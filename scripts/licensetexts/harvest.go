@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/radiergummi/cetacean/internal/api/sbom"
+	"golang.org/x/mod/module"
 )
 
 // maxTextBytes caps a single license or notice file. Every real one is a few
@@ -71,7 +71,11 @@ func Harvest(doc sbom.Document, roots Roots) (sbom.Artifact, error) {
 	}
 
 	for _, component := range doc.Components {
-		dir, ok := componentDir(component, roots)
+		dir, ok, err := componentDir(component, roots)
+		if err != nil {
+			return sbom.Artifact{}, err
+		}
+
 		if !ok {
 			// An ecosystem with no package store to read from. It keeps its
 			// inventory entry on the page; there is simply no text to attach.
@@ -110,45 +114,31 @@ func Harvest(doc sbom.Document, roots Roots) (sbom.Artifact, error) {
 
 // componentDir maps a component to the directory its sources were unpacked
 // into. Reports false for ecosystems with no local package store.
-func componentDir(component sbom.Component, roots Roots) (string, bool) {
+func componentDir(component sbom.Component, roots Roots) (string, bool, error) {
 	switch component.Ecosystem {
 	case "go":
-		return filepath.Join(
-			roots.GoModCache,
-			escapeModulePath(component.Name)+"@"+component.Version,
-		), true
-	case "npm":
-		return filepath.Join(roots.NodeModules, filepath.FromSlash(component.Name)), true
-	default:
-		return "", false
-	}
-}
-
-// escapeModulePath applies the Go module cache's case encoding: an uppercase
-// letter becomes "!" followed by its lowercase form, so that case-insensitive
-// filesystems cannot collide two distinct module paths.
-func escapeModulePath(module string) string {
-	var out strings.Builder
-
-	for _, r := range module {
-		if r >= 'A' && r <= 'Z' {
-			out.WriteByte('!')
-			out.WriteRune(r + ('a' - 'A'))
-
-			continue
+		// The module cache encodes an uppercase letter as "!" plus its
+		// lowercase form so a case-insensitive filesystem cannot collide two
+		// distinct module paths. EscapePath is the canonical encoder, and it
+		// rejects a path that is not a valid module path at all.
+		escaped, err := module.EscapePath(component.Name)
+		if err != nil {
+			return "", false, fmt.Errorf("escape module path %s: %w", component.Name, err)
 		}
 
-		out.WriteRune(r)
+		return filepath.Join(roots.GoModCache, escaped+"@"+component.Version), true, nil
+	case "npm":
+		return filepath.Join(roots.NodeModules, filepath.FromSlash(component.Name)), true, nil
+	default:
+		return "", false, nil
 	}
-
-	return out.String()
 }
 
 // readFirst returns the contents of the first regular file in dir whose name
 // starts with one of the stems (case-insensitively), with line endings
-// normalized. Matches are sorted so the choice does not depend on directory
-// order. A missing dir is reported as no match, not an error — the caller
-// turns that into the "no license file" error itself.
+// normalized. os.ReadDir returns entries ordered by filename, so the choice
+// does not depend on directory order. A missing dir is reported as no match,
+// not an error — the caller turns that into the "no license file" error itself.
 func readFirst(dir string, stems []string) (string, bool, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -159,7 +149,7 @@ func readFirst(dir string, stems []string) (string, bool, error) {
 		return "", false, fmt.Errorf("read dir %s: %w", dir, err)
 	}
 
-	var matches []string
+	var path string
 
 	for _, stem := range stems {
 		for _, entry := range entries {
@@ -175,41 +165,35 @@ func readFirst(dir string, stems []string) (string, bool, error) {
 				continue
 			}
 
-			path := filepath.Join(dir, entry.Name())
+			candidate := filepath.Join(dir, entry.Name())
 
 			// os.Stat (not the DirEntry's own Info, which does not follow
 			// symlinks) so a symlinked license file is still picked up, same
 			// as the previous filepath.Glob + os.Stat implementation.
-			info, err := os.Stat(path)
+			info, err := os.Stat(candidate)
 			if err != nil || !info.Mode().IsRegular() {
 				continue
 			}
 
-			matches = append(matches, path)
+			if info.Size() > maxTextBytes {
+				return "", false, fmt.Errorf(
+					"%s is %d bytes, over the %d-byte cap — it is unlikely to be a license",
+					candidate, info.Size(), maxTextBytes,
+				)
+			}
+
+			path = candidate
+
+			break
 		}
 
-		if len(matches) > 0 {
+		if path != "" {
 			break
 		}
 	}
 
-	if len(matches) == 0 {
+	if path == "" {
 		return "", false, nil
-	}
-
-	slices.Sort(matches)
-	path := matches[0]
-
-	info, err := os.Stat(path)
-	if err != nil {
-		return "", false, fmt.Errorf("stat %s: %w", path, err)
-	}
-
-	if info.Size() > maxTextBytes {
-		return "", false, fmt.Errorf(
-			"%s is %d bytes, over the %d-byte cap — it is unlikely to be a license",
-			path, info.Size(), maxTextBytes,
-		)
 	}
 
 	data, err := os.ReadFile(path)

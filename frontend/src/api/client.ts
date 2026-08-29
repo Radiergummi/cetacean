@@ -178,6 +178,22 @@ async function fetchJGF<T>(path: string, signal?: AbortSignal): Promise<T> {
   return res.json();
 }
 
+async function fetchText(path: string, signal?: AbortSignal): Promise<string> {
+  const res = await fetch(apiPath(path), {
+    signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
+  });
+
+  if (!res.ok) {
+    if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
+      redirectToLoginAndStop();
+    }
+
+    await throwResponseError(res);
+  }
+
+  return res.text();
+}
+
 async function mutationFetch<T>(
   path: string,
   method: string,
@@ -827,17 +843,8 @@ export const api = {
   licenses: (signal?: AbortSignal) =>
     fetchJSON<LicensesResponse>(`/-/licenses`, signal).then(({ data }) => data),
 
-  licenseText: async (id: string, signal?: AbortSignal): Promise<string> => {
-    const response = await fetch(apiPath(`/-/licenses/texts/${encodeURIComponent(id)}`), {
-      signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
-    });
-
-    if (!response.ok) {
-      await throwResponseError(response);
-    }
-
-    return await response.text();
-  },
+  licenseText: (id: string, signal?: AbortSignal) =>
+    fetchText(`/-/licenses/texts/${encodeURIComponent(id)}`, signal),
 };
 
 export interface HealthInfo {

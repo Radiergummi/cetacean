@@ -39,6 +39,8 @@ type License struct {
 }
 
 // Project parses a CycloneDX JSON document and flattens it into a Document.
+// It is a pure projection of raw: the license and notice text ids come from a
+// second artifact and are stamped on afterwards, by attachTexts.
 // Components lacking a recognized package URL (e.g. the synthetic container
 // components a hierarchical merge produces) are skipped; nested components are
 // walked recursively. Output is sorted by ecosystem, then name, so the
@@ -63,27 +65,36 @@ func Project(raw []byte) (Document, error) {
 
 		for _, component := range *in {
 			ecosystem := ecosystemFromPurl(component.PackageURL)
-			name := qualifiedName(component)
-			// Key on ecosystem too: a Go module and an npm package can share a
-			// name@version, and they are distinct components.
-			key := ecosystem + ":" + name + "@" + component.Version
-			if ecosystem != "" && !seen[key] {
+			if ecosystem == "" {
+				// A synthetic container/application component, not a
+				// dependency. Skip it, but still walk what it contains.
+				walk(component.Components)
+
+				continue
+			}
+
+			projected := Component{
+				Name:        qualifiedName(component),
+				Version:     component.Version,
+				Description: component.Description,
+				Ecosystem:   ecosystem,
+				Licenses:    projectLicenses(componentLicenses(component)),
+				Homepage: externalReference(
+					component.ExternalReferences,
+					cyclonedx.ERTypeWebsite,
+				),
+				Repository: externalReference(
+					component.ExternalReferences,
+					cyclonedx.ERTypeVCS,
+				),
+			}
+
+			// ComponentKey keys on ecosystem too: a Go module and an npm
+			// package can share a name@version, and they are distinct
+			// components.
+			if key := ComponentKey(projected); !seen[key] {
 				seen[key] = true
-				components = append(components, Component{
-					Name:        name,
-					Version:     component.Version,
-					Description: component.Description,
-					Ecosystem:   ecosystem,
-					Licenses:    projectLicenses(componentLicenses(component)),
-					Homepage: externalReference(
-						component.ExternalReferences,
-						cyclonedx.ERTypeWebsite,
-					),
-					Repository: externalReference(
-						component.ExternalReferences,
-						cyclonedx.ERTypeVCS,
-					),
-				})
+				components = append(components, projected)
 			}
 
 			walk(component.Components)
@@ -104,8 +115,6 @@ func Project(raw []byte) (Document, error) {
 		// a name (distinct versions) get a stable, total ordering.
 		return cmp.Compare(a.Version, b.Version)
 	})
-
-	Attach(components)
 
 	return Document{Components: components}, nil
 }

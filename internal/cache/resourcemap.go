@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"maps"
 	"slices"
 	"sync"
 )
@@ -55,14 +56,8 @@ func (r *ResourceMap[T]) del(key string) (name string) {
 // sort would order equal sort keys differently on every request — and a client
 // paging through a list would see items shift between pages.
 func (r *ResourceMap[T]) list() []T {
-	keys := make([]string, 0, len(r.items))
-	for k := range r.items {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-
-	out := make([]T, 0, len(keys))
-	for _, k := range keys {
+	out := make([]T, 0, len(r.items))
+	for _, k := range slices.Sorted(maps.Keys(r.items)) {
 		out = append(out, r.items[k])
 	}
 	return out

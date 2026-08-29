@@ -38,7 +38,9 @@ export function resourceBreadcrumbs({
 }: ResourceCrumbsConfig): Crumb[] {
   const leaf: Crumb = {
     label: stripStackPrefix(name, stack),
-    ...(trail.length > 0 && to ? { to } : {}),
+    // The resource is only a link when something sits below it; the last crumb
+    // is the page you are already on.
+    to: trail.length > 0 ? to : undefined,
   };
 
   if (!stack) {

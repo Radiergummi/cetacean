@@ -146,9 +146,11 @@ func TestLicensesEndpointsRouteThroughNegotiate(t *testing.T) {
 }
 
 func TestHandleLicenseText(t *testing.T) {
-	doc, err := sbom.Project(sbom.Raw())
-	if err != nil {
-		t.Fatalf("Project: %v", err)
+	// The served document is the one carrying text ids; a bare projection of
+	// the SBOM has none.
+	var doc sbom.Document
+	if err := json.Unmarshal(sbom.ProjectedJSON(), &doc); err != nil {
+		t.Fatalf("unmarshal ProjectedJSON: %v", err)
 	}
 
 	var id string

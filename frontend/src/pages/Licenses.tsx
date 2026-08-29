@@ -1,5 +1,5 @@
 import { api } from "@/api/client";
-import type { LicenseComponent } from "@/api/types";
+import type { LicenseComponent, LicenseEntry } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
 import FetchError from "@/components/FetchError";
 import LicenseTextDialog from "@/components/LicenseTextDialog";
@@ -23,6 +23,32 @@ const ecosystemLabels: Record<string, string> = {
   npm: "npm",
   other: "Other",
 };
+
+/**
+ * The label a license is known by everywhere on this page. The filter matches
+ * on it, the dropdown counts it, and the badge shows it — they have to agree
+ * exactly or the filter silently stops matching.
+ */
+function licenseLabel({ id, name }: LicenseEntry): string {
+  return id || name || "Unknown";
+}
+
+function matchesSearch(component: LicenseComponent, needle: string): boolean {
+  return !needle || component.name.toLowerCase().includes(needle);
+}
+
+function matchesEcosystem(component: LicenseComponent, ecosystem: EcosystemFilter): boolean {
+  return ecosystem === "all" || component.ecosystem === ecosystem;
+}
+
+function matchesLicense(component: LicenseComponent, license: string): boolean {
+  return license === "all" || component.licenses.some((entry) => licenseLabel(entry) === license);
+}
+
+/** The distinct licenses a component carries, so it counts once per license. */
+function licenseLabelsOf(component: LicenseComponent): Set<string> {
+  return new Set(component.licenses.map(licenseLabel));
+}
 
 /**
  * Applies basic heuristics to try and convert VCS URLs targeting git to HTTP
@@ -54,59 +80,72 @@ export default function Licenses() {
   const error = queryError ? getErrorMessage(queryError, "Failed to load licenses") : null;
   const components = useMemo(() => data?.components ?? [], [data]);
 
-  const counts = useMemo(() => {
-    const result: Record<string, number> = { all: components.length };
+  const needle = query.trim().toLowerCase();
 
-    for (const component of components) {
+  // Each control counts against every filter except its own, so it always
+  // reports what picking it would leave rather than counting itself out.
+  const licenseAndSearchMatches = useMemo(
+    () =>
+      components.filter(
+        (component) => matchesLicense(component, license) && matchesSearch(component, needle),
+      ),
+    [components, license, needle],
+  );
+
+  const ecosystemAndSearchMatches = useMemo(
+    () =>
+      components.filter(
+        (component) => matchesEcosystem(component, ecosystem) && matchesSearch(component, needle),
+      ),
+    [components, ecosystem, needle],
+  );
+
+  const counts = useMemo(() => {
+    const result: Record<string, number> = { all: licenseAndSearchMatches.length };
+
+    for (const component of licenseAndSearchMatches) {
       result[component.ecosystem] = (result[component.ecosystem] ?? 0) + 1;
     }
 
     return result;
-  }, [components]);
+  }, [licenseAndSearchMatches]);
+
+  // Which chips exist is a property of the inventory, not of the current
+  // filter: a chip that vanished as you typed would take its own selection
+  // with it.
+  const hasOtherEcosystem = useMemo(
+    () => components.some((component) => component.ecosystem === "other"),
+    [components],
+  );
 
   const licenseOptions = useMemo(() => {
+    // Counting only what is in scope is also what hides the empty options: a
+    // license nothing here carries never reaches the map, and an option that
+    // would return nothing is not worth offering. "All licenses" always
+    // remains, so a filter that narrows to nothing is still one click to undo.
     const counts = new Map<string, number>();
 
-    for (const component of components) {
-      for (const entry of component.licenses) {
-        const id = entry.id || entry.name || "Unknown";
-
-        counts.set(id, (counts.get(id) ?? 0) + 1);
+    for (const component of ecosystemAndSearchMatches) {
+      for (const label of licenseLabelsOf(component)) {
+        counts.set(label, (counts.get(label) ?? 0) + 1);
       }
     }
 
     const sorted = [...counts.entries()].sort(([a], [b]) => a.localeCompare(b));
 
     return [
-      { value: "all", label: "All licenses" },
-      ...sorted.map(([id, count]) => ({ value: id, label: `${id} (${count})` })),
+      { value: "all", label: "All licenses", trailing: ecosystemAndSearchMatches.length },
+      ...sorted.map(([label, count]) => ({ value: label, label, trailing: count })),
     ];
-  }, [components]);
+  }, [ecosystemAndSearchMatches]);
 
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-
-    return components
-      .filter((component) => {
-        if (ecosystem !== "all" && component.ecosystem !== ecosystem) {
-          return false;
-        }
-
-        if (
-          license !== "all" &&
-          !component.licenses.some((entry) => (entry.id || entry.name || "Unknown") === license)
-        ) {
-          return false;
-        }
-
-        if (needle && !component.name.toLowerCase().includes(needle)) {
-          return false;
-        }
-
-        return true;
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [components, query, ecosystem, license]);
+  const filtered = useMemo(
+    () =>
+      licenseAndSearchMatches
+        .filter((component) => matchesEcosystem(component, ecosystem))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [licenseAndSearchMatches, ecosystem],
+  );
 
   if (error) {
     return (
@@ -129,7 +168,7 @@ export default function Licenses() {
 
   const ecosystems: EcosystemFilter[] = ["all", "go", "npm"];
 
-  if (counts.other) {
+  if (hasOtherEcosystem) {
     ecosystems.push("other");
   }
 
@@ -157,13 +196,15 @@ export default function Licenses() {
           className="sm:max-w-xs"
         />
 
-        <div className="flex flex-wrap items-center gap-2">
+        {/* One row: the chips never wrap under the dropdown. On a viewport too
+            narrow to hold them all, the row scrolls rather than reflowing. */}
+        <div className="flex items-center gap-2 overflow-x-auto">
           <Combobox
             value={license}
             onChange={setLicense}
             options={licenseOptions}
             allowCustom={false}
-            className="sm:max-w-56"
+            className="h-7 w-44 shrink-0 text-xs"
           />
 
           {ecosystems.map((value) => (
@@ -172,7 +213,7 @@ export default function Licenses() {
               type="button"
               onClick={() => setEcosystem(value)}
               className={cn(
-                "rounded-md px-3 py-1 text-xs",
+                "inline-flex h-7 shrink-0 items-center rounded-md px-3 text-xs",
                 value === ecosystem
                   ? "bg-primary font-medium text-primary-foreground"
                   : "border text-muted-foreground transition hover:text-foreground",
@@ -205,6 +246,16 @@ function LicenseCard({ component }: { component: LicenseComponent }) {
   const homepageUrl = component.homepage ? browserUrl(component.homepage) : null;
   const repositoryUrl = component.repository ? browserUrl(component.repository) : null;
 
+  // Every license on the card opens the same text, so the badges become
+  // buttons only when there is a text to open.
+  const openTextProps = component.textId
+    ? {
+        render: <button type="button" />,
+        onClick: () => setShowText(true),
+        className: "cursor-pointer",
+      }
+    : {};
+
   return (
     <Card className="flex flex-col gap-2 p-4">
       <div className="flex items-start justify-between gap-2">
@@ -235,25 +286,15 @@ function LicenseCard({ component }: { component: LicenseComponent }) {
       )}
 
       <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
-        {component.licenses.map((license, index) =>
-          component.textId ? (
-            <button
-              key={license.id || license.name || String(index)}
-              type="button"
-              onClick={() => setShowText(true)}
-              className="cursor-pointer"
-            >
-              <Badge variant="secondary">{license.id || license.name || "Unknown"}</Badge>
-            </button>
-          ) : (
-            <Badge
-              key={license.id || license.name || String(index)}
-              variant="secondary"
-            >
-              {license.id || license.name || "Unknown"}
-            </Badge>
-          ),
-        )}
+        {component.licenses.map((license, index) => (
+          <Badge
+            key={license.id || license.name || String(index)}
+            variant="secondary"
+            {...openTextProps}
+          >
+            {licenseLabel(license)}
+          </Badge>
+        ))}
 
         {repositoryUrl && (
           <a

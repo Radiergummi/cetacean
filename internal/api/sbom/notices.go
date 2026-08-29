@@ -7,9 +7,10 @@ import _ "embed"
 // reference a parent directory.
 //
 //go:embed notices.txt
-var notices string
+var notices []byte
 
 // Notices returns the full third-party attribution document: the curated
 // preamble followed by every bundled dependency's license and notice text.
-// Served at GET /-/notices.
-func Notices() string { return notices }
+// Served at GET /-/notices. The bytes are the embedded copy itself — callers
+// must not modify them.
+func Notices() []byte { return notices }

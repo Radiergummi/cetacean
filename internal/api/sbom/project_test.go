@@ -2,6 +2,7 @@ package sbom
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -170,67 +171,39 @@ func TestProjectQualifiesScopedNames(t *testing.T) {
 	}
 }
 
-func TestAttachPopulatesTextAndNoticeIDs(t *testing.T) {
-	// Unit test of Attach: verify it correctly looks up and stamps components
-	// with TextID and NoticeID from the pool. Fails loudly if Attach is deleted
-	// or broken, and stays correct across dependency bumps (uses real pool data).
+func TestAttachTextsStampsIDsFromThePool(t *testing.T) {
+	// Reads one entry straight out of the pool rather than out of a projection
+	// Attach already stamped, so a broken lookup cannot supply its own fixture.
+	var key string
+	var want ComponentTexts
 
-	// Get the current projection to find a component that has ids populated.
-	doc, err := Project(Raw())
-	if err != nil {
-		t.Fatalf("Project: %v", err)
-	}
+	for candidate, entry := range textArtifact.Components {
+		if entry.Notice != "" {
+			key, want = candidate, entry
 
-	// Find a component that Attach populated in the projection.
-	var templateComponent Component
-	for _, component := range doc.Components {
-		if component.Ecosystem != "other" && component.TextID != "" {
-			templateComponent = component
 			break
 		}
-	}
 
-	if templateComponent.Name == "" {
-		// If no component was populated, Attach either isn't running or the pool
-		// is empty. Fail with a diagnostic message.
-		t.Fatal(
-			"no component with textId in the projection; " +
-				"Attach() is not populating components from the pool",
-		)
-	}
-
-	// Create a new component with the same identity but blank ids, simulating
-	// an unattached component, then verify Attach repopulates it.
-	testComponent := Component{
-		Name:      templateComponent.Name,
-		Version:   templateComponent.Version,
-		Ecosystem: templateComponent.Ecosystem,
-	}
-
-	components := []Component{testComponent}
-	Attach(components)
-
-	if components[0].TextID == "" {
-		t.Errorf(
-			"%s: Attach did not populate textId",
-			templateComponent.Name,
-		)
-	}
-
-	if components[0].TextID != templateComponent.TextID {
-		t.Errorf(
-			"%s: textId mismatch; Attach got %q, expected %q",
-			templateComponent.Name, components[0].TextID, templateComponent.TextID,
-		)
-	}
-
-	// NoticeID is optional; only verify if the template had one.
-	if templateComponent.NoticeID != "" {
-		if components[0].NoticeID != templateComponent.NoticeID {
-			t.Errorf(
-				"%s: noticeId mismatch; Attach got %q, expected %q",
-				templateComponent.Name, components[0].NoticeID, templateComponent.NoticeID,
-			)
+		if key == "" {
+			key, want = candidate, entry
 		}
+	}
+
+	if key == "" {
+		t.Fatal("the embedded text pool maps no components; run 'make sbom'")
+	}
+
+	ecosystem, rest, _ := strings.Cut(key, ":")
+	name, version, _ := strings.Cut(rest, "@")
+
+	components := []Component{{Name: name, Version: version, Ecosystem: ecosystem}}
+	attachTexts(components)
+
+	if components[0].TextID != want.License {
+		t.Errorf("%s: textId = %q, want %q", key, components[0].TextID, want.License)
+	}
+
+	if components[0].NoticeID != want.Notice {
+		t.Errorf("%s: noticeId = %q, want %q", key, components[0].NoticeID, want.Notice)
 	}
 }

@@ -45,10 +45,10 @@ func Text(id string) (string, bool) {
 	return text, ok
 }
 
-// Attach stamps each component with the ids of its license and notice text.
-// Components whose ecosystem has no local package store (and so no harvested
-// text) keep their inventory entry with empty ids.
-func Attach(components []Component) {
+// attachTexts stamps each component with the ids of its license and notice
+// text. Components whose ecosystem has no local package store (and so no
+// harvested text) keep their inventory entry with empty ids.
+func attachTexts(components []Component) {
 	for i := range components {
 		entry, ok := textArtifact.Components[ComponentKey(components[i])]
 		if !ok {

@@ -117,6 +117,13 @@ func (c *Cache) rebuildStacks() {
 
 	result := make(map[string]Stack, len(stacks))
 	for name, s := range stacks {
+		// Only include stacks that have at least one service; stacks with
+		// only leftover volumes/configs/secrets/networks are ghost stacks
+		// from removed deployments and should not appear in the stacks list.
+		if len(s.Services) == 0 {
+			continue
+		}
+
 		// Member IDs were collected by ranging over maps. Sort them so a stack's
 		// membership — and everything derived from it — is stable between calls.
 		slices.Sort(s.Services)
@@ -125,12 +132,6 @@ func (c *Cache) rebuildStacks() {
 		slices.Sort(s.Networks)
 		slices.Sort(s.Volumes)
 
-		// Only include stacks that have at least one service; stacks with
-		// only leftover volumes/configs/secrets/networks are ghost stacks
-		// from removed deployments and should not appear in the stacks list.
-		if len(s.Services) == 0 {
-			continue
-		}
 		result[name] = *s
 	}
 	c.stacks = result

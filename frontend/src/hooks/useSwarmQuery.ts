@@ -96,14 +96,20 @@ export function useSwarmQuery<T>(
             // and the displayed count stay consistent.
             return {
               ...old,
-              pages: old.pages.map((page) => ({
-                ...page,
-                data: {
-                  ...page.data,
-                  items: page.data.items.filter((item) => getIdRef.current(item) !== event.id),
-                  total: page.data.total - 1,
-                },
-              })),
+              pages: old.pages.map((page) => {
+                const items = page.data.items.filter((item) => getIdRef.current(item) !== event.id);
+
+                return {
+                  ...page,
+                  data: {
+                    ...page.data,
+                    // Keep the original array when this page held no match, so
+                    // only the page that actually lost a row re-renders.
+                    items: items.length === page.data.items.length ? page.data.items : items,
+                    total: page.data.total - 1,
+                  },
+                };
+              }),
             };
           });
         } else if (event.resource) {
@@ -136,19 +142,15 @@ export function useSwarmQuery<T>(
                 })),
               };
             });
-          } else {
+          } else if (event.action === "create") {
+            // Only a creation changes how many items the collection holds. An
+            // update for an item the pages don't hold means it sits on a page
+            // that was never fetched — the total already counts it, and
+            // counting it again inflates the collection without bound on a
+            // churning list. The sentinel then pages past the real end and the
+            // server answers 416.
             queryClient.setQueryData<InfinitePages<T>>(key, (old) => {
               if (!old) {
-                return old;
-              }
-
-              // Only a creation changes how many items the collection holds.
-              // An update for an item the pages don't hold means it sits on a
-              // page that was never fetched — the total already counts it, and
-              // counting it again inflates the collection without bound on a
-              // churning list. The sentinel then pages past the real end and
-              // the server answers 416.
-              if (event.action !== "create") {
                 return old;
               }
 

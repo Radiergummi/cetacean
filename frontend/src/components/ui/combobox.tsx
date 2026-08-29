@@ -1,12 +1,17 @@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
 export interface ComboboxOption {
   value: string;
   label: string;
   description?: string | undefined;
+  /**
+   * Rendered right-aligned and muted at the end of the row — a count, a
+   * shortcut hint. Not searchable: only value, label and description are.
+   */
+  trailing?: ReactNode | undefined;
 }
 
 interface ComboboxProps {
@@ -123,6 +128,12 @@ export function Combobox({
                   <div className="truncate text-xs text-muted-foreground">{option.description}</div>
                 )}
               </div>
+
+              {option.trailing !== undefined && (
+                <span className="mt-0.5 shrink-0 text-xs text-muted-foreground tabular-nums">
+                  {option.trailing}
+                </span>
+              )}
             </button>
           ))}
 

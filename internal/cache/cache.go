@@ -408,11 +408,15 @@ func (c *Cache) DeleteService(id string) {
 
 func (c *Cache) ListServices() []swarm.Service {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 	out := make([]swarm.Service, 0, len(c.services))
 	for _, s := range c.services {
 		out = append(out, s)
 	}
+	c.mu.RUnlock()
+
+	// out is this caller's own copy, so the sort — the expensive half of the
+	// call on a large cluster — does not belong under the lock the watcher's
+	// writers are contending for.
 	slices.SortFunc(out, func(a, b swarm.Service) int { return cmp.Compare(a.ID, b.ID) })
 	return out
 }
@@ -505,11 +509,12 @@ func (c *Cache) removeTaskIndex(t swarm.Task) {
 
 func (c *Cache) ListTasks() []swarm.Task {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 	out := make([]swarm.Task, 0, len(c.tasks))
 	for _, t := range c.tasks {
 		out = append(out, t)
 	}
+	c.mu.RUnlock()
+
 	slices.SortFunc(out, compareTasks)
 	return out
 }
@@ -647,21 +652,11 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 			detail.Volumes = append(detail.Volumes, vol)
 		}
 	}
-	slices.SortFunc(detail.Services, func(a, b swarm.Service) int {
-		return cmp.Compare(a.Spec.Name, b.Spec.Name)
-	})
-	slices.SortFunc(detail.Configs, func(a, b swarm.Config) int {
-		return cmp.Compare(a.Spec.Name, b.Spec.Name)
-	})
-	slices.SortFunc(detail.Secrets, func(a, b swarm.Secret) int {
-		return cmp.Compare(a.Spec.Name, b.Spec.Name)
-	})
-	slices.SortFunc(detail.Networks, func(a, b network.Summary) int {
-		return cmp.Compare(a.Name, b.Name)
-	})
-	slices.SortFunc(detail.Volumes, func(a, b volume.Volume) int {
-		return cmp.Compare(a.Name, b.Name)
-	})
+	sortByName(detail.Services, func(s swarm.Service) string { return s.Spec.Name })
+	sortByName(detail.Configs, func(c swarm.Config) string { return c.Spec.Name })
+	sortByName(detail.Secrets, func(s swarm.Secret) string { return s.Spec.Name })
+	sortByName(detail.Networks, func(n network.Summary) string { return n.Name })
+	sortByName(detail.Volumes, func(v volume.Volume) string { return v.Name })
 
 	// Secret data is nilled by the secrets map's onSet hook (see secret
 	// ResourceMap above), so detail.Secrets[*].Spec.Data is already nil here.
@@ -736,6 +731,11 @@ func setAction(existed bool) string {
 	return "create"
 }
 
+// sortByName orders a slice of resources by the string each one calls its name.
+func sortByName[T any](items []T, name func(T) string) {
+	slices.SortFunc(items, func(a, b T) int { return cmp.Compare(name(a), name(b)) })
+}
+
 // compareTasks orders tasks by slot, then ID. Slot groups the replicas of a
 // service the way the UI lists them; the ID breaks ties between a slot's
 // historical tasks (and orders global-mode tasks, which have no slot).
@@ -751,7 +751,6 @@ func compareTasks(a, b swarm.Task) int {
 
 func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 	ids := c.tasksByService[serviceID]
 	out := make([]swarm.Task, 0, len(ids))
 	for id := range ids {
@@ -759,6 +758,8 @@ func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
 			out = append(out, t)
 		}
 	}
+	c.mu.RUnlock()
+
 	slices.SortFunc(out, compareTasks)
 	return out
 }
@@ -778,7 +779,6 @@ func (c *Cache) RunningTaskCount(serviceID string) int {
 
 func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 	ids := c.tasksByNode[nodeID]
 	out := make([]swarm.Task, 0, len(ids))
 	for id := range ids {
@@ -786,6 +786,8 @@ func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 			out = append(out, t)
 		}
 	}
+	c.mu.RUnlock()
+
 	slices.SortFunc(out, compareTasks)
 	return out
 }

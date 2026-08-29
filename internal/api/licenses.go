@@ -6,11 +6,19 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sbom"
 )
 
+// The three attribution documents are embedded at build time and never change,
+// so their ETags are hashed once here rather than on every request.
+var (
+	licensesETag = computeETag(sbom.ProjectedJSON())
+	noticesETag  = computeETag(sbom.Notices())
+	sbomETag     = computeETag(sbom.Raw())
+)
+
 // HandleLicenses serves the projected open-source licenses document consumed by
 // the licenses page. Public (registered under the auth-exempt /-/ prefix).
 func HandleLicenses(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	writeRawWithETag(w, r, sbom.ProjectedJSON())
+	writeRawWithPrecomputedETag(w, r, sbom.ProjectedJSON(), licensesETag)
 }
 
 // HandleLicenseText serves one pooled license or notice text by its
@@ -34,12 +42,12 @@ func HandleLicenseText(w http.ResponseWriter, r *http.Request) {
 // (registered under the auth-exempt /-/ prefix).
 func HandleNotices(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	writeRawWithETag(w, r, []byte(sbom.Notices()))
+	writeRawWithPrecomputedETag(w, r, sbom.Notices(), noticesETag)
 }
 
 // HandleSBOM serves the raw embedded CycloneDX SBOM for supply-chain tooling.
 // Public (registered under the auth-exempt /-/ prefix).
 func HandleSBOM(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/vnd.cyclonedx+json; version=1.6")
-	writeRawWithETag(w, r, sbom.Raw())
+	writeRawWithPrecomputedETag(w, r, sbom.Raw(), sbomETag)
 }

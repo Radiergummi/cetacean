@@ -50,7 +50,18 @@ func etagMatch(header, etag string) bool {
 // Content-Type before calling this function. If the caller has already set
 // Cache-Control, that value is kept; otherwise it defaults to "no-cache".
 func writeRawWithETag(w http.ResponseWriter, r *http.Request, data []byte) {
-	etag := computeETag(data)
+	writeRawWithPrecomputedETag(w, r, data, computeETag(data))
+}
+
+// writeRawWithPrecomputedETag is writeRawWithETag for bodies fixed at build
+// time, whose ETag the caller hashed once at startup rather than on every
+// request — including the 304s, which never touch the body at all.
+func writeRawWithPrecomputedETag(
+	w http.ResponseWriter,
+	r *http.Request,
+	data []byte,
+	etag string,
+) {
 	w.Header().Set("ETag", etag)
 
 	if w.Header().Get("Cache-Control") == "" {

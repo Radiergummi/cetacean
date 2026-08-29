@@ -1,6 +1,7 @@
 package sbom
 
 import (
+	"bytes"
 	"os"
 	"strings"
 	"testing"
@@ -14,7 +15,7 @@ func TestNoticesMatchesTheCommittedFile(t *testing.T) {
 		t.Fatalf("read THIRD_PARTY_LICENSES: %v", err)
 	}
 
-	if Notices() != string(committed) {
+	if !bytes.Equal(Notices(), committed) {
 		t.Error("Notices() differs from THIRD_PARTY_LICENSES; run 'make sbom'")
 	}
 }
@@ -25,7 +26,7 @@ func TestNoticesCoversEveryComponent(t *testing.T) {
 		t.Fatalf("Project: %v", err)
 	}
 
-	notices := Notices()
+	notices := string(Notices())
 
 	var absent []string
 	for _, component := range doc.Components {
@@ -40,7 +41,7 @@ func TestNoticesCoversEveryComponent(t *testing.T) {
 }
 
 func TestNoticesCarriesTheCuratedPreamble(t *testing.T) {
-	notices := Notices()
+	notices := string(Notices())
 
 	for _, want := range []string{"elkjs", "Reserved Font Name", "Lucide"} {
 		if !strings.Contains(notices, want) {

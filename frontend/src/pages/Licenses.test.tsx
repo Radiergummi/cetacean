@@ -97,6 +97,71 @@ describe("Licenses", () => {
     expect(screen.getByText("alpha")).toBeInTheDocument();
   });
 
+  it("counts the ecosystem chips against the other filters, not themselves", async () => {
+    (api.licenses as ReturnType<typeof vi.fn>).mockResolvedValue({
+      components: [
+        { name: "alpha", ecosystem: "npm", licenses: [{ id: "MIT" }] },
+        { name: "beta", ecosystem: "npm", licenses: [{ id: "Apache-2.0" }] },
+        { name: "gamma", ecosystem: "go", licenses: [{ id: "MIT" }] },
+      ],
+    });
+
+    render(<Licenses />, { wrapper: createWrapper(createTestQueryClient()) });
+
+    await waitFor(() => expect(screen.getByText("alpha")).toBeInTheDocument());
+
+    expect(screen.getByRole("button", { name: /^All\s*3$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Go\s*1$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^npm\s*2$/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /all licenses/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^MIT/ }));
+
+    // Only the two MIT components are left, and each chip reports what
+    // clicking it would show.
+    expect(screen.getByRole("button", { name: /^All\s*2$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Go\s*1$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^npm\s*1$/ })).toBeInTheDocument();
+
+    // Picking an ecosystem must not shrink the ecosystem counts themselves,
+    // or the chips could never be used to switch between them.
+    fireEvent.click(screen.getByRole("button", { name: /^npm\s*1$/ }));
+
+    expect(screen.getByRole("button", { name: /^Go\s*1$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^All\s*2$/ })).toBeInTheDocument();
+  });
+
+  it("counts the license options against the ecosystem and search filters", async () => {
+    (api.licenses as ReturnType<typeof vi.fn>).mockResolvedValue({
+      components: [
+        { name: "alpha", ecosystem: "npm", licenses: [{ id: "MIT" }] },
+        { name: "beta", ecosystem: "npm", licenses: [{ id: "Apache-2.0" }] },
+        { name: "gamma", ecosystem: "go", licenses: [{ id: "MIT" }] },
+      ],
+    });
+
+    render(<Licenses />, { wrapper: createWrapper(createTestQueryClient()) });
+
+    await waitFor(() => expect(screen.getByText("alpha")).toBeInTheDocument());
+
+    // The trigger's accessible name is the bare label; an option's carries its
+    // count, so the exact string can only match the trigger.
+    fireEvent.click(screen.getByRole("button", { name: "All licenses" }));
+
+    expect(screen.getByRole("button", { name: /^MIT\s*2$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Apache-2\.0\s*1$/ })).toBeInTheDocument();
+
+    // Dismiss without changing the license, then narrow to Go.
+    fireEvent.click(screen.getByRole("button", { name: /^All licenses\s*3$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Go\s*1$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "All licenses" }));
+
+    // Only the Go component is in scope, so Apache-2.0 would return nothing
+    // and drops off the list rather than offering an empty result.
+    expect(screen.getByRole("button", { name: /^MIT\s*1$/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Apache-2\.0/ })).not.toBeInTheDocument();
+  });
+
   it("opens the license text dialog when a badge with text is clicked", async () => {
     (api.licenses as ReturnType<typeof vi.fn>).mockResolvedValue({
       components: [
@@ -115,8 +180,9 @@ describe("Licenses", () => {
     await waitFor(() => expect(screen.getByText("alpha")).toBeInTheDocument());
 
     // The license filter combobox is never opened in this test, so its own
-    // "MIT (…)" option button never mounts — this exact-name query can only
-    // match the card's own license badge.
+    // "MIT" option button never mounts. That option's accessible name would
+    // carry its count anyway, so this exact-name query can only match the
+    // card's own license badge.
     fireEvent.click(screen.getByRole("button", { name: "MIT" }));
 
     await waitFor(() => expect(screen.getByText("MIT License body")).toBeInTheDocument());

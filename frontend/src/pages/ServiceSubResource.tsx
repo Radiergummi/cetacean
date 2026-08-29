@@ -1,4 +1,5 @@
-import { get } from "@/api/client";
+import { api, get } from "@/api/client";
+import type { Service } from "@/api/types";
 import FetchError from "@/components/FetchError";
 import { LoadingDetail } from "@/components/LoadingSkeleton";
 import PageHeader from "@/components/PageHeader";
@@ -31,8 +32,7 @@ export default function ServiceSubResource() {
   const label = subResource ? subResources[subResource] : undefined;
 
   const [data, setData] = useState<unknown>(null);
-  const [serviceName, setServiceName] = useState<string | null>(null);
-  const [serviceStack, setServiceStack] = useState<string | undefined>(undefined);
+  const [service, setService] = useState<Service | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -50,17 +50,14 @@ export default function ServiceSubResource() {
 
     Promise.all([
       get<unknown>(`/services/${id}/${subResource}`, signal).then(({ data }) => data),
-      get<{ service?: { Spec?: { Name?: string; Labels?: Record<string, string> } } }>(
-        `/services/${id}`,
-        signal,
-      )
-        .then(({ data }) => data)
+      api
+        .service(id, signal)
+        .then(({ data }) => data.service)
         .catch(() => null),
     ])
       .then(([subData, serviceData]) => {
         setData(subData);
-        setServiceName(serviceData?.service?.Spec?.Name ?? null);
-        setServiceStack(serviceData?.service?.Spec?.Labels?.[stackNamespaceLabel]);
+        setService(serviceData);
         setLoading(false);
       })
       .catch((fetchError) => {
@@ -81,16 +78,14 @@ export default function ServiceSubResource() {
     return <LoadingDetail />;
   }
 
-  const displayName = serviceName ?? id!;
-
   const header = (
     <PageHeader
       title={label}
       breadcrumbs={resourceBreadcrumbs({
         listLabel: "Services",
         listPath: "/services",
-        name: displayName,
-        stack: serviceStack,
+        name: service?.Spec.Name ?? id!,
+        stack: service?.Spec.Labels?.[stackNamespaceLabel],
         to: `/services/${id}`,
         trail: [{ label }],
       })}
