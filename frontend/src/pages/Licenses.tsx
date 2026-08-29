@@ -2,6 +2,7 @@ import { api } from "@/api/client";
 import type { LicenseComponent } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
 import FetchError from "@/components/FetchError";
+import LicenseTextDialog from "@/components/LicenseTextDialog";
 import { LoadingDetail } from "@/components/LoadingSkeleton";
 import PageHeader from "@/components/PageHeader";
 import { SearchInput } from "@/components/search";
@@ -188,6 +189,8 @@ export default function Licenses() {
 }
 
 function LicenseCard({ component }: { component: LicenseComponent }) {
+  const [showText, setShowText] = useState(false);
+
   const homepageUrl = component.homepage ? browserUrl(component.homepage) : null;
   const repositoryUrl = component.repository ? browserUrl(component.repository) : null;
 
@@ -221,14 +224,25 @@ function LicenseCard({ component }: { component: LicenseComponent }) {
       )}
 
       <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
-        {component.licenses.map((license, index) => (
-          <Badge
-            key={license.id || license.name || String(index)}
-            variant="secondary"
-          >
-            {license.id || license.name || "Unknown"}
-          </Badge>
-        ))}
+        {component.licenses.map((license, index) =>
+          component.textId ? (
+            <button
+              key={license.id || license.name || String(index)}
+              type="button"
+              onClick={() => setShowText(true)}
+              className="cursor-pointer"
+            >
+              <Badge variant="secondary">{license.id || license.name || "Unknown"}</Badge>
+            </button>
+          ) : (
+            <Badge
+              key={license.id || license.name || String(index)}
+              variant="secondary"
+            >
+              {license.id || license.name || "Unknown"}
+            </Badge>
+          ),
+        )}
 
         {repositoryUrl && (
           <a
@@ -242,6 +256,14 @@ function LicenseCard({ component }: { component: LicenseComponent }) {
           </a>
         )}
       </div>
+
+      {component.textId && (
+        <LicenseTextDialog
+          component={component}
+          open={showText}
+          onOpenChange={setShowText}
+        />
+      )}
     </Card>
   );
 }

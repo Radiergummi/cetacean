@@ -826,6 +826,18 @@ export const api = {
 
   licenses: (signal?: AbortSignal) =>
     fetchJSON<LicensesResponse>(`/-/licenses`, signal).then(({ data }) => data),
+
+  licenseText: async (id: string, signal?: AbortSignal): Promise<string> => {
+    const response = await fetch(apiPath(`/-/licenses/texts/${encodeURIComponent(id)}`), {
+      signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
+    });
+
+    if (!response.ok) {
+      await throwResponseError(response);
+    }
+
+    return await response.text();
+  },
 };
 
 export interface HealthInfo {

@@ -6,7 +6,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", () => ({
-  api: { licenses: vi.fn<() => Promise<LicensesResponse>>() },
+  api: {
+    licenses: vi.fn<() => Promise<LicensesResponse>>(),
+    licenseText: vi.fn<(id: string) => Promise<string>>(),
+  },
 }));
 
 const sample = {

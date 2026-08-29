@@ -798,6 +798,8 @@ export interface LicenseComponent {
   licenses: LicenseEntry[];
   homepage?: string | undefined;
   repository?: string | undefined;
+  textId?: string | undefined;
+  noticeId?: string | undefined;
 }
 
 export interface LicensesResponse {
