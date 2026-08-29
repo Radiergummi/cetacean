@@ -67,12 +67,30 @@ func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
 			stream = "stderr"
 		}
 
+		// Docker prefixes only the first line of a multi-line message with a
+		// timestamp and its detail labels; the continuation lines of a stack
+		// trace or a pretty-printed JSON object carry neither. They belong to
+		// the message they continue, so they inherit its identity — without
+		// one they cannot be ordered, cursored, or attributed to a task.
+		// Inheritance stops at the frame boundary, which is where Docker's
+		// message boundary is: the next frame may well be another task's.
+		var parent LogLine
+
 		raw := strings.TrimRight(string(payload), "\n")
 		for line := range strings.SplitSeq(raw, "\n") {
 			if line == "" {
 				continue
 			}
-			emit(parseLine(line, stream))
+
+			parsed := parseLine(line, stream)
+			if parsed.Timestamp == "" {
+				parsed.Timestamp = parent.Timestamp
+				parsed.Attrs = parent.Attrs
+			} else {
+				parent = parsed
+			}
+
+			emit(parsed)
 		}
 	}
 }
@@ -182,24 +200,151 @@ func ParseDockerLogsWithIdleCancel(
 	return lines, err
 }
 
+// dockerTimeFormat is how Docker stamps its log lines: UTC, nanosecond
+// precision, fixed width. Normalising to it makes two timestamps comparable as
+// strings; RFC3339Nano cannot be used because it trims trailing zeros, which
+// sorts a truncated timestamp above genuinely newer ones.
+const dockerTimeFormat = "2006-01-02T15:04:05.000000000Z07:00"
+
+// Canonical normalises a log timestamp to Docker's own format so it can be
+// compared against another one as a string. Docker's own timestamps already
+// are in that format, which is the fast path; a client-supplied cursor may be
+// at second precision or in a non-UTC offset, and gets parsed and reformatted.
+func Canonical(timestamp string) (string, bool) {
+	if len(timestamp) == len("2006-01-02T15:04:05.000000000Z") &&
+		timestamp[len(timestamp)-1] == 'Z' {
+		return timestamp, true
+	}
+
+	t, err := time.Parse(time.RFC3339Nano, timestamp)
+	if err != nil {
+		return "", false
+	}
+
+	return t.UTC().Format(dockerTimeFormat), true
+}
+
+// ParseCursor resolves a log cursor to Docker's canonical timestamp format.
+//
+// Cursors reach us as RFC 3339 timestamps at any precision and in any offset,
+// or as Go durations meaning "this long ago" — all three documented and
+// accepted. Comparing any of them against a Docker timestamp as a raw string
+// is wrong: "30m" sorts below every timestamp, "…T12:00:00+02:00" above the
+// same instant in UTC, and a second-precision cursor above the sub-second
+// lines that follow it. Returns false when the cursor is empty or unusable,
+// meaning no filtering should happen at all.
+func ParseCursor(cursor string) (string, bool) {
+	if cursor == "" {
+		return "", false
+	}
+
+	if timestamp, ok := Canonical(cursor); ok {
+		return timestamp, true
+	}
+
+	if d, err := time.ParseDuration(cursor); err == nil {
+		return time.Now().Add(-d.Abs()).UTC().Format(dockerTimeFormat), true
+	}
+
+	return "", false
+}
+
+// Newer reports whether a log line's timestamp is strictly newer than a
+// cursor produced by ParseCursor. A line without a usable timestamp counts as
+// newer: it cannot be placed against the cursor, and dropping it would lose
+// output for good.
+func Newer(timestamp, cursor string) bool {
+	normalized, ok := Canonical(timestamp)
+	if !ok {
+		return true
+	}
+
+	return normalized > cursor
+}
+
+// Older reports whether a log line's timestamp is strictly older than a cursor
+// produced by ParseCursor. As in Newer, a line without a usable timestamp
+// counts as included rather than dropped.
+func Older(timestamp, cursor string) bool {
+	normalized, ok := Canonical(timestamp)
+	if !ok {
+		return true
+	}
+
+	return normalized < cursor
+}
+
 // FilterSince returns the lines strictly newer than the given cursor.
 //
 // Docker ignores the Since option for service logs, so every caller that
 // offers a cursor has to enforce it after parsing. This is that one place.
-// Lines without a timestamp are kept: they cannot be placed relative to the
-// cursor, and dropping them would silently lose output.
 func FilterSince(lines []LogLine, since string) []LogLine {
-	if since == "" {
+	cursor, ok := ParseCursor(since)
+	if !ok {
 		return lines
 	}
 
 	filtered := lines[:0]
 	for _, line := range lines {
-		if line.Timestamp != "" && line.Timestamp <= since {
+		if !Newer(line.Timestamp, cursor) {
 			continue
 		}
 		filtered = append(filtered, line)
 	}
 
 	return filtered
+}
+
+// BacklogFilter drops the lines a resumed follow stream has already delivered.
+//
+// A follow stream opens with a backlog — the lines Docker replays out of its
+// tail before it catches up to live output — and only that backlog can hold
+// lines the client already has. So only the backlog is filtered; live output
+// is passed through whatever its timestamp says. That distinction matters
+// because a task's timestamps come from the clock of the node running it,
+// which need not agree with the clock that produced the cursor, and because a
+// cursor can legitimately be expressed relative to now.
+//
+// One task's backlog is chronologically ordered, so the first of its lines to
+// clear the cursor ends it: everything that task emits afterwards is newer
+// still. Tasks are tracked apart because Docker interleaves them.
+type BacklogFilter struct {
+	cursor string
+	caught map[string]bool
+}
+
+// NewBacklogFilter returns a filter for a stream resuming from the given
+// cursor, or nil when there is no cursor to resume from — a nil filter keeps
+// every line, so a fresh stream needs no special case.
+func NewBacklogFilter(since string) *BacklogFilter {
+	cursor, ok := ParseCursor(since)
+	if !ok {
+		return nil
+	}
+
+	return &BacklogFilter{cursor: cursor, caught: make(map[string]bool)}
+}
+
+// Keep reports whether the line should be delivered to the client.
+func (f *BacklogFilter) Keep(line LogLine) bool {
+	if f == nil {
+		return true
+	}
+
+	task := line.Attrs["taskId"]
+	if f.caught[task] {
+		return true
+	}
+
+	if !Newer(line.Timestamp, f.cursor) {
+		return false
+	}
+
+	// A line with no timestamp is delivered, but says nothing about where
+	// the backlog ends, so it does not end it.
+	if line.Timestamp != "" {
+		f.caught[task] = true
+	}
+
+	return true
 }

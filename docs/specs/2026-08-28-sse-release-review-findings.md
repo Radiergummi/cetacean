@@ -129,3 +129,51 @@ output, short outages, a correct clock, and no MCP client. Root causes A (needs 
 cursor, or sub-ms precision), B (needs a flapping stream), D (needs multi-line output), and E
 (needs multiple replicas) are all unreachable under those conditions. The test was real but its
 coverage was narrow, and reporting it as "verified end to end" overstated what it established.
+
+## Resolution
+
+All five root causes and every pre-existing item above are addressed on this branch. One residual,
+noted under A, is bounded rather than eliminated.
+
+**A — cursor scope and comparison.** `logs.ParseCursor` normalises a cursor (RFC 3339 at any
+precision or offset, or a Go duration) to Docker's own timestamp format, and `logs.Newer` /
+`logs.Older` compare against it; `FilterSince` and the `before` filter both go through them.
+`logs.BacklogFilter` replaces the per-line filter in `serveLogsSSE`: it drops the replay Docker
+sends on connect and stops filtering a task as soon as one of its lines clears the cursor, so a
+stream is never silenced for the life of the connection. The frontend no longer seeds the cursor
+from `new Date().toISOString()`; with no server-issued cursor it opens a fresh stream, which also
+revives the `tail = "0"` branch. That removes the browser's clock from the picture entirely: a
+cursor is now always one Docker issued.
+
+One case is bounded rather than eliminated. `BacklogFilter` ends a task's backlog only when one of
+that task's lines clears the cursor, so a task whose node clock *trails* the node that stamped the
+cursor stays suppressed until its clock passes it. On a multi-node swarm with clock drift, one
+replica's output can therefore be missing for the drift duration after a resume, behind a healthy
+"Live" badge. It self-heals, and no other replica is affected — the old failure was permanent and
+cluster-wide — but it is not nothing. Verified live: against a cursor 15s in the future the SSE
+stream returned `200` with keepalives and delivered nothing until the first line stamped past the
+cursor, then resumed normally. Bounding the backlog by line count or elapsed time, rather than
+purely by "a line cleared the cursor", would close it.
+
+**B — retry budget.** `streamLogsWithRetry` resets the budget only after a connection that stayed
+up for 30 seconds, timed from the server accepting it. `onActivity` is gone.
+
+**C — manual reopen.** `openEventStream` reports a connection it reopened itself via `onReopened`;
+`useResourceStream` turns that into a synthetic `sync` event, which every consumer already treats
+as "refetch everything".
+
+**D — untimestamped continuation lines.** `readDockerLogFrames` gives the continuation lines of a
+multi-line message their parent's timestamp and detail labels, bounded to the frame — which is
+Docker's message boundary. They are now orderable, cursorable, and attributed to the right task,
+so the filter needs no exemption and MCP always finds a cursor.
+
+**E — cursor is the maximum.** The SSE `id:` only ever advances; `readServiceLogsImpl` sorts before
+taking its cursor and truncating, matching `serveLogs`; the frontend's `newestRef` only moves
+forward.
+
+**Pre-existing.** `appendMetricPoint` takes the chart title so a lone series matches how
+`parseRangeResult` labelled it; the `TimeSeriesChart` visibility handler no longer closes the gate
+it cannot reopen; the log tail redirects to login on 401; the live buffer is capped on push, not
+only in `flush`; MCP truncates the widened fetch back to the requested `tail`; the cursor is
+written at fixed nanosecond width and no longer advanced by a nanosecond (`FilterSince` already
+excludes the boundary); and `api/openapi.yaml` now says the SSE backlog is per task.

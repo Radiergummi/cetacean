@@ -1,5 +1,5 @@
 import type { ApiError, LogLine } from "../../api/client";
-import { problemFromResponse } from "../../api/client";
+import { problemFromResponse, redirectToLogin } from "../../api/client";
 import { backoffDelay } from "../../lib/backoff";
 
 /**
@@ -24,6 +24,20 @@ import { backoffDelay } from "../../lib/backoff";
 export const maxReconnectAttempts = 5;
 const baseReconnectDelay = 1000;
 const maxReconnectDelay = 30_000;
+
+/**
+ * How long a connection has to survive before it counts as healthy enough to
+ * clear the failures that came before it.
+ *
+ * The budget used to reset on any byte received, which made it not a budget:
+ * one keepalive comment restored it in full, so a stream that connected,
+ * delivered a byte and dropped — a crash-looping task, or a proxy with a short
+ * read timeout — reconnected once a second for as long as the page stayed
+ * open, and the give-up state was unreachable. A connection that lasts this
+ * long has proven itself; one that does not is flapping, and its failures
+ * accumulate.
+ */
+const healthyConnectionMilliseconds = 30_000;
 
 export interface LogStreamFailure {
   /** The server's problem document; null when the transport itself failed. */
@@ -145,7 +159,6 @@ function consumeFrame(frame: string, handlers: ConnectionHandlers): string | und
 export async function openLogStream(
   url: string,
   handlers: ConnectionHandlers,
-  onActivity: () => void,
   signal: AbortSignal,
 ): Promise<LogStreamOutcome> {
   let lastEventId: string | undefined;
@@ -162,6 +175,18 @@ export async function openLogStream(
     }
 
     if (!response.ok) {
+      // An expired session sends the person to the login page, as every other
+      // request in api/client.ts does. Retrying behind a dead session would
+      // only report the failure over and over.
+      if (
+        response.status === 401 &&
+        response.headers.get("WWW-Authenticate")?.startsWith("Bearer")
+      ) {
+        redirectToLogin();
+
+        return { lastEventId, failure: null };
+      }
+
       const error = await problemFromResponse(response);
 
       return {
@@ -212,7 +237,6 @@ export async function openLogStream(
       }
 
       searchFrom = Math.max(0, buffer.length - 1);
-      onActivity();
     }
 
     return { lastEventId, failure: signal.aborted ? null : { error: null } };
@@ -252,13 +276,17 @@ export async function streamLogsWithRetry(
 ): Promise<void> {
   let cursor = initialCursor;
   let attempt = 0;
+  let connectedAt = 0;
 
-  // Any data proves the connection works — including the server's keepalive
-  // comments, which is what keeps a quiet service from spending its retry
-  // budget. Resetting a local counter costs nothing per chunk; the UI is told
-  // separately, once, when a connection opens.
-  const onActivity = () => {
-    attempt = 0;
+  // Timed from when the server accepted the connection rather than from when
+  // the request went out, so a fetch that hangs and then fails cannot pass for
+  // a healthy connection.
+  const timedHandlers: ConnectionHandlers = {
+    onLine: handlers.onLine,
+    onStreaming: () => {
+      connectedAt = Date.now();
+      handlers.onStreaming();
+    },
   };
 
   for (;;) {
@@ -266,13 +294,19 @@ export async function streamLogsWithRetry(
       return;
     }
 
+    connectedAt = 0;
+
     // eslint-disable-next-line no-await-in-loop
-    const outcome = await openLogStream(urlFor(cursor), handlers, onActivity, signal);
+    const outcome = await openLogStream(urlFor(cursor), timedHandlers, signal);
 
     cursor = outcome.lastEventId ?? cursor;
 
     if (!outcome.failure || signal.aborted) {
       return;
+    }
+
+    if (connectedAt !== 0 && Date.now() - connectedAt >= healthyConnectionMilliseconds) {
+      attempt = 0;
     }
 
     attempt += 1;

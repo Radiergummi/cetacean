@@ -60,6 +60,11 @@ export function useResourceStream(path: string, listener: SSEListener) {
       },
       onOpen: () => setConnected(true),
       onDisconnected: () => setConnected(false),
+      // A stream we reopened ourselves missed everything that happened while
+      // it was down, and cannot ask the server to replay it. A sync tells
+      // every consumer to refetch, which is what they already do when the
+      // server declares one.
+      onReopened: () => listenerRef.current({ type: "sync", action: "sync", id: "" }),
     });
 
     return () => stream.close();

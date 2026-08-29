@@ -31,18 +31,17 @@ type LogStreamer interface {
 // LogResourceResponse is the body returned by reading
 // cetacean://services/<id>/logs and the get_logs tool. Lines are time-ordered
 // (oldest first). Cursor is opaque to clients but in practice is the
-// RFC3339 timestamp of the last emitted line plus one nanosecond — pass it
-// back as `since` on the next read to receive only newer lines.
+// timestamp of the newest line returned — pass it back as `since` on the next
+// read to receive only lines newer than it.
 type LogResourceResponse struct {
 	Lines  []logs.LogLine `json:"lines"`
 	Cursor string         `json:"cursor,omitempty"`
 }
 
 const (
-	defaultLogTail   = 100
-	maxLogTail       = 1000
-	logFetchTimeout  = 5 * time.Second
-	cursorTimeFormat = time.RFC3339Nano
+	defaultLogTail  = 100
+	maxLogTail      = 1000
+	logFetchTimeout = 5 * time.Second
 )
 
 // readServiceLogsImpl drives both the cetacean://services/{id}/logs read and
@@ -64,13 +63,18 @@ func (s *Server) readServiceLogsImpl(
 		}
 	}
 
-	tail := opts.tail
-	if tail <= 0 {
-		tail = defaultLogTail
+	wanted := opts.tail
+	if wanted <= 0 {
+		wanted = defaultLogTail
 	}
-	if tail > maxLogTail {
-		tail = maxLogTail
+	if wanted > maxLogTail {
+		wanted = maxLogTail
 	}
+
+	// Docker ignores `since` for service logs, so a cursored read has to pull
+	// a wider window and narrow it here. The widening is an implementation
+	// detail: the caller asked for `tail` lines and gets at most that many.
+	tail := wanted
 	if opts.since != "" {
 		tail = min(tail*10, maxLogTail)
 	}
@@ -104,10 +108,24 @@ func (s *Server) readServiceLogsImpl(
 	lines = filterLogLines(lines, opts.level)
 	lines = logs.FilterSince(lines, opts.since)
 
+	// Docker interleaves the output of a service's tasks, so arrival order is
+	// not time order. Sorting first makes the truncation below keep the truly
+	// newest lines and the cursor the truly newest timestamp — without it a
+	// late-arriving older line would push the cursor backwards, silently
+	// dropping everything between the two on the next read. Mirrors the REST
+	// path in api/log_handlers.go.
+	slices.SortStableFunc(lines, func(a, b logs.LogLine) int {
+		return strings.Compare(a.Timestamp, b.Timestamp)
+	})
+
+	if len(lines) > wanted {
+		lines = lines[len(lines)-wanted:]
+	}
+
 	resp := LogResourceResponse{Lines: lines, Cursor: opts.since}
 	for _, line := range slices.Backward(lines) {
-		if line.Timestamp != "" {
-			resp.Cursor = nextCursor(line.Timestamp)
+		if cursor, ok := logs.ParseCursor(line.Timestamp); ok {
+			resp.Cursor = cursor
 			break
 		}
 	}
@@ -120,22 +138,6 @@ type logOptions struct {
 	tail  int
 	since string
 	level string
-}
-
-// nextCursor advances a log timestamp by a nanosecond so that passing it back
-// as `since` on the next read excludes the line we already returned. Docker's
-// `since` parameter is inclusive.
-func nextCursor(ts string) string {
-	if ts == "" {
-		return ""
-	}
-	t, err := time.Parse(time.RFC3339Nano, ts)
-	if err != nil {
-		// Fall back to the raw timestamp — better to risk a duplicate line
-		// than to silently break pagination.
-		return ts
-	}
-	return t.Add(time.Nanosecond).Format(cursorTimeFormat)
 }
 
 // filterLogLines drops lines below the given minimum log level. Empty level

@@ -264,6 +264,25 @@ describe("appendMetricPoint", () => {
     expect(next?.series[0]).toMatchObject({ label: "web", color: "#111" });
   });
 
+  // parseRangeResult labels a lone series with the chart title, so matching
+  // without the title left node disk, node network and task CPU charts
+  // appending a hard zero on every streamed point.
+  it("matches a lone label-less series by the chart title", () => {
+    const titled = {
+      labels: ["10:00:00", "10:00:15"],
+      timestamps: [1000, 1015],
+      series: [{ label: "Disk I/O", color: "#111", data: [1, 2] }],
+    };
+    const response = {
+      data: {
+        resultType: "vector",
+        result: [{ metric: {}, value: [1030, "9"] as [number, string] }],
+      },
+    } as unknown as PrometheusResponse;
+
+    expect(appendMetricPoint(titled, response, "Disk I/O")?.series[0]?.data).toEqual([2, 9]);
+  });
+
   it("returns null when the response carries no samples", () => {
     expect(appendMetricPoint(previous, pointResponse([]))).toBeNull();
   });

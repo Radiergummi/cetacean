@@ -140,10 +140,10 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	// Docker ignores since/until for service logs, so enforce them here.
 	lines = logs.FilterSince(lines, since)
 
-	if until != "" {
+	if cursor, ok := logs.ParseCursor(until); ok {
 		filtered := lines[:0]
 		for _, l := range lines {
-			if l.Timestamp >= until {
+			if !logs.Older(l.Timestamp, cursor) {
 				continue
 			}
 			filtered = append(filtered, l)
@@ -236,6 +236,17 @@ func (h *Handlers) serveLogsSSE(
 		close(ch)
 	}()
 
+	// The cursor only narrows the backlog Docker replays on connect. Live
+	// output the connection itself produces is never filtered — see
+	// logs.BacklogFilter for why that distinction has to be made.
+	backlog := logs.NewBacklogFilter(since)
+
+	// The id clients resume from. Docker interleaves tasks, so a line can
+	// arrive carrying an older timestamp than one already sent; letting the id
+	// follow arrival order would move the cursor backwards and discard the
+	// lines in between on the next resume.
+	var cursor string
+
 	keepalive := time.NewTicker(15 * time.Second)
 	defer keepalive.Stop()
 
@@ -249,15 +260,12 @@ func (h *Handlers) serveLogsSSE(
 			if streamFilter != "" && line.Stream != streamFilter {
 				continue
 			}
-			// The per-line form of logs.FilterSince: keep lines strictly newer
-			// than the cursor, but keep untimestamped lines too, since they
-			// cannot be placed relative to it and dropping them would
-			// silently lose output.
-			if since != "" && line.Timestamp != "" && line.Timestamp <= since {
+			if !backlog.Keep(line) {
 				continue
 			}
 			data, _ := json.Marshal(line)
-			if line.Timestamp != "" {
+			if line.Timestamp != "" && logs.Newer(line.Timestamp, cursor) {
+				cursor = line.Timestamp
 				fmt.Fprintf(w, "id: %s\n", line.Timestamp)
 			}
 			fmt.Fprintf(w, "data: %s\n\n", data)

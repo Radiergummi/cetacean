@@ -23,6 +23,22 @@ function streamingResponse(chunks: string[]): Response {
   });
 }
 
+/** A stream that connects, sends a keepalive, and stays open for a while. */
+function longLivedResponse(milliseconds: number): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(keepaliveFrame()));
+      setTimeout(() => controller.close(), milliseconds);
+    },
+  });
+
+  return new Response(body, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
 function rateLimitedResponse(retryAfterSeconds = 5): Response {
   return new Response(
     JSON.stringify({
@@ -92,10 +108,8 @@ function collector() {
   };
 }
 
-const noop = () => {};
-
-function connect(sink: ReturnType<typeof collector>, onActivity: () => void = noop) {
-  return openLogStream("/logs", sink.handlers, onActivity, new AbortController().signal);
+function connect(sink: ReturnType<typeof collector>) {
+  return openLogStream("/logs", sink.handlers, new AbortController().signal);
 }
 
 describe("openLogStream", () => {
@@ -153,18 +167,6 @@ describe("openLogStream", () => {
     await connect(sink);
 
     expect(sink.lines).toEqual([]);
-  });
-
-  it("counts a keepalive as activity so a quiet stream keeps its retry budget", async () => {
-    const sink = collector();
-    let activity = 0;
-    queueStream(keepaliveFrame());
-
-    await connect(sink, () => {
-      activity += 1;
-    });
-
-    expect(activity).toBeGreaterThan(0);
   });
 
   it("reports the id of the most recent frame as the cursor", async () => {
@@ -254,7 +256,7 @@ describe("openLogStream", () => {
       throw Object.assign(new Error("aborted"), { name: "AbortError" });
     });
 
-    const outcome = await openLogStream("/logs", sink.handlers, noop, controller.signal);
+    const outcome = await openLogStream("/logs", sink.handlers, controller.signal);
 
     expect(outcome.failure).toBeNull();
   });
@@ -353,15 +355,33 @@ describe("streamLogsWithRetry", () => {
     await active.finished;
   });
 
-  it("restores the full retry budget once the stream shows activity", async () => {
-    queueStream();
-    queueStream();
+  // A single byte used to restore the whole budget, which made a stream that
+  // connected, delivered something and dropped straight away reconnect once a
+  // second for the life of the page, never reaching the give-up state.
+  it("spends the budget on a stream that keeps dropping immediately", async () => {
+    queueStream(keepaliveFrame());
     queueStream(keepaliveFrame());
     const active = run();
 
     await vi.advanceTimersByTimeAsync(3000);
 
-    expect(active.retries.map(({ attempt }) => attempt)).toEqual([1, 2, 1]);
+    expect(active.retries.map(({ attempt }) => attempt)).toEqual([1, 2, 3]);
+
+    active.controller.abort();
+    await active.finished;
+  });
+
+  it("restores the budget after a connection that stayed up", async () => {
+    queueStream();
+    queue.push(() => longLivedResponse(45_000));
+    const active = run();
+
+    // The first connection drops at once and costs an attempt. The second
+    // stays up long enough to prove itself, so the failure that ends it starts
+    // counting from one again.
+    await vi.advanceTimersByTimeAsync(46_500);
+
+    expect(active.retries.map(({ attempt }) => attempt)).toEqual([1, 1]);
 
     active.controller.abort();
     await active.finished;

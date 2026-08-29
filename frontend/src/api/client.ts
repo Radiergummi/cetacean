@@ -82,9 +82,14 @@ function parseAllowHeader(response: Response): Set<string> {
   return new Set(header.split(",").map((method) => method.trim().toUpperCase()));
 }
 
-function redirectToLogin(): never {
+/** Sends the browser to the login page, remembering where it was. */
+export function redirectToLogin(): void {
   const redirect = encodeURIComponent(window.location.pathname + window.location.search);
   window.location.href = apiPath(`/auth/login?redirect=${redirect}`);
+}
+
+function redirectToLoginAndStop(): never {
+  redirectToLogin();
 
   // Throw to prevent callers from continuing while the browser navigates away.
   throw new Error("redirecting to login");
@@ -144,7 +149,7 @@ async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<FetchRe
 
   if (!res.ok) {
     if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
-      redirectToLogin();
+      redirectToLoginAndStop();
     }
 
     await throwResponseError(res);
@@ -164,7 +169,7 @@ async function fetchJGF<T>(path: string, signal?: AbortSignal): Promise<T> {
 
   if (!res.ok) {
     if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
-      redirectToLogin();
+      redirectToLoginAndStop();
     }
 
     await throwResponseError(res);
@@ -197,7 +202,7 @@ async function mutationFetch<T>(
 
   if (!res.ok) {
     if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
-      redirectToLogin();
+      redirectToLoginAndStop();
     }
 
     await throwResponseError(res);
@@ -393,7 +398,7 @@ async function fetchRange<T>(
 
   if (!response.ok) {
     if (response.status === 401 && response.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
-      redirectToLogin();
+      redirectToLoginAndStop();
     }
 
     await throwResponseError(response);

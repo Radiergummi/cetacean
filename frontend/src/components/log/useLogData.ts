@@ -152,8 +152,13 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       // past lines the user never saw — and resuming would then ask the
       // server for lines after those, losing them. Held back to here, an
       // uncommitted batch is merely redelivered on the next connection.
+      //
+      // Only ever forward: a service's tasks are interleaved and their
+      // timestamps come from different nodes' clocks, so a line can arrive
+      // older than one already shown. Following it would move the cursor back
+      // and replay everything in between on the next connection.
       for (const line of batch) {
-        if (line.timestamp) {
+        if (line.timestamp && (!newestRef.current || line.timestamp > newestRef.current)) {
           newestRef.current = line.timestamp;
         }
       }
@@ -182,10 +187,23 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
 
     void streamLogsWithRetry(
       urlFor,
-      newestRef.current || new Date().toISOString(),
+      // Only a cursor the server issued. Seeding from the browser's clock made
+      // that clock authoritative over the server's own log timestamps, so a
+      // laptop a couple of minutes ahead blanked the tail for as long as the
+      // skew lasted. With no cursor the stream simply starts at the present,
+      // which is exactly what an empty log has to do anyway.
+      newestRef.current ?? "",
       {
         onLine: (line) => {
           buffer.push(line);
+
+          // A hidden tab suspends requestAnimationFrame, so flush — where the
+          // line cap is applied — never runs. Without a bound here, a
+          // backgrounded viewer on a busy service grows this array until the
+          // tab is looked at again.
+          if (buffer.length > maxLiveLines) {
+            buffer.splice(0, buffer.length - maxLiveLines);
+          }
 
           if (!animationFrameId) {
             animationFrameId = requestAnimationFrame(flush);

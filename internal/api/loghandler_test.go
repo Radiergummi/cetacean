@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	json "github.com/goccy/go-json"
 
@@ -602,5 +603,101 @@ func TestHandleServiceLogs_SSE_AfterKeepsUntimestampedLines(t *testing.T) {
 	}
 	if strings.Contains(body, "before") {
 		t.Errorf("resumed stream replayed a line at or before the cursor:\n%s", body)
+	}
+}
+
+// A Go duration is a documented value for ?after=, but the resumed stream used
+// to compare it against Docker's timestamps as a raw string, where '2' < '3'
+// drops every line. The stream then emitted nothing but keepalives — which
+// count as activity, so the viewer showed a live badge over an empty view.
+func TestHandleServiceLogs_SSE_DurationCursorDeliversLines(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	now := time.Now().UTC()
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, now.Add(-2*time.Hour).Format(time.RFC3339Nano)+" too old\n"))
+	frames.Write(buildFrame(1, now.Add(-time.Minute).Format(time.RFC3339Nano)+" recent\n"))
+
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
+
+	req := httptest.NewRequest("GET", "/services/svc1/logs?after=30m", nil)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "text/event-stream")
+	req = withContentType(req, ContentTypeSSE)
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	body := w.Body.String()
+	if !strings.Contains(body, "recent") {
+		t.Errorf("a duration cursor dropped a line from within its window:\n%s", body)
+	}
+	if strings.Contains(body, "too old") {
+		t.Errorf("a duration cursor let through a line from before its window:\n%s", body)
+	}
+}
+
+// The cursor narrows the backlog Docker replays on connect, nothing more.
+// Applied to live output as well, a task on a node whose clock trails the one
+// that produced the cursor would be silently dropped for the whole life of the
+// connection.
+func TestHandleServiceLogs_SSE_DoesNotFilterLiveOutput(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z replayed\n"))
+	frames.Write(buildFrame(1, "2024-01-01T00:00:05.000000000Z caught up\n"))
+	frames.Write(buildFrame(1, "2024-01-01T00:00:02.000000000Z from a trailing clock\n"))
+
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
+
+	req := httptest.NewRequest(
+		"GET",
+		"/services/svc1/logs?after=2024-01-01T00:00:03.000000000Z",
+		nil,
+	)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "text/event-stream")
+	req = withContentType(req, ContentTypeSSE)
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	body := w.Body.String()
+	if strings.Contains(body, "replayed") {
+		t.Errorf("backlog before the cursor was replayed:\n%s", body)
+	}
+	if !strings.Contains(body, "from a trailing clock") {
+		t.Errorf("live output was filtered against the cursor:\n%s", body)
+	}
+}
+
+// Docker interleaves the output of a service's tasks, so a line can arrive
+// carrying an older timestamp than one already sent. Letting the id follow
+// arrival order moved the resume cursor backwards, so the next connection
+// discarded everything between the two.
+func TestHandleServiceLogs_SSE_EventIDOnlyAdvances(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, "2024-01-01T00:00:05.000000000Z from task a\n"))
+	frames.Write(buildFrame(1, "2024-01-01T00:00:03.000000000Z from task b\n"))
+
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
+
+	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "text/event-stream")
+	req = withContentType(req, ContentTypeSSE)
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	body := w.Body.String()
+	if !strings.Contains(body, "from task b") {
+		t.Fatalf("the out-of-order line was not delivered:\n%s", body)
+	}
+	if strings.Contains(body, "id: 2024-01-01T00:00:03.000000000Z") {
+		t.Errorf("the event id moved backwards:\n%s", body)
 	}
 }

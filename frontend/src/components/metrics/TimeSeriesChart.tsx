@@ -348,7 +348,9 @@ export default function TimeSeriesChart({
         const response = JSON.parse(event.data) as PrometheusResponse;
 
         setParsedMetrics((previous) =>
-          previous ? (appendMetricPoint(previous, response) ?? previous) : previous,
+          previous
+            ? (appendMetricPoint(previous, response, titleRef.current) ?? previous)
+            : previous,
         );
       } catch {
         /* ignore parse errors */
@@ -372,9 +374,12 @@ export default function TimeSeriesChart({
       if (document.visibilityState === "hidden") {
         stream.close();
       } else {
-        hasOpenedRef.current = false;
-        dataSnapRef.current = fetchedDataRef.current;
-
+        // The gate stays open. Closing it here re-ran this effect with the
+        // gate shut, which returned before subscribing and left nothing behind
+        // to reopen it — one tab switch and the chart stopped streaming until
+        // the range changed. There is nothing to guard against anyway: the
+        // query has not changed, and the stream's own initial event replaces
+        // the window on connect.
         fetchDataRef.current();
         setSSEKey((key) => key + 1);
       }

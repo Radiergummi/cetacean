@@ -65,6 +65,28 @@ describe("openEventStream", () => {
     handle.close();
   });
 
+  // Last-Event-ID lives on the EventSource instance the browser retries by
+  // itself, so a connection we open in its place presents nothing and the
+  // server has nothing to replay against. Without this signal the indicator
+  // went green over data frozen at the moment the stream died.
+  it("reports that a connection it reopened itself missed events", async () => {
+    const reopens: number[] = [];
+    const handle = openEventStream("/events", {
+      listeners: {},
+      onReopened: () => reopens.push(Date.now()),
+    });
+
+    MockEventSource.instance.simulateOpen();
+    expect(reopens).toHaveLength(0);
+
+    MockEventSource.instance.simulateError(true);
+    await vi.advanceTimersByTimeAsync(firstRetryDelay);
+    MockEventSource.instance.simulateOpen();
+
+    expect(reopens).toHaveLength(1);
+    handle.close();
+  });
+
   it("leaves the browser alone while it is retrying on its own", async () => {
     const handle = openEventStream("/events", { listeners: {} });
 

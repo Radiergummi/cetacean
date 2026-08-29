@@ -37,6 +37,12 @@ export interface EventStreamOptions {
   onOpen?: (() => void) | undefined;
   /** The connection dropped; a retry follows, by us or by the browser. */
   onDisconnected?: (() => void) | undefined;
+  /**
+   * A connection we reopened ourselves is now up, and the events produced
+   * while it was down are gone. See the note in `connect` for why the server
+   * cannot replay them for us.
+   */
+  onReopened?: (() => void) | undefined;
 }
 
 export interface EventStreamHandle {
@@ -49,7 +55,7 @@ export interface EventStreamHandle {
  * pending retry.
  */
 export function openEventStream(url: string, options: EventStreamOptions): EventStreamHandle {
-  const { listeners, onOpen, onDisconnected } = options;
+  const { listeners, onOpen, onDisconnected, onReopened } = options;
   let eventSource: EventSource | null = null;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let attempt = 0;
@@ -66,16 +72,26 @@ export function openEventStream(url: string, options: EventStreamOptions): Event
 
     document.removeEventListener("visibilitychange", reconnectWhenVisible);
     awaitingVisibility = false;
-    connect();
+    connect(true);
   };
 
-  const connect = () => {
+  const connect = (reopening = false) => {
     const source = new EventSource(url);
     eventSource = source;
 
     source.onopen = () => {
       attempt = 0;
       onOpen?.();
+
+      // The server replays missed events only for a client that presents
+      // Last-Event-ID, and that header lives on the EventSource instance the
+      // browser retries by itself — a connection we opened in its place sends
+      // nothing, so it gets neither the replay nor the full-sync signal sent
+      // in its place. Without telling the caller, the page would go green over
+      // data frozen at the moment the stream died.
+      if (reopening) {
+        onReopened?.();
+      }
     };
 
     source.onerror = () => {
@@ -97,7 +113,7 @@ export function openEventStream(url: string, options: EventStreamOptions): Event
       }
 
       retryTimer = setTimeout(
-        connect,
+        () => connect(true),
         backoffDelay(attempt, { base: baseReconnectDelay, max: maxReconnectDelay }),
       );
     };
