@@ -14,6 +14,7 @@ import { useHotkeys } from "./hooks/useHotkeys";
 import { useRecommendations } from "./hooks/useRecommendations";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
 import { apiPath, basePath } from "./lib/basePath";
+import { openEventStream } from "./lib/eventStream";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -253,21 +254,19 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
   const lastEventAtRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const es = new EventSource(apiPath("/events"));
-    es.onopen = () => setConnected(true);
-    es.onerror = () => setConnected(false);
-
     const touch = () => {
       const now = Date.now();
       lastEventAtRef.current = now;
       setLastEventAt(now);
     };
 
-    for (const type of sseEventTypes) {
-      es.addEventListener(type, touch);
-    }
-    es.addEventListener("batch", touch);
-    return () => es.close();
+    const stream = openEventStream(apiPath("/events"), {
+      listeners: Object.fromEntries([...sseEventTypes, "batch"].map((type) => [type, touch])),
+      onOpen: () => setConnected(true),
+      onDisconnected: () => setConnected(false),
+    });
+
+    return () => stream.close();
   }, []);
 
   return <ConnectionProvider value={{ connected, lastEventAt }}>{children}</ConnectionProvider>;

@@ -1,5 +1,6 @@
+import { encodeLogFrame, keepaliveFrame } from "../../test/mocks";
 import LogViewer from "./LogViewer";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { act, render, screen, waitFor, fireEvent } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -7,8 +8,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // Mock scrollIntoView, which jsdom doesn't support
 Element.prototype.scrollIntoView = vi.fn<() => void>();
 
-// Mock the api module
-vi.mock("../../api/client", () => ({
+// Stub only the api surface; the module's error helpers stay real because the
+// log stream parses problem responses through them.
+vi.mock("../../api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../api/client")>()),
   api: {
     serviceLogs: vi.fn<() => void>(),
     serviceLogsStreamURL: vi.fn<() => void>(),
@@ -41,35 +44,109 @@ function logResponse(
   };
 }
 
-// Mock EventSource
-class MockEventSource {
-  onmessage: ((event: MessageEvent) => void) | null = null;
-  onerror: (() => void) | null = null;
-  readyState = 0;
-  url: string;
+/**
+ * A live SSE response whose frames the test pushes by hand. The log tail reads
+ * its stream through fetch, so the harness hands back real Responses.
+ */
+class MockStream {
+  readonly url: string;
   closed = false;
-  static instances: MockEventSource[] = [];
+  private controller!: ReadableStreamDefaultController<Uint8Array>;
+  private readonly encoder = new TextEncoder();
+  readonly body: ReadableStream<Uint8Array>;
 
-  constructor(url: string) {
+  constructor(url: string, signal?: AbortSignal | undefined) {
     this.url = url;
-    MockEventSource.instances.push(this);
+    this.body = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        this.controller = controller;
+        // Mirror what a real fetch does when the caller aborts: the body
+        // errors out and the pending read rejects.
+        signal?.addEventListener("abort", () => {
+          if (this.closed) {
+            return;
+          }
+
+          this.closed = true;
+          controller.error(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        });
+      },
+      cancel: () => {
+        this.closed = true;
+      },
+    });
   }
 
-  close() {
+  /** Pushes a log line frame. */
+  emit(line: { timestamp: string; message: string }) {
+    this.controller.enqueue(this.encoder.encode(encodeLogFrame(line.timestamp, line.message)));
+  }
+
+  /** Pushes the server's periodic keepalive comment. */
+  keepalive() {
+    this.controller.enqueue(this.encoder.encode(keepaliveFrame()));
+  }
+
+  /** Ends the stream the way a dropped connection would. */
+  drop() {
     this.closed = true;
+    this.controller.close();
+  }
+}
+
+const streams: MockStream[] = [];
+/** Responses queued ahead of the next connections, e.g. to force a 429. */
+const queuedResponses: Response[] = [];
+
+function rateLimitedResponse(retryAfterSeconds = 5): Response {
+  return new Response(
+    JSON.stringify({
+      type: "/api/errors/LOG001",
+      title: "Too Many Log Streams",
+      detail: "too many active log streams",
+    }),
+    {
+      status: 429,
+      headers: {
+        "Content-Type": "application/problem+json",
+        "Retry-After": String(retryAfterSeconds),
+      },
+    },
+  );
+}
+
+function mockFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const queued = queuedResponses.shift();
+
+  if (queued) {
+    return Promise.resolve(queued);
   }
 
-  // Test helper: simulate receiving an SSE event
-  emit(data: string) {
-    this.onmessage?.({ data } as MessageEvent);
-  }
+  const stream = new MockStream(String(input), init?.signal ?? undefined);
+  streams.push(stream);
+
+  return Promise.resolve(
+    new Response(stream.body, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    }),
+  );
+}
+
+/** The stream opened most recently, which is the one currently being read. */
+function currentStream(): MockStream {
+  return streams[streams.length - 1]!;
 }
 
 beforeEach(() => {
   mockServiceLogs.mockReset();
   mockServiceLogsStreamURL.mockReset();
-  MockEventSource.instances = [];
-  vi.stubGlobal("EventSource", MockEventSource);
+  streams.length = 0;
+  queuedResponses.length = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(mockFetch),
+  );
 });
 
 afterEach(() => {
@@ -208,17 +285,10 @@ describe("LogViewer", () => {
     fireEvent.click(screen.getByTitle("Live tail"));
 
     expect(screen.getByText("Live")).toBeInTheDocument();
-    expect(MockEventSource.instances).toHaveLength(1);
-    expect(MockEventSource.instances[0]?.url).toContain("/services/svc1/logs");
+    await waitFor(() => expect(streams).toHaveLength(1));
+    expect(streams[0]?.url).toContain("/services/svc1/logs");
 
-    // Simulate receiving an SSE event
-    MockEventSource.instances[0]?.emit(
-      JSON.stringify({
-        timestamp: "2024-01-01T00:00:01Z",
-        message: "streamed line",
-        stream: "stdout",
-      }),
-    );
+    currentStream().emit({ timestamp: "2024-01-01T00:00:01Z", message: "streamed line" });
 
     await waitFor(() => {
       expect(screen.getByText(/streamed line/)).toBeInTheDocument();
@@ -254,11 +324,12 @@ describe("LogViewer", () => {
 
     fireEvent.click(screen.getByTitle("Live tail"));
     expect(screen.getByText("Live")).toBeInTheDocument();
-    expect(MockEventSource.instances[0]?.closed).toBe(false);
+    await waitFor(() => expect(streams).toHaveLength(1));
+    expect(streams[0]?.closed).toBe(false);
 
     fireEvent.click(screen.getByTitle("Stop live"));
     expect(screen.queryByText("Live")).not.toBeInTheDocument();
-    expect(MockEventSource.instances[0]?.closed).toBe(true);
+    await waitFor(() => expect(streams[0]?.closed).toBe(true));
   });
 
   it("filters logs by level", async () => {
@@ -290,16 +361,11 @@ describe("LogViewer", () => {
     await waitFor(() => expect(screen.getByText(/initial/)).toBeInTheDocument());
 
     fireEvent.click(screen.getByTitle("Live tail"));
-    const es = MockEventSource.instances[0]!;
+    await waitFor(() => expect(streams).toHaveLength(1));
+    const stream = currentStream();
 
     for (let i = 0; i < 5; i++) {
-      es.emit(
-        JSON.stringify({
-          timestamp: `2024-01-01T00:00:0${i + 1}Z`,
-          message: `batch-${i}`,
-          stream: "stdout",
-        }),
-      );
+      stream.emit({ timestamp: `2024-01-01T00:00:0${i + 1}Z`, message: `batch-${i}` });
     }
 
     await waitFor(() => {
@@ -394,5 +460,149 @@ describe("LogViewer", () => {
         expect.objectContaining({ after: expect.any(String) }),
       );
     });
+  });
+});
+
+describe("LogViewer live tail resilience", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Advances timers and lets React flush the resulting state updates. */
+  async function flush(milliseconds = 0) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(milliseconds);
+    });
+  }
+
+  async function startLiveTail() {
+    mockServiceLogs.mockResolvedValue(
+      logResponse([{ message: "initial", timestamp: "2024-01-01T00:00:00Z" }]),
+    );
+    mockServiceLogsStreamURL.mockImplementation(
+      (id: string, options?: { after?: string | undefined }) =>
+        `/services/${id}/logs?after=${options?.after ?? ""}`,
+    );
+
+    renderWithRouter(<LogViewer serviceId="svc1" />);
+    await flush();
+    fireEvent.click(screen.getByTitle("Live tail"));
+    await flush();
+  }
+
+  it("reconnects after the stream drops", async () => {
+    await startLiveTail();
+    expect(streams).toHaveLength(1);
+
+    currentStream().drop();
+    await flush(1000);
+
+    expect(streams).toHaveLength(2);
+  });
+
+  it("keeps the tail live and shows a reconnecting indicator while waiting to retry", async () => {
+    await startLiveTail();
+
+    currentStream().drop();
+    await flush();
+
+    expect(screen.getByText(/Reconnecting \(1\/5\)/)).toBeInTheDocument();
+  });
+
+  it("names the log stream connection limit when the server answers 429", async () => {
+    await startLiveTail();
+
+    queuedResponses.push(rateLimitedResponse(5));
+    currentStream().drop();
+    await flush(1000);
+    await flush();
+
+    expect(screen.getByText(/too many log streams — retrying in 5s/i)).toBeInTheDocument();
+  });
+
+  it("gives up after the retry cap and offers to resume", async () => {
+    await startLiveTail();
+
+    for (const delay of [1000, 2000, 4000, 8000, 16_000]) {
+      currentStream().drop();
+      await flush(delay);
+    }
+
+    currentStream().drop();
+    await flush(32_000);
+
+    expect(screen.getByText(/Live tail stopped/i)).toBeInTheDocument();
+    expect(screen.queryByText("Live")).not.toBeInTheDocument();
+  });
+
+  it("streams again when the user resumes after the retry cap", async () => {
+    await startLiveTail();
+
+    for (const delay of [1000, 2000, 4000, 8000, 16_000]) {
+      currentStream().drop();
+      await flush(delay);
+    }
+
+    currentStream().drop();
+    await flush(32_000);
+    const attemptsBeforeResume = streams.length;
+
+    fireEvent.click(screen.getByRole("button", { name: /resume/i }));
+    await flush();
+
+    expect(streams.length).toBe(attemptsBeforeResume + 1);
+    expect(screen.getByText("Live")).toBeInTheDocument();
+  });
+
+  it("resumes from the last line actually streamed, not the initial fetch cursor", async () => {
+    await startLiveTail();
+
+    currentStream().emit({ timestamp: "2024-01-01T00:05:00Z", message: "streamed line" });
+    await flush();
+
+    for (const delay of [1000, 2000, 4000, 8000, 16_000]) {
+      currentStream().drop();
+      await flush(delay);
+    }
+
+    currentStream().drop();
+    await flush(32_000);
+
+    fireEvent.click(screen.getByRole("button", { name: /resume/i }));
+    await flush();
+
+    expect(currentStream().url).toContain("after=2024-01-01T00:05:00Z");
+    expect(currentStream().url).not.toContain("after=2024-01-01T00:00:00Z");
+  });
+
+  it("does not skip lines that were still buffered when the tail was stopped", async () => {
+    await startLiveTail();
+
+    currentStream().emit({ timestamp: "2024-01-01T00:05:00Z", message: "rendered line" });
+    // Let the animation frame commit this one, so the cursor legitimately
+    // advances to it.
+    await flush(20);
+
+    expect(screen.getByText(/rendered line/)).toBeInTheDocument();
+
+    // A burst arrives and is buffered, but the tail is stopped before the
+    // animation frame that would commit it — so these lines never reach the
+    // view. The cursor must not move past them, or resuming would ask the
+    // server for lines after ones the user never saw.
+    currentStream().emit({ timestamp: "2024-01-01T00:09:00Z", message: "buffered, never shown" });
+    fireEvent.click(screen.getByTitle("Stop live"));
+    await flush();
+
+    expect(screen.queryByText(/buffered, never shown/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("Live tail"));
+    await flush();
+
+    expect(currentStream().url).toContain("after=2024-01-01T00:05:00Z");
+    expect(currentStream().url).not.toContain("after=2024-01-01T00:09:00Z");
   });
 });

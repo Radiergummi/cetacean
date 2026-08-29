@@ -7,14 +7,40 @@ import { vi } from "vitest";
  * Minimal EventSource mock for tests that use SSE subscriptions.
  */
 export class MockEventSource {
-  static instance: MockEventSource;
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
+
+  /** Every instance constructed since the last reset, oldest first. */
+  static instances: MockEventSource[] = [];
+
+  /** The most recently constructed instance. */
+  static get instance(): MockEventSource {
+    return this.instances[this.instances.length - 1]!;
+  }
   onopen: (() => void) | null = null;
   onerror: (() => void) | null = null;
   listeners = new Map<string, ((e: MessageEvent) => void)[]>();
   closed = false;
+  readyState: number = MockEventSource.CONNECTING;
 
   constructor(_url: string) {
-    MockEventSource.instance = this;
+    MockEventSource.instances.push(this);
+  }
+
+  /** Simulates the browser accepting the connection. */
+  simulateOpen() {
+    this.readyState = MockEventSource.OPEN;
+    this.onopen?.();
+  }
+
+  /**
+   * Simulates a failure. `permanent` mirrors a non-2xx response, after which
+   * the browser closes the connection and stops retrying by itself.
+   */
+  simulateError(permanent = false) {
+    this.readyState = permanent ? MockEventSource.CLOSED : MockEventSource.CONNECTING;
+    this.onerror?.();
   }
 
   addEventListener(type: string, handler: (e: MessageEvent) => void) {
@@ -25,6 +51,7 @@ export class MockEventSource {
 
   close() {
     this.closed = true;
+    this.readyState = MockEventSource.CLOSED;
   }
 
   simulateEvent(type: string, data: unknown) {
@@ -80,4 +107,23 @@ export function createWrapper(
 
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   };
+}
+
+/**
+ * Encodes one log SSE frame the way the backend does: an `id:` line carrying
+ * the timestamp, then the JSON payload.
+ */
+export function encodeLogFrame(
+  timestamp: string,
+  message: string,
+  stream: "stdout" | "stderr" = "stdout",
+): string {
+  const data = JSON.stringify({ timestamp, message, stream });
+
+  return `id: ${timestamp}\ndata: ${data}\n\n`;
+}
+
+/** The keepalive comment the backend emits every 15 seconds. */
+export function keepaliveFrame(): string {
+  return ": keepalive\n\n";
 }

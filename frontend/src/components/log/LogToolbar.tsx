@@ -1,5 +1,7 @@
+import { Spinner } from "../Spinner";
 import type { TimeRange, Level } from "./log-utils";
 import { presets, toLocalInput, formatShortDate } from "./log-utils";
+import type { LiveTailStatus } from "./useLogData";
 import { X, Clock, ChevronDown } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
@@ -195,3 +197,87 @@ export function StreamFilterToggle({
 }
 
 export { IconButton as ToolbarButton } from "../IconButton";
+
+/**
+ * Counts down to a deadline, ticking once a second. Passing null keeps the
+ * timer off, so the countdown only runs while something is displaying it.
+ */
+function useCountdown(deadline: number | null | undefined): number {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (deadline === null || deadline === undefined) {
+      return;
+    }
+
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+
+    return () => clearInterval(timer);
+  }, [deadline]);
+
+  if (deadline === null || deadline === undefined) {
+    return 0;
+  }
+
+  return Math.max(0, Math.ceil((deadline - now) / 1000));
+}
+
+/**
+ * Reports the state of the live tail: streaming, waiting out a retry, or
+ * stopped after exhausting its retries.
+ */
+export function LiveStatus({
+  live,
+  status,
+  onResume,
+}: {
+  live: boolean;
+  status: LiveTailStatus | null;
+  onResume: () => void;
+}) {
+  const retrying = live && status?.state === "retrying";
+  // Only the server-explained wait shows a countdown, so only that case needs
+  // a ticking clock.
+  const secondsLeft = useCountdown(retrying && status.reason ? status.retryAt : null);
+
+  if (retrying) {
+    return (
+      <span className="me-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+        <Spinner className="size-3" />
+        <span>
+          {status.reason
+            ? `${status.reason} — retrying in ${secondsLeft}s`
+            : `Reconnecting (${status.attempt}/${status.maxAttempts})…`}
+        </span>
+      </span>
+    );
+  }
+
+  if (live) {
+    return (
+      <span className="me-2 flex items-center gap-1.5 text-xs text-green-500 opacity-100 transition starting:opacity-0">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
+        Live
+      </span>
+    );
+  }
+
+  if (status?.state === "stopped") {
+    return (
+      <span className="me-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span>
+          {status.reason ? `Live tail stopped — ${status.reason}.` : "Live tail stopped."}
+        </span>
+        <button
+          onClick={onResume}
+          className="rounded-md border px-2 py-0.5 text-xs hover:bg-muted"
+        >
+          Resume
+        </button>
+      </span>
+    );
+  }
+
+  return null;
+}

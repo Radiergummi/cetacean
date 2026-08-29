@@ -108,6 +108,47 @@ export function normalizePrometheusRows(data: PrometheusResponse["data"]): Norma
     .filter((row): row is NormalizedMetricRow => row !== null);
 }
 
+/**
+ * Advances a fixed-width window by one sample: drops the oldest point and
+ * appends the newest, matching each series by its label. A series the
+ * response omits gets a zero so every series stays the same length.
+ *
+ * The title has to be the same one parseRangeResult was given: a query
+ * returning a single series is labelled with the chart's title, and matching
+ * without it appends a hard zero to every such chart on every streamed point.
+ *
+ * Returns null when the response carries nothing usable, meaning the caller
+ * should keep the window it already has.
+ */
+export function appendMetricPoint(
+  previous: ParsedMetrics,
+  response: PrometheusResponse,
+  title?: string | undefined,
+): ParsedMetrics | null {
+  const result = response.data?.result?.filter(({ value }) => value);
+
+  if (!result?.length) {
+    return null;
+  }
+
+  const timestamp = Number(result[0]?.value?.[0]);
+  const timeLabel = new Date(timestamp * 1000).toLocaleTimeString();
+
+  return {
+    labels: [...previous.labels.slice(1), timeLabel],
+    timestamps: [...previous.timestamps.slice(1), timestamp],
+    series: previous.series.map((series) => {
+      const match = result.find(
+        ({ metric }) =>
+          seriesLabel(metric, result.length === 1 ? title : undefined) === series.label,
+      );
+      const value = match ? Number(match.value?.[1]) : 0;
+
+      return { ...series, data: [...series.data.slice(1), value] };
+    }),
+  };
+}
+
 /** Returns true if the series labels changed between two datasets. */
 export function seriesChanged(previous: ParsedMetrics | null, next: ParsedMetrics): boolean {
   if (!previous || previous.series.length !== next.series.length) {

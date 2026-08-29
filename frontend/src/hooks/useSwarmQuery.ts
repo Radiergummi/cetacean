@@ -150,11 +150,31 @@ export function useSwarmQuery<T>(
                 return old;
               }
 
+              const loaded = old.pages.reduce((sum, page) => sum + page.data.items.length, 0);
+              const lastIndex = old.pages.length - 1;
+              const knownTotal = old.pages[lastIndex]?.data.total ?? 0;
+
+              // A list already holding every item it counts has nowhere left
+              // to page to, so the new resource belongs on screen now. Raising
+              // the total without it would leave the table's load-more
+              // sentinel believing a page is still outstanding; it would fetch
+              // an offset overlapping what is loaded and render duplicate
+              // rows. While pages remain unloaded the count is all we can say:
+              // the resource may well sort into one of them.
+              const complete = loaded >= knownTotal;
+
               return {
                 ...old,
-                pages: old.pages.map((page) => ({
+                pages: old.pages.map((page, index) => ({
                   ...page,
-                  data: { ...page.data, total: page.data.total + 1 },
+                  data: {
+                    ...page.data,
+                    total: page.data.total + 1,
+                    items:
+                      complete && index === lastIndex
+                        ? [...page.data.items, resource]
+                        : page.data.items,
+                  },
                 })),
               };
             });

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/logs"
 )
 
 // LogStream is an alias for the io.ReadCloser returned by Docker log APIs.
@@ -107,19 +109,19 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	logs, err := fetch(ctx, strconv.Itoa(tail), false, since, until)
+	stream, err := fetch(ctx, strconv.Itoa(tail), false, since, until)
 	if err != nil {
 		slog.Error("failed to get logs", "error", err)
 		writeErrorCode(w, r, "LOG006", "failed to get logs")
 		return
 	}
-	defer logs.Close() //nolint:errcheck
+	defer stream.Close() //nolint:errcheck
 
 	// Docker's ServiceLogs with Follow=false may not close the stream
 	// after sending all data. Use an idle cancel: once we've received
 	// some data, if no new data arrives within 2s, cancel the context
 	// so the blocked read unblocks immediately.
-	lines, err := ParseDockerLogsWithIdleCancel(logs, cancel, 2*time.Second)
+	lines, err := logs.ParseDockerLogsWithIdleCancel(stream, cancel, 2*time.Second)
 	if err != nil {
 		slog.Error("failed to parse logs", "error", err)
 		writeErrorCode(w, r, "LOG007", "failed to parse logs")
@@ -136,13 +138,12 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	})
 
 	// Docker ignores since/until for service logs, so enforce them here.
-	if since != "" || until != "" {
+	lines = logs.FilterSince(lines, since)
+
+	if cursor, ok := logs.ParseCursor(until); ok {
 		filtered := lines[:0]
 		for _, l := range lines {
-			if since != "" && l.Timestamp <= since {
-				continue
-			}
-			if until != "" && l.Timestamp >= until {
+			if !logs.Older(l.Timestamp, cursor) {
 				continue
 			}
 			filtered = append(filtered, l)
@@ -207,13 +208,21 @@ func (h *Handlers) serveLogsSSE(
 		return
 	}
 
-	logs, err := fetch(r.Context(), "0", true, since, "")
+	// A fresh stream starts at "now"; a resumed one reaches back for the lines
+	// it missed. Docker ignores since for service logs, so the backlog has to
+	// be requested as a line count and narrowed to the cursor below.
+	tail := "0"
+	if since != "" {
+		tail = strconv.Itoa(logResumeTail)
+	}
+
+	stream, err := fetch(r.Context(), tail, true, since, "")
 	if err != nil {
 		slog.Error("failed to stream logs", "error", err)
 		writeErrorCode(w, r, "LOG008", "failed to stream logs")
 		return
 	}
-	defer logs.Close() //nolint:errcheck
+	defer stream.Close() //nolint:errcheck
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -223,9 +232,20 @@ func (h *Handlers) serveLogsSSE(
 	ch := make(chan LogLine, 64)
 	done := make(chan error, 1)
 	go func() {
-		done <- StreamDockerLogs(logs, ch)
+		done <- logs.StreamDockerLogs(stream, ch)
 		close(ch)
 	}()
+
+	// The cursor only narrows the backlog Docker replays on connect. Live
+	// output the connection itself produces is never filtered — see
+	// logs.BacklogFilter for why that distinction has to be made.
+	backlog := logs.NewBacklogFilter(since)
+
+	// The id clients resume from. Docker interleaves tasks, so a line can
+	// arrive carrying an older timestamp than one already sent; letting the id
+	// follow arrival order would move the cursor backwards and discard the
+	// lines in between on the next resume.
+	var cursor string
 
 	keepalive := time.NewTicker(15 * time.Second)
 	defer keepalive.Stop()
@@ -240,8 +260,12 @@ func (h *Handlers) serveLogsSSE(
 			if streamFilter != "" && line.Stream != streamFilter {
 				continue
 			}
+			if !backlog.Keep(line) {
+				continue
+			}
 			data, _ := json.Marshal(line)
-			if line.Timestamp != "" {
+			if line.Timestamp != "" && logs.Newer(line.Timestamp, cursor) {
+				cursor = line.Timestamp
 				fmt.Fprintf(w, "id: %s\n", line.Timestamp)
 			}
 			fmt.Fprintf(w, "data: %s\n\n", data)
@@ -250,7 +274,7 @@ func (h *Handlers) serveLogsSSE(
 			fmt.Fprint(w, ": keepalive\n\n")
 			flusher.Flush()
 		case <-r.Context().Done():
-			logs.Close() // unblocks StreamDockerLogs's io.Read
+			stream.Close() // unblocks StreamDockerLogs's io.Read
 			for range ch {
 			}
 			<-done

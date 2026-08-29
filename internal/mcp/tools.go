@@ -227,7 +227,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithString(
 					"since",
 					mcplib.Description(
-						"RFC 3339 timestamp; only return lines emitted at or after this time.",
+						"RFC 3339 timestamp; only return lines emitted strictly after this time.",
 					),
 				),
 				mcplib.WithString(

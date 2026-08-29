@@ -10,12 +10,13 @@ import { api } from "@/api/client.ts";
 import type { PrometheusResponse } from "@/api/types.ts";
 import { useMatchesBreakpoint } from "@/hooks/useMatchesBreakpoint.ts";
 import { getSemanticChartColor } from "@/lib/chartColors.ts";
+import { openEventStream } from "@/lib/eventStream.ts";
 import { formatMetricValue } from "@/lib/format.ts";
 import {
+  appendMetricPoint,
   type ParsedMetrics,
   parseRangeResult,
   seriesChanged,
-  seriesLabel,
 } from "@/lib/metricsParser.ts";
 import { generateMockSeries } from "@/lib/mockChartData.ts";
 import { getErrorMessage } from "@/lib/utils";
@@ -325,9 +326,7 @@ export default function TimeSeriesChart({
     const rangeSec = rangeIntervals[range] || 3600;
     const step = Math.max(Math.floor(rangeSec / 300), 15);
     const url = api.metricsStreamURL(query, step, rangeSec);
-    const eventSource = new EventSource(url);
-
-    eventSource.addEventListener("initial", (event: MessageEvent) => {
+    const handleInitial = (event: MessageEvent) => {
       try {
         const response = JSON.parse(event.data) as PrometheusResponse;
         const parsed = parseRangeResult(response, titleRef.current, colorOverrideRef.current);
@@ -342,61 +341,45 @@ export default function TimeSeriesChart({
       } catch {
         /* ignore parse errors */
       }
-    });
+    };
 
-    eventSource.addEventListener("point", (event: MessageEvent) => {
+    const handlePoint = (event: MessageEvent) => {
       try {
         const response = JSON.parse(event.data) as PrometheusResponse;
 
-        const result = response.data?.result?.filter(({ value }) => value);
-
-        if (!result?.length) {
-          return;
-        }
-
-        setParsedMetrics((previous) => {
-          if (!previous) {
-            return previous;
-          }
-
-          const timestamp = Number(result[0]?.value?.[0]);
-          const timeLabel = new Date(timestamp * 1000).toLocaleTimeString();
-          const newTimestamps = [...previous.timestamps.slice(1), timestamp];
-          const newLabels = [...previous.labels.slice(1), timeLabel];
-          const newSeries = previous.series.map((series) => {
-            const match = result.find(({ metric }) => seriesLabel(metric) === series.label);
-            const value = match ? Number(match.value?.[1]) : 0;
-
-            return { ...series, data: [...series.data.slice(1), value] };
-          });
-
-          return {
-            labels: newLabels,
-            timestamps: newTimestamps,
-            series: newSeries,
-          };
-        });
+        setParsedMetrics((previous) =>
+          previous
+            ? (appendMetricPoint(previous, response, titleRef.current) ?? previous)
+            : previous,
+        );
       } catch {
         /* ignore parse errors */
       }
-    });
-
-    eventSource.addEventListener("query_error", (event: MessageEvent) => {
-      console.warn("[metrics stream] Prometheus error:", event.data); // eslint-disable-line no-console
-    });
-
-    eventSource.onerror = () => {
-      eventSource.close();
     };
+
+    const handleQueryError = (event: MessageEvent) => {
+      console.warn("[metrics stream] Prometheus error:", event.data); // eslint-disable-line no-console
+    };
+
+    const stream = openEventStream(url, {
+      listeners: {
+        initial: handleInitial,
+        point: handlePoint,
+        query_error: handleQueryError,
+      },
+    });
 
     // Close SSE on tab hide; tab show triggers a re-run via sseKey
     const visibilityHandler = () => {
       if (document.visibilityState === "hidden") {
-        eventSource.close();
+        stream.close();
       } else {
-        hasOpenedRef.current = false;
-        dataSnapRef.current = fetchedDataRef.current;
-
+        // The gate stays open. Closing it here re-ran this effect with the
+        // gate shut, which returned before subscribing and left nothing behind
+        // to reopen it — one tab switch and the chart stopped streaming until
+        // the range changed. There is nothing to guard against anyway: the
+        // query has not changed, and the stream's own initial event replaces
+        // the window on connect.
         fetchDataRef.current();
         setSSEKey((key) => key + 1);
       }
@@ -405,7 +388,7 @@ export default function TimeSeriesChart({
     document.addEventListener("visibilitychange", visibilityHandler);
 
     return () => {
-      eventSource.close();
+      stream.close();
       document.removeEventListener("visibilitychange", visibilityHandler);
     };
   }, [query, range, from, to, streaming, sseKey]);

@@ -158,6 +158,48 @@ describe("useSwarmQuery", () => {
     expect(result.current.data[0]?.ID).toBe("1");
   });
 
+  it("SSE appends unknown items to a fully loaded list", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(
+        makeFetchResult(
+          [
+            { ID: "1", Name: "a" },
+            { ID: "2", Name: "b" },
+          ],
+          2,
+        ),
+      );
+
+    const { result } = renderHook(
+      () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.hasMore).toBe(false);
+
+    const created = { ID: "3", Name: "c" };
+    act(() =>
+      MockEventSource.instance.simulateEvent("service", {
+        type: "service",
+        action: "update",
+        id: "3",
+        resource: created,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.total).toBe(3));
+
+    // The list held every item, so the new one belongs on screen. Bumping the
+    // total without it would leave a page's worth of items unaccounted for,
+    // and the table's load-more sentinel would fetch an offset that overlaps
+    // what is already loaded — rendering duplicate rows.
+    expect(result.current.data).toHaveLength(3);
+    expect(result.current.data).toContainEqual(created);
+    expect(result.current.hasMore).toBe(false);
+  });
+
   it("SSE removes item", async () => {
     const fetchFn = vi
       .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()

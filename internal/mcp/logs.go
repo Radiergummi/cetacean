@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/radiergummi/cetacean/internal/api"
 	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/logs"
 )
 
 // LogStreamer is the subset of the docker.Client log API the MCP server needs.
@@ -30,18 +31,17 @@ type LogStreamer interface {
 // LogResourceResponse is the body returned by reading
 // cetacean://services/<id>/logs and the get_logs tool. Lines are time-ordered
 // (oldest first). Cursor is opaque to clients but in practice is the
-// RFC3339 timestamp of the last emitted line — pass it back as `since` on
-// the next read to receive only newer lines.
+// timestamp of the newest line returned — pass it back as `since` on the next
+// read to receive only lines newer than it.
 type LogResourceResponse struct {
-	Lines  []api.LogLine `json:"lines"`
-	Cursor string        `json:"cursor,omitempty"`
+	Lines  []logs.LogLine `json:"lines"`
+	Cursor string         `json:"cursor,omitempty"`
 }
 
 const (
-	defaultLogTail   = 100
-	maxLogTail       = 1000
-	logFetchTimeout  = 5 * time.Second
-	cursorTimeFormat = time.RFC3339Nano
+	defaultLogTail  = 100
+	maxLogTail      = 1000
+	logFetchTimeout = 5 * time.Second
 )
 
 // readServiceLogsImpl drives both the cetacean://services/{id}/logs read and
@@ -54,15 +54,29 @@ func (s *Server) readServiceLogsImpl(
 	opts logOptions,
 ) (LogResourceResponse, error) {
 	if s.logs == nil {
-		return LogResourceResponse{Lines: []api.LogLine{}}, nil
+		return LogResourceResponse{Lines: []logs.LogLine{}}, nil
 	}
 
-	tail := opts.tail
-	if tail <= 0 {
-		tail = defaultLogTail
+	if opts.since != "" {
+		if _, err := time.Parse(time.RFC3339Nano, opts.since); err != nil {
+			return LogResourceResponse{}, fmt.Errorf("since: %w", err)
+		}
 	}
-	if tail > maxLogTail {
-		tail = maxLogTail
+
+	wanted := opts.tail
+	if wanted <= 0 {
+		wanted = defaultLogTail
+	}
+	if wanted > maxLogTail {
+		wanted = maxLogTail
+	}
+
+	// Docker ignores `since` for service logs, so a cursored read has to pull
+	// a wider window and narrow it here. The widening is an implementation
+	// detail: the caller asked for `tail` lines and gets at most that many.
+	tail := wanted
+	if opts.since != "" {
+		tail = min(tail*10, maxLogTail)
 	}
 
 	fetchCtx, cancel := context.WithTimeout(ctx, logFetchTimeout)
@@ -86,16 +100,34 @@ func (s *Server) readServiceLogsImpl(
 	// often leaves the stream open until the deadline expires. Cancelling
 	// the fetch context 250ms after the last frame returns control without
 	// waiting out the full logFetchTimeout. Mirrors REST log_handlers.go.
-	lines, err := api.ParseDockerLogsWithIdleCancel(reader, cancel, 250*time.Millisecond)
+	lines, err := logs.ParseDockerLogsWithIdleCancel(reader, cancel, 250*time.Millisecond)
 	if err != nil {
 		return LogResourceResponse{}, fmt.Errorf("parse logs: %w", err)
 	}
 
 	lines = filterLogLines(lines, opts.level)
+	lines = logs.FilterSince(lines, opts.since)
 
-	resp := LogResourceResponse{Lines: lines}
-	if len(lines) > 0 {
-		resp.Cursor = nextCursor(lines[len(lines)-1].Timestamp)
+	// Docker interleaves the output of a service's tasks, so arrival order is
+	// not time order. Sorting first makes the truncation below keep the truly
+	// newest lines and the cursor the truly newest timestamp — without it a
+	// late-arriving older line would push the cursor backwards, silently
+	// dropping everything between the two on the next read. Mirrors the REST
+	// path in api/log_handlers.go.
+	slices.SortStableFunc(lines, func(a, b logs.LogLine) int {
+		return strings.Compare(a.Timestamp, b.Timestamp)
+	})
+
+	if len(lines) > wanted {
+		lines = lines[len(lines)-wanted:]
+	}
+
+	resp := LogResourceResponse{Lines: lines, Cursor: opts.since}
+	for _, line := range slices.Backward(lines) {
+		if cursor, ok := logs.ParseCursor(line.Timestamp); ok {
+			resp.Cursor = cursor
+			break
+		}
 	}
 	return resp, nil
 }
@@ -108,27 +140,11 @@ type logOptions struct {
 	level string
 }
 
-// nextCursor advances a log timestamp by a nanosecond so that passing it back
-// as `since` on the next read excludes the line we already returned. Docker's
-// `since` parameter is inclusive.
-func nextCursor(ts string) string {
-	if ts == "" {
-		return ""
-	}
-	t, err := time.Parse(time.RFC3339Nano, ts)
-	if err != nil {
-		// Fall back to the raw timestamp — better to risk a duplicate line
-		// than to silently break pagination.
-		return ts
-	}
-	return t.Add(time.Nanosecond).Format(cursorTimeFormat)
-}
-
 // filterLogLines drops lines below the given minimum log level. Empty level
 // returns the input unchanged. The level comparison is best-effort: Docker
 // log lines don't carry a structured level, so we match common prefixes
 // (DEBUG/INFO/WARN/ERROR/FATAL) anywhere in the message text.
-func filterLogLines(lines []api.LogLine, level string) []api.LogLine {
+func filterLogLines(lines []logs.LogLine, level string) []logs.LogLine {
 	if level == "" {
 		return lines
 	}
@@ -136,7 +152,7 @@ func filterLogLines(lines []api.LogLine, level string) []api.LogLine {
 	if !ok {
 		return lines
 	}
-	out := make([]api.LogLine, 0, len(lines))
+	out := make([]logs.LogLine, 0, len(lines))
 	for _, l := range lines {
 		if lineLevelRank(l.Message) >= minRank {
 			out = append(out, l)

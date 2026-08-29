@@ -1,5 +1,6 @@
 import { useLatestRef } from "./useLatestRef";
 import { apiPath } from "@/lib/basePath";
+import { openEventStream } from "@/lib/eventStream";
 import { createContext, useContext, useEffect, useState } from "react";
 
 interface SSEEvent {
@@ -32,11 +33,6 @@ export function useResourceStream(path: string, listener: SSEListener) {
   const listenerRef = useLatestRef(listener);
 
   useEffect(() => {
-    const eventSource = new EventSource(apiPath(path));
-
-    eventSource.onopen = () => setConnected(true);
-    eventSource.onerror = () => setConnected(false);
-
     const handler = (event: MessageEvent) => {
       try {
         listenerRef.current(JSON.parse(event.data) as SSEEvent);
@@ -57,13 +53,21 @@ export function useResourceStream(path: string, listener: SSEListener) {
       }
     };
 
-    for (const type of sseEventTypes) {
-      eventSource.addEventListener(type, handler);
-    }
+    const stream = openEventStream(apiPath(path), {
+      listeners: {
+        ...Object.fromEntries(sseEventTypes.map((type) => [type, handler])),
+        batch: batchHandler,
+      },
+      onOpen: () => setConnected(true),
+      onDisconnected: () => setConnected(false),
+      // A stream we reopened ourselves missed everything that happened while
+      // it was down, and cannot ask the server to replay it. A sync tells
+      // every consumer to refetch, which is what they already do when the
+      // server declares one.
+      onReopened: () => listenerRef.current({ type: "sync", action: "sync", id: "" }),
+    });
 
-    eventSource.addEventListener("batch", batchHandler);
-
-    return () => eventSource.close();
+    return () => stream.close();
   }, [path]);
 
   return { connected };

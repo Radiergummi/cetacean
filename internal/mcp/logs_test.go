@@ -6,18 +6,21 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/radiergummi/cetacean/internal/api"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/logs"
 )
 
 // buildLogFrame mirrors the Docker multiplexed log frame format used by
-// api.ParseDockerLogs: [stream(1)][padding(3)][size(4 BE)][payload].
+// logs.ParseDockerLogs: [stream(1)][padding(3)][size(4 BE)][payload].
 func buildLogFrame(stream byte, payload string) []byte {
 	var buf bytes.Buffer
 	buf.WriteByte(stream)
@@ -124,25 +127,87 @@ func TestReadServiceLogsPropagatesStreamerError(t *testing.T) {
 	}
 }
 
-func TestNextCursorAdvancesNanosecond(t *testing.T) {
-	cursor := nextCursor("2024-01-01T00:00:00.000000000Z")
-	if cursor == "2024-01-01T00:00:00.000000000Z" {
-		t.Error("cursor was not advanced past the input timestamp")
+// The cursor is the newest returned timestamp verbatim, at fixed nanosecond
+// width. It used to be advanced by a nanosecond and formatted with
+// RFC3339Nano, which trims trailing zeros — so a cursor taken from a line at
+// .999999999Z came back as a bare second and sorted above the whole of that
+// second, discarding it on the next read. Filtering excludes the boundary
+// line itself, so no advance is needed.
+func TestReadServiceLogsCursorKeepsFullPrecision(t *testing.T) {
+	c := cache.New(nil)
+	streamer := &fakeLogStreamer{
+		frames: buildLogFrame(1, "2024-01-01T00:00:57.999999999Z last\n"),
 	}
-	if cursor == "" {
-		t.Error("cursor empty")
+	srv := newLogTestServer(t, c, streamer)
+
+	got, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{})
+	if err != nil {
+		t.Fatalf("readServiceLogsImpl: %v", err)
+	}
+
+	if got.Cursor != "2024-01-01T00:00:57.999999999Z" {
+		t.Errorf("cursor = %q, want the newest timestamp at full precision", got.Cursor)
 	}
 }
 
-func TestNextCursorReturnsRawOnParseFailure(t *testing.T) {
-	cursor := nextCursor("not-a-timestamp")
-	if cursor != "not-a-timestamp" {
-		t.Errorf("cursor = %q, want pass-through on parse failure", cursor)
+// Docker interleaves the output of a service's tasks, so the last line to
+// arrive is not necessarily the newest. Taking its timestamp as the cursor
+// moved the cursor backwards and dropped everything in between on the next
+// read.
+func TestReadServiceLogsCursorIsTheNewestNotTheLastToArrive(t *testing.T) {
+	c := cache.New(nil)
+	streamer := &fakeLogStreamer{
+		frames: append(
+			buildLogFrame(1, "2024-01-01T00:00:05.000000000Z from task a\n"),
+			buildLogFrame(1, "2024-01-01T00:00:03.000000000Z from task b\n")...,
+		),
+	}
+	srv := newLogTestServer(t, c, streamer)
+
+	got, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{})
+	if err != nil {
+		t.Fatalf("readServiceLogsImpl: %v", err)
+	}
+
+	if got.Cursor != "2024-01-01T00:00:05.000000000Z" {
+		t.Errorf("cursor = %q, want the newest timestamp seen", got.Cursor)
+	}
+	if got.Lines[0].Message != "from task b" {
+		t.Errorf("lines = %+v, want them sorted oldest first", got.Lines)
+	}
+}
+
+// The widened fetch a cursored read needs is an implementation detail: the
+// caller asked for `tail` lines and the schema documents that as the number
+// returned.
+func TestReadServiceLogsTruncatesToRequestedTail(t *testing.T) {
+	c := cache.New(nil)
+
+	var frames []byte
+	for i := range 30 {
+		frames = append(
+			frames,
+			buildLogFrame(1, fmt.Sprintf("2024-01-01T00:00:%02d.000000000Z line\n", i))...,
+		)
+	}
+
+	srv := newLogTestServer(t, c, &fakeLogStreamer{frames: frames})
+
+	got, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{
+		tail:  5,
+		since: "2024-01-01T00:00:00.000000000Z",
+	})
+	if err != nil {
+		t.Fatalf("readServiceLogsImpl: %v", err)
+	}
+
+	if len(got.Lines) != 5 {
+		t.Errorf("got %d lines, want at most the requested tail of 5", len(got.Lines))
 	}
 }
 
 func TestFilterLogLinesByLevel(t *testing.T) {
-	lines := []api.LogLine{
+	lines := []logs.LogLine{
 		{Message: "DEBUG something happened"},
 		{Message: "INFO request handled"},
 		{Message: "WARN slow response"},
@@ -202,5 +267,143 @@ func TestGetLogsToolRequiresService(t *testing.T) {
 	_, err := td.handler(context.Background(), newCallToolRequest("get_logs", map[string]any{}))
 	if err == nil {
 		t.Fatal("expected error when service arg missing")
+	}
+}
+
+// The get_logs cursor is only meaningful if passing it back returns newer
+// lines. Docker ignores Since for service logs, so the filter has to happen
+// here — without it every call returns the same newest lines and an agent
+// paging through a log loops on the same output.
+func TestReadServiceLogsHonoursCursor(t *testing.T) {
+	c := cache.New(nil)
+	streamer := &fakeLogStreamer{
+		frames: append(
+			append(
+				buildLogFrame(1, "2024-01-01T00:00:00.000000000Z before\n"),
+				buildLogFrame(1, "2024-01-01T00:00:01.000000000Z at cursor\n")...,
+			),
+			buildLogFrame(1, "2024-01-01T00:00:02.000000000Z after\n")...,
+		),
+	}
+	srv := newLogTestServer(t, c, streamer)
+
+	got, err := srv.readServiceLogsImpl(
+		context.Background(),
+		"svc1",
+		logOptions{since: "2024-01-01T00:00:01.000000000Z"},
+	)
+	if err != nil {
+		t.Fatalf("readServiceLogsImpl: %v", err)
+	}
+
+	if len(got.Lines) != 1 {
+		t.Fatalf("got %d lines, want only the one after the cursor: %+v", len(got.Lines), got.Lines)
+	}
+	if !strings.Contains(got.Lines[0].Message, "after") {
+		t.Errorf("line = %q, want the line after the cursor", got.Lines[0].Message)
+	}
+}
+
+// nextCursor must skip lines with no timestamp when picking what to advance:
+// parseLine can leave Timestamp empty for a line that doesn't match the
+// expected shape, and nextCursor("") returns "". If the last returned line
+// happened to be one of those, the cursor would go empty, the client's next
+// call would send no since, and paging would loop on the newest lines again
+// — the exact bug this task exists to fix, just reintroduced from the other
+// end.
+func TestReadServiceLogsCursorSkipsUntimestampedTrailingLine(t *testing.T) {
+	c := cache.New(nil)
+	streamer := &fakeLogStreamer{
+		frames: append(
+			buildLogFrame(1, "2024-01-01T00:00:00.000000000Z first\n"),
+			buildLogFrame(1, "no timestamp last\n")...,
+		),
+	}
+	srv := newLogTestServer(t, c, streamer)
+
+	got, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{})
+	if err != nil {
+		t.Fatalf("readServiceLogsImpl: %v", err)
+	}
+
+	if len(got.Lines) != 2 {
+		t.Fatalf("got %d lines, want both returned: %+v", len(got.Lines), got.Lines)
+	}
+
+	want := "2024-01-01T00:00:00.000000000Z"
+	if got.Cursor != want {
+		t.Errorf("cursor = %q, want %q (taken from the last timestamped line)", got.Cursor, want)
+	}
+}
+
+// When no returned line carries a timestamp at all, the cursor must fall
+// back to the one the caller passed in rather than going empty — an empty
+// cursor tells the client to start over at the newest lines, losing its
+// place.
+func TestReadServiceLogsCursorFallsBackToIncomingSinceWhenNoneTimestamped(t *testing.T) {
+	c := cache.New(nil)
+	streamer := &fakeLogStreamer{
+		frames: buildLogFrame(1, "no timestamp only\n"),
+	}
+	srv := newLogTestServer(t, c, streamer)
+
+	got, err := srv.readServiceLogsImpl(
+		context.Background(),
+		"svc1",
+		logOptions{since: "2024-01-01T00:00:00.000000000Z"},
+	)
+	if err != nil {
+		t.Fatalf("readServiceLogsImpl: %v", err)
+	}
+
+	if len(got.Lines) != 1 {
+		t.Fatalf("got %d lines, want 1: %+v", len(got.Lines), got.Lines)
+	}
+	if got.Cursor != "2024-01-01T00:00:00.000000000Z" {
+		t.Errorf("cursor = %q, want the incoming since unchanged", got.Cursor)
+	}
+}
+
+// A pathological tail must never reach Docker. The since-widening multiply
+// used to run before the clamp, so a huge tail overflowed to a negative
+// number that slipped past both min() and the upper bound — and moby reads a
+// negative tail as "every line ever logged".
+func TestReadServiceLogsClampsPathologicalTail(t *testing.T) {
+	c := cache.New(nil)
+	streamer := &fakeLogStreamer{
+		frames: buildLogFrame(1, "2024-01-01T00:00:02.000000000Z line\n"),
+	}
+	srv := newLogTestServer(t, c, streamer)
+
+	_, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{
+		tail:  math.MaxInt,
+		since: "2024-01-01T00:00:01.000000000Z",
+	})
+	if err != nil {
+		t.Fatalf("readServiceLogsImpl: %v", err)
+	}
+
+	tail, err := strconv.Atoi(streamer.calledTail)
+	if err != nil {
+		t.Fatalf("streamer tail %q is not a number: %v", streamer.calledTail, err)
+	}
+	if tail <= 0 || tail > maxLogTail {
+		t.Errorf("streamer tail = %d, want a positive value no larger than %d", tail, maxLogTail)
+	}
+}
+
+// A cursor the server cannot compare is worse than no cursor: every line
+// filters out, the response echoes the same unusable value back, and the
+// client pages forever on an empty result. Reject it up front instead.
+func TestReadServiceLogsRejectsUnparseableSince(t *testing.T) {
+	c := cache.New(nil)
+	srv := newLogTestServer(t, c, &fakeLogStreamer{})
+
+	_, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{since: "5m"})
+	if err == nil {
+		t.Fatal("expected an error for a since value that is not an RFC 3339 timestamp")
+	}
+	if !strings.Contains(err.Error(), "since") {
+		t.Errorf("error = %q, want it to name the offending argument", err)
 	}
 }

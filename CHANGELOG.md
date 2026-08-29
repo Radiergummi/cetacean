@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Live pages, charts, and the connection indicator no longer stop updating for good when the server is momentarily at its connection limit. Resource streams and metrics charts now re-establish themselves after a rejected connection instead of staying silent until the page is reloaded, and reload what they missed while they were down rather than showing frozen data behind a connected indicator; metrics charts additionally recover from ordinary network interruptions, which previously killed them outright
+- Live log tail no longer switches itself off without explanation when its connection drops. It now reconnects on its own with a growing delay between attempts, and picks up where it left off — the lines produced while it was disconnected are filled in when it returns, without repeating what was already shown (a very long disconnection may still leave a gap) — and shows what it is doing while it retries. If the server is at its log-streaming connection limit, the viewer says so and counts down to the next attempt instead of showing a cryptic error, and waits as long as the server asks. After several failed attempts it stops and offers to resume.
+- Live log tail no longer sits empty behind a pulsing "Live" badge. Asking for a time range as a duration, at whole-second precision, or in a non-UTC time zone — and simply having a computer clock running ahead of the cluster — each silently discarded every line the stream produced, for as long as the viewer stayed open
+- Multi-line log output — stack traces, pretty-printed JSON — is no longer repeated in full every time the live tail reconnects, and is now attributed to the task that produced it, so filtering by task keeps it
+- Log lines from services running more than one replica are no longer dropped or shown twice around a reconnect. Docker hands them over interleaved, and the viewer resumed from the last line to arrive rather than the newest one
+- A live tail whose connection fails the instant it opens now gives up and offers to resume, instead of reconnecting once a second for as long as the page stays open
+- Live log tail now sends you to the login page when your session expires, as the rest of the dashboard does
+- Charts plotting a single value — node disk and network, task CPU — no longer drop to zero on every live update
+- Live metrics charts keep streaming after you switch to another browser tab and back
+- Resources created while a list page is open now appear in the list, instead of the page growing by a row that repeats the entry above it and the new resource showing up only after a reload
+- AI agents reading service logs over MCP now advance through history correctly. Passing the returned cursor back fetched the same newest lines every time instead of the next page, so an agent paging through a log could loop on the same output
+- AI agents reading service logs over MCP now receive at most the number of lines they asked for. A read that resumed from a cursor could return up to ten times as many
+
 ## [0.12.0] - 2026-08-28
 
 ### Security

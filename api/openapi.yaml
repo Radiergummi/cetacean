@@ -5618,8 +5618,15 @@ components:
       name: after
       in: query
       description: |
-        Return lines after this timestamp (RFC 3339 or Go duration).
+        Return lines after this timestamp (RFC 3339, at any precision and in
+        any offset, or a Go duration meaning that long ago).
         For SSE, Last-Event-ID header is used as fallback.
+        On an SSE stream this resumes from the cursor. The stream reaches back
+        at most 500 lines per task for the ones missed while disconnected —
+        so a multi-replica service replays up to 500 lines per replica — and
+        older overflow is dropped. The cursor narrows that replay only: output
+        the connection itself receives is delivered whatever its timestamp,
+        since a task is stamped by the clock of the node running it.
       schema:
         type: string
 
