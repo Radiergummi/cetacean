@@ -29,10 +29,6 @@ func TestNoticesCoversEveryComponent(t *testing.T) {
 
 	var absent []string
 	for _, component := range doc.Components {
-		if component.TextID == "" {
-			continue
-		}
-
 		if !strings.Contains(notices, component.Name) {
 			absent = append(absent, component.Name)
 		}

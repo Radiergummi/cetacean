@@ -217,8 +217,3 @@ function formatUnit(value: number, unit: string, maximumFractionDigits = 0): str
     maximumFractionDigits,
   }).format(value);
 }
-
-/**
- * Formats a Docker plugin interface type as its canonical
- * `prefix.capability/version` string (e.g. `docker.volumedriver/1.0`).
- */

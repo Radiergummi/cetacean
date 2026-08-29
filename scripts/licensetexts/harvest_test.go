@@ -159,3 +159,44 @@ func TestHarvestSkipsUnknownEcosystems(t *testing.T) {
 		t.Errorf("got %+v, want no entries", artifact.Components)
 	}
 }
+
+func TestHarvestSkipsSourceLikeStemMatches(t *testing.T) {
+	// tailscale.com@v1.102.3 ships both LICENSE and license_test.go; the
+	// stem match must not embed the Go source file. "License.go" sorts
+	// before "license.txt" in ASCII order (uppercase 'L' < lowercase 'l'),
+	// so without the extension check the wrong file would win here.
+	doc := sbom.Document{Components: []sbom.Component{
+		{Name: "example.com/sourcelike", Version: "v1.0.0", Ecosystem: "go"},
+	}}
+
+	artifact, err := Harvest(doc, testRoots())
+	if err != nil {
+		t.Fatalf("Harvest: %v", err)
+	}
+
+	entry, ok := artifact.Components["go:example.com/sourcelike@v1.0.0"]
+	if !ok {
+		t.Fatalf("component missing from artifact: %+v", artifact.Components)
+	}
+
+	if got := artifact.Texts[entry.License]; got != "MIT License\n\nCopyright (c) 2026 Source Like\n" {
+		t.Errorf("license text = %q, want the real license file, not the source lookalike", got)
+	}
+}
+
+func TestHarvestFailsWhenOnlyMatchIsSourceLike(t *testing.T) {
+	// A package shipping only a "license_test.go"-style file with no real
+	// license must fail loudly, not silently embed the source file.
+	doc := sbom.Document{Components: []sbom.Component{
+		{Name: "example.com/sourceonly", Version: "v1.0.0", Ecosystem: "go"},
+	}}
+
+	_, err := Harvest(doc, testRoots())
+	if err == nil {
+		t.Fatal("expected an error naming the component with no license file")
+	}
+
+	if !strings.Contains(err.Error(), "example.com/sourceonly") {
+		t.Errorf("error %q does not name the offending component", err)
+	}
+}

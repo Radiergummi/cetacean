@@ -27,6 +27,25 @@ var (
 	noticeStems  = []string{"notice"}
 )
 
+// rejectedExtensions marks file extensions that mark a stem match as source
+// code or build metadata rather than a license text — e.g. "license_test.go"
+// sitting beside the real "LICENSE" file. Matched case-insensitively against
+// the name's extension after the final dot; a name with no dot (like
+// "LICENSE" or "LICENSE-MIT") is never rejected.
+var rejectedExtensions = map[string]bool{
+	"go": true, "js": true, "mjs": true, "cjs": true, "ts": true, "tsx": true,
+	"jsx": true, "json": true, "yaml": true, "yml": true, "toml": true,
+	"lock": true, "sum": true, "mod": true,
+}
+
+// isLicenseCandidate reports whether name is plausibly a license/notice text
+// file rather than source or build metadata that merely shares a stem.
+func isLicenseCandidate(name string) bool {
+	ext := strings.TrimPrefix(filepath.Ext(name), ".")
+
+	return !rejectedExtensions[strings.ToLower(ext)]
+}
+
 // Roots locates the two package stores the harvester reads from. Tests point
 // these at fixtures; the CLI points them at the real module cache and
 // node_modules.
@@ -149,6 +168,10 @@ func readFirst(dir string, stems []string) (string, bool, error) {
 			}
 
 			if !strings.HasPrefix(strings.ToLower(entry.Name()), stem) {
+				continue
+			}
+
+			if !isLicenseCandidate(entry.Name()) {
 				continue
 			}
 
