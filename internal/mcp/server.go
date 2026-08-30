@@ -166,6 +166,16 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		// declare a schema; Docker-passthrough mutations carry none and skip
 		// validation.
 		mcpserver.WithOutputSchemaValidation(),
+		// SEP-2549 freshness hints. The scope is always private: every
+		// Cetacean response is filtered by the caller's ACL grants, so a
+		// shared intermediary caching one identity's view and serving it to
+		// another would be an authorization bypass.
+		mcpserver.WithCacheHints(cacheTTLList.Milliseconds(), mcplib.CacheScopePrivate),
+		mcpserver.WithMethodCacheHints(
+			mcplib.MethodResourcesRead,
+			cacheTTLRead.Milliseconds(),
+			mcplib.CacheScopePrivate,
+		),
 	)
 	srv.mcpServer = mcpSrv
 
