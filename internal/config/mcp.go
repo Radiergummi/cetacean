@@ -36,12 +36,6 @@ type MCPConfig struct {
 	// RefreshTokenTTL is how long MCP refresh tokens remain valid.
 	RefreshTokenTTL time.Duration
 
-	// SessionIdleTTL is the maximum idle time before a session is evicted.
-	SessionIdleTTL time.Duration
-
-	// MaxSessions is the maximum number of concurrent MCP sessions.
-	MaxSessions int
-
 	// RequireResourceIndicator requires RFC 8707 resource indicators in token requests.
 	RequireResourceIndicator bool
 
@@ -75,8 +69,6 @@ func DefaultMCPConfig() MCPConfig {
 		SigningKey:               "",
 		AccessTokenTTL:           time.Hour,
 		RefreshTokenTTL:          720 * time.Hour,
-		SessionIdleTTL:           30 * time.Minute,
-		MaxSessions:              256,
 		RequireResourceIndicator: true,
 		DCREnabled:               true,
 		DCRRateLimit:             10,
@@ -109,8 +101,6 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fSigningKey    *string
 		fAccessTTL     *string
 		fRefreshTTL    *string
-		fIdleTTL       *string
-		fMaxSessions   *int
 		fOpsLevel      *int
 		fRequireRI     *bool
 		fDCREnabled    *bool
@@ -125,8 +115,6 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fSigningKey = fm.SigningKey
 		fAccessTTL = fm.AccessTokenTTL
 		fRefreshTTL = fm.RefreshTokenTTL
-		fIdleTTL = fm.SessionIdleTTL
-		fMaxSessions = fm.MaxSessions
 		fOpsLevel = fm.OperationsLevel
 		if fm.OAuth != nil {
 			fRequireRI = fm.OAuth.RequireResourceIndicator
@@ -153,28 +141,6 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		"CETACEAN_MCP_REFRESH_TOKEN_TTL",
 		fRefreshTTL,
 		def.RefreshTokenTTL,
-	)
-	if err != nil {
-		return MCPConfig{}, err
-	}
-
-	idleTTL, err := resolveDuration(
-		nil,
-		"CETACEAN_MCP_SESSION_IDLE_TTL",
-		fIdleTTL,
-		def.SessionIdleTTL,
-	)
-	if err != nil {
-		return MCPConfig{}, err
-	}
-
-	maxSessions, err := resolveInt(
-		nil,
-		"CETACEAN_MCP_MAX_SESSIONS",
-		fMaxSessions,
-		def.MaxSessions,
-		1,
-		1<<20,
 	)
 	if err != nil {
 		return MCPConfig{}, err
@@ -228,8 +194,6 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		),
 		AccessTokenTTL:  accessTTL,
 		RefreshTokenTTL: refreshTTL,
-		SessionIdleTTL:  idleTTL,
-		MaxSessions:     maxSessions,
 		RequireResourceIndicator: resolveBool(
 			nil,
 			"CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR",

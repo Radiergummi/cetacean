@@ -22,7 +22,6 @@ import (
 func TestToolInputValidationIsExecutionError(t *testing.T) {
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsOperational)
 	handler := srv.Handler()
-	sessionID := initSession(t, handler, "")
 
 	calls := []struct {
 		name string
@@ -36,10 +35,8 @@ func TestToolInputValidationIsExecutionError(t *testing.T) {
 
 	for _, call := range calls {
 		t.Run(call.name, func(t *testing.T) {
-			_, env := mcpJSONRPC(t, handler, sessionID, `{
-				"jsonrpc":"2.0","id":2,"method":"tools/call",
-				"params":{"name":"`+call.name+`","arguments":`+call.args+`}
-			}`)
+			_, env := mcpModern(t, handler, 2, "tools/call",
+				`{"name":"`+call.name+`","arguments":`+call.args+`}`)
 
 			// Teeth: a regression to a protocol-level error would set
 			// env.Error here, failing the assertion.

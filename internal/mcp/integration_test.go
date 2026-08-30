@@ -57,36 +57,6 @@ type mcpJSONRPCResult struct {
 	Header     http.Header
 }
 
-func mcpJSONRPC(
-	t *testing.T,
-	handler http.Handler,
-	sessionID, body string,
-) (mcpJSONRPCResult, jsonrpcEnvelope) {
-	t.Helper()
-	return mcpJSONRPCWithToken(t, handler, sessionID, "", body)
-}
-
-// mcpJSONRPCWithToken is the bearer-aware variant used by integration tests
-// that drive the OAuth-protected /mcp handler.
-func mcpJSONRPCWithToken(
-	t *testing.T,
-	handler http.Handler,
-	sessionID, bearer, body string,
-) (mcpJSONRPCResult, jsonrpcEnvelope) {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	if sessionID != "" {
-		req.Header.Set("Mcp-Session-Id", sessionID)
-	}
-	if bearer != "" {
-		req.Header.Set("Authorization", "Bearer "+bearer)
-	}
-
-	return sendMCP(t, handler, req)
-}
-
 // sendMCP serves req and decodes the JSON-RPC envelope out of the response,
 // whether it arrived as SSE or as plain JSON. It owns the response body's
 // lifecycle — always draining and closing it — which is why callers get a value
@@ -143,26 +113,18 @@ func TestMCPEndToEnd(t *testing.T) {
 
 	handler := srv.Handler()
 
-	// 1) initialize
-	initResp, env := mcpJSONRPC(t, handler, "", `{
-		"jsonrpc":"2.0","id":1,"method":"initialize",
-		"params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}
-	}`)
-	if initResp.StatusCode != http.StatusOK {
-		t.Fatalf("initialize status = %d", initResp.StatusCode)
+	// 1) server/discover — the 2026-07-28 replacement for initialize.
+	discoverResp, env := mcpModern(t, handler, 1, "server/discover", `{}`)
+	if discoverResp.StatusCode != http.StatusOK {
+		t.Fatalf("server/discover status = %d", discoverResp.StatusCode)
 	}
+
 	if env.Error != nil {
-		t.Fatalf("initialize returned error: %+v", env.Error)
-	}
-	sessionID := initResp.Header.Get("Mcp-Session-Id")
-	if sessionID == "" {
-		t.Fatal("initialize did not set Mcp-Session-Id")
+		t.Fatalf("server/discover returned error: %+v", env.Error)
 	}
 
 	// 2) resources/list — must include at least the static resources.
-	_, env = mcpJSONRPC(t, handler, sessionID, `{
-		"jsonrpc":"2.0","id":2,"method":"resources/list","params":{}
-	}`)
+	_, env = mcpModern(t, handler, 2, "resources/list", `{}`)
 	if env.Error != nil {
 		t.Fatalf("resources/list error: %+v", env.Error)
 	}
@@ -192,10 +154,7 @@ func TestMCPEndToEnd(t *testing.T) {
 	}
 
 	// 3) resources/read for the service we seeded.
-	_, env = mcpJSONRPC(t, handler, sessionID, `{
-		"jsonrpc":"2.0","id":3,"method":"resources/read",
-		"params":{"uri":"cetacean://services/svc1"}
-	}`)
+	_, env = mcpModern(t, handler, 3, "resources/read", `{"uri":"cetacean://services/svc1"}`)
 	if env.Error != nil {
 		t.Fatalf("resources/read error: %+v", env.Error)
 	}
@@ -217,9 +176,7 @@ func TestMCPEndToEnd(t *testing.T) {
 	}
 
 	// 4) tools/list — should include the read-only tools at OpsReadOnly tier.
-	_, env = mcpJSONRPC(t, handler, sessionID, `{
-		"jsonrpc":"2.0","id":4,"method":"tools/list","params":{}
-	}`)
+	_, env = mcpModern(t, handler, 4, "tools/list", `{}`)
 	if env.Error != nil {
 		t.Fatalf("tools/list error: %+v", env.Error)
 	}
@@ -243,10 +200,7 @@ func TestMCPEndToEnd(t *testing.T) {
 	}
 
 	// 5) tools/call for search — should hit the seeded service.
-	_, env = mcpJSONRPC(t, handler, sessionID, `{
-		"jsonrpc":"2.0","id":5,"method":"tools/call",
-		"params":{"name":"search","arguments":{"query":"web"}}
-	}`)
+	_, env = mcpModern(t, handler, 5, "tools/call", `{"name":"search","arguments":{"query":"web"}}`)
 	if env.Error != nil {
 		t.Fatalf("tools/call error: %+v", env.Error)
 	}
@@ -296,27 +250,6 @@ func newOAuthIntegrationServer(
 	return srv.Handler(), issuer
 }
 
-// initSession initialises an MCP session over the bearer-authenticated handler
-// and returns the Mcp-Session-Id.
-func initSession(t *testing.T, handler http.Handler, token string) string {
-	t.Helper()
-	resp, env := mcpJSONRPCWithToken(t, handler, "", token, `{
-		"jsonrpc":"2.0","id":1,"method":"initialize",
-		"params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}
-	}`)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("initialize status = %d", resp.StatusCode)
-	}
-	if env.Error != nil {
-		t.Fatalf("initialize returned error: %+v", env.Error)
-	}
-	id := resp.Header.Get("Mcp-Session-Id")
-	if id == "" {
-		t.Fatal("initialize did not set Mcp-Session-Id")
-	}
-	return id
-}
-
 // TestMCPIntegration_ResourcesReadHonoursACL drives resources/read through the
 // full bearer-auth + JSON-RPC pipeline and confirms ACL denial reaches the
 // caller as a JSON-RPC error (covers M-01 at HTTP level).
@@ -347,13 +280,10 @@ func TestMCPIntegration_ResourcesReadHonoursACL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	sessionID := initSession(t, handler, token)
 
 	// Allowed — public-api is in the policy.
-	_, env := mcpJSONRPCWithToken(t, handler, sessionID, token, `{
-		"jsonrpc":"2.0","id":2,"method":"resources/read",
-		"params":{"uri":"cetacean://services/svc-public"}
-	}`)
+	_, env := mcpModernWithToken(t, handler, token, 2, "resources/read",
+		`{"uri":"cetacean://services/svc-public"}`)
 	if env.Error != nil {
 		t.Fatalf("allowed read produced error: %+v", env.Error)
 	}
@@ -362,10 +292,8 @@ func TestMCPIntegration_ResourcesReadHonoursACL(t *testing.T) {
 	}
 
 	// Denied — secret-svc is outside the policy.
-	_, env = mcpJSONRPCWithToken(t, handler, sessionID, token, `{
-		"jsonrpc":"2.0","id":3,"method":"resources/read",
-		"params":{"uri":"cetacean://services/svc-secret"}
-	}`)
+	_, env = mcpModernWithToken(t, handler, token, 3, "resources/read",
+		`{"uri":"cetacean://services/svc-secret"}`)
 	if env.Error == nil {
 		t.Fatalf(
 			"denied read should have returned a JSON-RPC error, got result %s",
@@ -407,13 +335,10 @@ func TestMCPIntegration_SearchToolFiltersByACL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	sessionID := initSession(t, handler, token)
 
 	// "acme" matches both services by name; ACL must hide the secret one.
-	_, env := mcpJSONRPCWithToken(t, handler, sessionID, token, `{
-		"jsonrpc":"2.0","id":2,"method":"tools/call",
-		"params":{"name":"search","arguments":{"query":"acme"}}
-	}`)
+	_, env := mcpModernWithToken(t, handler, token, 2, "tools/call",
+		`{"name":"search","arguments":{"query":"acme"}}`)
 	if env.Error != nil {
 		t.Fatalf("search returned error: %+v", env.Error)
 	}

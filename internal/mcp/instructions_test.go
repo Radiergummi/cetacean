@@ -8,12 +8,13 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// TestInitializeAdvertisesInstructionsAndDescription drives the real initialize
-// handshake through the MCP HTTP handler and asserts the result carries both
-// the server instructions and the implementation description. It checks against
+// TestDiscoverAdvertisesInstructionsAndDescription drives server/discover — the
+// 2026-07-28 replacement for the initialize handshake — through the MCP HTTP
+// handler and asserts the result carries both the server instructions and the
+// implementation description. It checks against
 // the production constants (single source of truth) and that they are non-empty,
 // so the test fails if either option is dropped or the constant is blanked.
-func TestInitializeAdvertisesInstructionsAndDescription(t *testing.T) {
+func TestDiscoverAdvertisesInstructionsAndDescription(t *testing.T) {
 	if mcpInstructions == "" || mcpDescription == "" {
 		t.Fatal("mcpInstructions and mcpDescription must be non-empty")
 	}
@@ -23,25 +24,26 @@ func TestInitializeAdvertisesInstructionsAndDescription(t *testing.T) {
 
 	handler := srv.Handler()
 
-	initResp, env := mcpJSONRPC(t, handler, "", `{
-		"jsonrpc":"2.0","id":1,"method":"initialize",
-		"params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}
-	}`)
-	if initResp.StatusCode != 200 {
-		t.Fatalf("initialize status = %d", initResp.StatusCode)
-	}
-	if env.Error != nil {
-		t.Fatalf("initialize returned error: %+v", env.Error)
+	resp, env := mcpModern(t, handler, 1, "server/discover", `{}`)
+	if resp.StatusCode != 200 {
+		t.Fatalf("server/discover status = %d", resp.StatusCode)
 	}
 
+	if env.Error != nil {
+		t.Fatalf("server/discover returned error: %+v", env.Error)
+	}
+
+	// 2026-07-28 moved the server implementation into the result's _meta.
 	var r struct {
 		Instructions string `json:"instructions"`
-		ServerInfo   struct {
-			Description string `json:"description"`
-		} `json:"serverInfo"`
+		Meta         struct {
+			ServerInfo struct {
+				Description string `json:"description"`
+			} `json:"io.modelcontextprotocol/serverInfo"`
+		} `json:"_meta"`
 	}
 	if err := json.Unmarshal(env.Result, &r); err != nil {
-		t.Fatalf("decode initialize result: %v: %s", err, string(env.Result))
+		t.Fatalf("decode server/discover result: %v: %s", err, string(env.Result))
 	}
 
 	if r.Instructions != mcpInstructions {
@@ -51,10 +53,10 @@ func TestInitializeAdvertisesInstructionsAndDescription(t *testing.T) {
 			mcpInstructions,
 		)
 	}
-	if r.ServerInfo.Description != mcpDescription {
+	if r.Meta.ServerInfo.Description != mcpDescription {
 		t.Errorf(
 			"serverInfo.description mismatch:\n got: %q\nwant: %q",
-			r.ServerInfo.Description,
+			r.Meta.ServerInfo.Description,
 			mcpDescription,
 		)
 	}

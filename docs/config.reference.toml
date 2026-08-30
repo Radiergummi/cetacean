@@ -102,8 +102,6 @@
 # signing_key = ""                          # JWT signing key (HMAC-SHA256); auto-generated if unset
 # access_token_ttl = "1h"                   # Access token lifetime
 # refresh_token_ttl = "720h"                # Refresh token lifetime (30 days)
-# session_idle_ttl = "30m"                  # Idle session cleanup
-# max_sessions = 256                        # Concurrent session limit
 
 # [mcp.oauth]
 # require_resource_indicator = true         # Require RFC 8707 resource parameter on authorize/token

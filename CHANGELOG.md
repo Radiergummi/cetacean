@@ -8,9 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- MCP server now speaks protocol revision 2026-07-28, with its stateless core: AI agents connect and work without a handshake or a session. Clients on 2025-11-25 and older continue to work unchanged
+- MCP server now speaks protocol revision 2026-07-28, with its stateless core: AI agents connect and work without a handshake or a session
 - List and read responses over MCP now carry cache freshness hints, so agents poll less
 - The licenses page now shows the full license text and NOTICE of every bundled dependency, can be filtered by license and ecosystem — every count reflects the other filters already applied, so it says what picking it would leave — and offers the complete attribution document as a download
+
+### Changed
+- **Breaking:** the MCP server now speaks protocol revision 2026-07-28 exclusively. Older revisions are refused with a clear error naming the version to use, rather than connecting and then silently delivering no updates. Update your MCP client if it cannot negotiate 2026-07-28
+- **Breaking:** `CETACEAN_MCP_SESSION_IDLE_TTL` and `CETACEAN_MCP_MAX_SESSIONS` (and their `session_idle_ttl` / `max_sessions` config-file equivalents) have been removed. The protocol no longer has sessions, so there is nothing to expire or cap. Both are now ignored if you still set them, so an existing config keeps working
 
 ### Fixed
 - AI agents on the new MCP protocol revision now receive live cluster updates. Subscribing succeeded and then delivered nothing, because 2026-07-28 replaced the subscription call the server was listening for

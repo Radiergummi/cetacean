@@ -202,12 +202,10 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 	srv.cancelNotifications = srv.startNotifications()
 
 	httpSrv := mcpserver.NewStreamableHTTPServer(mcpSrv,
-		// Sessions exist only for clients on 2025-11-25 and older, which
-		// negotiate through initialize and carry Mcp-Session-Id. Clients on
-		// 2026-07-28 are stateless: mcp-go serves them without minting a
-		// session, so SessionIdleTTL and MaxSessions do not apply to them.
-		mcpserver.WithStateful(true),
-		mcpserver.WithSessionIdleTTL(opts.Config.SessionIdleTTL),
+		// Protocol 2026-07-28 has no sessions, and requireModernProtocol
+		// turns away everything older, so there is no session state to keep:
+		// each request is served by its own ephemeral session.
+		mcpserver.WithStateful(false),
 		mcpserver.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
 			// The bearer-validating middleware (see Handler) stamps an
 			// auth.Identity on r.Context() before mcp-go sees the request.
@@ -216,7 +214,15 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 			if id := auth.IdentityFromContext(r.Context()); id != nil {
 				ctx = auth.ContextWithIdentity(ctx, id)
 			}
-			return ctx
+
+			// server/discover reports this as supportedVersions. mcp-go would
+			// otherwise list every revision it implements, advertising eras
+			// requireModernProtocol turns away and sending a well-behaved
+			// client straight into a rejection.
+			return mcpserver.WithSupportedProtocolVersions(
+				ctx,
+				[]string{mcplib.LATEST_PROTOCOL_VERSION},
+			)
 		}),
 	)
 	srv.httpServer = httpSrv
@@ -243,10 +249,13 @@ func (s *Server) Close() {
 // otherwise it serves the raw mcp-go handler unguarded (only safe with auth
 // mode "none").
 func (s *Server) Handler() http.Handler {
-	var h http.Handler = s.httpServer
+	// The protocol gate sits innermost so that origin and bearer checks answer
+	// first: an unauthenticated caller learns nothing about what we speak.
+	h := s.requireModernProtocol(s.httpServer)
 	if s.oauth != nil {
 		h = s.bearerAuth(h)
 	}
+
 	return s.originGuard(h)
 }
 

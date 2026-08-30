@@ -17,10 +17,10 @@ import (
 func TestNotificationSubscribeAndMatch(t *testing.T) {
 	nm := NewNotificationManager()
 
-	nm.Subscribe("session1", "cetacean://services/svc1", nil)
-	nm.Subscribe("session1", "cetacean://nodes/node1", nil)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", nil)
+	nm.Subscribe(session("session1"), "cetacean://nodes/node1", nil)
 
-	matches := nm.MatchingURIs("session1", cache.Event{
+	matches := nm.MatchingURIs(session("session1"), cache.Event{
 		Type:   cache.EventService,
 		Action: "update",
 		ID:     "svc1",
@@ -32,9 +32,9 @@ func TestNotificationSubscribeAndMatch(t *testing.T) {
 
 func TestNotificationNoMatchForDifferentID(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1", nil)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", nil)
 
-	matches := nm.MatchingURIs("session1", cache.Event{
+	matches := nm.MatchingURIs(session("session1"), cache.Event{
 		Type:   cache.EventService,
 		Action: "update",
 		ID:     "svc2",
@@ -46,9 +46,9 @@ func TestNotificationNoMatchForDifferentID(t *testing.T) {
 
 func TestNotificationLogURIMatches(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1/logs", nil)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1/logs", nil)
 
-	matches := nm.MatchingURIs("session1", cache.Event{
+	matches := nm.MatchingURIs(session("session1"), cache.Event{
 		Type:   cache.EventService,
 		Action: "update",
 		ID:     "svc1",
@@ -60,10 +60,10 @@ func TestNotificationLogURIMatches(t *testing.T) {
 
 func TestNotificationDetailAndLogMatchTogether(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1", nil)
-	nm.Subscribe("session1", "cetacean://services/svc1/logs", nil)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", nil)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1/logs", nil)
 
-	matches := nm.MatchingURIs("session1", cache.Event{
+	matches := nm.MatchingURIs(session("session1"), cache.Event{
 		Type:   cache.EventService,
 		Action: "update",
 		ID:     "svc1",
@@ -75,10 +75,10 @@ func TestNotificationDetailAndLogMatchTogether(t *testing.T) {
 
 func TestNotificationUnsubscribe(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1", nil)
-	nm.Unsubscribe("session1", "cetacean://services/svc1")
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", nil)
+	nm.Unsubscribe(session("session1"), "cetacean://services/svc1")
 
-	matches := nm.MatchingURIs("session1", cache.Event{
+	matches := nm.MatchingURIs(session("session1"), cache.Event{
 		Type:   cache.EventService,
 		Action: "update",
 		ID:     "svc1",
@@ -90,12 +90,15 @@ func TestNotificationUnsubscribe(t *testing.T) {
 
 func TestNotificationRemoveSessionDropsAll(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1", nil)
-	nm.Subscribe("session1", "cetacean://nodes/node1", nil)
-	nm.RemoveSession("session1")
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", nil)
+	nm.Subscribe(session("session1"), "cetacean://nodes/node1", nil)
+	nm.RemoveSession(session("session1"))
 
-	if ids := nm.sessionIDs(); len(ids) != 0 {
-		t.Errorf("sessionIDs = %v, want none", ids)
+	if got := nm.MatchingURIs(session("session1"), cache.Event{
+		Type: cache.EventService,
+		ID:   "svc1",
+	}); len(got) != 0 {
+		t.Errorf("subscriptions survived RemoveSession: %v", got)
 	}
 }
 
@@ -143,9 +146,9 @@ func TestNotificationEventTypeToURIPrefix(t *testing.T) {
 func TestNotification_SubscribeCapturesIdentity(t *testing.T) {
 	nm := NewNotificationManager()
 	id := &auth.Identity{Subject: "alice"}
-	nm.Subscribe("session1", "cetacean://services/svc1", id)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", id)
 
-	got := nm.IdentityFor("session1")
+	got := nm.IdentityFor(session("session1"))
 	if got == nil || got.Subject != "alice" {
 		t.Fatalf("IdentityFor = %v, want identity alice", got)
 	}
@@ -213,7 +216,7 @@ func TestDispatchCacheEvent_ACLBlocksUpdatedNotification(t *testing.T) {
 	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
 
 	id := &auth.Identity{Subject: "alice"}
-	srv.notifications.Subscribe("session1", "cetacean://services/svc1", id)
+	srv.notifications.Subscribe(session("session1"), "cetacean://services/svc1", id)
 
 	allowed := srv.canRead(id, "service:public-api")
 	denied := srv.canRead(id, "service:secret-svc")
@@ -249,7 +252,7 @@ func TestStartNotificationsCancelDetachesListener(t *testing.T) {
 	}
 
 	// Establish a subscription so the notification path has work to do.
-	srv.notifications.Subscribe("session1", "cetacean://services/svc1", nil)
+	srv.notifications.Subscribe(session("session1"), "cetacean://services/svc1", nil)
 
 	// Drive the cache once before cancel and once after — both should not
 	// panic. The strong guarantee is that Close detaches; we exercise it
@@ -301,7 +304,7 @@ func TestSubscriptionsListenPopulatesManager(t *testing.T) {
 		{cache.Event{Type: cache.EventService, ID: "abc"}, "cetacean://services/abc"},
 		{cache.Event{Type: cache.EventNode, ID: "xyz"}, "cetacean://nodes/xyz"},
 	} {
-		got := srv.notifications.MatchingURIs("session-modern", want.event)
+		got := srv.notifications.MatchingURIs(session("session-modern"), want.event)
 		if !slices.Contains(got, want.uri) {
 			t.Errorf("subscription to %s not recorded (matched %v)", want.uri, got)
 		}
@@ -329,7 +332,7 @@ func TestSubscriptionsListenClearsOnStreamClose(t *testing.T) {
 		hook(ctx, "req-1", req, &mcplib.SubscriptionsListenResult{})
 	}
 
-	got := srv.notifications.MatchingURIs("session-modern", cache.Event{
+	got := srv.notifications.MatchingURIs(session("session-modern"), cache.Event{
 		Type: cache.EventService,
 		ID:   "abc",
 	})

@@ -75,31 +75,3 @@ func TestCacheHintsOnModernResults(t *testing.T) {
 		})
 	}
 }
-
-// TestCacheHintsOmittedForLegacyClients pins the other half of the contract:
-// ttlMs and cacheScope do not exist before 2026-07-28, so a legacy client must
-// not receive them.
-func TestCacheHintsOmittedForLegacyClients(t *testing.T) {
-	handler := newTestServer(t).Handler()
-	sessionID := initSession(t, handler, "")
-
-	_, env := mcpJSONRPC(t, handler, sessionID, `{
-		"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}
-	}`)
-	if env.Error != nil {
-		t.Fatalf("tools/list error: %+v", env.Error)
-	}
-
-	var hints mcplib.CacheableResult
-	if err := json.Unmarshal(env.Result, &hints); err != nil {
-		t.Fatalf("decode tools/list: %v", err)
-	}
-
-	if ttl, ok := hints.TTL(); ok {
-		t.Errorf("legacy client received ttlMs = %d", ttl)
-	}
-
-	if hints.CacheScope != "" {
-		t.Errorf("legacy client received cacheScope = %q", hints.CacheScope)
-	}
-}

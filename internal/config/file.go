@@ -67,8 +67,6 @@ type fileMCP struct {
 	SigningKey      *string       `toml:"signing_key"`
 	AccessTokenTTL  *string       `toml:"access_token_ttl"`
 	RefreshTokenTTL *string       `toml:"refresh_token_ttl"`
-	SessionIdleTTL  *string       `toml:"session_idle_ttl"`
-	MaxSessions     *int          `toml:"max_sessions"`
 	OAuth           *fileMCPOAuth `toml:"oauth"`
 }
 

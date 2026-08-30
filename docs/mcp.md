@@ -44,14 +44,22 @@ operator to sign in and consent. No client secret or manual registration is requ
 
 ## Protocol version and compatibility
 
-The server speaks MCP **streamable HTTP** and negotiates the protocol revision per client, supporting `2025-11-25`
-(latest) down to `2024-11-05`. Clients that negotiate `2025-06-18` or newer receive richer responses (structured
-tool output, output schemas); older clients transparently fall back to the text representation. The deprecated
-HTTP+SSE transport and stdio transport are not supported.
+The server speaks MCP **streamable HTTP** at revision **`2026-07-28`**, and only that revision. Older revisions are
+refused with an `unsupported protocol version` JSON-RPC error naming the version to use, so an out-of-date client
+fails immediately and legibly instead of connecting and then quietly receiving nothing. The deprecated HTTP+SSE and
+stdio transports are not supported.
 
-Sessions are stateful: the server issues an `Mcp-Session-Id` on `initialize` and uses it to route server-initiated
-notifications (resource updates, list changes). Sessions are reconnect-friendly — a client that loses its session
-re-initializes and re-subscribes; bearer tokens are valid on any replica that shares the signing key.
+There are no sessions. `2026-07-28` removed the `initialize` handshake and `Mcp-Session-Id` along with it: every
+request carries its own protocol version, client identity, and capabilities in `_meta`, and is served on its own.
+This is why there is nothing to reconnect to and no session state to size — a client simply issues its next request.
+Bearer tokens are valid on any replica that shares the signing key, so a request may be served by any of them.
+
+A client receives server-initiated notifications by opening a `subscriptions/listen` stream, which replaces both
+`resources/subscribe` and the old standalone `GET` stream. Notification types are opt-in: the stream delivers only
+what the client's filter asked for.
+
+Cetacean is pre-1.0 and the MCP server shipped days before this revision, so nothing was gained by carrying the
+older eras forward. If you are on an older client, upgrade it.
 
 ## Authentication and authorization
 
@@ -63,7 +71,7 @@ access the operations level allows. Only appropriate for trusted networks.
 ### OAuth 2.1 (auth modes `oidc`, `tailscale`, `headers`)
 
 When MCP is enabled and the auth mode supports a browser flow, Cetacean acts as an OAuth 2.1 authorization server
-**and** identifies itself as a protected resource for `/mcp`. It implements the MCP `2025-11-25` authorization
+**and** identifies itself as a protected resource for `/mcp`. It implements the MCP `2026-07-28` authorization
 profile:
 
 | Endpoint | Purpose |
@@ -86,7 +94,7 @@ The flow:
      identity" badge on the consent screen.
    - **Client ID Metadata Documents (CIMD)** — the `client_id` is an `https://` URL pointing at a published metadata
      document. Cetacean fetches and verifies it (with SSRF protections), and renders a "verified via published
-     metadata" badge. CIMD is the registration mechanism recommended by the `2025-11-25` spec.
+     metadata" badge. CIMD is the registration mechanism recommended by the `2026-07-28` spec.
 3. The operator is authenticated by the configured auth provider, sees a consent screen, and approves.
 4. The client exchanges the authorization code (PKCE-S256, single-use, 60s) for an access token and refresh token.
 5. Subsequent MCP requests carry `Authorization: Bearer <token>`.
@@ -197,8 +205,6 @@ Docker version conflict.
 | `CETACEAN_MCP_SIGNING_KEY` | auto-generated | HMAC-SHA256 JWT signing key |
 | `CETACEAN_MCP_ACCESS_TOKEN_TTL` | `1h` | Access token lifetime |
 | `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | Refresh token lifetime (30 days) |
-| `CETACEAN_MCP_SESSION_IDLE_TTL` | `30m` | Idle session cleanup (legacy protocol only) |
-| `CETACEAN_MCP_MAX_SESSIONS` | `256` | Concurrent session limit (legacy protocol only) |
 | `CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR` | `true` | Require the RFC 8707 `resource` parameter |
 | `CETACEAN_MCP_DCR_ENABLED` | `true` | Enable Dynamic Client Registration |
 | `CETACEAN_MCP_DCR_RATE_LIMIT` | `10` | DCR registrations per IP per hour |

@@ -19,11 +19,8 @@ func TestCuratedToolsAdvertiseOutputSchema(t *testing.T) {
 	c := cache.New(nil)
 	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful)
 	handler := srv.Handler()
-	sessionID := initSession(t, handler, "")
 
-	_, env := mcpJSONRPC(t, handler, sessionID, `{
-		"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}
-	}`)
+	_, env := mcpModern(t, handler, 2, "tools/list", `{}`)
 	if env.Error != nil {
 		t.Fatalf("tools/list error: %+v", env.Error)
 	}
@@ -99,7 +96,6 @@ func TestCuratedToolOutputsValidate(t *testing.T) {
 	}
 	srv := newToolTestServer(t, c, wc, config.OpsImpactful)
 	handler := srv.Handler()
-	sessionID := initSession(t, handler, "")
 
 	calls := []struct {
 		name string
@@ -112,10 +108,8 @@ func TestCuratedToolOutputsValidate(t *testing.T) {
 
 	for _, call := range calls {
 		t.Run(call.name, func(t *testing.T) {
-			_, env := mcpJSONRPC(t, handler, sessionID, `{
-				"jsonrpc":"2.0","id":3,"method":"tools/call",
-				"params":{"name":"`+call.name+`","arguments":`+call.args+`}
-			}`)
+			_, env := mcpModern(t, handler, 3, "tools/call",
+				`{"name":"`+call.name+`","arguments":`+call.args+`}`)
 			if env.Error != nil {
 				t.Fatalf("tools/call %s transport error: %+v", call.name, env.Error)
 			}

@@ -48,13 +48,3 @@ func TestIdentityDoesNotComeFromSession(t *testing.T) {
 		}
 	}
 }
-
-// TestSessionsRemainAvailableForLegacyClients pins the other half: dropping
-// session support would break every client still on the initialize handshake.
-func TestSessionsRemainAvailableForLegacyClients(t *testing.T) {
-	handler := newTestServer(t).Handler()
-
-	if sessionID := initSession(t, handler, ""); sessionID == "" {
-		t.Fatal("legacy initialize did not yield a session")
-	}
-}

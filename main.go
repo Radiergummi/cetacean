@@ -673,7 +673,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 	}
 	slog.Info("MCP server enabled",
 		"operations_level", d.cfg.MCP.EffectiveOperationsLevel(d.cfg.OperationsLevel),
-		"max_sessions", d.cfg.MCP.MaxSessions)
+		"protocol_version", mcp.ProtocolVersion)
 
 	if len(d.cfg.CORSOrigins) == 0 {
 		slog.Warn(
