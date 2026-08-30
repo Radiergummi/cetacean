@@ -51,7 +51,7 @@ website/.astro/
 node_modules/
 # The harvester's fixtures stand in for a real npm install, so this one
 # node_modules tree is source and must stay tracked.
-!scripts/licensetexts/testdata/node_modules/
+!scripts/licensetexts/testdata/**/node_modules/
 .worktrees/
 cetacean.toml
 .playwright-mcp/
