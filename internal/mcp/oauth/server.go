@@ -115,11 +115,18 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
 
 // asMetadata is the RFC 8414 Authorization Server Metadata document.
 type asMetadata struct {
-	Issuer                                 string   `json:"issuer"`
-	AuthorizationEndpoint                  string   `json:"authorization_endpoint"`
-	TokenEndpoint                          string   `json:"token_endpoint"`
-	RevocationEndpoint                     string   `json:"revocation_endpoint"`
-	RegistrationEndpoint                   string   `json:"registration_endpoint,omitempty"`
+	Issuer                string `json:"issuer"`
+	AuthorizationEndpoint string `json:"authorization_endpoint"`
+	TokenEndpoint         string `json:"token_endpoint"`
+	RevocationEndpoint    string `json:"revocation_endpoint"`
+	RegistrationEndpoint  string `json:"registration_endpoint,omitempty"`
+
+	// ClientIDMetadataDocumentSupported advertises CIMD, which 2026-07-28
+	// prefers over RFC 7591 DCR. A client has no other way to learn that an
+	// https:// client_id will be accepted. Omitted when CIMD is disabled, so
+	// the document never points at a path the server will refuse.
+	ClientIDMetadataDocumentSupported bool `json:"client_id_metadata_document_supported,omitempty"`
+
 	CodeChallengeMethodsSupported          []string `json:"code_challenge_methods_supported"`
 	GrantTypesSupported                    []string `json:"grant_types_supported"`
 	ResponseTypesSupported                 []string `json:"response_types_supported"`
@@ -144,6 +151,8 @@ func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.MCP.DCREnabled {
 		doc.RegistrationEndpoint = base + "/oauth/register"
 	}
+
+	doc.ClientIDMetadataDocumentSupported = s.cfg.MCP.CIMDEnabled
 
 	// Marshal first so an encoding failure doesn't write partial headers
 	// followed by a 500 status (which would corrupt the response).
@@ -668,6 +677,10 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
 }
 
+// cimdDisabledMessage is shown when a client presents an https:// client_id
+// while CIMD is switched off.
+const cimdDisabledMessage = "client ID metadata documents are not enabled"
+
 // resolveClientMeta returns ClientMetadata and verified=true (CIMD) or
 // false (DCR), or an error message string if the client cannot be resolved.
 func (s *Server) resolveClientMeta(
@@ -675,7 +688,14 @@ func (s *Server) resolveClientMeta(
 	clientID string,
 ) (meta *ClientMetadata, verified bool, errMsg string) {
 	if strings.HasPrefix(clientID, "https://") {
-		// CIMD path. Don't surface the raw fetcher error to the browser —
+		// CIMD makes the server fetch a URL the client chose, so an operator
+		// who disabled it is deliberately removing outbound request surface.
+		// Refuse before fetching rather than after.
+		if !s.cfg.MCP.CIMDEnabled {
+			return nil, false, cimdDisabledMessage
+		}
+
+		// Don't surface the raw fetcher error to the browser —
 		// it can include DNS lookups, SSRF block reasons, "connection refused",
 		// etc. Log the specifics for operators and show a generic message.
 		m, err := s.cimd.Fetch(r.Context(), clientID)

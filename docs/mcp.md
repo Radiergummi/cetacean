@@ -89,12 +89,18 @@ The flow:
 1. The client hits `/mcp` without a valid token and receives `401` with a `WWW-Authenticate` header pointing at the
    Protected Resource Metadata document.
 2. The client discovers the authorization server, then identifies itself by one of:
-   - **Dynamic Client Registration** — POST to `/oauth/register`. Every DCR client is public and PKCE-only;
-     symmetric (`client_secret`) auth methods are rejected. Self-reported client names render with a "self-reported
-     identity" badge on the consent screen.
-   - **Client ID Metadata Documents (CIMD)** — the `client_id` is an `https://` URL pointing at a published metadata
-     document. Cetacean fetches and verifies it (with SSRF protections), and renders a "verified via published
-     metadata" badge. CIMD is the registration mechanism recommended by the `2026-07-28` spec.
+   - **Client ID Metadata Documents (CIMD)** — *recommended.* The `client_id` is an `https://` URL pointing at a
+     published metadata document. Cetacean fetches and verifies it (with SSRF protections), and the consent screen
+     shows a "verified via published metadata" badge, because the client's identity was checked against something it
+     does not control at consent time. `2026-07-28` prefers CIMD and deprecates DCR. Advertised as
+     `client_id_metadata_document_supported` in the AS metadata, and switchable with `CETACEAN_MCP_CIMD_ENABLED` —
+     turning it off stops Cetacean making any outbound fetch on a client's behalf, at the cost of refusing every
+     `https://` client_id.
+   - **Dynamic Client Registration (RFC 7591)** — supported for backwards compatibility; **deprecated in MCP
+     `2026-07-28`**. POST to `/oauth/register`. Every DCR client is public and PKCE-only; symmetric
+     (`client_secret`) auth methods are rejected. A DCR client names itself, so the consent screen shows a
+     "self-reported identity" badge. Registration is in memory, so registrations are lost on restart. Still enabled
+     by default (`CETACEAN_MCP_DCR_ENABLED`); prefer CIMD for anything new.
 3. The operator is authenticated by the configured auth provider, sees a consent screen, and approves.
 4. The client exchanges the authorization code (PKCE-S256, single-use, 60s) for an access token and refresh token.
 5. Subsequent MCP requests carry `Authorization: Bearer <token>`.

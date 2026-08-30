@@ -48,7 +48,9 @@ type MCPConfig struct {
 	// DCRMaxClients is the maximum number of dynamically registered clients.
 	DCRMaxClients int
 
-	// CIMDEnabled enables Client-Initiated Metadata Discovery.
+	// CIMDEnabled enables Client ID Metadata Documents: an https:// client_id
+	// that Cetacean fetches and verifies. Disabling it stops the server making
+	// outbound requests on a client's behalf.
 	CIMDEnabled bool
 
 	// AuthBypass lists upstream Cetacean auth modes (e.g. "cert") whose

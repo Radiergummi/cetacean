@@ -29,6 +29,7 @@ func newTestServer(t *testing.T) *Server {
 			DCREnabled:               true,
 			DCRRateLimit:             10,
 			DCRMaxClients:            100,
+			CIMDEnabled:              true,
 		},
 		SigningKey: []byte("test-signing-key-32bytes-padded!!"),
 	}
