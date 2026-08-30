@@ -56,6 +56,7 @@ export function useListPage<T>({
     ),
     sseType,
     keyFn,
+    debouncedSearch !== "",
   );
   const [viewMode, setViewMode] = useViewMode(viewModeKey);
 

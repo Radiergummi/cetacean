@@ -1,0 +1,4 @@
+# This fixture deliberately ships CRLF line endings to exercise the license
+# harvester's line-ending normalization (see harvest_test.go). core.autocrlf
+# would otherwise silently rewrite it to LF on commit, defeating the test.
+scripts/licensetexts/testdata/node_modules/@scope/pkg/LICENSE -text

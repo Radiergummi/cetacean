@@ -369,6 +369,48 @@ paths:
                               id: { type: string }
                               name: { type: string }
                               url: { type: string, format: uri }
+  /-/licenses/texts/{id}:
+    get:
+      tags: [Meta]
+      summary: Full text of one dependency's license or notice
+      description: >-
+        Returns the verbatim license or NOTICE text identified by `id`, which
+        comes from a component's `textId` or `noticeId` on `/-/licenses`. Ids
+        are content hashes, so a response is immutable and cacheable
+        indefinitely. Public — no authentication required.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: A `textId` or `noticeId` from the licenses document.
+      responses:
+        "200":
+          description: The license or notice text
+          content:
+            text/plain:
+              schema: { type: string }
+        "304": { description: Not modified }
+        "404":
+          description: No text with that identifier
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/ProblemDetail" }
+  /-/notices:
+    get:
+      tags: [Meta]
+      summary: Full third-party attribution document
+      description: >-
+        Returns the complete THIRD_PARTY_LICENSES document: the curated
+        preamble followed by every bundled dependency's license and any
+        NOTICE it ships. Public — no authentication required.
+      responses:
+        "200":
+          description: The third-party attribution document
+          content:
+            text/plain:
+              schema: { type: string }
+        "304": { description: Not modified }
   /-/sbom.cdx.json:
     get:
       summary: Software Bill of Materials (CycloneDX)
@@ -6681,7 +6723,11 @@ components:
           description: Resource type (node, service, task, etc.)
         action:
           type: string
-          description: Change action (update, remove)
+          enum: [create, update, remove, ref_changed]
+          description: >-
+            Change action. `create` means the resource appeared, `update` that
+            an existing one changed, `remove` that it is gone, and
+            `ref_changed` that a resource this one cross-references changed.
         resourceId:
           type: string
         name:
@@ -6770,7 +6816,13 @@ components:
           description: Event type string (node, service, task, etc.)
         action:
           type: string
-          description: Event action (update, remove)
+          enum: [create, update, remove, ref_changed, full_sync]
+          description: >-
+            Event action. `create` means the resource appeared, `update` that
+            an existing one changed, `remove` that it is gone, and
+            `ref_changed` that a resource this one cross-references changed.
+            `full_sync` accompanies a `sync` event and asks the client to
+            refetch, because the stream could not be replayed from its cursor.
         id:
           type: string
           description: Resource ID

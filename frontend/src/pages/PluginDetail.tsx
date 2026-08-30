@@ -24,7 +24,6 @@ import {
 } from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { formatPluginInterfaceType } from "../lib/format";
 import { joinCommand, parseCommand } from "../lib/parseCommand";
 import { ArrowUpCircle, Power, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -259,11 +258,7 @@ export default function PluginDetail() {
         <InfoCard
           label="Type"
           value={
-            config.Interface.Types?.map((type) => {
-              const name = formatPluginInterfaceType(type);
-
-              return pluginTypeLabels[name] ?? name;
-            }).join(", ") || "—"
+            config.Interface.Types?.map((type) => pluginTypeLabels[type] ?? type).join(", ") || "—"
           }
         />
       </MetadataGrid>

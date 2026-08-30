@@ -27,6 +27,8 @@ type Component struct {
 	Licenses    []License `json:"licenses"`
 	Homepage    string    `json:"homepage,omitempty"`
 	Repository  string    `json:"repository,omitempty"`
+	TextID      string    `json:"textId,omitempty"`
+	NoticeID    string    `json:"noticeId,omitempty"`
 }
 
 // License is a single license entry for a component.
@@ -37,6 +39,8 @@ type License struct {
 }
 
 // Project parses a CycloneDX JSON document and flattens it into a Document.
+// It is a pure projection of raw: the license and notice text ids come from a
+// second artifact and are stamped on afterwards, by attachTexts.
 // Components lacking a recognized package URL (e.g. the synthetic container
 // components a hierarchical merge produces) are skipped; nested components are
 // walked recursively. Output is sorted by ecosystem, then name, so the
@@ -61,26 +65,36 @@ func Project(raw []byte) (Document, error) {
 
 		for _, component := range *in {
 			ecosystem := ecosystemFromPurl(component.PackageURL)
-			// Key on ecosystem too: a Go module and an npm package can share a
-			// name@version, and they are distinct components.
-			key := ecosystem + ":" + component.Name + "@" + component.Version
-			if ecosystem != "" && !seen[key] {
+			if ecosystem == "" {
+				// A synthetic container/application component, not a
+				// dependency. Skip it, but still walk what it contains.
+				walk(component.Components)
+
+				continue
+			}
+
+			projected := Component{
+				Name:        qualifiedName(component),
+				Version:     component.Version,
+				Description: component.Description,
+				Ecosystem:   ecosystem,
+				Licenses:    projectLicenses(componentLicenses(component)),
+				Homepage: externalReference(
+					component.ExternalReferences,
+					cyclonedx.ERTypeWebsite,
+				),
+				Repository: externalReference(
+					component.ExternalReferences,
+					cyclonedx.ERTypeVCS,
+				),
+			}
+
+			// ComponentKey keys on ecosystem too: a Go module and an npm
+			// package can share a name@version, and they are distinct
+			// components.
+			if key := ComponentKey(projected); !seen[key] {
 				seen[key] = true
-				components = append(components, Component{
-					Name:        component.Name,
-					Version:     component.Version,
-					Description: component.Description,
-					Ecosystem:   ecosystem,
-					Licenses:    projectLicenses(componentLicenses(component)),
-					Homepage: externalReference(
-						component.ExternalReferences,
-						cyclonedx.ERTypeWebsite,
-					),
-					Repository: externalReference(
-						component.ExternalReferences,
-						cyclonedx.ERTypeVCS,
-					),
-				})
+				components = append(components, projected)
 			}
 
 			walk(component.Components)
@@ -103,6 +117,18 @@ func Project(raw []byte) (Document, error) {
 	})
 
 	return Document{Components: components}, nil
+}
+
+// qualifiedName rejoins the group CycloneDX splits off the component name. A
+// scoped npm package is recorded as group "@floating-ui" plus name "core"; on
+// its own the name is both unrecognizable and ambiguous — the SBOM holds
+// several components named "react". Go modules carry no group.
+func qualifiedName(component cyclonedx.Component) string {
+	if component.Group == "" {
+		return component.Name
+	}
+
+	return component.Group + "/" + component.Name
 }
 
 func ecosystemFromPurl(purl string) string {

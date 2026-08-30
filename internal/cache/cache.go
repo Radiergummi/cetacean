@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"cmp"
+	"slices"
 	"sync"
 	"time"
 
@@ -364,7 +366,8 @@ func (c *Cache) SetService(s swarm.Service) {
 
 	c.mu.Lock()
 	var oldRefs refSet
-	if old, ok := c.services[s.ID]; ok {
+	old, existed := c.services[s.ID]
+	if existed {
 		oldRefs = serviceRefs(old)
 		c.removeFromStack(EventService, old.ID, old.Spec.Labels)
 		c.serviceRef.remove(old)
@@ -374,7 +377,7 @@ func (c *Cache) SetService(s swarm.Service) {
 	c.serviceRef.add(s)
 	c.mu.Unlock()
 
-	c.notify(Event{Type: EventService, Action: "update", ID: s.ID, Resource: s})
+	c.notify(Event{Type: EventService, Action: setAction(existed), ID: s.ID, Resource: s})
 	c.notifyRefChanges(oldRefs, newRefs)
 }
 
@@ -405,11 +408,16 @@ func (c *Cache) DeleteService(id string) {
 
 func (c *Cache) ListServices() []swarm.Service {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 	out := make([]swarm.Service, 0, len(c.services))
 	for _, s := range c.services {
 		out = append(out, s)
 	}
+	c.mu.RUnlock()
+
+	// out is this caller's own copy, so the sort — the expensive half of the
+	// call on a large cluster — does not belong under the lock the watcher's
+	// writers are contending for.
+	slices.SortFunc(out, func(a, b swarm.Service) int { return cmp.Compare(a.ID, b.ID) })
 	return out
 }
 
@@ -419,7 +427,8 @@ func (c *Cache) SetTask(t swarm.Task) {
 	c.mu.Lock()
 	changed := true
 	wasFailure := false
-	if old, ok := c.tasks[t.ID]; ok {
+	old, existed := c.tasks[t.ID]
+	if existed {
 		// Status.Message captures the human-readable transition reason
 		// ("started", "shutdown requested", "rejected: …"). Without it
 		// the SSE stream silently coalesces task error-message changes.
@@ -441,7 +450,7 @@ func (c *Cache) SetTask(t swarm.Task) {
 	}
 
 	if changed {
-		c.notify(Event{Type: EventTask, Action: "update", ID: t.ID, Resource: t})
+		c.notify(Event{Type: EventTask, Action: setAction(existed), ID: t.ID, Resource: t})
 	}
 }
 
@@ -500,11 +509,13 @@ func (c *Cache) removeTaskIndex(t swarm.Task) {
 
 func (c *Cache) ListTasks() []swarm.Task {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 	out := make([]swarm.Task, 0, len(c.tasks))
 	for _, t := range c.tasks {
 		out = append(out, t)
 	}
+	c.mu.RUnlock()
+
+	slices.SortFunc(out, compareTasks)
 	return out
 }
 
@@ -597,6 +608,7 @@ func (c *Cache) ListStacks() []Stack {
 			Volumes:  append([]string{}, s.Volumes...),
 		})
 	}
+	slices.SortFunc(out, func(a, b Stack) int { return cmp.Compare(a.Name, b.Name) })
 	return out
 }
 
@@ -640,6 +652,12 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 			detail.Volumes = append(detail.Volumes, vol)
 		}
 	}
+	sortByName(detail.Services, func(s swarm.Service) string { return s.Spec.Name })
+	sortByName(detail.Configs, func(c swarm.Config) string { return c.Spec.Name })
+	sortByName(detail.Secrets, func(s swarm.Secret) string { return s.Spec.Name })
+	sortByName(detail.Networks, func(n network.Summary) string { return n.Name })
+	sortByName(detail.Volumes, func(v volume.Volume) string { return v.Name })
+
 	// Secret data is nilled by the secrets map's onSet hook (see secret
 	// ResourceMap above), so detail.Secrets[*].Spec.Data is already nil here.
 	// Don't re-walk to be defensive — that duplicates the redaction contract
@@ -699,14 +717,40 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 
 		out = append(out, s)
 	}
+	slices.SortFunc(out, func(a, b StackSummary) int { return cmp.Compare(a.Name, b.Name) })
 	return out
+}
+
+// setAction names what a Set did, so subscribers can tell a resource appearing
+// from one they already know about changing.
+func setAction(existed bool) string {
+	if existed {
+		return "update"
+	}
+
+	return "create"
+}
+
+// sortByName orders a slice of resources by the string each one calls its name.
+func sortByName[T any](items []T, name func(T) string) {
+	slices.SortFunc(items, func(a, b T) int { return cmp.Compare(name(a), name(b)) })
+}
+
+// compareTasks orders tasks by slot, then ID. Slot groups the replicas of a
+// service the way the UI lists them; the ID breaks ties between a slot's
+// historical tasks (and orders global-mode tasks, which have no slot).
+func compareTasks(a, b swarm.Task) int {
+	if bySlot := cmp.Compare(a.Slot, b.Slot); bySlot != 0 {
+		return bySlot
+	}
+
+	return cmp.Compare(a.ID, b.ID)
 }
 
 // --- Filtered task lists ---
 
 func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 	ids := c.tasksByService[serviceID]
 	out := make([]swarm.Task, 0, len(ids))
 	for id := range ids {
@@ -714,6 +758,9 @@ func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
 			out = append(out, t)
 		}
 	}
+	c.mu.RUnlock()
+
+	slices.SortFunc(out, compareTasks)
 	return out
 }
 
@@ -732,7 +779,6 @@ func (c *Cache) RunningTaskCount(serviceID string) int {
 
 func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 	ids := c.tasksByNode[nodeID]
 	out := make([]swarm.Task, 0, len(ids))
 	for id := range ids {
@@ -740,6 +786,9 @@ func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 			out = append(out, t)
 		}
 	}
+	c.mu.RUnlock()
+
+	slices.SortFunc(out, compareTasks)
 	return out
 }
 

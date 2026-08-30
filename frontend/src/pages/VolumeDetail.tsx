@@ -17,6 +17,7 @@ import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
+import { resourceBreadcrumbs } from "../lib/resourceBreadcrumbs";
 import { useParams } from "react-router-dom";
 
 export default function VolumeDetail() {
@@ -54,10 +55,12 @@ export default function VolumeDetail() {
             direction="column"
           />
         }
-        breadcrumbs={[
-          { label: "Volumes", to: "/volumes" },
-          { label: <ResourceName name={volume.Name} /> },
-        ]}
+        breadcrumbs={resourceBreadcrumbs({
+          listLabel: "Volumes",
+          listPath: "/volumes",
+          name: volume.Name,
+          stack,
+        })}
         actions={
           <RemoveResourceAction
             resourceType="volume"

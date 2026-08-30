@@ -24,6 +24,11 @@ func init() {
 		doc = Document{Components: []Component{}}
 	}
 
+	// Only the served document carries text ids. Project stays a pure
+	// projection of the SBOM so the generator that writes the text pool reads
+	// its input free of the previous build's ids.
+	attachTexts(doc.Components)
+
 	if version.Date != "" && version.Date != "unknown" {
 		doc.GeneratedAt = version.Date
 	}

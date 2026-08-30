@@ -33,6 +33,8 @@ import {
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { formatBytes, formatPercentage } from "../lib/format";
+import { stackNamespaceLabel } from "../lib/parseStackLabels";
+import { resourceBreadcrumbs } from "../lib/resourceBreadcrumbs";
 import { cpuGaugePercent, memoryGaugePercent } from "../lib/resourceGauge";
 import { isTerminalTaskState } from "../lib/taskState";
 import { escapePromQL } from "../lib/utils";
@@ -136,17 +138,22 @@ export default function TaskDetail() {
             </>
           )
         }
-        breadcrumbs={[
-          { label: "Services", to: "/services" },
-          { label: <ResourceName name={serviceName} />, to: `/services/${task.ServiceID}` },
-          {
-            label: task.Slot ? (
-              `Replica #${task.Slot}`
-            ) : (
-              <span className="font-mono">{taskIdShort}</span>
-            ),
-          },
-        ]}
+        breadcrumbs={resourceBreadcrumbs({
+          listLabel: "Services",
+          listPath: "/services",
+          name: serviceName,
+          stack: service?.Spec?.Labels?.[stackNamespaceLabel],
+          to: `/services/${task.ServiceID}`,
+          trail: [
+            {
+              label: task.Slot ? (
+                `Replica #${task.Slot}`
+              ) : (
+                <span className="font-mono">{taskIdShort}</span>
+              ),
+            },
+          ],
+        })}
         actions={
           canRemove ? (
             <>

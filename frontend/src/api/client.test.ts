@@ -20,6 +20,27 @@ function jsonResponse(data: unknown, status = 200) {
 }
 
 describe("api client", () => {
+  it("treats a 416 range response as the end of the collection", async () => {
+    // The server answers 416 when the requested offset is past the end. That
+    // is a correct answer to a stale question — the client's idea of the
+    // total drifted — not a failure worth tearing the page down for. Content-
+    // Range carries the real total, so the page resyncs from it.
+    mockFetch.mockReturnValue(
+      Promise.resolve({
+        ok: false,
+        status: 416,
+        statusText: "Requested Range Not Satisfiable",
+        json: () => Promise.resolve({ title: "range start is beyond the total" }),
+        text: () => Promise.resolve(""),
+        headers: new Headers({ "Content-Range": "items */12" }),
+      }),
+    );
+
+    const result = await api.tasks({ offset: 50 });
+
+    expect(result.data).toEqual({ items: [], total: 12, limit: 50, offset: 50 });
+  });
+
   it("fetches nodes with Range header", async () => {
     mockFetch.mockReturnValue(
       jsonResponse({ items: [{ ID: "n1" }], total: 1, limit: 50, offset: 0 }),

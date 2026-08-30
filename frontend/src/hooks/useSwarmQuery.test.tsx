@@ -131,7 +131,7 @@ describe("useSwarmQuery", () => {
     await waitFor(() => expect(result.current.data).toEqual([updated]));
   });
 
-  it("SSE bumps total for unknown items", async () => {
+  it("SSE bumps total when an unknown item is created", async () => {
     const fetchFn = vi
       .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
       .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "a" }], 5));
@@ -147,7 +147,7 @@ describe("useSwarmQuery", () => {
     act(() =>
       MockEventSource.instance.simulateEvent("service", {
         type: "service",
-        action: "update",
+        action: "create",
         id: "99",
         resource: { ID: "99", Name: "new-unknown" },
       }),
@@ -183,7 +183,7 @@ describe("useSwarmQuery", () => {
     act(() =>
       MockEventSource.instance.simulateEvent("service", {
         type: "service",
-        action: "update",
+        action: "create",
         id: "3",
         resource: created,
       }),
@@ -198,6 +198,156 @@ describe("useSwarmQuery", () => {
     expect(result.current.data).toHaveLength(3);
     expect(result.current.data).toContainEqual(created);
     expect(result.current.hasMore).toBe(false);
+  });
+
+  it("SSE updates to unloaded items leave the total alone", async () => {
+    // A partially loaded list can't tell whether an item it doesn't hold is
+    // new or simply on a page it hasn't fetched — so it trusts the action.
+    // Counting every update as an arrival inflates the total without bound on
+    // a churning cluster, and the table's load-more sentinel then walks the
+    // offset past the real end of the collection and gets a 416 back.
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "a" }], 50));
+
+    const { result } = renderHook(
+      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.total).toBe(50);
+
+    for (const id of ["90", "91", "92"]) {
+      act(() =>
+        MockEventSource.instance.simulateEvent("task", {
+          type: "task",
+          action: "update",
+          id,
+          resource: { ID: id, Name: `task-${id}` },
+        }),
+      );
+    }
+
+    expect(result.current.total).toBe(50);
+    expect(result.current.data).toHaveLength(1);
+  });
+
+  it("SSE removes an unloaded item from the total", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "a" }], 50));
+
+    const { result } = renderHook(
+      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("task", {
+        type: "task",
+        action: "remove",
+        id: "42",
+      }),
+    );
+
+    await waitFor(() => expect(result.current.total).toBe(49));
+    expect(result.current.data).toHaveLength(1);
+  });
+
+  it("SSE leaves a filtered collection's total alone for items it never held", async () => {
+    // The stream carries every resource of this type, not only the ones the
+    // search selected, so a filtered list cannot tell whether the departing
+    // item was ever a member. Counting the unrelated churn would drive the
+    // total below the real count — negative, on a busy cluster — and the
+    // load-more sentinel would then stop asking for the pages holding the
+    // rows that do match.
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "nginx-1" }], 3));
+
+    const { result } = renderHook(
+      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID, true),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.total).toBe(3);
+
+    for (const id of ["40", "41", "42", "43", "44"]) {
+      act(() =>
+        MockEventSource.instance.simulateEvent("task", {
+          type: "task",
+          action: "remove",
+          id,
+        }),
+      );
+    }
+
+    expect(result.current.total).toBe(3);
+    expect(result.current.data).toHaveLength(1);
+  });
+
+  it("SSE still removes a loaded item from a filtered collection", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(
+        makeFetchResult(
+          [
+            { ID: "1", Name: "nginx-1" },
+            { ID: "2", Name: "nginx-2" },
+          ],
+          2,
+        ),
+      );
+
+    const { result } = renderHook(
+      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID, true),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("task", {
+        type: "task",
+        action: "remove",
+        id: "1",
+      }),
+    );
+
+    await waitFor(() => expect(result.current.data).toEqual([{ ID: "2", Name: "nginx-2" }]));
+    expect(result.current.total).toBe(1);
+  });
+
+  it("SSE does not add an unknown creation to a filtered collection", async () => {
+    // A fully loaded unfiltered list would show the arrival; a filtered one
+    // cannot tell whether it matches the search, and appending it would render
+    // a row the filter excludes.
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "nginx-1" }], 1));
+
+    const { result } = renderHook(
+      () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID, true),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("service", {
+        type: "service",
+        action: "create",
+        id: "99",
+        resource: { ID: "99", Name: "redis" },
+      }),
+    );
+
+    expect(result.current.total).toBe(1);
+    expect(result.current.data).toEqual([{ ID: "1", Name: "nginx-1" }]);
   });
 
   it("SSE removes item", async () => {

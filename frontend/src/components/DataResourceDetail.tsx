@@ -2,6 +2,7 @@ import type { PatchOp } from "../api/types";
 import type { HistoryEntry, ServiceRef } from "../api/types";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { parseStackLabels } from "../lib/parseStackLabels";
+import { resourceBreadcrumbs } from "../lib/resourceBreadcrumbs";
 import ActivitySection from "./ActivitySection";
 import { MetadataGrid, ResourceId, ResourceLink, Timestamp } from "./data";
 import { KeyValueEditor } from "./KeyValueEditor";
@@ -66,7 +67,7 @@ export default function DataResourceDetail({
             direction="column"
           />
         }
-        breadcrumbs={[{ label: listLabel, to: listPath }, { label: <ResourceName name={name} /> }]}
+        breadcrumbs={resourceBreadcrumbs({ listLabel, listPath, name, stack })}
         actions={
           <RemoveResourceAction
             resourceType={resourceType}

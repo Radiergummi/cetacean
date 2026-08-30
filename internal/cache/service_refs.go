@@ -1,6 +1,11 @@
 package cache
 
-import "github.com/docker/docker/api/types/swarm"
+import (
+	"cmp"
+	"slices"
+
+	"github.com/docker/docker/api/types/swarm"
+)
 
 // ServiceRef is a lightweight reference to a service.
 type ServiceRef struct {
@@ -100,6 +105,13 @@ func (idx *serviceRefIndex) lookup(
 			})
 		}
 	}
+	slices.SortFunc(refs, func(a, b ServiceRef) int {
+		if byName := cmp.Compare(a.Name, b.Name); byName != 0 {
+			return byName
+		}
+
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return refs
 }
 

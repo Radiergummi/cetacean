@@ -1,5 +1,3 @@
-import type { PluginInterfaceType } from "../api/types";
-
 /**
  *  Locale-aware number formatting with N decimal places.
  */
@@ -218,16 +216,4 @@ function formatUnit(value: number, unit: string, maximumFractionDigits = 0): str
     unitDisplay: "narrow",
     maximumFractionDigits,
   }).format(value);
-}
-
-/**
- * Formats a Docker plugin interface type as its canonical
- * `prefix.capability/version` string (e.g. `docker.volumedriver/1.0`).
- */
-export function formatPluginInterfaceType({
-  Prefix,
-  Capability,
-  Version,
-}: PluginInterfaceType): string {
-  return `${Prefix}.${Capability}/${Version}`;
 }

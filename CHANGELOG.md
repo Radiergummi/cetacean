@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The licenses page now shows the full license text and NOTICE of every bundled dependency, can be filtered by license and ecosystem — every count reflects the other filters already applied, so it says what picking it would leave — and offers the complete attribution document as a download
+
 ### Fixed
+- Breadcrumbs on a resource that belongs to a stack now lead through the stack: "Stacks › monitoring › prometheus" rather than "Services › monitoring/prometheus"
+- The Tasks page no longer flips between the task list and a "range start is beyond the total number of items" error every few seconds on a busy cluster
+- Lists no longer come back in a different order every time you open them. Services, stacks, tasks, nodes, and the "Used by" tables on detail pages now hold a consistent order, so returning to a list after visiting a resource no longer means hunting for the row you clicked
+- Plugins on the Swarm page now show their type instead of "undefined.undefined/undefined"
+- Scoped npm packages on the licenses page now show their full name — "@floating-ui/core" rather than "core"
 - Live pages, charts, and the connection indicator no longer stop updating for good when the server is momentarily at its connection limit. Resource streams and metrics charts now re-establish themselves after a rejected connection instead of staying silent until the page is reloaded, and reload what they missed while they were down rather than showing frozen data behind a connected indicator; metrics charts additionally recover from ordinary network interruptions, which previously killed them outright
 - Live log tail no longer switches itself off without explanation when its connection drops. It now reconnects on its own with a growing delay between attempts, and picks up where it left off — the lines produced while it was disconnected are filled in when it returns, without repeating what was already shown (a very long disconnection may still leave a gap) — and shows what it is doing while it retries. If the server is at its log-streaming connection limit, the viewer says so and counts down to the next attempt instead of showing a cryptic error, and waits as long as the server asks. After several failed attempts it stops and offers to resume.
 - Live log tail no longer sits empty behind a pulsing "Live" badge. Asking for a time range as a duration, at whole-second precision, or in a non-UTC time zone — and simply having a computer clock running ahead of the cluster — each silently discarded every line the stream produced, for as long as the viewer stayed open

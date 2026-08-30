@@ -1,15 +1,11 @@
 import { feedForPath } from "@/components/AtomFeedLink";
 import { buttonVariants } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { Crumb } from "@/lib/resourceBreadcrumbs";
 import { ChevronRight, Rss } from "lucide-react";
 import type React from "react";
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-
-interface Crumb {
-  label: React.ReactNode;
-  to?: string | undefined;
-}
 
 interface Props {
   title: React.ReactNode;

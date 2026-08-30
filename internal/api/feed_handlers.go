@@ -203,6 +203,7 @@ func (h *Handlers) feedRecommendationsHandler(render feedRenderer) http.HandlerF
 
 // actionVerb maps history action strings to past-tense verbs for feed titles.
 var actionVerb = map[string]string{
+	"create":      "Added",
 	"update":      "Updated",
 	"remove":      "Removed",
 	"ref_changed": "Updated",

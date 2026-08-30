@@ -19,6 +19,7 @@ import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
+import { resourceBreadcrumbs } from "../lib/resourceBreadcrumbs";
 import { cardGridClass } from "../lib/styles";
 import { useParams } from "react-router-dom";
 
@@ -147,10 +148,12 @@ export default function NetworkDetail() {
             direction="column"
           />
         }
-        breadcrumbs={[
-          { label: "Networks", to: "/networks" },
-          { label: <ResourceName name={network.Name} /> },
-        ]}
+        breadcrumbs={resourceBreadcrumbs({
+          listLabel: "Networks",
+          listPath: "/networks",
+          name: network.Name,
+          stack,
+        })}
         actions={
           <RemoveResourceAction
             resourceType="network"

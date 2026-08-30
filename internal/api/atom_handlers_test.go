@@ -138,8 +138,35 @@ func TestHistoryToEntries(t *testing.T) {
 	})
 
 	t.Run("falls back to Action Name when Summary is empty", func(t *testing.T) {
+		// An action with no mapped verb is title-cased rather than dropped, so
+		// a vocabulary the feed hasn't been taught still reads as a sentence.
 		entries := []cache.HistoryEntry{{
 			ID:         43,
+			Timestamp:  ts,
+			Type:       cache.EventNode,
+			Action:     "quarantine",
+			ResourceID: "node-xyz",
+			Name:       "worker-1",
+		}}
+
+		result := historyToFeedEntries(req, entries)
+
+		if len(result) != 1 {
+			t.Fatalf("got %d entries, want 1", len(result))
+		}
+
+		if result[0].Title != "Quarantine node: worker-1" {
+			t.Errorf("title = %q, want %q", result[0].Title, "Quarantine node: worker-1")
+		}
+
+		if !strings.Contains(result[0].ContentHTML, "<strong>worker-1</strong>") {
+			t.Errorf("content = %q, want it to contain the resource name", result[0].ContentHTML)
+		}
+	})
+
+	t.Run("renders a create action as Added", func(t *testing.T) {
+		entries := []cache.HistoryEntry{{
+			ID:         44,
 			Timestamp:  ts,
 			Type:       cache.EventNode,
 			Action:     "create",
@@ -153,12 +180,8 @@ func TestHistoryToEntries(t *testing.T) {
 			t.Fatalf("got %d entries, want 1", len(result))
 		}
 
-		if result[0].Title != "Create node: worker-1" {
-			t.Errorf("title = %q, want %q", result[0].Title, "Create node: worker-1")
-		}
-
-		if !strings.Contains(result[0].ContentHTML, "<strong>worker-1</strong>") {
-			t.Errorf("content = %q, want it to contain the resource name", result[0].ContentHTML)
+		if result[0].Title != "Added node: worker-1" {
+			t.Errorf("title = %q, want %q", result[0].Title, "Added node: worker-1")
 		}
 	})
 
