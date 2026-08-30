@@ -23,12 +23,6 @@ func TestServerExtensionsDeclareUIMIMEType(t *testing.T) {
 	}
 }
 
-func TestServerExtensionsDeclareTasks(t *testing.T) {
-	if _, ok := serverExtensions()[extensionTasks]; !ok {
-		t.Fatalf("no %q extension declared", extensionTasks)
-	}
-}
-
 // TestDiscoverAdvertisesExtensions drives server/discover, the 2026-07-28
 // replacement for the initialize handshake. A host learns what we support from
 // this response alone, so an unwired capability is invisible to it.

@@ -83,6 +83,21 @@ func mcpJSONRPCWithToken(
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
+
+	return sendMCP(t, handler, req)
+}
+
+// sendMCP serves req and decodes the JSON-RPC envelope out of the response,
+// whether it arrived as SSE or as plain JSON. It owns the response body's
+// lifecycle — always draining and closing it — which is why callers get a value
+// type rather than the *http.Response (and why bodyclose has nothing to flag).
+func sendMCP(
+	t *testing.T,
+	handler http.Handler,
+	req *http.Request,
+) (mcpJSONRPCResult, jsonrpcEnvelope) {
+	t.Helper()
+
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -96,6 +111,7 @@ func mcpJSONRPCWithToken(
 			t.Fatalf("unmarshal JSON-RPC payload %q: %v", string(payload), err)
 		}
 	}
+
 	return mcpJSONRPCResult{StatusCode: resp.StatusCode, Header: resp.Header}, env
 }
 

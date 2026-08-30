@@ -25,6 +25,10 @@ func newTestServer(t *testing.T) *Server {
 // stubSession is the minimal ClientSession mcp-go needs to attribute a request
 // to a session. It notifies nowhere: tests that assert on subscription
 // bookkeeping never read the channel.
+//
+// mcp-go's own NewInProcessSession would also satisfy the interface, but it
+// reports Initialized() false until Initialize() is called and drags in
+// sampling/elicitation/roots machinery these tests do not exercise.
 type stubSession struct {
 	id string
 }
@@ -46,9 +50,8 @@ func contextWithSession(t *testing.T, srv *Server, sessionID string) context.Con
 }
 
 // mcpModern issues a request the way a 2026-07-28 client does: no session, no
-// initialize handshake, the protocol version declared both in _meta and in the
-// Mcp-Protocol-Version header, and the SEP-2243 standard request headers on
-// every POST.
+// initialize handshake, and the protocol version declared both in _meta and in
+// the Mcp-Protocol-Version header.
 func mcpModern(
 	t *testing.T,
 	handler http.Handler,
@@ -57,56 +60,61 @@ func mcpModern(
 ) (mcpJSONRPCResult, jsonrpcEnvelope) {
 	t.Helper()
 
-	paramsJSON := withProtocolMeta(params)
+	return sendMCP(t, handler, modernRequest(t, id, method, params))
+}
+
+// modernRequest builds the request mcpModern sends, for tests that need to add
+// a header of their own before it goes out.
+func modernRequest(t *testing.T, id int, method, params string) *http.Request {
+	t.Helper()
+
+	paramsJSON := withProtocolMeta(t, params)
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":%q,"params":%s}`, id, method, paramsJSON)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("Mcp-Protocol-Version", mcplib.LATEST_PROTOCOL_VERSION)
-	req.Header.Set("Mcp-Method", method)
+	req.Header.Set(mcplib.HeaderProtocolVersion, mcplib.LATEST_PROTOCOL_VERSION)
 
-	// SEP-2243: Mcp-Name carries the name of the thing being addressed — the
-	// tool name, or the resource URI — and the server rejects a value that
-	// disagrees with the body. Methods that address nothing send no header.
-	name, ok := mcplib.ExtractHeaderName(mcplib.MCPMethod(method), json.RawMessage(paramsJSON))
-	if ok {
-		req.Header.Set("Mcp-Name", name)
+	// SEP-2243 requires Mcp-Method, and Mcp-Name for the methods that address
+	// something. Let mcp-go derive them: it knows which methods carry a name,
+	// and it base64-encodes values that are not header-safe, which the server
+	// decodes before comparing against the body.
+	for key, value := range mcplib.StandardHeaders(
+		mcplib.LATEST_PROTOCOL_VERSION,
+		mcplib.MCPMethod(method),
+		json.RawMessage(paramsJSON),
+	) {
+		req.Header.Set(key, value)
 	}
 
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	return req
+}
 
-	resp := rec.Result()
-	payload := readSSEResponse(t, resp.Body)
-	_ = resp.Body.Close()
+// withProtocolMeta adds the per-request protocol metadata a modern client sends
+// to a params object. 2026-07-28 removed the initialize handshake, so every
+// request restates the protocol version, the client's identity, and its
+// capabilities: the server must not infer any of them from a previous request.
+func withProtocolMeta(t *testing.T, params string) json.RawMessage {
+	t.Helper()
 
-	var env jsonrpcEnvelope
-	if len(payload) > 0 {
-		if err := json.Unmarshal(payload, &env); err != nil {
-			t.Fatalf("unmarshal JSON-RPC payload %q: %v", string(payload), err)
+	object := map[string]any{}
+	if trimmed := strings.TrimSpace(params); trimmed != "" {
+		if err := json.Unmarshal([]byte(trimmed), &object); err != nil {
+			t.Fatalf("params %q is not a JSON object: %v", params, err)
 		}
 	}
 
-	return mcpJSONRPCResult{StatusCode: resp.StatusCode, Header: resp.Header}, env
-}
-
-// withProtocolMeta splices the protocol-version _meta key into a params object.
-func withProtocolMeta(params string) string {
-	// 2026-07-28 removed the initialize handshake, so every request restates
-	// the protocol version, the client's identity, and its capabilities: the
-	// server must not infer any of them from a previous request.
-	meta := fmt.Sprintf(
-		`"_meta":{%q:%q,%q:{"name":"test","version":"1.0"},%q:{}}`,
-		mcplib.MetaKeyProtocolVersion, mcplib.LATEST_PROTOCOL_VERSION,
-		mcplib.MetaKeyClientInfo,
-		mcplib.MetaKeyClientCapabilities,
-	)
-
-	trimmed := strings.TrimSpace(params)
-	if trimmed == "" || trimmed == "{}" {
-		return "{" + meta + "}"
+	object["_meta"] = map[string]any{
+		mcplib.MetaKeyProtocolVersion:    mcplib.LATEST_PROTOCOL_VERSION,
+		mcplib.MetaKeyClientInfo:         map[string]string{"name": "test", "version": "1.0"},
+		mcplib.MetaKeyClientCapabilities: map[string]any{},
 	}
 
-	return "{" + meta + "," + strings.TrimPrefix(trimmed, "{")
+	raw, err := json.Marshal(object)
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+
+	return raw
 }

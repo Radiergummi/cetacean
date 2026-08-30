@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -130,6 +131,17 @@ type Options struct {
 // mounting on an http.ServeMux. registerResources and registerTools are
 // invoked once during construction; tools and resources are then served from
 // the mcp-go shared registry.
+// Cache TTLs advertised on cacheable results. They are freshness hints, not
+// correctness guarantees: a client may serve a cached response for this long
+// before re-fetching. Both are deliberately short — Cetacean mirrors live
+// cluster state, and an agent acting on a minute-old service list can scale the
+// wrong thing. listChanged notifications remain the primary invalidation
+// signal; these hints only bound how long a client that missed one stays stale.
+const (
+	cacheTTLList = 30 * time.Second
+	cacheTTLRead = 10 * time.Second
+)
+
 func New(c *cache.Cache, opts Options) (*Server, error) {
 	if c == nil {
 		return nil, errors.New("mcp: cache is required")
@@ -167,10 +179,15 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		// declare a schema; Docker-passthrough mutations carry none and skip
 		// validation.
 		mcpserver.WithOutputSchemaValidation(),
-		// SEP-2549 freshness hints. The scope is always private: every
-		// Cetacean response is filtered by the caller's ACL grants, so a
-		// shared intermediary caching one identity's view and serving it to
-		// another would be an authorization bypass.
+		// SEP-2549 freshness hints, applied by mcp-go to tools/list,
+		// resources/list, resources/templates/list, resources/read and
+		// server/discover, and omitted for clients on protocol versions older
+		// than 2026-07-28, where the fields do not exist.
+		//
+		// The scope is always private: every Cetacean response is filtered by
+		// the caller's ACL grants, so a shared intermediary caching one
+		// identity's view and serving it to another would be an authorization
+		// bypass.
 		mcpserver.WithCacheHints(cacheTTLList.Milliseconds(), mcplib.CacheScopePrivate),
 		mcpserver.WithMethodCacheHints(
 			mcplib.MethodResourcesRead,

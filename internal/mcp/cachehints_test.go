@@ -21,23 +21,19 @@ func TestCacheTTLsAreConservative(t *testing.T) {
 	}
 }
 
-// cacheHints is the subset of a cacheable result the hint tests read. The full
+// readCacheHints decodes just the cacheable envelope of a result. The concrete
 // result types cannot be unmarshalled — ReadResourceResult.Contents is an
-// interface — and the wire shape is what SEP-2549 actually specifies.
-type cacheHints struct {
-	TTLMs      *int64            `json:"ttlMs"`
-	CacheScope mcplib.CacheScope `json:"cacheScope"`
-}
-
-func readCacheHints(t *testing.T, raw json.RawMessage, method string) cacheHints {
+// interface — but CacheableResult carries exactly the SEP-2549 fields and
+// nothing that resists decoding.
+func readCacheHints(t *testing.T, raw json.RawMessage, method string) mcplib.CacheableResult {
 	t.Helper()
 
-	var hints cacheHints
+	var hints mcplib.CacheableResult
 	if err := json.Unmarshal(raw, &hints); err != nil {
 		t.Fatalf("decode %s result: %v", method, err)
 	}
 
-	if hints.TTLMs == nil {
+	if _, ok := hints.TTL(); !ok {
 		t.Fatalf("%s result carries no ttlMs; SEP-2549 requires it", method)
 	}
 
@@ -73,8 +69,8 @@ func TestCacheHintsOnModernResults(t *testing.T) {
 			}
 
 			hints := readCacheHints(t, env.Result, tc.method)
-			if *hints.TTLMs != tc.wantMs {
-				t.Fatalf("%s ttlMs = %d, want %d", tc.method, *hints.TTLMs, tc.wantMs)
+			if ttl, _ := hints.TTL(); ttl != tc.wantMs {
+				t.Fatalf("%s ttlMs = %d, want %d", tc.method, ttl, tc.wantMs)
 			}
 		})
 	}
@@ -94,13 +90,13 @@ func TestCacheHintsOmittedForLegacyClients(t *testing.T) {
 		t.Fatalf("tools/list error: %+v", env.Error)
 	}
 
-	var hints cacheHints
+	var hints mcplib.CacheableResult
 	if err := json.Unmarshal(env.Result, &hints); err != nil {
 		t.Fatalf("decode tools/list: %v", err)
 	}
 
-	if hints.TTLMs != nil {
-		t.Errorf("legacy client received ttlMs = %d", *hints.TTLMs)
+	if ttl, ok := hints.TTL(); ok {
+		t.Errorf("legacy client received ttlMs = %d", ttl)
 	}
 
 	if hints.CacheScope != "" {

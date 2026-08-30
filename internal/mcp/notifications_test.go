@@ -294,12 +294,17 @@ func TestSubscriptionsListenPopulatesManager(t *testing.T) {
 		hook(ctx, "req-1", req)
 	}
 
-	got := srv.notifications.SubscribedURIs("session-modern")
-	slices.Sort(got)
-
-	want := []string{"cetacean://nodes/xyz", "cetacean://services/abc"}
-	if !slices.Equal(got, want) {
-		t.Fatalf("subscribed URIs = %v, want %v", got, want)
+	for _, want := range []struct {
+		event cache.Event
+		uri   string
+	}{
+		{cache.Event{Type: cache.EventService, ID: "abc"}, "cetacean://services/abc"},
+		{cache.Event{Type: cache.EventNode, ID: "xyz"}, "cetacean://nodes/xyz"},
+	} {
+		got := srv.notifications.MatchingURIs("session-modern", want.event)
+		if !slices.Contains(got, want.uri) {
+			t.Errorf("subscription to %s not recorded (matched %v)", want.uri, got)
+		}
 	}
 }
 
@@ -324,7 +329,11 @@ func TestSubscriptionsListenClearsOnStreamClose(t *testing.T) {
 		hook(ctx, "req-1", req, &mcplib.SubscriptionsListenResult{})
 	}
 
-	if got := srv.notifications.SubscribedURIs("session-modern"); len(got) != 0 {
+	got := srv.notifications.MatchingURIs("session-modern", cache.Event{
+		Type: cache.EventService,
+		ID:   "abc",
+	})
+	if len(got) != 0 {
 		t.Fatalf("subscriptions survived stream close: %v", got)
 	}
 }

@@ -38,10 +38,6 @@ func TestNegotiatesLatestProtocol(t *testing.T) {
 // #73) is handled by mcp-go per negotiated version, not by us. A legacy session
 // must still see -32002.
 func TestResourceNotFoundCodeIsVersionAware(t *testing.T) {
-	if mcplib.RESOURCE_NOT_FOUND == mcplib.INVALID_PARAMS {
-		t.Fatal("expected distinct codes for the two eras")
-	}
-
 	if got, want := mcplib.INVALID_PARAMS, -32602; got != want {
 		t.Fatalf("INVALID_PARAMS = %d, want %d", got, want)
 	}

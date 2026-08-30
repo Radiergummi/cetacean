@@ -75,25 +75,6 @@ func (nm *NotificationManager) RemoveSession(sessionID string) {
 	delete(nm.sessions, sessionID)
 }
 
-// SubscribedURIs returns the URIs sessionID is currently subscribed to. Order
-// is unspecified. Used by tests to assert subscription bookkeeping.
-func (nm *NotificationManager) SubscribedURIs(sessionID string) []string {
-	nm.mu.RLock()
-	defer nm.mu.RUnlock()
-
-	st := nm.sessions[sessionID]
-	if st == nil {
-		return nil
-	}
-
-	uris := make([]string, 0, len(st.uris))
-	for uri := range st.uris {
-		uris = append(uris, uri)
-	}
-
-	return uris
-}
-
 // IdentityFor returns the identity associated with sessionID, or nil when the
 // session has no live subscription (or was never recorded). Exposed for tests
 // and for the list_changed dispatch path, which iterates known sessions.
