@@ -200,3 +200,84 @@ func TestHarvestFailsWhenOnlyMatchIsSourceLike(t *testing.T) {
 		t.Errorf("error %q does not name the offending component", err)
 	}
 }
+
+func TestHarvestResolvesNpmVersionsSeparately(t *testing.T) {
+	// npm hoists one version of a package to the top of node_modules and nests
+	// the rest under their dependents. Resolving by name alone would hand both
+	// SBOM entries the hoisted version's license text.
+	doc := sbom.Document{Components: []sbom.Component{
+		{Name: "duplicated", Version: "2.0.0", Ecosystem: "npm"},
+		{Name: "duplicated", Version: "1.0.0", Ecosystem: "npm"},
+	}}
+
+	artifact, err := Harvest(doc, testRoots())
+	if err != nil {
+		t.Fatalf("Harvest: %v", err)
+	}
+
+	hoisted := artifact.Components["npm:duplicated@2.0.0"]
+	if got := artifact.Texts[hoisted.License]; got != "MIT License\n\nCopyright (c) 2026 Duplicated Two\n" {
+		t.Errorf("hoisted license text = %q", got)
+	}
+
+	nested := artifact.Components["npm:duplicated@1.0.0"]
+	if got := artifact.Texts[nested.License]; got != "MIT License\n\nCopyright (c) 2026 Duplicated One\n" {
+		t.Errorf("nested license text = %q, want the nested copy's own text", got)
+	}
+}
+
+func TestHarvestFailsOnUninstalledNpmVersion(t *testing.T) {
+	// Silently falling back to whichever version happens to be installed would
+	// put the wrong license text in the attribution document.
+	doc := sbom.Document{Components: []sbom.Component{
+		{Name: "duplicated", Version: "9.9.9", Ecosystem: "npm"},
+	}}
+
+	_, err := Harvest(doc, testRoots())
+	if err == nil {
+		t.Fatal("expected an error naming the version that is not installed")
+	}
+
+	if !strings.Contains(err.Error(), "duplicated@9.9.9") {
+		t.Errorf("error %q does not name the offending component", err)
+	}
+}
+
+func TestHarvestCollectsEveryLicenseOfADualLicensedPackage(t *testing.T) {
+	// A package offering Apache-2.0 or MIT ships both texts and no plain
+	// LICENSE. Embedding only the first would drop half the attribution.
+	doc := sbom.Document{Components: []sbom.Component{
+		{Name: "example.com/dual", Version: "v1.0.0", Ecosystem: "go"},
+	}}
+
+	artifact, err := Harvest(doc, testRoots())
+	if err != nil {
+		t.Fatalf("Harvest: %v", err)
+	}
+
+	text := artifact.Texts[artifact.Components["go:example.com/dual@v1.0.0"].License]
+
+	for _, want := range []string{"LICENSE-APACHE", "Apache License 2.0", "LICENSE-MIT", "MIT License"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("combined text %q is missing %q", text, want)
+		}
+	}
+}
+
+func TestHarvestCollapsesDuplicateLicenseFiles(t *testing.T) {
+	// LICENSE and LICENSE.md holding the same bytes is one obligation, not
+	// two, and printing it twice only pads the attribution document.
+	doc := sbom.Document{Components: []sbom.Component{
+		{Name: "example.com/twinned", Version: "v1.0.0", Ecosystem: "go"},
+	}}
+
+	artifact, err := Harvest(doc, testRoots())
+	if err != nil {
+		t.Fatalf("Harvest: %v", err)
+	}
+
+	text := artifact.Texts[artifact.Components["go:example.com/twinned@v1.0.0"].License]
+	if text != "MIT License\n\nCopyright (c) 2026 Twinned\n" {
+		t.Errorf("text = %q, want the license once and unlabelled", text)
+	}
+}
