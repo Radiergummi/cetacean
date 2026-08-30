@@ -183,7 +183,7 @@ export function useSwarmQuery<T>(
           void queryClient.invalidateQueries({ queryKey: key });
         }
       },
-      [queryClient],
+      [queryClient, queryKeyRef, getIdRef],
     ),
   );
 

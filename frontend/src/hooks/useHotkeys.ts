@@ -81,5 +81,5 @@ export function useHotkeys(hotkeys: HotkeyMap) {
         clearTimeout(timerRef.current);
       }
     };
-  }, []);
+  }, [hotkeysRef]);
 }
