@@ -64,3 +64,18 @@ func TestOriginGuard(t *testing.T) {
 		}
 	})
 }
+
+// TestStandardRequestHeadersPassOriginGuard ensures our DNS-rebinding guard
+// does not interfere with the headers 2026-07-28 requires on every POST.
+func TestStandardRequestHeadersPassOriginGuard(t *testing.T) {
+	handler := newTestServer(t).Handler()
+
+	status, env := mcpModern(t, handler, 1, "tools/list", `{}`)
+	if status == http.StatusForbidden {
+		t.Fatalf("origin guard rejected a well-formed 2026-07-28 request")
+	}
+
+	if env.Error != nil {
+		t.Fatalf("tools/list error: %+v", env.Error)
+	}
+}
