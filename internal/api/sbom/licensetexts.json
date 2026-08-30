@@ -199,7 +199,7 @@
   "go:github.com/klauspost/compress@v1.19.1": {
    "license": "0d9e582ee4bff57bf1189c9e514e6da7"
   },
-  "go:github.com/mark3labs/mcp-go@v0.58.0": {
+  "go:github.com/mark3labs/mcp-go@v1.0.0-beta.1": {
    "license": "5e13dbbc1d120fc2a03cecde7c91424a"
   },
   "go:github.com/mdlayher/netlink@v1.7.3-0.20250113171957-fbb4dce95f42": {

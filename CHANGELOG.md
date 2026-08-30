@@ -8,9 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- MCP server now speaks protocol revision 2026-07-28, with its stateless core: AI agents connect and work without a handshake or a session. Clients on 2025-11-25 and older continue to work unchanged
+- List and read responses over MCP now carry cache freshness hints, so agents poll less
 - The licenses page now shows the full license text and NOTICE of every bundled dependency, can be filtered by license and ecosystem — every count reflects the other filters already applied, so it says what picking it would leave — and offers the complete attribution document as a download
 
 ### Fixed
+- AI agents on the new MCP protocol revision now receive live cluster updates. Subscribing succeeded and then delivered nothing, because 2026-07-28 replaced the subscription call the server was listening for
+- MCP clients running in a browser can now reach the server at all. Cross-origin preflight rejected every header the MCP transport requires
 - Breadcrumbs on a resource that belongs to a stack now lead through the stack: "Stacks › monitoring › prometheus" rather than "Services › monitoring/prometheus"
 - Resource names no longer show a stack prefix that isn't there. A volume or config named "my_data" that belongs to no stack read as "my/data" in the page title while its breadcrumb correctly said "my_data"; a resource that joined a stack by label without being named for it now keeps its own name as well
 - The Tasks page no longer flips between the task list and a "range start is beyond the total number of items" error every few seconds on a busy cluster

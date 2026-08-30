@@ -69,7 +69,8 @@ func mcpModern(
 	// SEP-2243: Mcp-Name carries the name of the thing being addressed — the
 	// tool name, or the resource URI — and the server rejects a value that
 	// disagrees with the body. Methods that address nothing send no header.
-	if name, ok := mcplib.ExtractHeaderName(mcplib.MCPMethod(method), json.RawMessage(paramsJSON)); ok {
+	name, ok := mcplib.ExtractHeaderName(mcplib.MCPMethod(method), json.RawMessage(paramsJSON))
+	if ok {
 		req.Header.Set("Mcp-Name", name)
 	}
 
