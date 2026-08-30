@@ -513,18 +513,18 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	// From here on redirect_uri is verified — errors can redirect.
 
 	if responseType != "code" {
-		redirectWithError(w, r, redirectURIRaw, state, "unsupported_response_type",
+		s.redirectWithError(w, r, redirectURIRaw, state, "unsupported_response_type",
 			"response_type must be code")
 		return
 	}
 
 	if codeChallenge == "" {
-		redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
+		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
 			"code_challenge is required")
 		return
 	}
 	if codeChallengeMethod != "S256" {
-		redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
+		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
 			"code_challenge_method must be S256")
 		return
 	}
@@ -534,7 +534,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		s.cfg.MCPResource,
 		s.cfg.MCP.RequireResourceIndicator,
 	); err != nil {
-		redirectWithError(w, r, redirectURIRaw, state, "invalid_target", err.Error())
+		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_target", err.Error())
 		return
 	}
 
@@ -608,7 +608,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 
 	if decision == "deny" {
 		clearCSRFCookie(w, secure)
-		redirectWithError(w, r, redirectURIRaw, state, "access_denied",
+		s.redirectWithError(w, r, redirectURIRaw, state, "access_denied",
 			"user denied the authorization request")
 		return
 	}
@@ -623,7 +623,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 
 	if codeChallengeMethod != "S256" {
 		clearCSRFCookie(w, secure)
-		redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
+		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
 			"code_challenge_method must be S256")
 		return
 	}
@@ -635,7 +635,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		clearCSRFCookie(w, secure)
-		redirectWithError(w, r, redirectURIRaw, state, "invalid_target", err.Error())
+		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_target", err.Error())
 		return
 	}
 
@@ -659,6 +659,10 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	if state != "" {
 		q.Set("state", state)
 	}
+	// RFC 9207: name the issuer in the authorization response so a client
+	// configured with several authorization servers cannot be tricked into
+	// redeeming this code at the wrong one (mix-up attack).
+	q.Set("iss", s.cfg.issuerID())
 	redirectURI.RawQuery = q.Encode()
 	//nolint:gosec // G710: redirectURIRaw was exact-matched against the client's registered redirect_uris (HasRedirectURI) earlier in handleAuthorizePOST; this is a pre-validated URI, not open redirect.
 	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
@@ -702,7 +706,7 @@ func (s *Server) resolveClientMeta(
 }
 
 // redirectWithError sends an OAuth error redirect to redirect_uri.
-func redirectWithError(
+func (s *Server) redirectWithError(
 	w http.ResponseWriter,
 	r *http.Request,
 	redirectURIRaw, state, code, desc string,
@@ -720,6 +724,9 @@ func redirectWithError(
 	if state != "" {
 		q.Set("state", state)
 	}
+	// RFC 9207 §2 requires iss on error responses too: a client must be able
+	// to attribute the failure before acting on it.
+	q.Set("iss", s.cfg.issuerID())
 	u.RawQuery = q.Encode()
 	//nolint:gosec // G710: callers (handleAuthorizePOST) exact-match redirectURIRaw against the client's registered redirect_uris before invoking this; the target is a pre-validated URI, not open redirect.
 	http.Redirect(w, r, u.String(), http.StatusFound)
