@@ -26,10 +26,12 @@ export function useSwarmQuery<T>(
   fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>,
   sseType: string,
   getId: (item: T) => string,
+  filtered = false,
 ) {
   const queryClient = useQueryClient();
   const getIdRef = useLatestRef(getId);
   const queryKeyRef = useLatestRef(queryKey);
+  const filteredRef = useLatestRef(filtered);
 
   const query = useInfiniteQuery({
     queryKey: [...queryKey],
@@ -80,7 +82,23 @@ export function useSwarmQuery<T>(
           return;
         }
 
+        const held = currentData.pages.some((page) =>
+          page.data.items.some((item) => getIdRef.current(item) === event.id),
+        );
+
         if (event.action === "remove") {
+          // A filtered collection cannot tell whether an item it does not hold
+          // ever belonged to it: the stream carries every resource of this
+          // type, not only the ones the search selected. Decrementing on those
+          // walks the total below the real count — below zero on a churning
+          // cluster — and the load-more sentinel then stops asking for the
+          // pages that hold the rows which do match. A stale-high total costs
+          // one page fetch instead, which the server answers with a 416
+          // carrying the authoritative count.
+          if (!held && filteredRef.current) {
+            return;
+          }
+
           queryClient.setQueryData<InfinitePages<T>>(key, (old) => {
             if (!old) {
               return old;
@@ -114,16 +132,8 @@ export function useSwarmQuery<T>(
           });
         } else if (event.resource) {
           const resource = event.resource as T;
-          let found = false;
 
-          for (const page of currentData.pages) {
-            if (page.data.items.some((item) => getIdRef.current(item) === event.id)) {
-              found = true;
-              break;
-            }
-          }
-
-          if (found) {
+          if (held) {
             queryClient.setQueryData<InfinitePages<T>>(key, (old) => {
               if (!old) {
                 return old;
@@ -142,13 +152,17 @@ export function useSwarmQuery<T>(
                 })),
               };
             });
-          } else if (event.action === "create") {
+          } else if (event.action === "create" && !filteredRef.current) {
             // Only a creation changes how many items the collection holds. An
             // update for an item the pages don't hold means it sits on a page
             // that was never fetched — the total already counts it, and
             // counting it again inflates the collection without bound on a
             // churning list. The sentinel then pages past the real end and the
             // server answers 416.
+            //
+            // A filtered collection sits this out for the reason the removal
+            // above does: it cannot tell whether the arrival matches its
+            // search, and appending it would show a row the filter excludes.
             queryClient.setQueryData<InfinitePages<T>>(key, (old) => {
               if (!old) {
                 return old;
