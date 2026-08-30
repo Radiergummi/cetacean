@@ -160,6 +160,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		mcpserver.WithHooks(srv.installSubscriptionHooks()),
 		mcpserver.WithInstructions(mcpInstructions),
 		mcpserver.WithDescription(mcpDescription),
+		mcpserver.WithExtensions(serverExtensions()),
 		// Enforce advertised output schemas: a tool result whose
 		// structuredContent does not conform to its declared outputSchema is
 		// rejected. Only the curated-shape tools (search, get_logs, remove_*)
