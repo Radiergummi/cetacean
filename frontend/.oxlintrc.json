@@ -20,6 +20,10 @@
     "react/jsx-no-constructed-context-values": "warn",
     "react/no-this-in-sfc": "error",
     "react/no-array-index-key": "off",
+    // Every report is a `cell: ({ ID }) => <Link…>` render prop in a DataTable
+    // column definition. Those are not components — React never mounts them as
+    // one — so the stale-state hazard the rule warns about cannot occur.
+    "react/no-unstable-nested-components": ["warn", { "allowAsProps": true }],
     "react-hooks/rules-of-hooks": "error",
     "react/refs": "error",
     // React Compiler rules, added to oxlint's `correctness` category in 1.7x
@@ -46,6 +50,10 @@
         "varsIgnorePattern": "^_"
       }
     ],
+    // Private fields deliberately stashed on objects owned by other libraries:
+    // `_rawData` on a Chart.js dataset, `_elkHeight` on a React Flow node's
+    // data, `_values` in vendored shadcn slider code.
+    "no-underscore-dangle": ["warn", { "allow": ["_values", "_rawData", "_elkHeight"] }],
     "no-shadow": "off",
     "no-console": ["warn", { "allow": ["warn", "error"] }],
     "eqeqeq": ["error", "smart"],
@@ -68,5 +76,15 @@
   "env": {
     "builtin": true
   },
-  "ignorePatterns": ["dist/**"]
+  "ignorePatterns": ["dist/**"],
+  "overrides": [
+    {
+      // Tests drive sequences that have to happen in order — a reconnect
+      // attempt, then the next one — so awaiting inside the loop is the point.
+      "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "no-await-in-loop": "off"
+      }
+    }
+  ]
 }

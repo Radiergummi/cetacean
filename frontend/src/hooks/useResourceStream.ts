@@ -68,7 +68,7 @@ export function useResourceStream(path: string, listener: SSEListener) {
     });
 
     return () => stream.close();
-  }, [path]);
+  }, [path, listenerRef]);
 
   return { connected };
 }

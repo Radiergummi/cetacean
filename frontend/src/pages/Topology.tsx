@@ -129,7 +129,7 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
     return () => {
       cancelled = true;
     };
-  }, [structureKey]);
+  }, [structureKey, nodesRef, edgesRef]);
 
   // Patch node data in-place when only display data changes (replicas, status, etc.)
   useEffect(() => {
