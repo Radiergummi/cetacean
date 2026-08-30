@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"cmp"
 	"maps"
 	"slices"
 	"sync"
@@ -54,7 +55,8 @@ func (r *ResourceMap[T]) del(key string) (name string) {
 // list returns every value ordered by map key (the resource ID, or the name
 // for volumes). Go randomizes map iteration, so without this the API's stable
 // sort would order equal sort keys differently on every request — and a client
-// paging through a list would see items shift between pages.
+// paging through a list would see items shift between pages. Caller must hold
+// the lock; List takes the same order without holding it across the sort.
 func (r *ResourceMap[T]) list() []T {
 	out := make([]T, 0, len(r.items))
 	for _, k := range slices.Sorted(maps.Keys(r.items)) {
@@ -93,11 +95,32 @@ func (r *ResourceMap[T]) Delete(key string, eventType EventType) Event {
 	return Event{Type: eventType, Action: "remove", ID: key, Name: name}
 }
 
-// List returns all values as a slice.
+// List returns all values as a slice, ordered by map key like list.
+//
+// The copy comes out under the read lock and is sorted after releasing it: the
+// sort is the expensive half of the call on a large cluster, and it does not
+// belong under the lock the watcher's writers are contending for. ListServices
+// and ListTasks split the work the same way.
 func (r *ResourceMap[T]) List() []T {
+	type entry struct {
+		key   string
+		value T
+	}
+
 	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.list()
+	entries := make([]entry, 0, len(r.items))
+	for key, value := range r.items {
+		entries = append(entries, entry{key: key, value: value})
+	}
+	r.mu.RUnlock()
+
+	slices.SortFunc(entries, func(a, b entry) int { return cmp.Compare(a.key, b.key) })
+
+	out := make([]T, len(entries))
+	for i, e := range entries {
+		out[i] = e.value
+	}
+	return out
 }
 
 // Len returns the number of items.
