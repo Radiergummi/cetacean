@@ -70,8 +70,8 @@ func TestOriginGuard(t *testing.T) {
 func TestStandardRequestHeadersPassOriginGuard(t *testing.T) {
 	handler := newTestServer(t).Handler()
 
-	status, env := mcpModern(t, handler, 1, "tools/list", `{}`)
-	if status == http.StatusForbidden {
+	resp, env := mcpModern(t, handler, 1, "tools/list", `{}`)
+	if resp.StatusCode == http.StatusForbidden {
 		t.Fatalf("origin guard rejected a well-formed 2026-07-28 request")
 	}
 

@@ -185,6 +185,10 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 	srv.cancelNotifications = srv.startNotifications()
 
 	httpSrv := mcpserver.NewStreamableHTTPServer(mcpSrv,
+		// Sessions exist only for clients on 2025-11-25 and older, which
+		// negotiate through initialize and carry Mcp-Session-Id. Clients on
+		// 2026-07-28 are stateless: mcp-go serves them without minting a
+		// session, so SessionIdleTTL and MaxSessions do not apply to them.
 		mcpserver.WithStateful(true),
 		mcpserver.WithSessionIdleTTL(opts.Config.SessionIdleTTL),
 		mcpserver.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {

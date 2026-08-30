@@ -197,8 +197,8 @@ Docker version conflict.
 | `CETACEAN_MCP_SIGNING_KEY` | auto-generated | HMAC-SHA256 JWT signing key |
 | `CETACEAN_MCP_ACCESS_TOKEN_TTL` | `1h` | Access token lifetime |
 | `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | Refresh token lifetime (30 days) |
-| `CETACEAN_MCP_SESSION_IDLE_TTL` | `30m` | Idle session cleanup |
-| `CETACEAN_MCP_MAX_SESSIONS` | `256` | Concurrent session limit |
+| `CETACEAN_MCP_SESSION_IDLE_TTL` | `30m` | Idle session cleanup (legacy protocol only) |
+| `CETACEAN_MCP_MAX_SESSIONS` | `256` | Concurrent session limit (legacy protocol only) |
 | `CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR` | `true` | Require the RFC 8707 `resource` parameter |
 | `CETACEAN_MCP_DCR_ENABLED` | `true` | Enable Dynamic Client Registration |
 | `CETACEAN_MCP_DCR_RATE_LIMIT` | `10` | DCR registrations per IP per hour |

@@ -54,7 +54,7 @@ func mcpModern(
 	handler http.Handler,
 	id int,
 	method, params string,
-) (int, jsonrpcEnvelope) {
+) (mcpJSONRPCResult, jsonrpcEnvelope) {
 	t.Helper()
 
 	paramsJSON := withProtocolMeta(params)
@@ -87,7 +87,7 @@ func mcpModern(
 		}
 	}
 
-	return resp.StatusCode, env
+	return mcpJSONRPCResult{StatusCode: resp.StatusCode, Header: resp.Header}, env
 }
 
 // withProtocolMeta splices the protocol-version _meta key into a params object.
