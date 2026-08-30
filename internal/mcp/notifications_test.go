@@ -1,7 +1,10 @@
 package mcp
 
 import (
+	"slices"
 	"testing"
+
+	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -267,4 +270,61 @@ func TestStartNotificationsCancelDetachesListener(t *testing.T) {
 		t.Fatal("Close did not clear cancelNotifications")
 	}
 	srv.Close() // must not panic
+}
+
+// TestSubscriptionsListenPopulatesManager covers the 2026-07-28 path. Modern
+// clients never call resources/subscribe, so AddAfterSubscribe never fires; the
+// manager must instead learn subscriptions from subscriptions/listen.
+func TestSubscriptionsListenPopulatesManager(t *testing.T) {
+	srv := newTestServer(t)
+	hooks := srv.installSubscriptionHooks()
+
+	if len(hooks.OnBeforeSubscriptionsListen) == 0 {
+		t.Fatal("no subscriptions/listen hook installed: modern clients would receive no updates")
+	}
+
+	ctx := contextWithSession(t, srv, "session-modern")
+	req := &mcplib.SubscriptionsListenRequest{}
+	req.Params.Notifications = mcplib.SubscriptionFilter{
+		ResourcesListChanged:  true,
+		ResourceSubscriptions: []string{"cetacean://services/abc", "cetacean://nodes/xyz"},
+	}
+
+	for _, hook := range hooks.OnBeforeSubscriptionsListen {
+		hook(ctx, "req-1", req)
+	}
+
+	got := srv.notifications.SubscribedURIs("session-modern")
+	slices.Sort(got)
+
+	want := []string{"cetacean://nodes/xyz", "cetacean://services/abc"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("subscribed URIs = %v, want %v", got, want)
+	}
+}
+
+// TestSubscriptionsListenClearsOnStreamClose verifies the teardown half: the
+// listen stream holds until the client disconnects, and the after-hook fires
+// then. Leaving the URIs behind would leak subscriptions across reconnects.
+func TestSubscriptionsListenClearsOnStreamClose(t *testing.T) {
+	srv := newTestServer(t)
+	hooks := srv.installSubscriptionHooks()
+	ctx := contextWithSession(t, srv, "session-modern")
+
+	req := &mcplib.SubscriptionsListenRequest{}
+	req.Params.Notifications = mcplib.SubscriptionFilter{
+		ResourceSubscriptions: []string{"cetacean://services/abc"},
+	}
+
+	for _, hook := range hooks.OnBeforeSubscriptionsListen {
+		hook(ctx, "req-1", req)
+	}
+
+	for _, hook := range hooks.OnAfterSubscriptionsListen {
+		hook(ctx, "req-1", req, &mcplib.SubscriptionsListenResult{})
+	}
+
+	if got := srv.notifications.SubscribedURIs("session-modern"); len(got) != 0 {
+		t.Fatalf("subscriptions survived stream close: %v", got)
+	}
 }

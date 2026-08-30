@@ -75,6 +75,25 @@ func (nm *NotificationManager) RemoveSession(sessionID string) {
 	delete(nm.sessions, sessionID)
 }
 
+// SubscribedURIs returns the URIs sessionID is currently subscribed to. Order
+// is unspecified. Used by tests to assert subscription bookkeeping.
+func (nm *NotificationManager) SubscribedURIs(sessionID string) []string {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+
+	st := nm.sessions[sessionID]
+	if st == nil {
+		return nil
+	}
+
+	uris := make([]string, 0, len(st.uris))
+	for uri := range st.uris {
+		uris = append(uris, uri)
+	}
+
+	return uris
+}
+
 // IdentityFor returns the identity associated with sessionID, or nil when the
 // session has no live subscription (or was never recorded). Exposed for tests
 // and for the list_changed dispatch path, which iterates known sessions.
@@ -363,9 +382,11 @@ func eventTypeToACLPrefix(t cache.EventType) string {
 }
 
 // installSubscriptionHooks returns the mcp-go Hooks that wire client subscribe
-// / unsubscribe / session lifecycle into the NotificationManager. The hook
-// callbacks read the session ID from the request context — mcp-go stamps a
-// ClientSession on the ctx before invoking handlers.
+// / unsubscribe / session lifecycle into the NotificationManager, on both the
+// legacy resources/subscribe path and the 2026-07-28 subscriptions/listen path.
+// The hook callbacks read the session ID from the request context — mcp-go
+// stamps a ClientSession on the ctx before invoking handlers, for modern and
+// legacy clients alike.
 func (s *Server) installSubscriptionHooks() *mcpserver.Hooks {
 	h := &mcpserver.Hooks{}
 
@@ -381,6 +402,46 @@ func (s *Server) installSubscriptionHooks() *mcpserver.Hooks {
 		func(ctx context.Context, _ any, msg *mcplib.UnsubscribeRequest, _ *mcplib.EmptyResult) {
 			if sid := sessionIDFromContext(ctx); sid != "" {
 				s.notifications.Unsubscribe(sid, msg.Params.URI)
+			}
+		},
+	)
+
+	// 2026-07-28 replaced resources/subscribe with subscriptions/listen, which
+	// does not fire the subscribe hooks above: mcp-go records those URIs by
+	// type-asserting the session to SessionWithResourceSubscriptions, and its
+	// streamable-HTTP session does not implement that interface. Track them
+	// here instead, or modern clients would subscribe successfully and then
+	// never receive a single notification.
+	//
+	// The requested URIs are what mcp-go establishes verbatim: its
+	// allowedSubscriptions only drops them when resource subscription
+	// capability is off, and we advertise it unconditionally.
+	h.AddBeforeSubscriptionsListen(
+		func(ctx context.Context, _ any, msg *mcplib.SubscriptionsListenRequest) {
+			sid := sessionIDFromContext(ctx)
+			if sid == "" {
+				return
+			}
+
+			identity := auth.IdentityFromContext(ctx)
+			for _, uri := range msg.Params.Notifications.ResourceSubscriptions {
+				s.notifications.Subscribe(sid, uri, identity)
+			}
+		},
+	)
+
+	// The listen handler blocks until the client disconnects, so the after-hook
+	// is our stream-closed signal. Drop exactly what this request established;
+	// the session may still hold subscriptions from another listen stream.
+	h.AddAfterSubscriptionsListen(
+		func(ctx context.Context, _ any, msg *mcplib.SubscriptionsListenRequest, _ *mcplib.SubscriptionsListenResult) {
+			sid := sessionIDFromContext(ctx)
+			if sid == "" {
+				return
+			}
+
+			for _, uri := range msg.Params.Notifications.ResourceSubscriptions {
+				s.notifications.Unsubscribe(sid, uri)
 			}
 		},
 	)
