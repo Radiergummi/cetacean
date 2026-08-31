@@ -114,6 +114,7 @@ type toolDef struct {
 // listed here (there are none currently) are served without an icon.
 var toolIconCategory = map[string]string{
 	"get_logs":       "read",
+	"get_topology":   "read",
 	"list_resources": "read",
 	"search":         "search",
 
@@ -322,6 +323,29 @@ func (s *Server) toolCatalog() []toolDef {
 			tier:    config.OpsReadOnly,
 			handler: s.toolListResources,
 			widget:  "table",
+		},
+		{
+			tool: mcplib.NewTool(
+				"get_topology",
+				mcplib.WithToolTitle("Get cluster topology"),
+				mcplib.WithDescription(
+					"Return the cluster as a graph. The network view joins services to the overlay networks they attach to, answering which services can reach each other; the placement view joins cluster nodes to the services they run, answering what runs where. Use this instead of listing services and nodes separately when the question is about relationships.",
+				),
+				mcplib.WithOutputSchema[cluster.TopologyGraph](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString(
+					"view",
+					mcplib.Description(
+						"Which projection to return: \"network\" (services joined to overlay networks, the default) or \"placement\" (cluster nodes joined to the services they run).",
+					),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolGetTopology,
+			widget:  "topology",
 		},
 
 		// Tier 1 — Operational.

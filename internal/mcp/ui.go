@@ -56,6 +56,11 @@ var widgetCatalog = map[string]struct {
 		Description:   "Services in the cluster, with their state, as a sortable table.",
 		PrefersBorder: true,
 	},
+	"topology": {
+		Title:         "Cluster topology",
+		Description:   "Services, overlay networks and cluster nodes as an interactive graph.",
+		PrefersBorder: true,
+	},
 }
 
 // widgetFS holds the built widget bundles. main.go owns the //go:embed — the

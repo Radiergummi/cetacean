@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"strings"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -16,6 +15,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/jgf"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 type NetworkTopology struct {
@@ -100,12 +100,12 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 	netServices := make(map[string][]string)
 	nodes := make([]TopoServiceNode, 0, len(services))
 	for _, svc := range services {
-		replicas := replicaCount(svc)
+		replicas := cluster.ReplicaCount(svc)
 		stack := svc.Spec.Labels["com.docker.stack.namespace"]
 
 		var image string
 		if svc.Spec.TaskTemplate.ContainerSpec != nil {
-			image = stripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
+			image = cluster.StripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
 		}
 		var mode string
 		if svc.Spec.Mode.Replicated != nil {
@@ -219,7 +219,7 @@ func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Reques
 	for _, svc := range services {
 		svcNames[svc.ID] = svc.Spec.Name
 		if svc.Spec.TaskTemplate.ContainerSpec != nil {
-			svcImages[svc.ID] = stripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
+			svcImages[svc.ID] = cluster.StripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
 		}
 	}
 
@@ -244,7 +244,7 @@ func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Reques
 
 			var taskImage string
 			if t.Spec.ContainerSpec != nil {
-				taskImage = stripImageDigest(t.Spec.ContainerSpec.Image)
+				taskImage = cluster.StripImageDigest(t.Spec.ContainerSpec.Image)
 			}
 			if taskImage == "" {
 				taskImage = svcImages[t.ServiceID]
@@ -278,20 +278,6 @@ func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Reques
 			PlacementTopology{Nodes: topoNodes},
 		),
 	)
-}
-
-func replicaCount(svc swarm.Service) int {
-	if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
-		return int(*svc.Spec.Mode.Replicated.Replicas)
-	}
-	return 0
-}
-
-func stripImageDigest(image string) string {
-	if before, _, ok := strings.Cut(image, "@sha256:"); ok {
-		return before
-	}
-	return image
 }
 
 func formatPorts(ports []swarm.PortConfig) []string {
@@ -335,7 +321,7 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 	for _, svc := range services {
 		svcNames[svc.ID] = svc.Spec.Name
 		if svc.Spec.TaskTemplate.ContainerSpec != nil {
-			svcImages[svc.ID] = stripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
+			svcImages[svc.ID] = cluster.StripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
 		}
 		readableServiceIDs[svc.ID] = true
 	}
@@ -442,11 +428,11 @@ func buildNetworkJGF(
 		meta := jgf.Metadata{
 			"@context": contextURL,
 			"kind":     "service",
-			"replicas": replicaCount(svc),
+			"replicas": cluster.ReplicaCount(svc),
 		}
 
 		if svc.Spec.TaskTemplate.ContainerSpec != nil {
-			meta["image"] = stripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
+			meta["image"] = cluster.StripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
 		}
 
 		if svc.Spec.Mode.Replicated != nil {
@@ -638,7 +624,7 @@ func buildPlacementJGF(
 
 			var taskImage string
 			if t.Spec.ContainerSpec != nil {
-				taskImage = stripImageDigest(t.Spec.ContainerSpec.Image)
+				taskImage = cluster.StripImageDigest(t.Spec.ContainerSpec.Image)
 			}
 
 			if taskImage == "" {

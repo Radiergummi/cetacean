@@ -41,7 +41,7 @@ func TestCuratedToolsAdvertiseOutputSchema(t *testing.T) {
 	}
 
 	curated := map[string]bool{
-		"search": true, "get_logs": true, "list_resources": true,
+		"search": true, "get_logs": true, "list_resources": true, "get_topology": true,
 		"remove_task": true, "remove_service": true, "remove_config": true,
 		"remove_secret": true, "remove_network": true, "remove_volume": true,
 		// The four lifecycle mutations return serviceMutationResult, a shape
@@ -119,6 +119,7 @@ func TestCuratedToolOutputsValidate(t *testing.T) {
 		{"search", `{"query":"web"}`},
 		{"get_logs", `{"service":"svc1"}`},
 		{"list_resources", `{"type":"services"}`},
+		{"get_topology", `{"view":"placement"}`},
 		{"remove_task", `{"id":"task1"}`},
 		{"scale_service", `{"id":"svc1","replicas":2}`},
 		{"update_service_image", `{"id":"svc1","image":"nginx:1"}`},

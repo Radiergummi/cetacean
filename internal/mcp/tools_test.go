@@ -334,7 +334,9 @@ func TestTierThreeNodeToolsCarryDestructiveHint(t *testing.T) {
 func TestToolAnnotationsCompleteness(t *testing.T) {
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsImpactful)
 
-	readOnly := map[string]bool{"get_logs": true, "search": true, "list_resources": true}
+	readOnly := map[string]bool{
+		"get_logs": true, "search": true, "list_resources": true, "get_topology": true,
+	}
 	destructive := map[string]bool{
 		"update_service_image":     true,
 		"rollback_service":         true,
