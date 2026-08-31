@@ -242,6 +242,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 	srv.mcpServer = mcpSrv
 
 	srv.registerResources()
+	srv.registerUIResources()
 	srv.registerTools()
 	srv.cancelNotifications = srv.startNotifications()
 

@@ -26,12 +26,23 @@ const (
 // looks for a widget that was never registered. Both are worse than saying
 // nothing — a host that reads no extension simply uses the core protocol.
 //
-// Tasks is advertised because mcpserver.WithTaskCapabilities is wired beside
-// it in server.go. UI is still absent and is added by the phase that registers
-// the first widget resource; the pairing tests fail if either arrives without
-// the other.
+// Tasks is advertised because mcpserver.WithTaskCapabilities is wired beside it
+// in server.go. UI is advertised only when the widget build actually produced
+// something: registerUIResources publishes whatever uiResources() finds, so
+// asking the same function here means the advertisement and the resources are
+// derived from one fact and cannot disagree. A binary built without running
+// `npm run build:widgets` therefore says nothing about UI rather than promising
+// widgets it cannot serve.
 func serverExtensions() map[string]any {
-	return map[string]any{
+	extensions := map[string]any{
 		extensionTasks: map[string]any{},
 	}
+
+	if len(uiResources()) > 0 {
+		extensions[extensionUI] = map[string]any{
+			"mimeTypes": []string{uiMIMEType},
+		}
+	}
+
+	return extensions
 }

@@ -294,6 +294,30 @@ Pick a `ttl` long enough that you will have polled `tasks/get` for the result be
 discarded, the result is gone. If your MCP client library does not expose `ttl`, treat long-lived agent sessions
 against this server as a memory risk and restart Cetacean periodically until it does.
 
+## Widgets (MCP Apps)
+
+A host that supports the MCP Apps extension can render Cetacean's data as an interactive view instead of JSON.
+Cetacean advertises `io.modelcontextprotocol/ui` and serves each widget as a resource:
+
+```
+ui://cetacean/table
+```
+
+Each is a single self-contained HTML document with MIME type `text/html;profile=mcp-app` — all CSS and JavaScript
+inlined, because an app resource has no base URL and cannot fetch anything relative to itself.
+
+Widgets read data by calling Cetacean's own MCP tools through the host, never by reaching Cetacean's HTTP API
+directly. That keeps every read on the one audited path, so a widget sees exactly what the calling identity's ACL
+grants allow, and it works even when the browser has no network route to the Cetacean host.
+
+Each widget declares an empty `_meta.ui.csp`, which states that it needs no external origin at all — no network, no
+third-party assets, no nested frames. This is deliberate rather than an omission: an absent policy and an empty one
+mean different things to a host, and a widget that ever needs an origin should be a visible change.
+
+Widgets are optional in both directions. A host without app support ignores the extension and receives ordinary
+results, and a Cetacean binary built without `npm run build:widgets` serves no widget resources and does not
+advertise the extension — rather than pointing a host at a view it cannot load.
+
 ## Distributed tracing
 
 Point `CETACEAN_OTEL_ENDPOINT` (or `[tracing].endpoint`) at an OpenTelemetry collector that accepts OTLP over HTTP:

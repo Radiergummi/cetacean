@@ -28,6 +28,7 @@ LDFLAGS := -X github.com/radiergummi/cetacean/internal/version.Version=$(VERSION
 
 build:
 	cd frontend && npm run build
+	cd frontend && npm run build:widgets
 	go build -ldflags "$(LDFLAGS)" -o cetacean .
 
 ## Run all tests

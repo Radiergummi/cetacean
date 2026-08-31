@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - List and read responses over MCP now carry cache freshness hints, so agents poll less
 - The licenses page now shows the full license text and NOTICE of every bundled dependency, can be filtered by license and ecosystem — every count reflects the other filters already applied, so it says what picking it would leave — and offers the complete attribution document as a download
 - AI agents can now ask for a service change and be told when the cluster has actually caught up, rather than when Docker accepted the request. Scaling, image updates, rollbacks and restarts can be started as a task that stays open until the replicas are really running — or fails with the reason if they never do. Agents should set an expiry (`ttl`) on each such request: one without an expiry is kept until the server restarts, so an agent that omits it will grow Cetacean's memory use over time
+- MCP clients that support interactive apps can now render Cetacean's data as a widget rather than as JSON. The server ships self-contained HTML views and tells the client which one fits a result; clients without app support are unaffected and keep receiving plain results
 - Cetacean can now export traces to an OpenTelemetry collector via `CETACEAN_OTEL_ENDPOINT`. Every MCP request and tool call is recorded, and a call from an agent that is already tracing joins that agent's trace instead of starting its own, so the agent's turn and the cluster change it caused appear together
 
 ### Changed

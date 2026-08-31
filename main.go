@@ -37,6 +37,17 @@ import (
 //go:embed frontend/dist/*
 var frontendDist embed.FS
 
+// widgetDist holds the MCP Apps widget bundles, one self-contained HTML
+// document per widget. Built by `npm run build:widgets` into
+// frontend/dist-widgets/; internal/mcp serves each as a ui://cetacean/<name>
+// resource.
+//
+// Like frontend/dist above, this must exist before `go build` — `make build`,
+// the Dockerfile and CI all run the widget build first.
+//
+//go:embed frontend/dist-widgets/*
+var widgetDist embed.FS
+
 //go:embed api/openapi.yaml
 var openapiSpec []byte
 
@@ -657,6 +668,17 @@ type mcpDeps struct {
 func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string), func()) {
 	if !d.cfg.MCP.Enabled {
 		return nil, nil, func() {}
+	}
+
+	// Hand the MCP server the built widget bundles. fs.Sub strips the embed
+	// prefix so internal/mcp sees one directory per widget at the root, which is
+	// how it derives widget names. A build that skipped `npm run build:widgets`
+	// yields an empty FS, and the server then advertises no UI extension rather
+	// than promising widgets it cannot serve.
+	if widgets, err := fs.Sub(widgetDist, "frontend/dist-widgets"); err != nil {
+		slog.Warn("widget bundles unavailable; MCP Apps widgets disabled", "error", err)
+	} else {
+		mcp.SetWidgetFS(widgets)
 	}
 
 	issuer := d.cfg.MCP.Issuer
