@@ -114,20 +114,18 @@ export function useSwarmQuery<T>(
             // and the displayed count stay consistent.
             return {
               ...old,
-              pages: old.pages.map((page) => {
-                const items = page.data.items.filter((item) => getIdRef.current(item) !== event.id);
-
-                return {
-                  ...page,
-                  data: {
-                    ...page.data,
-                    // Keep the original array when this page held no match, so
-                    // only the page that actually lost a row re-renders.
-                    items: items.length === page.data.items.length ? page.data.items : items,
-                    total: page.data.total - 1,
-                  },
-                };
-              }),
+              pages: old.pages.map((page) => ({
+                ...page,
+                data: {
+                  ...page.data,
+                  // Nothing loaded holds the row when `held` is false, so
+                  // there is no page to filter — only totals to correct.
+                  items: held
+                    ? page.data.items.filter((item) => getIdRef.current(item) !== event.id)
+                    : page.data.items,
+                  total: page.data.total - 1,
+                },
+              })),
             };
           });
         } else if (event.resource) {

@@ -2,7 +2,7 @@ import type { PatchOp } from "../api/types";
 import type { HistoryEntry, ServiceRef } from "../api/types";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { parseStackLabels } from "../lib/parseStackLabels";
-import { resourceBreadcrumbs } from "../lib/resourceBreadcrumbs";
+import { resourceBreadcrumbs, resourceParentPath } from "../lib/resourceBreadcrumbs";
 import ActivitySection from "./ActivitySection";
 import { MetadataGrid, ResourceId, ResourceLink, Timestamp } from "./data";
 import { KeyValueEditor } from "./KeyValueEditor";
@@ -64,6 +64,7 @@ export default function DataResourceDetail({
         title={
           <ResourceName
             name={name}
+            stack={stack ?? null}
             direction="column"
           />
         }
@@ -72,7 +73,7 @@ export default function DataResourceDetail({
           <RemoveResourceAction
             resourceType={resourceType}
             resourceName={name}
-            listPath={stack ? `/stacks/${stack}` : listPath}
+            listPath={resourceParentPath({ listPath, stack })}
             onRemove={onRemove}
             canDelete={allowedMethods.has("DELETE")}
             disabled={services.length > 0}

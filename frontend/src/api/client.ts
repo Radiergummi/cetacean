@@ -141,9 +141,19 @@ function composeSignals(caller: AbortSignal | undefined, timeout: AbortSignal): 
   return AbortSignal.any([caller, timeout]);
 }
 
-async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<FetchResult<T>> {
+/**
+ * Issues a read request and hands back the response once it is known good.
+ * The 401-Bearer redirect and the timeout live here so every reader gets them
+ * on the same terms; callers differ only in the Accept they ask for and how
+ * they decode the body.
+ */
+async function request(
+  path: string,
+  requestHeaders: HeadersInit | undefined,
+  signal: AbortSignal | undefined,
+): Promise<Response> {
   const res = await fetch(apiPath(path), {
-    headers,
+    ...(requestHeaders ? { headers: requestHeaders } : {}),
     signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
   });
 
@@ -154,6 +164,12 @@ async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<FetchRe
 
     await throwResponseError(res);
   }
+
+  return res;
+}
+
+async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<FetchResult<T>> {
+  const res = await request(path, headers, signal);
 
   const allowedMethods = parseAllowHeader(res);
   const data = await res.json();
@@ -162,34 +178,13 @@ async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<FetchRe
 }
 
 async function fetchJGF<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(apiPath(path), {
-    headers: { Accept: "application/vnd.jgf+json" },
-    signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
-  });
-
-  if (!res.ok) {
-    if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
-      redirectToLoginAndStop();
-    }
-
-    await throwResponseError(res);
-  }
+  const res = await request(path, { Accept: "application/vnd.jgf+json" }, signal);
 
   return res.json();
 }
 
 async function fetchText(path: string, signal?: AbortSignal): Promise<string> {
-  const res = await fetch(apiPath(path), {
-    signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
-  });
-
-  if (!res.ok) {
-    if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
-      redirectToLoginAndStop();
-    }
-
-    await throwResponseError(res);
-  }
+  const res = await request(path, undefined, signal);
 
   return res.text();
 }

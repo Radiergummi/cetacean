@@ -19,7 +19,7 @@ import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
-import { resourceBreadcrumbs } from "../lib/resourceBreadcrumbs";
+import { resourceBreadcrumbs, resourceParentPath } from "../lib/resourceBreadcrumbs";
 import { cardGridClass } from "../lib/styles";
 import { useParams } from "react-router-dom";
 
@@ -145,6 +145,7 @@ export default function NetworkDetail() {
         title={
           <ResourceName
             name={network.Name}
+            stack={stack ?? null}
             direction="column"
           />
         }
@@ -158,7 +159,7 @@ export default function NetworkDetail() {
           <RemoveResourceAction
             resourceType="network"
             resourceName={network.Name}
-            listPath={stack ? `/stacks/${stack}` : "/networks"}
+            listPath={resourceParentPath({ listPath: "/networks", stack })}
             onRemove={() => api.removeNetwork(network.Id)}
             canDelete={allowedMethods.has("DELETE")}
             disabled={services.length > 0}

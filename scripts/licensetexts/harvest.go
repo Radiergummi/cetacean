@@ -84,12 +84,12 @@ func Harvest(doc sbom.Document, roots Roots) (sbom.Artifact, error) {
 			continue
 		}
 
-		licenses, found, err := readTexts(dir, licenseStems)
+		licenses, err := readTexts(dir, licenseStems)
 		if err != nil {
 			return sbom.Artifact{}, err
 		}
 
-		if !found {
+		if len(licenses) == 0 {
 			return sbom.Artifact{}, fmt.Errorf(
 				"no license file for %s %s (looked in %s for %s) — "+
 					"add a mapping or vendor the text before shipping it",
@@ -99,12 +99,12 @@ func Harvest(doc sbom.Document, roots Roots) (sbom.Artifact, error) {
 
 		entry := sbom.ComponentTexts{License: intern(joinTexts(licenses))}
 
-		notices, hasNotice, err := readTexts(dir, noticeStems)
+		notices, err := readTexts(dir, noticeStems)
 		if err != nil {
 			return sbom.Artifact{}, err
 		}
 
-		if hasNotice {
+		if len(notices) > 0 {
 			entry.Notice = intern(joinTexts(notices))
 		}
 
@@ -233,14 +233,14 @@ type namedText struct {
 // drop half the attribution with nothing to show for it. A missing dir is
 // reported as no match, not an error — the caller turns that into the "no
 // license file" error itself.
-func readTexts(dir string, stems []string) ([]namedText, bool, error) {
+func readTexts(dir string, stems []string) ([]namedText, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, false, nil
+			return nil, nil
 		}
 
-		return nil, false, fmt.Errorf("read dir %s: %w", dir, err)
+		return nil, fmt.Errorf("read dir %s: %w", dir, err)
 	}
 
 	for _, stem := range stems {
@@ -274,7 +274,7 @@ func readTexts(dir string, stems []string) ([]namedText, bool, error) {
 			}
 
 			if info.Size() > maxTextBytes {
-				return nil, false, fmt.Errorf(
+				return nil, fmt.Errorf(
 					"%s is %d bytes, over the %d-byte cap — it is unlikely to be a license",
 					candidate, info.Size(), maxTextBytes,
 				)
@@ -282,7 +282,7 @@ func readTexts(dir string, stems []string) ([]namedText, bool, error) {
 
 			text, err := readText(candidate)
 			if err != nil {
-				return nil, false, err
+				return nil, err
 			}
 
 			// A package shipping LICENSE and LICENSE.md with the same bytes
@@ -296,11 +296,11 @@ func readTexts(dir string, stems []string) ([]namedText, bool, error) {
 		}
 
 		if len(texts) > 0 {
-			return texts, true, nil
+			return texts, nil
 		}
 	}
 
-	return nil, false, nil
+	return nil, nil
 }
 
 // readText reads one license or notice file, rejecting anything that is not

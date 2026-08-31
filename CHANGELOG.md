@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Breadcrumbs on a resource that belongs to a stack now lead through the stack: "Stacks › monitoring › prometheus" rather than "Services › monitoring/prometheus"
+- Resource names no longer show a stack prefix that isn't there. A volume or config named "my_data" that belongs to no stack read as "my/data" in the page title while its breadcrumb correctly said "my_data"; a resource that joined a stack by label without being named for it now keeps its own name as well
 - The Tasks page no longer flips between the task list and a "range start is beyond the total number of items" error every few seconds on a busy cluster
 - Lists no longer come back in a different order every time you open them. Services, stacks, tasks, nodes, and the "Used by" tables on detail pages now hold a consistent order, so returning to a list after visiting a resource no longer means hunting for the row you clicked
 - Plugins on the Swarm page now show their type instead of "undefined.undefined/undefined"

@@ -17,7 +17,7 @@ import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
-import { resourceBreadcrumbs } from "../lib/resourceBreadcrumbs";
+import { resourceBreadcrumbs, resourceParentPath } from "../lib/resourceBreadcrumbs";
 import { useParams } from "react-router-dom";
 
 export default function VolumeDetail() {
@@ -52,6 +52,7 @@ export default function VolumeDetail() {
         title={
           <ResourceName
             name={volume.Name}
+            stack={stack ?? null}
             direction="column"
           />
         }
@@ -65,7 +66,7 @@ export default function VolumeDetail() {
           <RemoveResourceAction
             resourceType="volume"
             resourceName={volume.Name}
-            listPath={stack ? `/stacks/${stack}` : "/volumes"}
+            listPath={resourceParentPath({ listPath: "/volumes", stack })}
             onRemove={() => api.removeVolume(volume.Name)}
             onForceRemove={() => api.removeVolume(volume.Name, true)}
             canDelete={allowedMethods.has("DELETE")}

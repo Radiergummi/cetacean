@@ -1,4 +1,5 @@
-import { resourceBreadcrumbs, stripStackPrefix } from "./resourceBreadcrumbs";
+import { stripStackPrefix } from "./parseStackLabels";
+import { resourceBreadcrumbs } from "./resourceBreadcrumbs";
 import { describe, expect, it } from "vitest";
 
 describe("resourceBreadcrumbs", () => {

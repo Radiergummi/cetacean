@@ -69,6 +69,7 @@ export default function ServiceDetail() {
         title={
           <ResourceName
             name={detail.name}
+            stack={labels?.[stackNamespaceLabel] ?? null}
             direction="responsive"
           />
         }

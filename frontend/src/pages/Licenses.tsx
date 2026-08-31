@@ -1,5 +1,5 @@
 import { api } from "@/api/client";
-import type { LicenseComponent, LicenseEntry } from "@/api/types";
+import type { LicenseComponent } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
 import FetchError from "@/components/FetchError";
 import LicenseTextDialog from "@/components/LicenseTextDialog";
@@ -11,6 +11,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Combobox } from "@/components/ui/combobox";
 import { apiPath } from "@/lib/basePath";
+import { licenseLabel } from "@/lib/licenseLabel";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
@@ -24,15 +25,6 @@ const ecosystemLabels: Record<string, string> = {
   other: "Other",
 };
 
-/**
- * The label a license is known by everywhere on this page. The filter matches
- * on it, the dropdown counts it, and the badge shows it — they have to agree
- * exactly or the filter silently stops matching.
- */
-function licenseLabel({ id, name }: LicenseEntry): string {
-  return id || name || "Unknown";
-}
-
 function matchesSearch(component: LicenseComponent, needle: string): boolean {
   return !needle || component.name.toLowerCase().includes(needle);
 }
@@ -43,11 +35,6 @@ function matchesEcosystem(component: LicenseComponent, ecosystem: EcosystemFilte
 
 function matchesLicense(component: LicenseComponent, license: string): boolean {
   return license === "all" || component.licenses.some((entry) => licenseLabel(entry) === license);
-}
-
-/** The distinct licenses a component carries, so it counts once per license. */
-function licenseLabelsOf(component: LicenseComponent): Set<string> {
-  return new Set(component.licenses.map(licenseLabel));
 }
 
 /**
@@ -123,15 +110,16 @@ export default function Licenses() {
     // license nothing here carries never reaches the map, and an option that
     // would return nothing is not worth offering. "All licenses" always
     // remains, so a filter that narrows to nothing is still one click to undo.
-    const counts = new Map<string, number>();
+    const licenseCounts = new Map<string, number>();
 
     for (const component of ecosystemAndSearchMatches) {
-      for (const label of licenseLabelsOf(component)) {
-        counts.set(label, (counts.get(label) ?? 0) + 1);
+      // A Set, so a component carrying the same label twice counts once.
+      for (const label of new Set(component.licenses.map(licenseLabel))) {
+        licenseCounts.set(label, (licenseCounts.get(label) ?? 0) + 1);
       }
     }
 
-    const sorted = [...counts.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const sorted = [...licenseCounts.entries()].sort(([a], [b]) => a.localeCompare(b));
 
     return [
       { value: "all", label: "All licenses", trailing: ecosystemAndSearchMatches.length },

@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"cmp"
 	"maps"
 	"slices"
 	"sync"
@@ -52,17 +51,22 @@ func (r *ResourceMap[T]) del(key string) (name string) {
 	return name
 }
 
-// list returns every value ordered by map key (the resource ID, or the name
-// for volumes). Go randomizes map iteration, so without this the API's stable
-// sort would order equal sort keys differently on every request — and a client
-// paging through a list would see items shift between pages. Caller must hold
-// the lock; List takes the same order without holding it across the sort.
-func (r *ResourceMap[T]) list() []T {
-	out := make([]T, 0, len(r.items))
-	for _, k := range slices.Sorted(maps.Keys(r.items)) {
-		out = append(out, r.items[k])
+// listSorted returns every value ordered by map key (the resource ID, or the
+// name for volumes). Go randomizes map iteration, so without this the API's
+// stable sort would order equal sort keys differently on every request — and a
+// client paging through a list would see items shift between pages.
+func listSorted[T any](items map[string]T) []T {
+	out := make([]T, 0, len(items))
+	for _, k := range slices.Sorted(maps.Keys(items)) {
+		out = append(out, items[k])
 	}
 	return out
+}
+
+// list is listSorted over the map itself. Caller must hold the lock; List
+// takes the same order without holding it across the sort.
+func (r *ResourceMap[T]) list() []T {
+	return listSorted(r.items)
 }
 
 // Set stores a value, calling the onSet hook under the write lock. The event
@@ -102,25 +106,11 @@ func (r *ResourceMap[T]) Delete(key string, eventType EventType) Event {
 // belong under the lock the watcher's writers are contending for. ListServices
 // and ListTasks split the work the same way.
 func (r *ResourceMap[T]) List() []T {
-	type entry struct {
-		key   string
-		value T
-	}
-
 	r.mu.RLock()
-	entries := make([]entry, 0, len(r.items))
-	for key, value := range r.items {
-		entries = append(entries, entry{key: key, value: value})
-	}
+	items := maps.Clone(r.items)
 	r.mu.RUnlock()
 
-	slices.SortFunc(entries, func(a, b entry) int { return cmp.Compare(a.key, b.key) })
-
-	out := make([]T, len(entries))
-	for i, e := range entries {
-		out[i] = e.value
-	}
-	return out
+	return listSorted(items)
 }
 
 // Len returns the number of items.

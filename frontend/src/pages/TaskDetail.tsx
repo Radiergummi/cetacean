@@ -111,6 +111,9 @@ export default function TaskDetail() {
   }
 
   const serviceName = task.ServiceName || task.ServiceID.slice(0, 12);
+  // Until the service loads there are no labels to consult, so the name keeps
+  // its guessed split; once it arrives the label settles it either way.
+  const serviceStack = service ? (service.Spec?.Labels?.[stackNamespaceLabel] ?? null) : undefined;
   const nodeLabel = task.NodeHostname || task.NodeID?.slice(0, 12) || "—";
   const taskIdShort = task.ID.slice(0, 12);
   // Status is technically a pointer type in Docker's API — every nested field
@@ -130,7 +133,11 @@ export default function TaskDetail() {
         title={
           task.Slot ? (
             <span>
-              <ResourceName name={serviceName} /> Replica #{task.Slot}
+              <ResourceName
+                name={serviceName}
+                stack={serviceStack}
+              />{" "}
+              Replica #{task.Slot}
             </span>
           ) : (
             <>
@@ -142,7 +149,7 @@ export default function TaskDetail() {
           listLabel: "Services",
           listPath: "/services",
           name: serviceName,
-          stack: service?.Spec?.Labels?.[stackNamespaceLabel],
+          stack: serviceStack ?? undefined,
           to: `/services/${task.ServiceID}`,
           trail: [
             {
@@ -212,7 +219,12 @@ export default function TaskDetail() {
         />
         <ResourceLink
           label="Service"
-          name={<ResourceName name={serviceName} />}
+          name={
+            <ResourceName
+              name={serviceName}
+              stack={serviceStack}
+            />
+          }
           to={`/services/${task.ServiceID}`}
         />
         <ResourceLink
