@@ -11,6 +11,15 @@ case "$staged" in
   *) exit 0 ;;
 esac
 
+# cyclonedx-gomod resolves the main module through go-git, which does not follow
+# a linked worktree's .git *file* and fails with "failed to determine version of
+# main module: reference not found". Nothing in the worktree can fix that, so
+# skip (don't block) — same as every other can't-run-here case below.
+if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then
+  echo "pre-commit: linked worktree; cyclonedx-gomod cannot resolve the main module here. Skipping SBOM regeneration (CI will verify)." >&2
+  exit 0
+fi
+
 # The generators are declared deps (go tool cyclonedx-gomod; npx cyclonedx-npm),
 # so we only need go, node/npx, jq, and installed frontend deps. Skip (don't
 # block) when anything is missing — CI is the real gate.
