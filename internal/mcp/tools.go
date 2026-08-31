@@ -286,17 +286,14 @@ func (s *Server) toolCatalog() []toolDef {
 				"scale_service",
 				mcplib.WithToolTitle("Scale service replicas"),
 				mcplib.WithDescription(
-					"Set the desired replica count of a replicated service. Swarm reconciles asynchronously; calling with the current count is a no-op. Setting to 0 stops every task without removing the service. Returns the updated service spec.",
+					"Set the desired replica count of a replicated service. Swarm reconciles asynchronously; calling with the current count is a no-op. Setting to 0 stops every task without removing the service. Returns a summary of where the service ended up: id, name, image, mode, desired replicas, running count, derived state and version.",
 				),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
-				// Convergence takes far longer than the Docker call that starts
-				// it, so a client may ask for this as a task and poll. Optional,
-				// not required: a plain call still returns as soon as Swarm
-				// accepts the change.
-				mcplib.WithTaskSupport(mcplib.TaskSupportOptional),
+				taskSupportOptional(),
+				mcplib.WithOutputSchema[serviceMutationResult](),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -314,17 +311,14 @@ func (s *Server) toolCatalog() []toolDef {
 				"update_service_image",
 				mcplib.WithToolTitle("Update service image"),
 				mcplib.WithDescription(
-					"Set the container image for a service, triggering a rolling deploy per the service's update policy. The previous spec is retained on the service history and reachable via rollback_service. Returns the updated service spec.",
+					"Set the container image for a service, triggering a rolling deploy per the service's update policy. The previous spec is retained on the service history and reachable via rollback_service. Returns a summary of where the service ended up: id, name, image, mode, desired replicas, running count, derived state and version.",
 				),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
-				// Convergence takes far longer than the Docker call that starts
-				// it, so a client may ask for this as a task and poll. Optional,
-				// not required: a plain call still returns as soon as Swarm
-				// accepts the change.
-				mcplib.WithTaskSupport(mcplib.TaskSupportOptional),
+				taskSupportOptional(),
+				mcplib.WithOutputSchema[serviceMutationResult](),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -344,17 +338,14 @@ func (s *Server) toolCatalog() []toolDef {
 			tool: mcplib.NewTool("rollback_service",
 				mcplib.WithToolTitle("Roll back service to previous spec"),
 				mcplib.WithDescription(
-					"Revert a service to its previous spec, discarding the current one. Only the immediately previous spec is retained — calling twice does not unwind further. Returns the rolled-back service spec.",
+					"Revert a service to its previous spec, discarding the current one. Only the immediately previous spec is retained — calling twice does not unwind further. Returns a summary of where the service ended up: id, name, image, mode, desired replicas, running count, derived state and version.",
 				),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(false),
 				mcplib.WithOpenWorldHintAnnotation(false),
-				// Convergence takes far longer than the Docker call that starts
-				// it, so a client may ask for this as a task and poll. Optional,
-				// not required: a plain call still returns as soon as Swarm
-				// accepts the change.
-				mcplib.WithTaskSupport(mcplib.TaskSupportOptional),
+				taskSupportOptional(),
+				mcplib.WithOutputSchema[serviceMutationResult](),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -367,17 +358,14 @@ func (s *Server) toolCatalog() []toolDef {
 			tool: mcplib.NewTool("restart_service",
 				mcplib.WithToolTitle("Force-restart service"),
 				mcplib.WithDescription(
-					"Force a rolling restart of every task in the service by bumping its spec ForceUpdate counter. No other spec fields change. Honours the service's update policy (parallelism, delay). Returns the updated service spec.",
+					"Force a rolling restart of every task in the service by bumping its spec ForceUpdate counter. No other spec fields change. Honours the service's update policy (parallelism, delay). Returns a summary of where the service ended up: id, name, image, mode, desired replicas, running count, derived state and version.",
 				),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(false),
 				mcplib.WithOpenWorldHintAnnotation(false),
-				// Convergence takes far longer than the Docker call that starts
-				// it, so a client may ask for this as a task and poll. Optional,
-				// not required: a plain call still returns as soon as Swarm
-				// accepts the change.
-				mcplib.WithTaskSupport(mcplib.TaskSupportOptional),
+				taskSupportOptional(),
+				mcplib.WithOutputSchema[serviceMutationResult](),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -1007,10 +995,10 @@ func (s *Server) toolScaleService(ctx context.Context, req mcplib.CallToolReques
 	if err != nil {
 		return "", err
 	}
-	if err := s.awaitIfTask(ctx, req, serviceConverged(convergenceTarget(svc, id))); err != nil {
+	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
 	}
-	return marshalResult(svc)
+	return marshalResult(s.serviceMutation(svc))
 }
 
 func (s *Server) toolUpdateServiceImage(
@@ -1040,10 +1028,10 @@ func (s *Server) toolUpdateServiceImage(
 	if err != nil {
 		return "", err
 	}
-	if err := s.awaitIfTask(ctx, req, serviceConverged(convergenceTarget(svc, id))); err != nil {
+	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
 	}
-	return marshalResult(svc)
+	return marshalResult(s.serviceMutation(svc))
 }
 
 func (s *Server) toolRollbackService(
@@ -1065,10 +1053,10 @@ func (s *Server) toolRollbackService(
 	if err != nil {
 		return "", err
 	}
-	if err := s.awaitIfTask(ctx, req, serviceConverged(convergenceTarget(svc, id))); err != nil {
+	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
 	}
-	return marshalResult(svc)
+	return marshalResult(s.serviceMutation(svc))
 }
 
 func (s *Server) toolRestartService(
@@ -1090,10 +1078,10 @@ func (s *Server) toolRestartService(
 	if err != nil {
 		return "", err
 	}
-	if err := s.awaitIfTask(ctx, req, serviceConverged(convergenceTarget(svc, id))); err != nil {
+	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
 	}
-	return marshalResult(svc)
+	return marshalResult(s.serviceMutation(svc))
 }
 
 // removeHandler builds a tool handler for the common `{ id } → {"removed":true}`
@@ -1336,6 +1324,72 @@ func marshalResult(v any) (string, error) {
 // outputSchema (WithOutputSchema[removalResult]).
 type removalResult struct {
 	Removed bool `json:"removed"`
+}
+
+// serviceMutationResult is what the four lifecycle mutations return: a summary
+// of where the service ended up, rather than its entire specification.
+//
+// Two reasons. A task-augmented call's result is retained for as long as the
+// task lives, and a client that omits task.ttl keeps it for the life of the
+// process (see docs/mcp.md, "Always send task.ttl") — a full swarm.Service runs
+// to kilobytes, so the compact shape bounds what a long-running agent
+// accumulates. And it is the more useful answer: after a scale or a rollback an
+// agent wants to know where the service got to, not to re-read a spec it just
+// supplied. The spec-editing tools still return the full service, because there
+// the resulting spec *is* the answer.
+type serviceMutationResult struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Image is empty for a service whose task template is not a container.
+	Image string `json:"image,omitempty"`
+	// Mode is "replicated" or "global"; Replicas is unset for a global service,
+	// which has no desired count to report.
+	Mode     string  `json:"mode"`
+	Replicas *uint64 `json:"replicas,omitempty"`
+	Running  int     `json:"running"`
+	// State is the same derivation the REST API and the dashboard report, via
+	// cluster.DeriveServiceState.
+	State string `json:"state"`
+	// Version is the service's Swarm version index, for a caller doing its own
+	// optimistic-concurrency checks.
+	Version uint64 `json:"version"`
+}
+
+// serviceMutation summarises a mutated service. It prefers the cached copy over
+// the one the Docker write returned: after a task waited for convergence the
+// cache is the fresher of the two, and taking spec, running count and state
+// from one source keeps them mutually consistent.
+func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
+	if cached, ok := s.cache.GetService(svc.ID); ok {
+		svc = cached
+	}
+
+	running := s.cache.RunningTaskCount(svc.ID)
+
+	out := serviceMutationResult{
+		ID:      svc.ID,
+		Name:    svc.Spec.Name,
+		Running: running,
+		State:   cluster.DeriveServiceState(svc, running),
+		Version: svc.Version.Index,
+	}
+
+	if svc.Spec.TaskTemplate.ContainerSpec != nil {
+		out.Image = svc.Spec.TaskTemplate.ContainerSpec.Image
+	}
+
+	if svc.Spec.Mode.Global != nil {
+		out.Mode = "global"
+
+		return out
+	}
+
+	out.Mode = "replicated"
+	if svc.Spec.Mode.Replicated != nil {
+		out.Replicas = svc.Spec.Mode.Replicated.Replicas
+	}
+
+	return out
 }
 
 // structuredToolResult wraps a handler's JSON text into a tool result that

@@ -387,9 +387,20 @@ func main() {
 
 	// Distributed tracing is opt-in: with no collector configured the MCP
 	// server keeps mcp-go's noop tracer and nothing is allocated.
+	//
+	// The MCP server is the only thing that emits spans today, so building the
+	// pipeline without it would leave a batch processor and its goroutine alive
+	// for the life of the process with nothing able to feed them.
 	var mcpTracer oteltrace.Tracer
 
-	if cfg.OTelEndpoint != "" {
+	if cfg.OTelEndpoint != "" && !cfg.MCP.Enabled {
+		slog.Warn(
+			"tracing is configured but the MCP server is disabled, so no spans will be exported",
+			"endpoint", cfg.OTelEndpoint,
+		)
+	}
+
+	if cfg.OTelEndpoint != "" && cfg.MCP.Enabled {
 		traceProvider, err := tracing.NewProvider(ctx, cfg.OTelEndpoint, version.Version)
 		if err != nil {
 			slog.Error("tracing setup failed", "error", err)

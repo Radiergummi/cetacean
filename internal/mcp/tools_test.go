@@ -441,8 +441,25 @@ func TestToolScaleService(t *testing.T) {
 	if calledWith != 5 {
 		t.Errorf("scaled to %d, want 5", calledWith)
 	}
-	if !strings.Contains(out, `"ID":"svc1"`) {
-		t.Errorf("output missing service ID: %s", out)
+	// The tool returns the compact serviceMutationResult, not a raw
+	// swarm.Service — a task-augmented call retains this result for as long as
+	// the task lives, so the shape is deliberately small. Decoded rather than
+	// substring-matched so a field rename cannot pass by coincidence.
+	var got serviceMutationResult
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode result: %v (raw %s)", err, out)
+	}
+
+	if got.ID != "svc1" {
+		t.Errorf("id = %q, want %q", got.ID, "svc1")
+	}
+
+	if got.Name != "web" {
+		t.Errorf("name = %q, want %q", got.Name, "web")
+	}
+
+	if got.State == "" {
+		t.Error("state should be derived, so an agent knows whether the change has landed")
 	}
 }
 

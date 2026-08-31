@@ -49,7 +49,7 @@ func TestAwaitConvergenceReturnsWhenPredicateSatisfied(t *testing.T) {
 	srv := newTestServer(t)
 
 	calls := 0
-	converge := func(context.Context, *cache.Cache) (bool, string) {
+	converge := func() (bool, string) {
 		calls++
 
 		return calls >= 3, "waiting for replicas"
@@ -73,7 +73,7 @@ func TestAwaitConvergenceReturnsWhenPredicateSatisfied(t *testing.T) {
 func TestAwaitConvergenceRespectsDeadline(t *testing.T) {
 	srv := newTestServer(t)
 
-	never := func(context.Context, *cache.Cache) (bool, string) {
+	never := func() (bool, string) {
 		return false, "never converges"
 	}
 
@@ -92,7 +92,7 @@ func TestAwaitConvergenceRespectsDeadline(t *testing.T) {
 func TestAwaitConvergenceChecksBeforeWaiting(t *testing.T) {
 	srv := newTestServer(t)
 
-	always := func(context.Context, *cache.Cache) (bool, string) {
+	always := func() (bool, string) {
 		return true, "already there"
 	}
 
@@ -112,7 +112,7 @@ func TestServiceConvergedComparesRunningToDesired(t *testing.T) {
 	c := cache.New(nil)
 	seedService(t, c, "svc-1", 3 /* desired */, 1 /* running */)
 
-	done, status := serviceConverged("svc-1")(t.Context(), c)
+	done, status := serviceConverged(c, "svc-1")()
 	if done {
 		t.Error("reported converged with 1/3 replicas running")
 	}
@@ -123,7 +123,7 @@ func TestServiceConvergedComparesRunningToDesired(t *testing.T) {
 
 	seedService(t, c, "svc-1", 3, 3)
 
-	if done, _ := serviceConverged("svc-1")(t.Context(), c); !done {
+	if done, _ := serviceConverged(c, "svc-1")(); !done {
 		t.Error("did not report converged with 3/3 replicas running")
 	}
 }
@@ -139,7 +139,7 @@ func TestServiceConvergedWaitsOutRollingUpdate(t *testing.T) {
 	svc.UpdateStatus = &swarm.UpdateStatus{State: swarm.UpdateStateUpdating}
 	c.SetService(svc)
 
-	if done, status := serviceConverged("svc-1")(t.Context(), c); done {
+	if done, status := serviceConverged(c, "svc-1")(); done {
 		t.Errorf("reported converged during a rolling update (status %q)", status)
 	}
 }
@@ -149,7 +149,7 @@ func TestServiceConvergedWaitsOutRollingUpdate(t *testing.T) {
 func TestServiceConvergedHandlesUnknownService(t *testing.T) {
 	c := cache.New(nil)
 
-	done, status := serviceConverged("nope")(t.Context(), c)
+	done, status := serviceConverged(c, "nope")()
 	if done {
 		t.Error("reported converged for a service the cache has never seen")
 	}

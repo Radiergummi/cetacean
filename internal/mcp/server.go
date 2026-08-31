@@ -209,6 +209,13 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 			true,  /* cancel */
 			true,  /* toolCallTasks */
 		),
+		// Caps tasks running at once, NOT tasks retained. mcp-go releases the
+		// counter when a task finishes but keeps its record — and only ever
+		// deletes one from scheduleTaskCleanup, which it starts solely when the
+		// client sent params.task.ttl. A client that omits it therefore leaks a
+		// full CallToolResult per mutation for the life of the process, and
+		// there is no server-side default TTL option in v1.0.0-beta.1 to set.
+		// Documented for clients in docs/mcp.md ("Always send task.ttl").
 		mcpserver.WithMaxConcurrentTasks(opts.Config.MaxConcurrentTasks),
 	}
 

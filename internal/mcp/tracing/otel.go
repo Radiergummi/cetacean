@@ -2,16 +2,16 @@
 // interfaces mcp-go exposes. mcp-go deliberately depends on no tracing SDK, so
 // this package is the bridge, and the OTel dependency stays confined to it.
 //
-// mcp-go publishes an adapter of its own at github.com/mark3labs/mcp-go/otel,
-// but it is still cut against mcp-go v0.53.0 and predates SEP-414: it covers
-// the Tracer and the HTTP Propagator and has no MetaPropagator at all. Carrying
-// trace context through _meta is the whole point of the 2026-07-28 convention,
-// so we implement all three here rather than mix a stale module in.
+// mcp-go publishes an adapter of its own at github.com/mark3labs/mcp-go/otel.
+// It would compile against our pinned version — the tracing interfaces have not
+// changed since v0.53.0 — but it predates SEP-414 and has no MetaPropagator at
+// all, covering only the Tracer and the HTTP Propagator. Carrying trace context
+// through _meta is the whole point of the 2026-07-28 convention, so adopting it
+// would mean taking a second module and still writing the half that matters.
 package tracing
 
 import (
 	"context"
-	"maps"
 	"net/http"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -105,13 +105,21 @@ func attributes(attrs []mcpgotracing.Attribute) []attribute.KeyValue {
 	return out
 }
 
-// textMapPropagator is the W3C pair both propagators below carry: trace context
-// for the span linkage, baggage for the key/value set that rides alongside it.
-func textMapPropagator() propagation.TextMapPropagator {
-	return propagation.NewCompositeTextMapPropagator(
+// otelPropagator carries W3C trace context on both paths 2026-07-28 allows:
+// HTTP headers, and the transport-agnostic _meta bag. One type serves both
+// mcp-go interfaces — their method sets do not overlap — so the two paths
+// cannot end up understanding different formats.
+type otelPropagator struct {
+	propagator propagation.TextMapPropagator
+}
+
+// newPropagator carries the W3C pair: trace context for the span linkage,
+// baggage for the key/value set that rides alongside it.
+func newPropagator() otelPropagator {
+	return otelPropagator{propagator: propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
-	)
+	)}
 }
 
 // NewPropagator returns a propagator that carries W3C trace context through
@@ -119,11 +127,7 @@ func textMapPropagator() propagation.TextMapPropagator {
 // that delivered it, for hosts that trace at the transport rather than in
 // _meta.
 func NewPropagator() mcpgotracing.Propagator {
-	return otelPropagator{propagator: textMapPropagator()}
-}
-
-type otelPropagator struct {
-	propagator propagation.TextMapPropagator
+	return newPropagator()
 }
 
 func (p otelPropagator) Inject(ctx context.Context, headers http.Header) {
@@ -158,22 +162,18 @@ func (c metaCarrier) Keys() []string {
 	return keys
 }
 
-type otelMetaPropagator struct {
-	propagator propagation.TextMapPropagator
-}
-
 // NewMetaPropagator returns a propagator that carries W3C trace context through
 // an MCP request's _meta, per SEP-414. Unlike the HTTP propagator it works on
 // every transport, and it is the one the 2026-07-28 convention specifies.
 func NewMetaPropagator() mcpgotracing.MetaPropagator {
-	return otelMetaPropagator{propagator: textMapPropagator()}
+	return newPropagator()
 }
 
 // InjectMeta writes the active span context into meta.AdditionalFields. Per the
 // interface contract it allocates a Meta when meta is nil and there is
 // something to write, and returns meta untouched when the context carries no
 // trace — the common case of an untraced request must not grow an empty _meta.
-func (p otelMetaPropagator) InjectMeta(ctx context.Context, meta *mcplib.Meta) *mcplib.Meta {
+func (p otelPropagator) InjectMeta(ctx context.Context, meta *mcplib.Meta) *mcplib.Meta {
 	carrier := metaCarrier{}
 	p.propagator.Inject(ctx, carrier)
 
@@ -185,18 +185,18 @@ func (p otelMetaPropagator) InjectMeta(ctx context.Context, meta *mcplib.Meta) *
 		meta = &mcplib.Meta{}
 	}
 
-	if meta.AdditionalFields == nil {
-		meta.AdditionalFields = make(map[string]any, len(carrier))
+	// SetMetaField allocates AdditionalFields on first write, so this is the
+	// whole of it — no nil-map handling of our own to keep in step with mcp-go.
+	for key, value := range carrier {
+		meta.SetMetaField(key, value)
 	}
-
-	maps.Copy(meta.AdditionalFields, carrier)
 
 	return meta
 }
 
 // ExtractMeta reads traceparent/tracestate/baggage back out of _meta, so a tool
 // call joins the trace of whatever issued it.
-func (p otelMetaPropagator) ExtractMeta(ctx context.Context, meta *mcplib.Meta) context.Context {
+func (p otelPropagator) ExtractMeta(ctx context.Context, meta *mcplib.Meta) context.Context {
 	if meta == nil || len(meta.AdditionalFields) == 0 {
 		return ctx
 	}

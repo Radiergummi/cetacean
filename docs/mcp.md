@@ -240,15 +240,28 @@ The `2026-07-28` Tasks extension fixes that. Four tools accept task augmentation
 | `restart_service` | as above |
 
 Send `params.task` on the `tools/call` and the server answers immediately with a task handle instead of the tool's
-result:
+result. **Always include a `ttl`** — see [Always send `task.ttl`](#always-send-taskttl) below:
 
 ```json
-{"method":"tools/call","params":{"name":"scale_service","arguments":{"id":"web","replicas":5},"task":{}}}
+{"method":"tools/call","params":{"name":"scale_service","arguments":{"id":"web","replicas":5},"task":{"ttl":600000}}}
 ```
 
 Poll `tasks/get` with the returned `taskId`. The task stays `working` until Cetacean's cache shows the cluster has
 actually converged, then flips to `completed`; a mutation Docker refuses — or one the ACL denies — ends `failed`
 with the reason in `statusMessage`. `tasks/cancel` is supported; `tasks/list` was removed by this revision.
+
+These four return a summary of where the service ended up rather than its full specification — the result is
+retained for the task's lifetime, and a summary is the more useful answer after a scale or a rollback anyway:
+
+```json
+{"id":"web","name":"web","image":"nginx:1.27","mode":"replicated","replicas":5,"running":5,"state":"running","version":42}
+```
+
+`running` is the live count, `state` is the same derivation the dashboard and REST API report, and `version` is the
+Swarm version index for a caller doing its own concurrency checks. `replicas` is omitted for a global service,
+which has no desired count. The shape is advertised as an `outputSchema`, so a client can rely on it. The
+spec-editing tools (`update_service_env`, `update_service_resources`, and so on) still return the full service,
+because there the resulting spec *is* the answer.
 
 Task augmentation is **optional** on all four. A plain `tools/call` with no `params.task` behaves exactly as
 before, returning as soon as Docker accepts the change.
@@ -258,6 +271,28 @@ has not converged by then will not converge on its own. And `tasks/cancel` marks
 but does not stop the convergence watcher, which runs to convergence or timeout regardless — it only polls an
 in-memory cache, so the cost is negligible. `CETACEAN_MCP_MAX_CONCURRENT_TASKS` (default 32) caps how many run at
 once.
+
+### Always send `task.ttl`
+
+**A task with no `ttl` is retained for the lifetime of the server process.** Set one on every task-augmented call:
+
+```json
+"task": {"ttl": 600000}
+```
+
+`ttl` is milliseconds from creation, after which the server may discard the task. Ten minutes comfortably covers
+the five-minute convergence bound while leaving time to read the result. Omitting it, or sending `null`, means *no
+expiration* — that is what the protocol specifies, not a Cetacean choice.
+
+This matters because retention is not bounded by anything else. `CETACEAN_MCP_MAX_CONCURRENT_TASKS` caps how many
+tasks run *concurrently*, not how many completed ones are kept: the counter is released when a task finishes, but
+its record is not. Each retained record holds the tool's result, so an agent that mutates services on a schedule
+will grow the server's memory use steadily, for as long as it runs. The four task-capable tools return a compact
+summary rather than the full service specification, which bounds the per-task cost — but not the count.
+
+Pick a `ttl` long enough that you will have polled `tasks/get` for the result before it elapses; once the task is
+discarded, the result is gone. If your MCP client library does not expose `ttl`, treat long-lived agent sessions
+against this server as a memory risk and restart Cetacean periodically until it does.
 
 ## Distributed tracing
 
@@ -302,3 +337,6 @@ nowhere while looking configured.
   window.
 - **No cross-replica event replay.** A client that reconnects to a different replica catches up by re-reading
   resources rather than replaying missed notifications.
+- **Tasks without a `ttl` are never released.** A completed task is discarded only when the client asked for an
+  expiry, so a client that omits `task.ttl` grows the server's memory use with every mutation it makes. Nothing
+  server-side caps it. See [Always send `task.ttl`](#always-send-taskttl).

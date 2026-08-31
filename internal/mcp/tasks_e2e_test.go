@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -372,5 +373,65 @@ func TestFailedTaskReportsFailedNotCompleted(t *testing.T) {
 
 	if final.Task.StatusMessage == "" {
 		t.Error("failed task carries no status message explaining why")
+	}
+}
+
+// TestServiceMutationResultIsCompact pins the shape a task retains. mcp-go
+// keeps a completed task's result until its TTL elapses, and a client that
+// omits task.ttl keeps it for the life of the process, so returning the whole
+// swarm.Service here is what turns a busy agent into steady memory growth.
+//
+// Driven over the real transport so it covers the structured content a client
+// actually receives, not just the handler's return value.
+func TestServiceMutationResultIsCompact(t *testing.T) {
+	c := cache.New(nil)
+	seedService(t, c, "web", 2, 2)
+
+	handler := taskTestServer(t, c).Handler()
+
+	_, envelope := mcpModern(t, handler, 1, "tools/call",
+		`{"name":"scale_service","arguments":{"id":"web","replicas":2}}`)
+	if envelope.Error != nil {
+		t.Fatalf("scale_service failed: %+v", envelope.Error)
+	}
+
+	var result struct {
+		IsError           bool            `json:"isError"`
+		StructuredContent json.RawMessage `json:"structuredContent"`
+	}
+	if err := json.Unmarshal(envelope.Result, &result); err != nil {
+		t.Fatalf("decode tools/call result: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatalf("scale_service returned a tool error: %s", envelope.Result)
+	}
+
+	// A raw swarm.Service carries these; the compact result must not.
+	for _, leaked := range []string{"TaskTemplate", "CreatedAt", "Endpoint", "PreviousSpec"} {
+		if bytes.Contains(result.StructuredContent, []byte(leaked)) {
+			t.Errorf(
+				"result carries raw swarm.Service field %q: %s",
+				leaked,
+				result.StructuredContent,
+			)
+		}
+	}
+
+	var got serviceMutationResult
+	if err := json.Unmarshal(result.StructuredContent, &got); err != nil {
+		t.Fatalf("decode structured content: %v", err)
+	}
+
+	if got.ID != "web" {
+		t.Errorf("id = %q, want %q", got.ID, "web")
+	}
+
+	if got.Running != 2 {
+		t.Errorf("running = %d, want 2 — the count is what convergence is judged on", got.Running)
+	}
+
+	if got.Mode != "replicated" {
+		t.Errorf("mode = %q, want %q", got.Mode, "replicated")
 	}
 }
