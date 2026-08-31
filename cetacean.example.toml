@@ -17,6 +17,9 @@
 [prometheus]
 # url = ""                        # CETACEAN_PROMETHEUS_URL
 
+[tracing]
+# endpoint = ""                   # CETACEAN_OTEL_ENDPOINT
+
 [logging]
 # level = "info"                  # CETACEAN_LOG_LEVEL  (debug, info, warn, error)
 # format = "json"                 # CETACEAN_LOG_FORMAT (json, text)

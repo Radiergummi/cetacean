@@ -24,6 +24,9 @@
 [prometheus]
 # url = ""                                  # Prometheus base URL (unset = metrics disabled)
 
+[tracing]
+# endpoint = ""                             # OTLP/HTTP collector base URL (unset = tracing disabled)
+
 [logging]
 # level = "info"                            # debug, info, warn, error
 # format = "json"                           # json or text

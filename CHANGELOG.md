@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - MCP server now speaks protocol revision 2026-07-28, with its stateless core: AI agents connect and work without a handshake or a session
 - List and read responses over MCP now carry cache freshness hints, so agents poll less
 - The licenses page now shows the full license text and NOTICE of every bundled dependency, can be filtered by license and ecosystem — every count reflects the other filters already applied, so it says what picking it would leave — and offers the complete attribution document as a download
+- Cetacean can now export traces to an OpenTelemetry collector via `CETACEAN_OTEL_ENDPOINT`. Every MCP request and tool call is recorded, and a call from an agent that is already tracing joins that agent's trace instead of starting its own, so the agent's turn and the cluster change it caused appear together
 
 ### Changed
 - MCP authorization responses now identify the issuer (RFC 9207), so a client configured with several authorization servers cannot be tricked into redeeming a code at the wrong one

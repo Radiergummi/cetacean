@@ -222,6 +222,28 @@ All settings are also available under the `[mcp]` and `[mcp.oauth]` TOML tables.
 proxy, **always set `CETACEAN_MCP_ISSUER`** to the externally reachable base URL — token audiences and discovery URLs
 are derived from it, and a wrong value breaks the OAuth flow.
 
+## Distributed tracing
+
+Point `CETACEAN_OTEL_ENDPOINT` (or `[tracing].endpoint`) at an OpenTelemetry collector that accepts OTLP over HTTP:
+
+```bash
+CETACEAN_OTEL_ENDPOINT=http://collector:4318
+```
+
+Cetacean then records a span for every MCP method it dispatches (`mcp.tools/call`, `mcp.resources/read`, …) and a
+nested span for every tool handler (`tool.scale_service`), tagged with the method, the tool name, the negotiated
+protocol version, and an error status when the call fails.
+
+The point of it is joining traces rather than collecting isolated ones. A caller that is already tracing can put W3C
+trace context in the request — either in the `_meta` property bag as `traceparent` / `tracestate` / `baggage`, the
+transport-agnostic convention MCP `2026-07-28` specifies, or in the usual HTTP headers — and Cetacean's spans become
+children of the caller's span. So an agent's "scale the web service" turn and the Docker call it produced appear in
+one trace.
+
+Tracing is off unless the endpoint is set, and nothing is allocated for it in that case. A malformed endpoint stops
+startup with an error: the OTLP exporter would otherwise accept it, fall back to `localhost:4318`, and export
+nowhere while looking configured.
+
 ## Security notes
 
 - Run MCP behind TLS in production. Cetacean logs a warning at startup if MCP is enabled without TLS and auth mode is

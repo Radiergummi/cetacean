@@ -58,6 +58,14 @@ type fileConfig struct {
 	Sizing  *fileSizing  `toml:"sizing"`
 	ACL     *fileACL     `toml:"acl"`
 	MCP     *fileMCP     `toml:"mcp"`
+	Tracing *fileTracing `toml:"tracing"`
+}
+
+// fileTracing mirrors the [tracing] section. An empty endpoint leaves
+// distributed tracing off, the same way an empty prometheus.url leaves
+// metrics off.
+type fileTracing struct {
+	Endpoint *string `toml:"endpoint"`
 }
 
 type fileMCP struct {

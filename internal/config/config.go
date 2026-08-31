@@ -52,6 +52,10 @@ type Config struct {
 	CORSOrigins      []string        // CETACEAN_CORS_ORIGINS, default empty (disabled)
 	TrustedProxies   []netip.Prefix  // CETACEAN_TRUSTED_PROXIES
 	MCP              MCPConfig       // [mcp] section / CETACEAN_MCP_* env vars
+
+	// OTelEndpoint is the OTLP/HTTP collector to export traces to.
+	// CETACEAN_OTEL_ENDPOINT / [tracing].endpoint; empty disables tracing.
+	OTelEndpoint string
 }
 
 // Load merges configuration from flags, environment variables, a TOML
@@ -79,6 +83,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		fBasePath        *string
 		fCORSOrigins     []string
 		fTrustedProxies  *string
+		fOTelEndpoint    *string
 	)
 	if fc != nil {
 		if fc.Server != nil {
@@ -109,6 +114,9 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		if fc.Storage != nil {
 			fDataDir = fc.Storage.DataDir
 			fSnapshot = fc.Storage.Snapshot
+		}
+		if fc.Tracing != nil {
+			fOTelEndpoint = fc.Tracing.Endpoint
 		}
 	}
 
@@ -142,6 +150,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			"unix:///var/run/docker.sock",
 		),
 		PrometheusURL: resolve(flags.PrometheusURL, "CETACEAN_PROMETHEUS_URL", fPromURL, ""),
+		OTelEndpoint:  resolve(nil, "CETACEAN_OTEL_ENDPOINT", fOTelEndpoint, ""),
 		ListenAddr:    resolve(flags.Listen, "CETACEAN_LISTEN_ADDR", fListen, ":9000"),
 		BasePath: NormalizeBasePath(
 			resolve(flags.BasePath, "CETACEAN_BASE_PATH", fBasePath, ""),

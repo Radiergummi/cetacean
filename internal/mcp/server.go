@@ -19,12 +19,14 @@ import (
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
+	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/mcp/oauth"
+	"github.com/radiergummi/cetacean/internal/mcp/tracing"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
@@ -125,6 +127,11 @@ type Options struct {
 	// to build absolute tool-icon `src` values. Icons are served from the
 	// embedded frontend under /assets/mcp-icons/. Empty disables tool icons.
 	IconBaseURL string
+
+	// Tracer records spans for dispatched MCP methods and tool calls. Nil
+	// leaves mcp-go's noop tracer in place, which is the zero-config path:
+	// tracing costs nothing until CETACEAN_OTEL_ENDPOINT is set.
+	Tracer oteltrace.Tracer
 }
 
 // New constructs an MCP server. The returned *Server exposes Handler() for
@@ -163,9 +170,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		notifications:  NewNotificationManager(),
 	}
 
-	mcpSrv := mcpserver.NewMCPServer(
-		"cetacean",
-		"1.0.0",
+	serverOptions := []mcpserver.ServerOption{
 		mcpserver.WithResourceCapabilities(true, true),
 		mcpserver.WithToolCapabilities(true),
 		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
@@ -194,6 +199,27 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 			cacheTTLRead.Milliseconds(),
 			mcplib.CacheScopePrivate,
 		),
+	}
+
+	// SEP-414 trace context. Installed only when a tracer is configured: the
+	// options are cheap but WithTracer also appends a tool middleware, and an
+	// untraced deployment should carry none of it.
+	if opts.Tracer != nil {
+		serverOptions = append(serverOptions,
+			mcpserver.WithTracer(tracing.NewTracer(opts.Tracer)),
+			// _meta is the transport-agnostic path the 2026-07-28 convention
+			// specifies, and the one agent hosts use.
+			mcpserver.WithMetaPropagator(tracing.NewMetaPropagator()),
+			// Headers cover the host that traces at the HTTP layer instead,
+			// so a call joins the trace of the request that delivered it.
+			mcpserver.WithPropagator(tracing.NewPropagator()),
+		)
+	}
+
+	mcpSrv := mcpserver.NewMCPServer(
+		"cetacean",
+		"1.0.0",
+		serverOptions...,
 	)
 	srv.mcpServer = mcpSrv
 

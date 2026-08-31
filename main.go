@@ -27,8 +27,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/mcp"
 	"github.com/radiergummi/cetacean/internal/mcp/oauth"
+	"github.com/radiergummi/cetacean/internal/mcp/tracing"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"tailscale.com/tsnet"
 )
 
@@ -383,6 +385,30 @@ func main() {
 		slog.Info("CORS enabled", "origins", cfg.CORSOrigins)
 	}
 
+	// Distributed tracing is opt-in: with no collector configured the MCP
+	// server keeps mcp-go's noop tracer and nothing is allocated.
+	var mcpTracer oteltrace.Tracer
+
+	if cfg.OTelEndpoint != "" {
+		traceProvider, err := tracing.NewProvider(ctx, cfg.OTelEndpoint, version.Version)
+		if err != nil {
+			slog.Error("tracing setup failed", "error", err)
+			os.Exit(1)
+		}
+
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			if err := traceProvider.Shutdown(shutdownCtx); err != nil {
+				slog.Warn("tracing shutdown failed", "error", err)
+			}
+		}()
+
+		mcpTracer = traceProvider.Tracer()
+		slog.Info("distributed tracing enabled", "endpoint", cfg.OTelEndpoint)
+	}
+
 	mcpHandler, oauthRoutes, closeMCP := setupMCP(mcpDeps{
 		cfg:          cfg,
 		authMode:     authCfg.Mode,
@@ -393,6 +419,7 @@ func main() {
 		logs:         dockerClient,
 		acl:          aclEval,
 		rec:          recEngine,
+		tracer:       mcpTracer,
 	})
 	defer closeMCP()
 
@@ -603,6 +630,7 @@ type mcpDeps struct {
 	logs         mcp.LogStreamer
 	acl          *acl.Evaluator
 	rec          mcp.RecommendationEngine
+	tracer       oteltrace.Tracer
 }
 
 // setupMCP builds the MCP HTTP handler and the OAuth route registrar when
@@ -666,6 +694,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		Recommendations: d.rec,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		IconBaseURL:     issuer + d.cfg.BasePath,
+		Tracer:          d.tracer,
 	})
 	if err != nil {
 		slog.Error("MCP server setup failed", "error", err)

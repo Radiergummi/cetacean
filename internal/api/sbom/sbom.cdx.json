@@ -120,6 +120,26 @@
       }
     },
     {
+      "bom-ref": "pkg:golang/github.com/cenkalti/backoff/v5@v5.0.3?type=module",
+      "type": "library",
+      "name": "github.com/cenkalti/backoff/v5",
+      "version": "v5.0.3",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "64df8831aef9dca7d7e6177cbd568c8b18e7a91677cbc0ae24a44a8f5c5cb123"
+        }
+      ],
+      "purl": "pkg:golang/github.com/cenkalti/backoff/v5@v5.0.3?type=module&goos=linux&goarch=amd64",
+      "externalReferences": [
+        {
+          "url": "https://github.com/cenkalti/backoff",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
       "bom-ref": "pkg:golang/github.com/cespare/xxhash/v2@v2.3.0?type=module",
       "type": "library",
       "name": "github.com/cespare/xxhash/v2",
@@ -831,6 +851,35 @@
       "externalReferences": [
         {
           "url": "https://github.com/google/uuid",
+          "type": "vcs"
+        }
+      ],
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "BSD-3-Clause"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/grpc-ecosystem/grpc-gateway/v2@v2.29.0?type=module",
+      "type": "library",
+      "name": "github.com/grpc-ecosystem/grpc-gateway/v2",
+      "version": "v2.29.0",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e558a99ef1296eaaf6800d956ccfa76156e4205dbc7396507ea081439836c5f9"
+        }
+      ],
+      "purl": "pkg:golang/github.com/grpc-ecosystem/grpc-gateway/v2@v2.29.0?type=module&goos=linux&goarch=amd64",
+      "externalReferences": [
+        {
+          "url": "https://github.com/grpc-ecosystem/grpc-gateway",
           "type": "vcs"
         }
       ],
@@ -1697,6 +1746,52 @@
       }
     },
     {
+      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.43.0?type=module",
+      "type": "library",
+      "name": "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
+      "version": "v1.43.0",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f3c638b360bca13ba2d4b18ce9b4d6930d0808670e2c2008e65eb3b03d63db49"
+        }
+      ],
+      "purl": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.43.0?type=module&goos=linux&goarch=amd64",
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "Apache-2.0"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.43.0?type=module",
+      "type": "library",
+      "name": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
+      "version": "v1.43.0",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "de26492a5099b9fc91ccfce542150859599f96dad7b86c9f8d112018fdd45237"
+        }
+      ],
+      "purl": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.43.0?type=module&goos=linux&goarch=amd64",
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "Apache-2.0"
+            }
+          }
+        ]
+      }
+    },
+    {
       "bom-ref": "pkg:golang/go.opentelemetry.io/otel/metric@v1.43.0?type=module",
       "type": "library",
       "name": "go.opentelemetry.io/otel/metric",
@@ -1720,6 +1815,29 @@
       }
     },
     {
+      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/sdk@v1.43.0?type=module",
+      "type": "library",
+      "name": "go.opentelemetry.io/otel/sdk",
+      "version": "v1.43.0",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a62e6613cea2e6b4de2d7aa817f861881b5435cac01872ca41d860e21e15f438"
+        }
+      ],
+      "purl": "pkg:golang/go.opentelemetry.io/otel/sdk@v1.43.0?type=module&goos=linux&goarch=amd64",
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "Apache-2.0"
+            }
+          }
+        ]
+      }
+    },
+    {
       "bom-ref": "pkg:golang/go.opentelemetry.io/otel/trace@v1.43.0?type=module",
       "type": "library",
       "name": "go.opentelemetry.io/otel/trace",
@@ -1732,6 +1850,29 @@
         }
       ],
       "purl": "pkg:golang/go.opentelemetry.io/otel/trace@v1.43.0?type=module&goos=linux&goarch=amd64",
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "Apache-2.0"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "bom-ref": "pkg:golang/go.opentelemetry.io/proto/otlp@v1.10.0?type=module",
+      "type": "library",
+      "name": "go.opentelemetry.io/proto/otlp",
+      "version": "v1.10.0",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "210456813e6cace0987e25a7a6a518cfd09599b3bc6c598a730631a6e0922f68"
+        }
+      ],
+      "purl": "pkg:golang/go.opentelemetry.io/proto/otlp@v1.10.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -1990,6 +2131,75 @@
           {
             "license": {
               "id": "BSD-3-Clause"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "bom-ref": "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260519071638-aa98bba5eb94?type=module",
+      "type": "library",
+      "name": "google.golang.org/genproto/googleapis/api",
+      "version": "v0.0.0-20260519071638-aa98bba5eb94",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0dd746eb5944e4b917eb5e38cf6da2d2099af41301b39699f41f2564ba1bc72c"
+        }
+      ],
+      "purl": "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260519071638-aa98bba5eb94?type=module&goos=linux&goarch=amd64",
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "Apache-2.0"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "bom-ref": "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260519071638-aa98bba5eb94?type=module",
+      "type": "library",
+      "name": "google.golang.org/genproto/googleapis/rpc",
+      "version": "v0.0.0-20260519071638-aa98bba5eb94",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7990a3aff68017c73971c9b9a5be93e045e021e8b93250003d63c993ee40adf6"
+        }
+      ],
+      "purl": "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260519071638-aa98bba5eb94?type=module&goos=linux&goarch=amd64",
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "Apache-2.0"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "bom-ref": "pkg:golang/google.golang.org/grpc@v1.82.1?type=module",
+      "type": "library",
+      "name": "google.golang.org/grpc",
+      "version": "v1.82.1",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "367031cc6440d3aefbbc26b805490e0273b9f857d0a9597d8945de0f422a7061"
+        }
+      ],
+      "purl": "pkg:golang/google.golang.org/grpc@v1.82.1?type=module&goos=linux&goarch=amd64",
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "Apache-2.0"
             }
           }
         ]

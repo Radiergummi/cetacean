@@ -312,3 +312,59 @@ func TestLoad_FileConfig(t *testing.T) {
 		t.Errorf("Snapshot=%v", cfg.Snapshot)
 	}
 }
+
+func TestLoad_OTelEndpoint_DefaultsEmpty(t *testing.T) {
+	t.Setenv("CETACEAN_OTEL_ENDPOINT", "")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.OTelEndpoint != "" {
+		t.Errorf("expected tracing off by default, got endpoint %q", cfg.OTelEndpoint)
+	}
+}
+
+func TestLoad_OTelEndpoint_Env(t *testing.T) {
+	t.Setenv("CETACEAN_OTEL_ENDPOINT", "http://collector:4318")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.OTelEndpoint != "http://collector:4318" {
+		t.Errorf("expected collector endpoint, got %q", cfg.OTelEndpoint)
+	}
+}
+
+func TestLoad_OTelEndpoint_EnvOverridesFile(t *testing.T) {
+	t.Setenv("CETACEAN_OTEL_ENDPOINT", "http://from-env:4318")
+
+	fileValue := "http://from-file:4318"
+
+	cfg, err := Load(&fileConfig{Tracing: &fileTracing{Endpoint: &fileValue}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.OTelEndpoint != "http://from-env:4318" {
+		t.Errorf("env must win over file, got %q", cfg.OTelEndpoint)
+	}
+}
+
+func TestLoad_OTelEndpoint_File(t *testing.T) {
+	t.Setenv("CETACEAN_OTEL_ENDPOINT", "")
+
+	fileValue := "http://from-file:4318"
+
+	cfg, err := Load(&fileConfig{Tracing: &fileTracing{Endpoint: &fileValue}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.OTelEndpoint != "http://from-file:4318" {
+		t.Errorf("expected file value, got %q", cfg.OTelEndpoint)
+	}
+}

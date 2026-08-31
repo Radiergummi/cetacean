@@ -130,11 +130,18 @@ func withProtocolMeta(t *testing.T, params string) json.RawMessage {
 		}
 	}
 
-	object["_meta"] = map[string]any{
-		mcplib.MetaKeyProtocolVersion:    mcplib.LATEST_PROTOCOL_VERSION,
-		mcplib.MetaKeyClientInfo:         map[string]string{"name": "test", "version": "1.0"},
-		mcplib.MetaKeyClientCapabilities: map[string]any{},
+	// Merge rather than assign: a caller may have put its own keys in _meta
+	// (SEP-414 trace context, say), and those must survive alongside the
+	// protocol metadata every request carries.
+	meta, _ := object["_meta"].(map[string]any)
+	if meta == nil {
+		meta = map[string]any{}
 	}
+
+	meta[mcplib.MetaKeyProtocolVersion] = mcplib.LATEST_PROTOCOL_VERSION
+	meta[mcplib.MetaKeyClientInfo] = map[string]string{"name": "test", "version": "1.0"}
+	meta[mcplib.MetaKeyClientCapabilities] = map[string]any{}
+	object["_meta"] = meta
 
 	raw, err := json.Marshal(object)
 	if err != nil {
