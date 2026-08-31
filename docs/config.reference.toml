@@ -105,6 +105,7 @@
 # signing_key = ""                          # JWT signing key (HMAC-SHA256); auto-generated if unset
 # access_token_ttl = "1h"                   # Access token lifetime
 # refresh_token_ttl = "720h"                # Refresh token lifetime (30 days)
+# max_concurrent_tasks = 32                 # Cap on in-flight task-augmented tool calls
 
 # [mcp.oauth]
 # require_resource_indicator = true         # Require RFC 8707 resource parameter on authorize/token

@@ -303,3 +303,54 @@ func TestMCPConfigAuthBypass(t *testing.T) {
 		t.Errorf("AuthBypass[0] = %q, want client1", cfg.MCP.AuthBypass[0])
 	}
 }
+
+func TestLoadMCP_MaxConcurrentTasks_Default(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_CONCURRENT_TASKS", "")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxConcurrentTasks != 32 {
+		t.Errorf("MaxConcurrentTasks = %d, want 32", cfg.MaxConcurrentTasks)
+	}
+}
+
+func TestLoadMCP_MaxConcurrentTasks_Env(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_CONCURRENT_TASKS", "8")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxConcurrentTasks != 8 {
+		t.Errorf("MaxConcurrentTasks = %d, want 8", cfg.MaxConcurrentTasks)
+	}
+}
+
+func TestLoadMCP_MaxConcurrentTasks_RejectsZero(t *testing.T) {
+	// Zero would wire mcp-go to refuse every task rather than "no limit",
+	// which is a confusing way to spell "disabled".
+	t.Setenv("CETACEAN_MCP_MAX_CONCURRENT_TASKS", "0")
+
+	if _, err := loadMCP(nil); err == nil {
+		t.Error("loadMCP accepted a zero task limit, want an error")
+	}
+}
+
+func TestLoadMCP_MaxConcurrentTasks_File(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_CONCURRENT_TASKS", "")
+
+	value := 64
+
+	cfg, err := loadMCP(&fileMCP{MaxConcurrentTasks: &value})
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxConcurrentTasks != 64 {
+		t.Errorf("MaxConcurrentTasks = %d, want 64", cfg.MaxConcurrentTasks)
+	}
+}

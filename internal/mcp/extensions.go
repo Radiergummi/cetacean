@@ -26,9 +26,12 @@ const (
 // looks for a widget that was never registered. Both are worse than saying
 // nothing — a host that reads no extension simply uses the core protocol.
 //
-// The map is empty today. Tasks is added by the phase that enables task
-// capabilities, and UI by the phase that registers the first widget resource;
-// extensionsMatchWiring in the tests fails if either arrives without the other.
+// Tasks is advertised because mcpserver.WithTaskCapabilities is wired beside
+// it in server.go. UI is still absent and is added by the phase that registers
+// the first widget resource; the pairing tests fail if either arrives without
+// the other.
 func serverExtensions() map[string]any {
-	return map[string]any{}
+	return map[string]any{
+		extensionTasks: map[string]any{},
+	}
 }

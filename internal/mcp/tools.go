@@ -183,6 +183,19 @@ func (s *Server) registerTools() {
 			func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
 				text, err := handler(ctx, req)
 				if err != nil {
+					// On a plain call the failure belongs in the result, so
+					// the model reads it in its context window and can
+					// self-correct (SEP-1303).
+					//
+					// As a task it must be a real error instead: mcp-go marks
+					// a task completed whenever the handler returns no error,
+					// so a tool error returned this way would leave an agent
+					// polling tasks/get and reading "completed" for a mutation
+					// that was refused.
+					if req.Params.Task != nil {
+						return nil, err
+					}
+
 					return mcplib.NewToolResultError(err.Error()), nil
 				}
 				return structuredToolResult(text), nil
@@ -279,6 +292,11 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
+				// Convergence takes far longer than the Docker call that starts
+				// it, so a client may ask for this as a task and poll. Optional,
+				// not required: a plain call still returns as soon as Swarm
+				// accepts the change.
+				mcplib.WithTaskSupport(mcplib.TaskSupportOptional),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -302,6 +320,11 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
+				// Convergence takes far longer than the Docker call that starts
+				// it, so a client may ask for this as a task and poll. Optional,
+				// not required: a plain call still returns as soon as Swarm
+				// accepts the change.
+				mcplib.WithTaskSupport(mcplib.TaskSupportOptional),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -327,6 +350,11 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(false),
 				mcplib.WithOpenWorldHintAnnotation(false),
+				// Convergence takes far longer than the Docker call that starts
+				// it, so a client may ask for this as a task and poll. Optional,
+				// not required: a plain call still returns as soon as Swarm
+				// accepts the change.
+				mcplib.WithTaskSupport(mcplib.TaskSupportOptional),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -345,6 +373,11 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(false),
 				mcplib.WithOpenWorldHintAnnotation(false),
+				// Convergence takes far longer than the Docker call that starts
+				// it, so a client may ask for this as a task and poll. Optional,
+				// not required: a plain call still returns as soon as Swarm
+				// accepts the change.
+				mcplib.WithTaskSupport(mcplib.TaskSupportOptional),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -974,6 +1007,9 @@ func (s *Server) toolScaleService(ctx context.Context, req mcplib.CallToolReques
 	if err != nil {
 		return "", err
 	}
+	if err := s.awaitIfTask(ctx, req, serviceConverged(convergenceTarget(svc, id))); err != nil {
+		return "", err
+	}
 	return marshalResult(svc)
 }
 
@@ -1004,6 +1040,9 @@ func (s *Server) toolUpdateServiceImage(
 	if err != nil {
 		return "", err
 	}
+	if err := s.awaitIfTask(ctx, req, serviceConverged(convergenceTarget(svc, id))); err != nil {
+		return "", err
+	}
 	return marshalResult(svc)
 }
 
@@ -1026,6 +1065,9 @@ func (s *Server) toolRollbackService(
 	if err != nil {
 		return "", err
 	}
+	if err := s.awaitIfTask(ctx, req, serviceConverged(convergenceTarget(svc, id))); err != nil {
+		return "", err
+	}
 	return marshalResult(svc)
 }
 
@@ -1046,6 +1088,9 @@ func (s *Server) toolRestartService(
 	}
 	svc, err := wc.RestartService(ctx, id)
 	if err != nil {
+		return "", err
+	}
+	if err := s.awaitIfTask(ctx, req, serviceConverged(convergenceTarget(svc, id))); err != nil {
 		return "", err
 	}
 	return marshalResult(svc)

@@ -211,6 +211,7 @@ Docker version conflict.
 | `CETACEAN_MCP_SIGNING_KEY` | auto-generated | HMAC-SHA256 JWT signing key |
 | `CETACEAN_MCP_ACCESS_TOKEN_TTL` | `1h` | Access token lifetime |
 | `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | Refresh token lifetime (30 days) |
+| `CETACEAN_MCP_MAX_CONCURRENT_TASKS` | `32` | Cap on in-flight task-augmented tool calls |
 | `CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR` | `true` | Require the RFC 8707 `resource` parameter |
 | `CETACEAN_MCP_DCR_ENABLED` | `true` | Enable Dynamic Client Registration |
 | `CETACEAN_MCP_DCR_RATE_LIMIT` | `10` | DCR registrations per IP per hour |
@@ -221,6 +222,42 @@ Docker version conflict.
 All settings are also available under the `[mcp]` and `[mcp.oauth]` TOML tables. When Cetacean runs behind a reverse
 proxy, **always set `CETACEAN_MCP_ISSUER`** to the externally reachable base URL — token audiences and discovery URLs
 are derived from it, and a wrong value breaks the OAuth flow.
+
+## Tasks: mutations that finish when the cluster does
+
+Docker's write APIs return the moment Swarm *accepts* a spec change. Scaling a service to five replicas succeeds
+instantly and tells you nothing about whether five replicas are running — the image may still be pulling, a
+placement constraint may be unsatisfiable, the rollout may be halfway through. An agent that treats the call
+returning as the change being done will act on a cluster that is not there yet.
+
+The `2026-07-28` Tasks extension fixes that. Four tools accept task augmentation:
+
+| Tool | Converged when |
+|---|---|
+| `scale_service` | running replicas match the desired count, no rolling update in flight |
+| `update_service_image` | as above, after the rollout finishes |
+| `rollback_service` | as above |
+| `restart_service` | as above |
+
+Send `params.task` on the `tools/call` and the server answers immediately with a task handle instead of the tool's
+result:
+
+```json
+{"method":"tools/call","params":{"name":"scale_service","arguments":{"id":"web","replicas":5},"task":{}}}
+```
+
+Poll `tasks/get` with the returned `taskId`. The task stays `working` until Cetacean's cache shows the cluster has
+actually converged, then flips to `completed`; a mutation Docker refuses — or one the ACL denies — ends `failed`
+with the reason in `statusMessage`. `tasks/cancel` is supported; `tasks/list` was removed by this revision.
+
+Task augmentation is **optional** on all four. A plain `tools/call` with no `params.task` behaves exactly as
+before, returning as soon as Docker accepts the change.
+
+Two limits are worth knowing. A task gives up after five minutes and fails, on the reasoning that a mutation which
+has not converged by then will not converge on its own. And `tasks/cancel` marks the task cancelled for the client
+but does not stop the convergence watcher, which runs to convergence or timeout regardless — it only polls an
+in-memory cache, so the cost is negligible. `CETACEAN_MCP_MAX_CONCURRENT_TASKS` (default 32) caps how many run at
+once.
 
 ## Distributed tracing
 

@@ -39,6 +39,12 @@ type MCPConfig struct {
 	// RequireResourceIndicator requires RFC 8707 resource indicators in token requests.
 	RequireResourceIndicator bool
 
+	// MaxConcurrentTasks caps how many task-augmented tool calls may run at
+	// once. Each holds a goroutine polling the cache until the cluster
+	// converges, so the cap bounds what a client can pin down by firing off
+	// mutations it never collects.
+	MaxConcurrentTasks int
+
 	// DCREnabled enables Dynamic Client Registration (RFC 7591).
 	DCREnabled bool
 
@@ -72,6 +78,7 @@ func DefaultMCPConfig() MCPConfig {
 		AccessTokenTTL:           time.Hour,
 		RefreshTokenTTL:          720 * time.Hour,
 		RequireResourceIndicator: true,
+		MaxConcurrentTasks:       32,
 		DCREnabled:               true,
 		DCRRateLimit:             10,
 		DCRMaxClients:            1000,
@@ -105,6 +112,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fRefreshTTL    *string
 		fOpsLevel      *int
 		fRequireRI     *bool
+		fMaxTasks      *int
 		fDCREnabled    *bool
 		fDCRRateLimit  *int
 		fDCRMaxClients *int
@@ -118,6 +126,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fAccessTTL = fm.AccessTokenTTL
 		fRefreshTTL = fm.RefreshTokenTTL
 		fOpsLevel = fm.OperationsLevel
+		fMaxTasks = fm.MaxConcurrentTasks
 		if fm.OAuth != nil {
 			fRequireRI = fm.OAuth.RequireResourceIndicator
 			fDCREnabled = fm.OAuth.DCREnabled
@@ -143,6 +152,18 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		"CETACEAN_MCP_REFRESH_TOKEN_TTL",
 		fRefreshTTL,
 		def.RefreshTokenTTL,
+	)
+	if err != nil {
+		return MCPConfig{}, err
+	}
+
+	maxConcurrentTasks, err := resolveInt(
+		nil,
+		"CETACEAN_MCP_MAX_CONCURRENT_TASKS",
+		fMaxTasks,
+		def.MaxConcurrentTasks,
+		1,
+		1<<20,
 	)
 	if err != nil {
 		return MCPConfig{}, err
@@ -194,8 +215,9 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 			fSigningKey,
 			def.SigningKey,
 		),
-		AccessTokenTTL:  accessTTL,
-		RefreshTokenTTL: refreshTTL,
+		AccessTokenTTL:     accessTTL,
+		RefreshTokenTTL:    refreshTTL,
+		MaxConcurrentTasks: maxConcurrentTasks,
 		RequireResourceIndicator: resolveBool(
 			nil,
 			"CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR",

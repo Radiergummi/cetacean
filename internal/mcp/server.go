@@ -199,6 +199,17 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 			cacheTTLRead.Milliseconds(),
 			mcplib.CacheScopePrivate,
 		),
+		// Tasks (2026-07-28). tasks/list was removed by the revision, so the
+		// extension is poll-based: tasks/get and tasks/cancel only. Must stay
+		// paired with the extensionTasks entry in serverExtensions — a host
+		// that reads the advertisement and finds tasks/get missing is worse
+		// off than one told nothing.
+		mcpserver.WithTaskCapabilities(
+			false, /* list */
+			true,  /* cancel */
+			true,  /* toolCallTasks */
+		),
+		mcpserver.WithMaxConcurrentTasks(opts.Config.MaxConcurrentTasks),
 	}
 
 	// SEP-414 trace context. Installed only when a tracer is configured: the

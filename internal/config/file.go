@@ -69,13 +69,16 @@ type fileTracing struct {
 }
 
 type fileMCP struct {
-	Enabled         *bool         `toml:"enabled"`
-	OperationsLevel *int          `toml:"operations_level"`
-	Issuer          *string       `toml:"issuer"`
-	SigningKey      *string       `toml:"signing_key"`
-	AccessTokenTTL  *string       `toml:"access_token_ttl"`
-	RefreshTokenTTL *string       `toml:"refresh_token_ttl"`
-	OAuth           *fileMCPOAuth `toml:"oauth"`
+	Enabled         *bool   `toml:"enabled"`
+	OperationsLevel *int    `toml:"operations_level"`
+	Issuer          *string `toml:"issuer"`
+	SigningKey      *string `toml:"signing_key"`
+	AccessTokenTTL  *string `toml:"access_token_ttl"`
+	RefreshTokenTTL *string `toml:"refresh_token_ttl"`
+
+	// MaxConcurrentTasks caps in-flight task-augmented tool calls.
+	MaxConcurrentTasks *int          `toml:"max_concurrent_tasks"`
+	OAuth              *fileMCPOAuth `toml:"oauth"`
 }
 
 type fileMCPOAuth struct {
