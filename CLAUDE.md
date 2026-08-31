@@ -37,7 +37,15 @@ make fmt-check                            # Check formatting without modifying
 make check                                # lint + fmt-check + test
 make test                                 # go test ./...
 make build                                # frontend build + go build
+make sbom                                 # regenerate the committed SBOM + attribution
+make sbom-verify                          # check the committed SBOM against the tree (no regen)
 ```
+
+The SBOM (`internal/api/sbom/*`, `THIRD_PARTY_LICENSES`) is committed and embedded in the binary. You rarely need to
+regenerate it by hand: the `pre-commit` hook does it when a dependency manifest is staged (skipping when it cannot —
+a linked worktree, or a missing toolchain), and CI's `sbom-sync` job regenerates it on every pull request and
+**commits the result back to the branch**, signed, via `createCommitOnBranch`. Fork PRs only get a warning, since
+their token cannot write; pushes to `main` verify and fail.
 
 ### Full build from source
 ```bash
