@@ -7,13 +7,43 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { licenseLabel } from "@/lib/licenseLabel";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
 
 interface LicenseTextDialogProps {
   component: LicenseComponent;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+interface TextPaneProps {
+  id: string;
+  enabled: boolean;
+  errorMessage: string;
+}
+
+/**
+ * One pooled text, fetched by its content-addressed id. The id is a hash of
+ * the bytes, so the text behind it can never change — hence the infinite stale
+ * time.
+ */
+function TextPane({ id, enabled, errorMessage }: TextPaneProps) {
+  const { data, isError } = useQuery({
+    queryKey: ["licenseText", id],
+    queryFn: ({ signal }) => api.licenseText(id, signal),
+    enabled,
+    staleTime: Infinity,
+  });
+
+  if (isError) {
+    return <p className="text-sm text-destructive">{errorMessage}</p>;
+  }
+
+  return (
+    <pre className="font-mono text-xs whitespace-pre-wrap text-muted-foreground">
+      {data ?? "Loading…"}
+    </pre>
+  );
 }
 
 /**
@@ -28,29 +58,6 @@ export default function LicenseTextDialog({
 }: LicenseTextDialogProps) {
   const { textId, noticeId } = component;
 
-  const license = useQuery({
-    queryKey: ["licenseText", textId],
-    queryFn: ({ signal }) => api.licenseText(textId!, signal),
-    enabled: open && !!textId,
-    staleTime: Infinity,
-  });
-
-  const notice = useQuery({
-    queryKey: ["licenseText", noticeId],
-    queryFn: ({ signal }) => api.licenseText(noticeId!, signal),
-    enabled: open && !!noticeId,
-    staleTime: Infinity,
-  });
-
-  const identifiers = useMemo(
-    () =>
-      component.licenses
-        .map(({ id, name }) => id || name)
-        .filter(Boolean)
-        .join(", "),
-    [component.licenses],
-  );
-
   return (
     <Dialog
       open={open}
@@ -60,29 +67,27 @@ export default function LicenseTextDialog({
         <DialogHeader>
           <DialogTitle>{component.name}</DialogTitle>
           <DialogDescription>
-            {identifiers}
+            {component.licenses.map(licenseLabel).join(", ")}
             {component.version ? ` · ${component.version}` : ""}
           </DialogDescription>
         </DialogHeader>
 
-        {license.isError ? (
-          <p className="text-sm text-destructive">Could not load the license text.</p>
-        ) : (
-          <pre className="font-mono text-xs whitespace-pre-wrap text-muted-foreground">
-            {license.data ?? "Loading…"}
-          </pre>
+        {textId && (
+          <TextPane
+            id={textId}
+            enabled={open}
+            errorMessage="Could not load the license text."
+          />
         )}
 
         {noticeId && (
           <section className="border-t pt-4">
             <h3 className="mb-2 text-sm font-medium">NOTICE</h3>
-            {notice.isError ? (
-              <p className="text-sm text-destructive">Could not load the notice.</p>
-            ) : (
-              <pre className="font-mono text-xs whitespace-pre-wrap text-muted-foreground">
-                {notice.data ?? "Loading…"}
-              </pre>
-            )}
+            <TextPane
+              id={noticeId}
+              enabled={open}
+              errorMessage="Could not load the notice."
+            />
           </section>
         )}
       </DialogContent>

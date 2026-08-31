@@ -608,7 +608,7 @@ func (c *Cache) ListStacks() []Stack {
 			Volumes:  append([]string{}, s.Volumes...),
 		})
 	}
-	slices.SortFunc(out, func(a, b Stack) int { return cmp.Compare(a.Name, b.Name) })
+	sortByName(out, func(s Stack) string { return s.Name })
 	return out
 }
 
@@ -717,7 +717,7 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 
 		out = append(out, s)
 	}
-	slices.SortFunc(out, func(a, b StackSummary) int { return cmp.Compare(a.Name, b.Name) })
+	sortByName(out, func(s StackSummary) string { return s.Name })
 	return out
 }
 

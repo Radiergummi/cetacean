@@ -1,3 +1,4 @@
+import { stripStackPrefix } from "./parseStackLabels";
 import type { ReactNode } from "react";
 
 export interface Crumb {
@@ -18,6 +19,21 @@ interface ResourceCrumbsConfig {
   to?: string | undefined;
   /** Crumbs below the resource itself, e.g. a task or a service sub-resource. */
   trail?: Crumb[] | undefined;
+}
+
+/**
+ * Where a resource is reached from, and so where to go once it is gone: its
+ * stack when it belongs to one, its own list page otherwise. The breadcrumbs
+ * and the post-removal redirect have to agree on this, encoding included.
+ */
+export function resourceParentPath({
+  listPath,
+  stack,
+}: {
+  listPath: string;
+  stack?: string | undefined;
+}): string {
+  return stack ? `/stacks/${encodeURIComponent(stack)}` : listPath;
 }
 
 /**
@@ -49,23 +65,8 @@ export function resourceBreadcrumbs({
 
   return [
     { label: "Stacks", to: "/stacks" },
-    { label: stack, to: `/stacks/${encodeURIComponent(stack)}` },
+    { label: stack, to: resourceParentPath({ listPath, stack }) },
     leaf,
     ...trail,
   ];
-}
-
-/**
- * Drops the "<stack>_" prefix Docker gives a stack's resources, so the name
- * doesn't repeat the stack crumb standing right next to it. A resource can
- * join a stack by label without being named for it, so the prefix is only
- * removed when it is actually there — and never guessed at when the resource
- * belongs to no stack, where an underscore is just part of the name.
- */
-export function stripStackPrefix(name: string, stack?: string | undefined): string {
-  if (stack && name.startsWith(`${stack}_`)) {
-    return name.slice(stack.length + 1);
-  }
-
-  return name;
 }

@@ -24,7 +24,9 @@ func HandleLicenses(w http.ResponseWriter, r *http.Request) {
 // HandleLicenseText serves one pooled license or notice text by its
 // content-addressed id. Public (registered under the auth-exempt /-/ prefix).
 func HandleLicenseText(w http.ResponseWriter, r *http.Request) {
-	text, ok := sbom.Text(r.PathValue("id"))
+	id := r.PathValue("id")
+
+	text, ok := sbom.Text(id)
 	if !ok {
 		writeProblem(w, r, http.StatusNotFound, "no license text with that identifier")
 
@@ -32,10 +34,11 @@ func HandleLicenseText(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The id is a hash of the bytes, so a given URL's content can never
-	// change. Nothing to revalidate.
+	// change. Nothing to revalidate — and nothing to hash, either: the id was
+	// interned exactly as computeETag would derive it.
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	writeRawWithETag(w, r, []byte(text))
+	writeRawWithPrecomputedETag(w, r, []byte(text), `"`+id+`"`)
 }
 
 // HandleNotices serves the full third-party attribution document. Public

@@ -1,5 +1,6 @@
 import type { JGFGraph } from "../api/types";
 import { getChartColor } from "./chartColors";
+import { stripStackPrefix } from "./parseStackLabels";
 import type { Edge, Node } from "@xyflow/react";
 
 export function hashColor(id: string): string {
@@ -17,14 +18,6 @@ function urnToId(urn: string): string {
   const lastColon = urn.lastIndexOf(":");
 
   return lastColon >= 0 ? urn.slice(lastColon + 1) : urn;
-}
-
-export function stripStackPrefix(name: string, stack?: string): string {
-  if (stack && name.startsWith(stack + "_")) {
-    return name.slice(stack.length + 1);
-  }
-
-  return name;
 }
 
 /** Estimate rendered card height for ELK layout (matches ServiceCardNode CSS). */
