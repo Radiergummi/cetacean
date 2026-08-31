@@ -1,43 +1,45 @@
 import { useCetaceanHost, useToolData } from "../bridge";
+import type { ResourceRecord } from "./columns";
+import { ResourceTable } from "./ResourceTable";
 
 /**
- * A single hit from the `search` tool, mirroring cluster.SearchResult.
+ * The `list_resources` tool's structured output, mirroring
+ * internal/mcp.listResourcesResult. Total is the count before paging.
  */
-interface SearchHit {
+interface ListResourcesResult {
   type: string;
-  id: string;
-  name: string;
-  detail?: string;
-  state?: string;
+  items: ResourceRecord[];
+  total: number;
 }
 
 /**
- * The `search` tool's structured output, mirroring cluster.SearchResults.
+ * The resource type this widget lists.
  *
- * The outer keys are capitalised because the Go struct carries no JSON tags —
- * this is the MCP tool's shape, which is *not* the REST API's `SearchResponse`
- * (`results`/`counts`/`total`). Widgets read the tool, so they follow the tool.
+ * A host renders a widget for a tool result, so the type is whatever the model
+ * asked list_resources for. The host does not hand the widget the call's
+ * arguments, so the widget reads them from its own URL fragment — which is how
+ * one bundle serves every resource type — and lists services by default.
  */
-interface SearchResults {
-  Hits: Record<string, SearchHit[]>;
-  Counts: Record<string, number>;
-  Total: number;
+function resourceTypeFromLocation(): string {
+  const fromHash = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("type");
+
+  return fromHash ?? "services";
 }
 
 /**
- * Renders the cluster's services as a table inside an MCP Apps host.
+ * Renders a cluster resource listing as a searchable, sortable table.
  *
- * Phase 11 establishes the path end to end — build, embed, ui:// resource, host
- * bridge, tool call — with the plainest rendering that proves data arrives.
- * Phase 12 replaces the markup here with the dashboard's DataTable, so there is
- * one implementation of the view rather than two.
+ * Data comes from Cetacean's own `list_resources` tool through the host, never
+ * from its HTTP API, so the rows are exactly what the calling identity's ACL
+ * grants allow.
  */
 export function TableWidget() {
   const { isConnected, error: connectionError } = useCetaceanHost();
 
-  // An empty query matches every resource, which is what a table wants as its
-  // initial state; Phase 12 adds the search box that narrows it.
-  const { data, error, isLoading } = useToolData<SearchResults>("search", { query: "" });
+  const resourceType = resourceTypeFromLocation();
+  const { data, error, isLoading } = useToolData<ListResourcesResult>("list_resources", {
+    type: resourceType,
+  });
 
   if (connectionError) {
     return <Message text={`Could not reach the host: ${connectionError.message}`} />;
@@ -52,37 +54,15 @@ export function TableWidget() {
   }
 
   if (isLoading || !data) {
-    return <Message text="Loading cluster resources…" />;
-  }
-
-  const services = data.Hits?.services ?? [];
-
-  if (services.length === 0) {
-    return <Message text="No services in this cluster." />;
+    return <Message text={`Loading ${resourceType}…`} />;
   }
 
   return (
-    <table className="w-full border-collapse text-sm">
-      <thead>
-        <tr className="border-b text-left">
-          <th className="p-2 font-medium">Service</th>
-          <th className="p-2 font-medium">Detail</th>
-          <th className="p-2 font-medium">State</th>
-        </tr>
-      </thead>
-      <tbody>
-        {services.map(({ id, name, detail, state }) => (
-          <tr
-            key={id}
-            className="border-b last:border-0"
-          >
-            <td className="p-2">{name}</td>
-            <td className="p-2 font-mono text-xs">{detail}</td>
-            <td className="p-2">{state}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <ResourceTable
+      resourceType={data.type}
+      records={data.items}
+      total={data.total}
+    />
   );
 }
 

@@ -102,14 +102,20 @@ type toolDef struct {
 	tool    mcplib.Tool
 	tier    config.OperationsLevel
 	handler func(ctx context.Context, req mcplib.CallToolRequest) (string, error)
+
+	// widget names the MCP Apps view that renders this tool's result, if any.
+	// Declared here rather than built into the tool above so registerTools can
+	// withhold it when the widget was not built — see registerTools.
+	widget string
 }
 
 // toolIconCategory maps each tool to one of six verb-category icons served
 // from the embedded frontend under /assets/mcp-icons/<category>.svg. Tools not
 // listed here (there are none currently) are served without an icon.
 var toolIconCategory = map[string]string{
-	"get_logs": "read",
-	"search":   "search",
+	"get_logs":       "read",
+	"list_resources": "read",
+	"search":         "search",
 
 	"scale_service": "scale",
 
@@ -175,6 +181,14 @@ func (s *Server) registerTools() {
 		}
 
 		td.tool.Icons = s.iconsForTool(td.tool.Name)
+
+		// Point the host at this tool's widget, but only if the widget build
+		// actually produced it. A binary built without `npm run build:widgets`
+		// serves no ui:// resources, and a tool naming one anyway would send a
+		// host off to fetch a resource that does not exist.
+		if td.widget != "" && hasWidget(td.widget) {
+			td.tool.Meta = toolUIMeta(td.widget)
+		}
 		s.registeredTools = append(s.registeredTools, td)
 
 		handler := td.handler
@@ -278,6 +292,36 @@ func (s *Server) toolCatalog() []toolDef {
 			),
 			tier:    config.OpsReadOnly,
 			handler: s.toolSearch,
+		},
+		{
+			tool: mcplib.NewTool(
+				"list_resources",
+				mcplib.WithToolTitle("List cluster resources"),
+				mcplib.WithDescription(
+					"Enumerate every resource of one type (nodes, services, tasks, stacks, configs, secrets, networks, volumes), paged. Returns the same records the cetacean:// resources expose, filtered to what the caller may see. Use search to find a specific resource; use this to browse or tabulate a whole type.",
+				),
+				mcplib.WithOutputSchema[listResourcesResult](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString(
+					"type",
+					mcplib.Required(),
+					mcplib.Description(
+						"Resource type to list: nodes, services, tasks, stacks, configs, secrets, networks, or volumes.",
+					),
+				),
+				mcplib.WithNumber("limit",
+					mcplib.Description("Maximum records to return. Default and maximum 200."),
+				),
+				mcplib.WithNumber("offset",
+					mcplib.Description("Records to skip, for paging. Default 0."),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolListResources,
+			widget:  "table",
 		},
 
 		// Tier 1 — Operational.

@@ -181,11 +181,11 @@ writes gated by tier + ACL) so agents know how to drive it. Each tool also adver
 category (read, search, scale, edit, node, remove) that clients can render (see [Icons](#icons)).
 
 Tool results carry machine-readable `structuredContent` (the parsed JSON object) alongside the text form. The
-`search`, `get_logs`, and `remove_*` tools additionally advertise an output schema that the server validates results
-against. An input-validation failure comes back as a tool result with `isError: true` (so the model can self-correct),
+`search`, `get_logs`, `list_resources`, and `remove_*` tools additionally advertise an output schema that the server
+validates results against. An input-validation failure comes back as a tool result with `isError: true` (so the model can self-correct),
 not a protocol error.
 
-**Tier 0 — reads** (always available): `get_logs`, `search`.
+**Tier 0 — reads** (always available): `get_logs`, `search`, `list_resources`.
 
 **Tier 1 — operational**: `scale_service`, `update_service_image`, `rollback_service`, `restart_service`,
 `remove_task`.
@@ -302,6 +302,10 @@ Cetacean advertises `io.modelcontextprotocol/ui` and serves each widget as a res
 ```
 ui://cetacean/table
 ```
+
+`ui://cetacean/table` renders a `list_resources` result: a searchable, sortable table of one resource type, showing
+how many records it holds when the page is a subset. The tool names its widget in `_meta`, so a host knows which
+view fits the result; the same tool called from a client without app support simply returns JSON.
 
 Each is a single self-contained HTML document with MIME type `text/html;profile=mcp-app` — all CSS and JavaScript
 inlined, because an app resource has no base URL and cannot fetch anything relative to itself.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"slices"
 	"sort"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -191,4 +192,11 @@ func (s *Server) registerUIResources() {
 			return []mcplib.ResourceContents{contents}, nil
 		})
 	}
+}
+
+// hasWidget reports whether the named widget was built into this binary.
+func hasWidget(name string) bool {
+	return slices.ContainsFunc(uiResources(), func(r uiResource) bool {
+		return r.Name == name
+	})
 }
