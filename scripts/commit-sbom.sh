@@ -104,10 +104,34 @@ mutation ($input: CreateCommitOnBranchInput!) {
 GRAPHQL
 
 # --input takes the whole body (query plus variables) on stdin.
-jq -n \
-  --arg query "$mutation" \
-  --slurpfile variables "$workdir/variables.json" \
-  '{query: $query, variables: $variables[0]}' |
-  gh api graphql --input -
+#
+# The mutation is allowed to fail one specific way without failing the job. A
+# branch that advanced since checkout makes expectedHeadOid stale, and the write
+# is then correctly refused — that is the guard working, not a fault, and the
+# run for the newer commit regenerates the SBOM anyway. Turning that race into a
+# red check would report a problem that no longer exists. Every other error
+# still fails, because it means the SBOM genuinely could not be committed.
+set +e
+response=$(
+  jq -n \
+    --arg query "$mutation" \
+    --slurpfile variables "$workdir/variables.json" \
+    '{query: $query, variables: $variables[0]}' |
+    gh api graphql --input - 2>&1
+)
+status=$?
+set -e
+
+if [ $status -ne 0 ]; then
+  # GitHub words this "Expected branch to point to ... but it did not."
+  if printf '%s' "$response" | grep -qi 'expected branch to point to'; then
+    echo "::warning::$branch advanced while the SBOM was being regenerated; skipping the commit. The run for the newer commit will regenerate it."
+    echo "$response" >&2
+    exit 0
+  fi
+
+  echo "$response" >&2
+  exit $status
+fi
 
 echo "Committed regenerated SBOM to $branch." >&2
