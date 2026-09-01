@@ -1,5 +1,6 @@
-# Logs
-logs
+# Logs — anchored, so a directory named `logs` in the source tree (the MCP
+# Apps log tail widget) is not mistaken for a tool's log output.
+/logs
 *.log
 npm-debug.log*
 yarn-debug.log*

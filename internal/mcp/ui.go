@@ -61,6 +61,11 @@ var widgetCatalog = map[string]struct {
 		Description:   "Services, overlay networks and cluster nodes as an interactive graph.",
 		PrefersBorder: true,
 	},
+	"logs": {
+		Title:         "Service logs",
+		Description:   "A service's log output as a live tail, searchable and filtered by level.",
+		PrefersBorder: true,
+	},
 }
 
 // widgetFS holds the built widget bundles. main.go owns the //go:embed — the

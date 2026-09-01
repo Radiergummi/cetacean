@@ -267,6 +267,7 @@ func (s *Server) toolCatalog() []toolDef {
 			),
 			tier:    config.OpsReadOnly,
 			handler: s.toolGetLogs,
+			widget:  "logs",
 		},
 		{
 			tool: mcplib.NewTool(

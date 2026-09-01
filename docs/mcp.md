@@ -301,11 +301,23 @@ Cetacean advertises `io.modelcontextprotocol/ui` and serves each widget as a res
 
 ```
 ui://cetacean/table
+ui://cetacean/topology
+ui://cetacean/logs
 ```
 
 `ui://cetacean/table` renders a `list_resources` result: a searchable, sortable table of one resource type, showing
-how many records it holds when the page is a subset. The tool names its widget in `_meta`, so a host knows which
-view fits the result; the same tool called from a client without app support simply returns JSON.
+how many records it holds when the page is a subset.
+
+`ui://cetacean/topology` renders a `get_topology` result as a graph to pan, zoom and drag — services joined to the
+overlay networks they attach to, or cluster nodes joined to the services they run. Switching between the two views
+re-runs the tool, so the second view is fetched under the same identity and the same grants as the first.
+
+`ui://cetacean/logs` renders a `get_logs` result as a live tail. It keeps calling `get_logs` from the cursor the
+previous read returned — a widget cannot hold an SSE stream open, having no route to Cetacean's HTTP API — and
+filtering by level or search term happens over the lines already fetched, without going back through the host.
+
+Each tool names its widget in `_meta`, so a host knows which view fits the result; the same tool called from a
+client without app support simply returns JSON.
 
 Each is a single self-contained HTML document with MIME type `text/html;profile=mcp-app` — all CSS and JavaScript
 inlined, because an app resource has no base URL and cannot fetch anything relative to itself.

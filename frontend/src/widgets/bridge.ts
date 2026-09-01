@@ -14,9 +14,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * structured-content-first shape.
  */
 export function useCetaceanHost() {
+  // The arguments of the tool call this widget is rendering for. A widget is
+  // shown for one result, and this is the only channel that says which — the
+  // host does not put them in the frame's URL.
+  const [toolInput, setToolInput] = useState<Record<string, unknown> | undefined>(undefined);
+
   const { app, isConnected, error } = useApp({
     appInfo: { name: "cetacean-widget", version: "1" },
     capabilities: {},
+    // Registered before the handshake, because the host may send the tool input
+    // the moment it completes and a listener attached afterwards would miss it.
+    onAppCreated: (created) => {
+      created.addEventListener("toolinput", ({ arguments: args }) => setToolInput(args ?? {}));
+    },
   });
 
   // Applies the host's theme and style variables to the document, so a widget
@@ -50,7 +60,7 @@ export function useCetaceanHost() {
     [app],
   );
 
-  return { app, isConnected, error, callTool };
+  return { app, isConnected, error, callTool, toolInput };
 }
 
 /**
