@@ -1,4 +1,4 @@
-import type { TopologyGraphData } from "./layout";
+import type { TopologyGraphData, TopologyView } from "./layout";
 import { TopologyGraph } from "./TopologyGraph";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -26,7 +26,7 @@ describe("TopologyGraph", () => {
     render(
       <TopologyGraph
         graph={networkGraph}
-        onViewChange={vi.fn()}
+        onViewChange={vi.fn<(view: TopologyView) => void>()}
       />,
     );
 
@@ -42,7 +42,7 @@ describe("TopologyGraph", () => {
     const { container } = render(
       <TopologyGraph
         graph={networkGraph}
-        onViewChange={vi.fn()}
+        onViewChange={vi.fn<(view: TopologyView) => void>()}
       />,
     );
 
@@ -57,7 +57,7 @@ describe("TopologyGraph", () => {
   });
 
   it("asks for the other view when the switcher is used", () => {
-    const onViewChange = vi.fn();
+    const onViewChange = vi.fn<(view: TopologyView) => void>();
 
     render(
       <TopologyGraph
@@ -72,7 +72,7 @@ describe("TopologyGraph", () => {
   });
 
   it("does not ask for the view it is already showing", () => {
-    const onViewChange = vi.fn();
+    const onViewChange = vi.fn<(view: TopologyView) => void>();
 
     render(
       <TopologyGraph
@@ -90,7 +90,7 @@ describe("TopologyGraph", () => {
     render(
       <TopologyGraph
         graph={{ view: "placement", nodes: [], edges: [] }}
-        onViewChange={vi.fn()}
+        onViewChange={vi.fn<(view: TopologyView) => void>()}
       />,
     );
 

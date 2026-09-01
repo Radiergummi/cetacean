@@ -10,7 +10,9 @@ import { type LogTailArguments, useLogTail } from "./useLogTail";
  * tailing. Anything but a named service is nothing to show, so an argument set
  * without one yields no read at all rather than a guess.
  */
-function logArgumentsFrom(input: Record<string, unknown> | undefined): LogTailArguments | undefined {
+function logArgumentsFrom(
+  input: Record<string, unknown> | undefined,
+): LogTailArguments | undefined {
   const service = input?.service;
 
   if (typeof service !== "string" || service === "") {

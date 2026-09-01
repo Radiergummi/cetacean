@@ -23,7 +23,7 @@ export interface LogTailArguments {
 }
 
 /** The `get_logs` structured output, mirroring internal/mcp.LogResourceResponse. */
-interface GetLogsResult {
+export interface GetLogsResult {
   lines?: WireLogLine[];
   cursor?: string;
 }
@@ -47,7 +47,7 @@ interface LogTailState {
  * interval, so a slow or failing host cannot pile requests up behind itself.
  */
 export function useLogTail(
-  callTool: <T>(name: string, args?: Record<string, unknown>) => Promise<T>,
+  callTool: (name: string, args?: Record<string, unknown>) => Promise<GetLogsResult>,
   args: LogTailArguments | undefined,
 ): LogTailState {
   const [lines, setLines] = useState<LogLine[]>([]);
@@ -76,7 +76,7 @@ export function useLogTail(
 
     async function read() {
       try {
-        const result = await callTool<GetLogsResult>("get_logs", {
+        const result = await callTool("get_logs", {
           ...parsed,
           ...(cursor ? { since: cursor } : {}),
         });
@@ -110,7 +110,9 @@ export function useLogTail(
         // clear itself when the next one lands.
         if (!cancelled) {
           setIsLoading(false);
-          timer = setTimeout(() => void read(), pollIntervalMs);
+          timer = setTimeout(() => {
+            void read();
+          }, pollIntervalMs);
         }
       }
     }

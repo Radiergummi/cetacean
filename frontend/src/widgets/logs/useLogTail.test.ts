@@ -1,4 +1,4 @@
-import { pollIntervalMs, useLogTail } from "./useLogTail";
+import { type GetLogsResult, pollIntervalMs, useLogTail } from "./useLogTail";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,16 +6,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * A get_logs result as the tool returns it: raw wire lines with no level field,
  * plus the cursor the next read resumes from.
  */
-function result(messages: { timestamp: string; message: string }[], cursor?: string) {
-  return {
-    lines: messages.map(({ message, timestamp }) => ({
-      timestamp,
-      message,
-      stream: "stdout" as const,
-    })),
-    cursor,
-  };
+function result(
+  messages: { timestamp: string; message: string }[],
+  cursor?: string,
+): GetLogsResult {
+  const lines = messages.map(({ message, timestamp }) => ({
+    timestamp,
+    message,
+    stream: "stdout" as const,
+  }));
+
+  // Omitted rather than set to undefined: the Go field is `omitempty`, so a
+  // result without a cursor has no cursor key at all.
+  return cursor === undefined ? { lines } : { lines, cursor };
 }
+
+/** The bridge call the hook is given, typed as the hook expects it. */
+type CallTool = (name: string, args?: Record<string, unknown>) => Promise<GetLogsResult>;
 
 describe("useLogTail", () => {
   beforeEach(() => {
@@ -34,7 +41,7 @@ describe("useLogTail", () => {
   }
 
   it("reads the first page with the arguments the host called the tool with", async () => {
-    const callTool = vi.fn().mockResolvedValue(result([]));
+    const callTool = vi.fn<CallTool>().mockResolvedValue(result([]));
 
     renderHook(() => useLogTail(callTool, { service: "svc-a", tail: 200, level: "warn" }));
 
@@ -49,7 +56,7 @@ describe("useLogTail", () => {
 
   it("polls for new lines using the cursor from the previous result", async () => {
     const callTool = vi
-      .fn()
+      .fn<CallTool>()
       .mockResolvedValueOnce(
         result(
           [{ timestamp: "2026-08-30T10:00:00Z", message: "listening on :9000" }],
@@ -72,12 +79,18 @@ describe("useLogTail", () => {
 
   it("appends the lines a poll returns to the ones already shown, classifying each", async () => {
     const callTool = vi
-      .fn()
+      .fn<CallTool>()
       .mockResolvedValueOnce(
-        result([{ timestamp: "2026-08-30T10:00:00Z", message: "INFO started" }], "2026-08-30T10:00:00Z"),
+        result(
+          [{ timestamp: "2026-08-30T10:00:00Z", message: "INFO started" }],
+          "2026-08-30T10:00:00Z",
+        ),
       )
       .mockResolvedValueOnce(
-        result([{ timestamp: "2026-08-30T10:00:01Z", message: "ERROR boom" }], "2026-08-30T10:00:01Z"),
+        result(
+          [{ timestamp: "2026-08-30T10:00:01Z", message: "ERROR boom" }],
+          "2026-08-30T10:00:01Z",
+        ),
       )
       .mockResolvedValue(result([]));
 
@@ -95,7 +108,7 @@ describe("useLogTail", () => {
 
   it("surfaces a failed read and keeps polling", async () => {
     const callTool = vi
-      .fn()
+      .fn<CallTool>()
       .mockRejectedValueOnce(new Error("service not found"))
       .mockResolvedValue(result([]));
 
@@ -110,7 +123,7 @@ describe("useLogTail", () => {
   });
 
   it("reads nothing until the host has named a service", () => {
-    const callTool = vi.fn().mockResolvedValue(result([]));
+    const callTool = vi.fn<CallTool>().mockResolvedValue(result([]));
 
     renderHook(() => useLogTail(callTool, undefined));
 
