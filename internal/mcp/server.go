@@ -80,6 +80,7 @@ type Server struct {
 	mcpServer      *mcpserver.MCPServer
 	httpServer     *mcpserver.StreamableHTTPServer
 	recEngine      RecommendationEngine
+	prom           MetricsQuerier // nil when Prometheus is not configured
 
 	// allowedOrigins is the set of Origin header values the streamable HTTP
 	// endpoint accepts. originGuard rejects any other non-empty Origin with
@@ -123,6 +124,11 @@ type Options struct {
 	Recommendations RecommendationEngine
 	AllowedOrigins  []string
 
+	// Prometheus backs the get_metrics tool. Nil when CETACEAN_PROMETHEUS_URL
+	// is unset, and the tool then says metrics are unavailable rather than
+	// charting nothing.
+	Prometheus MetricsQuerier
+
 	// IconBaseURL is the canonical external base URL (issuer + base path) used
 	// to build absolute tool-icon `src` values. Icons are served from the
 	// embedded frontend under /assets/mcp-icons/. Empty disables tool icons.
@@ -165,6 +171,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		authMode:       opts.AuthMode,
 		authProvider:   opts.AuthProvider,
 		recEngine:      opts.Recommendations,
+		prom:           opts.Prometheus,
 		allowedOrigins: opts.AllowedOrigins,
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),

@@ -441,6 +441,7 @@ func main() {
 		logs:         dockerClient,
 		acl:          aclEval,
 		rec:          recEngine,
+		prometheus:   promClient,
 		tracer:       mcpTracer,
 	})
 	defer closeMCP()
@@ -652,6 +653,7 @@ type mcpDeps struct {
 	logs         mcp.LogStreamer
 	acl          *acl.Evaluator
 	rec          mcp.RecommendationEngine
+	prometheus   *promapi.Client
 	tracer       oteltrace.Tracer
 }
 
@@ -715,6 +717,14 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 			"issuer", issuer, "resource", mcpResource)
 	}
 
+	// A nil *promapi.Client stored in the interface would be a non-nil
+	// MetricsQuerier holding nothing, and get_metrics would call through it
+	// instead of reporting that Prometheus is unconfigured.
+	var metricsQuerier mcp.MetricsQuerier
+	if d.prometheus != nil {
+		metricsQuerier = d.prometheus
+	}
+
 	mcpSrv, err := mcp.New(d.cache, mcp.Options{
 		WriteClient:     d.writeClient,
 		Logs:            d.logs,
@@ -725,6 +735,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		AuthMode:        d.authMode,
 		AuthProvider:    d.authProvider,
 		Recommendations: d.rec,
+		Prometheus:      metricsQuerier,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		IconBaseURL:     issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,

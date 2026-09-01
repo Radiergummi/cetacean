@@ -9,6 +9,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/prom"
 )
 
 // TestCuratedToolsAdvertiseOutputSchema asserts that the tools whose result
@@ -42,6 +43,7 @@ func TestCuratedToolsAdvertiseOutputSchema(t *testing.T) {
 
 	curated := map[string]bool{
 		"search": true, "get_logs": true, "list_resources": true, "get_topology": true,
+		"get_metrics": true, "get_recommendations": true,
 		"remove_task": true, "remove_service": true, "remove_config": true,
 		"remove_secret": true, "remove_network": true, "remove_volume": true,
 		// The four lifecycle mutations return serviceMutationResult, a shape
@@ -109,7 +111,14 @@ func TestCuratedToolOutputsValidate(t *testing.T) {
 		rollbackServiceFn: mutated,
 		restartServiceFn:  mutated,
 	}
-	srv := newToolTestServer(t, c, wc, config.OpsImpactful)
+	// get_metrics needs something to query; the numbers do not matter here,
+	// only that the handler's real output satisfies its advertised schema.
+	srv := newToolTestServer(t, c, wc, config.OpsImpactful, func(o *Options) {
+		o.Prometheus = &fakeQuerier{
+			series: []prom.Series{{Points: []prom.Point{{Timestamp: 1788254400, Value: 1}}}},
+		}
+		o.Recommendations = &fakeRecommendationEngine{results: recommendationFixtures()}
+	})
 	handler := srv.Handler()
 
 	calls := []struct {
@@ -120,6 +129,8 @@ func TestCuratedToolOutputsValidate(t *testing.T) {
 		{"get_logs", `{"service":"svc1"}`},
 		{"list_resources", `{"type":"services"}`},
 		{"get_topology", `{"view":"placement"}`},
+		{"get_metrics", `{"target":"service","id":"svc1"}`},
+		{"get_recommendations", `{}`},
 		{"remove_task", `{"id":"task1"}`},
 		{"scale_service", `{"id":"svc1","replicas":2}`},
 		{"update_service_image", `{"id":"svc1","image":"nginx:1"}`},

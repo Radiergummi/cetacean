@@ -66,6 +66,16 @@ var widgetCatalog = map[string]struct {
 		Description:   "A service's log output as a live tail, searchable and filtered by level.",
 		PrefersBorder: true,
 	},
+	"metrics": {
+		Title:         "Resource metrics",
+		Description:   "CPU, memory or network use for one service or node, over a window you pick.",
+		PrefersBorder: true,
+	},
+	"recommendations": {
+		Title:         "Cluster recommendations",
+		Description:   "What the recommendation engine finds, grouped by severity.",
+		PrefersBorder: true,
+	},
 }
 
 // widgetFS holds the built widget bundles. main.go owns the //go:embed — the

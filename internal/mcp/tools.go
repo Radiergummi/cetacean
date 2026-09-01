@@ -113,10 +113,12 @@ type toolDef struct {
 // from the embedded frontend under /assets/mcp-icons/<category>.svg. Tools not
 // listed here (there are none currently) are served without an icon.
 var toolIconCategory = map[string]string{
-	"get_logs":       "read",
-	"get_topology":   "read",
-	"list_resources": "read",
-	"search":         "search",
+	"get_logs":            "read",
+	"get_topology":        "read",
+	"list_resources":      "read",
+	"get_metrics":         "read",
+	"get_recommendations": "read",
+	"search":              "search",
 
 	"scale_service": "scale",
 
@@ -347,6 +349,67 @@ func (s *Server) toolCatalog() []toolDef {
 			tier:    config.OpsReadOnly,
 			handler: s.toolGetTopology,
 			widget:  "topology",
+		},
+		{
+			tool: mcplib.NewTool(
+				"get_metrics",
+				mcplib.WithToolTitle("Chart a resource metric"),
+				mcplib.WithDescription(
+					"Return a time series of CPU, memory or network use for one service or one cluster node, over the last hour, six hours, day or week. Requires Prometheus (and cAdvisor for service metrics, node-exporter for node metrics); a Cetacean without them reports that metrics are unavailable rather than returning empty series. Cetacean owns the queries — name a target and a metric, not PromQL.",
+				),
+				mcplib.WithOutputSchema[metricsResult](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("target",
+					mcplib.Required(),
+					mcplib.Description(
+						"What to measure: \"service\" or \"node\".",
+					),
+				),
+				mcplib.WithString("id",
+					mcplib.Required(),
+					mcplib.Description(
+						"The service (ID or name) or node (ID or hostname) to measure.",
+					),
+				),
+				mcplib.WithString("metric",
+					mcplib.Description(
+						"Which metric: \"cpu\" (default), \"memory\" or \"network\". Service CPU is percent of a core and service memory is bytes; node CPU and memory are percentages. Network is two series, receive and transmit, in bytes per second.",
+					),
+				),
+				mcplib.WithString("range",
+					mcplib.Description(
+						"Window to chart: \"1h\" (default), \"6h\", \"24h\" or \"7d\".",
+					),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolGetMetrics,
+			widget:  "metrics",
+		},
+		{
+			tool: mcplib.NewTool(
+				"get_recommendations",
+				mcplib.WithToolTitle("Get cluster recommendations"),
+				mcplib.WithDescription(
+					"Return what Cetacean's recommendation engine currently finds: over- and under-provisioned resources, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance and uneven node distribution. Each entry carries a severity, the resource it concerns and why it was raised. Only findings about resources the caller may read are returned.",
+				),
+				mcplib.WithOutputSchema[recommendationsResult](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("severity",
+					mcplib.Description(
+						"Return only findings of this severity: \"critical\", \"warning\" or \"info\". Omit for all of them.",
+					),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolGetRecommendations,
+			widget:  "recommendations",
 		},
 
 		// Tier 1 — Operational.

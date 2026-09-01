@@ -180,12 +180,24 @@ On connect, the server also sends top-level usage `instructions` (read-mostly mo
 writes gated by tier + ACL) so agents know how to drive it. Each tool also advertises an `icon` grouped by verb
 category (read, search, scale, edit, node, remove) that clients can render (see [Icons](#icons)).
 
-Tool results carry machine-readable `structuredContent` (the parsed JSON object) alongside the text form. The
-`search`, `get_logs`, `list_resources`, and `remove_*` tools additionally advertise an output schema that the server
-validates results against. An input-validation failure comes back as a tool result with `isError: true` (so the model can self-correct),
-not a protocol error.
+Tool results carry machine-readable `structuredContent` (the parsed JSON object) alongside the text form. Every tool
+whose result shape Cetacean owns — the tier 0 reads, the four service lifecycle mutations, and the `remove_*` tools —
+advertises an output schema that the server validates results against. An input-validation failure comes back as a
+tool result with `isError: true` (so the model can self-correct), not a protocol error.
 
-**Tier 0 — reads** (always available): `get_logs`, `search`, `list_resources`.
+**Tier 0 — reads** (always available): `get_logs`, `search`, `list_resources`, `get_topology`, `get_metrics`,
+`get_recommendations`.
+
+`get_metrics` charts CPU, memory or network use for one service or one node over the last hour, six hours, day or
+week. It takes a target and a metric rather than PromQL: Cetacean owns the queries, resolves the service or node
+against its own cache, and checks the caller's read grant before querying — a tool accepting a raw query would hand
+the caller a label selector of their own and with it a way around every grant. It needs Prometheus
+(`CETACEAN_PROMETHEUS_URL`), plus cAdvisor for service metrics and node-exporter for node metrics; without them it
+reports that metrics are unavailable rather than returning empty series.
+
+`get_recommendations` returns the same findings as `cetacean://recommendations`, optionally filtered to one severity,
+as a tool a host can render — see [Widgets](#widgets-mcp-apps). Its totals count what the caller may read, not what
+the engine holds.
 
 **Tier 1 — operational**: `scale_service`, `update_service_image`, `rollback_service`, `restart_service`,
 `remove_task`.
@@ -303,6 +315,8 @@ Cetacean advertises `io.modelcontextprotocol/ui` and serves each widget as a res
 ui://cetacean/table
 ui://cetacean/topology
 ui://cetacean/logs
+ui://cetacean/metrics
+ui://cetacean/recommendations
 ```
 
 `ui://cetacean/table` renders a `list_resources` result: a searchable, sortable table of one resource type, showing
@@ -315,6 +329,13 @@ re-runs the tool, so the second view is fetched under the same identity and the 
 `ui://cetacean/logs` renders a `get_logs` result as a live tail. It keeps calling `get_logs` from the cursor the
 previous read returned — a widget cannot hold an SSE stream open, having no route to Cetacean's HTTP API — and
 filtering by level or search term happens over the lines already fetched, without going back through the host.
+
+`ui://cetacean/metrics` renders a `get_metrics` result as a line chart with a range picker; changing the range
+re-runs the tool. Every series is named in a legend and carries its latest value as text, so the chart never leans
+on colour alone to say which line is which.
+
+`ui://cetacean/recommendations` renders a `get_recommendations` result as findings grouped by severity, most serious
+first. Picking one asks the host to send the model a follow-up about that finding, which a host may decline.
 
 Each tool names its widget in `_meta`, so a host knows which view fits the result; the same tool called from a
 client without app support simply returns JSON.
