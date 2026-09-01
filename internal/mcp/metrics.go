@@ -120,10 +120,12 @@ var metricCatalog = map[string]map[string]metricSpec{
 		},
 		metricMemory: {
 			unit: "percent",
-			queries: []metricQuery{{
-				series: "memory",
-				query:  `(1 - node_memory_MemAvailable_bytes{%[1]s} / node_memory_MemTotal_bytes{%[1]s}) * 100`,
-			}},
+			queries: []metricQuery{
+				{
+					series: "memory",
+					query:  `(1 - node_memory_MemAvailable_bytes{%[1]s} / node_memory_MemTotal_bytes{%[1]s}) * 100`,
+				},
+			},
 		},
 		metricNetwork: {
 			unit: "bytes/s",
@@ -233,7 +235,13 @@ func (s *Server) toolGetMetrics(
 	series := make([]metricSeries, 0, len(spec.queries))
 
 	for _, query := range spec.queries {
-		points, err := s.queryMetricSeries(ctx, fmt.Sprintf(query.query, selector), start, end, window.step)
+		points, err := s.queryMetricSeries(
+			ctx,
+			fmt.Sprintf(query.query, selector),
+			start,
+			end,
+			window.step,
+		)
 		if err != nil {
 			return "", err
 		}
@@ -279,7 +287,11 @@ func (s *Server) queryMetricSeries(
 
 	for _, result := range results {
 		for _, point := range result.Points {
-			seconds, fraction := int64(point.Timestamp), point.Timestamp-float64(int64(point.Timestamp))
+			seconds, fraction := int64(
+				point.Timestamp,
+			), point.Timestamp-float64(
+				int64(point.Timestamp),
+			)
 
 			points = append(points, metricPoint{
 				Time:  time.Unix(seconds, int64(fraction*1e9)).UTC().Format(time.RFC3339),

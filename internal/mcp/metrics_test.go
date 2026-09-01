@@ -120,12 +120,18 @@ func TestGetMetricsSelectsOnTheCachedServiceName(t *testing.T) {
 	}
 
 	query := querier.queries[0]
-	if !strings.Contains(query, `container_label_com_docker_swarm_service_name="monitoring_prometheus"`) {
+	if !strings.Contains(
+		query,
+		`container_label_com_docker_swarm_service_name="monitoring_prometheus"`,
+	) {
 		t.Errorf("query does not select on the cached service name: %s", query)
 	}
 
 	if strings.Contains(query, "svc1") {
-		t.Errorf("query selects on the id the caller passed rather than the resolved name: %s", query)
+		t.Errorf(
+			"query selects on the id the caller passed rather than the resolved name: %s",
+			query,
+		)
 	}
 }
 
