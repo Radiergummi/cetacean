@@ -58,6 +58,7 @@ type Server struct {
 	cimd          *CIMDFetcher
 	authCodes     *AuthCodeStore
 	refreshTokens *RefreshTokenStore
+	consent       *ConsentStore
 	clients       *ClientRegistry // nil when DCREnabled is false
 }
 
@@ -90,6 +91,8 @@ func NewServer(cfg ServerConfig) *Server {
 	}
 
 	refreshTokens := NewRefreshTokenStore()
+	consent := NewConsentStore()
+
 	if cfg.TokenStorePath != "" {
 		// A missing file is the normal first start. Anything else — corrupt
 		// JSON, bad permissions, a version from a newer build — costs every
@@ -108,11 +111,16 @@ func NewServer(cfg ServerConfig) *Server {
 			}
 		} else {
 			refreshTokens.Restore(state.RefreshTokenSnapshot)
-			slog.Info("loaded MCP OAuth state", "grants", len(state.Grants))
+			consent.Restore(state.Consent)
+			slog.Info("loaded MCP OAuth state",
+				"grants", len(state.Grants),
+				"approvals", len(state.Consent),
+			)
 		}
 
-		file := &stateFile{path: cfg.TokenStorePath, tokens: refreshTokens}
+		file := &stateFile{path: cfg.TokenStorePath, tokens: refreshTokens, consent: consent}
 		refreshTokens.SetOnChange(file.write)
+		consent.SetOnChange(file.write)
 	}
 
 	return &Server{
@@ -121,6 +129,7 @@ func NewServer(cfg ServerConfig) *Server {
 		cimd:          cimd,
 		authCodes:     NewAuthCodeStore(),
 		refreshTokens: refreshTokens,
+		consent:       consent,
 		clients:       clients,
 	}
 }

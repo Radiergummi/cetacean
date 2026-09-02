@@ -46,9 +46,11 @@ func onDisk(t *testing.T, path string) oauthState {
 	return state
 }
 
-// persisting wires a store to a file the way NewServer does.
+// persisting wires a store to a file the way NewServer does. A ConsentStore is
+// constructed alongside it, unused by the caller, so these tests exercise the
+// same stateFile wiring NewServer builds rather than a partial stand-in.
 func persisting(s *RefreshTokenStore, path string) {
-	file := &stateFile{path: path, tokens: s}
+	file := &stateFile{path: path, tokens: s, consent: NewConsentStore()}
 	s.SetOnChange(file.write)
 }
 

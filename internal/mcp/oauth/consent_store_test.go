@@ -1,8 +1,11 @@
 package oauth
 
 import (
+	"os"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func TestConsentFingerprintIgnoresRedirectURIOrder(t *testing.T) {
@@ -279,5 +282,74 @@ func TestConsentKeySeparatesFields(t *testing.T) {
 				t.Errorf("collision: two different triples share key %q", keyA)
 			}
 		})
+	}
+}
+
+func TestConsentSurvivesRestart(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	cfg := ServerConfig{
+		Issuer:      "https://cetacean.test",
+		MCPResource: testResource,
+		MCP: config.MCPConfig{
+			AccessTokenTTL:  time.Hour,
+			RefreshTokenTTL: 720 * time.Hour,
+		},
+		SigningKey:     []byte("test-signing-key-32bytes-padded!!"),
+		TokenStorePath: path,
+	}
+
+	before := NewServer(cfg)
+	before.consent.Remember(testSubject, testClientID, testResource, testFingerprint)
+
+	// A second Server over the same path stands in for the process restarting.
+	after := NewServer(cfg)
+
+	if !after.consent.Allows(testSubject, testClientID, testResource, testFingerprint) {
+		t.Fatal("an approval granted before the restart should still be allowed")
+	}
+}
+
+func TestConsentIsWrittenThrough(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	consent := NewConsentStore()
+	tokens := NewRefreshTokenStore()
+	file := &stateFile{path: path, tokens: tokens, consent: consent}
+	consent.SetOnChange(file.write)
+
+	consent.Remember(testSubject, testClientID, testResource, testFingerprint)
+
+	state, err := readState(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if state.Version != oauthStateVersion {
+		t.Errorf("version = %d, want %d", state.Version, oauthStateVersion)
+	}
+	if len(state.Consent) != 1 {
+		t.Fatalf("consent records on disk = %d, want 1", len(state.Consent))
+	}
+	if state.Consent[0].Fingerprint != testFingerprint {
+		t.Errorf("fingerprint = %q", state.Consent[0].Fingerprint)
+	}
+}
+
+func TestVersion1FileLoadsWithoutConsent(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	// A file written before consent records existed. It must load, not error:
+	// an operator upgrading should keep their refresh tokens.
+	v1 := []byte(`{"version":1,"tokens":{},"consumed":{},"grants":{}}`)
+	if err := os.WriteFile(path, v1, 0600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	state, err := readState(path)
+	if err != nil {
+		t.Fatalf("a v1 file should still load: %v", err)
+	}
+	if len(state.Consent) != 0 {
+		t.Errorf("consent records = %d, want none", len(state.Consent))
 	}
 }

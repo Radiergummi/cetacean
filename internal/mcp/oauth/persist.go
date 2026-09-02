@@ -13,7 +13,11 @@ import (
 
 // oauthStateVersion is the on-disk format version. Bump it whenever the shape
 // below changes incompatibly; readState refuses anything newer.
-const oauthStateVersion = 1
+//
+// v2 added consent records. A v1 file loads and yields none, which is exactly
+// the pre-upgrade behaviour: every client is prompted once more, then
+// remembered.
+const oauthStateVersion = 2
 
 // RefreshTokenSnapshot is the serializable state of a RefreshTokenStore.
 //
@@ -37,6 +41,11 @@ type oauthState struct {
 	Version              int       `json:"version"`
 	Timestamp            time.Time `json:"timestamp"`
 	RefreshTokenSnapshot           // tokens, consumed, grants
+
+	// Consent is a slice rather than a map: it is readable in the file, and it
+	// avoids inventing an encoding for a composite key built from three
+	// free-form strings.
+	Consent []ConsentRecord `json:"consent,omitempty"`
 }
 
 // RefreshTokenSnapEntry is one live token: the claims bound to it plus both
@@ -232,8 +241,9 @@ func readState(path string) (oauthState, error) {
 // would serialize the whole thing from its own view and drop the other's. The
 // file is the single writer, and every store points its change hook here.
 type stateFile struct {
-	path   string
-	tokens *RefreshTokenStore
+	path    string
+	tokens  *RefreshTokenStore
+	consent *ConsentStore
 }
 
 // write serializes every store's current state. A failed write is logged and
@@ -246,11 +256,12 @@ func (f *stateFile) write() {
 		Version:              oauthStateVersion,
 		Timestamp:            time.Now(),
 		RefreshTokenSnapshot: f.tokens.Snapshot(),
+		Consent:              f.consent.Snapshot(),
 	}
 
 	if err := writeState(f.path, state); err != nil {
 		slog.Warn(
-			"MCP OAuth state write failed; tokens will not survive a restart",
+			"MCP OAuth state write failed; tokens and approvals will not survive a restart",
 			"error", err,
 			"path", f.path,
 		)
