@@ -1,7 +1,11 @@
 package oauth
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -332,6 +336,82 @@ func TestConsentIsWrittenThrough(t *testing.T) {
 	}
 	if state.Consent[0].Fingerprint != testFingerprint {
 		t.Errorf("fingerprint = %q", state.Consent[0].Fingerprint)
+	}
+}
+
+// consentServer builds a Server with a memory-only state file and one
+// remembered approval for the token it returns.
+func consentServer(t *testing.T) (*Server, string) {
+	t.Helper()
+
+	s := newTestServer(t)
+	s.consent.Remember(testSubject, testClientID, s.cfg.MCPResource, testFingerprint)
+
+	token := s.refreshTokens.Issue(RefreshTokenData{
+		Subject:  testSubject,
+		ClientID: testClientID,
+		Resource: s.cfg.MCPResource,
+	}, time.Hour)
+
+	return s, token
+}
+
+func TestRevocationClearsConsent(t *testing.T) {
+	s, token := consentServer(t)
+
+	form := url.Values{"token": {token}}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/revoke", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.HandleRevoke(rec, req)
+
+	// A record outliving revocation degrades revoke into "grant one more
+	// silent re-authorization", which is worse than not revoking, because it
+	// appears to have worked.
+	if s.consent.Allows(testSubject, testClientID, s.cfg.MCPResource, testFingerprint) {
+		t.Error("revocation should have cleared the approval")
+	}
+}
+
+func TestTheftClearsConsent(t *testing.T) {
+	s, token := consentServer(t)
+
+	rotated := s.refreshTokens.Rotate(token, time.Hour)
+	if !rotated.OK {
+		t.Fatal("the first rotation should succeed")
+	}
+
+	replay := s.refreshTokens.Rotate(token, time.Hour)
+	if !replay.Theft {
+		t.Fatal("re-presenting a consumed token should be detected as theft")
+	}
+	if replay.Data.Subject != testSubject {
+		t.Fatalf("theft result should name the burned family, got subject %q", replay.Data.Subject)
+	}
+	s.consent.Forget(replay.Data.Subject, replay.Data.ClientID, replay.Data.Resource)
+
+	if s.consent.Allows(testSubject, testClientID, s.cfg.MCPResource, testFingerprint) {
+		t.Error("a burned grant family should not leave a silent re-grant behind")
+	}
+}
+
+func TestExpiryDoesNotClearConsent(t *testing.T) {
+	s := newTestServer(t)
+	s.consent.Remember(testSubject, testClientID, s.cfg.MCPResource, testFingerprint)
+
+	expired := s.refreshTokens.Issue(RefreshTokenData{
+		Subject:  testSubject,
+		ClientID: testClientID,
+		Resource: s.cfg.MCPResource,
+	}, -time.Second)
+
+	if s.refreshTokens.Rotate(expired, time.Hour).OK {
+		t.Fatal("an expired token should not rotate")
+	}
+
+	// Consent outliving the refresh token is the entire point of the feature.
+	if !s.consent.Allows(testSubject, testClientID, s.cfg.MCPResource, testFingerprint) {
+		t.Error("expiry must not clear consent")
 	}
 }
 

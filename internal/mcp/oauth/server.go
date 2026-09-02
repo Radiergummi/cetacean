@@ -408,6 +408,10 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// Now consume (rotate) the token. Theft detection runs inside Rotate.
 	result := s.refreshTokens.Rotate(refreshTokenRaw, s.cfg.MCP.RefreshTokenTTL)
 	if result.Theft {
+		// A replayed token means someone else holds a copy. Re-prompting is
+		// the point: the next authorization must reach a human.
+		s.consent.Forget(result.Data.Subject, result.Data.ClientID, result.Data.Resource)
+
 		// Per RFC 6749 §5.2: don't leak that it was theft.
 		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "refresh token is invalid")
 		return
@@ -516,7 +520,11 @@ func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 	token := r.FormValue("token") // #nosec G120 -- bounded above
 	if token != "" {
-		s.refreshTokens.RevokeGrant(token)
+		// Revoking must also drop the approval, or the next authorization
+		// request is granted silently and revocation only appeared to work.
+		if data, revoked := s.refreshTokens.RevokeGrant(token); revoked {
+			s.consent.Forget(data.Subject, data.ClientID, data.Resource)
+		}
 	}
 	// RFC 7009 §2.2: always 200 regardless of whether the token was valid.
 	w.WriteHeader(http.StatusOK)
