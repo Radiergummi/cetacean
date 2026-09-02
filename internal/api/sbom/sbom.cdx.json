@@ -7273,8 +7273,8 @@
     {
       "type": "library",
       "name": "qs",
-      "version": "6.15.3",
-      "bom-ref": "frontend@0.0.0|qs@6.15.3",
+      "version": "6.16.0",
+      "bom-ref": "frontend@0.0.0|qs@6.16.0",
       "description": "A querystring parser that supports nesting and arrays, with a depth limit",
       "licenses": [
         {
@@ -7284,7 +7284,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/qs@6.15.3",
+      "purl": "pkg:npm/qs@6.16.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/ljharb/qs.git",
@@ -7302,12 +7302,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/qs/-/qs-6.15.3.tgz",
+          "url": "https://registry.npmjs.org/qs/-/qs-6.16.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "3bd825df30a5e61e5b970d4a194cd02a1039a145d297caf0508339a344b79c25cc9624afcb90f3c7bfc325c23e4b08080aff889de499c21061d684b210703bd4"
+              "content": "87a7e1388691ac80f609b118d9faacfbbb7e517668f8c2c09d4e60448abce6e16d76250f09db00a4c947857a202953381ccd8355b22318d4d3607d8e7263f5bc"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
