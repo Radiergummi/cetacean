@@ -6,6 +6,9 @@ import (
 	"encoding/binary"
 	"hash"
 	"slices"
+	"strings"
+	"sync"
+	"time"
 )
 
 // consentFingerprintDomain separates this hash from every other use of
@@ -51,4 +54,175 @@ func consentFingerprint(meta *ClientMetadata) string {
 	}
 
 	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+}
+
+// ConsentRecord is one remembered approval: this user approved this client,
+// as it looked at the time, for this MCP endpoint.
+type ConsentRecord struct {
+	Subject     string    `json:"subject"`
+	ClientID    string    `json:"clientId"`
+	Resource    string    `json:"resource"`
+	Fingerprint string    `json:"fingerprint"`
+	GrantedAt   time.Time `json:"grantedAt"`
+}
+
+// ConsentStore remembers approvals so an already-approved client does not
+// re-prompt on every authorization request.
+//
+// Unlike the refresh token store, whose file holds only hashes and is
+// therefore a confidentiality concern, a consent record is a capability:
+// anyone able to write it can pre-approve a client and complete an
+// authorization with no human in the loop. The file is mode 0600 and the
+// caveat is the usual one — an attacker with host access has already won —
+// but the property being protected is integrity, not secrecy.
+type ConsentStore struct {
+	mu      sync.Mutex
+	records map[string]ConsentRecord
+
+	// onChange is called after every mutation that changed state, always with
+	// mu released. Nil when the store is memory-only.
+	onChange func()
+}
+
+// NewConsentStore returns a ready-to-use ConsentStore.
+func NewConsentStore() *ConsentStore {
+	return &ConsentStore{
+		records: make(map[string]ConsentRecord),
+	}
+}
+
+// SetOnChange installs the callback fired after every mutation. Call it during
+// setup, before the store serves any request: it is not guarded by the mutex,
+// because a hook swapped mid-flight would race the mutations it records.
+func (s *ConsentStore) SetOnChange(fn func()) {
+	s.onChange = fn
+}
+
+// writeThrough notifies the owner of the durable state that it changed. It
+// must be called with mu released, since the owner takes a snapshot, which
+// acquires it.
+func (s *ConsentStore) writeThrough() {
+	if s.onChange == nil {
+		return
+	}
+
+	s.onChange()
+}
+
+// consentKeyDomain separates this hash from every other use of SHA-256 in the
+// package, so a value from one can never be mistaken for the other.
+const consentKeyDomain = "cetacean-consent-key-v1"
+
+// consentKey identifies the approval, without the fingerprint: the fingerprint
+// lives in the value, so a client whose metadata changed replaces its stale
+// record rather than accumulating a second one alongside it.
+//
+// A subject can originate from an OIDC token claim, and JSON can encode any
+// byte including NUL, so a plain separator-joined string cannot rule out one
+// triple's bytes spelling another's — e.g. ("a\x00b", "c", "d") and
+// ("a", "b\x00c", "d") would join identically. Each field is instead
+// length-prefixed via hashField before being folded into a SHA-256, so the
+// composition is unambiguous regardless of what bytes a field contains.
+func consentKey(subject, clientID, resource string) string {
+	h := sha256.New()
+	hashField(h, consentKeyDomain)
+	hashField(h, subject)
+	hashField(h, clientID)
+	hashField(h, resource)
+
+	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+}
+
+// Allows reports whether this exact approval was remembered — same user, same
+// client, same MCP endpoint, and the same client metadata they were shown.
+func (s *ConsentStore) Allows(subject, clientID, resource, fingerprint string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	record, exists := s.records[consentKey(subject, clientID, resource)]
+
+	return exists && record.Fingerprint == fingerprint
+}
+
+// Remember records an approval, replacing any earlier one for the same user,
+// client and resource.
+func (s *ConsentStore) Remember(subject, clientID, resource, fingerprint string) {
+	key := consentKey(subject, clientID, resource)
+
+	s.mu.Lock()
+	existing, exists := s.records[key]
+	unchanged := exists && existing.Fingerprint == fingerprint
+	if !unchanged {
+		s.records[key] = ConsentRecord{
+			Subject:     subject,
+			ClientID:    clientID,
+			Resource:    resource,
+			Fingerprint: fingerprint,
+			GrantedAt:   time.Now(),
+		}
+	}
+	s.mu.Unlock()
+
+	// Re-approving an unchanged client changes nothing durable, and rewriting
+	// the whole file for it would be work for no reason.
+	if unchanged {
+		return
+	}
+
+	s.writeThrough()
+}
+
+// Forget drops an approval. Called when a grant is revoked or burned for
+// theft, so revocation cannot degrade into "grant one more silent
+// re-authorization".
+func (s *ConsentStore) Forget(subject, clientID, resource string) {
+	key := consentKey(subject, clientID, resource)
+
+	s.mu.Lock()
+	_, existed := s.records[key]
+	delete(s.records, key)
+	s.mu.Unlock()
+
+	if !existed {
+		return
+	}
+
+	s.writeThrough()
+}
+
+// Snapshot returns the records in a stable order. Map iteration is random, and
+// an unsorted snapshot would rewrite the file with reordered records on every
+// unrelated change.
+func (s *ConsentStore) Snapshot() []ConsentRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	records := make([]ConsentRecord, 0, len(s.records))
+	for _, record := range s.records {
+		records = append(records, record)
+	}
+
+	slices.SortFunc(records, func(a, b ConsentRecord) int {
+		if c := strings.Compare(a.Subject, b.Subject); c != 0 {
+			return c
+		}
+		if c := strings.Compare(a.ClientID, b.ClientID); c != 0 {
+			return c
+		}
+
+		return strings.Compare(a.Resource, b.Resource)
+	})
+
+	return records
+}
+
+// Restore replaces the store's state from a snapshot.
+func (s *ConsentStore) Restore(records []ConsentRecord) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.records = make(map[string]ConsentRecord, len(records))
+	for _, record := range records {
+		s.records[consentKey(record.Subject, record.ClientID, record.Resource)] = record
+	}
 }
