@@ -44,14 +44,22 @@ operator to sign in and consent. No client secret or manual registration is requ
 
 ## Protocol version and compatibility
 
-The server speaks MCP **streamable HTTP** and negotiates the protocol revision per client, supporting `2025-11-25`
-(latest) down to `2024-11-05`. Clients that negotiate `2025-06-18` or newer receive richer responses (structured
-tool output, output schemas); older clients transparently fall back to the text representation. The deprecated
-HTTP+SSE transport and stdio transport are not supported.
+The server speaks MCP **streamable HTTP** at revision **`2026-07-28`**, and only that revision. Older revisions are
+refused with an `unsupported protocol version` JSON-RPC error naming the version to use, so an out-of-date client
+fails immediately and legibly instead of connecting and then quietly receiving nothing. The deprecated HTTP+SSE and
+stdio transports are not supported.
 
-Sessions are stateful: the server issues an `Mcp-Session-Id` on `initialize` and uses it to route server-initiated
-notifications (resource updates, list changes). Sessions are reconnect-friendly — a client that loses its session
-re-initializes and re-subscribes; bearer tokens are valid on any replica that shares the signing key.
+There are no sessions. `2026-07-28` removed the `initialize` handshake and `Mcp-Session-Id` along with it: every
+request carries its own protocol version, client identity, and capabilities in `_meta`, and is served on its own.
+This is why there is nothing to reconnect to and no session state to size — a client simply issues its next request.
+Bearer tokens are valid on any replica that shares the signing key, so a request may be served by any of them.
+
+A client receives server-initiated notifications by opening a `subscriptions/listen` stream, which replaces both
+`resources/subscribe` and the old standalone `GET` stream. Notification types are opt-in: the stream delivers only
+what the client's filter asked for.
+
+Cetacean is pre-1.0 and the MCP server shipped days before this revision, so nothing was gained by carrying the
+older eras forward. If you are on an older client, upgrade it.
 
 ## Authentication and authorization
 
@@ -63,7 +71,7 @@ access the operations level allows. Only appropriate for trusted networks.
 ### OAuth 2.1 (auth modes `oidc`, `tailscale`, `headers`)
 
 When MCP is enabled and the auth mode supports a browser flow, Cetacean acts as an OAuth 2.1 authorization server
-**and** identifies itself as a protected resource for `/mcp`. It implements the MCP `2025-11-25` authorization
+**and** identifies itself as a protected resource for `/mcp`. It implements the MCP `2026-07-28` authorization
 profile:
 
 | Endpoint | Purpose |
@@ -81,12 +89,18 @@ The flow:
 1. The client hits `/mcp` without a valid token and receives `401` with a `WWW-Authenticate` header pointing at the
    Protected Resource Metadata document.
 2. The client discovers the authorization server, then identifies itself by one of:
-   - **Dynamic Client Registration** — POST to `/oauth/register`. Every DCR client is public and PKCE-only;
-     symmetric (`client_secret`) auth methods are rejected. Self-reported client names render with a "self-reported
-     identity" badge on the consent screen.
-   - **Client ID Metadata Documents (CIMD)** — the `client_id` is an `https://` URL pointing at a published metadata
-     document. Cetacean fetches and verifies it (with SSRF protections), and renders a "verified via published
-     metadata" badge. CIMD is the registration mechanism recommended by the `2025-11-25` spec.
+   - **Client ID Metadata Documents (CIMD)** — *recommended.* The `client_id` is an `https://` URL pointing at a
+     published metadata document. Cetacean fetches and verifies it (with SSRF protections), and the consent screen
+     shows a "verified via published metadata" badge, because the client's identity was checked against something it
+     does not control at consent time. `2026-07-28` prefers CIMD and deprecates DCR. Advertised as
+     `client_id_metadata_document_supported` in the AS metadata, and switchable with `CETACEAN_MCP_CIMD_ENABLED` —
+     turning it off stops Cetacean making any outbound fetch on a client's behalf, at the cost of refusing every
+     `https://` client_id.
+   - **Dynamic Client Registration (RFC 7591)** — supported for backwards compatibility; **deprecated in MCP
+     `2026-07-28`**. POST to `/oauth/register`. Every DCR client is public and PKCE-only; symmetric
+     (`client_secret`) auth methods are rejected. A DCR client names itself, so the consent screen shows a
+     "self-reported identity" badge. Registration is in memory, so registrations are lost on restart. Still enabled
+     by default (`CETACEAN_MCP_DCR_ENABLED`); prefer CIMD for anything new.
 3. The operator is authenticated by the configured auth provider, sees a consent screen, and approves.
 4. The client exchanges the authorization code (PKCE-S256, single-use, 60s) for an access token and refresh token.
 5. Subsequent MCP requests carry `Authorization: Bearer <token>`.
@@ -166,12 +180,24 @@ On connect, the server also sends top-level usage `instructions` (read-mostly mo
 writes gated by tier + ACL) so agents know how to drive it. Each tool also advertises an `icon` grouped by verb
 category (read, search, scale, edit, node, remove) that clients can render (see [Icons](#icons)).
 
-Tool results carry machine-readable `structuredContent` (the parsed JSON object) alongside the text form. The
-`search`, `get_logs`, and `remove_*` tools additionally advertise an output schema that the server validates results
-against. An input-validation failure comes back as a tool result with `isError: true` (so the model can self-correct),
-not a protocol error.
+Tool results carry machine-readable `structuredContent` (the parsed JSON object) alongside the text form. Every tool
+whose result shape Cetacean owns — the tier 0 reads, the four service lifecycle mutations, and the `remove_*` tools —
+advertises an output schema that the server validates results against. An input-validation failure comes back as a
+tool result with `isError: true` (so the model can self-correct), not a protocol error.
 
-**Tier 0 — reads** (always available): `get_logs`, `search`.
+**Tier 0 — reads** (always available): `get_logs`, `search`, `list_resources`, `get_topology`, `get_metrics`,
+`get_recommendations`.
+
+`get_metrics` charts CPU, memory or network use for one service or one node over the last hour, six hours, day or
+week. It takes a target and a metric rather than PromQL: Cetacean owns the queries, resolves the service or node
+against its own cache, and checks the caller's read grant before querying — a tool accepting a raw query would hand
+the caller a label selector of their own and with it a way around every grant. It needs Prometheus
+(`CETACEAN_PROMETHEUS_URL`), plus cAdvisor for service metrics and node-exporter for node metrics; without them it
+reports that metrics are unavailable rather than returning empty series.
+
+`get_recommendations` returns the same findings as `cetacean://recommendations`, optionally filtered to one severity,
+as a tool a host can render — see [Widgets](#widgets-mcp-apps). Its totals count what the caller may read, not what
+the engine holds.
 
 **Tier 1 — operational**: `scale_service`, `update_service_image`, `rollback_service`, `restart_service`,
 `remove_task`.
@@ -197,8 +223,7 @@ Docker version conflict.
 | `CETACEAN_MCP_SIGNING_KEY` | auto-generated | HMAC-SHA256 JWT signing key |
 | `CETACEAN_MCP_ACCESS_TOKEN_TTL` | `1h` | Access token lifetime |
 | `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | Refresh token lifetime (30 days) |
-| `CETACEAN_MCP_SESSION_IDLE_TTL` | `30m` | Idle session cleanup |
-| `CETACEAN_MCP_MAX_SESSIONS` | `256` | Concurrent session limit |
+| `CETACEAN_MCP_MAX_CONCURRENT_TASKS` | `32` | Cap on in-flight task-augmented tool calls |
 | `CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR` | `true` | Require the RFC 8707 `resource` parameter |
 | `CETACEAN_MCP_DCR_ENABLED` | `true` | Enable Dynamic Client Registration |
 | `CETACEAN_MCP_DCR_RATE_LIMIT` | `10` | DCR registrations per IP per hour |
@@ -209,6 +234,148 @@ Docker version conflict.
 All settings are also available under the `[mcp]` and `[mcp.oauth]` TOML tables. When Cetacean runs behind a reverse
 proxy, **always set `CETACEAN_MCP_ISSUER`** to the externally reachable base URL — token audiences and discovery URLs
 are derived from it, and a wrong value breaks the OAuth flow.
+
+## Tasks: mutations that finish when the cluster does
+
+Docker's write APIs return the moment Swarm *accepts* a spec change. Scaling a service to five replicas succeeds
+instantly and tells you nothing about whether five replicas are running — the image may still be pulling, a
+placement constraint may be unsatisfiable, the rollout may be halfway through. An agent that treats the call
+returning as the change being done will act on a cluster that is not there yet.
+
+The `2026-07-28` Tasks extension fixes that. Four tools accept task augmentation:
+
+| Tool | Converged when |
+|---|---|
+| `scale_service` | running replicas match the desired count, no rolling update in flight |
+| `update_service_image` | as above, after the rollout finishes |
+| `rollback_service` | as above |
+| `restart_service` | as above |
+
+Send `params.task` on the `tools/call` and the server answers immediately with a task handle instead of the tool's
+result. **Always include a `ttl`** — see [Always send `task.ttl`](#always-send-taskttl) below:
+
+```json
+{"method":"tools/call","params":{"name":"scale_service","arguments":{"id":"web","replicas":5},"task":{"ttl":600000}}}
+```
+
+Poll `tasks/get` with the returned `taskId`. The task stays `working` until Cetacean's cache shows the cluster has
+actually converged, then flips to `completed`; a mutation Docker refuses — or one the ACL denies — ends `failed`
+with the reason in `statusMessage`. `tasks/cancel` is supported; `tasks/list` was removed by this revision.
+
+These four return a summary of where the service ended up rather than its full specification — the result is
+retained for the task's lifetime, and a summary is the more useful answer after a scale or a rollback anyway:
+
+```json
+{"id":"web","name":"web","image":"nginx:1.27","mode":"replicated","replicas":5,"running":5,"state":"running","version":42}
+```
+
+`running` is the live count, `state` is the same derivation the dashboard and REST API report, and `version` is the
+Swarm version index for a caller doing its own concurrency checks. `replicas` is omitted for a global service,
+which has no desired count. The shape is advertised as an `outputSchema`, so a client can rely on it. The
+spec-editing tools (`update_service_env`, `update_service_resources`, and so on) still return the full service,
+because there the resulting spec *is* the answer.
+
+Task augmentation is **optional** on all four. A plain `tools/call` with no `params.task` behaves exactly as
+before, returning as soon as Docker accepts the change.
+
+Two limits are worth knowing. A task gives up after five minutes and fails, on the reasoning that a mutation which
+has not converged by then will not converge on its own. And `tasks/cancel` marks the task cancelled for the client
+but does not stop the convergence watcher, which runs to convergence or timeout regardless — it only polls an
+in-memory cache, so the cost is negligible. `CETACEAN_MCP_MAX_CONCURRENT_TASKS` (default 32) caps how many run at
+once.
+
+### Always send `task.ttl`
+
+**A task with no `ttl` is retained for the lifetime of the server process.** Set one on every task-augmented call:
+
+```json
+"task": {"ttl": 600000}
+```
+
+`ttl` is milliseconds from creation, after which the server may discard the task. Ten minutes comfortably covers
+the five-minute convergence bound while leaving time to read the result. Omitting it, or sending `null`, means *no
+expiration* — that is what the protocol specifies, not a Cetacean choice.
+
+This matters because retention is not bounded by anything else. `CETACEAN_MCP_MAX_CONCURRENT_TASKS` caps how many
+tasks run *concurrently*, not how many completed ones are kept: the counter is released when a task finishes, but
+its record is not. Each retained record holds the tool's result, so an agent that mutates services on a schedule
+will grow the server's memory use steadily, for as long as it runs. The four task-capable tools return a compact
+summary rather than the full service specification, which bounds the per-task cost — but not the count.
+
+Pick a `ttl` long enough that you will have polled `tasks/get` for the result before it elapses; once the task is
+discarded, the result is gone. If your MCP client library does not expose `ttl`, treat long-lived agent sessions
+against this server as a memory risk and restart Cetacean periodically until it does.
+
+## Widgets (MCP Apps)
+
+A host that supports the MCP Apps extension can render Cetacean's data as an interactive view instead of JSON.
+Cetacean advertises `io.modelcontextprotocol/ui` and serves each widget as a resource:
+
+```
+ui://cetacean/table
+ui://cetacean/topology
+ui://cetacean/logs
+ui://cetacean/metrics
+ui://cetacean/recommendations
+```
+
+`ui://cetacean/table` renders a `list_resources` result: a searchable, sortable table of one resource type, showing
+how many records it holds when the page is a subset.
+
+`ui://cetacean/topology` renders a `get_topology` result as a graph to pan, zoom and drag — services joined to the
+overlay networks they attach to, or cluster nodes joined to the services they run. Switching between the two views
+re-runs the tool, so the second view is fetched under the same identity and the same grants as the first.
+
+`ui://cetacean/logs` renders a `get_logs` result as a live tail. It keeps calling `get_logs` from the cursor the
+previous read returned — a widget cannot hold an SSE stream open, having no route to Cetacean's HTTP API — and
+filtering by level or search term happens over the lines already fetched, without going back through the host.
+
+`ui://cetacean/metrics` renders a `get_metrics` result as a line chart with a range picker; changing the range
+re-runs the tool. Every series is named in a legend and carries its latest value as text, so the chart never leans
+on colour alone to say which line is which.
+
+`ui://cetacean/recommendations` renders a `get_recommendations` result as findings grouped by severity, most serious
+first. Picking one asks the host to send the model a follow-up about that finding, which a host may decline.
+
+Each tool names its widget in `_meta`, so a host knows which view fits the result; the same tool called from a
+client without app support simply returns JSON.
+
+Each is a single self-contained HTML document with MIME type `text/html;profile=mcp-app` — all CSS and JavaScript
+inlined, because an app resource has no base URL and cannot fetch anything relative to itself.
+
+Widgets read data by calling Cetacean's own MCP tools through the host, never by reaching Cetacean's HTTP API
+directly. That keeps every read on the one audited path, so a widget sees exactly what the calling identity's ACL
+grants allow, and it works even when the browser has no network route to the Cetacean host.
+
+Each widget declares an empty `_meta.ui.csp`, which states that it needs no external origin at all — no network, no
+third-party assets, no nested frames. This is deliberate rather than an omission: an absent policy and an empty one
+mean different things to a host, and a widget that ever needs an origin should be a visible change.
+
+Widgets are optional in both directions. A host without app support ignores the extension and receives ordinary
+results, and a Cetacean binary built without `npm run build:widgets` serves no widget resources and does not
+advertise the extension — rather than pointing a host at a view it cannot load.
+
+## Distributed tracing
+
+Point `CETACEAN_OTEL_ENDPOINT` (or `[tracing].endpoint`) at an OpenTelemetry collector that accepts OTLP over HTTP:
+
+```bash
+CETACEAN_OTEL_ENDPOINT=http://collector:4318
+```
+
+Cetacean then records a span for every MCP method it dispatches (`mcp.tools/call`, `mcp.resources/read`, …) and a
+nested span for every tool handler (`tool.scale_service`), tagged with the method, the tool name, the negotiated
+protocol version, and an error status when the call fails.
+
+The point of it is joining traces rather than collecting isolated ones. A caller that is already tracing can put W3C
+trace context in the request — either in the `_meta` property bag as `traceparent` / `tracestate` / `baggage`, the
+transport-agnostic convention MCP `2026-07-28` specifies, or in the usual HTTP headers — and Cetacean's spans become
+children of the caller's span. So an agent's "scale the web service" turn and the Docker call it produced appear in
+one trace.
+
+Tracing is off unless the endpoint is set, and nothing is allocated for it in that case. A malformed endpoint stops
+startup with an error: the OTLP exporter would otherwise accept it, fall back to `localhost:4318`, and export
+nowhere while looking configured.
 
 ## Security notes
 
@@ -231,3 +398,6 @@ are derived from it, and a wrong value breaks the OAuth flow.
   window.
 - **No cross-replica event replay.** A client that reconnects to a different replica catches up by re-reading
   resources rather than replaying missed notifications.
+- **Tasks without a `ttl` are never released.** A completed task is discarded only when the client asked for an
+  expiry, so a client that omits `task.ttl` grows the server's memory use with every mutation it makes. Nothing
+  server-side caps it. See [Always send `task.ttl`](#always-send-taskttl).

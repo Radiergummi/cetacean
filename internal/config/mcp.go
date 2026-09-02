@@ -36,14 +36,14 @@ type MCPConfig struct {
 	// RefreshTokenTTL is how long MCP refresh tokens remain valid.
 	RefreshTokenTTL time.Duration
 
-	// SessionIdleTTL is the maximum idle time before a session is evicted.
-	SessionIdleTTL time.Duration
-
-	// MaxSessions is the maximum number of concurrent MCP sessions.
-	MaxSessions int
-
 	// RequireResourceIndicator requires RFC 8707 resource indicators in token requests.
 	RequireResourceIndicator bool
+
+	// MaxConcurrentTasks caps how many task-augmented tool calls may run at
+	// once. Each holds a goroutine polling the cache until the cluster
+	// converges, so the cap bounds what a client can pin down by firing off
+	// mutations it never collects.
+	MaxConcurrentTasks int
 
 	// DCREnabled enables Dynamic Client Registration (RFC 7591).
 	DCREnabled bool
@@ -54,7 +54,9 @@ type MCPConfig struct {
 	// DCRMaxClients is the maximum number of dynamically registered clients.
 	DCRMaxClients int
 
-	// CIMDEnabled enables Client-Initiated Metadata Discovery.
+	// CIMDEnabled enables Client ID Metadata Documents: an https:// client_id
+	// that Cetacean fetches and verifies. Disabling it stops the server making
+	// outbound requests on a client's behalf.
 	CIMDEnabled bool
 
 	// AuthBypass lists upstream Cetacean auth modes (e.g. "cert") whose
@@ -75,9 +77,8 @@ func DefaultMCPConfig() MCPConfig {
 		SigningKey:               "",
 		AccessTokenTTL:           time.Hour,
 		RefreshTokenTTL:          720 * time.Hour,
-		SessionIdleTTL:           30 * time.Minute,
-		MaxSessions:              256,
 		RequireResourceIndicator: true,
+		MaxConcurrentTasks:       32,
 		DCREnabled:               true,
 		DCRRateLimit:             10,
 		DCRMaxClients:            1000,
@@ -109,10 +110,9 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fSigningKey    *string
 		fAccessTTL     *string
 		fRefreshTTL    *string
-		fIdleTTL       *string
-		fMaxSessions   *int
 		fOpsLevel      *int
 		fRequireRI     *bool
+		fMaxTasks      *int
 		fDCREnabled    *bool
 		fDCRRateLimit  *int
 		fDCRMaxClients *int
@@ -125,9 +125,8 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fSigningKey = fm.SigningKey
 		fAccessTTL = fm.AccessTokenTTL
 		fRefreshTTL = fm.RefreshTokenTTL
-		fIdleTTL = fm.SessionIdleTTL
-		fMaxSessions = fm.MaxSessions
 		fOpsLevel = fm.OperationsLevel
+		fMaxTasks = fm.MaxConcurrentTasks
 		if fm.OAuth != nil {
 			fRequireRI = fm.OAuth.RequireResourceIndicator
 			fDCREnabled = fm.OAuth.DCREnabled
@@ -158,21 +157,11 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		return MCPConfig{}, err
 	}
 
-	idleTTL, err := resolveDuration(
+	maxConcurrentTasks, err := resolveInt(
 		nil,
-		"CETACEAN_MCP_SESSION_IDLE_TTL",
-		fIdleTTL,
-		def.SessionIdleTTL,
-	)
-	if err != nil {
-		return MCPConfig{}, err
-	}
-
-	maxSessions, err := resolveInt(
-		nil,
-		"CETACEAN_MCP_MAX_SESSIONS",
-		fMaxSessions,
-		def.MaxSessions,
+		"CETACEAN_MCP_MAX_CONCURRENT_TASKS",
+		fMaxTasks,
+		def.MaxConcurrentTasks,
 		1,
 		1<<20,
 	)
@@ -226,10 +215,9 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 			fSigningKey,
 			def.SigningKey,
 		),
-		AccessTokenTTL:  accessTTL,
-		RefreshTokenTTL: refreshTTL,
-		SessionIdleTTL:  idleTTL,
-		MaxSessions:     maxSessions,
+		AccessTokenTTL:     accessTTL,
+		RefreshTokenTTL:    refreshTTL,
+		MaxConcurrentTasks: maxConcurrentTasks,
 		RequireResourceIndicator: resolveBool(
 			nil,
 			"CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR",

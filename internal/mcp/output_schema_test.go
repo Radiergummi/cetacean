@@ -9,6 +9,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/prom"
 )
 
 // TestCuratedToolsAdvertiseOutputSchema asserts that the tools whose result
@@ -19,11 +20,8 @@ func TestCuratedToolsAdvertiseOutputSchema(t *testing.T) {
 	c := cache.New(nil)
 	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful)
 	handler := srv.Handler()
-	sessionID := initSession(t, handler, "")
 
-	_, env := mcpJSONRPC(t, handler, sessionID, `{
-		"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}
-	}`)
+	_, env := mcpModern(t, handler, 2, "tools/list", `{}`)
 	if env.Error != nil {
 		t.Fatalf("tools/list error: %+v", env.Error)
 	}
@@ -44,9 +42,14 @@ func TestCuratedToolsAdvertiseOutputSchema(t *testing.T) {
 	}
 
 	curated := map[string]bool{
-		"search": true, "get_logs": true,
+		"search": true, "get_logs": true, "list_resources": true, "get_topology": true,
+		"get_metrics": true, "get_recommendations": true,
 		"remove_task": true, "remove_service": true, "remove_config": true,
 		"remove_secret": true, "remove_network": true, "remove_volume": true,
+		// The four lifecycle mutations return serviceMutationResult, a shape
+		// Cetacean owns, rather than a raw swarm.Service.
+		"scale_service": true, "update_service_image": true,
+		"rollback_service": true, "restart_service": true,
 	}
 
 	hasSchema := func(s json.RawMessage) bool {
@@ -94,12 +97,29 @@ func TestCuratedToolOutputsValidate(t *testing.T) {
 	})
 	c.SetTask(swarm.Task{ID: "task1", ServiceID: "svc1"})
 
+	mutated := func(_ context.Context, id string) (swarm.Service, error) {
+		return swarm.Service{ID: id}, nil
+	}
 	wc := &fakeWriteClient{
 		removeTaskFn: func(_ context.Context, _ string) error { return nil },
+		scaleServiceFn: func(_ context.Context, id string, _ uint64) (swarm.Service, error) {
+			return swarm.Service{ID: id}, nil
+		},
+		updateServiceImageFn: func(_ context.Context, id, _ string) (swarm.Service, error) {
+			return swarm.Service{ID: id}, nil
+		},
+		rollbackServiceFn: mutated,
+		restartServiceFn:  mutated,
 	}
-	srv := newToolTestServer(t, c, wc, config.OpsImpactful)
+	// get_metrics needs something to query; the numbers do not matter here,
+	// only that the handler's real output satisfies its advertised schema.
+	srv := newToolTestServer(t, c, wc, config.OpsImpactful, func(o *Options) {
+		o.Prometheus = &fakeQuerier{
+			series: []prom.Series{{Points: []prom.Point{{Timestamp: 1788254400, Value: 1}}}},
+		}
+		o.Recommendations = &fakeRecommendationEngine{results: recommendationFixtures()}
+	})
 	handler := srv.Handler()
-	sessionID := initSession(t, handler, "")
 
 	calls := []struct {
 		name string
@@ -107,15 +127,21 @@ func TestCuratedToolOutputsValidate(t *testing.T) {
 	}{
 		{"search", `{"query":"web"}`},
 		{"get_logs", `{"service":"svc1"}`},
+		{"list_resources", `{"type":"services"}`},
+		{"get_topology", `{"view":"placement"}`},
+		{"get_metrics", `{"target":"service","id":"svc1"}`},
+		{"get_recommendations", `{}`},
 		{"remove_task", `{"id":"task1"}`},
+		{"scale_service", `{"id":"svc1","replicas":2}`},
+		{"update_service_image", `{"id":"svc1","image":"nginx:1"}`},
+		{"rollback_service", `{"id":"svc1"}`},
+		{"restart_service", `{"id":"svc1"}`},
 	}
 
 	for _, call := range calls {
 		t.Run(call.name, func(t *testing.T) {
-			_, env := mcpJSONRPC(t, handler, sessionID, `{
-				"jsonrpc":"2.0","id":3,"method":"tools/call",
-				"params":{"name":"`+call.name+`","arguments":`+call.args+`}
-			}`)
+			_, env := mcpModern(t, handler, 3, "tools/call",
+				`{"name":"`+call.name+`","arguments":`+call.args+`}`)
 			if env.Error != nil {
 				t.Fatalf("tools/call %s transport error: %+v", call.name, env.Error)
 			}

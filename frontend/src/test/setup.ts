@@ -13,6 +13,19 @@ import { afterEach, vi } from "vitest";
   };
 });
 
+// React Flow measures its viewport and every node with a ResizeObserver, which
+// jsdom does not implement. Without it the graph widget's tests throw before
+// rendering a single vertex.
+(globalThis as unknown as Record<string, unknown>).ResizeObserver = vi.fn<
+  () => { observe: () => void; unobserve: () => void; disconnect: () => void }
+>(function () {
+  return {
+    observe: vi.fn<() => void>(),
+    unobserve: vi.fn<() => void>(),
+    disconnect: vi.fn<() => void>(),
+  };
+});
+
 // Chart.js requires matchMedia which jsdom does not provide
 Object.defineProperty(window, "matchMedia", {
   writable: true,

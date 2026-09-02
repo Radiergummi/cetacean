@@ -64,3 +64,29 @@ func TestOriginGuard(t *testing.T) {
 		}
 	})
 }
+
+// TestStandardRequestHeadersPassOriginGuard ensures our DNS-rebinding guard
+// does not interfere with the headers 2026-07-28 requires on every POST. It
+// sends an allowed Origin so the guard actually runs — without one the guard
+// short-circuits and the test would prove nothing.
+func TestStandardRequestHeadersPassOriginGuard(t *testing.T) {
+	srv := newToolTestServer(
+		t,
+		cache.New(nil),
+		&fakeWriteClient{},
+		config.OpsReadOnly,
+		func(o *Options) { o.AllowedOrigins = []string{"https://host.example"} },
+	)
+
+	req := modernRequest(t, 1, "tools/list", `{}`)
+	req.Header.Set("Origin", "https://host.example")
+
+	resp, env := sendMCP(t, srv.Handler(), req)
+	if resp.StatusCode == http.StatusForbidden {
+		t.Fatalf("origin guard rejected a well-formed 2026-07-28 request from an allowed origin")
+	}
+
+	if env.Error != nil {
+		t.Fatalf("tools/list error: %+v", env.Error)
+	}
+}

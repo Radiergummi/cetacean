@@ -11,25 +11,34 @@ case "$staged" in
   *) exit 0 ;;
 esac
 
+# cyclonedx-gomod resolves the main module through go-git, which does not follow
+# a linked worktree's .git *file* and fails with "failed to determine version of
+# main module: reference not found". Nothing in the worktree can fix that, so
+# skip (don't block) — same as every other can't-run-here case below.
+if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then
+  echo "pre-commit: linked worktree; cyclonedx-gomod cannot resolve the main module here. Skipping SBOM regeneration (CI regenerates and commits it)." >&2
+  exit 0
+fi
+
 # The generators are declared deps (go tool cyclonedx-gomod; npx cyclonedx-npm),
 # so we only need go, node/npx, jq, and installed frontend deps. Skip (don't
-# block) when anything is missing — CI is the real gate.
+# block) when anything is missing — CI regenerates and commits it on PRs.
 for tool in go npx jq; do
   if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "pre-commit: '$tool' missing; skipping SBOM regeneration (CI will verify)." >&2
+    echo "pre-commit: '$tool' missing; skipping SBOM regeneration (CI regenerates and commits it)." >&2
     exit 0
   fi
 done
 
 if [ ! -d frontend/node_modules ]; then
-  echo "pre-commit: frontend/node_modules missing; run 'cd frontend && npm ci'. Skipping SBOM regeneration (CI will verify)." >&2
+  echo "pre-commit: frontend/node_modules missing; run 'cd frontend && npm ci'. Skipping SBOM regeneration (CI regenerates and commits it)." >&2
   exit 0
 fi
 
 # cyclonedx-gomod compiles the package, so main.go's //go:embed frontend/dist/*
-# needs a built frontend. Skip (don't block) when it's absent — CI is the gate.
+# needs a built frontend. Skip (don't block) when it's absent — CI handles it.
 if [ -z "$(ls -A frontend/dist 2>/dev/null)" ]; then
-  echo "pre-commit: frontend/dist missing; run 'cd frontend && npm run build'. Skipping SBOM regeneration (CI will verify)." >&2
+  echo "pre-commit: frontend/dist missing; run 'cd frontend && npm run build'. Skipping SBOM regeneration (CI regenerates and commits it)." >&2
   exit 0
 fi
 

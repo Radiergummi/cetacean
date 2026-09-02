@@ -102,14 +102,23 @@ type toolDef struct {
 	tool    mcplib.Tool
 	tier    config.OperationsLevel
 	handler func(ctx context.Context, req mcplib.CallToolRequest) (string, error)
+
+	// widget names the MCP Apps view that renders this tool's result, if any.
+	// Declared here rather than built into the tool above so registerTools can
+	// withhold it when the widget was not built — see registerTools.
+	widget string
 }
 
 // toolIconCategory maps each tool to one of six verb-category icons served
 // from the embedded frontend under /assets/mcp-icons/<category>.svg. Tools not
 // listed here (there are none currently) are served without an icon.
 var toolIconCategory = map[string]string{
-	"get_logs": "read",
-	"search":   "search",
+	"get_logs":            "read",
+	"get_topology":        "read",
+	"list_resources":      "read",
+	"get_metrics":         "read",
+	"get_recommendations": "read",
+	"search":              "search",
 
 	"scale_service": "scale",
 
@@ -175,6 +184,14 @@ func (s *Server) registerTools() {
 		}
 
 		td.tool.Icons = s.iconsForTool(td.tool.Name)
+
+		// Point the host at this tool's widget, but only if the widget build
+		// actually produced it. A binary built without `npm run build:widgets`
+		// serves no ui:// resources, and a tool naming one anyway would send a
+		// host off to fetch a resource that does not exist.
+		if td.widget != "" && hasWidget(td.widget) {
+			td.tool.Meta = toolUIMeta(td.widget)
+		}
 		s.registeredTools = append(s.registeredTools, td)
 
 		handler := td.handler
@@ -183,6 +200,19 @@ func (s *Server) registerTools() {
 			func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
 				text, err := handler(ctx, req)
 				if err != nil {
+					// On a plain call the failure belongs in the result, so
+					// the model reads it in its context window and can
+					// self-correct (SEP-1303).
+					//
+					// As a task it must be a real error instead: mcp-go marks
+					// a task completed whenever the handler returns no error,
+					// so a tool error returned this way would leave an agent
+					// polling tasks/get and reading "completed" for a mutation
+					// that was refused.
+					if req.Params.Task != nil {
+						return nil, err
+					}
+
 					return mcplib.NewToolResultError(err.Error()), nil
 				}
 				return structuredToolResult(text), nil
@@ -239,6 +269,7 @@ func (s *Server) toolCatalog() []toolDef {
 			),
 			tier:    config.OpsReadOnly,
 			handler: s.toolGetLogs,
+			widget:  "logs",
 		},
 		{
 			tool: mcplib.NewTool(
@@ -266,6 +297,120 @@ func (s *Server) toolCatalog() []toolDef {
 			tier:    config.OpsReadOnly,
 			handler: s.toolSearch,
 		},
+		{
+			tool: mcplib.NewTool(
+				"list_resources",
+				mcplib.WithToolTitle("List cluster resources"),
+				mcplib.WithDescription(
+					"Enumerate every resource of one type (nodes, services, tasks, stacks, configs, secrets, networks, volumes), paged. Returns the same records the cetacean:// resources expose, filtered to what the caller may see. Use search to find a specific resource; use this to browse or tabulate a whole type.",
+				),
+				mcplib.WithOutputSchema[listResourcesResult](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString(
+					"type",
+					mcplib.Required(),
+					mcplib.Description(
+						"Resource type to list: nodes, services, tasks, stacks, configs, secrets, networks, or volumes.",
+					),
+				),
+				mcplib.WithNumber("limit",
+					mcplib.Description("Maximum records to return. Default and maximum 200."),
+				),
+				mcplib.WithNumber("offset",
+					mcplib.Description("Records to skip, for paging. Default 0."),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolListResources,
+			widget:  "table",
+		},
+		{
+			tool: mcplib.NewTool(
+				"get_topology",
+				mcplib.WithToolTitle("Get cluster topology"),
+				mcplib.WithDescription(
+					"Return the cluster as a graph. The network view joins services to the overlay networks they attach to, answering which services can reach each other; the placement view joins cluster nodes to the services they run, answering what runs where. Use this instead of listing services and nodes separately when the question is about relationships.",
+				),
+				mcplib.WithOutputSchema[cluster.TopologyGraph](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString(
+					"view",
+					mcplib.Description(
+						"Which projection to return: \"network\" (services joined to overlay networks, the default) or \"placement\" (cluster nodes joined to the services they run).",
+					),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolGetTopology,
+			widget:  "topology",
+		},
+		{
+			tool: mcplib.NewTool(
+				"get_metrics",
+				mcplib.WithToolTitle("Chart a resource metric"),
+				mcplib.WithDescription(
+					"Return a time series of CPU, memory or network use for one service or one cluster node, over the last hour, six hours, day or week. Requires Prometheus (and cAdvisor for service metrics, node-exporter for node metrics); a Cetacean without them reports that metrics are unavailable rather than returning empty series. Cetacean owns the queries — name a target and a metric, not PromQL.",
+				),
+				mcplib.WithOutputSchema[metricsResult](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("target",
+					mcplib.Required(),
+					mcplib.Description(
+						"What to measure: \"service\" or \"node\".",
+					),
+				),
+				mcplib.WithString("id",
+					mcplib.Required(),
+					mcplib.Description(
+						"The service (ID or name) or node (ID or hostname) to measure.",
+					),
+				),
+				mcplib.WithString("metric",
+					mcplib.Description(
+						"Which metric: \"cpu\" (default), \"memory\" or \"network\". Service CPU is percent of a core and service memory is bytes; node CPU and memory are percentages. Network is two series, receive and transmit, in bytes per second.",
+					),
+				),
+				mcplib.WithString("range",
+					mcplib.Description(
+						"Window to chart: \"1h\" (default), \"6h\", \"24h\" or \"7d\".",
+					),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolGetMetrics,
+			widget:  "metrics",
+		},
+		{
+			tool: mcplib.NewTool(
+				"get_recommendations",
+				mcplib.WithToolTitle("Get cluster recommendations"),
+				mcplib.WithDescription(
+					"Return what Cetacean's recommendation engine currently finds: over- and under-provisioned resources, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance and uneven node distribution. Each entry carries a severity, the resource it concerns and why it was raised. Only findings about resources the caller may read are returned.",
+				),
+				mcplib.WithOutputSchema[recommendationsResult](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("severity",
+					mcplib.Description(
+						"Return only findings of this severity: \"critical\", \"warning\" or \"info\". Omit for all of them.",
+					),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolGetRecommendations,
+			widget:  "recommendations",
+		},
 
 		// Tier 1 — Operational.
 		{
@@ -273,12 +418,14 @@ func (s *Server) toolCatalog() []toolDef {
 				"scale_service",
 				mcplib.WithToolTitle("Scale service replicas"),
 				mcplib.WithDescription(
-					"Set the desired replica count of a replicated service. Swarm reconciles asynchronously; calling with the current count is a no-op. Setting to 0 stops every task without removing the service. Returns the updated service spec.",
+					"Set the desired replica count of a replicated service. Swarm reconciles asynchronously; calling with the current count is a no-op. Setting to 0 stops every task without removing the service. Returns a summary of where the service ended up: id, name, image, mode, desired replicas, running count, derived state and version.",
 				),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
+				taskSupportOptional(),
+				mcplib.WithOutputSchema[serviceMutationResult](),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -296,12 +443,14 @@ func (s *Server) toolCatalog() []toolDef {
 				"update_service_image",
 				mcplib.WithToolTitle("Update service image"),
 				mcplib.WithDescription(
-					"Set the container image for a service, triggering a rolling deploy per the service's update policy. The previous spec is retained on the service history and reachable via rollback_service. Returns the updated service spec.",
+					"Set the container image for a service, triggering a rolling deploy per the service's update policy. The previous spec is retained on the service history and reachable via rollback_service. Returns a summary of where the service ended up: id, name, image, mode, desired replicas, running count, derived state and version.",
 				),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
+				taskSupportOptional(),
+				mcplib.WithOutputSchema[serviceMutationResult](),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -321,12 +470,14 @@ func (s *Server) toolCatalog() []toolDef {
 			tool: mcplib.NewTool("rollback_service",
 				mcplib.WithToolTitle("Roll back service to previous spec"),
 				mcplib.WithDescription(
-					"Revert a service to its previous spec, discarding the current one. Only the immediately previous spec is retained — calling twice does not unwind further. Returns the rolled-back service spec.",
+					"Revert a service to its previous spec, discarding the current one. Only the immediately previous spec is retained — calling twice does not unwind further. Returns a summary of where the service ended up: id, name, image, mode, desired replicas, running count, derived state and version.",
 				),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(false),
 				mcplib.WithOpenWorldHintAnnotation(false),
+				taskSupportOptional(),
+				mcplib.WithOutputSchema[serviceMutationResult](),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -339,12 +490,14 @@ func (s *Server) toolCatalog() []toolDef {
 			tool: mcplib.NewTool("restart_service",
 				mcplib.WithToolTitle("Force-restart service"),
 				mcplib.WithDescription(
-					"Force a rolling restart of every task in the service by bumping its spec ForceUpdate counter. No other spec fields change. Honours the service's update policy (parallelism, delay). Returns the updated service spec.",
+					"Force a rolling restart of every task in the service by bumping its spec ForceUpdate counter. No other spec fields change. Honours the service's update policy (parallelism, delay). Returns a summary of where the service ended up: id, name, image, mode, desired replicas, running count, derived state and version.",
 				),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(false),
 				mcplib.WithOpenWorldHintAnnotation(false),
+				taskSupportOptional(),
+				mcplib.WithOutputSchema[serviceMutationResult](),
 				mcplib.WithString("id",
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
@@ -974,7 +1127,10 @@ func (s *Server) toolScaleService(ctx context.Context, req mcplib.CallToolReques
 	if err != nil {
 		return "", err
 	}
-	return marshalResult(svc)
+	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
+		return "", err
+	}
+	return marshalResult(s.serviceMutation(svc))
 }
 
 func (s *Server) toolUpdateServiceImage(
@@ -1004,7 +1160,10 @@ func (s *Server) toolUpdateServiceImage(
 	if err != nil {
 		return "", err
 	}
-	return marshalResult(svc)
+	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
+		return "", err
+	}
+	return marshalResult(s.serviceMutation(svc))
 }
 
 func (s *Server) toolRollbackService(
@@ -1026,7 +1185,10 @@ func (s *Server) toolRollbackService(
 	if err != nil {
 		return "", err
 	}
-	return marshalResult(svc)
+	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
+		return "", err
+	}
+	return marshalResult(s.serviceMutation(svc))
 }
 
 func (s *Server) toolRestartService(
@@ -1048,7 +1210,10 @@ func (s *Server) toolRestartService(
 	if err != nil {
 		return "", err
 	}
-	return marshalResult(svc)
+	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
+		return "", err
+	}
+	return marshalResult(s.serviceMutation(svc))
 }
 
 // removeHandler builds a tool handler for the common `{ id } → {"removed":true}`
@@ -1291,6 +1456,72 @@ func marshalResult(v any) (string, error) {
 // outputSchema (WithOutputSchema[removalResult]).
 type removalResult struct {
 	Removed bool `json:"removed"`
+}
+
+// serviceMutationResult is what the four lifecycle mutations return: a summary
+// of where the service ended up, rather than its entire specification.
+//
+// Two reasons. A task-augmented call's result is retained for as long as the
+// task lives, and a client that omits task.ttl keeps it for the life of the
+// process (see docs/mcp.md, "Always send task.ttl") — a full swarm.Service runs
+// to kilobytes, so the compact shape bounds what a long-running agent
+// accumulates. And it is the more useful answer: after a scale or a rollback an
+// agent wants to know where the service got to, not to re-read a spec it just
+// supplied. The spec-editing tools still return the full service, because there
+// the resulting spec *is* the answer.
+type serviceMutationResult struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Image is empty for a service whose task template is not a container.
+	Image string `json:"image,omitempty"`
+	// Mode is "replicated" or "global"; Replicas is unset for a global service,
+	// which has no desired count to report.
+	Mode     string  `json:"mode"`
+	Replicas *uint64 `json:"replicas,omitempty"`
+	Running  int     `json:"running"`
+	// State is the same derivation the REST API and the dashboard report, via
+	// cluster.DeriveServiceState.
+	State string `json:"state"`
+	// Version is the service's Swarm version index, for a caller doing its own
+	// optimistic-concurrency checks.
+	Version uint64 `json:"version"`
+}
+
+// serviceMutation summarises a mutated service. It prefers the cached copy over
+// the one the Docker write returned: after a task waited for convergence the
+// cache is the fresher of the two, and taking spec, running count and state
+// from one source keeps them mutually consistent.
+func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
+	if cached, ok := s.cache.GetService(svc.ID); ok {
+		svc = cached
+	}
+
+	running := s.cache.RunningTaskCount(svc.ID)
+
+	out := serviceMutationResult{
+		ID:      svc.ID,
+		Name:    svc.Spec.Name,
+		Running: running,
+		State:   cluster.DeriveServiceState(svc, running),
+		Version: svc.Version.Index,
+	}
+
+	if svc.Spec.TaskTemplate.ContainerSpec != nil {
+		out.Image = svc.Spec.TaskTemplate.ContainerSpec.Image
+	}
+
+	if svc.Spec.Mode.Global != nil {
+		out.Mode = "global"
+
+		return out
+	}
+
+	out.Mode = "replicated"
+	if svc.Spec.Mode.Replicated != nil {
+		out.Replicas = svc.Spec.Mode.Replicated.Replicas
+	}
+
+	return out
 }
 
 // structuredToolResult wraps a handler's JSON text into a tool result that

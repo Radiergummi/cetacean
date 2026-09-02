@@ -17,12 +17,6 @@ func TestMCPConfigDefaults(t *testing.T) {
 	if cfg.RefreshTokenTTL != 720*time.Hour {
 		t.Errorf("refresh token TTL = %v, want 720h", cfg.RefreshTokenTTL)
 	}
-	if cfg.SessionIdleTTL != 30*time.Minute {
-		t.Errorf("session idle TTL = %v, want 30m", cfg.SessionIdleTTL)
-	}
-	if cfg.MaxSessions != 256 {
-		t.Errorf("max sessions = %d, want 256", cfg.MaxSessions)
-	}
 	if cfg.OperationsLevel != OpsInherit {
 		t.Errorf("operations level = %v, want OpsInherit", cfg.OperationsLevel)
 	}
@@ -48,8 +42,6 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	t.Setenv("CETACEAN_MCP_SIGNING_KEY", "test-secret")
 	t.Setenv("CETACEAN_MCP_ACCESS_TOKEN_TTL", "2h")
 	t.Setenv("CETACEAN_MCP_REFRESH_TOKEN_TTL", "48h")
-	t.Setenv("CETACEAN_MCP_SESSION_IDLE_TTL", "15m")
-	t.Setenv("CETACEAN_MCP_MAX_SESSIONS", "128")
 	t.Setenv("CETACEAN_MCP_OPERATIONS_LEVEL", "2")
 	t.Setenv("CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR", "false")
 	t.Setenv("CETACEAN_MCP_DCR_ENABLED", "false")
@@ -74,12 +66,6 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	}
 	if cfg.MCP.RefreshTokenTTL != 48*time.Hour {
 		t.Errorf("refresh TTL = %v, want 48h", cfg.MCP.RefreshTokenTTL)
-	}
-	if cfg.MCP.SessionIdleTTL != 15*time.Minute {
-		t.Errorf("idle TTL = %v, want 15m", cfg.MCP.SessionIdleTTL)
-	}
-	if cfg.MCP.MaxSessions != 128 {
-		t.Errorf("max sessions = %d, want 128", cfg.MCP.MaxSessions)
 	}
 	if cfg.MCP.OperationsLevel != OpsConfiguration {
 		t.Errorf("ops level = %v, want OpsConfiguration", cfg.MCP.OperationsLevel)
@@ -168,8 +154,6 @@ func TestMCPConfigFromFile(t *testing.T) {
 	t.Setenv("CETACEAN_MCP_SIGNING_KEY", "")
 	t.Setenv("CETACEAN_MCP_ACCESS_TOKEN_TTL", "")
 	t.Setenv("CETACEAN_MCP_REFRESH_TOKEN_TTL", "")
-	t.Setenv("CETACEAN_MCP_SESSION_IDLE_TTL", "")
-	t.Setenv("CETACEAN_MCP_MAX_SESSIONS", "")
 	t.Setenv("CETACEAN_MCP_OPERATIONS_LEVEL", "")
 	t.Setenv("CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR", "")
 	t.Setenv("CETACEAN_MCP_DCR_ENABLED", "")
@@ -182,8 +166,6 @@ func TestMCPConfigFromFile(t *testing.T) {
 	signingKey := "file-secret"
 	accessTTL := "2h"
 	refreshTTL := "48h"
-	idleTTL := "15m"
-	maxSessions := 64
 	opsLevel := 2
 	requireRI := false
 	dcrEnabled := false
@@ -197,8 +179,6 @@ func TestMCPConfigFromFile(t *testing.T) {
 			SigningKey:      &signingKey,
 			AccessTokenTTL:  &accessTTL,
 			RefreshTokenTTL: &refreshTTL,
-			SessionIdleTTL:  &idleTTL,
-			MaxSessions:     &maxSessions,
 			OperationsLevel: &opsLevel,
 			OAuth: &fileMCPOAuth{
 				RequireResourceIndicator: &requireRI,
@@ -226,12 +206,6 @@ func TestMCPConfigFromFile(t *testing.T) {
 	}
 	if cfg.MCP.RefreshTokenTTL != 48*time.Hour {
 		t.Errorf("RefreshTokenTTL = %v, want 48h", cfg.MCP.RefreshTokenTTL)
-	}
-	if cfg.MCP.SessionIdleTTL != 15*time.Minute {
-		t.Errorf("SessionIdleTTL = %v, want 15m", cfg.MCP.SessionIdleTTL)
-	}
-	if cfg.MCP.MaxSessions != 64 {
-		t.Errorf("MaxSessions = %d, want 64", cfg.MCP.MaxSessions)
 	}
 	if cfg.MCP.OperationsLevel != OpsConfiguration {
 		t.Errorf("OperationsLevel = %v, want OpsConfiguration", cfg.MCP.OperationsLevel)
@@ -271,15 +245,6 @@ func TestMCPConfigEnvWinsOverFile(t *testing.T) {
 
 	if cfg.MCP.AccessTokenTTL != 3*time.Hour {
 		t.Errorf("AccessTokenTTL = %v, want 3h (env should win over file)", cfg.MCP.AccessTokenTTL)
-	}
-}
-
-func TestMCPConfigMaxSessionsValidation(t *testing.T) {
-	t.Setenv("CETACEAN_MCP_MAX_SESSIONS", "0")
-
-	_, err := Load(nil, nil)
-	if err == nil {
-		t.Error("expected error for MaxSessions=0")
 	}
 }
 
@@ -336,5 +301,56 @@ func TestMCPConfigAuthBypass(t *testing.T) {
 	}
 	if cfg.MCP.AuthBypass[0] != "client1" {
 		t.Errorf("AuthBypass[0] = %q, want client1", cfg.MCP.AuthBypass[0])
+	}
+}
+
+func TestLoadMCP_MaxConcurrentTasks_Default(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_CONCURRENT_TASKS", "")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxConcurrentTasks != 32 {
+		t.Errorf("MaxConcurrentTasks = %d, want 32", cfg.MaxConcurrentTasks)
+	}
+}
+
+func TestLoadMCP_MaxConcurrentTasks_Env(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_CONCURRENT_TASKS", "8")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxConcurrentTasks != 8 {
+		t.Errorf("MaxConcurrentTasks = %d, want 8", cfg.MaxConcurrentTasks)
+	}
+}
+
+func TestLoadMCP_MaxConcurrentTasks_RejectsZero(t *testing.T) {
+	// Zero would wire mcp-go to refuse every task rather than "no limit",
+	// which is a confusing way to spell "disabled".
+	t.Setenv("CETACEAN_MCP_MAX_CONCURRENT_TASKS", "0")
+
+	if _, err := loadMCP(nil); err == nil {
+		t.Error("loadMCP accepted a zero task limit, want an error")
+	}
+}
+
+func TestLoadMCP_MaxConcurrentTasks_File(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_CONCURRENT_TASKS", "")
+
+	value := 64
+
+	cfg, err := loadMCP(&fileMCP{MaxConcurrentTasks: &value})
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxConcurrentTasks != 64 {
+		t.Errorf("MaxConcurrentTasks = %d, want 64", cfg.MaxConcurrentTasks)
 	}
 }

@@ -511,7 +511,7 @@ Cetacean optionally exposes a Model Context Protocol server for AI agents. Enabl
 
 ### Authorization
 
-When auth mode is anything other than `none`, the MCP endpoint is bearer-protected and Cetacean exposes an OAuth 2.1 authorization server alongside it. The protocol implements the MCP 2025-06-18 authorization profile (RFC 8414 AS metadata, RFC 9728 protected-resource metadata, RFC 8707 resource indicators, PKCE-only with S256).
+When auth mode is anything other than `none`, the MCP endpoint is bearer-protected and Cetacean exposes an OAuth 2.1 authorization server alongside it. The protocol implements the MCP 2026-07-28 authorization profile (RFC 8414 AS metadata, RFC 9728 protected-resource metadata, RFC 8707 resource indicators, PKCE-only with S256).
 
 | Endpoint | Purpose |
 |---|---|

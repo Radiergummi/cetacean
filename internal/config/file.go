@@ -58,18 +58,27 @@ type fileConfig struct {
 	Sizing  *fileSizing  `toml:"sizing"`
 	ACL     *fileACL     `toml:"acl"`
 	MCP     *fileMCP     `toml:"mcp"`
+	Tracing *fileTracing `toml:"tracing"`
+}
+
+// fileTracing mirrors the [tracing] section. An empty endpoint leaves
+// distributed tracing off, the same way an empty prometheus.url leaves
+// metrics off.
+type fileTracing struct {
+	Endpoint *string `toml:"endpoint"`
 }
 
 type fileMCP struct {
-	Enabled         *bool         `toml:"enabled"`
-	OperationsLevel *int          `toml:"operations_level"`
-	Issuer          *string       `toml:"issuer"`
-	SigningKey      *string       `toml:"signing_key"`
-	AccessTokenTTL  *string       `toml:"access_token_ttl"`
-	RefreshTokenTTL *string       `toml:"refresh_token_ttl"`
-	SessionIdleTTL  *string       `toml:"session_idle_ttl"`
-	MaxSessions     *int          `toml:"max_sessions"`
-	OAuth           *fileMCPOAuth `toml:"oauth"`
+	Enabled         *bool   `toml:"enabled"`
+	OperationsLevel *int    `toml:"operations_level"`
+	Issuer          *string `toml:"issuer"`
+	SigningKey      *string `toml:"signing_key"`
+	AccessTokenTTL  *string `toml:"access_token_ttl"`
+	RefreshTokenTTL *string `toml:"refresh_token_ttl"`
+
+	// MaxConcurrentTasks caps in-flight task-augmented tool calls.
+	MaxConcurrentTasks *int          `toml:"max_concurrent_tasks"`
+	OAuth              *fileMCPOAuth `toml:"oauth"`
 }
 
 type fileMCPOAuth struct {

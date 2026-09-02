@@ -27,13 +27,26 @@ import (
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/mcp"
 	"github.com/radiergummi/cetacean/internal/mcp/oauth"
+	"github.com/radiergummi/cetacean/internal/mcp/tracing"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"tailscale.com/tsnet"
 )
 
 //go:embed frontend/dist/*
 var frontendDist embed.FS
+
+// widgetDist holds the MCP Apps widget bundles, one self-contained HTML
+// document per widget. Built by `npm run build:widgets` into
+// frontend/dist-widgets/; internal/mcp serves each as a ui://cetacean/<name>
+// resource.
+//
+// Like frontend/dist above, this must exist before `go build` — `make build`,
+// the Dockerfile and CI all run the widget build first.
+//
+//go:embed frontend/dist-widgets/*
+var widgetDist embed.FS
 
 //go:embed api/openapi.yaml
 var openapiSpec []byte
@@ -383,6 +396,41 @@ func main() {
 		slog.Info("CORS enabled", "origins", cfg.CORSOrigins)
 	}
 
+	// Distributed tracing is opt-in: with no collector configured the MCP
+	// server keeps mcp-go's noop tracer and nothing is allocated.
+	//
+	// The MCP server is the only thing that emits spans today, so building the
+	// pipeline without it would leave a batch processor and its goroutine alive
+	// for the life of the process with nothing able to feed them.
+	var mcpTracer oteltrace.Tracer
+
+	if cfg.OTelEndpoint != "" && !cfg.MCP.Enabled {
+		slog.Warn(
+			"tracing is configured but the MCP server is disabled, so no spans will be exported",
+			"endpoint", cfg.OTelEndpoint,
+		)
+	}
+
+	if cfg.OTelEndpoint != "" && cfg.MCP.Enabled {
+		traceProvider, err := tracing.NewProvider(ctx, cfg.OTelEndpoint, version.Version)
+		if err != nil {
+			slog.Error("tracing setup failed", "error", err)
+			os.Exit(1)
+		}
+
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			if err := traceProvider.Shutdown(shutdownCtx); err != nil {
+				slog.Warn("tracing shutdown failed", "error", err)
+			}
+		}()
+
+		mcpTracer = traceProvider.Tracer()
+		slog.Info("distributed tracing enabled", "endpoint", cfg.OTelEndpoint)
+	}
+
 	mcpHandler, oauthRoutes, closeMCP := setupMCP(mcpDeps{
 		cfg:          cfg,
 		authMode:     authCfg.Mode,
@@ -393,6 +441,8 @@ func main() {
 		logs:         dockerClient,
 		acl:          aclEval,
 		rec:          recEngine,
+		prometheus:   promClient,
+		tracer:       mcpTracer,
 	})
 	defer closeMCP()
 
@@ -603,6 +653,8 @@ type mcpDeps struct {
 	logs         mcp.LogStreamer
 	acl          *acl.Evaluator
 	rec          mcp.RecommendationEngine
+	prometheus   *promapi.Client
+	tracer       oteltrace.Tracer
 }
 
 // setupMCP builds the MCP HTTP handler and the OAuth route registrar when
@@ -618,6 +670,17 @@ type mcpDeps struct {
 func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string), func()) {
 	if !d.cfg.MCP.Enabled {
 		return nil, nil, func() {}
+	}
+
+	// Hand the MCP server the built widget bundles. fs.Sub strips the embed
+	// prefix so internal/mcp sees one directory per widget at the root, which is
+	// how it derives widget names. A build that skipped `npm run build:widgets`
+	// yields an empty FS, and the server then advertises no UI extension rather
+	// than promising widgets it cannot serve.
+	if widgets, err := fs.Sub(widgetDist, "frontend/dist-widgets"); err != nil {
+		slog.Warn("widget bundles unavailable; MCP Apps widgets disabled", "error", err)
+	} else {
+		mcp.SetWidgetFS(widgets)
 	}
 
 	issuer := d.cfg.MCP.Issuer
@@ -654,6 +717,14 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 			"issuer", issuer, "resource", mcpResource)
 	}
 
+	// A nil *promapi.Client stored in the interface would be a non-nil
+	// MetricsQuerier holding nothing, and get_metrics would call through it
+	// instead of reporting that Prometheus is unconfigured.
+	var metricsQuerier mcp.MetricsQuerier
+	if d.prometheus != nil {
+		metricsQuerier = d.prometheus
+	}
+
 	mcpSrv, err := mcp.New(d.cache, mcp.Options{
 		WriteClient:     d.writeClient,
 		Logs:            d.logs,
@@ -664,8 +735,10 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		AuthMode:        d.authMode,
 		AuthProvider:    d.authProvider,
 		Recommendations: d.rec,
+		Prometheus:      metricsQuerier,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		IconBaseURL:     issuer + d.cfg.BasePath,
+		Tracer:          d.tracer,
 	})
 	if err != nil {
 		slog.Error("MCP server setup failed", "error", err)
@@ -673,7 +746,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 	}
 	slog.Info("MCP server enabled",
 		"operations_level", d.cfg.MCP.EffectiveOperationsLevel(d.cfg.OperationsLevel),
-		"max_sessions", d.cfg.MCP.MaxSessions)
+		"protocol_version", mcp.ProtocolVersion)
 
 	if len(d.cfg.CORSOrigins) == 0 {
 		slog.Warn(

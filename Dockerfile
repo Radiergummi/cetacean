@@ -6,6 +6,8 @@ COPY --link frontend/package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY --link frontend/ ./
 RUN npm run build
+# MCP Apps widget bundles; main.go embeds frontend/dist-widgets.
+RUN npm run build:widgets
 
 FROM golang:1.26-alpine AS backend
 ARG VERSION=dev

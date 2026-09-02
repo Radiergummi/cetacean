@@ -28,6 +28,9 @@ var exposedHeaders = strings.Join([]string{
 	"Location",
 	"Retry-After",
 	"Request-Id",
+	// A browser-based MCP client on protocol 2025-11-25 or older reads its
+	// session ID off the initialize response.
+	"Mcp-Session-Id",
 }, ", ")
 
 // allowedMethods lists methods the API supports.
@@ -43,6 +46,14 @@ var allowedHeaders = strings.Join([]string{
 	"Content-Type",
 	"If-None-Match",
 	"Request-Id",
+	// The MCP streamable HTTP transport. Mcp-Method and Mcp-Name are required
+	// on every POST from protocol 2026-07-28 (SEP-2243); Mcp-Protocol-Version
+	// and Mcp-Session-Id carry the negotiated version and the legacy session.
+	// Without these a browser-based MCP host cannot reach /mcp at all.
+	"Mcp-Method",
+	"Mcp-Name",
+	"Mcp-Protocol-Version",
+	"Mcp-Session-Id",
 }, ", ")
 
 func cors(cfg *CORSConfig) func(http.Handler) http.Handler {

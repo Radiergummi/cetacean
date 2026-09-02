@@ -8,9 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- MCP server now speaks protocol revision 2026-07-28, with its stateless core: AI agents connect and work without a handshake or a session
+- List and read responses over MCP now carry cache freshness hints, so agents poll less
 - The licenses page now shows the full license text and NOTICE of every bundled dependency, can be filtered by license and ecosystem — every count reflects the other filters already applied, so it says what picking it would leave — and offers the complete attribution document as a download
+- AI agents can now ask for a service change and be told when the cluster has actually caught up, rather than when Docker accepted the request. Scaling, image updates, rollbacks and restarts can be started as a task that stays open until the replicas are really running — or fails with the reason if they never do. Agents should set an expiry (`ttl`) on each such request: one without an expiry is kept until the server restarts, so an agent that omits it will grow Cetacean's memory use over time
+- MCP clients that support interactive apps can now render Cetacean's data as a widget rather than as JSON. Listing a resource type shows a searchable, sortable table instead of a wall of records; clients without app support are unaffected and keep receiving plain results
+- AI agents can now ask Cetacean for the cluster's topology, and clients that support interactive apps render it as a graph they can pan and explore: services joined to the overlay networks they attach to, or cluster nodes joined to the services they run
+- Reading a service's logs over MCP now renders as a live tail in clients that support interactive apps: the widget keeps reading as new lines arrive, and can be searched and filtered by level without going back to the model
+- AI agents can now chart CPU, memory or network use for a service or a node over the last hour, six hours, day or week, where before they could only read the numbers the dashboard showed. Clients that support interactive apps render it as a chart with a range picker. Requires Prometheus; an agent asking a Cetacean without it is told metrics are unavailable rather than being shown empty charts
+- AI agents can now ask for Cetacean's recommendations directly, optionally only the critical ones, and clients that support interactive apps render them grouped by severity — picking one asks the agent to look into it
+- AI agents can now list a whole resource type over MCP — every service, node, task, stack, config, secret, network, or volume the caller may see, paged — rather than searching for resources one name at a time
+- Cetacean can now export traces to an OpenTelemetry collector via `CETACEAN_OTEL_ENDPOINT`. Every MCP request and tool call is recorded, and a call from an agent that is already tracing joins that agent's trace instead of starting its own, so the agent's turn and the cluster change it caused appear together
+
+### Changed
+- MCP authorization responses now identify the issuer (RFC 9207), so a client configured with several authorization servers cannot be tricked into redeeming a code at the wrong one
+- Client ID Metadata Documents are now the recommended way for MCP clients to identify themselves, and are advertised in the authorization server metadata so clients can discover that. Dynamic Client Registration still works and stays enabled by default
+- MCP clients registering dynamically can now declare whether they are a native or web application, and are held to the redirect URIs that implies. Clients that do not say are treated as native, which is what MCP clients almost always are
+- **Breaking:** the MCP tools that scale, update the image of, roll back or restart a service now return a summary of where the service ended up — id, name, image, mode, desired replicas, running count, state and version — instead of the service's full specification. The shape is published as an output schema. Tools that edit a service's spec are unchanged and still return the whole service
+- **Breaking:** the MCP server now speaks protocol revision 2026-07-28 exclusively. Older revisions are refused with a clear error naming the version to use, rather than connecting and then silently delivering no updates. Update your MCP client if it cannot negotiate 2026-07-28
+- **Breaking:** `CETACEAN_MCP_SESSION_IDLE_TTL` and `CETACEAN_MCP_MAX_SESSIONS` (and their `session_idle_ttl` / `max_sessions` config-file equivalents) have been removed. The protocol no longer has sessions, so there is nothing to expire or cap. Both are now ignored if you still set them, so an existing config keeps working
 
 ### Fixed
+- Turning off `CETACEAN_MCP_CIMD_ENABLED` now actually takes effect. The setting was ignored, so a server configured not to fetch client metadata documents still fetched them
+- AI agents on the new MCP protocol revision now receive live cluster updates. Subscribing succeeded and then delivered nothing, because 2026-07-28 replaced the subscription call the server was listening for
+- MCP clients running in a browser can now reach the server at all. Cross-origin preflight rejected every header the MCP transport requires
 - Breadcrumbs on a resource that belongs to a stack now lead through the stack: "Stacks › monitoring › prometheus" rather than "Services › monitoring/prometheus"
 - Resource names no longer show a stack prefix that isn't there. A volume or config named "my_data" that belongs to no stack read as "my/data" in the page title while its breadcrumb correctly said "my_data"; a resource that joined a stack by label without being named for it now keeps its own name as well
 - The Tasks page no longer flips between the task list and a "range start is beyond the total number of items" error every few seconds on a busy cluster

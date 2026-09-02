@@ -1,7 +1,10 @@
 package mcp
 
 import (
+	"slices"
 	"testing"
+
+	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -14,10 +17,10 @@ import (
 func TestNotificationSubscribeAndMatch(t *testing.T) {
 	nm := NewNotificationManager()
 
-	nm.Subscribe("session1", "cetacean://services/svc1", nil)
-	nm.Subscribe("session1", "cetacean://nodes/node1", nil)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", nil)
+	nm.Subscribe(session("session1"), "cetacean://nodes/node1", nil)
 
-	matches := nm.MatchingURIs("session1", cache.Event{
+	matches := nm.MatchingURIs(session("session1"), cache.Event{
 		Type:   cache.EventService,
 		Action: "update",
 		ID:     "svc1",
@@ -29,9 +32,9 @@ func TestNotificationSubscribeAndMatch(t *testing.T) {
 
 func TestNotificationNoMatchForDifferentID(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1", nil)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", nil)
 
-	matches := nm.MatchingURIs("session1", cache.Event{
+	matches := nm.MatchingURIs(session("session1"), cache.Event{
 		Type:   cache.EventService,
 		Action: "update",
 		ID:     "svc2",
@@ -43,9 +46,9 @@ func TestNotificationNoMatchForDifferentID(t *testing.T) {
 
 func TestNotificationLogURIMatches(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1/logs", nil)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1/logs", nil)
 
-	matches := nm.MatchingURIs("session1", cache.Event{
+	matches := nm.MatchingURIs(session("session1"), cache.Event{
 		Type:   cache.EventService,
 		Action: "update",
 		ID:     "svc1",
@@ -57,10 +60,10 @@ func TestNotificationLogURIMatches(t *testing.T) {
 
 func TestNotificationDetailAndLogMatchTogether(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1", nil)
-	nm.Subscribe("session1", "cetacean://services/svc1/logs", nil)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", nil)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1/logs", nil)
 
-	matches := nm.MatchingURIs("session1", cache.Event{
+	matches := nm.MatchingURIs(session("session1"), cache.Event{
 		Type:   cache.EventService,
 		Action: "update",
 		ID:     "svc1",
@@ -72,10 +75,10 @@ func TestNotificationDetailAndLogMatchTogether(t *testing.T) {
 
 func TestNotificationUnsubscribe(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1", nil)
-	nm.Unsubscribe("session1", "cetacean://services/svc1")
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", nil)
+	nm.Unsubscribe(session("session1"), "cetacean://services/svc1")
 
-	matches := nm.MatchingURIs("session1", cache.Event{
+	matches := nm.MatchingURIs(session("session1"), cache.Event{
 		Type:   cache.EventService,
 		Action: "update",
 		ID:     "svc1",
@@ -87,12 +90,15 @@ func TestNotificationUnsubscribe(t *testing.T) {
 
 func TestNotificationRemoveSessionDropsAll(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1", nil)
-	nm.Subscribe("session1", "cetacean://nodes/node1", nil)
-	nm.RemoveSession("session1")
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", nil)
+	nm.Subscribe(session("session1"), "cetacean://nodes/node1", nil)
+	nm.RemoveSession(session("session1"))
 
-	if ids := nm.sessionIDs(); len(ids) != 0 {
-		t.Errorf("sessionIDs = %v, want none", ids)
+	if got := nm.MatchingURIs(session("session1"), cache.Event{
+		Type: cache.EventService,
+		ID:   "svc1",
+	}); len(got) != 0 {
+		t.Errorf("subscriptions survived RemoveSession: %v", got)
 	}
 }
 
@@ -140,9 +146,9 @@ func TestNotificationEventTypeToURIPrefix(t *testing.T) {
 func TestNotification_SubscribeCapturesIdentity(t *testing.T) {
 	nm := NewNotificationManager()
 	id := &auth.Identity{Subject: "alice"}
-	nm.Subscribe("session1", "cetacean://services/svc1", id)
+	nm.Subscribe(session("session1"), "cetacean://services/svc1", id)
 
-	got := nm.IdentityFor("session1")
+	got := nm.IdentityFor(session("session1"))
 	if got == nil || got.Subject != "alice" {
 		t.Fatalf("IdentityFor = %v, want identity alice", got)
 	}
@@ -210,7 +216,7 @@ func TestDispatchCacheEvent_ACLBlocksUpdatedNotification(t *testing.T) {
 	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
 
 	id := &auth.Identity{Subject: "alice"}
-	srv.notifications.Subscribe("session1", "cetacean://services/svc1", id)
+	srv.notifications.Subscribe(session("session1"), "cetacean://services/svc1", id)
 
 	allowed := srv.canRead(id, "service:public-api")
 	denied := srv.canRead(id, "service:secret-svc")
@@ -246,7 +252,7 @@ func TestStartNotificationsCancelDetachesListener(t *testing.T) {
 	}
 
 	// Establish a subscription so the notification path has work to do.
-	srv.notifications.Subscribe("session1", "cetacean://services/svc1", nil)
+	srv.notifications.Subscribe(session("session1"), "cetacean://services/svc1", nil)
 
 	// Drive the cache once before cancel and once after — both should not
 	// panic. The strong guarantee is that Close detaches; we exercise it
@@ -267,4 +273,70 @@ func TestStartNotificationsCancelDetachesListener(t *testing.T) {
 		t.Fatal("Close did not clear cancelNotifications")
 	}
 	srv.Close() // must not panic
+}
+
+// TestSubscriptionsListenPopulatesManager covers the 2026-07-28 path. Modern
+// clients never call resources/subscribe, so AddAfterSubscribe never fires; the
+// manager must instead learn subscriptions from subscriptions/listen.
+func TestSubscriptionsListenPopulatesManager(t *testing.T) {
+	srv := newTestServer(t)
+	hooks := srv.installSubscriptionHooks()
+
+	if len(hooks.OnBeforeSubscriptionsListen) == 0 {
+		t.Fatal("no subscriptions/listen hook installed: modern clients would receive no updates")
+	}
+
+	ctx := contextWithSession(t, srv, "session-modern")
+	req := &mcplib.SubscriptionsListenRequest{}
+	req.Params.Notifications = mcplib.SubscriptionFilter{
+		ResourcesListChanged:  true,
+		ResourceSubscriptions: []string{"cetacean://services/abc", "cetacean://nodes/xyz"},
+	}
+
+	for _, hook := range hooks.OnBeforeSubscriptionsListen {
+		hook(ctx, "req-1", req)
+	}
+
+	for _, want := range []struct {
+		event cache.Event
+		uri   string
+	}{
+		{cache.Event{Type: cache.EventService, ID: "abc"}, "cetacean://services/abc"},
+		{cache.Event{Type: cache.EventNode, ID: "xyz"}, "cetacean://nodes/xyz"},
+	} {
+		got := srv.notifications.MatchingURIs(session("session-modern"), want.event)
+		if !slices.Contains(got, want.uri) {
+			t.Errorf("subscription to %s not recorded (matched %v)", want.uri, got)
+		}
+	}
+}
+
+// TestSubscriptionsListenClearsOnStreamClose verifies the teardown half: the
+// listen stream holds until the client disconnects, and the after-hook fires
+// then. Leaving the URIs behind would leak subscriptions across reconnects.
+func TestSubscriptionsListenClearsOnStreamClose(t *testing.T) {
+	srv := newTestServer(t)
+	hooks := srv.installSubscriptionHooks()
+	ctx := contextWithSession(t, srv, "session-modern")
+
+	req := &mcplib.SubscriptionsListenRequest{}
+	req.Params.Notifications = mcplib.SubscriptionFilter{
+		ResourceSubscriptions: []string{"cetacean://services/abc"},
+	}
+
+	for _, hook := range hooks.OnBeforeSubscriptionsListen {
+		hook(ctx, "req-1", req)
+	}
+
+	for _, hook := range hooks.OnAfterSubscriptionsListen {
+		hook(ctx, "req-1", req, &mcplib.SubscriptionsListenResult{})
+	}
+
+	got := srv.notifications.MatchingURIs(session("session-modern"), cache.Event{
+		Type: cache.EventService,
+		ID:   "abc",
+	})
+	if len(got) != 0 {
+		t.Fatalf("subscriptions survived stream close: %v", got)
+	}
 }

@@ -120,3 +120,58 @@ func TestDeriveServiceState(t *testing.T) {
 		})
 	}
 }
+
+// TestServiceConvergedWaitsOutRollback is the reason ServiceConverged and
+// DeriveServiceState share ServiceUpdateInFlight. Swarm reports a rollback as
+// "rollback_started", and during one the replica count still matches, because
+// the old tasks are the ones being restored. A convergence check that only
+// looked for "updating" would call a rollback done the instant it began —
+// exactly the tool that most needs to wait.
+func TestServiceConvergedWaitsOutRollback(t *testing.T) {
+	replicas := uint64(2)
+
+	for _, state := range []swarm.UpdateState{
+		swarm.UpdateStateUpdating,
+		swarm.UpdateStateRollbackStarted,
+		swarm.UpdateStateRollbackPaused,
+	} {
+		t.Run(string(state), func(t *testing.T) {
+			svc := swarm.Service{
+				Spec: swarm.ServiceSpec{
+					Mode: swarm.ServiceMode{
+						Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+					},
+				},
+				UpdateStatus: &swarm.UpdateStatus{State: state},
+			}
+
+			if done, status := cluster.ServiceConverged(svc, 2); done {
+				t.Errorf("reported converged during %s (status %q)", state, status)
+			}
+
+			if got := cluster.DeriveServiceState(svc, 2); got != "updating" {
+				t.Errorf("DeriveServiceState = %q, want %q — the two must agree", got, "updating")
+			}
+		})
+	}
+}
+
+// TestServiceConvergedRequiresExactCount pins the deliberate difference from
+// DeriveServiceState: a scale-down is not done while surplus tasks are still
+// being reaped, even though the service is already "running" to a reader.
+func TestServiceConvergedRequiresExactCount(t *testing.T) {
+	replicas := uint64(2)
+	svc := swarm.Service{
+		Spec: swarm.ServiceSpec{
+			Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+		},
+	}
+
+	if done, _ := cluster.ServiceConverged(svc, 5); done {
+		t.Error("reported converged with 5 running and 2 desired")
+	}
+
+	if got := cluster.DeriveServiceState(svc, 5); got != "running" {
+		t.Errorf("DeriveServiceState = %q, want %q", got, "running")
+	}
+}

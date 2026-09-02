@@ -15,76 +15,123 @@ import (
 // NotificationManager tracks per-session resource subscriptions and matches
 // cache events against them. It owns no goroutines; dispatch is driven by the
 // cache's OnChange listener registered in StartNotifications.
+//
+// Sessions are keyed by the mcp-go ClientSession value rather than by session
+// ID, because protocol 2026-07-28 has no session IDs: mcp-go serves each modern
+// request from an ephemeral session whose SessionID() is empty and which never
+// enters the server's session registry. Keying on the ID would collapse every
+// modern client onto the same empty-string key and leave dispatch with nothing
+// to address. The session value is what mcp-go itself delivers against.
 type NotificationManager struct {
 	mu sync.RWMutex
 	// sessions holds per-session subscription state. Each session record stores
-	// both the subscribed URIs and the *auth.Identity captured at subscribe
-	// time — used by dispatch to ACL-filter notifications per-session.
-	sessions map[string]*sessionState
+	// the subscribed URIs, the *auth.Identity captured at subscribe time (used
+	// by dispatch to ACL-filter notifications per-session), and — for modern
+	// clients — the notification filter the subscriptions/listen stream
+	// established.
+	sessions map[mcpserver.ClientSession]*sessionState
 }
 
 type sessionState struct {
 	identity *auth.Identity
 	uris     map[string]struct{}
+
+	// filter is the opt-in a subscriptions/listen stream established, and is
+	// nil for legacy sessions. 2026-07-28 makes every notification type
+	// opt-in, so a modern client only receives what its filter names; legacy
+	// clients have no such filter and keep the old always-on semantics.
+	filter *mcplib.SubscriptionFilter
 }
 
 // NewNotificationManager returns an empty manager. Subscriptions are populated
 // via mcp-go's OnAfterSubscribe hook (wired in StartNotifications).
 func NewNotificationManager() *NotificationManager {
 	return &NotificationManager{
-		sessions: make(map[string]*sessionState),
+		sessions: make(map[mcpserver.ClientSession]*sessionState),
 	}
 }
 
-// Subscribe records that sessionID is interested in updates to uri. The
-// identity is captured for later ACL re-checks at dispatch time. Idempotent;
-// a later call updates the stored identity (matching token refresh behaviour).
-func (nm *NotificationManager) Subscribe(sessionID, uri string, identity *auth.Identity) {
-	if sessionID == "" || uri == "" {
+// Subscribe records that session is interested in updates to uri. The identity
+// is captured for later ACL re-checks at dispatch time. Idempotent; a later
+// call updates the stored identity (matching token refresh behaviour).
+func (nm *NotificationManager) Subscribe(
+	session mcpserver.ClientSession,
+	uri string,
+	identity *auth.Identity,
+) {
+	if session == nil || uri == "" {
 		return
 	}
+
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
-	st := nm.sessions[sessionID]
+
+	st := nm.sessions[session]
 	if st == nil {
 		st = &sessionState{uris: make(map[string]struct{})}
-		nm.sessions[sessionID] = st
+		nm.sessions[session] = st
 	}
+
 	st.identity = identity
 	st.uris[uri] = struct{}{}
 }
 
-// Unsubscribe removes sessionID's interest in uri.
-func (nm *NotificationManager) Unsubscribe(sessionID, uri string) {
+// SetFilter records the notification opt-in a subscriptions/listen stream
+// established for session, so dispatch can honour it.
+func (nm *NotificationManager) SetFilter(
+	session mcpserver.ClientSession,
+	filter mcplib.SubscriptionFilter,
+) {
+	if session == nil {
+		return
+	}
+
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
-	st, ok := nm.sessions[sessionID]
+
+	st := nm.sessions[session]
+	if st == nil {
+		st = &sessionState{uris: make(map[string]struct{})}
+		nm.sessions[session] = st
+	}
+
+	st.filter = &filter
+}
+
+// Unsubscribe removes session's interest in uri.
+func (nm *NotificationManager) Unsubscribe(session mcpserver.ClientSession, uri string) {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+
+	st, ok := nm.sessions[session]
 	if !ok {
 		return
 	}
+
 	delete(st.uris, uri)
 	if len(st.uris) == 0 {
-		delete(nm.sessions, sessionID)
+		delete(nm.sessions, session)
 	}
 }
 
 // RemoveSession drops every subscription for a disconnected session.
-func (nm *NotificationManager) RemoveSession(sessionID string) {
+func (nm *NotificationManager) RemoveSession(session mcpserver.ClientSession) {
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
-	delete(nm.sessions, sessionID)
+	delete(nm.sessions, session)
 }
 
-// IdentityFor returns the identity associated with sessionID, or nil when the
-// session has no live subscription (or was never recorded). Exposed for tests
-// and for the list_changed dispatch path, which iterates known sessions.
-func (nm *NotificationManager) IdentityFor(sessionID string) *auth.Identity {
+// IdentityFor returns the identity associated with session, or nil when the
+// session has no live subscription (or was never recorded).
+func (nm *NotificationManager) IdentityFor(session mcpserver.ClientSession) *auth.Identity {
 	nm.mu.RLock()
 	defer nm.mu.RUnlock()
-	st, ok := nm.sessions[sessionID]
+
+	st, ok := nm.sessions[session]
 	if !ok {
 		return nil
 	}
+
 	return st.identity
 }
 
@@ -92,7 +139,10 @@ func (nm *NotificationManager) IdentityFor(sessionID string) *auth.Identity {
 // the cache event. Detail-level URIs match exactly; for a service-update event
 // the manager also reports `cetacean://services/<id>/logs` so log-tail
 // subscribers learn about new lines without polling.
-func (nm *NotificationManager) MatchingURIs(sessionID string, event cache.Event) []string {
+func (nm *NotificationManager) MatchingURIs(
+	session mcpserver.ClientSession,
+	event cache.Event,
+) []string {
 	prefix := eventTypeToURIPrefix(event.Type)
 	if prefix == "" || event.ID == "" {
 		return nil
@@ -101,7 +151,7 @@ func (nm *NotificationManager) MatchingURIs(sessionID string, event cache.Event)
 	nm.mu.RLock()
 	defer nm.mu.RUnlock()
 
-	st, ok := nm.sessions[sessionID]
+	st, ok := nm.sessions[session]
 	if !ok || len(st.uris) == 0 {
 		return nil
 	}
@@ -127,19 +177,26 @@ func (nm *NotificationManager) IsListChange(event cache.Event) bool {
 	return event.Action == "create" || event.Action == "remove"
 }
 
-// sessionIDs returns a snapshot of all sessions currently holding at least one
-// subscription. Used by tests; the dispatch path uses matchingDeliveries to
-// avoid the N+1 RLock pattern.
-func (nm *NotificationManager) sessionIDs() []string {
+// listChangedTargets returns the sessions that should receive a
+// resources/list_changed notification, paired with the identity to ACL-check
+// them against.
+//
+// A client receives it only when its subscriptions/listen filter opted in:
+// 2026-07-28 makes notification types opt-in and a server MUST NOT deliver one
+// that was not requested.
+func (nm *NotificationManager) listChangedTargets() []delivery {
 	nm.mu.RLock()
 	defer nm.mu.RUnlock()
-	if len(nm.sessions) == 0 {
-		return nil
+
+	var out []delivery
+	for session, st := range nm.sessions {
+		if st.filter == nil || !st.filter.ResourcesListChanged {
+			continue
+		}
+
+		out = append(out, delivery{session: session, identity: st.identity})
 	}
-	out := make([]string, 0, len(nm.sessions))
-	for id := range nm.sessions {
-		out = append(out, id)
-	}
+
 	return out
 }
 
@@ -163,26 +220,28 @@ func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery 
 	defer nm.mu.RUnlock()
 
 	var out []delivery
-	for sessionID, st := range nm.sessions {
+	for session, st := range nm.sessions {
 		if _, ok := st.uris[detail]; ok {
-			out = append(out, delivery{sessionID: sessionID, uri: detail, identity: st.identity})
+			out = append(out, delivery{session: session, uri: detail, identity: st.identity})
 		}
+
 		if logURI != "" {
 			if _, ok := st.uris[logURI]; ok {
 				out = append(
 					out,
-					delivery{sessionID: sessionID, uri: logURI, identity: st.identity},
+					delivery{session: session, uri: logURI, identity: st.identity},
 				)
 			}
 		}
 	}
+
 	return out
 }
 
 type delivery struct {
-	sessionID string
-	uri       string
-	identity  *auth.Identity
+	session  mcpserver.ClientSession
+	uri      string
+	identity *auth.Identity
 }
 
 func eventTypeToURIPrefix(t cache.EventType) string {
@@ -245,37 +304,58 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 		if aclResource != "" && !s.canRead(d.identity, aclResource) {
 			continue
 		}
-		_ = s.mcpServer.SendNotificationToSpecificClient(
-			d.sessionID,
-			"notifications/resources/updated",
-			map[string]any{
-				"uri": d.uri,
-			},
-		)
+
+		s.notify(d.session, "notifications/resources/updated", map[string]any{
+			"uri": d.uri,
+		})
 	}
 
 	if s.notifications.IsListChange(event) {
-		// list_changed is a coarse "go refetch" signal. When ACL is in play,
-		// don't broadcast it to sessions whose identity can't read any
-		// resource of the affected type — otherwise the notification leaks
-		// activity timing across tenancy boundaries.
-		aclType := eventTypeToACLPrefix(event.Type)
-		aclType = strings.TrimSuffix(aclType, ":")
-		if aclType == "" || s.acl == nil {
-			s.mcpServer.SendNotificationToAllClients("notifications/resources/list_changed", nil)
-			return
-		}
-		for _, sid := range s.notifications.sessionIDs() {
-			id := s.notifications.IdentityFor(sid)
-			if !s.canReadAnyOfType(id, aclType) {
+		// list_changed is a coarse "go refetch" signal, delivered only to the
+		// streams that opted in. When ACL is in play, skip sessions whose
+		// identity cannot read any resource of the affected type — otherwise
+		// the notification leaks activity timing across tenancy boundaries.
+		aclType := strings.TrimSuffix(eventTypeToACLPrefix(event.Type), ":")
+
+		for _, d := range s.notifications.listChangedTargets() {
+			if aclType != "" && s.acl != nil && !s.canReadAnyOfType(d.identity, aclType) {
 				continue
 			}
-			_ = s.mcpServer.SendNotificationToSpecificClient(
-				sid,
-				"notifications/resources/list_changed",
-				nil,
-			)
+
+			s.notify(d.session, "notifications/resources/list_changed", nil)
 		}
+	}
+}
+
+// notify delivers a notification to one session.
+//
+// 2026-07-28 sessions are ephemeral and unregistered — a client's
+// subscriptions/listen stream is the delivery channel — so the session is
+// written to directly rather than looked up by ID, mirroring what mcp-go does
+// internally: upgrade the response to SSE if the transport needs it, then send
+// without blocking. A full channel means the client is not draining its stream;
+// dropping is the same choice mcp-go makes, and the client re-reads when it
+// reconnects.
+func (s *Server) notify(session mcpserver.ClientSession, method string, params map[string]any) {
+	if session == nil {
+		return
+	}
+
+	if upgradable, ok := session.(mcpserver.SessionWithStreamableHTTPConfig); ok {
+		upgradable.UpgradeToSSEWhenReceiveNotification()
+	}
+
+	notification := mcplib.JSONRPCNotification{
+		JSONRPC: mcplib.JSONRPC_VERSION,
+		Notification: mcplib.Notification{
+			Method: method,
+			Params: mcplib.NotificationParams{AdditionalFields: params},
+		},
+	}
+
+	select {
+	case session.NotificationChannel() <- notification:
+	default:
 	}
 }
 
@@ -363,39 +443,55 @@ func eventTypeToACLPrefix(t cache.EventType) string {
 }
 
 // installSubscriptionHooks returns the mcp-go Hooks that wire client subscribe
-// / unsubscribe / session lifecycle into the NotificationManager. The hook
-// callbacks read the session ID from the request context — mcp-go stamps a
-// ClientSession on the ctx before invoking handlers.
+// / unsubscribe / session lifecycle into the NotificationManager, on both the
+// legacy resources/subscribe path and the 2026-07-28 subscriptions/listen path.
+// The hook callbacks read the session ID from the request context — mcp-go
+// stamps a ClientSession on the ctx before invoking handlers, for modern and
+// legacy clients alike.
 func (s *Server) installSubscriptionHooks() *mcpserver.Hooks {
 	h := &mcpserver.Hooks{}
 
-	h.AddAfterSubscribe(
-		func(ctx context.Context, _ any, msg *mcplib.SubscribeRequest, _ *mcplib.EmptyResult) {
-			if sid := sessionIDFromContext(ctx); sid != "" {
-				s.notifications.Subscribe(sid, msg.Params.URI, auth.IdentityFromContext(ctx))
+	// subscriptions/listen is the only way to subscribe. mcp-go records the
+	// requested URIs by type-asserting the session to
+	// SessionWithResourceSubscriptions, which its streamable-HTTP session does
+	// not implement, so its own tracking never fires — we track them here or
+	// a client would subscribe successfully and never receive a notification.
+	//
+	// Sessions are tracked by value: 2026-07-28 removed session IDs, so
+	// SessionID() is always empty and cannot distinguish two clients. The
+	// filter is recorded alongside the URIs because notification types are
+	// opt-in from this revision on.
+	//
+	// The requested URIs are what mcp-go establishes verbatim: its
+	// allowedSubscriptions only drops them when resource subscription
+	// capability is off, and we advertise it unconditionally.
+	h.AddBeforeSubscriptionsListen(
+		func(ctx context.Context, _ any, msg *mcplib.SubscriptionsListenRequest) {
+			session := mcpserver.ClientSessionFromContext(ctx)
+			if session == nil {
+				return
+			}
+
+			s.notifications.SetFilter(session, msg.Params.Notifications)
+
+			identity := auth.IdentityFromContext(ctx)
+			for _, uri := range msg.Params.Notifications.ResourceSubscriptions {
+				s.notifications.Subscribe(session, uri, identity)
 			}
 		},
 	)
 
-	h.AddAfterUnsubscribe(
-		func(ctx context.Context, _ any, msg *mcplib.UnsubscribeRequest, _ *mcplib.EmptyResult) {
-			if sid := sessionIDFromContext(ctx); sid != "" {
-				s.notifications.Unsubscribe(sid, msg.Params.URI)
+	// The listen handler blocks until the client disconnects, so the after-hook
+	// is our stream-closed signal. The session is ephemeral — it exists only
+	// for this request — so drop the whole record rather than the individual
+	// URIs.
+	h.AddAfterSubscriptionsListen(
+		func(ctx context.Context, _ any, _ *mcplib.SubscriptionsListenRequest, _ *mcplib.SubscriptionsListenResult) {
+			if session := mcpserver.ClientSessionFromContext(ctx); session != nil {
+				s.notifications.RemoveSession(session)
 			}
 		},
 	)
-
-	h.AddOnUnregisterSession(func(_ context.Context, session mcpserver.ClientSession) {
-		s.notifications.RemoveSession(session.SessionID())
-	})
 
 	return h
-}
-
-func sessionIDFromContext(ctx context.Context) string {
-	session := mcpserver.ClientSessionFromContext(ctx)
-	if session == nil {
-		return ""
-	}
-	return session.SessionID()
 }

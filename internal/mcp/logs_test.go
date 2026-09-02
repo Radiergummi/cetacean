@@ -407,3 +407,28 @@ func TestReadServiceLogsRejectsUnparseableSince(t *testing.T) {
 		t.Errorf("error = %q, want it to name the offending argument", err)
 	}
 }
+
+// TestGetLogsPointsAtTheLogWidget is the tool half of the MCP Apps contract: a
+// host learns which view renders a result from the tool's _meta, so a tool that
+// does not name its widget renders as a wall of JSON instead.
+func TestGetLogsPointsAtTheLogWidget(t *testing.T) {
+	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsReadOnly)
+
+	td, ok := srv.findTool("get_logs")
+	if !ok {
+		t.Fatal("get_logs is not registered at OpsReadOnly")
+	}
+
+	if td.widget != "logs" {
+		t.Errorf("widget = %q, want logs", td.widget)
+	}
+
+	if td.tool.Meta == nil {
+		t.Fatal("get_logs carries no _meta; hosts cannot find its widget")
+	}
+
+	uri := uiResourceURI("logs")
+	if got := td.tool.Meta.AdditionalFields[uiResourceURIMetaKey]; got != uri {
+		t.Errorf("_meta[%q] = %v, want %q", uiResourceURIMetaKey, got, uri)
+	}
+}

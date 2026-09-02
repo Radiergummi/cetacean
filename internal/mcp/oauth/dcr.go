@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"sync"
 	"time"
 )
@@ -24,6 +25,14 @@ type ClientRegistration struct {
 	ResponseTypes           []string `json:"response_types,omitempty"`
 	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
 	ClientIDIssuedAt        int64    `json:"client_id_issued_at"`
+
+	// ApplicationType is the OpenID Connect application type, "native" or
+	// "web". It governs which redirect URIs are acceptable: "web" requires
+	// https and forbids loopback, "native" permits loopback and custom
+	// schemes. 2026-07-28 requires clients to state it (SEP-837); we default
+	// to "native", because that is what MCP clients overwhelmingly are and
+	// because the OIDC default of "web" would reject their redirect URIs.
+	ApplicationType string `json:"application_type,omitempty"`
 }
 
 // dcrRequest is the incoming JSON body for RFC 7591 registration.
@@ -33,6 +42,7 @@ type dcrRequest struct {
 	GrantTypes              []string `json:"grant_types"`
 	ResponseTypes           []string `json:"response_types"`
 	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
+	ApplicationType         string   `json:"application_type"`
 }
 
 // ipBucket is a per-IP rate limiter bucket using a simple token bucket approach.
@@ -229,6 +239,27 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate application_type (SEP-837). It decides which redirect URIs are
+	// acceptable, so it is checked before the client_id is minted.
+	applicationType := req.ApplicationType
+	if applicationType == "" {
+		applicationType = "native"
+	}
+
+	if applicationType != "native" && applicationType != "web" {
+		writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
+			`application_type must be "native" or "web"`)
+
+		return
+	}
+
+	if applicationType == "web" && slices.ContainsFunc(req.RedirectURIs, isLoopbackURI) {
+		writeDCRError(w, http.StatusBadRequest, "invalid_redirect_uri",
+			"a web client may not register a loopback redirect URI")
+
+		return
+	}
+
 	// Generate client_id.
 	clientID := "cetacean-" + generateOpaqueToken()
 
@@ -264,6 +295,7 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		ResponseTypes:           responseTypes,
 		TokenEndpointAuthMethod: authMethod,
 		ClientIDIssuedAt:        time.Now().Unix(),
+		ApplicationType:         applicationType,
 	}
 
 	body, err := json.Marshal(reg)

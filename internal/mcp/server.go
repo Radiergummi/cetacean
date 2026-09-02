@@ -15,15 +15,18 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
+	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/mcp/oauth"
+	"github.com/radiergummi/cetacean/internal/mcp/tracing"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
@@ -77,6 +80,7 @@ type Server struct {
 	mcpServer      *mcpserver.MCPServer
 	httpServer     *mcpserver.StreamableHTTPServer
 	recEngine      RecommendationEngine
+	prom           MetricsQuerier // nil when Prometheus is not configured
 
 	// allowedOrigins is the set of Origin header values the streamable HTTP
 	// endpoint accepts. originGuard rejects any other non-empty Origin with
@@ -120,16 +124,37 @@ type Options struct {
 	Recommendations RecommendationEngine
 	AllowedOrigins  []string
 
+	// Prometheus backs the get_metrics tool. Nil when CETACEAN_PROMETHEUS_URL
+	// is unset, and the tool then says metrics are unavailable rather than
+	// charting nothing.
+	Prometheus MetricsQuerier
+
 	// IconBaseURL is the canonical external base URL (issuer + base path) used
 	// to build absolute tool-icon `src` values. Icons are served from the
 	// embedded frontend under /assets/mcp-icons/. Empty disables tool icons.
 	IconBaseURL string
+
+	// Tracer records spans for dispatched MCP methods and tool calls. Nil
+	// leaves mcp-go's noop tracer in place, which is the zero-config path:
+	// tracing costs nothing until CETACEAN_OTEL_ENDPOINT is set.
+	Tracer oteltrace.Tracer
 }
 
 // New constructs an MCP server. The returned *Server exposes Handler() for
 // mounting on an http.ServeMux. registerResources and registerTools are
 // invoked once during construction; tools and resources are then served from
 // the mcp-go shared registry.
+// Cache TTLs advertised on cacheable results. They are freshness hints, not
+// correctness guarantees: a client may serve a cached response for this long
+// before re-fetching. Both are deliberately short — Cetacean mirrors live
+// cluster state, and an agent acting on a minute-old service list can scale the
+// wrong thing. listChanged notifications remain the primary invalidation
+// signal; these hints only bound how long a client that missed one stays stale.
+const (
+	cacheTTLList = 30 * time.Second
+	cacheTTLRead = 10 * time.Second
+)
+
 func New(c *cache.Cache, opts Options) (*Server, error) {
 	if c == nil {
 		return nil, errors.New("mcp: cache is required")
@@ -146,36 +171,93 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		authMode:       opts.AuthMode,
 		authProvider:   opts.AuthProvider,
 		recEngine:      opts.Recommendations,
+		prom:           opts.Prometheus,
 		allowedOrigins: opts.AllowedOrigins,
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
 	}
 
-	mcpSrv := mcpserver.NewMCPServer(
-		"cetacean",
-		"1.0.0",
+	serverOptions := []mcpserver.ServerOption{
 		mcpserver.WithResourceCapabilities(true, true),
 		mcpserver.WithToolCapabilities(true),
 		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
 		mcpserver.WithHooks(srv.installSubscriptionHooks()),
 		mcpserver.WithInstructions(mcpInstructions),
 		mcpserver.WithDescription(mcpDescription),
+		mcpserver.WithExtensions(serverExtensions()),
 		// Enforce advertised output schemas: a tool result whose
 		// structuredContent does not conform to its declared outputSchema is
 		// rejected. Only the curated-shape tools (search, get_logs, remove_*)
 		// declare a schema; Docker-passthrough mutations carry none and skip
 		// validation.
 		mcpserver.WithOutputSchemaValidation(),
+		// SEP-2549 freshness hints, applied by mcp-go to tools/list,
+		// resources/list, resources/templates/list, resources/read and
+		// server/discover, and omitted for clients on protocol versions older
+		// than 2026-07-28, where the fields do not exist.
+		//
+		// The scope is always private: every Cetacean response is filtered by
+		// the caller's ACL grants, so a shared intermediary caching one
+		// identity's view and serving it to another would be an authorization
+		// bypass.
+		mcpserver.WithCacheHints(cacheTTLList.Milliseconds(), mcplib.CacheScopePrivate),
+		mcpserver.WithMethodCacheHints(
+			mcplib.MethodResourcesRead,
+			cacheTTLRead.Milliseconds(),
+			mcplib.CacheScopePrivate,
+		),
+		// Tasks (2026-07-28). tasks/list was removed by the revision, so the
+		// extension is poll-based: tasks/get and tasks/cancel only. Must stay
+		// paired with the extensionTasks entry in serverExtensions — a host
+		// that reads the advertisement and finds tasks/get missing is worse
+		// off than one told nothing.
+		mcpserver.WithTaskCapabilities(
+			false, /* list */
+			true,  /* cancel */
+			true,  /* toolCallTasks */
+		),
+		// Caps tasks running at once, NOT tasks retained. mcp-go releases the
+		// counter when a task finishes but keeps its record — and only ever
+		// deletes one from scheduleTaskCleanup, which it starts solely when the
+		// client sent params.task.ttl. A client that omits it therefore leaks a
+		// full CallToolResult per mutation for the life of the process, and
+		// there is no server-side default TTL option in v1.0.0-beta.1 to set.
+		// Documented for clients in docs/mcp.md ("Always send task.ttl").
+		mcpserver.WithMaxConcurrentTasks(opts.Config.MaxConcurrentTasks),
+	}
+
+	// SEP-414 trace context. Installed only when a tracer is configured: the
+	// options are cheap but WithTracer also appends a tool middleware, and an
+	// untraced deployment should carry none of it.
+	if opts.Tracer != nil {
+		serverOptions = append(serverOptions,
+			mcpserver.WithTracer(tracing.NewTracer(opts.Tracer)),
+			// _meta is the transport-agnostic path the 2026-07-28 convention
+			// specifies, and the one agent hosts use.
+			mcpserver.WithMetaPropagator(tracing.NewMetaPropagator()),
+			// Headers cover the host that traces at the HTTP layer instead,
+			// so a call joins the trace of the request that delivered it.
+			mcpserver.WithPropagator(tracing.NewPropagator()),
+		)
+	}
+
+	mcpSrv := mcpserver.NewMCPServer(
+		"cetacean",
+		"1.0.0",
+		serverOptions...,
 	)
 	srv.mcpServer = mcpSrv
 
 	srv.registerResources()
+	srv.registerUIResources()
 	srv.registerTools()
 	srv.cancelNotifications = srv.startNotifications()
 
 	httpSrv := mcpserver.NewStreamableHTTPServer(mcpSrv,
-		mcpserver.WithStateful(true),
-		mcpserver.WithSessionIdleTTL(opts.Config.SessionIdleTTL),
+		// Protocol 2026-07-28 has no sessions, and requireModernProtocol
+		// turns away everything older, so there is no session state to keep:
+		// each request is served by its own ephemeral session.
+		mcpserver.WithStateful(false),
 		mcpserver.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
 			// The bearer-validating middleware (see Handler) stamps an
 			// auth.Identity on r.Context() before mcp-go sees the request.
@@ -184,7 +266,15 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 			if id := auth.IdentityFromContext(r.Context()); id != nil {
 				ctx = auth.ContextWithIdentity(ctx, id)
 			}
-			return ctx
+
+			// server/discover reports this as supportedVersions. mcp-go would
+			// otherwise list every revision it implements, advertising eras
+			// requireModernProtocol turns away and sending a well-behaved
+			// client straight into a rejection.
+			return mcpserver.WithSupportedProtocolVersions(
+				ctx,
+				[]string{mcplib.LATEST_PROTOCOL_VERSION},
+			)
 		}),
 	)
 	srv.httpServer = httpSrv
@@ -211,10 +301,13 @@ func (s *Server) Close() {
 // otherwise it serves the raw mcp-go handler unguarded (only safe with auth
 // mode "none").
 func (s *Server) Handler() http.Handler {
-	var h http.Handler = s.httpServer
+	// The protocol gate sits innermost so that origin and bearer checks answer
+	// first: an unauthenticated caller learns nothing about what we speak.
+	h := s.requireModernProtocol(s.httpServer)
 	if s.oauth != nil {
 		h = s.bearerAuth(h)
 	}
+
 	return s.originGuard(h)
 }
 

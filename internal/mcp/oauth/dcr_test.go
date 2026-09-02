@@ -250,3 +250,99 @@ func TestDCRLRUEviction(t *testing.T) {
 		t.Error("third client should still be present")
 	}
 }
+
+// registerClient posts a registration body and returns the status and decoded
+// registration. It does not assert success — callers checking a rejection need
+// the failing status.
+func registerClient(t *testing.T, s *Server, body string) (int, ClientRegistration) {
+	t.Helper()
+
+	rec := httptest.NewRecorder()
+	s.HandleRegister(rec, newDCRRequest(t, body))
+
+	var reg ClientRegistration
+	if rec.Code == http.StatusCreated {
+		if err := json.Unmarshal(rec.Body.Bytes(), &reg); err != nil {
+			t.Fatalf("decode registration: %v (body %s)", err, rec.Body.String())
+		}
+	}
+
+	return rec.Code, reg
+}
+
+// TestDCRDefaultsApplicationTypeToNative — SEP-837. OpenID Connect defaults
+// application_type to "web", which forbids the loopback redirect URIs native
+// MCP clients use. Defaulting to "native" avoids rejecting a correct client
+// that simply did not send the field.
+func TestDCRDefaultsApplicationTypeToNative(t *testing.T) {
+	s := newTestServer(t)
+
+	status, reg := registerClient(t, s, `{
+		"client_name": "Native client",
+		"redirect_uris": ["http://127.0.0.1:49152/cb"]
+	}`)
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", status)
+	}
+
+	if reg.ApplicationType != "native" {
+		t.Fatalf("application_type = %q, want %q", reg.ApplicationType, "native")
+	}
+}
+
+func TestDCREchoesExplicitApplicationType(t *testing.T) {
+	s := newTestServer(t)
+
+	status, reg := registerClient(t, s, `{
+		"client_name": "Web client",
+		"redirect_uris": ["https://client.example/cb"],
+		"application_type": "web"
+	}`)
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", status)
+	}
+
+	if reg.ApplicationType != "web" {
+		t.Fatalf("application_type = %q, want %q", reg.ApplicationType, "web")
+	}
+}
+
+func TestDCRRejectsUnknownApplicationType(t *testing.T) {
+	s := newTestServer(t)
+
+	status, _ := registerClient(t, s, `{
+		"redirect_uris": ["https://client.example/cb"],
+		"application_type": "carrier-pigeon"
+	}`)
+	if status == http.StatusCreated {
+		t.Fatal("registration accepted an unknown application_type")
+	}
+}
+
+// TestDCRWebApplicationTypeRejectsLoopbackRedirect is the reason the field
+// exists: a "web" client must not register a loopback redirect URI.
+func TestDCRWebApplicationTypeRejectsLoopbackRedirect(t *testing.T) {
+	s := newTestServer(t)
+
+	status, _ := registerClient(t, s, `{
+		"redirect_uris": ["http://127.0.0.1:49152/cb"],
+		"application_type": "web"
+	}`)
+	if status == http.StatusCreated {
+		t.Fatal("a web client registered a loopback redirect URI")
+	}
+}
+
+// TestDCRNativeApplicationTypeAllowsLoopback guards the other direction — the
+// default must keep working for the clients it exists for.
+func TestDCRNativeApplicationTypeAllowsLoopback(t *testing.T) {
+	s := newTestServer(t)
+
+	status, _ := registerClient(t, s, `{
+		"redirect_uris": ["http://localhost:33418/callback"],
+		"application_type": "native"
+	}`)
+	if status != http.StatusCreated {
+		t.Fatalf("native client with a loopback redirect was rejected: status %d", status)
+	}
+}

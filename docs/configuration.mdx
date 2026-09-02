@@ -34,6 +34,10 @@ startup. The `_FILE` variant has lower precedence than the direct env var.
   Base URL of a Prometheus server (e.g., `http://prometheus:9090`). When set, Cetacean proxies metric queries and enables resource usage charts, sizing recommendations, and the metrics stream. When unset, all metric-dependent features are disabled.
 </ConfigParam>
 
+<ConfigParam name="tracing.endpoint" env="CETACEAN_OTEL_ENDPOINT">
+  Base URL of an OpenTelemetry collector accepting OTLP over HTTP (e.g., `http://collector:4318`). When set, Cetacean exports a span for every MCP request and tool call, joining the trace of the agent that made the call. When unset, tracing is off and costs nothing. Cetacean refuses to start on a malformed endpoint rather than silently exporting nowhere.
+</ConfigParam>
+
 <ConfigParam name="logging.level" flag="-log-level" env="CETACEAN_LOG_LEVEL" default="info">
   Minimum log severity. One of `debug`, `info`, `warn`, or `error`.
 </ConfigParam>

@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -113,5 +114,49 @@ func TestCORS_NoOriginHeader(t *testing.T) {
 
 	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
 		t.Errorf("expected no ACAO without Origin header, got %q", got)
+	}
+}
+
+// TestCORSAllowsMCPRequestHeaders — a browser-based MCP host cannot send the
+// headers 2026-07-28 requires on every POST unless preflight allows them.
+// Mcp-Session-Id covers legacy clients, which carry it on every request after
+// the initialize handshake.
+func TestCORSAllowsMCPRequestHeaders(t *testing.T) {
+	handler := cors(&CORSConfig{AllowedOrigins: []string{"https://host.example"}})(
+		http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
+	)
+
+	req := httptest.NewRequest(http.MethodOptions, "/mcp", nil)
+	req.Header.Set("Origin", "https://host.example")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	req.Header.Set("Access-Control-Request-Headers", "mcp-method,mcp-name,mcp-protocol-version")
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	allowed := strings.ToLower(w.Header().Get("Access-Control-Allow-Headers"))
+	for _, header := range []string{"mcp-method", "mcp-name", "mcp-protocol-version", "mcp-session-id"} {
+		if !strings.Contains(allowed, header) {
+			t.Errorf("preflight does not allow %q (got %q)", header, allowed)
+		}
+	}
+}
+
+// TestCORSExposesSessionHeader — a legacy browser client reads its session ID
+// off the initialize response, which it cannot do unless the header is exposed.
+func TestCORSExposesSessionHeader(t *testing.T) {
+	handler := cors(&CORSConfig{AllowedOrigins: []string{"https://host.example"}})(
+		http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("Origin", "https://host.example")
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	exposed := strings.ToLower(w.Header().Get("Access-Control-Expose-Headers"))
+	if !strings.Contains(exposed, "mcp-session-id") {
+		t.Errorf("Mcp-Session-Id not exposed to cross-origin scripts (got %q)", exposed)
 	}
 }
