@@ -1,7 +1,9 @@
 package oauth
 
 import (
+	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -367,5 +369,75 @@ func TestUnknownTokenRevocationDoesNotWrite(t *testing.T) {
 
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Error("revoking an unknown token wrote to disk; it changes no state")
+	}
+}
+
+func TestStateFileSerializesConcurrentWriters(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	tokens := NewRefreshTokenStore()
+	consent := NewConsentStore()
+
+	file := &stateFile{path: path, tokens: tokens, consent: consent}
+	tokens.SetOnChange(file.write)
+	consent.SetOnChange(file.write)
+
+	// Two independent stores now write the same file from their own hooks.
+	// Unserialized, each snapshots at its own moment and opens the same temp
+	// path, so the rename publishes either a stale snapshot — silently losing
+	// a token or an approval still live in memory — or structurally mixed
+	// bytes that fail to parse at the next start, costing every client a
+	// re-authorization.
+	//
+	// This exercises that path rather than proving it: the corruption is in
+	// the file, not in memory, so the race detector cannot see it and the
+	// interleaving does not reproduce on demand. It is a regression guard on
+	// the invariant — a published file always parses and always holds both
+	// stores — not a reproduction of the unserialized failure.
+	const rounds = 25
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+
+		for i := range rounds {
+			tokens.Issue(RefreshTokenData{
+				Subject:  fmt.Sprintf("token-%d@example.com", i),
+				ClientID: testClientID,
+				Resource: testResource,
+			}, time.Hour)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		for i := range rounds {
+			consent.Remember(
+				fmt.Sprintf("consent-%d@example.com", i),
+				testClientID,
+				testResource,
+				testFingerprint,
+			)
+		}
+	}()
+
+	wg.Wait()
+
+	state, err := readState(path)
+	if err != nil {
+		t.Fatalf("the published file must always parse: %v", err)
+	}
+
+	// Every mutation completed before the write it triggered, so whichever
+	// write held the lock last saw both stores complete — and the file it
+	// published must hold everything.
+	if got := len(state.Tokens); got != rounds {
+		t.Errorf("tokens on disk = %d, want %d", got, rounds)
+	}
+	if got := len(state.Consent); got != rounds {
+		t.Errorf("consent records on disk = %d, want %d", got, rounds)
 	}
 }

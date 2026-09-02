@@ -1,11 +1,14 @@
 package oauth
 
 import (
+	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -419,10 +422,40 @@ func TestExpiryDoesNotClearConsent(t *testing.T) {
 func TestVersion1FileLoadsWithoutConsent(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
-	// A file written before consent records existed. It must load, not error:
-	// an operator upgrading should keep their refresh tokens.
-	v1 := []byte(`{"version":1,"tokens":{},"consumed":{},"grants":{}}`)
-	if err := os.WriteFile(path, v1, 0600); err != nil {
+	// A file written before consent records existed, holding a live refresh
+	// token. The token is what makes this fixture worth having: v2 moved
+	// tokens, consumed and grants into an embedded RefreshTokenSnapshot, and
+	// an embedding that nested them under a key instead of flattening would
+	// drop every operator's refresh tokens on upgrade. An empty token map
+	// cannot see that, because the round-trip helpers are symmetric and would
+	// round-trip a nested shape just as happily.
+	const raw = "v1-fixture-refresh-token"
+
+	now := time.Now().UTC()
+	expiry := now.Add(time.Hour).Format(time.RFC3339Nano)
+
+	v1 := fmt.Sprintf(`{
+  "version": 1,
+  "timestamp": %q,
+  "tokens": {
+    %q: {
+      "subject": %q,
+      "clientId": %q,
+      "resource": %q,
+      "grantId": "v1-grant",
+      "expiresAt": %q,
+      "grantExpiresAt": %q
+    }
+  },
+  "consumed": {},
+  "grants": {"v1-grant": [%q]}
+}`,
+		now.Format(time.RFC3339Nano),
+		hashToken(raw), testSubject, testClientID, testResource, expiry, expiry,
+		hashToken(raw),
+	)
+
+	if err := os.WriteFile(path, []byte(v1), 0600); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
 
@@ -433,7 +466,34 @@ func TestVersion1FileLoadsWithoutConsent(t *testing.T) {
 	if len(state.Consent) != 0 {
 		t.Errorf("consent records = %d, want none", len(state.Consent))
 	}
+
+	// Drive the load path an upgrading operator's restart actually takes.
+	s := NewServer(ServerConfig{
+		Issuer:      "https://cetacean.test",
+		MCPResource: testResource,
+		MCP: config.MCPConfig{
+			AccessTokenTTL:  time.Hour,
+			RefreshTokenTTL: 720 * time.Hour,
+		},
+		SigningKey:     []byte("test-signing-key-32bytes-padded!!"),
+		TokenStorePath: path,
+	})
+
+	data, ok := s.refreshTokens.Validate(raw)
+	if !ok {
+		t.Fatal("a v1 refresh token must still validate after the upgrade")
+	}
+	if data.Subject != testSubject {
+		t.Errorf("subject = %q, want %q", data.Subject, testSubject)
+	}
+	if data.ClientID != testClientID {
+		t.Errorf("clientId = %q, want %q", data.ClientID, testClientID)
+	}
 }
+
+// authorizeVerifier is the PKCE verifier every authorize helper below derives
+// its code_challenge from, so a GET and the POST that follows it agree.
+const authorizeVerifier = "verifier-verifier-verifier-1234"
 
 // authorizeGET drives a GET /oauth/authorize for a CIMD client whose metadata
 // document is served by a local test server, and returns the response.
@@ -448,7 +508,7 @@ func authorizeGET(
 		"response_type":         {"code"},
 		"client_id":             {clientID},
 		"redirect_uri":          {redirectURI},
-		"code_challenge":        {computeS256Challenge("verifier-verifier-verifier-1234")},
+		"code_challenge":        {computeS256Challenge(authorizeVerifier)},
 		"code_challenge_method": {"S256"},
 		"state":                 {"xyz"},
 		"resource":              {s.cfg.MCPResource},
@@ -561,5 +621,298 @@ func TestDynamicallyRegisteredClientNeverSkipsTheConsentPage(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "Authorization Request") {
 		t.Error("an unverified client skipped the consent page")
+	}
+}
+
+// approvePOST posts the consent form back the way a browser would: every
+// hidden field the page rendered, plus the CSRF nonce cookie it set. Passing
+// the recorded GET response rather than rebuilding the form by hand is the
+// point — a field the page stopped rendering shows up as a failure here.
+func approvePOST(
+	t *testing.T,
+	s *Server,
+	page *httptest.ResponseRecorder,
+	clientID, redirectURI string,
+	overrides url.Values,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	body := page.Body.String()
+
+	form := url.Values{
+		"decision":              {"approve"},
+		"response_type":         {"code"},
+		"client_id":             {clientID},
+		"redirect_uri":          {redirectURI},
+		"code_challenge":        {computeS256Challenge(authorizeVerifier)},
+		"code_challenge_method": {"S256"},
+		"state":                 {"xyz"},
+		"resource":              {s.cfg.MCPResource},
+		"csrf_token":            {extractHiddenField(body, "csrf_token")},
+		consentFingerprintField: {extractHiddenField(body, consentFingerprintField)},
+	}
+
+	maps.Copy(form, overrides)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/oauth/authorize",
+		strings.NewReader(form.Encode()),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	for _, cookie := range page.Result().Cookies() {
+		if cookie.Name == csrfCookieName {
+			req.AddCookie(cookie)
+		}
+	}
+
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{
+		Subject:  testSubject,
+		Provider: "none",
+	}))
+
+	w := httptest.NewRecorder()
+	s.HandleAuthorize(w, req)
+
+	return w
+}
+
+// redirectedCode returns the authorization code from a recorded redirect.
+func redirectedCode(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+
+	location, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse Location: %v", err)
+	}
+
+	return location.Query().Get("code")
+}
+
+func TestApprovingThroughTheConsentPageIsRemembered(t *testing.T) {
+	s, clientID, redirectURI, meta := cimdServer(t)
+
+	page := authorizeGET(t, s, clientID, redirectURI)
+	if page.Code != http.StatusOK {
+		t.Fatalf("GET status = %d, want the consent page: %s", page.Code, page.Body.String())
+	}
+
+	approved := approvePOST(t, s, page, clientID, redirectURI, nil)
+	if approved.Code != http.StatusFound {
+		t.Fatalf("POST status = %d, want %d: %s",
+			approved.Code, http.StatusFound, approved.Body.String())
+	}
+	if redirectedCode(t, approved) == "" {
+		t.Fatal("no authorization code in the approval redirect")
+	}
+
+	// The wiring under test: the approve handler must write the record, not
+	// merely issue a code. Seeding the store directly would prove nothing
+	// about whether the endpoint ever calls Remember.
+	if !s.consent.Allows(testSubject, clientID, s.cfg.MCPResource, consentFingerprint(meta)) {
+		t.Fatal("approving through the consent page recorded no approval")
+	}
+
+	// And the record it wrote must be the one the skip path reads.
+	again := authorizeGET(t, s, clientID, redirectURI)
+	if again.Code != http.StatusFound {
+		t.Fatalf("second GET status = %d, want a redirect with a code", again.Code)
+	}
+	if redirectedCode(t, again) == "" {
+		t.Error("the second authorization did not carry a code")
+	}
+}
+
+// postRefreshGrant drives a refresh_token grant through the real token
+// endpoint.
+//
+// No resource parameter: when one is supplied the handler validates it against
+// the live token before rotating, so a replayed token is rejected as unknown
+// and never reaches the theft branch. RequireResourceIndicator is off in
+// newTestServer, so omitting it is a legitimate request.
+func postRefreshGrant(t *testing.T, s *Server, token string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	form := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {token},
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/oauth/token",
+		strings.NewReader(form.Encode()),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	w := httptest.NewRecorder()
+	s.HandleToken(w, req)
+
+	return w
+}
+
+func TestTheftAtTheTokenEndpointClearsConsent(t *testing.T) {
+	s, token := consentServer(t)
+
+	// A legitimate refresh, then a replay of the token it consumed. Both go
+	// through HandleToken on purpose: calling Rotate directly proves only that
+	// the store detects theft, not that the endpoint reacts to it.
+	if first := postRefreshGrant(t, s, token); first.Code != http.StatusOK {
+		t.Fatalf("first refresh: status = %d, want 200: %s", first.Code, first.Body.String())
+	}
+
+	replay := postRefreshGrant(t, s, token)
+	if replay.Code != http.StatusBadRequest {
+		t.Fatalf("replay: status = %d, want 400: %s", replay.Code, replay.Body.String())
+	}
+
+	// A replayed token burned the family. Silently re-granting on the next
+	// authorize is exactly wrong.
+	if s.consent.Allows(testSubject, testClientID, s.cfg.MCPResource, testFingerprint) {
+		t.Error("a replayed refresh token should have cleared the approval")
+	}
+}
+
+func TestMetadataChangedMidFlowRePrompts(t *testing.T) {
+	// The document is mutated between the GET and the POST, so the handler
+	// goroutine and the test goroutine both touch it.
+	var (
+		mu        sync.Mutex
+		published = ClientMetadata{
+			ClientName:   "Acme CLI",
+			RedirectURIs: []string{"https://example.com/cb"},
+		}
+		documentURL string
+	)
+
+	httpSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		current := published
+		mu.Unlock()
+
+		serveMetadata(documentURL, current)(w, r)
+	}))
+	t.Cleanup(httpSrv.Close)
+	documentURL = httpSrv.URL + "/client.json"
+
+	s := newTestServer(t)
+	s.cimd.Client = httpSrv.Client()
+
+	const redirectURI = "https://example.com/cb"
+
+	page := authorizeGET(t, s, documentURL, redirectURI)
+	if page.Code != http.StatusOK {
+		t.Fatalf("GET status = %d, want the consent page: %s", page.Code, page.Body.String())
+	}
+
+	// The client edits its document while the user is deciding, and the
+	// fetcher's cached copy lapses — a consent tab left open longer than an
+	// hour, a restart, an eviction. Without the fingerprint travelling from
+	// the GET, the POST would fingerprint this new document and record an
+	// approval for a client the user never saw.
+	mu.Lock()
+	published.ClientName = "Totally Different"
+	mu.Unlock()
+
+	s.cimd.mu.Lock()
+	s.cimd.cache = nil
+	s.cimd.mu.Unlock()
+
+	stale := approvePOST(t, s, page, documentURL, redirectURI, nil)
+
+	if stale.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, want the consent page again: %s",
+			stale.Code, stale.Body.String())
+	}
+	if !strings.Contains(stale.Body.String(), "Totally Different") {
+		t.Error("the second prompt should describe the client as it is now")
+	}
+	if got := len(s.consent.Snapshot()); got != 0 {
+		t.Errorf("records = %d, want nothing recorded for metadata the user never saw", got)
+	}
+
+	// The re-prompt must be usable: a fresh nonce bound to the new
+	// fingerprint, so approving it goes through.
+	confirmed := approvePOST(t, s, stale, documentURL, redirectURI, nil)
+	if confirmed.Code != http.StatusFound {
+		t.Fatalf("re-approval status = %d, want %d: %s",
+			confirmed.Code, http.StatusFound, confirmed.Body.String())
+	}
+
+	mu.Lock()
+	current := published
+	mu.Unlock()
+
+	if !s.consent.Allows(
+		testSubject,
+		documentURL,
+		s.cfg.MCPResource,
+		consentFingerprint(&current),
+	) {
+		t.Error("approving the second prompt should record the metadata it displayed")
+	}
+}
+
+func TestTamperedFingerprintFailsCSRF(t *testing.T) {
+	s, clientID, redirectURI, _ := cimdServer(t)
+
+	page := authorizeGET(t, s, clientID, redirectURI)
+	if page.Code != http.StatusOK {
+		t.Fatalf("GET status = %d, want the consent page: %s", page.Code, page.Body.String())
+	}
+
+	// The fingerprint is not a secret and rides in a hidden field; the CSRF
+	// HMAC is what makes it unforgeable. Swapping it must not merely
+	// re-prompt — it must fail the token check outright.
+	tampered := approvePOST(t, s, page, clientID, redirectURI, url.Values{
+		consentFingerprintField: {"a-fingerprint-the-user-never-saw"},
+	})
+
+	if tampered.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d: %s",
+			tampered.Code, http.StatusBadRequest, tampered.Body.String())
+	}
+	if !strings.Contains(tampered.Body.String(), "CSRF") {
+		t.Errorf("expected a CSRF failure, got: %s", tampered.Body.String())
+	}
+	if got := len(s.consent.Snapshot()); got != 0 {
+		t.Errorf("records = %d, want none", got)
+	}
+}
+
+func TestConsentPageDisclosesRemembering(t *testing.T) {
+	const disclosure = "will be remembered"
+
+	verified, clientID, redirectURI, _ := cimdServer(t)
+
+	page := authorizeGET(t, verified, clientID, redirectURI)
+	if page.Code != http.StatusOK {
+		t.Fatalf("GET status = %d, want the consent page: %s", page.Code, page.Body.String())
+	}
+
+	// Turning "approve once" into "approve until revoked" without telling the
+	// person is not consent.
+	if !strings.Contains(page.Body.String(), disclosure) {
+		t.Error("the consent page for a verified client should say the approval is remembered")
+	}
+
+	// And it must not claim so where nothing is remembered.
+	unverified := newTestServer(t)
+
+	const dcrRedirectURI = "http://127.0.0.1:1/cb"
+
+	unverified.clients.register(&ClientRegistration{
+		ClientID:     "dcr-disclosure-client",
+		ClientName:   "Self-Registered CLI",
+		RedirectURIs: []string{dcrRedirectURI},
+	})
+
+	dcrPage := authorizeGET(t, unverified, "dcr-disclosure-client", dcrRedirectURI)
+	if dcrPage.Code != http.StatusOK {
+		t.Fatalf("DCR GET status = %d, want the consent page", dcrPage.Code)
+	}
+	if strings.Contains(dcrPage.Body.String(), disclosure) {
+		t.Error("a DCR client's approval is never remembered, so the page must not say it is")
 	}
 }

@@ -593,6 +593,61 @@ func (s *Server) issueCodeAndRedirect(
 	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
 }
 
+// consentPrompt carries everything needed to render the consent page. Both the
+// initial GET and the POST that finds the client changed mid-decision go
+// through it, so the second prompt is built exactly like the first.
+type consentPrompt struct {
+	meta     *ClientMetadata
+	verified bool
+	identity *auth.Identity
+
+	// fingerprint hashes meta. It is passed rather than recomputed so the
+	// value bound into the CSRF token is provably the one the caller compared
+	// against, not a second resolution of the same document.
+	fingerprint string
+
+	responseType        string
+	clientID            string
+	redirectURI         string
+	codeChallenge       string
+	codeChallengeMethod string
+	state               string
+
+	// resource is the raw request parameter, echoed back unchanged: the form
+	// must resubmit what the client sent, not the resolved default.
+	resource string
+}
+
+// renderConsentPage issues a fresh CSRF nonce bound to this prompt and renders
+// the form.
+func (s *Server) renderConsentPage(w http.ResponseWriter, p consentPrompt) {
+	csrfToken, _ := issueCSRFNonce(
+		w,
+		s.cfg.SigningKey,
+		p.state,
+		p.fingerprint,
+		strings.HasPrefix(s.cfg.Issuer, "https://"),
+	)
+
+	renderConsent(w, consentData{
+		ClientName:          p.meta.ClientName,
+		Verified:            p.verified,
+		Remembered:          p.verified,
+		RedirectURI:         p.redirectURI,
+		Subject:             p.identity.Subject,
+		Email:               p.identity.Email,
+		ActionURL:           s.cfg.BasePath + "/oauth/authorize",
+		ResponseType:        p.responseType,
+		ClientID:            p.clientID,
+		CodeChallenge:       p.codeChallenge,
+		CodeChallengeMethod: p.codeChallengeMethod,
+		State:               p.state,
+		Resource:            p.resource,
+		Fingerprint:         p.fingerprint,
+		CSRFToken:           csrfToken,
+	})
+}
+
 func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	responseType := q.Get("response_type")
@@ -652,6 +707,21 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fingerprint the metadata exactly once, here, from the document the page
+	// is about to be rendered from. It travels to the POST in a hidden field
+	// covered by the CSRF HMAC, because a record must be bound to what the
+	// user was *shown*: resolving the client again on POST and fingerprinting
+	// that would record a document the user may never have seen, whenever the
+	// CIMD cache entry lapsed in between.
+	//
+	// Computed for unverified clients too. Nothing is remembered for them, but
+	// the fingerprint costs a hash, and covering it uniformly means the POST
+	// re-prompts whenever the name or redirect URI on screen went stale — for
+	// DCR that is an LRU eviction and re-registration rather than a document
+	// edit, but the user is equally owed a page describing the client that is
+	// about to receive the code.
+	fingerprint := consentFingerprint(meta)
+
 	// A remembered approval skips the page. Only for verified clients, and only
 	// when the metadata still hashes to what the user was shown — a CIMD client
 	// controls its own document and could otherwise redirect an inherited
@@ -661,7 +731,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	// redirect_uri was exact-matched against the client's registered set above,
 	// so a silently issued code still lands only where the client registered.
 	if verified &&
-		s.consent.Allows(identity.Subject, clientID, effectiveResource, consentFingerprint(meta)) {
+		s.consent.Allows(identity.Subject, clientID, effectiveResource, fingerprint) {
 		s.issueCodeAndRedirect(w, r, authorizedRequest{
 			clientID:      clientID,
 			redirectURI:   redirectURIRaw,
@@ -675,30 +745,18 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	csrfToken, _ := issueCSRFNonce(
-		w,
-		s.cfg.SigningKey,
-		state,
-		strings.HasPrefix(s.cfg.Issuer, "https://"),
-	)
-
-	actionURL := s.cfg.BasePath + "/oauth/authorize"
-
-	renderConsent(w, consentData{
-		ClientName:          meta.ClientName,
-		Verified:            verified,
-		Remembered:          verified,
-		RedirectURI:         redirectURIRaw,
-		Subject:             identity.Subject,
-		Email:               identity.Email,
-		ActionURL:           actionURL,
-		ResponseType:        responseType,
-		ClientID:            clientID,
-		CodeChallenge:       codeChallenge,
-		CodeChallengeMethod: codeChallengeMethod,
-		State:               state,
-		Resource:            resourceParam,
-		CSRFToken:           csrfToken,
+	s.renderConsentPage(w, consentPrompt{
+		meta:                meta,
+		verified:            verified,
+		identity:            identity,
+		fingerprint:         fingerprint,
+		responseType:        responseType,
+		clientID:            clientID,
+		redirectURI:         redirectURIRaw,
+		codeChallenge:       codeChallenge,
+		codeChallengeMethod: codeChallengeMethod,
+		state:               state,
+		resource:            resourceParam,
 	})
 }
 
@@ -716,6 +774,12 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	codeChallengeMethod := r.FormValue("code_challenge_method")
 	resourceParam := r.FormValue("resource")
 	decision := r.FormValue("decision")
+	responseType := r.FormValue("response_type")
+
+	// Only trustworthy once verifyCSRFToken passes: the CSRF HMAC covers this
+	// field, so a token that verifies proves this is the fingerprint the
+	// consent page was rendered with.
+	shownFingerprint := r.FormValue(consentFingerprintField)
 
 	// Re-validate client and redirect_uri before any redirect.
 	meta, verified, errMsg := s.resolveClientMeta(r, clientID)
@@ -770,14 +834,45 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The client's metadata changed between rendering the page and this
+	// submission — a CIMD document edited, or its cache entry lapsed and the
+	// re-fetch returned something else. The user approved a name and a set of
+	// redirect URIs that no longer describe this client, so their approval
+	// does not cover this request: prompt again from the fresh metadata rather
+	// than issue a code or record anything against a document they never saw.
+	//
+	// The cookie is deliberately not cleared here; renderConsentPage replaces
+	// it with a nonce bound to the new fingerprint.
+	if fingerprint := consentFingerprint(meta); fingerprint != shownFingerprint {
+		s.renderConsentPage(w, consentPrompt{
+			meta:                meta,
+			verified:            verified,
+			identity:            identity,
+			fingerprint:         fingerprint,
+			responseType:        responseType,
+			clientID:            clientID,
+			redirectURI:         redirectURIRaw,
+			codeChallenge:       codeChallenge,
+			codeChallengeMethod: codeChallengeMethod,
+			state:               state,
+			resource:            resourceParam,
+		})
+
+		return
+	}
+
 	// Clear the CSRF cookie — the flow is complete.
 	clearCSRFCookie(w, secure)
 
 	// Remembering is limited to verified clients. A DCR client's metadata is
 	// self-reported and its client_id does not survive a restart, so a record
 	// keyed on one would be worthless at best.
+	//
+	// The recorded fingerprint is the one the page displayed, proven current
+	// by the comparison above — not a fresh resolution, which could differ
+	// from what the user actually approved.
 	if verified {
-		s.consent.Remember(identity.Subject, clientID, effectiveResource, consentFingerprint(meta))
+		s.consent.Remember(identity.Subject, clientID, effectiveResource, shownFingerprint)
 	}
 
 	s.issueCodeAndRedirect(w, r, authorizedRequest{

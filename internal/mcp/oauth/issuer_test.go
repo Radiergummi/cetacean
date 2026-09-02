@@ -39,6 +39,13 @@ func runConsent(t *testing.T, s *Server, decision string, overrides url.Values) 
 		t.Fatal("CSRF token not found in consent page")
 	}
 
+	// The CSRF token is bound to the fingerprint of the metadata the page was
+	// rendered from, so a browser resubmitting the form must carry it back.
+	fingerprint := extractHiddenField(getRec.Body.String(), consentFingerprintField)
+	if fingerprint == "" {
+		t.Fatal("metadata fingerprint not found in consent page")
+	}
+
 	var nonceCookie *http.Cookie
 	for _, cookie := range getRec.Result().Cookies() {
 		if cookie.Name == csrfCookieName {
@@ -62,6 +69,7 @@ func runConsent(t *testing.T, s *Server, decision string, overrides url.Values) 
 		"state":                 {"stateISS"},
 		"resource":              {s.cfg.MCPResource},
 		"csrf_token":            {csrfToken},
+		consentFingerprintField: {fingerprint},
 	}
 
 	maps.Copy(form, overrides)

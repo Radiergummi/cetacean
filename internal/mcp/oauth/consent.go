@@ -63,6 +63,7 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!DOCTYPE htm
   <input type="hidden" name="code_challenge_method" value="{{.CodeChallengeMethod}}">
   <input type="hidden" name="state" value="{{.State}}">
   <input type="hidden" name="resource" value="{{.Resource}}">
+  <input type="hidden" name="consent_fingerprint" value="{{.Fingerprint}}">
   <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
   <div class="actions">
     <button type="submit" name="decision" value="approve" class="btn-approve">Approve</button>
@@ -107,7 +108,12 @@ type consentData struct {
 	CodeChallengeMethod string
 	State               string
 	Resource            string
-	CSRFToken           string
+
+	// Fingerprint hashes the metadata this page was rendered from. It rides
+	// along in a hidden field and is covered by CSRFToken, so the POST can
+	// tell whether the client changed while the user was deciding.
+	Fingerprint string
+	CSRFToken   string
 }
 
 // renderConsent writes the consent page with security headers.
@@ -137,14 +143,47 @@ func setConsentHeaders(w http.ResponseWriter) {
 	w.Header().Set("Pragma", "no-cache")
 }
 
+// consentFingerprintField is the hidden form field carrying the fingerprint of
+// the client metadata the consent page was rendered from. It is not a secret —
+// the CSRF HMAC over it is what makes it unforgeable.
+const consentFingerprintField = "consent_fingerprint"
+
+// csrfMAC derives the CSRF token from the nonce and the request parameters it
+// must stay bound to. Both issuing and verifying go through here so the two
+// cannot drift apart.
+//
+// The fingerprint is covered because the recorded approval must be bound to
+// what the user was *shown*: the metadata is resolved on GET to render the
+// page and again on POST to act on it, and a CIMD document can change (or its
+// cache entry lapse) in between. Folding it into the MAC that is already
+// verified on every POST carries the GET's view forward without adding a
+// second piece of trust machinery.
+//
+// Fields are length-prefixed via hashField rather than joined with a
+// separator. state is client-chosen and may contain any byte, so a plain
+// "nonce|state|fingerprint" would let one field's content spell another's and
+// a token issued for one pair verify for a different one. This is the same
+// discipline consentFingerprint and consentKey already apply, for the same
+// reason.
+func csrfMAC(signingKey []byte, nonce, state, fingerprint string) string {
+	mac := hmac.New(sha256.New, signingKey)
+	hashField(mac, nonce)
+	hashField(mac, state)
+	hashField(mac, fingerprint)
+
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
 // issueCSRFNonce generates a random nonce, sets a short-lived signed cookie,
-// and returns the CSRF token (HMAC of nonce+state). The cookie is HttpOnly
-// and SameSite=Strict. When secure is true (issuer is HTTPS) the cookie is
-// also marked Secure.
+// and returns the CSRF token (an HMAC over nonce, state and the client
+// metadata fingerprint the page is being rendered from). The cookie is
+// HttpOnly and SameSite=Strict. When secure is true (issuer is HTTPS) the
+// cookie is also marked Secure.
 func issueCSRFNonce(
 	w http.ResponseWriter,
 	signingKey []byte,
 	state string,
+	fingerprint string,
 	secure bool,
 ) (token string, nonce string) {
 	b := make([]byte, 16)
@@ -152,12 +191,7 @@ func issueCSRFNonce(
 		panic("mcp/oauth: crypto/rand failure: " + err.Error())
 	}
 	nonce = base64.RawURLEncoding.EncodeToString(b)
-
-	mac := hmac.New(sha256.New, signingKey)
-	mac.Write([]byte(nonce))
-	mac.Write([]byte("|"))
-	mac.Write([]byte(state))
-	token = base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	token = csrfMAC(signingKey, nonce, state, fingerprint)
 
 	//nolint:gosec // G124: cookie is HttpOnly + SameSite=Strict; Secure is true on HTTPS issuers and intentionally off only for loopback HTTP dev, which gosec can't prove from the variable.
 	http.SetCookie(w, &http.Cookie{
@@ -190,21 +224,21 @@ func clearCSRFCookie(w http.ResponseWriter, secure bool) {
 }
 
 // verifyCSRFToken validates the CSRF token from the form against the nonce
-// stored in the cookie.
+// stored in the cookie. A token verifies only for the state and the metadata
+// fingerprint it was issued for, so the caller can trust the submitted
+// fingerprint as the one the consent page actually displayed.
 func verifyCSRFToken(r *http.Request, signingKey []byte) bool {
 	cookie, err := r.Cookie(csrfCookieName)
 	if err != nil {
 		return false
 	}
-	nonce := cookie.Value
-	state := r.FormValue("state")
-	submittedToken := r.FormValue("csrf_token")
 
-	mac := hmac.New(sha256.New, signingKey)
-	mac.Write([]byte(nonce))
-	mac.Write([]byte("|"))
-	mac.Write([]byte(state))
-	expected := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	expected := csrfMAC(
+		signingKey,
+		cookie.Value,
+		r.FormValue("state"),
+		r.FormValue(consentFingerprintField),
+	)
 
-	return hmac.Equal([]byte(submittedToken), []byte(expected))
+	return hmac.Equal([]byte(r.FormValue("csrf_token")), []byte(expected))
 }

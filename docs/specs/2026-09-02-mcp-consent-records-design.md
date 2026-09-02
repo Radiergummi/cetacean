@@ -2,7 +2,7 @@
 
 **Issue:** [#160](https://github.com/Radiergummi/cetacean/issues/160)
 **Depends on:** [#74](https://github.com/Radiergummi/cetacean/issues/74), merged as `0f71654e`
-**Status:** design approved, not implemented
+**Status:** implemented
 
 Record a user's consent decision so an already-approved MCP client does not
 re-prompt on every authorization request.
@@ -111,7 +111,7 @@ issue time".
   mutex, a map, and an on-change hook fired after the lock is released.
 - **`consentFingerprint(meta *ClientMetadata) string`** — the hash above.
 - **`stateFile`** (`internal/mcp/oauth/persist.go`) — owns the path and writes
-  both stores as one file.
+  both stores as one file, under its own mutex.
 
 ### One file, two stores
 
@@ -119,6 +119,17 @@ Two stores cannot each hold their own persist func: each would write the file
 from its own snapshot and clobber the other's. `stateFile` owns the path,
 snapshots both stores, and writes. Each store's hook becomes a plain `func()`
 into it.
+
+Being the single writer takes a mutex, held across the snapshot and the rename
+that publishes it. Two concurrent mutations — reachable now that two independent
+stores point here — would otherwise snapshot at different moments and rename in
+either order, publishing a view taken before the other's mutation and silently
+dropping a token or an approval still live in memory. The temp file also gets a
+unique name instead of a fixed `path + ".tmp"`: within the process the mutex
+settles it, but two processes sharing a data directory would truncate the same
+temp file and interleave bytes into it, and the rename would publish something
+that does not parse. A lost update is survivable; unparseable bytes cost every
+client a re-authorization.
 
 This revises what #74 landed: `SetPersistFunc(func(RefreshTokenSnapshot))`
 becomes `SetOnChange(func())`. Both stores keep the existing discipline — the
@@ -163,7 +174,7 @@ if verified && consent.Allows(subject, clientID, effectiveResource, fingerprint)
     issue code, redirect
     return
 }
-render the consent page
+render the consent page, carrying fingerprint
 ```
 
 Skipping the page means GET issues a code and redirects rather than rendering a
@@ -176,9 +187,46 @@ GET currently computes the effective resource via `ValidateResourceIndicator`
 and discards it; it now keeps it, since the record is keyed on it.
 
 The code-issuing tail of `handleAuthorizePOST` is extracted into a helper both
-paths call, removing the duplication that would otherwise appear.
+paths call, removing the duplication that would otherwise appear. So is the
+consent-page render, which GET and POST both reach.
 
 On approve, `handleAuthorizePOST` calls `Remember` when `verified`.
+
+### The fingerprint travels from the GET, not resolved again on the POST
+
+The claim above — an approval is bound to a fingerprint of what the user was
+shown — is not delivered by fingerprinting on the POST. `resolveClientMeta`
+runs twice: once on GET to render the page, once on POST to act on it. The CIMD
+fetcher's 1h cache usually hides the gap, but a consent tab open longer than
+that, a restart or an eviction makes the POST re-fetch, and it would then record
+a fingerprint of a document the user never saw. Every later authorize would
+silently issue codes against a redirect URI set nobody approved — precisely the
+attack the fingerprint exists to prevent.
+
+So the fingerprint is computed once, on GET, and carried into the POST as a
+hidden form field, folded into the existing CSRF HMAC. That HMAC already covers
+`nonce` and `state` and is already verified on every POST, so binding the
+fingerprint to it adds no new trust machinery: a token verifies only for the
+fingerprint it was issued with, which makes the submitted value unforgeable
+without making it secret.
+
+The HMAC's fields are length-prefixed rather than `|`-joined, the same
+discipline `consentFingerprint` and `consentKey` already apply. `state` is
+client-chosen and may contain any byte, so a separator alone would let one
+field's content spell another's.
+
+On POST, after CSRF verification passes, the metadata is re-resolved as before
+and compared against the submitted fingerprint. If they differ the client
+changed while the user was deciding: **re-prompt** — render the page again from
+the fresh metadata with a fresh CSRF nonce — rather than issue a code or record
+anything. The record is written with the submitted fingerprint, now proven
+current.
+
+The fingerprint is computed and carried for unverified (DCR) clients too. It is
+never remembered for them, but a uniform path costs one hash and no branch, and
+the comparison still re-prompts when the name or redirect URI on screen went
+stale — an LRU eviction and re-registration rather than a document edit, but the
+user is equally owed a page describing the client about to receive the code.
 
 ### The consent page says so
 
@@ -208,11 +256,20 @@ documentation should say that rather than let the reader generalize from #74.
   fingerprint.
 - A GET with a matching record redirects with a code and renders no form.
 - A GET re-prompts after the client's metadata changes.
+- Approving through the consent page records the approval, and the next GET
+  skips the page — driven through the real handlers, not by seeding the store.
+- A client whose metadata changes between the GET and the POST re-prompts and
+  records nothing; the re-prompt is itself approvable.
+- A tampered fingerprint fails the CSRF check outright.
 - A DCR (unverified) client records nothing and always prompts.
+- The consent page states that a verified client's approval is remembered, and
+  does not state it for an unverified one.
 - `RevokeGrant` clears the record; a subsequent authorize prompts.
-- Theft clears the record.
+- Theft clears the record, driven through the token endpoint.
 - **Expiry does not clear the record.**
-- A v1 file loads with no records; a v2 file round-trips through disk.
+- A v1 file — with a populated token map, so a nested rather than flattened
+  `RefreshTokenSnapshot` embedding would be caught — loads with no records and
+  keeps its refresh tokens; a v2 file round-trips through disk.
 
 ## Out of scope
 

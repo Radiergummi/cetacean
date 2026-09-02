@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	json "github.com/goccy/go-json"
@@ -157,9 +158,16 @@ func writeState(path string, state oauthState) error {
 		return fmt.Errorf("marshal oauth state: %w", err)
 	}
 
-	tmpPath := path + ".tmp"
-	if err := writeFileSynced(tmpPath, data); err != nil {
-		os.Remove(tmpPath) //nolint:errcheck
+	// The temp file gets a unique name rather than a fixed path + ".tmp".
+	// stateFile's mutex already serializes writers inside this process, but
+	// two processes pointed at one data directory would otherwise open and
+	// truncate the same temp file and interleave their bytes into it, and the
+	// rename would publish something that fails to parse — costing every
+	// client a re-authorization. A lost update between two processes is
+	// survivable; unparseable bytes are not. The cost is that an unclean kill
+	// mid-write leaves an orphan file behind instead of reusing one slot.
+	tmpPath, err := writeTempSynced(filepath.Dir(path), filepath.Base(path)+".*.tmp", data)
+	if err != nil {
 		return fmt.Errorf("write oauth state tmp: %w", err)
 	}
 
@@ -179,25 +187,38 @@ func writeState(path string, state oauthState) error {
 	return nil
 }
 
-// writeFileSynced writes data to path and flushes it to the disk before
-// returning, so the caller can treat a nil error as "this survives a crash".
-func writeFileSynced(path string, data []byte) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+// writeTempSynced creates a uniquely named file in dir, writes data to it and
+// flushes it to the disk before returning, so the caller can treat a nil error
+// as "this survives a crash". It returns the path it created, which the caller
+// owns: on error it is removed here, on success the caller renames it.
+//
+// os.CreateTemp already creates with mode 0600, which is what this file needs.
+func writeTempSynced(dir, pattern string, data []byte) (string, error) {
+	f, err := os.CreateTemp(dir, pattern)
 	if err != nil {
-		return err
+		return "", err
 	}
 
+	path := f.Name()
+
 	if _, err := f.Write(data); err != nil {
-		f.Close() //nolint:errcheck // the write error is the one worth reporting
-		return err
+		f.Close()       //nolint:errcheck // the write error is the one worth reporting
+		os.Remove(path) //nolint:errcheck
+		return "", err
 	}
 
 	if err := f.Sync(); err != nil {
-		f.Close() //nolint:errcheck // the sync error is the one worth reporting
-		return err
+		f.Close()       //nolint:errcheck // the sync error is the one worth reporting
+		os.Remove(path) //nolint:errcheck
+		return "", err
 	}
 
-	return f.Close()
+	if err := f.Close(); err != nil {
+		os.Remove(path) //nolint:errcheck
+		return "", err
+	}
+
+	return path, nil
 }
 
 // syncDir flushes a directory's own entries, which is what makes a rename
@@ -241,6 +262,17 @@ func readState(path string) (oauthState, error) {
 // would serialize the whole thing from its own view and drop the other's. The
 // file is the single writer, and every store points its change hook here.
 type stateFile struct {
+	// mu makes "the single writer" true rather than aspirational. Two stores
+	// mutating concurrently each call write, and unserialized they would
+	// snapshot at different moments and rename in either order — publishing a
+	// snapshot taken before the other's mutation and silently dropping a token
+	// or an approval that is still live in memory. Held across the whole of
+	// write so the snapshot and the rename that publishes it stay one step.
+	//
+	// Neither store's mutex is held while its hook runs, so taking this one
+	// here cannot deadlock against them.
+	mu sync.Mutex
+
 	path    string
 	tokens  *RefreshTokenStore
 	consent *ConsentStore
@@ -252,6 +284,9 @@ type stateFile struct {
 // will cost a re-authorization, which is the behaviour they had before this
 // file existed.
 func (f *stateFile) write() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	state := oauthState{
 		Version:              oauthStateVersion,
 		Timestamp:            time.Now(),
