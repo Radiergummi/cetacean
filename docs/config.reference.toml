@@ -32,7 +32,7 @@
 # format = "json"                           # json or text
 
 [storage]
-# data_dir = "./data"                       # Directory for snapshot file
+# data_dir = "./data"                       # Directory for snapshot and MCP token files
 # snapshot = true                           # Persist swarm state to disk
 
 [tls]

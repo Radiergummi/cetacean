@@ -152,6 +152,28 @@ type RefreshTokenStore struct {
 	tokens   map[string]refreshTokenEntry // hash → live entry
 	consumed map[string]string            // hash → grantID (rotated-away tokens)
 	grants   map[string][]string          // grantID → ordered slice of recent hashes (capped at maxGrantHistorySize)
+
+	// persist is called with a fresh snapshot after every mutation, always
+	// with mu released. Nil when the store is memory-only.
+	persist func(RefreshTokenSnapshot)
+}
+
+// SetPersistFunc installs the writer that receives a snapshot after every
+// mutation. Call it during setup, before the store serves any request: it is
+// not guarded by the mutex, because a persister swapped mid-flight would race
+// the mutations it is meant to record.
+func (s *RefreshTokenStore) SetPersistFunc(fn func(RefreshTokenSnapshot)) {
+	s.persist = fn
+}
+
+// writeThrough hands the current state to the configured writer. It must be
+// called with mu released, since taking a snapshot acquires it.
+func (s *RefreshTokenStore) writeThrough() {
+	if s.persist == nil {
+		return
+	}
+
+	s.persist(s.Snapshot())
 }
 
 // NewRefreshTokenStore returns a ready-to-use RefreshTokenStore.
@@ -184,6 +206,8 @@ func (s *RefreshTokenStore) Issue(data RefreshTokenData, ttl time.Duration) stri
 	}
 	s.grants[grantID] = []string{h}
 	s.mu.Unlock()
+
+	s.writeThrough()
 
 	return raw
 }
@@ -222,6 +246,22 @@ func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
 //  5. Move old hash to consumed, mint a fresh token, register it in tokens
 //     and grants, return RotateResult{OK: true, NewToken: ..., Data: ...}.
 func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateResult {
+	result, mutated := s.rotate(oldToken, ttl)
+
+	// Theft burns the grant family and an expired token tears it down, so
+	// those write as surely as a successful rotation does. An unknown token
+	// changes nothing, and must not write: anyone can post a made-up refresh
+	// token to the token endpoint, and rewriting the whole file for each one
+	// would turn that into an amplified write.
+	if mutated {
+		s.writeThrough()
+	}
+
+	return result
+}
+
+// rotate performs the rotation and reports whether it changed durable state.
+func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) (RotateResult, bool) {
 	oldHash := hashToken(oldToken)
 
 	// Generate the candidate replacement outside the critical section so
@@ -240,20 +280,20 @@ func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateRes
 	// must record it at issue time.
 	if grantID, isConsumed := s.consumed[oldHash]; isConsumed {
 		s.revokeGrantLocked(grantID)
-		return RotateResult{Theft: true}
+		return RotateResult{Theft: true}, true
 	}
 
 	// Step 3: live token lookup.
 	entry, exists := s.tokens[oldHash]
 	if !exists {
-		return RotateResult{}
+		return RotateResult{}, false
 	}
 
 	// Step 4: expiry check. Tear down the whole family so consumed and grants
 	// don't accumulate orphaned entries past the token's natural lifetime.
 	if time.Now().After(entry.expiresAt) {
 		s.revokeGrantLocked(entry.data.grantID)
-		return RotateResult{}
+		return RotateResult{}, true
 	}
 
 	// Step 5: rotate. Per-token expiry refreshes, but grantExpiresAt carries
@@ -286,12 +326,20 @@ func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateRes
 		NewToken: newRaw,
 		Data:     out,
 		OK:       true,
-	}
+	}, true
 }
 
 // RevokeGrant revokes every token in the grant family that contains the
 // given token, whether that token is currently live or already consumed.
 func (s *RefreshTokenStore) RevokeGrant(token string) {
+	if s.revokeGrant(token) {
+		s.writeThrough()
+	}
+}
+
+// revokeGrant revokes the family and reports whether one was found. A token
+// belonging to no known family is a no-op, and must not write.
+func (s *RefreshTokenStore) revokeGrant(token string) bool {
 	h := hashToken(token)
 
 	s.mu.Lock()
@@ -305,9 +353,13 @@ func (s *RefreshTokenStore) RevokeGrant(token string) {
 		grantID = id
 	}
 
-	if grantID != "" {
-		s.revokeGrantLocked(grantID)
+	if grantID == "" {
+		return false
 	}
+
+	s.revokeGrantLocked(grantID)
+
+	return true
 }
 
 // revokeGrantLocked removes every hash ever associated with grantID from both

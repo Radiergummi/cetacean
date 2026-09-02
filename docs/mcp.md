@@ -390,9 +390,16 @@ nowhere while looking configured.
 
 ## Known limitations (current release)
 
-- **State is in-memory.** DCR registrations, authorization codes, and refresh tokens do not survive a restart;
-  clients silently re-authorize via the discovery chain on the next `401`. Access-token JWTs remain valid until they
-  expire. This is acceptable for single-instance and small multi-replica deployments.
+- **Refresh tokens survive a restart; nothing else does.** They are written to `mcp-tokens.json` in the data
+  directory (see [`storage.data_dir`](configuration.md)) on every issue, rotation and revocation, so an authorized
+  client stays authorized. DCR registrations and authorization codes are still in-memory: a client whose registration
+  is lost re-registers via the discovery chain on the next `401`, and a code lost mid-flow is indistinguishable from an
+  expired one at its 60-second TTL. Access-token JWTs are stateless and remain valid until they expire, unless
+  `CETACEAN_MCP_SIGNING_KEY` is unset — an auto-generated key changes on every restart, which invalidates them. Set it
+  to keep access tokens valid too.
+- **Durability is not shared.** The token file is local. Multi-replica deployments are not supported: authorization codes
+  live in one replica's memory for their 60-second lifetime, and an unset `CETACEAN_MCP_SIGNING_KEY` leaves each
+  replica signing with a different key.
 - **Token revocation is not immediate.** Per RFC 7009 the revoke endpoint always returns `200`, but a revoked access
   token JWT keeps validating until `exp` (default 1h). Lower `CETACEAN_MCP_ACCESS_TOKEN_TTL` if you need a tighter
   window.

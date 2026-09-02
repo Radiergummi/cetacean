@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `CETACEAN_MCP_SESSION_IDLE_TTL` and `CETACEAN_MCP_MAX_SESSIONS` (and their `session_idle_ttl` / `max_sessions` config-file equivalents) have been removed. The protocol no longer has sessions, so there is nothing to expire or cap. Both are now ignored if you still set them, so an existing config keeps working
 
 ### Fixed
+- MCP clients no longer have to re-authorize every time Cetacean restarts. Refresh tokens are now kept in the data directory alongside the state snapshot, so an authorized client stays authorized. Set `CETACEAN_MCP_SIGNING_KEY` as well to keep access tokens valid across a restart too — an auto-generated key changes on every start
 - Turning off `CETACEAN_MCP_CIMD_ENABLED` now actually takes effect. The setting was ignored, so a server configured not to fetch client metadata documents still fetched them
 - AI agents on the new MCP protocol revision now receive live cluster updates. Subscribing succeeded and then delivered nothing, because 2026-07-28 replaced the subscription call the server was listening for
 - MCP clients running in a browser can now reach the server at all. Cross-origin preflight rejected every header the MCP transport requires
