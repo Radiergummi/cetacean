@@ -246,18 +246,22 @@ func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
 //  5. Move old hash to consumed, mint a fresh token, register it in tokens
 //     and grants, return RotateResult{OK: true, NewToken: ..., Data: ...}.
 func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateResult {
-	result := s.rotate(oldToken, ttl)
+	result, mutated := s.rotate(oldToken, ttl)
 
 	// Theft burns the grant family and an expired token tears it down, so
-	// every outcome but "unknown token" changes durable state. Writing on all
-	// of them keeps the rule simple: the file matches memory after any call
-	// that could have altered it.
-	s.writeThrough()
+	// those write as surely as a successful rotation does. An unknown token
+	// changes nothing, and must not write: anyone can post a made-up refresh
+	// token to the token endpoint, and rewriting the whole file for each one
+	// would turn that into an amplified write.
+	if mutated {
+		s.writeThrough()
+	}
 
 	return result
 }
 
-func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) RotateResult {
+// rotate performs the rotation and reports whether it changed durable state.
+func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) (RotateResult, bool) {
 	oldHash := hashToken(oldToken)
 
 	// Generate the candidate replacement outside the critical section so
@@ -276,20 +280,20 @@ func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) RotateRes
 	// must record it at issue time.
 	if grantID, isConsumed := s.consumed[oldHash]; isConsumed {
 		s.revokeGrantLocked(grantID)
-		return RotateResult{Theft: true}
+		return RotateResult{Theft: true}, true
 	}
 
 	// Step 3: live token lookup.
 	entry, exists := s.tokens[oldHash]
 	if !exists {
-		return RotateResult{}
+		return RotateResult{}, false
 	}
 
 	// Step 4: expiry check. Tear down the whole family so consumed and grants
 	// don't accumulate orphaned entries past the token's natural lifetime.
 	if time.Now().After(entry.expiresAt) {
 		s.revokeGrantLocked(entry.data.grantID)
-		return RotateResult{}
+		return RotateResult{}, true
 	}
 
 	// Step 5: rotate. Per-token expiry refreshes, but grantExpiresAt carries
@@ -322,17 +326,20 @@ func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) RotateRes
 		NewToken: newRaw,
 		Data:     out,
 		OK:       true,
-	}
+	}, true
 }
 
 // RevokeGrant revokes every token in the grant family that contains the
 // given token, whether that token is currently live or already consumed.
 func (s *RefreshTokenStore) RevokeGrant(token string) {
-	s.revokeGrant(token)
-	s.writeThrough()
+	if s.revokeGrant(token) {
+		s.writeThrough()
+	}
 }
 
-func (s *RefreshTokenStore) revokeGrant(token string) {
+// revokeGrant revokes the family and reports whether one was found. A token
+// belonging to no known family is a no-op, and must not write.
+func (s *RefreshTokenStore) revokeGrant(token string) bool {
 	h := hashToken(token)
 
 	s.mu.Lock()
@@ -346,9 +353,13 @@ func (s *RefreshTokenStore) revokeGrant(token string) {
 		grantID = id
 	}
 
-	if grantID != "" {
-		s.revokeGrantLocked(grantID)
+	if grantID == "" {
+		return false
 	}
+
+	s.revokeGrantLocked(grantID)
+
+	return true
 }
 
 // revokeGrantLocked removes every hash ever associated with grantID from both

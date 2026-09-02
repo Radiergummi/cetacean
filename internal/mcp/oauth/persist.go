@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"path/filepath"
 	"time"
 
 	json "github.com/goccy/go-json"
@@ -96,7 +97,12 @@ func (s *RefreshTokenStore) Restore(snap RefreshTokenSnapshot) {
 	live := make(map[string]bool, len(snap.Tokens))
 
 	for hash, entry := range snap.Tokens {
-		if now.After(entry.ExpiresAt) {
+		// Rotate caps a token's expiry at its family's, so in memory the
+		// second check is implied by the first. The file is a trust boundary
+		// the invariant does not cross: it can be stale, hand-edited or from
+		// an older build, and a family past its absolute expiry must not come
+		// back regardless of what a token entry claims.
+		if now.After(entry.ExpiresAt) || now.After(entry.GrantExpiresAt) {
 			continue
 		}
 
@@ -138,7 +144,8 @@ func writeRefreshTokens(path string, snap RefreshTokenSnapshot) error {
 	}
 
 	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+	if err := writeFileSynced(tmpPath, data); err != nil {
+		os.Remove(tmpPath) //nolint:errcheck
 		return fmt.Errorf("write refresh tokens tmp: %w", err)
 	}
 
@@ -147,7 +154,48 @@ func writeRefreshTokens(path string, snap RefreshTokenSnapshot) error {
 		return fmt.Errorf("rename refresh tokens: %w", err)
 	}
 
+	// The rename is only durable once the directory entry reaches the disk.
+	// Without this a power loss can leave the old file — or no file — even
+	// though every write above succeeded, which is exactly the case this
+	// store exists to survive.
+	if err := syncDir(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("sync refresh token dir: %w", err)
+	}
+
 	return nil
+}
+
+// writeFileSynced writes data to path and flushes it to the disk before
+// returning, so the caller can treat a nil error as "this survives a crash".
+func writeFileSynced(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+
+	if _, err := f.Write(data); err != nil {
+		f.Close() //nolint:errcheck // the write error is the one worth reporting
+		return err
+	}
+
+	if err := f.Sync(); err != nil {
+		f.Close() //nolint:errcheck // the sync error is the one worth reporting
+		return err
+	}
+
+	return f.Close()
+}
+
+// syncDir flushes a directory's own entries, which is what makes a rename
+// durable rather than merely visible to the running kernel.
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close() //nolint:errcheck // read-only handle
+
+	return d.Sync()
 }
 
 // readRefreshTokens reads a snapshot written by writeRefreshTokens.

@@ -95,13 +95,33 @@ func TestExpiredGrantFamilyIsDroppedOnLoad(t *testing.T) {
 
 	// A family that rotates once and then expires. Rotation leaves a consumed
 	// hash behind, so this exercises all three maps, not just tokens.
-	doomed := s.Issue(RefreshTokenData{Subject: "expired@example.com"}, 30*time.Millisecond)
-	if !s.Rotate(doomed, 30*time.Millisecond).OK {
+	doomed := s.Issue(RefreshTokenData{Subject: "expired@example.com"}, time.Hour)
+	if !s.Rotate(doomed, time.Hour).OK {
 		t.Fatal("rotation before expiry should succeed")
 	}
-	time.Sleep(40 * time.Millisecond)
 
-	restored := restart(t, s, path)
+	// Age that family into the past by editing the snapshot rather than
+	// sleeping: a real store reaches this state by sitting on disk across the
+	// token's lifetime, and a wall-clock sleep only makes the test flaky.
+	snap := s.Snapshot()
+	past := time.Now().Add(-time.Minute)
+
+	for hash, entry := range snap.Tokens {
+		if entry.Subject != "expired@example.com" {
+			continue
+		}
+
+		entry.ExpiresAt = past
+		entry.GrantExpiresAt = past
+		snap.Tokens[hash] = entry
+	}
+
+	if err := writeRefreshTokens(path, snap); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	restored := NewRefreshTokenStore()
+	restored.Restore(onDisk(t, path))
 
 	if _, ok := restored.Validate(live); !ok {
 		t.Fatal("the unexpired token should still validate")
@@ -109,15 +129,15 @@ func TestExpiredGrantFamilyIsDroppedOnLoad(t *testing.T) {
 
 	// An expired family can never rotate again, so carrying its rotation
 	// history forward would grow the file for no benefit.
-	snap := restored.Snapshot()
-	if len(snap.Tokens) != 1 {
-		t.Errorf("tokens = %d, want only the live one", len(snap.Tokens))
+	reloaded := restored.Snapshot()
+	if len(reloaded.Tokens) != 1 {
+		t.Errorf("tokens = %d, want only the live one", len(reloaded.Tokens))
 	}
-	if len(snap.Grants) != 1 {
-		t.Errorf("grants = %d, want only the live family", len(snap.Grants))
+	if len(reloaded.Grants) != 1 {
+		t.Errorf("grants = %d, want only the live family", len(reloaded.Grants))
 	}
-	if len(snap.Consumed) != 0 {
-		t.Errorf("consumed = %d, want the expired family's history dropped", len(snap.Consumed))
+	if len(reloaded.Consumed) != 0 {
+		t.Errorf("consumed = %d, want the expired family's history dropped", len(reloaded.Consumed))
 	}
 }
 
@@ -275,17 +295,57 @@ func TestServerCarriesRefreshTokensAcrossRestart(t *testing.T) {
 	}
 }
 
-func TestServerWithoutTokenStorePathWritesNothing(t *testing.T) {
-	dir := t.TempDir()
-
+func TestServerWithoutTokenStorePathKeepsTokensInMemory(t *testing.T) {
 	s := newTestServer(t)
-	s.refreshTokens.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
 
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("read dir: %v", err)
+	token := s.refreshTokens.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
+	if _, ok := s.refreshTokens.Validate(token); !ok {
+		t.Fatal("a memory-only store should still issue usable tokens")
 	}
-	if len(entries) != 0 {
-		t.Errorf("wrote %d files with no store path configured, want none", len(entries))
+
+	// With no path configured there is nowhere a write could be observed, so
+	// the assertion is on the wiring itself: no persister was installed, which
+	// is what keeps a read-only deployment from warning on every mutation.
+	if s.refreshTokens.persist != nil {
+		t.Error("a server with no token store path should install no persister")
+	}
+}
+
+func TestUnknownTokenRotationDoesNotWrite(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	s := NewRefreshTokenStore()
+	s.SetPersistFunc(persistRefreshTokens(path))
+	s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
+
+	// Removing the file makes a subsequent write observable: anyone can post a
+	// made-up refresh token to the token endpoint, and answering each one with
+	// a whole-file rewrite hands an unauthenticated caller an amplified write.
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+
+	s.Rotate("not-a-real-token", time.Hour)
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("rotating an unknown token wrote to disk; it changes no state")
+	}
+}
+
+func TestUnknownTokenRevocationDoesNotWrite(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	s := NewRefreshTokenStore()
+	s.SetPersistFunc(persistRefreshTokens(path))
+	s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
+
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+
+	s.RevokeGrant("not-a-real-token")
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("revoking an unknown token wrote to disk; it changes no state")
 	}
 }

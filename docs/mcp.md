@@ -397,7 +397,7 @@ nowhere while looking configured.
   expired one at its 60-second TTL. Access-token JWTs are stateless and remain valid until they expire, unless
   `CETACEAN_MCP_SIGNING_KEY` is unset — an auto-generated key changes on every restart, which invalidates them. Set it
   to keep access tokens valid too.
-- **Durable is not shared.** The token file is local. Multi-replica deployments are not supported: authorization codes
+- **Durability is not shared.** The token file is local. Multi-replica deployments are not supported: authorization codes
   live in one replica's memory for their 60-second lifetime, and an unset `CETACEAN_MCP_SIGNING_KEY` leaves each
   replica signing with a different key.
 - **Token revocation is not immediate.** Per RFC 7009 the revoke endpoint always returns `200`, but a revoked access

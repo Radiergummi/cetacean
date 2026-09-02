@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -89,12 +91,21 @@ func NewServer(cfg ServerConfig) *Server {
 
 	refreshTokens := NewRefreshTokenStore()
 	if cfg.TokenStorePath != "" {
-		// A missing file is the normal first start, and an unreadable one is
-		// worth saying out loud — but neither is fatal: the server comes up
-		// empty and clients re-authorize, exactly as they did before the store
-		// existed.
+		// A missing file is the normal first start. Anything else — corrupt
+		// JSON, bad permissions, a version from a newer build — costs every
+		// client a re-authorization, so it is worth an operator's attention.
+		// Neither is fatal: the server comes up empty and clients re-authorize,
+		// exactly as they did before the store existed.
 		if snap, err := readRefreshTokens(cfg.TokenStorePath); err != nil {
-			slog.Info("no MCP refresh tokens loaded", "error", err)
+			if errors.Is(err, fs.ErrNotExist) {
+				slog.Info("no MCP refresh token store yet", "path", cfg.TokenStorePath)
+			} else {
+				slog.Warn(
+					"could not read MCP refresh tokens; clients must re-authorize",
+					"error", err,
+					"path", cfg.TokenStorePath,
+				)
+			}
 		} else {
 			refreshTokens.Restore(snap)
 			slog.Info("loaded MCP refresh tokens", "grants", len(snap.Grants))
