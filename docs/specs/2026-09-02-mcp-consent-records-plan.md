@@ -338,7 +338,7 @@ changed. No behaviour or format change."
 
 **Interfaces:**
 - Consumes: `ClientMetadata` from `cimd.go` (fields `ClientName string`, `RedirectURIs []string`).
-- Produces: `func consentFingerprint(meta *ClientMetadata) string`.
+- Produces: `func consentFingerprint(meta *ClientMetadata) string`; `func hashField(h hash.Hash, field string)`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -445,6 +445,8 @@ package oauth
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
+	"hash"
 	"slices"
 )
 
@@ -453,6 +455,18 @@ import (
 // other, and lets a future change to what is fingerprinted invalidate old
 // records rather than silently reinterpret them.
 const consentFingerprintDomain = "cetacean-consent-v1"
+
+// hashField writes a length-prefixed field, so the hash is an unambiguous
+// encoding of its inputs. A separator byte is not enough: client_name comes
+// from a JSON document the client controls, and JSON can encode any byte
+// including the separator, letting one field's content spill into the next
+// and two different clients share a fingerprint.
+func hashField(h hash.Hash, field string) {
+	var length [8]byte
+	binary.BigEndian.PutUint64(length[:], uint64(len(field)))
+	h.Write(length[:])
+	h.Write([]byte(field))
+}
 
 // consentFingerprint hashes what the consent page showed the user: the
 // client's name, and the exact set of URIs it may receive a code at.
@@ -464,19 +478,18 @@ const consentFingerprintDomain = "cetacean-consent-v1"
 //
 // The URIs are sorted because array order in a client-controlled document
 // carries no meaning; re-prompting on a reordering would be noise. Fields are
-// NUL-separated so ("ab", "c") cannot hash the same as ("a", "bc").
+// length-prefixed so no two distinct tuples can produce the same byte stream,
+// including when a field itself contains the delimiter.
 func consentFingerprint(meta *ClientMetadata) string {
 	uris := slices.Clone(meta.RedirectURIs)
 	slices.Sort(uris)
 
 	h := sha256.New()
-	h.Write([]byte(consentFingerprintDomain))
-	h.Write([]byte{0})
-	h.Write([]byte(meta.ClientName))
+	hashField(h, consentFingerprintDomain)
+	hashField(h, meta.ClientName)
 
 	for _, uri := range uris {
-		h.Write([]byte{0})
-		h.Write([]byte(uri))
+		hashField(h, uri)
 	}
 
 	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))

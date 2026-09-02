@@ -72,12 +72,36 @@ func TestConsentFingerprintChangesWithTheDecision(t *testing.T) {
 }
 
 func TestConsentFingerprintSeparatesFields(t *testing.T) {
-	// Without a separator between the name and the URIs, ("ab", "c") and
-	// ("a", "bc") would hash alike and one client could impersonate another.
-	a := consentFingerprint(&ClientMetadata{ClientName: "ab", RedirectURIs: []string{"c"}})
-	b := consentFingerprint(&ClientMetadata{ClientName: "a", RedirectURIs: []string{"bc"}})
+	tests := []struct {
+		name string
+		a    *ClientMetadata
+		b    *ClientMetadata
+	}{
+		{
+			name: "concatenation collision",
+			// Without field separation, ("ab", "c") and ("a", "bc") would
+			// hash alike and one client could impersonate another.
+			a: &ClientMetadata{ClientName: "ab", RedirectURIs: []string{"c"}},
+			b: &ClientMetadata{ClientName: "a", RedirectURIs: []string{"bc"}},
+		},
+		{
+			name: "embedded NUL in ClientName",
+			// client_name comes from a JSON document the client controls.
+			// JSON can encode a literal NUL via \u0000. Without length
+			// prefixing, ClientName="A\x00B" with RedirectURIs=nil would
+			// collide with ClientName="A" with RedirectURIs=["B"].
+			a: &ClientMetadata{ClientName: "A\x00B", RedirectURIs: nil},
+			b: &ClientMetadata{ClientName: "A", RedirectURIs: []string{"B"}},
+		},
+	}
 
-	if a == b {
-		t.Error("concatenation collision: two different clients share a fingerprint")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fpA := consentFingerprint(tc.a)
+			fpB := consentFingerprint(tc.b)
+			if fpA == fpB {
+				t.Errorf("collision: two different clients share fingerprint %q", fpA)
+			}
+		})
 	}
 }

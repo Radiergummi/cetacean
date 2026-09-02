@@ -40,7 +40,9 @@ The fingerprint is a domain-separated SHA-256 over the client's `client_name`
 and its **sorted** `redirect_uris` — precisely the two things the consent page
 displays. A rename, an added URI, a removed URI or an edited URI all re-prompt.
 Reordering does not: array order in a client-controlled document carries no
-meaning, and re-prompting on it would be noise.
+meaning, and re-prompting on it would be noise. Fields are length-prefixed so
+no two distinct tuples can produce the same byte stream, including when a
+field itself contains the delimiter.
 
 Rejected: hashing the whole fetched document. Strictly safer, but it re-prompts
 on cosmetic edits (`logo_uri`, contacts), and a prompt that fires for reasons the
