@@ -10945,7 +10945,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/query-core 5.102.7
+@tanstack/query-core 5.102.8
 https://tanstack.com/query
 License: MIT
 
@@ -10974,7 +10974,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/query-devtools 5.102.7
+@tanstack/query-devtools 5.102.8
 https://tanstack.com/query
 License: MIT
 
@@ -11003,7 +11003,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/react-query 5.102.7
+@tanstack/react-query 5.102.8
 https://tanstack.com/query
 License: MIT
 
@@ -11032,7 +11032,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/react-query-devtools 5.102.7
+@tanstack/react-query-devtools 5.102.8
 https://tanstack.com/query
 License: MIT
 
@@ -13799,7 +13799,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-lucide-react 1.34.0
+lucide-react 1.37.0
 https://lucide.dev
 License: ISC
 
@@ -14543,7 +14543,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-react-router 7.18.2
+react-router 7.18.3
 https://github.com/remix-run/react-router#readme
 License: MIT
 
@@ -14574,7 +14574,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-react-router-dom 7.18.2
+react-router-dom 7.18.3
 https://github.com/remix-run/react-router#readme
 License: MIT
 

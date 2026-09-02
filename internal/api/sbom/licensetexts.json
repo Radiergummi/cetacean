@@ -475,16 +475,16 @@
   "npm:@standard-schema/spec@1.1.0": {
    "license": "653b779005a3a4d64a7288c940f7b9a0"
   },
-  "npm:@tanstack/query-core@5.102.7": {
+  "npm:@tanstack/query-core@5.102.8": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
-  "npm:@tanstack/query-devtools@5.102.7": {
+  "npm:@tanstack/query-devtools@5.102.8": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
-  "npm:@tanstack/react-query-devtools@5.102.7": {
+  "npm:@tanstack/react-query-devtools@5.102.8": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
-  "npm:@tanstack/react-query@5.102.7": {
+  "npm:@tanstack/react-query@5.102.8": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
   "npm:@tanstack/react-virtual@3.14.10": {
@@ -733,7 +733,7 @@
   "npm:json-schema-typed@8.0.2": {
    "license": "2701eb669226473bb7df25dff5abcd3b"
   },
-  "npm:lucide-react@1.34.0": {
+  "npm:lucide-react@1.37.0": {
    "license": "b495047bd93a9b06913511076f504dab"
   },
   "npm:luxon@3.7.2": {
@@ -805,10 +805,10 @@
   "npm:react-dom@19.2.8": {
    "license": "da6d3703ed11cbe42bd212c725957c98"
   },
-  "npm:react-router-dom@7.18.2": {
+  "npm:react-router-dom@7.18.3": {
    "license": "77c9ee6a9c5d5782fb0c50b50d101189"
   },
-  "npm:react-router@7.18.2": {
+  "npm:react-router@7.18.3": {
    "license": "77c9ee6a9c5d5782fb0c50b50d101189"
   },
   "npm:react@19.2.8": {
