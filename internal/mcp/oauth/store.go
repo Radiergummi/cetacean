@@ -153,27 +153,27 @@ type RefreshTokenStore struct {
 	consumed map[string]string            // hash → grantID (rotated-away tokens)
 	grants   map[string][]string          // grantID → ordered slice of recent hashes (capped at maxGrantHistorySize)
 
-	// persist is called with a fresh snapshot after every mutation, always
-	// with mu released. Nil when the store is memory-only.
-	persist func(RefreshTokenSnapshot)
+	// onChange is called after every mutation, always with mu released. Nil
+	// when the store is memory-only.
+	onChange func()
 }
 
-// SetPersistFunc installs the writer that receives a snapshot after every
-// mutation. Call it during setup, before the store serves any request: it is
-// not guarded by the mutex, because a persister swapped mid-flight would race
-// the mutations it is meant to record.
-func (s *RefreshTokenStore) SetPersistFunc(fn func(RefreshTokenSnapshot)) {
-	s.persist = fn
+// SetOnChange installs the callback fired after every mutation. Call it during
+// setup, before the store serves any request: it is not guarded by the mutex,
+// because a hook swapped mid-flight would race the mutations it records.
+func (s *RefreshTokenStore) SetOnChange(fn func()) {
+	s.onChange = fn
 }
 
-// writeThrough hands the current state to the configured writer. It must be
-// called with mu released, since taking a snapshot acquires it.
+// writeThrough notifies the owner of the durable state that it changed. It
+// must be called with mu released, since the owner takes a snapshot, which
+// acquires it.
 func (s *RefreshTokenStore) writeThrough() {
-	if s.persist == nil {
+	if s.onChange == nil {
 		return
 	}
 
-	s.persist(s.Snapshot())
+	s.onChange()
 }
 
 // NewRefreshTokenStore returns a ready-to-use RefreshTokenStore.

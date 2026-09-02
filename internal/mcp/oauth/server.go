@@ -96,22 +96,23 @@ func NewServer(cfg ServerConfig) *Server {
 		// client a re-authorization, so it is worth an operator's attention.
 		// Neither is fatal: the server comes up empty and clients re-authorize,
 		// exactly as they did before the store existed.
-		if snap, err := readRefreshTokens(cfg.TokenStorePath); err != nil {
+		if state, err := readState(cfg.TokenStorePath); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				slog.Info("no MCP refresh token store yet", "path", cfg.TokenStorePath)
+				slog.Info("no MCP OAuth state yet", "path", cfg.TokenStorePath)
 			} else {
 				slog.Warn(
-					"could not read MCP refresh tokens; clients must re-authorize",
+					"could not read MCP OAuth state; clients must re-authorize",
 					"error", err,
 					"path", cfg.TokenStorePath,
 				)
 			}
 		} else {
-			refreshTokens.Restore(snap)
-			slog.Info("loaded MCP refresh tokens", "grants", len(snap.Grants))
+			refreshTokens.Restore(state.RefreshTokenSnapshot)
+			slog.Info("loaded MCP OAuth state", "grants", len(state.Grants))
 		}
 
-		refreshTokens.SetPersistFunc(persistRefreshTokens(cfg.TokenStorePath))
+		file := &stateFile{path: cfg.TokenStorePath, tokens: refreshTokens}
+		refreshTokens.SetOnChange(file.write)
 	}
 
 	return &Server{
