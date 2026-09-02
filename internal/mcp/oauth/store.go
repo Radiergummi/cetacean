@@ -152,6 +152,28 @@ type RefreshTokenStore struct {
 	tokens   map[string]refreshTokenEntry // hash → live entry
 	consumed map[string]string            // hash → grantID (rotated-away tokens)
 	grants   map[string][]string          // grantID → ordered slice of recent hashes (capped at maxGrantHistorySize)
+
+	// persist is called with a fresh snapshot after every mutation, always
+	// with mu released. Nil when the store is memory-only.
+	persist func(RefreshTokenSnapshot)
+}
+
+// SetPersistFunc installs the writer that receives a snapshot after every
+// mutation. Call it during setup, before the store serves any request: it is
+// not guarded by the mutex, because a persister swapped mid-flight would race
+// the mutations it is meant to record.
+func (s *RefreshTokenStore) SetPersistFunc(fn func(RefreshTokenSnapshot)) {
+	s.persist = fn
+}
+
+// writeThrough hands the current state to the configured writer. It must be
+// called with mu released, since taking a snapshot acquires it.
+func (s *RefreshTokenStore) writeThrough() {
+	if s.persist == nil {
+		return
+	}
+
+	s.persist(s.Snapshot())
 }
 
 // NewRefreshTokenStore returns a ready-to-use RefreshTokenStore.
@@ -184,6 +206,8 @@ func (s *RefreshTokenStore) Issue(data RefreshTokenData, ttl time.Duration) stri
 	}
 	s.grants[grantID] = []string{h}
 	s.mu.Unlock()
+
+	s.writeThrough()
 
 	return raw
 }
@@ -222,6 +246,18 @@ func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
 //  5. Move old hash to consumed, mint a fresh token, register it in tokens
 //     and grants, return RotateResult{OK: true, NewToken: ..., Data: ...}.
 func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateResult {
+	result := s.rotate(oldToken, ttl)
+
+	// Theft burns the grant family and an expired token tears it down, so
+	// every outcome but "unknown token" changes durable state. Writing on all
+	// of them keeps the rule simple: the file matches memory after any call
+	// that could have altered it.
+	s.writeThrough()
+
+	return result
+}
+
+func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) RotateResult {
 	oldHash := hashToken(oldToken)
 
 	// Generate the candidate replacement outside the critical section so
@@ -292,6 +328,11 @@ func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateRes
 // RevokeGrant revokes every token in the grant family that contains the
 // given token, whether that token is currently live or already consumed.
 func (s *RefreshTokenStore) RevokeGrant(token string) {
+	s.revokeGrant(token)
+	s.writeThrough()
+}
+
+func (s *RefreshTokenStore) revokeGrant(token string) {
 	h := hashToken(token)
 
 	s.mu.Lock()

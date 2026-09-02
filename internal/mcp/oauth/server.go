@@ -42,6 +42,11 @@ type ServerConfig struct {
 
 	// HTTPClient is an optional HTTP client for CIMD fetches.
 	HTTPClient *http.Client
+
+	// TokenStorePath is where refresh tokens are persisted, so a restart does
+	// not force every client to re-authorize. Empty keeps the store in memory
+	// only, which is what happens when the data directory is not writable.
+	TokenStorePath string
 }
 
 // Server is the OAuth 2.1 authorization server. Use NewServer to construct.
@@ -82,12 +87,28 @@ func NewServer(cfg ServerConfig) *Server {
 		clients = newClientRegistry(cfg.MCP.DCRMaxClients, cfg.MCP.DCRRateLimit)
 	}
 
+	refreshTokens := NewRefreshTokenStore()
+	if cfg.TokenStorePath != "" {
+		// A missing file is the normal first start, and an unreadable one is
+		// worth saying out loud — but neither is fatal: the server comes up
+		// empty and clients re-authorize, exactly as they did before the store
+		// existed.
+		if snap, err := readRefreshTokens(cfg.TokenStorePath); err != nil {
+			slog.Info("no MCP refresh tokens loaded", "error", err)
+		} else {
+			refreshTokens.Restore(snap)
+			slog.Info("loaded MCP refresh tokens", "grants", len(snap.Grants))
+		}
+
+		refreshTokens.SetPersistFunc(persistRefreshTokens(cfg.TokenStorePath))
+	}
+
 	return &Server{
 		cfg:           cfg,
 		tokenIssuer:   issuer,
 		cimd:          cimd,
 		authCodes:     NewAuthCodeStore(),
-		refreshTokens: NewRefreshTokenStore(),
+		refreshTokens: refreshTokens,
 		clients:       clients,
 	}
 }
