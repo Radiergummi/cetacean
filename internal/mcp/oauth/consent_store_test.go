@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -431,5 +432,134 @@ func TestVersion1FileLoadsWithoutConsent(t *testing.T) {
 	}
 	if len(state.Consent) != 0 {
 		t.Errorf("consent records = %d, want none", len(state.Consent))
+	}
+}
+
+// authorizeGET drives a GET /oauth/authorize for a CIMD client whose metadata
+// document is served by a local test server, and returns the response.
+func authorizeGET(
+	t *testing.T,
+	s *Server,
+	clientID, redirectURI string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	target := "/oauth/authorize?" + url.Values{
+		"response_type":         {"code"},
+		"client_id":             {clientID},
+		"redirect_uri":          {redirectURI},
+		"code_challenge":        {computeS256Challenge("verifier-verifier-verifier-1234")},
+		"code_challenge_method": {"S256"},
+		"state":                 {"xyz"},
+		"resource":              {s.cfg.MCPResource},
+	}.Encode()
+
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{
+		Subject:  testSubject,
+		Provider: "none",
+	}))
+
+	w := httptest.NewRecorder()
+	s.HandleAuthorize(w, req)
+
+	return w
+}
+
+// cimdServer stands up a CIMD client whose metadata document is served over
+// TLS from loopback, and returns a Server wired to fetch it.
+func cimdServer(t *testing.T) (srv *Server, clientID, redirectURI string, meta *ClientMetadata) {
+	t.Helper()
+
+	published := ClientMetadata{
+		ClientName:   "Acme CLI",
+		RedirectURIs: []string{"https://example.com/cb"},
+	}
+
+	var documentURL string
+	httpSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serveMetadata(documentURL, published)(w, r)
+	}))
+	t.Cleanup(httpSrv.Close)
+	documentURL = httpSrv.URL + "/client.json"
+
+	srv = newTestServer(t)
+
+	// The document is served with a self-signed certificate, so the fetcher
+	// needs the test server's client to trust it. newTestServer already sets
+	// AllowLoopback.
+	srv.cimd.Client = httpSrv.Client()
+
+	// consentFingerprint reads only ClientName and RedirectURIs, so this local
+	// copy fingerprints identically to the fetched document.
+	return srv, documentURL, published.RedirectURIs[0], &published
+}
+
+func TestApprovedClientSkipsTheConsentPage(t *testing.T) {
+	s, clientID, redirectURI, meta := cimdServer(t)
+	s.consent.Remember(testSubject, clientID, s.cfg.MCPResource, consentFingerprint(meta))
+
+	w := authorizeGET(t, s, clientID, redirectURI)
+
+	if w.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d (redirect with a code)", w.Code, http.StatusFound)
+	}
+
+	location, err := url.Parse(w.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse Location: %v", err)
+	}
+	if location.Query().Get("code") == "" {
+		t.Error("no authorization code in the redirect")
+	}
+	if strings.Contains(w.Body.String(), "Authorization Request") {
+		t.Error("the consent page was rendered despite a matching approval")
+	}
+}
+
+func TestChangedMetadataRePrompts(t *testing.T) {
+	s, clientID, redirectURI, _ := cimdServer(t)
+
+	// An approval granted against different metadata than the client now
+	// publishes must not carry over.
+	s.consent.Remember(testSubject, clientID, s.cfg.MCPResource, "fingerprint-from-before")
+
+	w := authorizeGET(t, s, clientID, redirectURI)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (the consent page)", w.Code, http.StatusOK)
+	}
+	if !strings.Contains(w.Body.String(), "Authorization Request") {
+		t.Error("expected the consent page to be rendered")
+	}
+}
+
+func TestDynamicallyRegisteredClientNeverSkipsTheConsentPage(t *testing.T) {
+	s := newTestServer(t)
+
+	const clientID = "dcr-generated-client-id"
+	const redirectURI = "http://127.0.0.1:1/cb"
+
+	s.clients.register(&ClientRegistration{
+		ClientID:     clientID,
+		ClientName:   "Self-Registered CLI",
+		RedirectURIs: []string{redirectURI},
+	})
+
+	// Seed a record that matches on every field. It must still be ignored:
+	// a DCR client's metadata is self-reported, so a fingerprint over it
+	// proves nothing about who the client is.
+	s.consent.Remember(testSubject, clientID, s.cfg.MCPResource, consentFingerprint(&ClientMetadata{
+		ClientName:   "Self-Registered CLI",
+		RedirectURIs: []string{redirectURI},
+	}))
+
+	w := authorizeGET(t, s, clientID, redirectURI)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (the consent page)", w.Code, http.StatusOK)
+	}
+	if !strings.Contains(w.Body.String(), "Authorization Request") {
+		t.Error("an unverified client skipped the consent page")
 	}
 }

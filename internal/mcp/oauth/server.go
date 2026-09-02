@@ -546,6 +546,53 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// authorizedRequest carries the validated parameters of an authorization
+// request that is ready to receive a code.
+type authorizedRequest struct {
+	clientID      string
+	redirectURI   string
+	codeChallenge string
+	resource      string
+	state         string
+	subject       string
+	groups        []string
+}
+
+// issueCodeAndRedirect mints an authorization code and redirects the browser
+// back to the client with it. Both the consent-page POST and the skipped-consent
+// GET path end here, so they cannot drift apart.
+func (s *Server) issueCodeAndRedirect(
+	w http.ResponseWriter,
+	r *http.Request,
+	p authorizedRequest,
+) {
+	rawCode := s.authCodes.Issue(AuthCodeData{
+		ClientID:      p.clientID,
+		RedirectURI:   p.redirectURI,
+		CodeChallenge: p.codeChallenge,
+		Resource:      p.resource,
+		Subject:       p.subject,
+		Groups:        p.groups,
+	}, authCodeTTL)
+
+	redirectURI, _ := url.Parse(p.redirectURI)
+	q := redirectURI.Query()
+	q.Set("code", rawCode)
+
+	if p.state != "" {
+		q.Set("state", p.state)
+	}
+
+	// RFC 9207: name the issuer in the authorization response so a client
+	// configured with several authorization servers cannot be tricked into
+	// redeeming this code at the wrong one (mix-up attack).
+	q.Set("iss", s.cfg.issuerID())
+	redirectURI.RawQuery = q.Encode()
+
+	//nolint:gosec // G710: p.redirectURI was exact-matched against the client's registered redirect_uris (HasRedirectURI) by both callers before reaching here; this is a pre-validated URI, not open redirect.
+	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
+}
+
 func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	responseType := q.Get("response_type")
@@ -588,11 +635,12 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := ValidateResourceIndicator(
+	effectiveResource, err := ValidateResourceIndicator(
 		resourceParam,
 		s.cfg.MCPResource,
 		s.cfg.MCP.RequireResourceIndicator,
-	); err != nil {
+	)
+	if err != nil {
 		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_target", err.Error())
 		return
 	}
@@ -601,6 +649,29 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	identity := auth.IdentityFromContext(r.Context())
 	if identity == nil {
 		renderErrorPage(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	// A remembered approval skips the page. Only for verified clients, and only
+	// when the metadata still hashes to what the user was shown — a CIMD client
+	// controls its own document and could otherwise redirect an inherited
+	// approval somewhere the user never saw.
+	//
+	// Issuing a code from a GET is ordinary for an authorization endpoint, and
+	// redirect_uri was exact-matched against the client's registered set above,
+	// so a silently issued code still lands only where the client registered.
+	if verified &&
+		s.consent.Allows(identity.Subject, clientID, effectiveResource, consentFingerprint(meta)) {
+		s.issueCodeAndRedirect(w, r, authorizedRequest{
+			clientID:      clientID,
+			redirectURI:   redirectURIRaw,
+			codeChallenge: codeChallenge,
+			resource:      effectiveResource,
+			state:         state,
+			subject:       identity.Subject,
+			groups:        identity.Groups,
+		})
+
 		return
 	}
 
@@ -616,6 +687,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	renderConsent(w, consentData{
 		ClientName:          meta.ClientName,
 		Verified:            verified,
+		Remembered:          verified,
 		RedirectURI:         redirectURIRaw,
 		Subject:             identity.Subject,
 		Email:               identity.Email,
@@ -646,7 +718,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	decision := r.FormValue("decision")
 
 	// Re-validate client and redirect_uri before any redirect.
-	meta, _, errMsg := s.resolveClientMeta(r, clientID)
+	meta, verified, errMsg := s.resolveClientMeta(r, clientID)
 	if errMsg != "" {
 		renderErrorPage(w, http.StatusBadRequest, errMsg)
 		return
@@ -698,33 +770,25 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Issue authorization code.
-	rawCode := s.authCodes.Issue(AuthCodeData{
-		ClientID:      clientID,
-		RedirectURI:   redirectURIRaw,
-		CodeChallenge: codeChallenge,
-		Resource:      effectiveResource,
-		Subject:       identity.Subject,
-		Groups:        identity.Groups,
-	}, authCodeTTL)
-
 	// Clear the CSRF cookie — the flow is complete.
 	clearCSRFCookie(w, secure)
 
-	// Redirect with code.
-	redirectURI, _ := url.Parse(redirectURIRaw)
-	q := redirectURI.Query()
-	q.Set("code", rawCode)
-	if state != "" {
-		q.Set("state", state)
+	// Remembering is limited to verified clients. A DCR client's metadata is
+	// self-reported and its client_id does not survive a restart, so a record
+	// keyed on one would be worthless at best.
+	if verified {
+		s.consent.Remember(identity.Subject, clientID, effectiveResource, consentFingerprint(meta))
 	}
-	// RFC 9207: name the issuer in the authorization response so a client
-	// configured with several authorization servers cannot be tricked into
-	// redeeming this code at the wrong one (mix-up attack).
-	q.Set("iss", s.cfg.issuerID())
-	redirectURI.RawQuery = q.Encode()
-	//nolint:gosec // G710: redirectURIRaw was exact-matched against the client's registered redirect_uris (HasRedirectURI) earlier in handleAuthorizePOST; this is a pre-validated URI, not open redirect.
-	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
+
+	s.issueCodeAndRedirect(w, r, authorizedRequest{
+		clientID:      clientID,
+		redirectURI:   redirectURIRaw,
+		codeChallenge: codeChallenge,
+		resource:      effectiveResource,
+		state:         state,
+		subject:       identity.Subject,
+		groups:        identity.Groups,
+	})
 }
 
 // cimdDisabledMessage is shown when a client presents an https:// client_id

@@ -54,6 +54,7 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!DOCTYPE htm
 <div class="warning">
   This will grant <strong>{{.ClientName}}</strong> access to your Cetacean instance. Only approve if you trust this application.
 </div>
+{{if .Remembered}}<div class="warning">Approving will be remembered for <strong>{{.ClientName}}</strong> until you revoke its access.</div>{{end}}
 <form method="POST" action="{{.ActionURL}}">
   <input type="hidden" name="response_type" value="{{.ResponseType}}">
   <input type="hidden" name="client_id" value="{{.ClientID}}">
@@ -95,6 +96,7 @@ var errorTemplate = template.Must(template.New("error").Parse(`<!DOCTYPE html>
 type consentData struct {
 	ClientName          string
 	Verified            bool
+	Remembered          bool
 	RedirectURI         string
 	Subject             string
 	Email               string
