@@ -63,18 +63,28 @@ export function useCetaceanHost() {
   return { app, isConnected, error, callTool, toolInput };
 }
 
+/** What a widget gets back from {@link useCetaceanHost}. */
+export type CetaceanHost = ReturnType<typeof useCetaceanHost>;
+
 /**
  * Loads data from an MCP tool once the host bridge is connected.
+ *
+ * The connection is passed in rather than opened here: every useCetaceanHost
+ * call builds its own App and runs its own ui/initialize handshake over the
+ * same postMessage channel, so a widget calling both hooks would talk to the
+ * host twice, with two size-reporting loops and two transports seeing each
+ * other's replies. One host per widget, shared with whatever needs it.
  *
  * Widgets are rendered in a sandboxed iframe whose lifetime the host controls,
  * so a call can still be in flight when the widget is torn down; the result of
  * a superseded or late call is discarded rather than set on an unmounted tree.
  */
 export function useToolData<T>(
+  host: Pick<CetaceanHost, "callTool" | "isConnected">,
   toolName: string,
   args: Record<string, unknown> = {},
 ): { data: T | undefined; error: Error | undefined; isLoading: boolean } {
-  const { isConnected, callTool } = useCetaceanHost();
+  const { isConnected, callTool } = host;
 
   // Serialised so a caller can pass an object literal without re-firing the
   // effect on every render.

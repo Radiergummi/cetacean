@@ -12,10 +12,11 @@ import { useState } from "react";
  * therefore something the calling identity may read.
  */
 export function TopologyWidget() {
-  const { error: connectionError, isConnected } = useCetaceanHost();
+  const host = useCetaceanHost();
+  const { error: connectionError, isConnected } = host;
   const [view, setView] = useState<TopologyView>("network");
 
-  const { data, error, isLoading } = useToolData<TopologyGraphData>("get_topology", { view });
+  const { data, error, isLoading } = useToolData<TopologyGraphData>(host, "get_topology", { view });
 
   if (connectionError) {
     return <Message text={`Could not reach the host: ${connectionError.message}`} />;

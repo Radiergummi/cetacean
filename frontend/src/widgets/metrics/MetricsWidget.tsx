@@ -37,11 +37,13 @@ function metricsArgumentsFrom(
  * grants as the first — a widget cannot widen its own reach by asking for more.
  */
 export function MetricsWidget() {
-  const { error: connectionError, isConnected, toolInput } = useCetaceanHost();
+  const host = useCetaceanHost();
+  const { error: connectionError, isConnected, toolInput } = host;
   const [range, setRange] = useState("1h");
 
   const args = metricsArgumentsFrom(toolInput);
   const { data, error, isLoading } = useToolData<MetricsResult>(
+    host,
     "get_metrics",
     args ? { ...args, range } : {},
   );

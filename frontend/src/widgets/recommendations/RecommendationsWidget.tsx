@@ -12,9 +12,13 @@ import type { Recommendation, RecommendationsResult } from "./types";
  * list stays readable either way.
  */
 export function RecommendationsWidget() {
-  const { app, error: connectionError, isConnected } = useCetaceanHost();
+  const host = useCetaceanHost();
+  const { app, error: connectionError, isConnected } = host;
 
-  const { data, error, isLoading } = useToolData<RecommendationsResult>("get_recommendations");
+  const { data, error, isLoading } = useToolData<RecommendationsResult>(
+    host,
+    "get_recommendations",
+  );
 
   function investigate(finding: Recommendation) {
     void app?.sendMessage({

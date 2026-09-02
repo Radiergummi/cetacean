@@ -34,10 +34,11 @@ function resourceTypeFromLocation(): string {
  * grants allow.
  */
 export function TableWidget() {
-  const { isConnected, error: connectionError } = useCetaceanHost();
+  const host = useCetaceanHost();
+  const { isConnected, error: connectionError } = host;
 
   const resourceType = resourceTypeFromLocation();
-  const { data, error, isLoading } = useToolData<ListResourcesResult>("list_resources", {
+  const { data, error, isLoading } = useToolData<ListResourcesResult>(host, "list_resources", {
     type: resourceType,
   });
 
