@@ -139,6 +139,10 @@ function currentStream(): MockStream {
 }
 
 beforeEach(() => {
+  // These tests assert the reconnect *schedule*, so the jitter is pinned to
+  // its midpoint, where the backoff spread is exactly 1 and the curve is its
+  // nominal 1s/2s/4s. The spread itself is covered in lib/backoff.test.ts.
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
   mockServiceLogs.mockReset();
   mockServiceLogsStreamURL.mockReset();
   streams.length = 0;
@@ -150,6 +154,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -521,7 +526,10 @@ describe("LogViewer live tail resilience", () => {
     await flush(1000);
     await flush();
 
-    expect(screen.getByText(/too many log streams — retrying in 5s/i)).toBeInTheDocument();
+    // The countdown reports the wait actually scheduled, not the server's raw
+    // Retry-After: the 5s floor is stretched to 6.25s (Math.random pinned at
+    // 0.5) so rejected clients do not all wake in the same second.
+    expect(screen.getByText(/too many log streams — retrying in 7s/i)).toBeInTheDocument();
   });
 
   it("gives up after the retry cap and offers to resume", async () => {
