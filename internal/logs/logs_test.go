@@ -3,6 +3,7 @@ package logs
 import (
 	"bytes"
 	"encoding/binary"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -384,4 +385,87 @@ func TestBacklogFilter(t *testing.T) {
 			t.Error("a fresh stream dropped a line")
 		}
 	})
+}
+
+// TestFilterSinceAndBacklogFilterAgree pins the two entry points to one
+// comparison rule.
+//
+// The paginated path filters with FilterSince and the follow path with
+// BacklogFilter, and they are deliberately not interchangeable: BacklogFilter
+// only screens the replayed backlog, since live output may carry a clock the
+// cursor never saw. But they must agree on *whether a given line is past a
+// given cursor*, because that is the rule the cursors themselves are built on
+// — and the two comparisons living in separate functions is exactly how they
+// drifted apart before (#150).
+//
+// The fixture is one task's backlog in chronological order, which is what
+// BacklogFilter is specified against, so any disagreement is a difference in
+// the rule rather than in the latch.
+func TestFilterSinceAndBacklogFilterAgree(t *testing.T) {
+	const task = "task-1"
+
+	// Each line owns its Attrs map. Sharing one instance across the fixture
+	// would couple the lines if anything under test ever wrote to it, and a
+	// failure would then point at the wrong line.
+	line := func(timestamp, message string) LogLine {
+		return LogLine{
+			Timestamp: timestamp,
+			Message:   message,
+			Attrs:     map[string]string{"taskId": task},
+		}
+	}
+
+	// Chronological, but deliberately not all in Docker's canonical form. A
+	// fixture of canonical timestamps cannot tell the two rules apart: the
+	// cursor is canonicalized on the way in, so against canonical lines a raw
+	// string compare agrees with Newer by accident. The offset and
+	// reduced-precision lines are the ones that separate them.
+	lines := []LogLine{
+		line("2026-08-28T09:59:59.000000000Z", "a"),
+		line("2026-08-28T12:00:00.000000000+02:00", "b"),
+		line("2026-08-28T10:00:00.5Z", "c"),
+		line("2026-08-28T10:00:01.000000000Z", "d"),
+		line("2026-08-28T11:00:00.000000000Z", "e"),
+	}
+
+	cursors := []struct {
+		name   string
+		cursor string
+	}{
+		{"second precision UTC", "2026-08-28T10:00:00Z"},
+		{"non-UTC offset", "2026-08-28T12:00:00+02:00"},
+		{"nanosecond precision", "2026-08-28T10:00:00.999999999Z"},
+
+		// A duration is resolved against time.Now() separately by each side,
+		// so the two cursors differ by the microseconds between the calls.
+		// That only matters for a line sitting inside that window, and this
+		// one resolves to well over a century before now, leaving every
+		// fixture line clear of the boundary by an enormous margin. Kept
+		// because a duration is one of the three accepted cursor forms and
+		// belongs in a parity check.
+		{"duration", "1000000h"},
+
+		{"unparseable", "not-a-cursor"},
+	}
+
+	for _, tc := range cursors {
+		t.Run(tc.name, func(t *testing.T) {
+			paginated := []string{}
+			for _, kept := range FilterSince(append([]LogLine(nil), lines...), tc.cursor) {
+				paginated = append(paginated, kept.Message)
+			}
+
+			follow := []string{}
+			backlog := NewBacklogFilter(tc.cursor)
+			for _, candidate := range lines {
+				if backlog.Keep(candidate) {
+					follow = append(follow, candidate.Message)
+				}
+			}
+
+			if !slices.Equal(paginated, follow) {
+				t.Fatalf("paginated kept %v, follow kept %v", paginated, follow)
+			}
+		})
+	}
 }
