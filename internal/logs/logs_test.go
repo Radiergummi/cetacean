@@ -385,3 +385,73 @@ func TestBacklogFilter(t *testing.T) {
 		}
 	})
 }
+
+// TestFilterSinceAndBacklogFilterAgree pins the two entry points to one
+// comparison rule.
+//
+// The paginated path filters with FilterSince and the follow path with
+// BacklogFilter, and they are deliberately not interchangeable: BacklogFilter
+// only screens the replayed backlog, since live output may carry a clock the
+// cursor never saw. But they must agree on *whether a given line is past a
+// given cursor*, because that is the rule the cursors themselves are built on
+// — and the two comparisons living in separate functions is exactly how they
+// drifted apart before (#150).
+//
+// The fixture is one task's backlog in chronological order, which is what
+// BacklogFilter is specified against, so any disagreement is a difference in
+// the rule rather than in the latch.
+func TestFilterSinceAndBacklogFilterAgree(t *testing.T) {
+	const task = "task-1"
+
+	// Chronological, but deliberately not all in Docker's canonical form. A
+	// fixture of canonical timestamps cannot tell the two rules apart: the
+	// cursor is canonicalized on the way in, so against canonical lines a raw
+	// string compare agrees with Newer by accident. The offset and
+	// reduced-precision lines are the ones that separate them.
+	attrs := map[string]string{"taskId": task}
+
+	lines := []LogLine{
+		{Timestamp: "2026-08-28T09:59:59.000000000Z", Message: "a", Attrs: attrs},
+		{Timestamp: "2026-08-28T12:00:00.000000000+02:00", Message: "b", Attrs: attrs},
+		{Timestamp: "2026-08-28T10:00:00.5Z", Message: "c", Attrs: attrs},
+		{Timestamp: "2026-08-28T10:00:01.000000000Z", Message: "d", Attrs: attrs},
+		{Timestamp: "2026-08-28T11:00:00.000000000Z", Message: "e", Attrs: attrs},
+	}
+
+	cursors := []struct {
+		name   string
+		cursor string
+	}{
+		{"second precision UTC", "2026-08-28T10:00:00Z"},
+		{"non-UTC offset", "2026-08-28T12:00:00+02:00"},
+		{"nanosecond precision", "2026-08-28T10:00:00.999999999Z"},
+		{"duration", "1000000h"},
+		{"unparseable", "not-a-cursor"},
+	}
+
+	for _, tc := range cursors {
+		t.Run(tc.name, func(t *testing.T) {
+			paginated := []string{}
+			for _, line := range FilterSince(append([]LogLine(nil), lines...), tc.cursor) {
+				paginated = append(paginated, line.Message)
+			}
+
+			follow := []string{}
+			backlog := NewBacklogFilter(tc.cursor)
+			for _, line := range lines {
+				if backlog.Keep(line) {
+					follow = append(follow, line.Message)
+				}
+			}
+
+			if len(paginated) != len(follow) {
+				t.Fatalf("paginated %v, follow %v", paginated, follow)
+			}
+			for i := range paginated {
+				if paginated[i] != follow[i] {
+					t.Fatalf("paginated %v, follow %v", paginated, follow)
+				}
+			}
+		})
+	}
+}
