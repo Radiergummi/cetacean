@@ -558,9 +558,23 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 func (s *Server) issueCodeAndRedirect(
 	w http.ResponseWriter,
 	r *http.Request,
+	meta *ClientMetadata,
 	code AuthCodeData,
 	state string,
 ) {
+	// Re-check the target against the client's registered set, even though
+	// both callers already did. This is the sink for an open redirect on an
+	// authorization endpoint, and hoisting the redirect into a shared helper
+	// moved it away from the guard that made it safe — leaving the invariant
+	// resting on a comment, and on every future caller remembering to check.
+	// Keeping the guard adjacent to the redirect makes it local again.
+	if !meta.HasRedirectURI(code.RedirectURI) {
+		renderErrorPage(w, http.StatusBadRequest,
+			"redirect_uri is not registered for this client")
+
+		return
+	}
+
 	rawCode := s.authCodes.Issue(code, authCodeTTL)
 
 	redirectURI, _ := url.Parse(code.RedirectURI)
@@ -577,7 +591,7 @@ func (s *Server) issueCodeAndRedirect(
 	q.Set("iss", s.cfg.issuerID())
 	redirectURI.RawQuery = q.Encode()
 
-	//nolint:gosec // G710: code.RedirectURI was exact-matched against the client's registered redirect_uris (HasRedirectURI) by both callers before reaching here; this is a pre-validated URI, not open redirect.
+	//nolint:gosec // G710: code.RedirectURI is exact-matched against the client's registered redirect_uris (HasRedirectURI) immediately above; this is a pre-validated URI, not open redirect.
 	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
 }
 
@@ -700,7 +714,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if verified && s.consent.Allows(consentKey, fingerprint) {
-		s.issueCodeAndRedirect(w, r, AuthCodeData{
+		s.issueCodeAndRedirect(w, r, meta, AuthCodeData{
 			ClientID:      clientID,
 			RedirectURI:   redirectURIRaw,
 			CodeChallenge: codeChallenge,
@@ -852,7 +866,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		}, shownFingerprint)
 	}
 
-	s.issueCodeAndRedirect(w, r, AuthCodeData{
+	s.issueCodeAndRedirect(w, r, meta, AuthCodeData{
 		ClientID:      clientID,
 		RedirectURI:   redirectURIRaw,
 		CodeChallenge: codeChallenge,

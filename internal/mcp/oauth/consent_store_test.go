@@ -1010,3 +1010,34 @@ func TestConsentPageDisclosesRemembering(t *testing.T) {
 		t.Error("a DCR client's approval is never remembered, so the page must not say it is")
 	}
 }
+
+func TestIssueCodeRefusesAnUnregisteredRedirect(t *testing.T) {
+	s := newTestServer(t)
+	meta := &ClientMetadata{RedirectURIs: []string{"https://example.com/cb"}}
+
+	// Both handlers check this before calling, so reaching the helper with an
+	// unregistered target means a caller lost the guard. The helper is the
+	// sink for an open redirect on an authorization endpoint, so it must
+	// refuse rather than trust that someone upstream checked.
+	w := httptest.NewRecorder()
+	s.issueCodeAndRedirect(
+		w,
+		httptest.NewRequest(http.MethodGet, "/oauth/authorize", nil),
+		meta,
+		AuthCodeData{
+			ClientID:    testClientID,
+			RedirectURI: "https://attacker.example/cb",
+		},
+		"xyz",
+	)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+	if location := w.Header().Get("Location"); location != "" {
+		t.Errorf("redirected to an unregistered URI: %s", location)
+	}
+	if strings.Contains(w.Body.String(), "code=") {
+		t.Error("an authorization code was minted for an unregistered redirect")
+	}
+}
