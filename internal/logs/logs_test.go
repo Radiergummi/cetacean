@@ -438,10 +438,11 @@ func TestFilterSinceAndBacklogFilterAgree(t *testing.T) {
 
 		// A duration is resolved against time.Now() separately by each side,
 		// so the two cursors differ by the microseconds between the calls.
-		// That only matters for a line sitting inside that window: this one
-		// resolves to roughly 1911, putting every fixture line a century clear
-		// of the boundary. Kept because a duration is one of the three
-		// accepted cursor forms and belongs in a parity check.
+		// That only matters for a line sitting inside that window, and this
+		// one resolves to well over a century before now, leaving every
+		// fixture line clear of the boundary by an enormous margin. Kept
+		// because a duration is one of the three accepted cursor forms and
+		// belongs in a parity check.
 		{"duration", "1000000h"},
 
 		{"unparseable", "not-a-cursor"},
