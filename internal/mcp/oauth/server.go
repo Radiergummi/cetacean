@@ -45,10 +45,11 @@ type ServerConfig struct {
 	// HTTPClient is an optional HTTP client for CIMD fetches.
 	HTTPClient *http.Client
 
-	// TokenStorePath is where refresh tokens are persisted, so a restart does
-	// not force every client to re-authorize. Empty keeps the store in memory
-	// only, which is what happens when the data directory is not writable.
-	TokenStorePath string
+	// StatePath is where the OAuth server's durable state — refresh tokens and
+	// remembered approvals — is persisted, so a restart does not force every
+	// client to re-authorize. Empty keeps both stores in memory only, which is
+	// what happens when the data directory is not writable.
+	StatePath string
 }
 
 // Server is the OAuth 2.1 authorization server. Use NewServer to construct.
@@ -58,6 +59,7 @@ type Server struct {
 	cimd          *CIMDFetcher
 	authCodes     *AuthCodeStore
 	refreshTokens *RefreshTokenStore
+	consent       *ConsentStore
 	clients       *ClientRegistry // nil when DCREnabled is false
 }
 
@@ -90,28 +92,38 @@ func NewServer(cfg ServerConfig) *Server {
 	}
 
 	refreshTokens := NewRefreshTokenStore()
-	if cfg.TokenStorePath != "" {
+	consent := NewConsentStore(cfg.MCP.ConsentTTL)
+
+	if cfg.StatePath != "" {
+		sweepTempFiles(cfg.StatePath)
+
 		// A missing file is the normal first start. Anything else — corrupt
 		// JSON, bad permissions, a version from a newer build — costs every
 		// client a re-authorization, so it is worth an operator's attention.
 		// Neither is fatal: the server comes up empty and clients re-authorize,
 		// exactly as they did before the store existed.
-		if snap, err := readRefreshTokens(cfg.TokenStorePath); err != nil {
+		if state, err := readState(cfg.StatePath); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				slog.Info("no MCP refresh token store yet", "path", cfg.TokenStorePath)
+				slog.Info("no MCP OAuth state yet", "path", cfg.StatePath)
 			} else {
 				slog.Warn(
-					"could not read MCP refresh tokens; clients must re-authorize",
+					"could not read MCP OAuth state; clients must re-authorize",
 					"error", err,
-					"path", cfg.TokenStorePath,
+					"path", cfg.StatePath,
 				)
 			}
 		} else {
-			refreshTokens.Restore(snap)
-			slog.Info("loaded MCP refresh tokens", "grants", len(snap.Grants))
+			refreshTokens.Restore(state.RefreshTokenSnapshot)
+			consent.Restore(state.Consent)
+			slog.Info("loaded MCP OAuth state",
+				"grants", len(state.Grants),
+				"approvals", len(state.Consent),
+			)
 		}
 
-		refreshTokens.SetPersistFunc(persistRefreshTokens(cfg.TokenStorePath))
+		file := &stateFile{path: cfg.StatePath, tokens: refreshTokens, consent: consent}
+		refreshTokens.SetOnChange(file.write)
+		consent.SetOnChange(file.write)
 	}
 
 	return &Server{
@@ -120,6 +132,7 @@ func NewServer(cfg ServerConfig) *Server {
 		cimd:          cimd,
 		authCodes:     NewAuthCodeStore(),
 		refreshTokens: refreshTokens,
+		consent:       consent,
 		clients:       clients,
 	}
 }
@@ -398,6 +411,10 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// Now consume (rotate) the token. Theft detection runs inside Rotate.
 	result := s.refreshTokens.Rotate(refreshTokenRaw, s.cfg.MCP.RefreshTokenTTL)
 	if result.Theft {
+		// A replayed token means someone else holds a copy. Re-prompting is
+		// the point: the next authorization must reach a human.
+		s.consent.Forget(result.Data.ConsentKey())
+
 		// Per RFC 6749 §5.2: don't leak that it was theft.
 		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "refresh token is invalid")
 		return
@@ -506,7 +523,11 @@ func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 	token := r.FormValue("token") // #nosec G120 -- bounded above
 	if token != "" {
-		s.refreshTokens.RevokeGrant(token)
+		// Revoking must also drop the approval, or the next authorization
+		// request is granted silently and revocation only appeared to work.
+		if data, revoked := s.refreshTokens.RevokeGrant(token); revoked {
+			s.consent.Forget(data.ConsentKey())
+		}
 	}
 	// RFC 7009 §2.2: always 200 regardless of whether the token was valid.
 	w.WriteHeader(http.StatusOK)
@@ -526,6 +547,82 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// issueCodeAndRedirect mints an authorization code and redirects the browser
+// back to the client with it. Both the consent-page POST and the skipped-consent
+// GET path end here, so they cannot drift apart.
+//
+// state is separate from code because it is echoed back to the client rather
+// than bound into the code.
+func (s *Server) issueCodeAndRedirect(
+	w http.ResponseWriter,
+	r *http.Request,
+	meta *ClientMetadata,
+	code AuthCodeData,
+	state string,
+) {
+	// Re-check the target against the client's registered set, even though
+	// both callers already did. This is the sink for an open redirect on an
+	// authorization endpoint, and hoisting the redirect into a shared helper
+	// moved it away from the guard that made it safe — leaving the invariant
+	// resting on a comment, and on every future caller remembering to check.
+	// Keeping the guard adjacent to the redirect makes it local again.
+	if !meta.HasRedirectURI(code.RedirectURI) {
+		renderErrorPage(w, http.StatusBadRequest,
+			"redirect_uri is not registered for this client")
+
+		return
+	}
+
+	rawCode := s.authCodes.Issue(code, authCodeTTL)
+
+	redirectURI, _ := url.Parse(code.RedirectURI)
+	q := redirectURI.Query()
+	q.Set("code", rawCode)
+
+	if state != "" {
+		q.Set("state", state)
+	}
+
+	// RFC 9207: name the issuer in the authorization response so a client
+	// configured with several authorization servers cannot be tricked into
+	// redeeming this code at the wrong one (mix-up attack).
+	q.Set("iss", s.cfg.issuerID())
+	redirectURI.RawQuery = q.Encode()
+
+	//nolint:gosec // G710: code.RedirectURI is exact-matched against the client's registered redirect_uris (HasRedirectURI) immediately above; this is a pre-validated URI, not open redirect.
+	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
+}
+
+// renderConsentPage completes a partly-built consentData with the fields only
+// the server can supply — the action URL and a fresh CSRF nonce bound to this
+// page's state and fingerprint — and renders the form. Both the initial GET and
+// the POST that finds the client changed mid-decision go through it, so the
+// second prompt is built exactly like the first.
+//
+// The caller sets Fingerprint to the hash of the metadata it just rendered
+// from, rather than this recomputing it, so the value bound into the CSRF
+// token is provably the one the caller compared against.
+func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
+	data.ActionURL = s.cfg.BasePath + "/oauth/authorize"
+
+	// Empty unless this approval will actually be remembered, which is what
+	// the template gates the disclosure on: promising to remember a client the
+	// server will prompt for again is worse than saying nothing.
+	if data.Verified && s.consent.Enabled() {
+		data.RememberedFor = humanizeDuration(s.consent.TTL())
+	}
+
+	data.CSRFToken, _ = issueCSRFNonce(
+		w,
+		s.cfg.SigningKey,
+		data.State,
+		data.Fingerprint,
+		strings.HasPrefix(s.cfg.Issuer, "https://"),
+	)
+
+	renderConsent(w, data)
 }
 
 func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
@@ -570,11 +667,12 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := ValidateResourceIndicator(
+	effectiveResource, err := ValidateResourceIndicator(
 		resourceParam,
 		s.cfg.MCPResource,
 		s.cfg.MCP.RequireResourceIndicator,
-	); err != nil {
+	)
+	if err != nil {
 		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_target", err.Error())
 		return
 	}
@@ -586,29 +684,65 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	csrfToken, _ := issueCSRFNonce(
-		w,
-		s.cfg.SigningKey,
-		state,
-		strings.HasPrefix(s.cfg.Issuer, "https://"),
-	)
+	// Fingerprint the metadata exactly once, here, from the document the page
+	// is about to be rendered from. It travels to the POST in a hidden field
+	// covered by the CSRF HMAC, because a record must be bound to what the
+	// user was *shown*: resolving the client again on POST and fingerprinting
+	// that would record a document the user may never have seen, whenever the
+	// CIMD cache entry lapsed in between.
+	//
+	// Computed for unverified clients too. Nothing is remembered for them, but
+	// the fingerprint costs a hash, and covering it uniformly means the POST
+	// re-prompts whenever the name or redirect URI on screen went stale — for
+	// DCR that is an LRU eviction and re-registration rather than a document
+	// edit, but the user is equally owed a page describing the client that is
+	// about to receive the code.
+	fingerprint := consentFingerprint(meta)
 
-	actionURL := s.cfg.BasePath + "/oauth/authorize"
+	// A remembered approval skips the page. Only for verified clients, and only
+	// when the metadata still hashes to what the user was shown — a CIMD client
+	// controls its own document and could otherwise redirect an inherited
+	// approval somewhere the user never saw.
+	//
+	// Issuing a code from a GET is ordinary for an authorization endpoint, and
+	// redirect_uri was exact-matched against the client's registered set above,
+	// so a silently issued code still lands only where the client registered.
+	consentKey := ConsentKey{
+		Subject:  identity.Subject,
+		ClientID: clientID,
+		Resource: effectiveResource,
+	}
 
-	renderConsent(w, consentData{
+	if verified && s.consent.Allows(consentKey, fingerprint) {
+		s.issueCodeAndRedirect(w, r, meta, AuthCodeData{
+			ClientID:      clientID,
+			RedirectURI:   redirectURIRaw,
+			CodeChallenge: codeChallenge,
+			Resource:      effectiveResource,
+			Subject:       identity.Subject,
+			Groups:        identity.Groups,
+		}, state)
+
+		return
+	}
+
+	s.renderConsentPage(w, consentData{
 		ClientName:          meta.ClientName,
 		Verified:            verified,
 		RedirectURI:         redirectURIRaw,
 		Subject:             identity.Subject,
 		Email:               identity.Email,
-		ActionURL:           actionURL,
 		ResponseType:        responseType,
 		ClientID:            clientID,
 		CodeChallenge:       codeChallenge,
 		CodeChallengeMethod: codeChallengeMethod,
 		State:               state,
-		Resource:            resourceParam,
-		CSRFToken:           csrfToken,
+
+		// resourceParam is the raw request parameter, echoed back unchanged:
+		// the form must resubmit what the client sent, not the resolved
+		// default.
+		Resource:    resourceParam,
+		Fingerprint: fingerprint,
 	})
 }
 
@@ -626,9 +760,15 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	codeChallengeMethod := r.FormValue("code_challenge_method")
 	resourceParam := r.FormValue("resource")
 	decision := r.FormValue("decision")
+	responseType := r.FormValue("response_type")
+
+	// Only trustworthy once verifyCSRFToken passes: the CSRF HMAC covers this
+	// field, so a token that verifies proves this is the fingerprint the
+	// consent page was rendered with.
+	shownFingerprint := r.FormValue(consentFingerprintField)
 
 	// Re-validate client and redirect_uri before any redirect.
-	meta, _, errMsg := s.resolveClientMeta(r, clientID)
+	meta, verified, errMsg := s.resolveClientMeta(r, clientID)
 	if errMsg != "" {
 		renderErrorPage(w, http.StatusBadRequest, errMsg)
 		return
@@ -680,33 +820,60 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Issue authorization code.
-	rawCode := s.authCodes.Issue(AuthCodeData{
+	// The client's metadata changed between rendering the page and this
+	// submission — a CIMD document edited, or its cache entry lapsed and the
+	// re-fetch returned something else. The user approved a name and a set of
+	// redirect URIs that no longer describe this client, so their approval
+	// does not cover this request: prompt again from the fresh metadata rather
+	// than issue a code or record anything against a document they never saw.
+	//
+	// The cookie is deliberately not cleared here; renderConsentPage replaces
+	// it with a nonce bound to the new fingerprint.
+	if fingerprint := consentFingerprint(meta); fingerprint != shownFingerprint {
+		s.renderConsentPage(w, consentData{
+			ClientName:          meta.ClientName,
+			Verified:            verified,
+			RedirectURI:         redirectURIRaw,
+			Subject:             identity.Subject,
+			Email:               identity.Email,
+			ResponseType:        responseType,
+			ClientID:            clientID,
+			CodeChallenge:       codeChallenge,
+			CodeChallengeMethod: codeChallengeMethod,
+			State:               state,
+			Resource:            resourceParam,
+			Fingerprint:         fingerprint,
+		})
+
+		return
+	}
+
+	// Clear the CSRF cookie — the flow is complete.
+	clearCSRFCookie(w, secure)
+
+	// Remembering is limited to verified clients. A DCR client's metadata is
+	// self-reported and its client_id does not survive a restart, so a record
+	// keyed on one would be worthless at best.
+	//
+	// The recorded fingerprint is the one the page displayed, proven current
+	// by the comparison above — not a fresh resolution, which could differ
+	// from what the user actually approved.
+	if verified {
+		s.consent.Remember(ConsentKey{
+			Subject:  identity.Subject,
+			ClientID: clientID,
+			Resource: effectiveResource,
+		}, shownFingerprint)
+	}
+
+	s.issueCodeAndRedirect(w, r, meta, AuthCodeData{
 		ClientID:      clientID,
 		RedirectURI:   redirectURIRaw,
 		CodeChallenge: codeChallenge,
 		Resource:      effectiveResource,
 		Subject:       identity.Subject,
 		Groups:        identity.Groups,
-	}, authCodeTTL)
-
-	// Clear the CSRF cookie — the flow is complete.
-	clearCSRFCookie(w, secure)
-
-	// Redirect with code.
-	redirectURI, _ := url.Parse(redirectURIRaw)
-	q := redirectURI.Query()
-	q.Set("code", rawCode)
-	if state != "" {
-		q.Set("state", state)
-	}
-	// RFC 9207: name the issuer in the authorization response so a client
-	// configured with several authorization servers cannot be tricked into
-	// redeeming this code at the wrong one (mix-up attack).
-	q.Set("iss", s.cfg.issuerID())
-	redirectURI.RawQuery = q.Encode()
-	//nolint:gosec // G710: redirectURIRaw was exact-matched against the client's registered redirect_uris (HasRedirectURI) earlier in handleAuthorizePOST; this is a pre-validated URI, not open redirect.
-	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
+	}, state)
 }
 
 // cimdDisabledMessage is shown when a client presents an https:// client_id

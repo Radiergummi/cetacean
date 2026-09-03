@@ -110,6 +110,38 @@ URL — a token minted for one Cetacean deployment cannot be replayed against an
 are required by default. Refresh tokens are opaque, rotate single-use, and carry an absolute grant-family lifetime;
 presenting a rotated token revokes the whole family (theft detection).
 
+### Remembered approvals
+
+Approving a client is remembered, so you are asked once rather than every time
+its refresh token expires. A record ties your identity to that client, the MCP
+endpoint it asked for, and a fingerprint of the client's name and redirect URIs
+as you were shown them.
+
+You are asked again when any of those change — including when a client updates
+its own metadata document, since a client identified by URL controls what that
+document says — and when the grant is revoked or Cetacean detects a stolen
+refresh token. Clients that registered dynamically are never remembered: their
+metadata is self-reported.
+
+An approval is also a lease, not a permanent grant. It lasts
+`CETACEAN_MCP_CONSENT_TTL` (default `2160h`, 90 days) from the moment you
+approved, and approving again renews it. The lease exists because revoking an
+approval means presenting a token from its grant family, and that family is torn
+down once its refresh token expires — so without one, an approval belonging to a
+long-unused client would keep authorizing silently with no handle left to
+withdraw it. The default deliberately outlives the 30-day refresh token, since
+not re-prompting when that token expires is the whole point of remembering.
+
+Set `CETACEAN_MCP_CONSENT_TTL=0` to turn remembering off entirely: nothing is
+recorded, existing records stop being honoured, and every authorization reaches
+a human.
+
+Approvals live in `mcp-tokens.json` beside the refresh tokens. Note the file's
+threat model differs between the two: refresh tokens are stored as SHA-256
+hashes, which are useless to anyone who steals the file, while an approval is a
+capability — anyone able to *write* the file could pre-approve a client. The
+file is mode `0600`, and as always an attacker with host access has already won.
+
 ### `cert` mode and `CETACEAN_MCP_AUTH_BYPASS`
 
 mTLS client-certificate auth can't drive a browser consent flow, so OAuth is not used in `cert` mode. Set
@@ -223,6 +255,7 @@ Docker version conflict.
 | `CETACEAN_MCP_SIGNING_KEY` | auto-generated | HMAC-SHA256 JWT signing key |
 | `CETACEAN_MCP_ACCESS_TOKEN_TTL` | `1h` | Access token lifetime |
 | `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | Refresh token lifetime (30 days) |
+| `CETACEAN_MCP_CONSENT_TTL` | `2160h` | How long a remembered approval lasts (90 days); `0` disables remembering |
 | `CETACEAN_MCP_MAX_CONCURRENT_TASKS` | `32` | Cap on in-flight task-augmented tool calls |
 | `CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR` | `true` | Require the RFC 8707 `resource` parameter |
 | `CETACEAN_MCP_DCR_ENABLED` | `true` | Enable Dynamic Client Registration |
@@ -390,13 +423,15 @@ nowhere while looking configured.
 
 ## Known limitations (current release)
 
-- **Refresh tokens survive a restart; nothing else does.** They are written to `mcp-tokens.json` in the data
-  directory (see [`storage.data_dir`](configuration.md)) on every issue, rotation and revocation, so an authorized
-  client stays authorized. DCR registrations and authorization codes are still in-memory: a client whose registration
-  is lost re-registers via the discovery chain on the next `401`, and a code lost mid-flow is indistinguishable from an
-  expired one at its 60-second TTL. Access-token JWTs are stateless and remain valid until they expire, unless
+- **Refresh tokens and consent approvals survive a restart; nothing else does.** They are written to
+  `mcp-tokens.json` in the data directory (see [`storage.data_dir`](configuration.md)) on every issue, rotation,
+  revocation, and approval, so an authorized client stays authorized and does not have to be re-approved. DCR
+  registrations and authorization codes are still in-memory: a client whose registration is lost re-registers via
+  the discovery chain on the next `401`, and a code lost mid-flow is indistinguishable from an expired one at its
+  60-second TTL. Access-token JWTs are stateless and remain valid until they expire, unless
   `CETACEAN_MCP_SIGNING_KEY` is unset — an auto-generated key changes on every restart, which invalidates them. Set it
-  to keep access tokens valid too.
+  to keep access tokens valid too. See [Remembered approvals](#remembered-approvals) for what makes a stored approval
+  stop applying.
 - **Durability is not shared.** The token file is local. Multi-replica deployments are not supported: authorization codes
   live in one replica's memory for their 60-second lifetime, and an unset `CETACEAN_MCP_SIGNING_KEY` leaves each
   replica signing with a different key.

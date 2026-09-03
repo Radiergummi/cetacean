@@ -711,24 +711,24 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		// path, since token durability is not tied to storage.snapshot: an
 		// operator who turns cache snapshots off still gets clients that stay
 		// authorized across a restart.
-		tokenStorePath := filepath.Join(d.cfg.DataDir, "mcp-tokens.json")
+		statePath := filepath.Join(d.cfg.DataDir, "mcp-tokens.json")
 		//nolint:gosec // DataDir is operator-configured, not user input
 		if err := os.MkdirAll(d.cfg.DataDir, 0700); err != nil {
 			slog.Warn(
-				"could not create data dir; MCP refresh tokens will not survive a restart",
+				"could not create data dir; MCP tokens and approvals will not survive a restart",
 				"error", err,
 				"path", d.cfg.DataDir,
 			)
-			tokenStorePath = ""
+			statePath = ""
 		}
 
 		oauthSrv = oauth.NewServer(oauth.ServerConfig{
-			Issuer:         issuer,
-			BasePath:       d.cfg.BasePath,
-			MCPResource:    mcpResource,
-			MCP:            d.cfg.MCP,
-			SigningKey:     signingKey,
-			TokenStorePath: tokenStorePath,
+			Issuer:      issuer,
+			BasePath:    d.cfg.BasePath,
+			MCPResource: mcpResource,
+			MCP:         d.cfg.MCP,
+			SigningKey:  signingKey,
+			StatePath:   statePath,
 		})
 		slog.Info("MCP OAuth 2.1 authorization server enabled",
 			"issuer", issuer, "resource", mcpResource)

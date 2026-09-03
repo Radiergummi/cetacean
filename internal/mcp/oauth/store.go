@@ -118,7 +118,9 @@ type RefreshTokenData struct {
 	grantID  string // assigned and tracked by the store; unexported
 }
 
-// RotateResult is returned by RefreshTokenStore.Rotate.
+// RotateResult is returned by RefreshTokenStore.Rotate. On the theft path Data
+// names the family that was burned, so the caller can clear its consent record
+// and log the affected subject.
 type RotateResult struct {
 	NewToken string // empty when OK is false
 	Data     RefreshTokenData
@@ -148,32 +150,12 @@ const maxGrantHistorySize = 32
 // and grant-family theft detection. Raw tokens are never persisted; only
 // their SHA-256 hashes are held in memory.
 type RefreshTokenStore struct {
+	changeNotifier
+
 	mu       sync.Mutex
 	tokens   map[string]refreshTokenEntry // hash → live entry
 	consumed map[string]string            // hash → grantID (rotated-away tokens)
 	grants   map[string][]string          // grantID → ordered slice of recent hashes (capped at maxGrantHistorySize)
-
-	// persist is called with a fresh snapshot after every mutation, always
-	// with mu released. Nil when the store is memory-only.
-	persist func(RefreshTokenSnapshot)
-}
-
-// SetPersistFunc installs the writer that receives a snapshot after every
-// mutation. Call it during setup, before the store serves any request: it is
-// not guarded by the mutex, because a persister swapped mid-flight would race
-// the mutations it is meant to record.
-func (s *RefreshTokenStore) SetPersistFunc(fn func(RefreshTokenSnapshot)) {
-	s.persist = fn
-}
-
-// writeThrough hands the current state to the configured writer. It must be
-// called with mu released, since taking a snapshot acquires it.
-func (s *RefreshTokenStore) writeThrough() {
-	if s.persist == nil {
-		return
-	}
-
-	s.persist(s.Snapshot())
 }
 
 // NewRefreshTokenStore returns a ready-to-use RefreshTokenStore.
@@ -275,12 +257,12 @@ func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) (RotateRe
 	defer s.mu.Unlock()
 
 	// Step 2: replay / theft check runs before anything else. On theft, the
-	// grant family is burned and Data is intentionally zero — the data is no
-	// longer in the store. Callers that need to log the affected subject
-	// must record it at issue time.
+	// grant family is burned.
 	if grantID, isConsumed := s.consumed[oldHash]; isConsumed {
-		s.revokeGrantLocked(grantID)
-		return RotateResult{Theft: true}, true
+		// Naming the burned family lets the caller clear the user's consent
+		// record and log who was affected, neither of which was possible when
+		// this returned a zero result.
+		return RotateResult{Theft: true, Data: s.revokeGrantLocked(grantID)}, true
 	}
 
 	// Step 3: live token lookup.
@@ -292,7 +274,10 @@ func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) (RotateRe
 	// Step 4: expiry check. Tear down the whole family so consumed and grants
 	// don't accumulate orphaned entries past the token's natural lifetime.
 	if time.Now().After(entry.expiresAt) {
+		// The identity is deliberately dropped: an expired grant must not
+		// clear the user's consent.
 		s.revokeGrantLocked(entry.data.grantID)
+
 		return RotateResult{}, true
 	}
 
@@ -329,17 +314,22 @@ func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) (RotateRe
 	}, true
 }
 
-// RevokeGrant revokes every token in the grant family that contains the
-// given token, whether that token is currently live or already consumed.
-func (s *RefreshTokenStore) RevokeGrant(token string) {
-	if s.revokeGrant(token) {
+// RevokeGrant revokes every token in the grant family that contains the given
+// token, whether that token is currently live or already consumed. It returns
+// the identity the family belonged to, so the caller can clear the matching
+// consent record, and false when the token belongs to no known family.
+func (s *RefreshTokenStore) RevokeGrant(token string) (RefreshTokenData, bool) {
+	owner, revoked := s.revokeGrant(token)
+	if revoked {
 		s.writeThrough()
 	}
+
+	return owner, revoked
 }
 
 // revokeGrant revokes the family and reports whether one was found. A token
 // belonging to no known family is a no-op, and must not write.
-func (s *RefreshTokenStore) revokeGrant(token string) bool {
+func (s *RefreshTokenStore) revokeGrant(token string) (RefreshTokenData, bool) {
 	h := hashToken(token)
 
 	s.mu.Lock()
@@ -354,21 +344,34 @@ func (s *RefreshTokenStore) revokeGrant(token string) bool {
 	}
 
 	if grantID == "" {
-		return false
+		return RefreshTokenData{}, false
 	}
 
-	s.revokeGrantLocked(grantID)
-
-	return true
+	return s.revokeGrantLocked(grantID), true
 }
 
 // revokeGrantLocked removes every hash ever associated with grantID from both
-// tokens and consumed, then drops the grant record. Must be called with s.mu held.
-func (s *RefreshTokenStore) revokeGrantLocked(grantID string) {
-	hashes := s.grants[grantID]
-	for _, h := range hashes {
+// tokens and consumed, then drops the grant record. It returns the identity
+// the family belonged to, read from its live token — a family has exactly one,
+// unless it has already expired, in which case the zero value comes back.
+//
+// Whether revoking a family should also drop the user's consent record is the
+// caller's decision, not this function's: an explicit revocation and a theft
+// must clear it, and an expiry must not, because consent outliving the refresh
+// token is the point of remembering it. Must be called with s.mu held.
+func (s *RefreshTokenStore) revokeGrantLocked(grantID string) RefreshTokenData {
+	var owner RefreshTokenData
+
+	for _, h := range s.grants[grantID] {
+		if entry, live := s.tokens[h]; live {
+			owner = entry.data
+		}
+
 		delete(s.tokens, h)
 		delete(s.consumed, h)
 	}
+
 	delete(s.grants, grantID)
+
+	return owner
 }

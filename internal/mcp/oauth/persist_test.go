@@ -1,11 +1,11 @@
 package oauth
 
 import (
+	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
-
-	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // restart round-trips a store through the on-disk format the way a process
@@ -14,19 +14,56 @@ import (
 func restart(t *testing.T, s *RefreshTokenStore, path string) *RefreshTokenStore {
 	t.Helper()
 
-	if err := writeRefreshTokens(path, s.Snapshot()); err != nil {
+	if err := writeState(path, tokenState(s.Snapshot())); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	snap, err := readRefreshTokens(path)
+	state, err := readState(path)
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
 
 	restored := NewRefreshTokenStore()
-	restored.Restore(snap)
+	restored.Restore(state.RefreshTokenSnapshot)
 
 	return restored
+}
+
+// tokenState wraps a refresh-token snapshot in the file envelope, so a new
+// envelope field is reconsidered in one place rather than at each writer.
+func tokenState(snap RefreshTokenSnapshot) oauthState {
+	return oauthState{
+		Version:              oauthStateVersion,
+		Timestamp:            time.Now(),
+		RefreshTokenSnapshot: snap,
+	}
+}
+
+// onDisk reads back what the store has written without going through it, so
+// these tests assert on the file rather than on the store's own memory.
+func onDisk(t *testing.T, path string) oauthState {
+	t.Helper()
+
+	state, err := readState(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	return state
+}
+
+// persisting wires a store to a file the way NewServer does, and returns the
+// ConsentStore sharing that file so a caller can drive the other half of it.
+// Both hooks are installed, so these tests exercise the same stateFile wiring
+// NewServer builds rather than a partial stand-in.
+func persisting(s *RefreshTokenStore, path string) *ConsentStore {
+	consent := NewConsentStore(testConsentTTL)
+
+	file := &stateFile{path: path, tokens: s, consent: consent}
+	s.SetOnChange(file.write)
+	consent.SetOnChange(file.write)
+
+	return consent
 }
 
 func TestRefreshTokenSurvivesRestart(t *testing.T) {
@@ -116,12 +153,12 @@ func TestExpiredGrantFamilyIsDroppedOnLoad(t *testing.T) {
 		snap.Tokens[hash] = entry
 	}
 
-	if err := writeRefreshTokens(path, snap); err != nil {
+	if err := writeState(path, tokenState(snap)); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
 	restored := NewRefreshTokenStore()
-	restored.Restore(onDisk(t, path))
+	restored.Restore(onDisk(t, path).RefreshTokenSnapshot)
 
 	if _, ok := restored.Validate(live); !ok {
 		t.Fatal("the unexpired token should still validate")
@@ -148,7 +185,7 @@ func TestRefreshTokenFileIsPrivateAndAtomic(t *testing.T) {
 	s := NewRefreshTokenStore()
 	s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
 
-	if err := writeRefreshTokens(path, s.Snapshot()); err != nil {
+	if err := writeState(path, tokenState(s.Snapshot())); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -194,31 +231,18 @@ func TestReadRefreshTokensRejectsUnreadableFiles(t *testing.T) {
 				}
 			}
 
-			if _, err := readRefreshTokens(tc.path); err == nil {
+			if _, err := readState(tc.path); err == nil {
 				t.Fatal("expected an error the caller can log and carry on from")
 			}
 		})
 	}
 }
 
-// onDisk reads back what the store has written without going through it, so
-// these tests assert on the file rather than on the store's own memory.
-func onDisk(t *testing.T, path string) RefreshTokenSnapshot {
-	t.Helper()
-
-	snap, err := readRefreshTokens(path)
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-
-	return snap
-}
-
 func TestIssueIsWrittenThrough(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
 	s := NewRefreshTokenStore()
-	s.SetPersistFunc(persistRefreshTokens(path))
+	persisting(s, path)
 
 	// Nothing calls save: a token the client already holds must be durable by
 	// the time the token endpoint answers, or a crash loses exactly the token
@@ -234,7 +258,7 @@ func TestRotateIsWrittenThrough(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
 	s := NewRefreshTokenStore()
-	s.SetPersistFunc(persistRefreshTokens(path))
+	persisting(s, path)
 
 	token := s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
 	if !s.Rotate(token, time.Hour).OK {
@@ -254,7 +278,7 @@ func TestRevokeIsWrittenThrough(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
 	s := NewRefreshTokenStore()
-	s.SetPersistFunc(persistRefreshTokens(path))
+	persisting(s, path)
 
 	token := s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
 	s.RevokeGrant(token)
@@ -269,18 +293,7 @@ func TestRevokeIsWrittenThrough(t *testing.T) {
 func TestServerCarriesRefreshTokensAcrossRestart(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
-	cfg := ServerConfig{
-		Issuer:      "https://cetacean.test",
-		MCPResource: "https://cetacean.test/mcp",
-		MCP: config.MCPConfig{
-			AccessTokenTTL:  time.Hour,
-			RefreshTokenTTL: 720 * time.Hour,
-		},
-		SigningKey:     []byte("test-signing-key-32bytes-padded!!"),
-		TokenStorePath: path,
-	}
-
-	before := NewServer(cfg)
+	before := newPersistingServer(t, path, "https://cetacean.test/mcp")
 	token := before.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user@example.com",
 		ClientID: "https://example.com/client",
@@ -288,14 +301,14 @@ func TestServerCarriesRefreshTokensAcrossRestart(t *testing.T) {
 	}, 720*time.Hour)
 
 	// A second Server over the same path stands in for the process restarting.
-	after := NewServer(cfg)
+	after := newPersistingServer(t, path, "https://cetacean.test/mcp")
 
 	if _, ok := after.refreshTokens.Validate(token); !ok {
 		t.Fatal("a refresh token issued before the restart should still validate")
 	}
 }
 
-func TestServerWithoutTokenStorePathKeepsTokensInMemory(t *testing.T) {
+func TestServerWithoutStatePathKeepsTokensInMemory(t *testing.T) {
 	s := newTestServer(t)
 
 	token := s.refreshTokens.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
@@ -306,8 +319,8 @@ func TestServerWithoutTokenStorePathKeepsTokensInMemory(t *testing.T) {
 	// With no path configured there is nowhere a write could be observed, so
 	// the assertion is on the wiring itself: no persister was installed, which
 	// is what keeps a read-only deployment from warning on every mutation.
-	if s.refreshTokens.persist != nil {
-		t.Error("a server with no token store path should install no persister")
+	if s.refreshTokens.onChange != nil {
+		t.Error("a server with no token store path should install no change hook")
 	}
 }
 
@@ -315,7 +328,7 @@ func TestUnknownTokenRotationDoesNotWrite(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
 	s := NewRefreshTokenStore()
-	s.SetPersistFunc(persistRefreshTokens(path))
+	persisting(s, path)
 	s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
 
 	// Removing the file makes a subsequent write observable: anyone can post a
@@ -336,7 +349,7 @@ func TestUnknownTokenRevocationDoesNotWrite(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
 	s := NewRefreshTokenStore()
-	s.SetPersistFunc(persistRefreshTokens(path))
+	persisting(s, path)
 	s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
 
 	if err := os.Remove(path); err != nil {
@@ -347,5 +360,67 @@ func TestUnknownTokenRevocationDoesNotWrite(t *testing.T) {
 
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Error("revoking an unknown token wrote to disk; it changes no state")
+	}
+}
+
+func TestStateFileSerializesConcurrentWriters(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	tokens := NewRefreshTokenStore()
+	consent := persisting(tokens, path)
+
+	// Two independent stores now write the same file from their own hooks.
+	// Unserialized, each snapshots at its own moment and opens the same temp
+	// path, so the rename publishes either a stale snapshot — silently losing
+	// a token or an approval still live in memory — or structurally mixed
+	// bytes that fail to parse at the next start, costing every client a
+	// re-authorization.
+	//
+	// This exercises that path rather than proving it: the corruption is in
+	// the file, not in memory, so the race detector cannot see it and the
+	// interleaving does not reproduce on demand. It is a regression guard on
+	// the invariant — a published file always parses and always holds both
+	// stores — not a reproduction of the unserialized failure.
+	const rounds = 25
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+
+		for i := range rounds {
+			tokens.Issue(RefreshTokenData{
+				Subject:  fmt.Sprintf("token-%d@example.com", i),
+				ClientID: testClientID,
+				Resource: testResource,
+			}, time.Hour)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		for i := range rounds {
+			subject := fmt.Sprintf("consent-%d@example.com", i)
+			consent.Remember(keyFor(subject, testClientID, testResource), testFingerprint)
+		}
+	}()
+
+	wg.Wait()
+
+	state, err := readState(path)
+	if err != nil {
+		t.Fatalf("the published file must always parse: %v", err)
+	}
+
+	// Every mutation completed before the write it triggered, so whichever
+	// write held the lock last saw both stores complete — and the file it
+	// published must hold everything.
+	if got := len(state.Tokens); got != rounds {
+		t.Errorf("tokens on disk = %d, want %d", got, rounds)
+	}
+	if got := len(state.Consent); got != rounds {
+		t.Errorf("consent records on disk = %d, want %d", got, rounds)
 	}
 }

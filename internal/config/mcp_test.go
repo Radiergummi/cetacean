@@ -17,6 +17,16 @@ func TestMCPConfigDefaults(t *testing.T) {
 	if cfg.RefreshTokenTTL != 720*time.Hour {
 		t.Errorf("refresh token TTL = %v, want 720h", cfg.RefreshTokenTTL)
 	}
+
+	// A remembered approval must outlive the refresh token, or remembering
+	// buys nothing: skipping the prompt once the token expires is the point.
+	if cfg.ConsentTTL <= cfg.RefreshTokenTTL {
+		t.Errorf(
+			"consent TTL = %v, want longer than the refresh token TTL %v",
+			cfg.ConsentTTL,
+			cfg.RefreshTokenTTL,
+		)
+	}
 	if cfg.OperationsLevel != OpsInherit {
 		t.Errorf("operations level = %v, want OpsInherit", cfg.OperationsLevel)
 	}
@@ -42,6 +52,7 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	t.Setenv("CETACEAN_MCP_SIGNING_KEY", "test-secret")
 	t.Setenv("CETACEAN_MCP_ACCESS_TOKEN_TTL", "2h")
 	t.Setenv("CETACEAN_MCP_REFRESH_TOKEN_TTL", "48h")
+	t.Setenv("CETACEAN_MCP_CONSENT_TTL", "96h")
 	t.Setenv("CETACEAN_MCP_OPERATIONS_LEVEL", "2")
 	t.Setenv("CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR", "false")
 	t.Setenv("CETACEAN_MCP_DCR_ENABLED", "false")
@@ -66,6 +77,9 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	}
 	if cfg.MCP.RefreshTokenTTL != 48*time.Hour {
 		t.Errorf("refresh TTL = %v, want 48h", cfg.MCP.RefreshTokenTTL)
+	}
+	if cfg.MCP.ConsentTTL != 96*time.Hour {
+		t.Errorf("consent TTL = %v, want 96h", cfg.MCP.ConsentTTL)
 	}
 	if cfg.MCP.OperationsLevel != OpsConfiguration {
 		t.Errorf("ops level = %v, want OpsConfiguration", cfg.MCP.OperationsLevel)
