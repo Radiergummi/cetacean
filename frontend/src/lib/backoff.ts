@@ -10,7 +10,9 @@ export interface BackoffOptions {
 }
 
 /**
- * How far a jittered delay may fall either side of its nominal value.
+ * How far a jittered delay may fall either side of its nominal value, giving a
+ * factor in `[1 - fraction, 1 + fraction)` — the upper bound is exclusive
+ * because `Math.random()` never returns 1.
  *
  * Clients that fail together compute the same delay, so without a spread they
  * wake together, re-collide, and synchronize harder each round — which is what
@@ -20,19 +22,22 @@ export interface BackoffOptions {
 const backoffJitterFraction = 0.25;
 
 /**
- * How much longer than the server's `Retry-After` a delay may be stretched.
+ * How much longer than the server's `Retry-After` a delay may be stretched,
+ * giving a factor in `[1, 1 + fraction)` — the upper bound is exclusive
+ * because `Math.random()` never returns 1.
  *
  * `Retry-After` is a floor, not a target: waiting *less* than the server asked
  * is the one thing a client must not do. So this spreads strictly later, never
- * earlier — at `Math.random() === 0` the delay is exactly what was asked for.
+ * earlier — at `Math.random() === 0` the delay is exactly what was asked for,
+ * which is the reachable lower bound.
  */
 const retryAfterStretchFraction = 0.5;
 
 /**
  * Exponential backoff: the first retry waits `base`, each subsequent one
  * doubles, and the doubling stops at `max` — then a random spread of
- * ±`backoffJitterFraction` is applied so that clients which failed at the same
- * instant do not retry at the same instant.
+ * ±`backoffJitterFraction` is applied (upper bound exclusive) so that clients
+ * which failed at the same instant do not retry at the same instant.
  *
  * The schedule is shared; the values are not. Each stream passes its own
  * `base` and `max` because the policies genuinely differ — the log tail
@@ -52,8 +57,8 @@ export function backoffDelay(attempt: number, { base, max }: BackoffOptions): nu
  * Spreads a server-supplied `Retry-After` so that every client rejected while
  * a cap was full does not wake in the same second and re-collide.
  *
- * The result is never shorter than the server asked for; see
- * `retryAfterStretchFraction`.
+ * The result is never shorter than the server asked for, and always shorter
+ * than `1 + retryAfterStretchFraction` times it.
  *
  * @param milliseconds the delay the server asked for.
  */

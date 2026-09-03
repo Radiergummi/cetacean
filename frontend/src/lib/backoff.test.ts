@@ -12,6 +12,34 @@ function randomReturns(value: number) {
   vi.spyOn(Math, "random").mockReturnValue(value);
 }
 
+/**
+ * The largest value Math.random() realistically yields. Its range is `[0, 1)`,
+ * so 1 is unreachable; this rounds to the same maxima while staying an input
+ * the platform can actually produce.
+ */
+const nearlyOne = 0.999999;
+
+/**
+ * Drives Math.random through a fixed sequence, so a test asserting that the
+ * delays vary is deterministic rather than merely unlikely to collide.
+ *
+ * A stub still catches the spread being removed: a delay computed without
+ * randomness is constant whatever the sequence yields, so the set collapses to
+ * one entry and the assertion fails.
+ */
+function randomCycles(values: number[]) {
+  let index = 0;
+
+  vi.spyOn(Math, "random").mockImplementation(() => {
+    const value = values[index % values.length]!;
+    index += 1;
+
+    return value;
+  });
+}
+
+const spreadSamples = [0, 0.25, 0.5, 0.75, nearlyOne];
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -56,7 +84,7 @@ describe("backoffDelay", () => {
   });
 
   it("spreads the delay a quarter above nominal at the high end", () => {
-    randomReturns(1);
+    randomReturns(nearlyOne);
 
     expect(backoffDelay(1, options)).toBe(1250);
   });
@@ -64,6 +92,8 @@ describe("backoffDelay", () => {
   it("does not hand two clients failing together the same delay", () => {
     // A deterministic schedule is what turns one restart into a series of
     // synchronized spikes, so the spread is the behaviour under test.
+    randomCycles(spreadSamples);
+
     const delays = new Set(Array.from({ length: 50 }, () => backoffDelay(3, options)));
 
     expect(delays.size).toBeGreaterThan(1);
@@ -85,12 +115,14 @@ describe("retryAfterDelay", () => {
   });
 
   it("stretches by up to half again", () => {
-    randomReturns(1);
+    randomReturns(nearlyOne);
 
     expect(retryAfterDelay(5000)).toBe(7500);
   });
 
   it("scatters clients rejected at the same instant", () => {
+    randomCycles(spreadSamples);
+
     const delays = new Set(Array.from({ length: 50 }, () => retryAfterDelay(5000)));
 
     expect(delays.size).toBeGreaterThan(1);
