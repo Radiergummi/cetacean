@@ -123,6 +123,19 @@ document says — and when the grant is revoked or Cetacean detects a stolen
 refresh token. Clients that registered dynamically are never remembered: their
 metadata is self-reported.
 
+An approval is also a lease, not a permanent grant. It lasts
+`CETACEAN_MCP_CONSENT_TTL` (default `2160h`, 90 days) from the moment you
+approved, and approving again renews it. The lease exists because revoking an
+approval means presenting a token from its grant family, and that family is torn
+down once its refresh token expires — so without one, an approval belonging to a
+long-unused client would keep authorizing silently with no handle left to
+withdraw it. The default deliberately outlives the 30-day refresh token, since
+not re-prompting when that token expires is the whole point of remembering.
+
+Set `CETACEAN_MCP_CONSENT_TTL=0` to turn remembering off entirely: nothing is
+recorded, existing records stop being honoured, and every authorization reaches
+a human.
+
 Approvals live in `mcp-tokens.json` beside the refresh tokens. Note the file's
 threat model differs between the two: refresh tokens are stored as SHA-256
 hashes, which are useless to anyone who steals the file, while an approval is a
@@ -242,6 +255,7 @@ Docker version conflict.
 | `CETACEAN_MCP_SIGNING_KEY` | auto-generated | HMAC-SHA256 JWT signing key |
 | `CETACEAN_MCP_ACCESS_TOKEN_TTL` | `1h` | Access token lifetime |
 | `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | Refresh token lifetime (30 days) |
+| `CETACEAN_MCP_CONSENT_TTL` | `2160h` | How long a remembered approval lasts (90 days); `0` disables remembering |
 | `CETACEAN_MCP_MAX_CONCURRENT_TASKS` | `32` | Cap on in-flight task-augmented tool calls |
 | `CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR` | `true` | Require the RFC 8707 `resource` parameter |
 | `CETACEAN_MCP_DCR_ENABLED` | `true` | Enable Dynamic Client Registration |

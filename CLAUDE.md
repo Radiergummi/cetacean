@@ -117,6 +117,7 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_MCP_SIGNING_KEY` | auto-generated | No (HMAC-SHA256 JWT signing key) |
 | `CETACEAN_MCP_ACCESS_TOKEN_TTL` | `1h` | No |
 | `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | No |
+| `CETACEAN_MCP_CONSENT_TTL` | `2160h` | No (how long a remembered approval lasts; `0` always prompts) |
 | `CETACEAN_MCP_MAX_CONCURRENT_TASKS` | `32` | No (cap on in-flight task-augmented tool calls) |
 | `CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR` | `true` | No (require RFC 8707 `resource` on authorize/token) |
 | `CETACEAN_MCP_DCR_ENABLED` | `true` | No (RFC 7591 Dynamic Client Registration) |

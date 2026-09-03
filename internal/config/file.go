@@ -75,6 +75,7 @@ type fileMCP struct {
 	SigningKey      *string `toml:"signing_key"`
 	AccessTokenTTL  *string `toml:"access_token_ttl"`
 	RefreshTokenTTL *string `toml:"refresh_token_ttl"`
+	ConsentTTL      *string `toml:"consent_ttl"`
 
 	// MaxConcurrentTasks caps in-flight task-augmented tool calls.
 	MaxConcurrentTasks *int          `toml:"max_concurrent_tasks"`

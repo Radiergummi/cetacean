@@ -166,7 +166,7 @@ func writeState(path string, state oauthState) error {
 	// client a re-authorization. A lost update between two processes is
 	// survivable; unparseable bytes are not. The cost is that an unclean kill
 	// mid-write leaves an orphan file behind instead of reusing one slot.
-	tmpPath, err := writeTempSynced(filepath.Dir(path), filepath.Base(path)+".*.tmp", data)
+	tmpPath, err := writeTempSynced(path, data)
 	if err != nil {
 		return fmt.Errorf("write oauth state tmp: %w", err)
 	}
@@ -187,38 +187,40 @@ func writeState(path string, state oauthState) error {
 	return nil
 }
 
-// writeTempSynced creates a uniquely named file in dir, writes data to it and
-// flushes it to the disk before returning, so the caller can treat a nil error
-// as "this survives a crash". It returns the path it created, which the caller
-// owns: on error it is removed here, on success the caller renames it.
+// writeTempSynced creates a uniquely named sibling of path, writes data to it
+// and flushes it to the disk before returning, so the caller can treat a nil
+// error as "this survives a crash". It returns the path it created, which the
+// caller owns: on error it is removed here, on success the caller renames it.
 //
 // os.CreateTemp already creates with mode 0600, which is what this file needs.
-func writeTempSynced(dir, pattern string, data []byte) (string, error) {
-	f, err := os.CreateTemp(dir, pattern)
+// The name it picks matches tempFileSuffix, so sweepTempFiles can recognise an
+// orphan left behind by an unclean kill.
+func writeTempSynced(path string, data []byte) (string, error) {
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+tempFileSuffix)
 	if err != nil {
 		return "", err
 	}
 
-	path := f.Name()
+	tmpPath := f.Name()
 
 	if _, err := f.Write(data); err != nil {
-		f.Close()       //nolint:errcheck // the write error is the one worth reporting
-		os.Remove(path) //nolint:errcheck
+		f.Close()          //nolint:errcheck // the write error is the one worth reporting
+		os.Remove(tmpPath) //nolint:errcheck
 		return "", err
 	}
 
 	if err := f.Sync(); err != nil {
-		f.Close()       //nolint:errcheck // the sync error is the one worth reporting
-		os.Remove(path) //nolint:errcheck
+		f.Close()          //nolint:errcheck // the sync error is the one worth reporting
+		os.Remove(tmpPath) //nolint:errcheck
 		return "", err
 	}
 
 	if err := f.Close(); err != nil {
-		os.Remove(path) //nolint:errcheck
+		os.Remove(tmpPath) //nolint:errcheck
 		return "", err
 	}
 
-	return path, nil
+	return tmpPath, nil
 }
 
 // syncDir flushes a directory's own entries, which is what makes a rename
@@ -254,6 +256,59 @@ func readState(path string) (oauthState, error) {
 	}
 
 	return state, nil
+}
+
+// tempFileSuffix is appended to the state file's name to form the pattern
+// os.CreateTemp expands. It is shared by the writer and the sweeper so the
+// names one creates are exactly the ones the other reclaims.
+const tempFileSuffix = ".*.tmp"
+
+// changeNotifier is the write-through hook the stores share. Both hold state
+// that belongs to one file, and neither knows what owns it, so both report a
+// mutation the same way.
+type changeNotifier struct {
+	// onChange is called after every mutation that changed state, always with
+	// the store's mutex released. Nil when the store is memory-only.
+	onChange func()
+}
+
+// SetOnChange installs the callback fired after every mutation. Call it during
+// setup, before the store serves any request: it is not guarded by a mutex,
+// because a hook swapped mid-flight would race the mutations it records.
+func (n *changeNotifier) SetOnChange(fn func()) {
+	n.onChange = fn
+}
+
+// writeThrough notifies the owner of the durable state that it changed. It
+// must be called with the store's mutex released, since the owner takes a
+// snapshot, which acquires it.
+func (n *changeNotifier) writeThrough() {
+	if n.onChange == nil {
+		return
+	}
+
+	n.onChange()
+}
+
+// sweepTempFiles removes temp files orphaned by an unclean kill mid-write.
+// Each holds a full copy of the state, so leaving them to accumulate would
+// both fill the data directory and scatter extra copies of it around. Called
+// once at startup, where a stray readdir costs nothing and no writer is racing
+// it: a temp file that a live writer still owns cannot exist yet.
+func sweepTempFiles(path string) {
+	orphans, err := filepath.Glob(path + tempFileSuffix)
+	if err != nil {
+		return // the pattern is a constant, so this cannot fire
+	}
+
+	for _, orphan := range orphans {
+		if err := os.Remove(orphan); err != nil {
+			slog.Warn("could not remove orphaned MCP OAuth state temp file",
+				"error", err,
+				"path", orphan,
+			)
+		}
+	}
 }
 
 // stateFile owns the OAuth server's durable state on disk.

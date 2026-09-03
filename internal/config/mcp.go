@@ -36,6 +36,16 @@ type MCPConfig struct {
 	// RefreshTokenTTL is how long MCP refresh tokens remain valid.
 	RefreshTokenTTL time.Duration
 
+	// ConsentTTL is how long a remembered approval keeps letting a client skip
+	// the consent screen. It must outlive RefreshTokenTTL to be useful at all —
+	// the point of remembering is that an expired refresh token does not cost
+	// the operator a second prompt — but it cannot be unbounded: an approval is
+	// only revocable by presenting a token from its grant family, so once that
+	// family lapses an unbounded record would keep authorizing silently with no
+	// way left to withdraw it. Zero or negative disables remembering entirely,
+	// so every authorization is prompted.
+	ConsentTTL time.Duration
+
 	// RequireResourceIndicator requires RFC 8707 resource indicators in token requests.
 	RequireResourceIndicator bool
 
@@ -71,12 +81,14 @@ type MCPConfig struct {
 // DefaultMCPConfig returns an MCPConfig populated with sensible defaults.
 func DefaultMCPConfig() MCPConfig {
 	return MCPConfig{
-		Enabled:                  false,
-		OperationsLevel:          OpsInherit,
-		Issuer:                   "",
-		SigningKey:               "",
-		AccessTokenTTL:           time.Hour,
-		RefreshTokenTTL:          720 * time.Hour,
+		Enabled:         false,
+		OperationsLevel: OpsInherit,
+		Issuer:          "",
+		SigningKey:      "",
+		AccessTokenTTL:  time.Hour,
+		RefreshTokenTTL: 720 * time.Hour,
+		ConsentTTL:      2160 * time.Hour, // 90d, well past the refresh token's 30d
+
 		RequireResourceIndicator: true,
 		MaxConcurrentTasks:       32,
 		DCREnabled:               true,
@@ -112,6 +124,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fRefreshTTL    *string
 		fOpsLevel      *int
 		fRequireRI     *bool
+		fConsentTTL    *string
 		fMaxTasks      *int
 		fDCREnabled    *bool
 		fDCRRateLimit  *int
@@ -125,6 +138,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fSigningKey = fm.SigningKey
 		fAccessTTL = fm.AccessTokenTTL
 		fRefreshTTL = fm.RefreshTokenTTL
+		fConsentTTL = fm.ConsentTTL
 		fOpsLevel = fm.OperationsLevel
 		fMaxTasks = fm.MaxConcurrentTasks
 		if fm.OAuth != nil {
@@ -152,6 +166,16 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		"CETACEAN_MCP_REFRESH_TOKEN_TTL",
 		fRefreshTTL,
 		def.RefreshTokenTTL,
+	)
+	if err != nil {
+		return MCPConfig{}, err
+	}
+
+	consentTTL, err := resolveDuration(
+		nil,
+		"CETACEAN_MCP_CONSENT_TTL",
+		fConsentTTL,
+		def.ConsentTTL,
 	)
 	if err != nil {
 		return MCPConfig{}, err
@@ -217,6 +241,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		),
 		AccessTokenTTL:     accessTTL,
 		RefreshTokenTTL:    refreshTTL,
+		ConsentTTL:         consentTTL,
 		MaxConcurrentTasks: maxConcurrentTasks,
 		RequireResourceIndicator: resolveBool(
 			nil,

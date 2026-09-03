@@ -2,7 +2,6 @@ package oauth
 
 import (
 	"fmt"
-	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,10 +10,17 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/radiergummi/cetacean/internal/auth"
-	"github.com/radiergummi/cetacean/internal/config"
 )
+
+// testConsentTTL is long enough that no test crosses it by accident; the tests
+// that care about lapsing set their own.
+const testConsentTTL = 2160 * time.Hour
+
+// keyFor builds the approval identity the store is keyed on. Tests name the
+// triple positionally; production code passes a ConsentKey it built by field.
+func keyFor(subject, clientID, resource string) ConsentKey {
+	return ConsentKey{Subject: subject, ClientID: clientID, Resource: resource}
+}
 
 func TestConsentFingerprintIgnoresRedirectURIOrder(t *testing.T) {
 	// CIMD documents are client-controlled and array order carries no meaning,
@@ -126,17 +132,17 @@ const (
 )
 
 func TestConsentStoreRemembersAnApproval(t *testing.T) {
-	s := NewConsentStore()
-	s.Remember(testSubject, testClientID, testResource, testFingerprint)
+	s := NewConsentStore(testConsentTTL)
+	s.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
 
-	if !s.Allows(testSubject, testClientID, testResource, testFingerprint) {
+	if !s.Allows(keyFor(testSubject, testClientID, testResource), testFingerprint) {
 		t.Error("a remembered approval should be allowed")
 	}
 }
 
 func TestConsentStoreRequiresAnExactMatch(t *testing.T) {
-	s := NewConsentStore()
-	s.Remember(testSubject, testClientID, testResource, testFingerprint)
+	s := NewConsentStore(testConsentTTL)
+	s.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
 
 	tests := []struct {
 		name                                     string
@@ -168,7 +174,7 @@ func TestConsentStoreRequiresAnExactMatch(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if s.Allows(tc.subject, tc.clientID, tc.resource, tc.fingerprint) {
+			if s.Allows(keyFor(tc.subject, tc.clientID, tc.resource), tc.fingerprint) {
 				t.Error("a non-matching request should re-prompt")
 			}
 		})
@@ -176,39 +182,39 @@ func TestConsentStoreRequiresAnExactMatch(t *testing.T) {
 }
 
 func TestConsentStoreReplacesAStaleRecord(t *testing.T) {
-	s := NewConsentStore()
-	s.Remember(testSubject, testClientID, testResource, "fingerprint-a")
-	s.Remember(testSubject, testClientID, testResource, "fingerprint-b")
+	s := NewConsentStore(testConsentTTL)
+	s.Remember(keyFor(testSubject, testClientID, testResource), "fingerprint-a")
+	s.Remember(keyFor(testSubject, testClientID, testResource), "fingerprint-b")
 
 	// A user must never hold two live approvals for one client, one of which
 	// they no longer remember granting.
 	if got := len(s.Snapshot()); got != 1 {
 		t.Errorf("records = %d, want the stale one replaced", got)
 	}
-	if s.Allows(testSubject, testClientID, testResource, "fingerprint-a") {
+	if s.Allows(keyFor(testSubject, testClientID, testResource), "fingerprint-a") {
 		t.Error("the replaced approval should no longer be allowed")
 	}
 }
 
 func TestConsentStoreForgets(t *testing.T) {
-	s := NewConsentStore()
-	s.Remember(testSubject, testClientID, testResource, testFingerprint)
-	s.Forget(testSubject, testClientID, testResource)
+	s := NewConsentStore(testConsentTTL)
+	s.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
+	s.Forget(keyFor(testSubject, testClientID, testResource))
 
-	if s.Allows(testSubject, testClientID, testResource, testFingerprint) {
+	if s.Allows(keyFor(testSubject, testClientID, testResource), testFingerprint) {
 		t.Error("a forgotten approval should re-prompt")
 	}
 }
 
 func TestConsentStoreNotifiesOnlyOnRealChanges(t *testing.T) {
-	s := NewConsentStore()
+	s := NewConsentStore(testConsentTTL)
 
 	var writes int
 	s.SetOnChange(func() { writes++ })
 
-	s.Remember(testSubject, testClientID, testResource, testFingerprint)
-	s.Remember(testSubject, testClientID, testResource, testFingerprint) // identical
-	s.Forget(testSubject, "https://unknown.example/client.json", testResource)
+	s.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
+	s.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint) // identical
+	s.Forget(keyFor(testSubject, "https://unknown.example/client.json", testResource))
 
 	// Re-approving an unchanged client and forgetting an unknown one change
 	// nothing, and a whole-file rewrite for each would be work for no reason.
@@ -218,9 +224,9 @@ func TestConsentStoreNotifiesOnlyOnRealChanges(t *testing.T) {
 }
 
 func TestConsentStoreSnapshotIsDeterministic(t *testing.T) {
-	s := NewConsentStore()
-	s.Remember("b@example.com", testClientID, testResource, testFingerprint)
-	s.Remember("a@example.com", testClientID, testResource, testFingerprint)
+	s := NewConsentStore(testConsentTTL)
+	s.Remember(keyFor("b@example.com", testClientID, testResource), testFingerprint)
+	s.Remember(keyFor("a@example.com", testClientID, testResource), testFingerprint)
 
 	// Map iteration order is random; an unsorted snapshot would rewrite the
 	// file with reordered records on every unrelated change.
@@ -239,21 +245,19 @@ func TestConsentStoreSnapshotIsDeterministic(t *testing.T) {
 }
 
 func TestConsentStoreRestoreReplacesState(t *testing.T) {
-	s := NewConsentStore()
-	s.Remember("stale@example.com", testClientID, testResource, testFingerprint)
+	s := NewConsentStore(testConsentTTL)
+	s.Remember(keyFor("stale@example.com", testClientID, testResource), testFingerprint)
 
 	s.Restore([]ConsentRecord{{
-		Subject:     testSubject,
-		ClientID:    testClientID,
-		Resource:    testResource,
+		ConsentKey:  keyFor(testSubject, testClientID, testResource),
 		Fingerprint: testFingerprint,
 		GrantedAt:   time.Now(),
 	}})
 
-	if s.Allows("stale@example.com", testClientID, testResource, testFingerprint) {
+	if s.Allows(keyFor("stale@example.com", testClientID, testResource), testFingerprint) {
 		t.Error("Restore should replace state, not merge into it")
 	}
-	if !s.Allows(testSubject, testClientID, testResource, testFingerprint) {
+	if !s.Allows(keyFor(testSubject, testClientID, testResource), testFingerprint) {
 		t.Error("the restored record should be allowed")
 	}
 }
@@ -284,8 +288,8 @@ func TestConsentKeySeparatesFields(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			keyA := consentKey(tc.subjectA, tc.clientIDA, tc.resourceA)
-			keyB := consentKey(tc.subjectB, tc.clientIDB, tc.resourceB)
+			keyA := keyFor(tc.subjectA, tc.clientIDA, tc.resourceA).hash()
+			keyB := keyFor(tc.subjectB, tc.clientIDB, tc.resourceB).hash()
 			if keyA == keyB {
 				t.Errorf("collision: two different triples share key %q", keyA)
 			}
@@ -296,24 +300,13 @@ func TestConsentKeySeparatesFields(t *testing.T) {
 func TestConsentSurvivesRestart(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
-	cfg := ServerConfig{
-		Issuer:      "https://cetacean.test",
-		MCPResource: testResource,
-		MCP: config.MCPConfig{
-			AccessTokenTTL:  time.Hour,
-			RefreshTokenTTL: 720 * time.Hour,
-		},
-		SigningKey:     []byte("test-signing-key-32bytes-padded!!"),
-		TokenStorePath: path,
-	}
-
-	before := NewServer(cfg)
-	before.consent.Remember(testSubject, testClientID, testResource, testFingerprint)
+	before := newPersistingServer(t, path, testResource)
+	before.consent.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
 
 	// A second Server over the same path stands in for the process restarting.
-	after := NewServer(cfg)
+	after := newPersistingServer(t, path, testResource)
 
-	if !after.consent.Allows(testSubject, testClientID, testResource, testFingerprint) {
+	if !after.consent.Allows(keyFor(testSubject, testClientID, testResource), testFingerprint) {
 		t.Fatal("an approval granted before the restart should still be allowed")
 	}
 }
@@ -321,12 +314,9 @@ func TestConsentSurvivesRestart(t *testing.T) {
 func TestConsentIsWrittenThrough(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
-	consent := NewConsentStore()
-	tokens := NewRefreshTokenStore()
-	file := &stateFile{path: path, tokens: tokens, consent: consent}
-	consent.SetOnChange(file.write)
+	consent := persisting(NewRefreshTokenStore(), path)
 
-	consent.Remember(testSubject, testClientID, testResource, testFingerprint)
+	consent.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
 
 	state, err := readState(path)
 	if err != nil {
@@ -349,7 +339,7 @@ func consentServer(t *testing.T) (*Server, string) {
 	t.Helper()
 
 	s := newTestServer(t)
-	s.consent.Remember(testSubject, testClientID, s.cfg.MCPResource, testFingerprint)
+	s.consent.Remember(keyFor(testSubject, testClientID, s.cfg.MCPResource), testFingerprint)
 
 	token := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  testSubject,
@@ -372,12 +362,12 @@ func TestRevocationClearsConsent(t *testing.T) {
 	// A record outliving revocation degrades revoke into "grant one more
 	// silent re-authorization", which is worse than not revoking, because it
 	// appears to have worked.
-	if s.consent.Allows(testSubject, testClientID, s.cfg.MCPResource, testFingerprint) {
+	if s.consent.Allows(keyFor(testSubject, testClientID, s.cfg.MCPResource), testFingerprint) {
 		t.Error("revocation should have cleared the approval")
 	}
 }
 
-func TestTheftClearsConsent(t *testing.T) {
+func TestTheftResultNamesTheBurnedFamily(t *testing.T) {
 	s, token := consentServer(t)
 
 	rotated := s.refreshTokens.Rotate(token, time.Hour)
@@ -389,19 +379,18 @@ func TestTheftClearsConsent(t *testing.T) {
 	if !replay.Theft {
 		t.Fatal("re-presenting a consumed token should be detected as theft")
 	}
-	if replay.Data.Subject != testSubject {
-		t.Fatalf("theft result should name the burned family, got subject %q", replay.Data.Subject)
-	}
-	s.consent.Forget(replay.Data.Subject, replay.Data.ClientID, replay.Data.Resource)
 
-	if s.consent.Allows(testSubject, testClientID, s.cfg.MCPResource, testFingerprint) {
-		t.Error("a burned grant family should not leave a silent re-grant behind")
+	// Naming the burned family is what lets the caller clear its approval; the
+	// handler that does so is covered by TestTheftAtTheTokenEndpointClearsConsent.
+	want := keyFor(testSubject, testClientID, s.cfg.MCPResource)
+	if got := replay.Data.ConsentKey(); got != want {
+		t.Errorf("theft result should name the burned family, got %+v", got)
 	}
 }
 
 func TestExpiryDoesNotClearConsent(t *testing.T) {
 	s := newTestServer(t)
-	s.consent.Remember(testSubject, testClientID, s.cfg.MCPResource, testFingerprint)
+	s.consent.Remember(keyFor(testSubject, testClientID, s.cfg.MCPResource), testFingerprint)
 
 	expired := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  testSubject,
@@ -414,8 +403,169 @@ func TestExpiryDoesNotClearConsent(t *testing.T) {
 	}
 
 	// Consent outliving the refresh token is the entire point of the feature.
-	if !s.consent.Allows(testSubject, testClientID, s.cfg.MCPResource, testFingerprint) {
+	if !s.consent.Allows(keyFor(testSubject, testClientID, s.cfg.MCPResource), testFingerprint) {
 		t.Error("expiry must not clear consent")
+	}
+}
+
+// grantedAt rewinds a remembered approval's grant time, standing in for one
+// recorded that long ago. The store has no clock to inject and Remember always
+// stamps time.Now(), so the record is edited in place.
+//
+// Deliberately not a Snapshot/Restore round-trip: Restore prunes what has
+// lapsed, so aging a record that way would leave the store empty and the test
+// would pass on the record being *absent* rather than on Allows judging it
+// expired. Restore's pruning has its own test.
+func grantedAt(t *testing.T, s *ConsentStore, age time.Duration) {
+	t.Helper()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.records) == 0 {
+		t.Fatal("nothing to age")
+	}
+
+	for hash, record := range s.records {
+		record.GrantedAt = time.Now().Add(-age)
+		s.records[hash] = record
+	}
+}
+
+func TestLapsedApprovalIsNotHonoured(t *testing.T) {
+	s := NewConsentStore(time.Hour)
+	s.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
+
+	// An approval is only revocable by presenting a token from its grant
+	// family. That family is torn down when its refresh token expires, so
+	// without a lease of its own the record would outlive the only handle
+	// anyone had on it and keep authorizing silently, forever.
+	grantedAt(t, s, 2*time.Hour)
+
+	if s.Allows(keyFor(testSubject, testClientID, testResource), testFingerprint) {
+		t.Error("an approval past its lease must not skip the consent page")
+	}
+}
+
+func TestApprovalWithinItsLeaseIsHonoured(t *testing.T) {
+	s := NewConsentStore(24 * time.Hour)
+	s.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
+
+	// The lease has to outlive the refresh token or the feature is pointless:
+	// not re-prompting once the token expires is the whole reason to remember.
+	grantedAt(t, s, 23*time.Hour)
+
+	if !s.Allows(keyFor(testSubject, testClientID, testResource), testFingerprint) {
+		t.Error("an approval inside its lease should still be honoured")
+	}
+}
+
+func TestRestorePrunesLapsedApprovals(t *testing.T) {
+	s := NewConsentStore(time.Hour)
+
+	fresh := keyFor("fresh@example.com", testClientID, testResource)
+	stale := keyFor("stale@example.com", testClientID, testResource)
+
+	s.Restore([]ConsentRecord{
+		{ConsentKey: fresh, Fingerprint: testFingerprint, GrantedAt: time.Now()},
+		{
+			ConsentKey:  stale,
+			Fingerprint: testFingerprint,
+			GrantedAt:   time.Now().Add(-2 * time.Hour),
+		},
+	})
+
+	// Allows refuses a lapsed record but leaves it in place, so Restore is the
+	// only thing that stops the file accumulating records that can never
+	// authorize anything again.
+	if got := len(s.Snapshot()); got != 1 {
+		t.Errorf("records after restore = %d, want only the unexpired one", got)
+	}
+	if !s.Allows(fresh, testFingerprint) {
+		t.Error("the unexpired record should have survived")
+	}
+	if s.Allows(stale, testFingerprint) {
+		t.Error("the lapsed record should have been pruned")
+	}
+}
+
+func TestReapprovalRenewsTheLease(t *testing.T) {
+	s := NewConsentStore(time.Hour)
+	key := keyFor(testSubject, testClientID, testResource)
+
+	s.Remember(key, testFingerprint)
+	grantedAt(t, s, 2*time.Hour)
+
+	// Re-approving skips the write when nothing changed. A lapsed record has
+	// changed in the one way that matters, so the short-circuit must not
+	// swallow the renewal.
+	s.Remember(key, testFingerprint)
+
+	if !s.Allows(key, testFingerprint) {
+		t.Error("re-approving a lapsed client should renew its lease")
+	}
+}
+
+func TestZeroTTLDisablesRemembering(t *testing.T) {
+	s := NewConsentStore(0)
+	key := keyFor(testSubject, testClientID, testResource)
+
+	var writes int
+	s.SetOnChange(func() { writes++ })
+
+	s.Remember(key, testFingerprint)
+
+	if s.Allows(key, testFingerprint) {
+		t.Error("a disabled store must never skip the consent page")
+	}
+	if got := len(s.Snapshot()); got != 0 {
+		t.Errorf("records = %d, want none recorded while disabled", got)
+	}
+	if writes != 0 {
+		t.Errorf("writes = %d, want none: nothing durable changed", writes)
+	}
+}
+
+func TestDisabledConsentAlwaysPromptsThroughTheServer(t *testing.T) {
+	s, clientID, redirectURI, meta := cimdServer(t)
+	s.consent = NewConsentStore(0)
+
+	// Even a record that matches on every field must not skip the page once an
+	// operator has turned remembering off.
+	s.consent.Restore([]ConsentRecord{{
+		ConsentKey:  keyFor(testSubject, clientID, s.cfg.MCPResource),
+		Fingerprint: consentFingerprint(meta),
+		GrantedAt:   time.Now(),
+	}})
+
+	w := authorizeGET(t, s, clientID, redirectURI)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (the consent page)", w.Code, http.StatusOK)
+	}
+}
+
+func TestConsentPageStatesTheLease(t *testing.T) {
+	s, clientID, redirectURI, _ := cimdServer(t)
+	s.consent = NewConsentStore(48 * time.Hour)
+
+	body := authorizeGET(t, s, clientID, redirectURI).Body.String()
+
+	// The page has to describe the lease it is actually offering, not an
+	// open-ended promise it no longer keeps.
+	if !strings.Contains(body, "2 days") {
+		t.Errorf("consent page should state how long the approval lasts, got:\n%s", body)
+	}
+}
+
+func TestConsentPageOmitsTheLeaseWhenDisabled(t *testing.T) {
+	s, clientID, redirectURI, _ := cimdServer(t)
+	s.consent = NewConsentStore(0)
+
+	body := authorizeGET(t, s, clientID, redirectURI).Body.String()
+
+	if strings.Contains(body, "will be remembered") {
+		t.Errorf("a disabled store must not promise to remember, got:\n%s", body)
 	}
 }
 
@@ -468,16 +618,7 @@ func TestVersion1FileLoadsWithoutConsent(t *testing.T) {
 	}
 
 	// Drive the load path an upgrading operator's restart actually takes.
-	s := NewServer(ServerConfig{
-		Issuer:      "https://cetacean.test",
-		MCPResource: testResource,
-		MCP: config.MCPConfig{
-			AccessTokenTTL:  time.Hour,
-			RefreshTokenTTL: 720 * time.Hour,
-		},
-		SigningKey:     []byte("test-signing-key-32bytes-padded!!"),
-		TokenStorePath: path,
-	})
+	s := newPersistingServer(t, path, testResource)
 
 	data, ok := s.refreshTokens.Validate(raw)
 	if !ok {
@@ -504,21 +645,15 @@ func authorizeGET(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	target := "/oauth/authorize?" + url.Values{
-		"response_type":         {"code"},
-		"client_id":             {clientID},
-		"redirect_uri":          {redirectURI},
-		"code_challenge":        {computeS256Challenge(authorizeVerifier)},
-		"code_challenge_method": {"S256"},
-		"state":                 {"xyz"},
-		"resource":              {s.cfg.MCPResource},
-	}.Encode()
+	target := authorizeURL(
+		clientID,
+		redirectURI,
+		computeS256Challenge(authorizeVerifier),
+		"xyz",
+		s.cfg.MCPResource,
+	)
 
-	req := httptest.NewRequest(http.MethodGet, target, nil)
-	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{
-		Subject:  testSubject,
-		Provider: "none",
-	}))
+	req := withIdentity(httptest.NewRequest(http.MethodGet, target, nil), testSubject, "")
 
 	w := httptest.NewRecorder()
 	s.HandleAuthorize(w, req)
@@ -557,7 +692,7 @@ func cimdServer(t *testing.T) (srv *Server, clientID, redirectURI string, meta *
 
 func TestApprovedClientSkipsTheConsentPage(t *testing.T) {
 	s, clientID, redirectURI, meta := cimdServer(t)
-	s.consent.Remember(testSubject, clientID, s.cfg.MCPResource, consentFingerprint(meta))
+	s.consent.Remember(keyFor(testSubject, clientID, s.cfg.MCPResource), consentFingerprint(meta))
 
 	w := authorizeGET(t, s, clientID, redirectURI)
 
@@ -582,7 +717,7 @@ func TestChangedMetadataRePrompts(t *testing.T) {
 
 	// An approval granted against different metadata than the client now
 	// publishes must not carry over.
-	s.consent.Remember(testSubject, clientID, s.cfg.MCPResource, "fingerprint-from-before")
+	s.consent.Remember(keyFor(testSubject, clientID, s.cfg.MCPResource), "fingerprint-from-before")
 
 	w := authorizeGET(t, s, clientID, redirectURI)
 
@@ -609,10 +744,11 @@ func TestDynamicallyRegisteredClientNeverSkipsTheConsentPage(t *testing.T) {
 	// Seed a record that matches on every field. It must still be ignored:
 	// a DCR client's metadata is self-reported, so a fingerprint over it
 	// proves nothing about who the client is.
-	s.consent.Remember(testSubject, clientID, s.cfg.MCPResource, consentFingerprint(&ClientMetadata{
+	fingerprint := consentFingerprint(&ClientMetadata{
 		ClientName:   "Self-Registered CLI",
 		RedirectURIs: []string{redirectURI},
-	}))
+	})
+	s.consent.Remember(keyFor(testSubject, clientID, s.cfg.MCPResource), fingerprint)
 
 	w := authorizeGET(t, s, clientID, redirectURI)
 
@@ -632,50 +768,11 @@ func approvePOST(
 	t *testing.T,
 	s *Server,
 	page *httptest.ResponseRecorder,
-	clientID, redirectURI string,
 	overrides url.Values,
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	body := page.Body.String()
-
-	form := url.Values{
-		"decision":              {"approve"},
-		"response_type":         {"code"},
-		"client_id":             {clientID},
-		"redirect_uri":          {redirectURI},
-		"code_challenge":        {computeS256Challenge(authorizeVerifier)},
-		"code_challenge_method": {"S256"},
-		"state":                 {"xyz"},
-		"resource":              {s.cfg.MCPResource},
-		"csrf_token":            {extractHiddenField(body, "csrf_token")},
-		consentFingerprintField: {extractHiddenField(body, consentFingerprintField)},
-	}
-
-	maps.Copy(form, overrides)
-
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/oauth/authorize",
-		strings.NewReader(form.Encode()),
-	)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	for _, cookie := range page.Result().Cookies() {
-		if cookie.Name == csrfCookieName {
-			req.AddCookie(cookie)
-		}
-	}
-
-	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{
-		Subject:  testSubject,
-		Provider: "none",
-	}))
-
-	w := httptest.NewRecorder()
-	s.HandleAuthorize(w, req)
-
-	return w
+	return submitConsent(t, s, page, "approve", testSubject, "", overrides)
 }
 
 // redirectedCode returns the authorization code from a recorded redirect.
@@ -698,7 +795,7 @@ func TestApprovingThroughTheConsentPageIsRemembered(t *testing.T) {
 		t.Fatalf("GET status = %d, want the consent page: %s", page.Code, page.Body.String())
 	}
 
-	approved := approvePOST(t, s, page, clientID, redirectURI, nil)
+	approved := approvePOST(t, s, page, nil)
 	if approved.Code != http.StatusFound {
 		t.Fatalf("POST status = %d, want %d: %s",
 			approved.Code, http.StatusFound, approved.Body.String())
@@ -710,7 +807,8 @@ func TestApprovingThroughTheConsentPageIsRemembered(t *testing.T) {
 	// The wiring under test: the approve handler must write the record, not
 	// merely issue a code. Seeding the store directly would prove nothing
 	// about whether the endpoint ever calls Remember.
-	if !s.consent.Allows(testSubject, clientID, s.cfg.MCPResource, consentFingerprint(meta)) {
+	approval := keyFor(testSubject, clientID, s.cfg.MCPResource)
+	if !s.consent.Allows(approval, consentFingerprint(meta)) {
 		t.Fatal("approving through the consent page recorded no approval")
 	}
 
@@ -769,7 +867,7 @@ func TestTheftAtTheTokenEndpointClearsConsent(t *testing.T) {
 
 	// A replayed token burned the family. Silently re-granting on the next
 	// authorize is exactly wrong.
-	if s.consent.Allows(testSubject, testClientID, s.cfg.MCPResource, testFingerprint) {
+	if s.consent.Allows(keyFor(testSubject, testClientID, s.cfg.MCPResource), testFingerprint) {
 		t.Error("a replayed refresh token should have cleared the approval")
 	}
 }
@@ -819,7 +917,7 @@ func TestMetadataChangedMidFlowRePrompts(t *testing.T) {
 	s.cimd.cache = nil
 	s.cimd.mu.Unlock()
 
-	stale := approvePOST(t, s, page, documentURL, redirectURI, nil)
+	stale := approvePOST(t, s, page, nil)
 
 	if stale.Code != http.StatusOK {
 		t.Fatalf("POST status = %d, want the consent page again: %s",
@@ -834,7 +932,7 @@ func TestMetadataChangedMidFlowRePrompts(t *testing.T) {
 
 	// The re-prompt must be usable: a fresh nonce bound to the new
 	// fingerprint, so approving it goes through.
-	confirmed := approvePOST(t, s, stale, documentURL, redirectURI, nil)
+	confirmed := approvePOST(t, s, stale, nil)
 	if confirmed.Code != http.StatusFound {
 		t.Fatalf("re-approval status = %d, want %d: %s",
 			confirmed.Code, http.StatusFound, confirmed.Body.String())
@@ -844,12 +942,8 @@ func TestMetadataChangedMidFlowRePrompts(t *testing.T) {
 	current := published
 	mu.Unlock()
 
-	if !s.consent.Allows(
-		testSubject,
-		documentURL,
-		s.cfg.MCPResource,
-		consentFingerprint(&current),
-	) {
+	approval := keyFor(testSubject, documentURL, s.cfg.MCPResource)
+	if !s.consent.Allows(approval, consentFingerprint(&current)) {
 		t.Error("approving the second prompt should record the metadata it displayed")
 	}
 }
@@ -865,7 +959,7 @@ func TestTamperedFingerprintFailsCSRF(t *testing.T) {
 	// The fingerprint is not a secret and rides in a hidden field; the CSRF
 	// HMAC is what makes it unforgeable. Swapping it must not merely
 	// re-prompt — it must fail the token check outright.
-	tampered := approvePOST(t, s, page, clientID, redirectURI, url.Values{
+	tampered := approvePOST(t, s, page, url.Values{
 		consentFingerprintField: {"a-fingerprint-the-user-never-saw"},
 	})
 

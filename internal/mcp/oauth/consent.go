@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"html/template"
 	"net/http"
 	"time"
@@ -54,7 +55,7 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!DOCTYPE htm
 <div class="warning">
   This will grant <strong>{{.ClientName}}</strong> access to your Cetacean instance. Only approve if you trust this application.
 </div>
-{{if .Remembered}}<div class="warning">Approving will be remembered for <strong>{{.ClientName}}</strong> until you revoke its access.</div>{{end}}
+{{if .RememberedFor}}<div class="warning">Approving will be remembered for <strong>{{.ClientName}}</strong> for {{.RememberedFor}}, or until you revoke its access.</div>{{end}}
 <form method="POST" action="{{.ActionURL}}">
   <input type="hidden" name="response_type" value="{{.ResponseType}}">
   <input type="hidden" name="client_id" value="{{.ClientID}}">
@@ -95,9 +96,14 @@ var errorTemplate = template.Must(template.New("error").Parse(`<!DOCTYPE html>
 
 // consentData holds the template variables for the consent page.
 type consentData struct {
-	ClientName          string
-	Verified            bool
-	Remembered          bool
+	ClientName string
+	Verified   bool
+
+	// RememberedFor is how long this approval will be remembered, already
+	// humanized. Empty when it will not be remembered at all, which is what
+	// the template gates the disclosure on.
+	RememberedFor string
+
 	RedirectURI         string
 	Subject             string
 	Email               string
@@ -241,4 +247,19 @@ func verifyCSRFToken(r *http.Request, signingKey []byte) bool {
 	)
 
 	return hmac.Equal([]byte(r.FormValue("csrf_token")), []byte(expected))
+}
+
+// humanizeDuration renders a lifetime for the consent page. Approval lifetimes
+// are configured in hours but read to a person in days, which is the unit the
+// page is describing.
+func humanizeDuration(d time.Duration) string {
+	if days := int(d.Hours() / 24); days >= 1 {
+		if days == 1 {
+			return "1 day"
+		}
+
+		return fmt.Sprintf("%d days", days)
+	}
+
+	return d.String()
 }

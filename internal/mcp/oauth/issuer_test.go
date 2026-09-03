@@ -1,11 +1,9 @@
 package oauth
 
 import (
-	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"testing"
 )
 
@@ -34,57 +32,7 @@ func runConsent(t *testing.T, s *Server, decision string, overrides url.Values) 
 		t.Fatalf("GET consent: status %d: %s", getRec.Code, getRec.Body.String())
 	}
 
-	csrfToken := extractHiddenField(getRec.Body.String(), "csrf_token")
-	if csrfToken == "" {
-		t.Fatal("CSRF token not found in consent page")
-	}
-
-	// The CSRF token is bound to the fingerprint of the metadata the page was
-	// rendered from, so a browser resubmitting the form must carry it back.
-	fingerprint := extractHiddenField(getRec.Body.String(), consentFingerprintField)
-	if fingerprint == "" {
-		t.Fatal("metadata fingerprint not found in consent page")
-	}
-
-	var nonceCookie *http.Cookie
-	for _, cookie := range getRec.Result().Cookies() {
-		if cookie.Name == csrfCookieName {
-			nonceCookie = cookie
-
-			break
-		}
-	}
-
-	if nonceCookie == nil {
-		t.Fatal("CSRF nonce cookie not set")
-	}
-
-	form := url.Values{
-		"decision":              {decision},
-		"response_type":         {"code"},
-		"client_id":             {clientID},
-		"redirect_uri":          {redirectURI},
-		"code_challenge":        {challenge},
-		"code_challenge_method": {"S256"},
-		"state":                 {"stateISS"},
-		"resource":              {s.cfg.MCPResource},
-		"csrf_token":            {csrfToken},
-		consentFingerprintField: {fingerprint},
-	}
-
-	maps.Copy(form, overrides)
-
-	postReq := httptest.NewRequest(
-		http.MethodPost,
-		"/oauth/authorize",
-		strings.NewReader(form.Encode()),
-	)
-	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	postReq.AddCookie(nonceCookie)
-	postReq = withIdentity(postReq, "bob", "bob@example.com")
-
-	postRec := httptest.NewRecorder()
-	s.HandleAuthorize(postRec, postReq)
+	postRec := submitConsent(t, s, getRec, decision, "bob", "bob@example.com", overrides)
 
 	if postRec.Code != http.StatusFound {
 		t.Fatalf("expected a redirect, got %d: %s", postRec.Code, postRec.Body.String())

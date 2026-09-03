@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - AI agents can now ask for Cetacean's recommendations directly, optionally only the critical ones, and clients that support interactive apps render them grouped by severity — picking one asks the agent to look into it
 - AI agents can now list a whole resource type over MCP — every service, node, task, stack, config, secret, network, or volume the caller may see, paged — rather than searching for resources one name at a time
 - Cetacean can now export traces to an OpenTelemetry collector via `CETACEAN_OTEL_ENDPOINT`. Every MCP request and tool call is recorded, and a call from an agent that is already tracing joins that agent's trace instead of starting its own, so the agent's turn and the cluster change it caused appear together
-- Approving an MCP client is now remembered, so you are asked once instead of every time its access expires. Cetacean asks again if the client changes its name or where it sends you, if you revoke its access, or if a stolen token is detected
+- Approving an MCP client is now remembered, so you are asked once instead of every time its access expires. Cetacean asks again if the client changes its name or where it sends you, if you revoke its access, or if a stolen token is detected. An approval lasts 90 days and is renewed each time you approve; set `CETACEAN_MCP_CONSENT_TTL` to change that, or to `0` to always be asked
 
 ### Changed
 - MCP authorization responses now identify the issuer (RFC 9207), so a client configured with several authorization servers cannot be tricked into redeeming a code at the wrong one

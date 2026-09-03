@@ -150,32 +150,12 @@ const maxGrantHistorySize = 32
 // and grant-family theft detection. Raw tokens are never persisted; only
 // their SHA-256 hashes are held in memory.
 type RefreshTokenStore struct {
+	changeNotifier
+
 	mu       sync.Mutex
 	tokens   map[string]refreshTokenEntry // hash → live entry
 	consumed map[string]string            // hash → grantID (rotated-away tokens)
 	grants   map[string][]string          // grantID → ordered slice of recent hashes (capped at maxGrantHistorySize)
-
-	// onChange is called after every mutation, always with mu released. Nil
-	// when the store is memory-only.
-	onChange func()
-}
-
-// SetOnChange installs the callback fired after every mutation. Call it during
-// setup, before the store serves any request: it is not guarded by the mutex,
-// because a hook swapped mid-flight would race the mutations it records.
-func (s *RefreshTokenStore) SetOnChange(fn func()) {
-	s.onChange = fn
-}
-
-// writeThrough notifies the owner of the durable state that it changed. It
-// must be called with mu released, since the owner takes a snapshot, which
-// acquires it.
-func (s *RefreshTokenStore) writeThrough() {
-	if s.onChange == nil {
-		return
-	}
-
-	s.onChange()
 }
 
 // NewRefreshTokenStore returns a ready-to-use RefreshTokenStore.
@@ -282,9 +262,7 @@ func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) (RotateRe
 		// Naming the burned family lets the caller clear the user's consent
 		// record and log who was affected, neither of which was possible when
 		// this returned a zero result.
-		owner, _ := s.revokeGrantLocked(grantID)
-
-		return RotateResult{Theft: true, Data: owner}, true
+		return RotateResult{Theft: true, Data: s.revokeGrantLocked(grantID)}, true
 	}
 
 	// Step 3: live token lookup.
@@ -369,33 +347,24 @@ func (s *RefreshTokenStore) revokeGrant(token string) (RefreshTokenData, bool) {
 		return RefreshTokenData{}, false
 	}
 
-	owner, _ := s.revokeGrantLocked(grantID)
-
-	return owner, true
+	return s.revokeGrantLocked(grantID), true
 }
 
 // revokeGrantLocked removes every hash ever associated with grantID from both
 // tokens and consumed, then drops the grant record. It returns the identity
 // the family belonged to, read from its live token — a family has exactly one,
-// unless it has already expired.
+// unless it has already expired, in which case the zero value comes back.
 //
 // Whether revoking a family should also drop the user's consent record is the
 // caller's decision, not this function's: an explicit revocation and a theft
 // must clear it, and an expiry must not, because consent outliving the refresh
 // token is the point of remembering it. Must be called with s.mu held.
-func (s *RefreshTokenStore) revokeGrantLocked(grantID string) (RefreshTokenData, bool) {
-	hashes := s.grants[grantID]
+func (s *RefreshTokenStore) revokeGrantLocked(grantID string) RefreshTokenData {
+	var owner RefreshTokenData
 
-	var (
-		owner RefreshTokenData
-		found bool
-	)
-
-	for _, h := range hashes {
-		if entry, live := s.tokens[h]; live && !found {
+	for _, h := range s.grants[grantID] {
+		if entry, live := s.tokens[h]; live {
 			owner = entry.data
-			owner.Groups = append([]string(nil), entry.data.Groups...)
-			found = true
 		}
 
 		delete(s.tokens, h)
@@ -404,5 +373,5 @@ func (s *RefreshTokenStore) revokeGrantLocked(grantID string) (RefreshTokenData,
 
 	delete(s.grants, grantID)
 
-	return owner, found
+	return owner
 }

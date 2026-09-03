@@ -6,8 +6,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // restart round-trips a store through the on-disk format the way a process
@@ -16,11 +14,7 @@ import (
 func restart(t *testing.T, s *RefreshTokenStore, path string) *RefreshTokenStore {
 	t.Helper()
 
-	if err := writeState(path, oauthState{
-		Version:              oauthStateVersion,
-		Timestamp:            time.Now(),
-		RefreshTokenSnapshot: s.Snapshot(),
-	}); err != nil {
+	if err := writeState(path, tokenState(s.Snapshot())); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -33,6 +27,16 @@ func restart(t *testing.T, s *RefreshTokenStore, path string) *RefreshTokenStore
 	restored.Restore(state.RefreshTokenSnapshot)
 
 	return restored
+}
+
+// tokenState wraps a refresh-token snapshot in the file envelope, so a new
+// envelope field is reconsidered in one place rather than at each writer.
+func tokenState(snap RefreshTokenSnapshot) oauthState {
+	return oauthState{
+		Version:              oauthStateVersion,
+		Timestamp:            time.Now(),
+		RefreshTokenSnapshot: snap,
+	}
 }
 
 // onDisk reads back what the store has written without going through it, so
@@ -48,12 +52,18 @@ func onDisk(t *testing.T, path string) oauthState {
 	return state
 }
 
-// persisting wires a store to a file the way NewServer does. A ConsentStore is
-// constructed alongside it, unused by the caller, so these tests exercise the
-// same stateFile wiring NewServer builds rather than a partial stand-in.
-func persisting(s *RefreshTokenStore, path string) {
-	file := &stateFile{path: path, tokens: s, consent: NewConsentStore()}
+// persisting wires a store to a file the way NewServer does, and returns the
+// ConsentStore sharing that file so a caller can drive the other half of it.
+// Both hooks are installed, so these tests exercise the same stateFile wiring
+// NewServer builds rather than a partial stand-in.
+func persisting(s *RefreshTokenStore, path string) *ConsentStore {
+	consent := NewConsentStore(testConsentTTL)
+
+	file := &stateFile{path: path, tokens: s, consent: consent}
 	s.SetOnChange(file.write)
+	consent.SetOnChange(file.write)
+
+	return consent
 }
 
 func TestRefreshTokenSurvivesRestart(t *testing.T) {
@@ -143,11 +153,7 @@ func TestExpiredGrantFamilyIsDroppedOnLoad(t *testing.T) {
 		snap.Tokens[hash] = entry
 	}
 
-	if err := writeState(path, oauthState{
-		Version:              oauthStateVersion,
-		Timestamp:            time.Now(),
-		RefreshTokenSnapshot: snap,
-	}); err != nil {
+	if err := writeState(path, tokenState(snap)); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -179,11 +185,7 @@ func TestRefreshTokenFileIsPrivateAndAtomic(t *testing.T) {
 	s := NewRefreshTokenStore()
 	s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
 
-	if err := writeState(path, oauthState{
-		Version:              oauthStateVersion,
-		Timestamp:            time.Now(),
-		RefreshTokenSnapshot: s.Snapshot(),
-	}); err != nil {
+	if err := writeState(path, tokenState(s.Snapshot())); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -291,18 +293,7 @@ func TestRevokeIsWrittenThrough(t *testing.T) {
 func TestServerCarriesRefreshTokensAcrossRestart(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
-	cfg := ServerConfig{
-		Issuer:      "https://cetacean.test",
-		MCPResource: "https://cetacean.test/mcp",
-		MCP: config.MCPConfig{
-			AccessTokenTTL:  time.Hour,
-			RefreshTokenTTL: 720 * time.Hour,
-		},
-		SigningKey:     []byte("test-signing-key-32bytes-padded!!"),
-		TokenStorePath: path,
-	}
-
-	before := NewServer(cfg)
+	before := newPersistingServer(t, path, "https://cetacean.test/mcp")
 	token := before.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user@example.com",
 		ClientID: "https://example.com/client",
@@ -310,14 +301,14 @@ func TestServerCarriesRefreshTokensAcrossRestart(t *testing.T) {
 	}, 720*time.Hour)
 
 	// A second Server over the same path stands in for the process restarting.
-	after := NewServer(cfg)
+	after := newPersistingServer(t, path, "https://cetacean.test/mcp")
 
 	if _, ok := after.refreshTokens.Validate(token); !ok {
 		t.Fatal("a refresh token issued before the restart should still validate")
 	}
 }
 
-func TestServerWithoutTokenStorePathKeepsTokensInMemory(t *testing.T) {
+func TestServerWithoutStatePathKeepsTokensInMemory(t *testing.T) {
 	s := newTestServer(t)
 
 	token := s.refreshTokens.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
@@ -376,11 +367,7 @@ func TestStateFileSerializesConcurrentWriters(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
 	tokens := NewRefreshTokenStore()
-	consent := NewConsentStore()
-
-	file := &stateFile{path: path, tokens: tokens, consent: consent}
-	tokens.SetOnChange(file.write)
-	consent.SetOnChange(file.write)
+	consent := persisting(tokens, path)
 
 	// Two independent stores now write the same file from their own hooks.
 	// Unserialized, each snapshots at its own moment and opens the same temp
@@ -415,12 +402,8 @@ func TestStateFileSerializesConcurrentWriters(t *testing.T) {
 		defer wg.Done()
 
 		for i := range rounds {
-			consent.Remember(
-				fmt.Sprintf("consent-%d@example.com", i),
-				testClientID,
-				testResource,
-				testFingerprint,
-			)
+			subject := fmt.Sprintf("consent-%d@example.com", i)
+			consent.Remember(keyFor(subject, testClientID, testResource), testFingerprint)
 		}
 	}()
 
