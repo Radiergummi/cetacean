@@ -489,3 +489,28 @@ func TestLoadMCP_MaxTaskTTL_File(t *testing.T) {
 		t.Errorf("MaxTaskTTL = %v, want 2h", cfg.MaxTaskTTL)
 	}
 }
+
+// TestLoadMCP_ConsentTTL_ZeroDisables — docs/mcp.md documents
+// CETACEAN_MCP_CONSENT_TTL=0 as the way to turn remembered approvals off, and
+// ConsentStore.Enabled() honours a zero TTL by never remembering. Rejecting it
+// at parse time meant the documented setting failed startup instead.
+func TestLoadMCP_ConsentTTL_ZeroDisables(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_CONSENT_TTL", "0")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP rejected the documented way to disable consent: %v", err)
+	}
+
+	if cfg.ConsentTTL != 0 {
+		t.Errorf("ConsentTTL = %v, want 0", cfg.ConsentTTL)
+	}
+}
+
+func TestLoadMCP_ConsentTTL_RejectsNegative(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_CONSENT_TTL", "-1h")
+
+	if _, err := loadMCP(nil); err == nil {
+		t.Error("loadMCP accepted a negative consent TTL, want an error")
+	}
+}

@@ -195,7 +195,9 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		return MCPConfig{}, err
 	}
 
-	consentTTL, err := resolveDuration(
+	// Non-negative rather than positive: zero is the documented way to turn
+	// remembered approvals off, and ConsentStore.Enabled() honours it.
+	consentTTL, err := resolveNonNegativeDuration(
 		nil,
 		"CETACEAN_MCP_CONSENT_TTL",
 		fConsentTTL,
