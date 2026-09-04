@@ -305,10 +305,10 @@ func TestMCPIntegration_ResourcesReadHonoursACL(t *testing.T) {
 	}
 }
 
-// TestMCPIntegration_SearchToolFiltersByACL drives the search tool through
+// TestMCPIntegration_FindToolFiltersByACL drives the find tool through
 // tools/call and confirms denied resources are filtered out before reaching
 // the caller (covers M-02 at HTTP level).
-func TestMCPIntegration_SearchToolFiltersByACL(t *testing.T) {
+func TestMCPIntegration_FindToolFiltersByACL(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
 		ID:   "svc-public",

@@ -9,6 +9,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -280,6 +281,258 @@ func TestFindRawModeDoesNotClaimStructuredContent(t *testing.T) {
 
 	if len(result.Content) == 0 || !strings.Contains(result.Content[0].Text, "web") {
 		t.Errorf("raw find's untouched record missing from its text content: %s", env.Result)
+	}
+}
+
+// seedFilterFixture puts two of everything a post-filter test needs to tell
+// apart into the cache: two services (different stacks, images and labels),
+// two nodes (different states), and one task on each node against each
+// service, so query/state/stack/node/image/label each have exactly one match
+// to find and one to exclude.
+func seedFilterFixture(t *testing.T) *cache.Cache {
+	t.Helper()
+
+	c := cache.New(nil)
+
+	c.SetService(swarm.Service{
+		ID: "svc-web",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{
+				Name: "web",
+				Labels: map[string]string{
+					"com.docker.stack.namespace": "demo",
+					"env":                        "prod",
+					"team":                       "alpha",
+				},
+			},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.21@sha256:aaa"},
+			},
+		},
+	})
+	c.SetService(swarm.Service{
+		ID: "svc-worker",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{
+				Name: "worker",
+				Labels: map[string]string{
+					"com.docker.stack.namespace": "other",
+					"env":                        "dev",
+				},
+			},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{Image: "redis:7@sha256:bbb"},
+			},
+		},
+	})
+
+	c.SetNode(swarm.Node{
+		ID:          "node-a",
+		Description: swarm.NodeDescription{Hostname: "node-a"},
+		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+	})
+	c.SetNode(swarm.Node{
+		ID:          "node-b",
+		Description: swarm.NodeDescription{Hostname: "node-b"},
+		Status:      swarm.NodeStatus{State: swarm.NodeStateDown},
+	})
+
+	c.SetTask(swarm.Task{
+		ID:        "task-web",
+		ServiceID: "svc-web",
+		NodeID:    "node-a",
+		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+	c.SetTask(swarm.Task{
+		ID:        "task-worker",
+		ServiceID: "svc-worker",
+		NodeID:    "node-b",
+		Status:    swarm.TaskStatus{State: swarm.TaskStateFailed},
+	})
+
+	return c
+}
+
+// findRows drives find through the handler directly (post-filters are pure
+// row-list logic that does not need the validating transport the schema
+// tests use) and decodes the compact result.
+func findRows(t *testing.T, srv *Server, args map[string]any) findResult {
+	t.Helper()
+
+	td, ok := srv.findTool("find")
+	if !ok {
+		t.Fatal("find not registered")
+	}
+
+	out, err := td.handler(context.Background(), newCallToolRequest("find", args))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+
+	var got findResult
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("unmarshal: %v: %s", err, out)
+	}
+
+	return got
+}
+
+// rowNames collects the Name of every row, for a compact assertion of which
+// rows survived a filter.
+func rowNames(rows []cluster.Row) []string {
+	names := make([]string, len(rows))
+	for i, row := range rows {
+		names[i] = row.Name
+	}
+	return names
+}
+
+// TestFindQueryFilterNarrowsRows pins `query` as a post-filter over a typed
+// listing (as opposed to findAcrossTypes, which uses query for the
+// cross-type search covered separately by TestToolFindSearchesAcrossTypes).
+func TestFindQueryFilterNarrowsRows(t *testing.T) {
+	srv := newToolTestServer(t, seedFilterFixture(t), &fakeWriteClient{}, config.OpsReadOnly)
+
+	got := findRows(t, srv, map[string]any{"type": "services", "query": "web"})
+
+	if names := rowNames(got.Items); len(names) != 1 || names[0] != "web" {
+		t.Errorf("query=web rows = %v, want [web]", names)
+	}
+}
+
+// TestFindStateFilterNarrowsRows pins `state` against the node's raw
+// swarm.NodeState — the field RowsForNodes copies into Row.State verbatim.
+func TestFindStateFilterNarrowsRows(t *testing.T) {
+	srv := newToolTestServer(t, seedFilterFixture(t), &fakeWriteClient{}, config.OpsReadOnly)
+
+	got := findRows(t, srv, map[string]any{"type": "nodes", "state": "down"})
+
+	if names := rowNames(got.Items); len(names) != 1 || names[0] != "node-b" {
+		t.Errorf("state=down rows = %v, want [node-b]", names)
+	}
+}
+
+// TestFindStackFilterNarrowsRows pins `stack` against the
+// com.docker.stack.namespace label RowsForServices reads into Row.Stack.
+func TestFindStackFilterNarrowsRows(t *testing.T) {
+	srv := newToolTestServer(t, seedFilterFixture(t), &fakeWriteClient{}, config.OpsReadOnly)
+
+	got := findRows(t, srv, map[string]any{"type": "services", "stack": "demo"})
+
+	if names := rowNames(got.Items); len(names) != 1 || names[0] != "web" {
+		t.Errorf("stack=demo rows = %v, want [web]", names)
+	}
+}
+
+// TestFindNodeFilterNarrowsTaskRows pins `node`, which tests a task row's
+// Detail — the node hostname RowsForTasks resolves the task onto.
+func TestFindNodeFilterNarrowsTaskRows(t *testing.T) {
+	srv := newToolTestServer(t, seedFilterFixture(t), &fakeWriteClient{}, config.OpsReadOnly)
+
+	got := findRows(t, srv, map[string]any{"type": "tasks", "node": "node-b"})
+
+	if len(got.Items) != 1 || got.Items[0].Detail != "node-b" {
+		t.Errorf("node=node-b rows = %+v, want one row with Detail node-b", got.Items)
+	}
+}
+
+// TestFindImageFilterNarrowsServiceRows pins `image`, which tests a service
+// row's Detail — the digest-stripped image RowsForServices resolves.
+func TestFindImageFilterNarrowsServiceRows(t *testing.T) {
+	srv := newToolTestServer(t, seedFilterFixture(t), &fakeWriteClient{}, config.OpsReadOnly)
+
+	got := findRows(t, srv, map[string]any{"type": "services", "image": "nginx"})
+
+	if names := rowNames(got.Items); len(names) != 1 || names[0] != "web" {
+		t.Errorf("image=nginx rows = %v, want [web]", names)
+	}
+}
+
+// TestFindLabelFilterSupportsPresenceAndExactValue pins both forms Docker's
+// own label-filter syntax supports: `key` alone tests presence, `key=value`
+// tests an exact value — cluster.Row carries no label data at all, so this is
+// the only filter that reads the pre-conversion record (labelsFor) rather
+// than a Row field.
+func TestFindLabelFilterSupportsPresenceAndExactValue(t *testing.T) {
+	srv := newToolTestServer(t, seedFilterFixture(t), &fakeWriteClient{}, config.OpsReadOnly)
+
+	// "team" only exists on svc-web.
+	presence := findRows(t, srv, map[string]any{"type": "services", "label": "team"})
+	if names := rowNames(presence.Items); len(names) != 1 || names[0] != "web" {
+		t.Errorf("label=team rows = %v, want [web]", names)
+	}
+
+	// "env" exists on both, but only svc-web has env=prod.
+	exact := findRows(t, srv, map[string]any{"type": "services", "label": "env=prod"})
+	if names := rowNames(exact.Items); len(names) != 1 || names[0] != "web" {
+		t.Errorf("label=env=prod rows = %v, want [web]", names)
+	}
+
+	// The exact-value form must reject a present key with the wrong value.
+	mismatch := findRows(t, srv, map[string]any{"type": "services", "label": "env=staging"})
+	if len(mismatch.Items) != 0 {
+		t.Errorf("label=env=staging rows = %v, want none", rowNames(mismatch.Items))
+	}
+}
+
+// TestFindRawModeHonoursFilters is the regression test for the bug where raw
+// mode returned early, before rowFilters was built, and so ignored every
+// post-filter — silently returning the whole type instead of just the
+// caller's stack. raw only changes the *shape* of what comes back, never the
+// scope, so the filtered set must be identical either way; this pins that the
+// raw item surviving is genuinely the untouched record for the row that
+// matched, not a coincidence of both being named "web".
+func TestFindRawModeHonoursFilters(t *testing.T) {
+	srv := newToolTestServer(t, seedFilterFixture(t), &fakeWriteClient{}, config.OpsReadOnly)
+
+	td, ok := srv.findTool("find")
+	if !ok {
+		t.Fatal("find not registered")
+	}
+
+	out, err := td.handler(context.Background(), newCallToolRequest("find", map[string]any{
+		"type":  "services",
+		"stack": "demo",
+		"raw":   true,
+	}))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+
+	var raw findRawResult
+	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+		t.Fatalf("unmarshal: %v: %s", err, out)
+	}
+
+	if raw.Total != 1 || len(raw.Items) != 1 {
+		t.Fatalf(
+			"stack=demo raw total/items = %d/%d, want 1/1 — the filter was not applied",
+			raw.Total,
+			len(raw.Items),
+		)
+	}
+
+	// The surviving item must be the *untouched* svc-web record: its digest
+	// is still on the image (RowsForServices strips it; raw must not), and
+	// its worker sibling's fields must not leak in.
+	item, err := json.Marshal(raw.Items[0])
+	if err != nil {
+		t.Fatalf("marshal item: %v", err)
+	}
+
+	var svc swarm.Service
+	if err := json.Unmarshal(item, &svc); err != nil {
+		t.Fatalf("unmarshal item as swarm.Service: %v", err)
+	}
+
+	if svc.ID != "svc-web" {
+		t.Errorf("raw item ID = %q, want svc-web", svc.ID)
+	}
+	if svc.Spec.TaskTemplate.ContainerSpec.Image != "nginx:1.21@sha256:aaa" {
+		t.Errorf(
+			"raw item image = %q, want the untouched digest-bearing reference",
+			svc.Spec.TaskTemplate.ContainerSpec.Image,
+		)
 	}
 }
 

@@ -109,22 +109,8 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		return "", err
 	}
 
-	if req.GetBool("raw", false) {
-		items, ok := toSlice(listed)
-		if !ok {
-			return "", fmt.Errorf("resource type %q does not enumerate", resourceType)
-		}
-
-		total := len(items)
-		items = paginate(items, req)
-
-		// findRawResult is not the shape find's outputSchema describes (that
-		// is findResult, the compact Row list) — presenting it as
-		// structuredContent would fail the server's output-schema
-		// validation on the very call that asked for the untouched record.
-		markTextOnlyResult(ctx)
-
-		return marshalResult(findRawResult{Type: resourceType, Items: items, Total: total})
+	if _, ok := toSlice(listed); !ok {
+		return "", fmt.Errorf("resource type %q does not enumerate", resourceType)
 	}
 
 	rows, err := rowsFor(s.cache, resourceType, listed)
@@ -140,6 +126,35 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		image: strings.TrimSpace(req.GetString("image", "")),
 		label: strings.TrimSpace(req.GetString("label", "")),
 	}, labelsFor(listed))
+
+	if req.GetBool("raw", false) {
+		// raw changes the shape of what comes back, never the scope: a
+		// caller who asked for one stack's worth of services must not
+		// silently get every service back because raw skipped the filters
+		// that shape would have applied. Project the *filtered* rows' IDs
+		// back onto the untouched records — never pair the two slices by
+		// index, since rowsFor's builders each sort their own output and
+		// positional correspondence with `listed` does not hold.
+		byID := rawItemsByID(listed)
+
+		items := make([]any, 0, len(rows))
+		for _, row := range rows {
+			if item, ok := byID[row.ID]; ok {
+				items = append(items, item)
+			}
+		}
+
+		total := len(items)
+		items = paginate(items, req)
+
+		// findRawResult is not the shape find's outputSchema describes (that
+		// is findResult, the compact Row list) — presenting it as
+		// structuredContent would fail the server's output-schema
+		// validation on the very call that asked for the untouched record.
+		markTextOnlyResult(ctx)
+
+		return marshalResult(findRawResult{Type: resourceType, Items: items, Total: total})
+	}
 
 	total := len(rows)
 	rows = paginate(rows, req)
@@ -418,6 +433,61 @@ func labelsFor(listed any) map[string]map[string]string {
 	case []volume.Volume:
 		for _, v := range items {
 			out[v.Name] = v.Labels
+		}
+	}
+
+	return out
+}
+
+// rawItemsByID indexes the raw slice lookupResource returned by the same ID
+// cluster.Row.ID carries for each entry — the same per-type identity
+// labelsFor keys by, with cache.Stack added since a stack has no labels to
+// collect but still needs an identity for raw mode to filter by. This is what
+// lets raw mode filter by the compact Row's identity and hand back the
+// untouched record: pairing the two slices by index would not work, since
+// every RowsFor* builder sorts its own output.
+func rawItemsByID(listed any) map[string]any {
+	out := map[string]any{}
+
+	switch items := listed.(type) {
+	case []swarm.Service:
+		for _, svc := range items {
+			out[svc.ID] = svc
+		}
+
+	case []swarm.Node:
+		for _, n := range items {
+			out[n.ID] = n
+		}
+
+	case []cluster.EnrichedTask:
+		for _, t := range items {
+			out[t.ID] = t
+		}
+
+	case []cache.Stack:
+		for _, st := range items {
+			out[st.Name] = st
+		}
+
+	case []swarm.Config:
+		for _, cfg := range items {
+			out[cfg.ID] = cfg
+		}
+
+	case []swarm.Secret:
+		for _, sec := range items {
+			out[sec.ID] = sec
+		}
+
+	case []network.Summary:
+		for _, n := range items {
+			out[n.ID] = n
+		}
+
+	case []volume.Volume:
+		for _, v := range items {
+			out[v.Name] = v
 		}
 	}
 
