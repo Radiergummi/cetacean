@@ -173,3 +173,23 @@ func promptTier(def promptDef, tiers map[string]config.OperationsLevel) config.O
 
 	return tier
 }
+
+// registerPrompts registers every prompt the deployment's operations level
+// permits. Tier gating happens here, once, exactly as registerTools does it;
+// per-caller ACL visibility is a request-time filter.
+func (s *Server) registerPrompts() {
+	tiers := s.toolTiers()
+	opsLevel := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
+
+	catalog := promptCatalog()
+
+	s.registeredPrompts = make([]promptDef, 0, len(catalog))
+	for _, def := range catalog {
+		if opsLevel < promptTier(def, tiers) {
+			continue
+		}
+
+		s.registeredPrompts = append(s.registeredPrompts, def)
+		s.mcpServer.AddPrompt(def.prompt, def.handler)
+	}
+}

@@ -98,6 +98,11 @@ type Server struct {
 	// slice to know which tools may need further hiding from a given caller.
 	registeredTools []toolDef
 
+	// registeredPrompts holds the prompts that passed the tier gate, so the
+	// per-identity prompts/list filter (filterPromptsForIdentity) can read
+	// each one's driven tools back.
+	registeredPrompts []promptDef
+
 	// notifications tracks per-session resource subscriptions and fans cache
 	// events out as MCP notifications. cancelNotifications is the listener
 	// detach returned by cache.AddOnChangeListener.
@@ -181,6 +186,16 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		mcpserver.WithResourceCapabilities(true, true),
 		mcpserver.WithToolCapabilities(true),
 		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
+		// AddPrompt does NOT enable the capability: mcp-go gates prompts/list
+		// and prompts/get on capabilities.prompts != nil, which only this
+		// option sets. Registering prompts without it serves none of them —
+		// the same advertise-versus-wire split that made server/discover
+		// promise Tasks and UI nothing backed. TestPromptsCapabilityIsWired
+		// drives the real transport for exactly this reason.
+		//
+		// listChanged is false: the catalog is static and cannot change while
+		// the process runs.
+		mcpserver.WithPromptCapabilities(false),
 		mcpserver.WithHooks(srv.installSubscriptionHooks()),
 		mcpserver.WithInstructions(mcpInstructions),
 		mcpserver.WithDescription(mcpDescription),
@@ -248,6 +263,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 	srv.registerResources()
 	srv.registerUIResources()
 	srv.registerTools()
+	srv.registerPrompts()
 	srv.cancelNotifications = srv.startNotifications()
 
 	httpSrv := mcpserver.NewStreamableHTTPServer(mcpSrv,
