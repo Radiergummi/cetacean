@@ -83,4 +83,67 @@ pending.`
 Report where the cluster is constrained, which nodes are the constraint, and
 whether the limit is reservations or real use. Do not change any reservation as
 part of this review.`
+
+	promptTextRollBackService = `You have been asked to roll %s back to its previous version. Confirm the
+rollback is warranted before performing it.
+
+1. Resolve the name with the search tool, then read cetacean://services/<id>.
+   Check UpdateStatus: a service already rolling_back needs no second rollback,
+   and one still updating may converge on its own.
+2. Call list_resources for tasks and confirm this service actually has failing
+   or unplaced tasks. If every task is running and healthy, stop and report
+   that - there is nothing to roll back, and rolling back a healthy service is
+   an outage you caused.
+3. Read cetacean://history to confirm what changed and when. A rollback undoes
+   the last spec update, which may not be the change that broke it.
+4. Call rollback_service with task.ttl set, so the call reports when the
+   previous version's replicas are actually running rather than when Docker
+   accepted the request.
+5. Poll tasks/get until the task settles. On failure read statusMessage: a
+   rollback can fail for the same reason the update did.
+
+Report the version rolled back to and the running replica count afterwards. If
+step 2 showed a healthy service, report that and make no change.`
+
+	promptTextRightSizeService = `Right-size the resource reservations for %s, using measured use rather than a
+guess.
+
+1. Call get_recommendations and find the sizing finding for this service.
+   Cetacean computes it from observed use over the configured lookback window.
+   If there is no finding, the service is already within thresholds - say so
+   and stop.
+2. Resolve the name with the search tool, then read cetacean://services/<id>
+   for its current Resources.Reservations and Resources.Limits.
+3. Call get_metrics for cpu and memory over the last week and check the finding
+   against the series yourself. A service whose load is weekly or bursty can
+   look over-provisioned over a day and be correctly sized over a week.
+4. Apply the change with update_service_resources. Raise reservations before
+   lowering limits, and never set a reservation above a limit.
+5. Confirm the tasks rescheduled and are running. Changing reservations
+   replaces every task, so this is a rolling restart, not a metadata edit.
+
+Report the old and new values and the evidence for them. If the metric window
+disagrees with the recommendation, report the disagreement and change nothing.`
+
+	promptTextDrainNode = `Drain node %s for maintenance, without moving work somewhere it cannot run.
+
+1. Resolve the name with the search tool, then read cetacean://nodes/<id> for
+   its role, current availability and resources.
+2. If this node is a manager, read cetacean://cluster for the manager count
+   first. Draining a manager does not remove it from the raft quorum, but
+   losing it while drained does - and a two-manager quorum has no tolerance at
+   all. Report and stop if draining would leave fewer than three managers,
+   unless you have been told otherwise.
+3. Call list_resources for tasks and list every task currently on this node,
+   with its service. This is the work that has to land elsewhere.
+4. Call list_resources for nodes and check that the remaining active nodes
+   satisfy each of those services' placement constraints and have the
+   reservations spare. A service constrained to this node alone has nowhere to
+   go and will sit pending.
+5. Only then call update_node_availability with drain.
+6. Poll the affected services' tasks until they are running elsewhere. Report
+   any that stayed pending, with the constraint that blocked them.
+
+Report what moved, where it moved to, and anything that could not move. If step
+2 or 4 found a blocker, report it and leave the node active.`
 )

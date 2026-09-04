@@ -89,6 +89,71 @@ func promptCatalog() []promptDef {
 				promptTextReviewCapacity,
 			),
 		},
+		{
+			prompt: mcplib.NewPrompt("roll_back_service",
+				mcplib.WithPromptTitle("Roll a service back"),
+				mcplib.WithPromptDescription(
+					"Confirm a service is actually degraded, then roll it back to its "+
+						"previous version and wait for the replicas to run.",
+				),
+				mcplib.WithArgument("service",
+					mcplib.ArgumentTitle("Service"),
+					mcplib.ArgumentDescription("Name or ID of the service to roll back"),
+					mcplib.RequiredArgument(),
+				),
+			),
+			drives: []string{"search", "list_resources", "rollback_service"},
+			handler: interpolatingHandler(
+				"Roll a service back",
+				promptTextRollBackService,
+				"service",
+			),
+		},
+		{
+			prompt: mcplib.NewPrompt("right_size_service",
+				mcplib.WithPromptTitle("Right-size a service"),
+				mcplib.WithPromptDescription(
+					"Check a sizing recommendation against measured use, then correct the "+
+						"service's reservations. Replaces every task.",
+				),
+				mcplib.WithArgument("service",
+					mcplib.ArgumentTitle("Service"),
+					mcplib.ArgumentDescription("Name or ID of the service to right-size"),
+					mcplib.RequiredArgument(),
+				),
+			),
+			drives: []string{
+				"search",
+				"get_metrics",
+				"get_recommendations",
+				"update_service_resources",
+			},
+			handler: interpolatingHandler(
+				"Right-size a service",
+				promptTextRightSizeService,
+				"service",
+			),
+		},
+		{
+			prompt: mcplib.NewPrompt("drain_node",
+				mcplib.WithPromptTitle("Drain a node for maintenance"),
+				mcplib.WithPromptDescription(
+					"Check quorum and that the node's work can be placed elsewhere, then "+
+						"drain it and confirm the tasks moved.",
+				),
+				mcplib.WithArgument("node",
+					mcplib.ArgumentTitle("Node"),
+					mcplib.ArgumentDescription("Hostname or ID of the node to drain"),
+					mcplib.RequiredArgument(),
+				),
+			),
+			drives: []string{"search", "list_resources", "update_node_availability"},
+			handler: interpolatingHandler(
+				"Drain a node for maintenance",
+				promptTextDrainNode,
+				"node",
+			),
+		},
 	}
 }
 

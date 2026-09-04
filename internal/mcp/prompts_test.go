@@ -40,6 +40,9 @@ func TestPromptTierIsTheMaxOfItsTools(t *testing.T) {
 		"diagnose_service":      config.OpsReadOnly,
 		"explain_unschedulable": config.OpsReadOnly,
 		"review_capacity":       config.OpsReadOnly,
+		"roll_back_service":     config.OpsOperational,
+		"right_size_service":    config.OpsConfiguration,
+		"drain_node":            config.OpsImpactful,
 	}
 
 	for _, def := range promptCatalog() {
@@ -110,6 +113,9 @@ func TestPromptCatalogDeclaresItsArguments(t *testing.T) {
 		"diagnose_service":      "service",
 		"explain_unschedulable": "service",
 		"review_capacity":       "",
+		"roll_back_service":     "service",
+		"right_size_service":    "service",
+		"drain_node":            "node",
 	}
 
 	for _, def := range promptCatalog() {
@@ -264,5 +270,42 @@ func getPromptRequest(name string, args map[string]string) mcplib.GetPromptReque
 			Name:      name,
 			Arguments: args,
 		},
+	}
+}
+
+// TestRemediationPromptsConfirmBeforeActing is rule 3 of the text
+// conventions, and the reason remediation prompts are safe to ship: a runbook
+// that assumes its own diagnosis turns "roll this back" into an outage when
+// the service was healthy all along.
+func TestRemediationPromptsConfirmBeforeActing(t *testing.T) {
+	for name, mutation := range map[string]string{
+		"roll_back_service":  "rollback_service",
+		"right_size_service": "update_service_resources",
+		"drain_node":         "update_node_availability",
+	} {
+		def := findPrompt(t, name)
+
+		result, err := def.handler(context.Background(), getPromptRequest(
+			name,
+			map[string]string{"service": "example", "node": "example"},
+		))
+		if err != nil {
+			t.Fatalf("prompt %q handler: %v", name, err)
+		}
+
+		text, ok := result.Messages[0].Content.(mcplib.TextContent)
+		if !ok {
+			t.Fatalf("prompt %q content is %T", name, result.Messages[0].Content)
+		}
+
+		if !strings.Contains(text.Text, mutation) {
+			t.Errorf("prompt %q never names the %q tool it exists to drive", name, mutation)
+		}
+
+		// The text must offer an exit that makes no change. Without one, the
+		// model has no instruction for "the problem is not real".
+		if !strings.Contains(text.Text, "stop") && !strings.Contains(text.Text, "no change") {
+			t.Errorf("prompt %q gives the model no way to stop without acting", name)
+		}
 	}
 }

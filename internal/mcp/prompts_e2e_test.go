@@ -289,3 +289,58 @@ func TestPromptsGetOnAHiddenPromptSaysNotFound(t *testing.T) {
 			envelope.Error.Message)
 	}
 }
+
+// TestPromptsListAtEachTier is what makes the gating observable: every tier
+// above 0 adds exactly one remediation prompt.
+func TestPromptsListAtEachTier(t *testing.T) {
+	for _, testCase := range []struct {
+		level config.OperationsLevel
+		want  []string
+	}{
+		{
+			level: config.OpsReadOnly,
+			want:  []string{"diagnose_service", "explain_unschedulable", "review_capacity"},
+		},
+		{
+			level: config.OpsOperational,
+			want: []string{
+				"diagnose_service", "explain_unschedulable", "review_capacity",
+				"roll_back_service",
+			},
+		},
+		{
+			level: config.OpsConfiguration,
+			want: []string{
+				"diagnose_service", "explain_unschedulable", "review_capacity",
+				"roll_back_service", "right_size_service",
+			},
+		},
+		{
+			level: config.OpsImpactful,
+			want: []string{
+				"diagnose_service", "explain_unschedulable", "review_capacity",
+				"roll_back_service", "right_size_service", "drain_node",
+			},
+		},
+	} {
+		handler := newPromptTestServer(t, testCase.level).Handler()
+
+		got := promptNames(listPrompts(t, handler))
+		if len(got) != len(testCase.want) {
+			t.Errorf("tier %v listed %v, want %v", testCase.level, got, testCase.want)
+
+			continue
+		}
+
+		listed := make(map[string]bool, len(got))
+		for _, name := range got {
+			listed[name] = true
+		}
+
+		for _, name := range testCase.want {
+			if !listed[name] {
+				t.Errorf("tier %v did not list %q", testCase.level, name)
+			}
+		}
+	}
+}
