@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Approving an MCP client is now remembered, so you are asked once instead of every time its access expires. Cetacean asks again if the client changes its name or where it sends you, if you revoke its access, or if a stolen token is detected. An approval lasts 90 days and is renewed each time you approve; set `CETACEAN_MCP_CONSENT_TTL` to change that, or to `0` to always be asked
 
 ### Changed
+- The MCP server now builds against the 1.0 release of its protocol library rather than a pre-release of it, picking up upstream stability fixes. No change to how Cetacean's MCP server behaves
 - MCP authorization responses now identify the issuer (RFC 9207), so a client configured with several authorization servers cannot be tricked into redeeming a code at the wrong one
 - Client ID Metadata Documents are now the recommended way for MCP clients to identify themselves, and are advertised in the authorization server metadata so clients can discover that. Dynamic Client Registration still works and stays enabled by default
 - MCP clients registering dynamically can now declare whether they are a native or web application, and are held to the redirect URIs that implies. Clients that do not say are treated as native, which is what MCP clients almost always are
