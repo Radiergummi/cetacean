@@ -9,6 +9,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
@@ -45,12 +46,17 @@ func TestReadServiceResource(t *testing.T) {
 		t.Fatalf("readResource: %v", err)
 	}
 
-	var svc swarm.Service
-	if err := json.Unmarshal([]byte(body), &svc); err != nil {
+	// A read of one resource serves the compact digest, not the raw
+	// swarm.Service it used to — the same shape the describe tool builds.
+	var digest cluster.Digest
+	if err := json.Unmarshal([]byte(body), &digest); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if svc.Spec.Name != "web" {
-		t.Errorf("Spec.Name = %q, want web", svc.Spec.Name)
+	if digest.Name != "web" {
+		t.Errorf("name = %q, want web", digest.Name)
+	}
+	if digest.Type != "service" {
+		t.Errorf("type = %q, want service", digest.Type)
 	}
 }
 
@@ -117,7 +123,11 @@ func TestReadSecretListRedactsData(t *testing.T) {
 	}
 }
 
-func TestReadTaskEnrichesServiceName(t *testing.T) {
+// TestReadTaskNamesItsParents is what TestReadTaskEnrichesServiceName became
+// when the task read started serving a digest: the enriched ServiceName and
+// NodeHostname fields are gone, and the parents are named as cross-references
+// instead — with real names, which is what the assertion was protecting.
+func TestReadTaskNamesItsParents(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
 		ID:   "svc1",
@@ -139,11 +149,17 @@ func TestReadTaskEnrichesServiceName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readResource: %v", err)
 	}
-	if !strings.Contains(body, `"ServiceName":"web"`) {
-		t.Errorf("task body missing ServiceName: %s", body)
+
+	var digest cluster.Digest
+	if err := json.Unmarshal([]byte(body), &digest); err != nil {
+		t.Fatalf("unmarshal: %v", err)
 	}
-	if !strings.Contains(body, `"NodeHostname":"worker-1"`) {
-		t.Errorf("task body missing NodeHostname: %s", body)
+
+	if !hasRelated(digest.Related, "service", "web") {
+		t.Errorf("task digest does not name its parent service: %s", body)
+	}
+	if !hasRelated(digest.Related, "node", "worker-1") {
+		t.Errorf("task digest does not name its node: %s", body)
 	}
 }
 

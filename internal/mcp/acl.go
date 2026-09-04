@@ -200,6 +200,26 @@ func (s *Server) filterVolumes(ctx context.Context, items []volume.Volume) []vol
 	)
 }
 
+// filterServiceRefs drops the services an identity may not read from one of
+// the cache's reverse indexes (ServicesUsingConfig and friends). A digest's
+// "used by" list is built from those, and would otherwise name services the
+// caller cannot see just because they can read the config those services
+// mount.
+func (s *Server) filterServiceRefs(
+	ctx context.Context,
+	items []cache.ServiceRef,
+) []cache.ServiceRef {
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(ref cache.ServiceRef) string {
+			return "service:" + ref.Name
+		},
+	)
+}
+
 // filterRecommendations mirrors api/recommendation_handlers.go.
 func (s *Server) filterRecommendations(
 	ctx context.Context,

@@ -42,7 +42,7 @@ func TestCuratedToolsAdvertiseOutputSchema(t *testing.T) {
 	}
 
 	curated := map[string]bool{
-		"find": true, "get_logs": true, "get_topology": true,
+		"find": true, "describe": true, "get_logs": true, "get_topology": true,
 		"get_metrics": true, "get_recommendations": true,
 		"remove_task": true, "remove_service": true, "remove_config": true,
 		"remove_secret": true, "remove_network": true, "remove_volume": true,

@@ -335,7 +335,7 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsImpactful)
 
 	readOnly := map[string]bool{
-		"get_logs": true, "find": true, "get_topology": true,
+		"get_logs": true, "find": true, "describe": true, "get_topology": true,
 		"get_metrics": true, "get_recommendations": true,
 	}
 	destructive := map[string]bool{

@@ -171,8 +171,10 @@ func TestMCPEndToEnd(t *testing.T) {
 	if len(readResult.Contents) != 1 {
 		t.Fatalf("expected 1 content entry, got %d", len(readResult.Contents))
 	}
-	if !strings.Contains(readResult.Contents[0].Text, `"Name":"web"`) {
-		t.Errorf("service content missing Name=web: %s", readResult.Contents[0].Text)
+	// The templated resource reads serve the compact digest, whose name is
+	// lower-cased `name` rather than swarm.Service's embedded Annotations.
+	if !strings.Contains(readResult.Contents[0].Text, `"name":"web"`) {
+		t.Errorf("service content missing name=web: %s", readResult.Contents[0].Text)
 	}
 
 	// 4) tools/list — should include the read-only tools at OpsReadOnly tier.

@@ -119,6 +119,7 @@ var toolIconCategory = map[string]string{
 	"get_metrics":         "read",
 	"get_recommendations": "read",
 	"find":                "search",
+	"describe":            "read",
 
 	"scale_service": "scale",
 
@@ -358,6 +359,39 @@ func (s *Server) toolCatalog() []toolDef {
 			tier:    config.OpsReadOnly,
 			handler: s.toolFind,
 			widget:  "table",
+		},
+		{
+			tool: mcplib.NewTool(
+				"describe",
+				mcplib.WithToolTitle("Describe one cluster resource"),
+				mcplib.WithDescription(
+					"Return everything needed to act on one resource: its derived state, the reason Swarm gave for that state when it is not healthy, how long the state has held, the type-specific facts (a service's image, replica counts, reserved CPU in cores and memory in bytes, ports, placement constraints and environment variable *names*; a node's role, availability, capacity; a network's driver and subnets), the resources it references or is referenced by, and the recent task failures behind a failing state. Name the type in the singular (service, node, task, stack, config, secret, network, volume) and give an ID or a name. Use this instead of a resource read when following up on a finding from find or get_recommendations; secret payloads and environment variable values are never returned.",
+				),
+				mcplib.WithOutputSchema[cluster.Digest](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("type",
+					mcplib.Required(),
+					mcplib.Description(
+						"Resource type, singular: service, node, task, stack, config, secret, network or volume.",
+					),
+				),
+				mcplib.WithString("id",
+					mcplib.Required(),
+					mcplib.Description(
+						"The resource's ID, or its name (hostname for a node, name for a stack or volume).",
+					),
+				),
+				mcplib.WithBoolean("raw",
+					mcplib.Description(
+						"Return the untouched Docker record instead of the digest. Default false.",
+					),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolDescribe,
 		},
 		{
 			tool: mcplib.NewTool(
