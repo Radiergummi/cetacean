@@ -245,6 +245,39 @@ Env-var and label tools follow JSON Merge Patch semantics: a `null` value delete
 against a fresh inspect of the live spec to avoid clobbering concurrent changes. Mutating tools return `409` on a
 Docker version conflict.
 
+## Prompts
+
+Prompts are named sequences a client offers from a menu: picking one seeds the
+conversation with an investigation or a runbook, so an agent does not have to
+rediscover which order of calls answers a question.
+
+| Prompt | Tier | Argument | What it does |
+|---|---|---|---|
+| `diagnose_service` | 0 | `service` | Walks tasks, the failing task's logs, metrics and recent changes to find why a service is unhealthy |
+| `explain_unschedulable` | 0 | `service` | Separates the four causes of an unplaced task: placement constraints, node labels, node availability, reservations |
+| `review_capacity` | 0 | — | Joins node capacity, reservations, real usage and sizing findings to say where the cluster is constrained |
+| `roll_back_service` | 1 | `service` | Confirms a service is actually degraded, then rolls it back and waits for the replicas to run |
+| `right_size_service` | 2 | `service` | Checks a sizing recommendation against measured use, then corrects the reservations |
+| `drain_node` | 3 | `node` | Checks quorum and that the work can be placed elsewhere, then drains and confirms the tasks moved |
+
+A prompt's tier is the highest tier of the tools it walks, so it is never
+offered where one of its steps would be refused. `CETACEAN_MCP_OPERATIONS_LEVEL`
+therefore controls prompts as it controls tools: at the default tier 1 you get
+the three diagnostic prompts plus `roll_back_service`.
+
+Prompts are also filtered by ACL, all-or-nothing: a prompt is offered only when
+**every** tool it walks is available to you. A sequence whose fourth step you
+cannot perform would dead-end partway, and for a remediation prompt possibly
+after a write. A caller whose grants match nothing is offered no prompts at all.
+A prompt you cannot see reports `not found` from `prompts/get`, the same as a
+name that does not exist.
+
+Prompts read no cluster data. They expand to a single message with the resource
+name you supplied interpolated, and the name is not checked for existence — the
+text tells the model to resolve it with `search` first. A prompt is a plan for
+the model to carry out, not a report; every read and write it describes still
+goes through the ordinary tool and resource paths, with the ordinary ACL checks.
+
 ## Configuration
 
 | Variable | Default | Description |

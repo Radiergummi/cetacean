@@ -2,7 +2,7 @@
 
 **Issue:** [#169](https://github.com/Radiergummi/cetacean/issues/169)
 **Related:** [#170](https://github.com/Radiergummi/cetacean/issues/170) (completions — consumes this design's arguments)
-**Status:** designed
+**Status:** implemented
 
 Offer prompts so an agent knows which sequence of calls answers a question an
 operator actually asks.
@@ -50,7 +50,7 @@ when nil — the same mechanism mcp-go uses for tools and resources. So
 thing to remember.
 
 This corrects an earlier draft of this section, which claimed the option was
-required and cited the 2026-07-28 upgrade's [E-1]/[E-3] as precedent. The option
+required and cited the 2026-07-28 upgrade's E-1/E-3 as precedent. The option
 is kept anyway, because the same block already calls `WithToolCapabilities` and
 `WithResourceCapabilities`, redundant for exactly the same reason; dropping one
 of the three would read as though prompts were special. A behavioural test is
@@ -424,11 +424,11 @@ Two batches, reviewable independently, in this order:
 - **Drift guard.** A table test asserting every `drives` entry names a tool in
   `toolCatalog()`. Renaming a tool then fails the suite instead of silently
   mis-tiering a prompt or hiding it forever.
-- **Capability wiring.** `prompts/list` is non-empty and `prompts/get`
-  succeeds, driven through the real transport. A unit test on `promptCatalog()`
-  alone would pass with `WithPromptCapabilities` unwired — the same altitude
-  mistake as [E-2], where Phase 2's tests passed against a synthetic session
-  while the real transport dropped every subscription.
+- **Registration and reachability.** `prompts/list` is non-empty and
+  `prompts/get` succeeds, driven through the real transport. A unit test on
+  `promptCatalog()` alone would pass with `registerPrompts()` never called — the
+  same altitude mistake as [E-2], where Phase 2's tests passed against a
+  synthetic session while the real transport dropped every subscription.
 
 [E-2]: 2026-08-30-mcp-2026-07-28-upgrade-plan.md#issues-encountered-running-log
 
