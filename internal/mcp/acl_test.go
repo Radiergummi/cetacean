@@ -302,3 +302,89 @@ func TestReadServiceList_PreservesEmptySliceShape(t *testing.T) {
 		t.Fatalf("response should be a JSON array: %v (body %s)", err, body)
 	}
 }
+
+// TestToolVisibilityForReportsAllowAll pins the three ways every tool stays
+// visible: no ACL wired, no identity on the context, and a nil policy.
+func TestToolVisibilityForReportsAllowAll(t *testing.T) {
+	c := cache.New(nil)
+
+	t.Run("no acl", func(t *testing.T) {
+		srv := newResourceTestServer(t, c)
+
+		got := srv.toolVisibilityFor(ctxWithIdentity())
+		if got.allow != nil || got.noGrants {
+			t.Errorf("toolVisibilityFor = %+v, want allow-all", got)
+		}
+	})
+
+	t.Run("no identity", func(t *testing.T) {
+		srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = acl.NewEvaluator() })
+
+		got := srv.toolVisibilityFor(context.Background())
+		if got.allow != nil || got.noGrants {
+			t.Errorf("toolVisibilityFor = %+v, want allow-all", got)
+		}
+	})
+
+	t.Run("nil policy", func(t *testing.T) {
+		srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = acl.NewEvaluator() })
+
+		got := srv.toolVisibilityFor(ctxWithIdentity())
+		if got.allow != nil || got.noGrants {
+			t.Errorf("toolVisibilityFor = %+v, want allow-all", got)
+		}
+	})
+}
+
+// TestToolVisibilityForReportsNoGrants covers the fact filterToolsForIdentity
+// discards today: an identity matching no grant at all. Prompts need it, since
+// a caller who can read nothing has no investigation to seed.
+func TestToolVisibilityForReportsNoGrants(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:web-*"},
+		Audience:    []string{"user:somebody-else"},
+		Permissions: []string{"read"},
+	}}})
+
+	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
+
+	got := srv.toolVisibilityFor(ctxWithIdentity())
+	if !got.noGrants {
+		t.Error("toolVisibilityFor did not report zero grants for an unmatched identity")
+	}
+
+	if got.allow == nil {
+		t.Fatal("allow must still be set, so gated tools are hidden")
+	}
+
+	if got.allow("scale_service") {
+		t.Error("a zero-grant identity may not see scale_service")
+	}
+
+	if !got.allow("search") {
+		t.Error("search is ungated and must stay visible")
+	}
+}
+
+// TestToolVisibilityForAppliesGrants is the ordinary path: a service:read
+// grant reveals the gated read and hides the gated write.
+func TestToolVisibilityForAppliesGrants(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(readOnlyPolicy("service:*"))
+
+	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
+
+	got := srv.toolVisibilityFor(ctxWithIdentity())
+	if got.noGrants {
+		t.Fatal("identity holds a grant; noGrants must be false")
+	}
+
+	if !got.allow("get_logs") {
+		t.Error("service:read must reveal get_logs")
+	}
+
+	if got.allow("scale_service") {
+		t.Error("service:read must not reveal scale_service")
+	}
+}

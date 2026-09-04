@@ -404,33 +404,57 @@ func (d discardingResponseWriter) Header() http.Header       { return d.h }
 func (discardingResponseWriter) Write(p []byte) (int, error) { return len(p), nil }
 func (discardingResponseWriter) WriteHeader(int)             {}
 
-// filterToolsForIdentity is wired as a WithToolFilter for tools/list. Tier
-// gating already happened at registration; this filter additionally hides
-// tools whose primary resource type the identity has zero grants on, so the
-// catalog reflects what the caller can actually invoke. The filter is
-// advisory — call-time ACL still enforces, so returning the full slice would
-// never grant anything; the goal here is a truthful list.
-func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool) []mcplib.Tool {
+// toolVisibility describes which tools an identity may see. allow is nil when
+// every tool is visible — no ACL wired, no identity, or a nil policy, all of
+// which mirror acl.Evaluator.Can's allow-all behaviour. noGrants marks an
+// identity that matched no grant at all; it still gets an allow func (the
+// ungated tools stay visible, as they do in tools/list) but prompts treat it
+// as a floor, since a caller who can read nothing has nothing to investigate.
+type toolVisibility struct {
+	allow    func(name string) bool
+	noGrants bool
+}
+
+// toolVisibilityFor flattens an identity's grants into a per-tool predicate.
+// Shared by filterToolsForIdentity and filterPromptsForIdentity so the
+// grant-flattening rules — "write" implies "read", "*" wildcards, and the
+// always-visible ungated tools — are stated exactly once.
+func (s *Server) toolVisibilityFor(ctx context.Context) toolVisibility {
 	if s.acl == nil {
-		return tools
+		return toolVisibility{}
 	}
+
 	identity := auth.IdentityFromContext(ctx)
 	if identity == nil {
-		return tools
+		return toolVisibility{}
 	}
-	perms := s.acl.PermissionsFor(identity)
-	if perms == nil {
-		// nil policy = allow all (mirrors acl.Evaluator.Can).
-		return tools
-	}
-	if len(perms) == 0 {
-		// Identity has zero grants. Drop everything except tools that don't
-		// require any ACL check (none today, but kept defensive).
-		return filterToolsByACLSpec(tools, func(name string) bool {
+
+	// Drop everything gated for a zero-grant identity; ungated tools (search
+	// and the cross-type reads) stay visible, since each ACL-filters its own
+	// results at call time.
+	noGrantsVisibility := toolVisibility{
+		noGrants: true,
+		allow: func(name string) bool {
 			_, gated := toolACLSpecs[name]
 			return !gated
-		})
+		},
 	}
+
+	perms := s.acl.PermissionsFor(identity)
+	if perms == nil {
+		// PermissionsFor returns nil both for "no policy loaded" (allow all)
+		// and "policy loaded, identity matched zero grants" (restrict) —
+		// HasAnyGrant is the only way to tell those two apart.
+		if s.acl.HasAnyGrant(identity) {
+			return toolVisibility{}
+		}
+		return noGrantsVisibility
+	}
+
+	if len(perms) == 0 {
+		return noGrantsVisibility
+	}
+
 	allowedByType := make(map[string]map[string]bool, 2) // permission → type → bool
 	for pattern, perms := range perms {
 		resType, _, ok := splitResourceType(pattern)
@@ -446,6 +470,7 @@ func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool
 			byType[resType] = true
 		}
 	}
+
 	// "write" implies "read" — mirror Evaluator.hasPermission.
 	if writers, ok := allowedByType["write"]; ok {
 		readers := allowedByType["read"]
@@ -457,7 +482,8 @@ func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool
 			readers[t] = true
 		}
 	}
-	return filterToolsByACLSpec(tools, func(name string) bool {
+
+	return toolVisibility{allow: func(name string) bool {
 		spec, gated := toolACLSpecs[name]
 		if !gated {
 			return true
@@ -471,7 +497,22 @@ func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool
 			return false
 		}
 		return byType[spec.resourceType] || byType["*"]
-	})
+	}}
+}
+
+// filterToolsForIdentity is wired as a WithToolFilter for tools/list. Tier
+// gating already happened at registration; this filter additionally hides
+// tools whose primary resource type the identity has zero grants on, so the
+// catalog reflects what the caller can actually invoke. The filter is
+// advisory — call-time ACL still enforces, so returning the full slice would
+// never grant anything; the goal here is a truthful list.
+func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool) []mcplib.Tool {
+	visibility := s.toolVisibilityFor(ctx)
+	if visibility.allow == nil {
+		return tools
+	}
+
+	return filterToolsByACLSpec(tools, visibility.allow)
 }
 
 // toolACLSpec describes the resource type and permission required to call a
