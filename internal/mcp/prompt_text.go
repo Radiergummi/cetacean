@@ -88,8 +88,10 @@ part of this review.`
 rollback is warranted before performing it.
 
 1. Resolve the name with the search tool, then read cetacean://services/<id>.
-   Check UpdateStatus: a service already rolling_back needs no second rollback,
-   and one still updating may converge on its own.
+   Check UpdateStatus.State: rollback_started means a rollback is already
+   running, so report that and stop rather than starting a second one;
+   rollback_paused means one stalled and needs a human, not another attempt;
+   updating means the deployment may still converge on its own.
 2. Call list_resources for tasks and confirm this service actually has failing
    or unplaced tasks. If every task is running and healthy, stop and report
    that - there is nothing to roll back, and rolling back a healthy service is
@@ -117,8 +119,9 @@ guess.
 3. Call get_metrics for cpu and memory over the last week and check the finding
    against the series yourself. A service whose load is weekly or bursty can
    look over-provisioned over a day and be correctly sized over a week.
-4. Apply the change with update_service_resources. Raise reservations before
-   lowering limits, and never set a reservation above a limit.
+4. Apply the change with update_service_resources. It sets the whole resource
+   block in one call, so give it reservations and limits together, and never
+   set a reservation above a limit.
 5. Confirm the tasks rescheduled and are running. Changing reservations
    replaces every task, so this is a rolling restart, not a metadata edit.
 
