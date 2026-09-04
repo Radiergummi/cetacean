@@ -5,7 +5,15 @@ package mcp
 // one place, beside mcpInstructions in review terms — rather than inline in the
 // catalog.
 //
-// Four rules, all enforced by tests in prompts_test.go:
+// Five rules shape this text, not all enforced the same way. 1 and 4 are
+// tested across all six prompts (TestDiagnoseServiceExpandsItsArgument's
+// driven-tool loop, generalized to the whole catalog, and
+// TestPromptTextMakesNoClusterClaims). 2 and 3 apply only to the three
+// remediation prompts and are both checked by
+// TestRemediationPromptsConfirmBeforeActing. 5 is not tested at all — it
+// holds structurally, because promptResult always builds exactly one user
+// message and nothing in this package can construct a GetPromptResult any
+// other way:
 //
 //  1. Name the driven tools explicitly, in order. The sequence is the content;
 //     a prompt that gestures at "investigate the service" adds nothing to the
@@ -16,6 +24,8 @@ package mcp
 //  4. Make no claims about *this* cluster. The text is static and cannot know
 //     the cluster's shape. Describe method; never assert that the cluster runs
 //     three managers or uses overlay networks.
+//  5. One user message. The prompt seeds a conversation; it never fabricates
+//     an assistant turn.
 //
 // No backticks: these are raw string literals, which are backtick-delimited.
 // Tool names appear bare. No literal % either — the single %s is the
@@ -29,20 +39,23 @@ Work through this order and stop as soon as you can name the cause.
    cetacean://services/<id> for its mode, desired replicas and update status.
 2. Call list_resources for tasks and find this service's tasks. Compare the
    running count against desired. Note any task in failed, rejected or
-   orphaned, and its Status.Err.
+   orphaned, and its Status.Err. The call returns at most 200 items but
+   reports the true total, so page with offset if you need more.
 3. For the most recent failing task, call get_logs on the service. A crash loop
    usually names itself in the last lines before exit.
 4. If the tasks are running but the service still misbehaves, call get_metrics
    for cpu and memory over the last hour. A container at its memory limit is
    killed and restarted without ever logging why.
 5. Read cetacean://history for changes to this service. A fault that started
-   minutes after an image update is usually the update.
+   minutes after an image update is usually the update. The history read
+   returns the most recent entries across all resources, so if you do not see
+   this service, say so rather than concluding nothing changed.
 6. Call get_recommendations and report any finding naming this service.
 
 Report the cause, the evidence you used, and what you would change. Do not
 apply a change as part of this investigation.`
 
-	promptTextExplainUnschedulable = `Service %s has tasks Swarm has not placed. Four independent causes produce
+	promptTextExplainUnschedulable = `Service %s has tasks Swarm has not placed. Several independent causes produce
 this one symptom; check them in this order, because the cheap checks rule out
 the expensive ones.
 
@@ -54,15 +67,19 @@ the expensive ones.
    ("no suitable node"); if it does, stop there.
 3. Call list_resources for nodes. For each placement constraint, check which
    nodes satisfy it - node.labels.* come from a node's Spec.Labels, node.role
-   and node.hostname from its description. A constraint naming a label no node
-   carries can never be satisfied.
-4. Check each node's Availability. A drain node accepts nothing and a pause
-   node accepts no new tasks, so a cluster can look healthy and still have
-   nowhere to put this service.
+   from Spec.Role, and node.hostname and node.platform.* from its description;
+   engine.labels.* come from Description.Engine.Labels. A constraint naming a
+   label no node carries can never be satisfied.
+4. Check each node's Availability and Status.State. A drain node accepts
+   nothing and a pause node accepts no new tasks, and a node whose
+   Status.State is down cannot take work either - so a cluster can look
+   healthy and still have nowhere to put this service.
 5. Compare the task template's resource reservations against what nodes have
-   left. Reservations, not limits, decide placement.
+   left. Reservations, not limits, decide placement. If Placement.MaxReplicas
+   is set, check whether that per-node cap is already reached on every
+   eligible node.
 
-Report which of the four it is, and the specific constraint, label or
+Report which cause it is, and the specific constraint, label or
 reservation responsible. If several apply, say so - fixing one leaves the task
 pending.`
 
@@ -97,10 +114,12 @@ rollback is warranted before performing it.
    that - there is nothing to roll back, and rolling back a healthy service is
    an outage you caused.
 3. Read cetacean://history to confirm what changed and when. A rollback undoes
-   the last spec update, which may not be the change that broke it.
-4. Call rollback_service with task.ttl set, so the call reports when the
-   previous version's replicas are actually running rather than when Docker
-   accepted the request.
+   the last spec update, which may not be the change that broke it. The
+   history read returns the most recent entries across all resources, so if
+   you do not see this service, say so rather than concluding nothing changed.
+4. Call rollback_service as a task (params.task, with a ttl), so the call
+   reports when the previous version's replicas are actually running rather
+   than when Docker accepted the request.
 5. Poll tasks/get until the task settles. On failure read statusMessage: a
    rollback can fail for the same reason the update did.
 
@@ -112,8 +131,10 @@ guess.
 
 1. Call get_recommendations and find the sizing finding for this service.
    Cetacean computes it from observed use over the configured lookback window.
-   If there is no finding, the service is already within thresholds - say so
-   and stop.
+   If there is no finding, either the service is within thresholds or
+   Cetacean cannot measure it - sizing findings require Prometheus. Confirm
+   with get_metrics: if it reports metrics unavailable, say so and stop
+   rather than reporting the service as correctly sized.
 2. Resolve the name with the search tool, then read cetacean://services/<id>
    for its current Resources.Reservations and Resources.Limits.
 3. Call get_metrics for cpu and memory over the last week and check the finding
@@ -132,13 +153,18 @@ disagrees with the recommendation, report the disagreement and change nothing.`
 
 1. Resolve the name with the search tool, then read cetacean://nodes/<id> for
    its role, current availability and resources.
-2. If this node is a manager, read cetacean://cluster for the manager count
-   first. Draining a manager does not remove it from the raft quorum, but
-   losing it while drained does - and a two-manager quorum has no tolerance at
-   all. Report and stop if draining would leave fewer than three managers,
-   unless you have been told otherwise.
+2. If this node is a manager, count the cluster's managers first: call
+   list_resources for nodes and count those whose Spec.Role is manager.
+   Draining a manager does not remove it from the raft quorum, but losing it
+   while drained does - and a two-manager quorum has no tolerance at all.
+   Report and stop if the cluster has fewer than three managers, unless you
+   have been told otherwise.
 3. Call list_resources for tasks and list every task currently on this node,
-   with its service. This is the work that has to land elsewhere.
+   with its service. This is the work that has to land elsewhere. The call
+   returns at most 200 items but reports the true total, so page with offset
+   until you have them all. If the list comes back empty, do not conclude the
+   node is idle: confirm you can read tasks at all, and if you cannot, report
+   that and leave the node active.
 4. Call list_resources for nodes and check that the remaining active nodes
    satisfy each of those services' placement constraints and have the
    reservations spare. A service constrained to this node alone has nowhere to

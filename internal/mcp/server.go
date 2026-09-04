@@ -40,7 +40,7 @@ const ProviderName = "mcp-oauth"
 // Kept as package constants so the contract has a single source of truth
 // shared with the test that asserts it surfaces.
 const (
-	mcpInstructions = "Cetacean is a read-mostly observability and operations interface for a Docker Swarm cluster. Resolve a resource's ID or name with the search tool before reading its details or applying a write. Reads (the cetacean:// resources and the get_logs/search tools) are always available; mutating tools are gated by an operations tier and per-resource ACL, and may be hidden from tools/list or rejected at call time. Prefer the cetacean:// resources for detail and cross-references; use tools to change cluster state. Tool results include structuredContent you can parse directly."
+	mcpInstructions = "Cetacean is a read-mostly observability and operations interface for a Docker Swarm cluster. Resolve a resource's ID or name with the search tool before reading its details or applying a write. Reads (the cetacean:// resources and the get_logs/search tools) are subject to per-resource ACL like everything else; mutating tools are additionally gated by an operations tier, and either kind may be hidden from tools/list or rejected at call time. Prefer the cetacean:// resources for detail and cross-references; use tools to change cluster state. Tool results include structuredContent you can parse directly. Named investigation and remediation sequences over these resources and tools are available via prompts/list."
 
 	mcpDescription = "Read and safely operate a Docker Swarm cluster."
 )
@@ -469,6 +469,8 @@ func (s *Server) toolVisibilityFor(ctx context.Context) toolVisibility {
 		return noGrantsVisibility
 	}
 
+	// Unreachable today — PermissionsFor returns nil, not an empty map, for a
+	// zero-grant identity. Kept so a change upstream fails closed.
 	if len(perms) == 0 {
 		return noGrantsVisibility
 	}
@@ -552,7 +554,7 @@ func (s *Server) filterPromptsForIdentity(
 	// tools/list on their own reasoning — each ACL-filters its own results —
 	// but a prompt promising a sequence over them promises nothing.
 	if visibility.noGrants {
-		return nil
+		return []mcplib.Prompt{}
 	}
 
 	if visibility.allow == nil {
@@ -566,7 +568,15 @@ func (s *Server) filterPromptsForIdentity(
 
 	out := make([]mcplib.Prompt, 0, len(prompts))
 	for _, prompt := range prompts {
-		if allToolsVisible(drives[prompt.Name], visibility.allow) {
+		// Fail closed: a prompt we cannot resolve to a driven-tool list, or one
+		// that declares none, has nothing to check visibility against — and
+		// "every driven tool is visible" is vacuously true for an empty set.
+		driven, known := drives[prompt.Name]
+		if !known || len(driven) == 0 {
+			continue
+		}
+
+		if allToolsVisible(driven, visibility.allow) {
 			out = append(out, prompt)
 		}
 	}

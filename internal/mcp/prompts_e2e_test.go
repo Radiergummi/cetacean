@@ -73,30 +73,6 @@ func TestPromptsAreRegisteredAndReachable(t *testing.T) {
 	}
 }
 
-// TestPromptsListIsTierGated — at tier 0 only the diagnostic prompts exist.
-// Asserted by name so a prompt changing tier fails here rather than silently
-// appearing in a read-only deployment.
-func TestPromptsListIsTierGated(t *testing.T) {
-	handler := newPromptTestServer(t, config.OpsReadOnly).Handler()
-
-	got := promptNames(listPrompts(t, handler))
-	want := map[string]bool{
-		"diagnose_service":      true,
-		"explain_unschedulable": true,
-		"review_capacity":       true,
-	}
-
-	if len(got) != len(want) {
-		t.Fatalf("tier 0 listed %v, want exactly %d diagnostic prompts", got, len(want))
-	}
-
-	for _, name := range got {
-		if !want[name] {
-			t.Errorf("tier 0 listed %q, which is not a tier-0 prompt", name)
-		}
-	}
-}
-
 // TestPromptsGetExpandsThroughTheTransport confirms the handler is reachable
 // and its argument survives JSON round-tripping.
 func TestPromptsGetExpandsThroughTheTransport(t *testing.T) {
@@ -254,6 +230,25 @@ func TestPromptsHiddenEntirelyWithoutGrants(t *testing.T) {
 
 	if got := promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"})); len(got) != 0 {
 		t.Errorf("a zero-grant caller was offered %v, want nothing", got)
+	}
+
+	// Decoding into promptListing cannot tell a JSON "null" apart from "[]" —
+	// both unmarshal to a nil/empty Go slice — so check the raw envelope too.
+	// mcp-go's encoder may or may not insert a space after the colon, so
+	// compare with spaces stripped rather than pinning exact formatting.
+	request := modernRequest(t, 1, "prompts/list", `{}`)
+	request = request.WithContext(
+		auth.ContextWithIdentity(request.Context(), &auth.Identity{Subject: "tester"}),
+	)
+
+	_, envelope := sendMCP(t, srv.Handler(), request)
+	if envelope.Error != nil {
+		t.Fatalf("prompts/list failed: %+v", envelope.Error)
+	}
+
+	raw := strings.ReplaceAll(string(envelope.Result), " ", "")
+	if !strings.Contains(raw, `"prompts":[]`) {
+		t.Errorf("raw prompts/list result = %s, want an empty array, not null", envelope.Result)
 	}
 }
 

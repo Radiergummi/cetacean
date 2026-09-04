@@ -224,14 +224,21 @@ func (s *Server) toolTiers() map[string]config.OperationsLevel {
 // promptTier is the highest tier among the tools a prompt drives, so a prompt
 // is never offered at a tier that would refuse one of its steps.
 //
-// A name absent from tiers contributes nothing rather than failing loudly —
-// there is nowhere sensible to fail from a pure function called during
-// registration. TestPromptCatalogDrivesOnlyRealTools is what catches it, and
-// catches it at the only time it can be fixed.
+// A name absent from tiers is treated as the highest tier rather than
+// contributing nothing: there is nowhere sensible to fail from a pure
+// function called during registration, so an unknown name fails closed by
+// mis-tiering the prompt loudly — it drops out of every deployment below the
+// top tier — instead of under-tiering it into visibility it should not have.
+// TestPromptCatalogDrivesOnlyRealTools is the guard that catches a typo at
+// authoring time, before it ever reaches this fallback.
 func promptTier(def promptDef, tiers map[string]config.OperationsLevel) config.OperationsLevel {
 	tier := config.OpsReadOnly
 	for _, name := range def.drives {
-		if got, ok := tiers[name]; ok && got > tier {
+		got, ok := tiers[name]
+		if !ok {
+			got = config.OpsImpactful
+		}
+		if got > tier {
 			tier = got
 		}
 	}

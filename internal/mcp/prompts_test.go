@@ -55,6 +55,11 @@ func TestPromptTierIsTheMaxOfItsTools(t *testing.T) {
 			t.Errorf("prompt %q tier = %v, want %v", def.prompt.Name, got, expected)
 		}
 	}
+
+	if len(want) != len(promptCatalog()) {
+		t.Errorf("want tracks %d prompts, but promptCatalog() has %d — "+
+			"a prompt is silently skipped", len(want), len(promptCatalog()))
+	}
 }
 
 // TestPromptTierDerivesFromDrives exercises promptTier directly against a
@@ -89,9 +94,9 @@ func TestPromptTierDerivesFromDrives(t *testing.T) {
 			drives: nil,
 			want:   config.OpsReadOnly,
 		},
-		"unknown tool ignored, known maximum still wins": {
+		"unknown tool fails closed to the highest tier": {
 			drives: []string{"low", "does-not-exist", "middle"},
-			want:   config.OpsConfiguration,
+			want:   config.OpsImpactful,
 		},
 	}
 
@@ -147,6 +152,11 @@ func TestPromptCatalogDeclaresItsArguments(t *testing.T) {
 			t.Errorf("prompt %q argument %q must be required", def.prompt.Name, arg.Name)
 		}
 	}
+
+	if len(want) != len(promptCatalog()) {
+		t.Errorf("want tracks %d prompts, but promptCatalog() has %d — "+
+			"a prompt is silently skipped", len(want), len(promptCatalog()))
+	}
 }
 
 // TestDiagnoseServiceExpandsItsArgument is the wording guard: the expanded
@@ -185,6 +195,34 @@ func TestDiagnoseServiceExpandsItsArgument(t *testing.T) {
 	for _, tool := range def.drives {
 		if !strings.Contains(text.Text, tool) {
 			t.Errorf("expanded text does not name the %q tool it drives", tool)
+		}
+	}
+}
+
+// TestAllPromptsNameTheirDrivenTools generalizes
+// TestDiagnoseServiceExpandsItsArgument's driven-tool assertion to every
+// prompt in the catalog, so text rule 1 (name the driven tools explicitly)
+// holds for all six, not just diagnose_service.
+func TestAllPromptsNameTheirDrivenTools(t *testing.T) {
+	for _, def := range promptCatalog() {
+		result, err := def.handler(context.Background(), getPromptRequest(
+			def.prompt.Name,
+			map[string]string{"service": "example", "node": "example"},
+		))
+		if err != nil {
+			t.Fatalf("prompt %q handler: %v", def.prompt.Name, err)
+		}
+
+		text, ok := result.Messages[0].Content.(mcplib.TextContent)
+		if !ok {
+			t.Fatalf("prompt %q content is %T", def.prompt.Name, result.Messages[0].Content)
+		}
+
+		for _, tool := range def.drives {
+			if !strings.Contains(text.Text, tool) {
+				t.Errorf("prompt %q expanded text does not name the %q tool it drives",
+					def.prompt.Name, tool)
+			}
 		}
 	}
 }
