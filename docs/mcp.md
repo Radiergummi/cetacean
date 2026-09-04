@@ -257,6 +257,8 @@ Docker version conflict.
 | `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | Refresh token lifetime (30 days) |
 | `CETACEAN_MCP_CONSENT_TTL` | `2160h` | How long a remembered approval lasts (90 days); `0` disables remembering |
 | `CETACEAN_MCP_MAX_CONCURRENT_TASKS` | `32` | Cap on in-flight task-augmented tool calls |
+| `CETACEAN_MCP_TASK_TTL` | `15m` | Task retention applied when a call omits `task.ttl`; `0` disables the fill-in |
+| `CETACEAN_MCP_MAX_TASK_TTL` | `1h` | Ceiling on the retention a call may ask for; `0` disables the cap |
 | `CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR` | `true` | Require the RFC 8707 `resource` parameter |
 | `CETACEAN_MCP_DCR_ENABLED` | `true` | Enable Dynamic Client Registration |
 | `CETACEAN_MCP_DCR_RATE_LIMIT` | `10` | DCR registrations per IP per hour |
@@ -285,7 +287,7 @@ The `2026-07-28` Tasks extension fixes that. Four tools accept task augmentation
 | `restart_service` | as above |
 
 Send `params.task` on the `tools/call` and the server answers immediately with a task handle instead of the tool's
-result. **Always include a `ttl`** — see [Always send `task.ttl`](#always-send-taskttl) below:
+result. **Always include a `ttl`** — see [Task retention](#task-retention-and-taskttl) below:
 
 ```json
 {"method":"tools/call","params":{"name":"scale_service","arguments":{"id":"web","replicas":5},"task":{"ttl":600000}}}
@@ -317,27 +319,42 @@ but does not stop the convergence watcher, which runs to convergence or timeout 
 in-memory cache, so the cost is negligible. `CETACEAN_MCP_MAX_CONCURRENT_TASKS` (default 32) caps how many run at
 once.
 
-### Always send `task.ttl`
+### Task retention and `task.ttl`
 
-**A task with no `ttl` is retained for the lifetime of the server process.** Set one on every task-augmented call:
+`ttl` is milliseconds from task **creation**, after which the server discards the task and its result. Send one on
+every task-augmented call:
 
 ```json
 "task": {"ttl": 600000}
 ```
 
-`ttl` is milliseconds from creation, after which the server may discard the task. Ten minutes comfortably covers
-the five-minute convergence bound while leaving time to read the result. Omitting it, or sending `null`, means *no
-expiration* — that is what the protocol specifies, not a Cetacean choice.
+Ten minutes comfortably covers the five-minute convergence bound while leaving time to read the result. Pick a
+`ttl` long enough that you will have polled `tasks/get` before it elapses — once the task is discarded, the result
+is gone.
 
-This matters because retention is not bounded by anything else. `CETACEAN_MCP_MAX_CONCURRENT_TASKS` caps how many
-tasks run *concurrently*, not how many completed ones are kept: the counter is released when a task finishes, but
-its record is not. Each retained record holds the tool's result, so an agent that mutates services on a schedule
-will grow the server's memory use steadily, for as long as it runs. The four task-capable tools return a compact
-summary rather than the full service specification, which bounds the per-task cost — but not the count.
+The protocol says an omitted `ttl` means *no expiration*, which would retain the result for the lifetime of the
+server process. Cetacean does not honour that literally, because nothing else bounds it:
+`CETACEAN_MCP_MAX_CONCURRENT_TASKS` caps how many tasks run *concurrently*, not how many completed ones are kept —
+the counter is released when a task finishes, but its record is not. An agent mutating services on a schedule would
+grow the server's memory use steadily, for as long as it runs.
 
-Pick a `ttl` long enough that you will have polled `tasks/get` for the result before it elapses; once the task is
-discarded, the result is gone. If your MCP client library does not expose `ttl`, treat long-lived agent sessions
-against this server as a memory risk and restart Cetacean periodically until it does.
+Two settings bound it instead:
+
+| Setting | Default | Effect |
+|---|---|---|
+| `CETACEAN_MCP_TASK_TTL` | `15m` | Applied when a call omits `ttl`, or sends `0` or `null` |
+| `CETACEAN_MCP_MAX_TASK_TTL` | `1h` | Ceiling on what a call may ask for |
+
+A request above the ceiling is **served with the ceiling**, not refused — you asked for a cluster mutation, and
+failing it over a retention preference would be the wrong trade. It appears in the debug log, not in the response.
+Set either to `0` to disable that half: no fill-in, or no ceiling.
+
+The default leaves at least ten minutes to collect a result even for a task that ran the full convergence timeout,
+since the clock starts at creation rather than completion. Keep that margin in mind if you change it; setting
+`CETACEAN_MCP_TASK_TTL=0` puts a client that omits `ttl` back to retaining its result until the process exits.
+
+The four task-capable tools return a compact summary rather than the full service specification, which bounds the
+per-task cost as well as the count.
 
 ## Widgets (MCP Apps)
 
@@ -440,6 +457,7 @@ nowhere while looking configured.
   window.
 - **No cross-replica event replay.** A client that reconnects to a different replica catches up by re-reading
   resources rather than replaying missed notifications.
-- **Tasks without a `ttl` are never released.** A completed task is discarded only when the client asked for an
-  expiry, so a client that omits `task.ttl` grows the server's memory use with every mutation it makes. Nothing
-  server-side caps it. See [Always send `task.ttl`](#always-send-taskttl).
+- **A task's result is discarded when its retention elapses.** Cetacean bounds retention itself
+  (`CETACEAN_MCP_TASK_TTL`, `CETACEAN_MCP_MAX_TASK_TTL`) rather than honouring the protocol's "no expiration", which
+  cannot be bounded. A client that polls `tasks/get` too late finds the task gone. See
+  [Task retention](#task-retention-and-taskttl).

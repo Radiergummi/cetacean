@@ -451,6 +451,8 @@ func eventTypeToACLPrefix(t cache.EventType) string {
 func (s *Server) installSubscriptionHooks() *mcpserver.Hooks {
 	h := &mcpserver.Hooks{}
 
+	s.installTaskTTLHook(h)
+
 	// subscriptions/listen is the only way to subscribe. mcp-go records the
 	// requested URIs by type-asserting the session to
 	// SessionWithResourceSubscriptions, which its streamable-HTTP session does

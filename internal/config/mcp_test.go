@@ -368,3 +368,124 @@ func TestLoadMCP_MaxConcurrentTasks_File(t *testing.T) {
 		t.Errorf("MaxConcurrentTasks = %d, want 64", cfg.MaxConcurrentTasks)
 	}
 }
+
+func TestLoadMCP_TaskTTL_Default(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_TASK_TTL", "")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.TaskTTL != 15*time.Minute {
+		t.Errorf("TaskTTL = %v, want 15m", cfg.TaskTTL)
+	}
+}
+
+func TestLoadMCP_TaskTTL_Env(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_TASK_TTL", "45m")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.TaskTTL != 45*time.Minute {
+		t.Errorf("TaskTTL = %v, want 45m", cfg.TaskTTL)
+	}
+}
+
+// TestLoadMCP_TaskTTL_ZeroDisables — zero is a real setting here, not an
+// error: it turns the fill-in off and leaves retention to whatever the client
+// asks for.
+func TestLoadMCP_TaskTTL_ZeroDisables(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_TASK_TTL", "0")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP rejected a zero task TTL: %v", err)
+	}
+
+	if cfg.TaskTTL != 0 {
+		t.Errorf("TaskTTL = %v, want 0", cfg.TaskTTL)
+	}
+}
+
+func TestLoadMCP_TaskTTL_File(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_TASK_TTL", "")
+
+	value := "30m"
+
+	cfg, err := loadMCP(&fileMCP{TaskTTL: &value})
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.TaskTTL != 30*time.Minute {
+		t.Errorf("TaskTTL = %v, want 30m", cfg.TaskTTL)
+	}
+}
+
+func TestLoadMCP_TaskTTL_RejectsNegative(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_TASK_TTL", "-5m")
+
+	if _, err := loadMCP(nil); err == nil {
+		t.Error("loadMCP accepted a negative task TTL, want an error")
+	}
+}
+
+func TestLoadMCP_MaxTaskTTL_Default(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_TASK_TTL", "")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxTaskTTL != time.Hour {
+		t.Errorf("MaxTaskTTL = %v, want 1h", cfg.MaxTaskTTL)
+	}
+}
+
+func TestLoadMCP_MaxTaskTTL_Env(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_TASK_TTL", "6h")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxTaskTTL != 6*time.Hour {
+		t.Errorf("MaxTaskTTL = %v, want 6h", cfg.MaxTaskTTL)
+	}
+}
+
+// TestLoadMCP_MaxTaskTTL_ZeroDisables — zero lifts the ceiling rather than
+// pinning every task to nothing.
+func TestLoadMCP_MaxTaskTTL_ZeroDisables(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_TASK_TTL", "0")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP rejected a zero maximum task TTL: %v", err)
+	}
+
+	if cfg.MaxTaskTTL != 0 {
+		t.Errorf("MaxTaskTTL = %v, want 0", cfg.MaxTaskTTL)
+	}
+}
+
+func TestLoadMCP_MaxTaskTTL_File(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_TASK_TTL", "")
+
+	value := "2h"
+
+	cfg, err := loadMCP(&fileMCP{MaxTaskTTL: &value})
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxTaskTTL != 2*time.Hour {
+		t.Errorf("MaxTaskTTL = %v, want 2h", cfg.MaxTaskTTL)
+	}
+}

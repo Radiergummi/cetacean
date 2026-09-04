@@ -3,10 +3,12 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -114,4 +116,73 @@ func serviceConverged(c *cache.Cache, serviceID string) convergenceFunc {
 
 		return cluster.ServiceConverged(svc, c.RunningTaskCount(svc.ID))
 	}
+}
+
+// boundTaskTTL fills in and caps how long mcp-go retains a task's result,
+// reporting whether it had to cut a client's request down.
+//
+// mcp-go deletes a task record only from scheduleTaskCleanup, which it starts
+// solely when the client supplied params.task.ttl — so an omitted TTL pins a
+// full CallToolResult for the life of the process, and a large one pins it for
+// as long as the client cared to name. Supplying the number mcp-go already
+// knows how to honour is the whole mechanism; nothing here reimplements
+// retention.
+//
+// A zero default leaves an absent TTL absent, and a zero ceiling clamps
+// nothing, so an operator can disable either half. The fill-in is clamped
+// along with everything else, so a default configured above the ceiling cannot
+// escape it.
+func boundTaskTTL(task *mcplib.TaskParams, def, ceiling time.Duration) bool {
+	// A call that carried no task augmentation must stay that way. Inventing
+	// params here would turn every ordinary synchronous tools/call into a
+	// task, and mcp-go would answer it with a handle instead of the result.
+	if task == nil {
+		return false
+	}
+
+	// Non-positive is not a shorter retention, it is no cleanup at all — the
+	// same leak as an absent field, so it gets the same treatment.
+	if def > 0 && (task.TTL == nil || *task.TTL <= 0) {
+		task.TTL = new(def.Milliseconds())
+	}
+
+	if ceiling <= 0 || task.TTL == nil || *task.TTL <= ceiling.Milliseconds() {
+		return false
+	}
+
+	task.TTL = new(ceiling.Milliseconds())
+
+	return true
+}
+
+// installTaskTTLHook bounds the retention of every task-augmented tool call.
+//
+// mcp-go has no server-side default TTL and no exported way into its task map:
+// scheduleTaskCleanup is private and starts only when the client supplied
+// params.task.ttl, so a client that omits it pins a full CallToolResult for the
+// life of the process. What mcp-go does give us is this hook, called with a
+// pointer to the request it passes to handleToolCall on the very next line
+// (server/request_handler.go:520-521) — so filling the field in here is
+// indistinguishable, to everything downstream, from the client having sent it.
+//
+// That adjacency is the assumption the whole mechanism rests on, and it is not
+// a documented contract. TestTaskWithoutTTLIsStillReleased drives a real
+// tools/call and waits for the record to go, so a future bump that reorders or
+// copies between those two lines fails the build rather than quietly restoring
+// the leak.
+func (s *Server) installTaskTTLHook(h *mcpserver.Hooks) {
+	h.AddBeforeCallTool(func(_ context.Context, _ any, msg *mcplib.CallToolRequest) {
+		if !boundTaskTTL(msg.Params.Task, s.config.TaskTTL, s.config.MaxTaskTTL) {
+			return
+		}
+
+		// Served, not refused: the caller asked for a cluster mutation, and
+		// failing it over a retention preference would be the wrong trade. Debug
+		// rather than warn — a client naming a long TTL is being optimistic,
+		// not hostile.
+		slog.Debug("clamped MCP task TTL to the configured maximum",
+			"tool", msg.Params.Name,
+			"max", s.config.MaxTaskTTL,
+		)
+	})
 }
