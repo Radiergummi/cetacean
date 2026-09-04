@@ -105,6 +105,7 @@
 # signing_key = ""                          # JWT signing key (HMAC-SHA256); auto-generated if unset
 # access_token_ttl = "1h"                   # Access token lifetime
 # refresh_token_ttl = "720h"                # Refresh token lifetime (30 days)
+# consent_ttl = "2160h"                     # How long a remembered approval lasts (90 days); "0s" always prompts
 # max_concurrent_tasks = 32                 # Cap on in-flight task-augmented tool calls
 # task_ttl = "15m"                          # Task retention applied when a call omits task.ttl; "0s" disables the fill-in
 # max_task_ttl = "1h"                       # Ceiling on the retention a call may ask for; "0s" disables the cap
