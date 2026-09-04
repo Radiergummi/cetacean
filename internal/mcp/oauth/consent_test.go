@@ -1,9 +1,12 @@
 package oauth
 
 import (
+	"html"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -159,47 +162,8 @@ func TestConsentApproveProducesCode(t *testing.T) {
 		t.Fatalf("GET consent: expected 200, got %d: %s", getRec.Code, getRec.Body.String())
 	}
 
-	// Extract CSRF token from the rendered form.
-	body := getRec.Body.String()
-	csrfToken := extractHiddenField(body, "csrf_token")
-	if csrfToken == "" {
-		t.Fatal("CSRF token not found in consent page")
-	}
-
-	// Extract the nonce cookie set by the GET.
-	var nonceCookie *http.Cookie
-	for _, c := range getRec.Result().Cookies() {
-		if c.Name == csrfCookieName {
-			nonceCookie = c
-			break
-		}
-	}
-	if nonceCookie == nil {
-		t.Fatal("CSRF nonce cookie not set")
-	}
-
-	// Step 2: POST the approval.
-	form := url.Values{
-		"decision":              {"approve"},
-		"response_type":         {"code"},
-		"client_id":             {clientID},
-		"redirect_uri":          {"http://localhost:7777/cb"},
-		"code_challenge":        {challenge},
-		"code_challenge_method": {"S256"},
-		"state":                 {"stateXYZ"},
-		"resource":              {s.cfg.MCPResource},
-		"csrf_token":            {csrfToken},
-	}
-	postReq := httptest.NewRequest(
-		http.MethodPost,
-		"/oauth/authorize",
-		strings.NewReader(form.Encode()),
-	)
-	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	postReq.AddCookie(nonceCookie)
-	postReq = withIdentity(postReq, "bob", "bob@example.com")
-	postRec := httptest.NewRecorder()
-	s.HandleAuthorize(postRec, postReq)
+	// Step 2: POST the approval, resubmitting the form the page rendered.
+	postRec := submitConsent(t, s, getRec, "approve", "bob", "bob@example.com", nil)
 
 	if postRec.Code != http.StatusFound {
 		t.Fatalf("expected redirect (302), got %d: %s", postRec.Code, postRec.Body.String())
@@ -229,32 +193,65 @@ func TestConsentApproveProducesCode(t *testing.T) {
 	}
 }
 
-// extractHiddenField parses a simple hidden input value from HTML without
-// importing an HTML parser — good enough for test templates we control.
-func extractHiddenField(html, name string) string {
-	marker := `name="` + name + `" value="`
-	idx := strings.Index(html, marker)
-	if idx == -1 {
-		// Try alternate attribute order.
-		marker = `name="` + name + `"`
-		idx = strings.Index(html, marker)
-		if idx == -1 {
-			return ""
-		}
-		// Look for value=" after the name attr.
-		_, after, ok := strings.Cut(html[idx:], `value="`)
-		if !ok {
-			return ""
-		}
-		val, _, ok := strings.Cut(after, `"`)
-		if !ok {
-			return ""
-		}
-		return val
+// hiddenInputPattern matches the hidden inputs the consent template emits.
+var hiddenInputPattern = regexp.MustCompile(`<input type="hidden" name="([^"]*)" value="([^"]*)">`)
+
+// hiddenFields reads every hidden input out of a rendered form, undoing the
+// HTML escaping the template applied.
+func hiddenFields(page string) url.Values {
+	fields := url.Values{}
+	for _, match := range hiddenInputPattern.FindAllStringSubmatch(page, -1) {
+		fields.Set(match[1], html.UnescapeString(match[2]))
 	}
-	val, _, ok := strings.Cut(html[idx+len(marker):], `"`)
-	if !ok {
-		return ""
+
+	return fields
+}
+
+// consentForm rebuilds the form a browser would resubmit from a rendered
+// consent page: every hidden input the template emitted, plus the decision.
+//
+// Reading the fields back off the page rather than restating them is what keeps
+// these tests in step with the template. A field added to the form is carried
+// automatically — which is exactly what the consent fingerprint was not, having
+// cost an edit in all three places that submit this form.
+func consentForm(page, decision string, overrides url.Values) url.Values {
+	form := hiddenFields(page)
+	form.Set("decision", decision)
+	maps.Copy(form, overrides)
+
+	return form
+}
+
+// submitConsent POSTs a decision back to the authorize endpoint the way a
+// browser would: the form the page rendered, carrying the nonce cookie it set.
+func submitConsent(
+	t *testing.T,
+	s *Server,
+	page *httptest.ResponseRecorder,
+	decision, subject, email string,
+	overrides url.Values,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	form := consentForm(page.Body.String(), decision, overrides)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/oauth/authorize",
+		strings.NewReader(form.Encode()),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	for _, cookie := range page.Result().Cookies() {
+		if cookie.Name == csrfCookieName {
+			req.AddCookie(cookie)
+		}
 	}
-	return val
+
+	req = withIdentity(req, subject, email)
+
+	w := httptest.NewRecorder()
+	s.HandleAuthorize(w, req)
+
+	return w
 }

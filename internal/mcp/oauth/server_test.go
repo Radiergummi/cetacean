@@ -25,6 +25,7 @@ func newTestServer(t *testing.T) *Server {
 		MCP: config.MCPConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,
+			ConsentTTL:               testConsentTTL,
 			RequireResourceIndicator: false,
 			DCREnabled:               true,
 			DCRRateLimit:             10,
@@ -35,6 +36,28 @@ func newTestServer(t *testing.T) *Server {
 	}
 	s := NewServer(cfg)
 	s.cimd.AllowLoopback = true
+	return s
+}
+
+// newPersistingServer is newTestServer wired to a state file at path, for tests
+// that restart a server over the same durable state. resource stays explicit:
+// these tests pin it to the audience their fixture tokens were written for.
+func newPersistingServer(t *testing.T, path, resource string) *Server {
+	t.Helper()
+
+	s := NewServer(ServerConfig{
+		Issuer:      "https://cetacean.test",
+		MCPResource: resource,
+		MCP: config.MCPConfig{
+			AccessTokenTTL:  time.Hour,
+			RefreshTokenTTL: 720 * time.Hour,
+			ConsentTTL:      testConsentTTL,
+		},
+		SigningKey: []byte("test-signing-key-32bytes-padded!!"),
+		StatePath:  path,
+	})
+	s.cimd.AllowLoopback = true
+
 	return s
 }
 

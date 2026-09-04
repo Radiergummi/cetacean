@@ -12,6 +12,10 @@ function setVisibility(state: "visible" | "hidden") {
 }
 
 beforeEach(() => {
+  // These tests assert the reconnect *schedule*, so the jitter is pinned to
+  // its midpoint, where the backoff spread is exactly 1 and the curve is its
+  // nominal 1s/2s/4s. The spread itself is covered in lib/backoff.test.ts.
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
   setVisibility("visible");
   MockEventSource.instances = [];
   vi.stubGlobal("EventSource", MockEventSource);
@@ -19,6 +23,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });

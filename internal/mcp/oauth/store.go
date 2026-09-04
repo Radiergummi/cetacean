@@ -118,7 +118,9 @@ type RefreshTokenData struct {
 	grantID  string // assigned and tracked by the store; unexported
 }
 
-// RotateResult is returned by RefreshTokenStore.Rotate.
+// RotateResult is returned by RefreshTokenStore.Rotate. On the theft path Data
+// names the family that was burned, so the caller can clear its consent record
+// and log the affected subject.
 type RotateResult struct {
 	NewToken string // empty when OK is false
 	Data     RefreshTokenData
@@ -148,6 +150,8 @@ const maxGrantHistorySize = 32
 // and grant-family theft detection. Raw tokens are never persisted; only
 // their SHA-256 hashes are held in memory.
 type RefreshTokenStore struct {
+	changeNotifier
+
 	mu       sync.Mutex
 	tokens   map[string]refreshTokenEntry // hash → live entry
 	consumed map[string]string            // hash → grantID (rotated-away tokens)
@@ -184,6 +188,8 @@ func (s *RefreshTokenStore) Issue(data RefreshTokenData, ttl time.Duration) stri
 	}
 	s.grants[grantID] = []string{h}
 	s.mu.Unlock()
+
+	s.writeThrough()
 
 	return raw
 }
@@ -222,6 +228,22 @@ func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
 //  5. Move old hash to consumed, mint a fresh token, register it in tokens
 //     and grants, return RotateResult{OK: true, NewToken: ..., Data: ...}.
 func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateResult {
+	result, mutated := s.rotate(oldToken, ttl)
+
+	// Theft burns the grant family and an expired token tears it down, so
+	// those write as surely as a successful rotation does. An unknown token
+	// changes nothing, and must not write: anyone can post a made-up refresh
+	// token to the token endpoint, and rewriting the whole file for each one
+	// would turn that into an amplified write.
+	if mutated {
+		s.writeThrough()
+	}
+
+	return result
+}
+
+// rotate performs the rotation and reports whether it changed durable state.
+func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) (RotateResult, bool) {
 	oldHash := hashToken(oldToken)
 
 	// Generate the candidate replacement outside the critical section so
@@ -235,25 +257,28 @@ func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateRes
 	defer s.mu.Unlock()
 
 	// Step 2: replay / theft check runs before anything else. On theft, the
-	// grant family is burned and Data is intentionally zero — the data is no
-	// longer in the store. Callers that need to log the affected subject
-	// must record it at issue time.
+	// grant family is burned.
 	if grantID, isConsumed := s.consumed[oldHash]; isConsumed {
-		s.revokeGrantLocked(grantID)
-		return RotateResult{Theft: true}
+		// Naming the burned family lets the caller clear the user's consent
+		// record and log who was affected, neither of which was possible when
+		// this returned a zero result.
+		return RotateResult{Theft: true, Data: s.revokeGrantLocked(grantID)}, true
 	}
 
 	// Step 3: live token lookup.
 	entry, exists := s.tokens[oldHash]
 	if !exists {
-		return RotateResult{}
+		return RotateResult{}, false
 	}
 
 	// Step 4: expiry check. Tear down the whole family so consumed and grants
 	// don't accumulate orphaned entries past the token's natural lifetime.
 	if time.Now().After(entry.expiresAt) {
+		// The identity is deliberately dropped: an expired grant must not
+		// clear the user's consent.
 		s.revokeGrantLocked(entry.data.grantID)
-		return RotateResult{}
+
+		return RotateResult{}, true
 	}
 
 	// Step 5: rotate. Per-token expiry refreshes, but grantExpiresAt carries
@@ -286,12 +311,25 @@ func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateRes
 		NewToken: newRaw,
 		Data:     out,
 		OK:       true,
-	}
+	}, true
 }
 
-// RevokeGrant revokes every token in the grant family that contains the
-// given token, whether that token is currently live or already consumed.
-func (s *RefreshTokenStore) RevokeGrant(token string) {
+// RevokeGrant revokes every token in the grant family that contains the given
+// token, whether that token is currently live or already consumed. It returns
+// the identity the family belonged to, so the caller can clear the matching
+// consent record, and false when the token belongs to no known family.
+func (s *RefreshTokenStore) RevokeGrant(token string) (RefreshTokenData, bool) {
+	owner, revoked := s.revokeGrant(token)
+	if revoked {
+		s.writeThrough()
+	}
+
+	return owner, revoked
+}
+
+// revokeGrant revokes the family and reports whether one was found. A token
+// belonging to no known family is a no-op, and must not write.
+func (s *RefreshTokenStore) revokeGrant(token string) (RefreshTokenData, bool) {
 	h := hashToken(token)
 
 	s.mu.Lock()
@@ -305,18 +343,35 @@ func (s *RefreshTokenStore) RevokeGrant(token string) {
 		grantID = id
 	}
 
-	if grantID != "" {
-		s.revokeGrantLocked(grantID)
+	if grantID == "" {
+		return RefreshTokenData{}, false
 	}
+
+	return s.revokeGrantLocked(grantID), true
 }
 
 // revokeGrantLocked removes every hash ever associated with grantID from both
-// tokens and consumed, then drops the grant record. Must be called with s.mu held.
-func (s *RefreshTokenStore) revokeGrantLocked(grantID string) {
-	hashes := s.grants[grantID]
-	for _, h := range hashes {
+// tokens and consumed, then drops the grant record. It returns the identity
+// the family belonged to, read from its live token — a family has exactly one,
+// unless it has already expired, in which case the zero value comes back.
+//
+// Whether revoking a family should also drop the user's consent record is the
+// caller's decision, not this function's: an explicit revocation and a theft
+// must clear it, and an expiry must not, because consent outliving the refresh
+// token is the point of remembering it. Must be called with s.mu held.
+func (s *RefreshTokenStore) revokeGrantLocked(grantID string) RefreshTokenData {
+	var owner RefreshTokenData
+
+	for _, h := range s.grants[grantID] {
+		if entry, live := s.tokens[h]; live {
+			owner = entry.data
+		}
+
 		delete(s.tokens, h)
 		delete(s.consumed, h)
 	}
+
 	delete(s.grants, grantID)
+
+	return owner
 }
