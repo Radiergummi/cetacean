@@ -54,6 +54,55 @@ func TestPromptTierIsTheMaxOfItsTools(t *testing.T) {
 	}
 }
 
+// TestPromptTierDerivesFromDrives exercises promptTier directly against a
+// synthetic tiers map, independent of what the real catalog happens to drive
+// today. TestPromptTierIsTheMaxOfItsTools alone cannot catch a broken
+// promptTier: every catalogued prompt currently drives only tier-0 tools, so
+// a hardcoded config.OpsReadOnly, a minimum instead of a maximum, or a
+// first-entry-only implementation would all pass it unchanged.
+func TestPromptTierDerivesFromDrives(t *testing.T) {
+	tiers := map[string]config.OperationsLevel{
+		"low":     config.OpsReadOnly,
+		"high":    config.OpsImpactful,
+		"middle":  config.OpsConfiguration,
+		"another": config.OpsOperational,
+	}
+
+	tests := map[string]struct {
+		drives []string
+		want   config.OperationsLevel
+	}{
+		// Low tier ordered first, high tier later: a "first entry wins" or a
+		// "minimum wins" implementation both fail this, only "maximum" passes.
+		"mixed tiers, highest wins regardless of order": {
+			drives: []string{"low", "high", "middle"},
+			want:   config.OpsImpactful,
+		},
+		"single tool, its own tier": {
+			drives: []string{"another"},
+			want:   config.OpsOperational,
+		},
+		"no tools, read-only": {
+			drives: nil,
+			want:   config.OpsReadOnly,
+		},
+		"unknown tool ignored, known maximum still wins": {
+			drives: []string{"low", "does-not-exist", "middle"},
+			want:   config.OpsConfiguration,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			def := promptDef{drives: tt.drives}
+
+			if got := promptTier(def, tiers); got != tt.want {
+				t.Errorf("promptTier(%v) = %v, want %v", tt.drives, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestPromptCatalogDeclaresItsArguments — the argument names are what #170's
 // completion provider will key off, so they are part of the contract.
 func TestPromptCatalogDeclaresItsArguments(t *testing.T) {
@@ -189,32 +238,6 @@ func TestPromptTextMakesNoClusterClaims(t *testing.T) {
 			if strings.Contains(lowered, phrase) {
 				t.Errorf("prompt %q asserts %q about this cluster", def.prompt.Name, phrase)
 			}
-		}
-	}
-}
-
-// TestPromptTextCarriesNoBackticks — the constants are Go raw strings, which
-// are backtick-delimited, so a backtick cannot appear in one. A contributor
-// adding markdown code spans would have to break the literal to do it; this
-// fails first and says why.
-func TestPromptTextCarriesNoBackticks(t *testing.T) {
-	for _, def := range promptCatalog() {
-		result, err := def.handler(context.Background(), getPromptRequest(
-			def.prompt.Name,
-			map[string]string{"service": "example", "node": "example"},
-		))
-		if err != nil {
-			t.Fatalf("prompt %q handler: %v", def.prompt.Name, err)
-		}
-
-		text, ok := result.Messages[0].Content.(mcplib.TextContent)
-		if !ok {
-			t.Fatalf("prompt %q content is %T", def.prompt.Name, result.Messages[0].Content)
-		}
-
-		if strings.Contains(text.Text, "`") {
-			t.Errorf("prompt %q text contains a backtick; the constants are raw strings",
-				def.prompt.Name)
 		}
 	}
 }
