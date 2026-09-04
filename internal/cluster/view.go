@@ -3,6 +3,7 @@ package cluster
 import (
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -252,4 +253,136 @@ func RowsForStacks(stacks []cache.Stack) []Row {
 	sortRows(rows)
 
 	return rows
+}
+
+// Digest is the detail view of one resource: everything a caller needs to
+// decide what to do, and nothing they would have to ask a second question for.
+//
+// Reason is the field that earns the type. A state alone — "failed" — is not an
+// answer to "why is this broken", so every read that reports a non-healthy
+// state also reports the cause Swarm gave for it, and a follow-up call is not
+// required to learn it.
+type Digest struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+
+	State string `json:"state,omitempty"`
+
+	// Reason explains a non-healthy State, and is empty when there is nothing
+	// to explain.
+	Reason string `json:"reason,omitempty"`
+
+	// Details is type-specific. It is deliberately open in the advertised
+	// output schema: eight describe_<type> tools would tighten it at the cost
+	// of eight entries in every tools/list, and the envelope is where the
+	// tightness matters.
+	Details map[string]any `json:"details,omitempty"`
+
+	// Related are the resources this one references or is referenced by, so a
+	// caller can traverse without a second search.
+	Related []Related `json:"related"`
+
+	// RecentFailures are the task failures behind the current State, newest
+	// first, capped at maxRecentFailures.
+	RecentFailures []TaskFailure `json:"recentFailures"`
+}
+
+// Related is one cross-reference from a Digest.
+type Related struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+
+	// Relation names the direction, e.g. "attached-to", "mounts", "runs-on".
+	Relation string `json:"relation"`
+}
+
+// TaskFailure is one task that did not run, with the reason it did not.
+type TaskFailure struct {
+	TaskID  string `json:"taskId"`
+	At      string `json:"at,omitempty"`
+	State   string `json:"state"`
+	Message string `json:"message,omitempty"`
+}
+
+// maxRecentFailures bounds what a digest carries. A service restarting in a
+// loop can hold dozens of failed records and they all say the same thing.
+const maxRecentFailures = 5
+
+// ServiceDigest builds the detail view of one service.
+func ServiceDigest(svc swarm.Service, tasks []swarm.Task, nodes []swarm.Node) Digest {
+	nodeNames := make(map[string]string, len(nodes))
+	for _, n := range nodes {
+		nodeNames[n.ID] = n.Description.Hostname
+	}
+
+	var (
+		running  int
+		failures []TaskFailure
+	)
+
+	for _, task := range tasks {
+		if task.ServiceID != svc.ID {
+			continue
+		}
+
+		if task.Status.State == swarm.TaskStateRunning {
+			running++
+
+			continue
+		}
+
+		// A task the orchestrator has already replaced explains history, not
+		// the current state, and including it would attribute an old failure
+		// to a service that has since recovered.
+		if task.DesiredState == swarm.TaskStateShutdown ||
+			task.DesiredState == swarm.TaskStateRemove {
+			continue
+		}
+
+		failures = append(failures, TaskFailure{
+			TaskID:  task.ID,
+			At:      task.Status.Timestamp.UTC().Format(time.RFC3339),
+			State:   string(task.Status.State),
+			Message: taskReason(task),
+		})
+	}
+
+	slices.SortFunc(failures, func(a, b TaskFailure) int {
+		return strings.Compare(b.At, a.At)
+	})
+
+	if len(failures) > maxRecentFailures {
+		failures = failures[:maxRecentFailures]
+	}
+
+	state := DeriveServiceState(svc, running)
+
+	digest := Digest{
+		ID:             svc.ID,
+		Name:           svc.Spec.Name,
+		Type:           "service",
+		State:          state,
+		Related:        []Related{},
+		RecentFailures: failures,
+	}
+
+	if state != "running" && len(failures) > 0 {
+		digest.Reason = failures[0].Message
+	}
+
+	return digest
+}
+
+// taskReason is the cause Swarm gave for a task not running. Status.Err holds
+// the actionable text ("no suitable node (scheduling constraints not satisfied
+// on 1 node)"); Status.Message is the lifecycle narration ("pending task
+// scheduling") and is only worth returning when there is no error.
+func taskReason(task swarm.Task) string {
+	if task.Status.Err != "" {
+		return task.Status.Err
+	}
+
+	return task.Status.Message
 }

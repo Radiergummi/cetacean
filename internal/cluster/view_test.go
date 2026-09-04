@@ -142,3 +142,51 @@ func TestBuildersProduceIdentifiableRows(t *testing.T) {
 		})
 	}
 }
+
+// The reason is the point of a digest. "state: failed" is not an answer; the
+// unmet constraint is. Swarm puts it in Status.Err, which is where this reads.
+func TestServiceDigestExplainsWhyAServiceIsNotRunning(t *testing.T) {
+	svc := replicated("stuck", 1)
+	svc.Spec.TaskTemplate.Placement = &swarm.Placement{
+		Constraints: []string{"node.labels.gpu == true"},
+	}
+
+	tasks := []swarm.Task{{
+		ID:           "t1",
+		ServiceID:    "svc-stuck",
+		DesiredState: swarm.TaskStateRunning,
+		Status: swarm.TaskStatus{
+			State:   swarm.TaskStatePending,
+			Message: "pending task scheduling",
+			Err:     "no suitable node (scheduling constraints not satisfied on 1 node)",
+		},
+	}}
+
+	got := ServiceDigest(svc, tasks, nil)
+
+	if got.Reason != "no suitable node (scheduling constraints not satisfied on 1 node)" {
+		t.Errorf("reason = %q, want Status.Err verbatim", got.Reason)
+	}
+	if got.State == "running" {
+		t.Errorf("state = %q, want a non-running state", got.State)
+	}
+	if len(got.RecentFailures) != 1 {
+		t.Fatalf("recentFailures = %d, want the pending task", len(got.RecentFailures))
+	}
+}
+
+// A healthy service has nothing to explain, and a reason on a healthy resource
+// would read as though something were wrong.
+func TestServiceDigestOmitsReasonWhenHealthy(t *testing.T) {
+	svc := replicated("api", 1)
+	tasks := []swarm.Task{{
+		ID: "t1", ServiceID: "svc-api", DesiredState: swarm.TaskStateRunning,
+		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
+	}}
+
+	got := ServiceDigest(svc, tasks, nil)
+
+	if got.Reason != "" {
+		t.Errorf("reason = %q, want empty for a converged service", got.Reason)
+	}
+}
