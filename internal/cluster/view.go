@@ -474,6 +474,16 @@ func serviceRelated(svc swarm.Service, networks []network.Summary) []Related {
 		}
 	}
 
+	sortRelated(related)
+
+	return related
+}
+
+// sortRelated puts a Digest's cross-references into a stable order — the same
+// rule sortRows applies to a Row list, and for the same reason: every caller
+// builds this from a map or an unordered slice, and the result is marshalled
+// into an MCP result a client may cache by ETag.
+func sortRelated(related []Related) {
 	slices.SortFunc(related, func(a, b Related) int {
 		if c := strings.Compare(a.Type, b.Type); c != 0 {
 			return c
@@ -485,8 +495,6 @@ func serviceRelated(svc swarm.Service, networks []network.Summary) []Related {
 
 		return strings.Compare(a.ID, b.ID)
 	})
-
-	return related
 }
 
 // ServiceDetails is the type-specific body of a service's Digest.
