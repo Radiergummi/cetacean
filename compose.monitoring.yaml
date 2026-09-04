@@ -3,6 +3,10 @@ version: "3.8"
 services:
   prometheus:
     image: prom/prometheus:v3.10.0
+    # dockerswarm_sd reads the mounted socket, which the image's `nobody` user
+    # cannot open. Scoped to this local/demo stack; in front of a real cluster
+    # put a socket proxy here instead of granting root.
+    user: root
     volumes:
       - type: bind
         source: /var/run/docker.sock
@@ -11,8 +15,12 @@ services:
       - type: volume
         source: prometheus_data
         target: /prometheus
+    # Without an explicit target the config lands at /prometheus_config and
+    # Prometheus silently runs its built-in default instead, discovering
+    # nothing.
     configs:
-      - prometheus_config
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
     networks:
       - monitoring
     ports:
@@ -110,6 +118,9 @@ services:
 
 networks:
   monitoring:
+    # Named explicitly so the network is `monitoring`, not
+    # `<stack>_monitoring` — compose.yaml joins it as an external network.
+    name: monitoring
     driver: overlay
 
 volumes:
