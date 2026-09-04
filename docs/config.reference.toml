@@ -106,6 +106,8 @@
 # access_token_ttl = "1h"                   # Access token lifetime
 # refresh_token_ttl = "720h"                # Refresh token lifetime (30 days)
 # max_concurrent_tasks = 32                 # Cap on in-flight task-augmented tool calls
+# task_ttl = "15m"                          # Task retention applied when a call omits task.ttl; "0s" disables the fill-in
+# max_task_ttl = "1h"                       # Ceiling on the retention a call may ask for; "0s" disables the cap
 
 # [mcp.oauth]
 # require_resource_indicator = true         # Require RFC 8707 resource parameter on authorize/token
