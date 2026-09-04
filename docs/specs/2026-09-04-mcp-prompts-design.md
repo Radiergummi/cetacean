@@ -41,16 +41,21 @@ unknown name. So a filtered prompt is indistinguishable from a nonexistent one
 and the filter cannot be bypassed by guessing a name. This is the disclosure
 posture we want, inherited rather than built.
 
-**`AddPrompt` does not enable the capability.** `prompts/list` and
+**`AddPrompt` registers the capability implicitly.** `prompts/list` and
 `prompts/get` are gated on `capabilities.prompts != nil`
-(`server/request_handler.go:428,454`), which only `WithPromptCapabilities` sets.
-This is precisely the advertise-versus-wire split that produced [E-1] and [E-3]
-during the 2026-07-28 upgrade, where `server/discover` promised Tasks and UI
-that no capability backed. The mitigation there was behavioural
-(`TestTasksExtensionMatchesWiring`), and the same applies here.
+(`server/request_handler.go:428,454`), but `AddPrompts` calls
+`implicitlyRegisterPromptCapabilities` (`server/server.go:892`), which sets it
+when nil — the same mechanism mcp-go uses for tools and resources. So
+`WithPromptCapabilities` is redundant with registration rather than a second
+thing to remember.
 
-[E-1]: 2026-08-30-mcp-2026-07-28-upgrade-plan.md#issues-encountered-running-log
-[E-3]: 2026-08-30-mcp-2026-07-28-upgrade-plan.md#issues-encountered-running-log
+This corrects an earlier draft of this section, which claimed the option was
+required and cited the 2026-07-28 upgrade's [E-1]/[E-3] as precedent. The option
+is kept anyway, because the same block already calls `WithToolCapabilities` and
+`WithResourceCapabilities`, redundant for exactly the same reason; dropping one
+of the three would read as though prompts were special. A behavioural test is
+still worth having, but it guards registration and end-to-end reachability — a
+missing `registerPrompts()` call — not the option.
 
 ## Decisions
 

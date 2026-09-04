@@ -51,16 +51,17 @@ func promptNames(listing promptListing) []string {
 	return names
 }
 
-// TestPromptsCapabilityIsWired is the E-1/E-3 guard. A unit test on
-// promptCatalog() passes happily while WithPromptCapabilities is unwired, at
-// which point mcp-go answers every prompts/* call with METHOD_NOT_FOUND — the
-// server would list prompts nowhere and serve none.
-func TestPromptsCapabilityIsWired(t *testing.T) {
+// TestPromptsAreRegisteredAndReachable guards registration and end-to-end
+// reachability. A unit test on promptCatalog() passes happily whether or not
+// registerPrompts() ever ran on a real server; this drives the real transport
+// so a missing registerPrompts() call, an empty catalog, or a broken handler
+// fails here instead of silently serving no prompts.
+func TestPromptsAreRegisteredAndReachable(t *testing.T) {
 	handler := newPromptTestServer(t, config.OpsReadOnly).Handler()
 
 	listing := listPrompts(t, handler)
 	if len(listing.Prompts) == 0 {
-		t.Fatal("prompts/list returned nothing; the capability is not wired")
+		t.Fatal("prompts/list returned nothing; prompts are not registered")
 	}
 
 	_, envelope := mcpModern(t, handler, 2, "prompts/get",

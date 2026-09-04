@@ -186,12 +186,13 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		mcpserver.WithResourceCapabilities(true, true),
 		mcpserver.WithToolCapabilities(true),
 		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
-		// AddPrompt does NOT enable the capability: mcp-go gates prompts/list
-		// and prompts/get on capabilities.prompts != nil, which only this
-		// option sets. Registering prompts without it serves none of them —
-		// the same advertise-versus-wire split that made server/discover
-		// promise Tasks and UI nothing backed. TestPromptsCapabilityIsWired
-		// drives the real transport for exactly this reason.
+		// registerPrompts()'s AddPrompt calls already enable this capability
+		// implicitly (AddPrompts -> implicitlyRegisterPromptCapabilities), the
+		// same mechanism mcp-go uses for tools and resources — so this option
+		// is redundant. It is declared anyway to match WithToolCapabilities and
+		// WithResourceCapabilities above, which are equally redundant against
+		// AddTool/AddResource; dropping just this one would read as though
+		// prompts were special.
 		//
 		// listChanged is false: the catalog is static and cannot change while
 		// the process runs.
