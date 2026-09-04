@@ -40,7 +40,7 @@ const ProviderName = "mcp-oauth"
 // Kept as package constants so the contract has a single source of truth
 // shared with the test that asserts it surfaces.
 const (
-	mcpInstructions = "Cetacean is a read-mostly observability and operations interface for a Docker Swarm cluster. Resolve a resource's ID or name with the search tool before reading its details or applying a write. Reads (the cetacean:// resources and the get_logs/search tools) are subject to per-resource ACL like everything else; mutating tools are additionally gated by an operations tier, and either kind may be hidden from tools/list or rejected at call time. Prefer the cetacean:// resources for detail and cross-references; use tools to change cluster state. Tool results include structuredContent you can parse directly. Named investigation and remediation sequences over these resources and tools are available via prompts/list."
+	mcpInstructions = "Cetacean is a read-mostly observability and operations interface for a Docker Swarm cluster. Resolve a resource's ID or name with the find tool before reading its details or applying a write. Reads (the cetacean:// resources and the get_logs/find tools) are subject to per-resource ACL like everything else; mutating tools are additionally gated by an operations tier, and either kind may be hidden from tools/list or rejected at call time. Prefer the cetacean:// resources for detail and cross-references; use tools to change cluster state. Tool results include structuredContent you can parse directly. Named investigation and remediation sequences over these resources and tools are available via prompts/list."
 
 	mcpDescription = "Read and safely operate a Docker Swarm cluster."
 )
@@ -594,7 +594,7 @@ var toolACLSpecs = map[string]toolACLSpec{
 	"remove_secret":                  {"secret", "write"},
 	"remove_network":                 {"network", "write"},
 	"remove_volume":                  {"volume", "write"},
-	// "search" is intentionally absent — it returns hits across many types,
+	// "find" is intentionally absent — it returns hits across many types,
 	// each individually ACL-filtered, so it should remain visible even to
 	// callers with grants on only a subset.
 }

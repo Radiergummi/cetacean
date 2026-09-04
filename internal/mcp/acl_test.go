@@ -359,8 +359,8 @@ func TestToolVisibilityForHidesEverythingGatedWithoutGrants(t *testing.T) {
 		t.Error("a zero-grant identity may not see scale_service")
 	}
 
-	if !got.allow("search") {
-		t.Error("search is ungated and must stay visible")
+	if !got.allow("find") {
+		t.Error("find is ungated and must stay visible")
 	}
 
 	if got.readable("service") {

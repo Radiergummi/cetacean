@@ -18,7 +18,7 @@ import (
 // who could not call one of its steps.
 //
 // reads is the other half, and it exists because "callable" is not "will return
-// anything". search, list_resources, get_metrics and get_recommendations are
+// anything". find, get_metrics and get_recommendations are
 // deliberately ungated — each ACL-filters its own results, so each stays
 // visible to any caller — which makes a sequence built only from them pass the
 // drives check for a caller who can read none of the types it walks. reads
@@ -55,8 +55,7 @@ func promptCatalog() []promptDef {
 				),
 			),
 			drives: []string{
-				"search",
-				"list_resources",
+				"find",
 				"get_logs",
 				"get_metrics",
 				"get_recommendations",
@@ -82,7 +81,7 @@ func promptCatalog() []promptDef {
 					mcplib.RequiredArgument(),
 				),
 			),
-			drives: []string{"search", "list_resources"},
+			drives: []string{"find"},
 			// Step 3 compares each placement constraint against the nodes, so
 			// a caller who cannot read nodes cannot separate the causes.
 			reads: []string{"service", "node"},
@@ -100,7 +99,7 @@ func promptCatalog() []promptDef {
 						"where the cluster is constrained. Reads only.",
 				),
 			),
-			drives: []string{"list_resources", "get_metrics", "get_recommendations"},
+			drives: []string{"find", "get_metrics", "get_recommendations"},
 			reads:  []string{"node"},
 			handler: staticHandler(
 				"Review cluster capacity",
@@ -120,7 +119,7 @@ func promptCatalog() []promptDef {
 					mcplib.RequiredArgument(),
 				),
 			),
-			drives: []string{"search", "list_resources", "rollback_service"},
+			drives: []string{"find", "rollback_service"},
 			reads:  []string{"service"},
 			handler: interpolatingHandler(
 				"Roll a service back",
@@ -142,7 +141,7 @@ func promptCatalog() []promptDef {
 				),
 			),
 			drives: []string{
-				"search",
+				"find",
 				"get_metrics",
 				"get_recommendations",
 				"update_service_resources",
@@ -167,7 +166,7 @@ func promptCatalog() []promptDef {
 					mcplib.RequiredArgument(),
 				),
 			),
-			drives: []string{"search", "list_resources", "update_node_availability"},
+			drives: []string{"find", "update_node_availability"},
 			// Steps 3 and 4 read the services behind the node's tasks to check
 			// their placement constraints against the remaining nodes.
 			reads: []string{"node", "service"},
@@ -182,7 +181,7 @@ func promptCatalog() []promptDef {
 
 // interpolatingHandler builds a handler that substitutes one required argument
 // into the text. The argument is not checked against the cache: the text tells
-// the model to resolve the name with search first, which is what
+// the model to resolve the name with find first, which is what
 // mcpInstructions already asks of every client, and failing prompts/get on a
 // typo leaves the client no way to correct it.
 func interpolatingHandler(description, text, argument string) mcpserver.PromptHandlerFunc {

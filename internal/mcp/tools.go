@@ -116,10 +116,9 @@ type toolDef struct {
 var toolIconCategory = map[string]string{
 	"get_logs":            "read",
 	"get_topology":        "read",
-	"list_resources":      "read",
 	"get_metrics":         "read",
 	"get_recommendations": "read",
-	"search":              "search",
+	"find":                "search",
 
 	"scale_service": "scale",
 
@@ -280,58 +279,71 @@ func (s *Server) toolCatalog() []toolDef {
 		},
 		{
 			tool: mcplib.NewTool(
-				"search",
-				mcplib.WithToolTitle("Search swarm resources"),
+				"find",
+				mcplib.WithToolTitle("Find cluster resources"),
 				mcplib.WithDescription(
-					"Search across every cluster resource (nodes, services, tasks, stacks, configs, secrets, networks, volumes) by name, label, or image reference. Returns ranked matches grouped by resource type. Use this to locate a resource before fetching its details or applying a write.",
+					"Locate cluster resources. Give `type` (nodes, services, tasks, stacks, configs, secrets, networks, or volumes) to enumerate that type, paged, optionally narrowed by query/state/stack/node/image/label; the returned records are the same ones the cetacean:// resources expose, filtered to what the caller may see. Omit `type` and give `query` to search by name, label, or image reference across every type at once, ranked and grouped by resource type. Use the cross-type search to locate a resource before fetching its details or applying a write; use a typed listing to browse or tabulate a whole type.",
 				),
-				mcplib.WithOutputSchema[cluster.SearchResults](),
-				mcplib.WithReadOnlyHintAnnotation(true),
-				mcplib.WithDestructiveHintAnnotation(false),
-				mcplib.WithIdempotentHintAnnotation(true),
-				mcplib.WithOpenWorldHintAnnotation(false),
-				mcplib.WithString(
-					"query",
-					mcplib.Required(),
-					mcplib.Description(
-						"Substring to match against resource names, labels, and (for services) image references. Case-insensitive.",
-					),
-				),
-				mcplib.WithNumber("limit",
-					mcplib.Description("Maximum results per resource type. Default 3."),
-				),
-			),
-			tier:    config.OpsReadOnly,
-			handler: s.toolSearch,
-		},
-		{
-			tool: mcplib.NewTool(
-				"list_resources",
-				mcplib.WithToolTitle("List cluster resources"),
-				mcplib.WithDescription(
-					"Enumerate every resource of one type (nodes, services, tasks, stacks, configs, secrets, networks, volumes), paged. Returns the same records the cetacean:// resources expose, filtered to what the caller may see. Use search to find a specific resource; use this to browse or tabulate a whole type.",
-				),
-				mcplib.WithOutputSchema[listResourcesResult](),
+				mcplib.WithOutputSchema[findResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
 				mcplib.WithString(
 					"type",
-					mcplib.Required(),
 					mcplib.Description(
-						"Resource type to list: nodes, services, tasks, stacks, configs, secrets, networks, or volumes.",
+						"Resource type to enumerate: nodes, services, tasks, stacks, configs, secrets, networks, or volumes. Omit to search across every type at once (requires `query`).",
+					),
+				),
+				mcplib.WithString(
+					"query",
+					mcplib.Description(
+						"Substring to match against resource names — and, when `type` is omitted, also labels and image references. Case-insensitive. Required when `type` is omitted.",
+					),
+				),
+				mcplib.WithString("state",
+					mcplib.Description(
+						"With `type`, keep only rows whose derived state matches exactly (case-insensitive).",
+					),
+				),
+				mcplib.WithString("stack",
+					mcplib.Description(
+						"With `type`, keep only rows in this stack namespace (exact match, case-insensitive).",
+					),
+				),
+				mcplib.WithString("node",
+					mcplib.Description(
+						"With `type: tasks`, keep only rows running on a node whose hostname contains this (case-insensitive).",
+					),
+				),
+				mcplib.WithString("image",
+					mcplib.Description(
+						"With `type: services`, keep only rows whose image contains this (case-insensitive).",
+					),
+				),
+				mcplib.WithString("label",
+					mcplib.Description(
+						"With `type`, keep only rows carrying this label: `key` for presence, `key=value` for an exact value.",
 					),
 				),
 				mcplib.WithNumber("limit",
-					mcplib.Description("Maximum records to return. Default and maximum 200."),
+					mcplib.Description(
+						"With `type`, the maximum records to return (default and maximum 200). Without `type`, the maximum matches per resource type in the cross-type search (default 3).",
+					),
 				),
 				mcplib.WithNumber("offset",
-					mcplib.Description("Records to skip, for paging. Default 0."),
+					mcplib.Description(
+						"With `type`, records to skip, for paging. Default 0. Ignored in the cross-type search.",
+					),
+				),
+				mcplib.WithBoolean("raw",
+					mcplib.Description(
+						"With `type`, return each match's untouched resource record instead of the compact row shape. Default false.",
+					),
 				),
 			),
 			tier:    config.OpsReadOnly,
-			handler: s.toolListResources,
+			handler: s.toolFind,
 			widget:  "table",
 		},
 		{
@@ -1093,21 +1105,6 @@ func (s *Server) checkTaskRead(ctx context.Context, id string) error {
 }
 
 // --- tool handlers ---
-
-func (s *Server) toolSearch(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-	query, err := req.RequireString("query")
-	if err != nil {
-		return "", err
-	}
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return "", fmt.Errorf("query must not be empty")
-	}
-	limit := req.GetInt("limit", 3)
-
-	results := s.filterSearchResults(ctx, cluster.Search(ctx, s.cache, query, limit))
-	return marshalResult(results)
-}
 
 func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
 	service := strings.TrimSpace(req.GetString("service", ""))

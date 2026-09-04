@@ -335,7 +335,7 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsImpactful)
 
 	readOnly := map[string]bool{
-		"get_logs": true, "search": true, "list_resources": true, "get_topology": true,
+		"get_logs": true, "find": true, "get_topology": true,
 		"get_metrics": true, "get_recommendations": true,
 	}
 	destructive := map[string]bool{
@@ -391,8 +391,8 @@ func TestToolCatalogTierFilter(t *testing.T) {
 	if _, ok := srv.findTool("scale_service"); ok {
 		t.Error("scale_service should not be registered at OpsReadOnly")
 	}
-	if _, ok := srv.findTool("search"); !ok {
-		t.Error("search (read tool) should be registered at OpsReadOnly")
+	if _, ok := srv.findTool("find"); !ok {
+		t.Error("find (read tool) should be registered at OpsReadOnly")
 	}
 
 	srv = newToolTestServer(t, c, &fakeWriteClient{}, config.OpsOperational)
@@ -527,41 +527,6 @@ func TestToolScaleServiceMissingArgs(t *testing.T) {
 	}))
 	if err == nil {
 		t.Fatal("expected error when replicas missing")
-	}
-}
-
-func TestToolSearch(t *testing.T) {
-	c := cache.New(nil)
-	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web-frontend"}},
-	})
-
-	srv := newToolTestServer(t, c, nil, config.OpsReadOnly)
-	td, _ := srv.findTool("search")
-
-	out, err := td.handler(context.Background(), newCallToolRequest("search", map[string]any{
-		"query": "web",
-	}))
-	if err != nil {
-		t.Fatalf("handler: %v", err)
-	}
-	if !strings.Contains(out, "web-frontend") {
-		t.Errorf("search output missing match: %s", out)
-	}
-}
-
-func TestToolSearchRejectsEmptyQuery(t *testing.T) {
-	srv := newToolTestServer(t, cache.New(nil), nil, config.OpsReadOnly)
-	td, _ := srv.findTool("search")
-
-	for _, q := range []string{"", "   ", "\t\n"} {
-		_, err := td.handler(context.Background(), newCallToolRequest("search", map[string]any{
-			"query": q,
-		}))
-		if err == nil {
-			t.Errorf("query %q: expected error, got nil", q)
-		}
 	}
 }
 
@@ -1026,8 +991,8 @@ func TestFilterToolsForIdentity_HidesWritesWithoutGrants(t *testing.T) {
 	if names["remove_config"] {
 		t.Error("remove_config must be hidden — identity has no config write grant")
 	}
-	if !names["search"] {
-		t.Error("search is unconditionally visible (cross-type tool)")
+	if !names["find"] {
+		t.Error("find is unconditionally visible (cross-type tool)")
 	}
 }
 
@@ -1062,8 +1027,8 @@ func TestFilterToolsForIdentity_HidesWritesWithZeroGrants(t *testing.T) {
 	if names["scale_service"] {
 		t.Error("scale_service must be hidden — identity matches no grant at all")
 	}
-	if !names["search"] {
-		t.Error("search is unconditionally visible (cross-type tool)")
+	if !names["find"] {
+		t.Error("find is unconditionally visible (cross-type tool)")
 	}
 }
 
