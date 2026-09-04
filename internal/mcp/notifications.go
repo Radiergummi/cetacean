@@ -360,31 +360,19 @@ func (s *Server) notify(session mcpserver.ClientSession, method string, params m
 }
 
 // canReadAnyOfType returns true when the identity has at least one read grant
-// on a resource of the given type. Mirrors the logic in filterToolsForIdentity
-// — a write grant implies read.
+// on a resource of the given type. Shares acl.TypeGrants with
+// toolVisibilityFor, so a write grant implies read and a stack grant reaches
+// its member types in both places.
+//
+// A caller matching no grant reads nothing and is told nothing: list_changed
+// carries no resource data, but its timing still says a resource of that type
+// changed.
 func (s *Server) canReadAnyOfType(identity *auth.Identity, resourceType string) bool {
 	if s.acl == nil {
 		return true
 	}
-	perms := s.acl.PermissionsFor(identity)
-	if perms == nil {
-		return true
-	}
-	for pattern, granted := range perms {
-		resType, _, ok := splitResourceType(pattern)
-		if !ok {
-			continue
-		}
-		if resType != "*" && resType != resourceType {
-			continue
-		}
-		for _, p := range granted {
-			if p == "read" || p == "write" {
-				return true
-			}
-		}
-	}
-	return false
+
+	return s.acl.TypeGrants(identity).Can("read", resourceType)
 }
 
 // canRead returns true when identity is allowed to read aclResource (or when

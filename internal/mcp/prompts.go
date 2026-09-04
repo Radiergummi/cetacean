@@ -11,16 +11,28 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// promptDef is a prompt plus the tools it walks. drives is load-bearing: both
-// the prompt's operations tier and its per-caller visibility derive from it, so
-// a prompt cannot advertise itself below the tier of a mutation it instructs,
-// and cannot be offered to a caller who could not complete it.
+// promptDef is a prompt plus the tools it walks and the resource types it
+// reads. drives is load-bearing: both the prompt's operations tier and half of
+// its per-caller visibility derive from it, so a prompt cannot advertise itself
+// below the tier of a mutation it instructs, and cannot be offered to a caller
+// who could not call one of its steps.
+//
+// reads is the other half, and it exists because "callable" is not "will return
+// anything". search, list_resources, get_metrics and get_recommendations are
+// deliberately ungated — each ACL-filters its own results, so each stays
+// visible to any caller — which makes a sequence built only from them pass the
+// drives check for a caller who can read none of the types it walks. reads
+// names those types, so a prompt is offered only to a caller who would get
+// answers rather than a run of empty lists. Every type implied by a driven
+// tool's toolACLSpec must appear here too; TestPromptReadsCoverItsDrivenTools
+// keeps the two declarations from drifting.
 //
 // The order of drives is the order the text walks them, which keeps the
 // declaration readable against the prompt body.
 type promptDef struct {
 	prompt  mcplib.Prompt
 	drives  []string
+	reads   []string
 	handler mcpserver.PromptHandlerFunc
 }
 
@@ -49,6 +61,7 @@ func promptCatalog() []promptDef {
 				"get_metrics",
 				"get_recommendations",
 			},
+			reads: []string{"service"},
 			handler: interpolatingHandler(
 				"Diagnose an unhealthy service",
 				promptTextDiagnoseService,
@@ -70,6 +83,9 @@ func promptCatalog() []promptDef {
 				),
 			),
 			drives: []string{"search", "list_resources"},
+			// Step 3 compares each placement constraint against the nodes, so
+			// a caller who cannot read nodes cannot separate the causes.
+			reads: []string{"service", "node"},
 			handler: interpolatingHandler(
 				"Explain why a service will not schedule",
 				promptTextExplainUnschedulable,
@@ -85,6 +101,7 @@ func promptCatalog() []promptDef {
 				),
 			),
 			drives: []string{"list_resources", "get_metrics", "get_recommendations"},
+			reads:  []string{"node"},
 			handler: staticHandler(
 				"Review cluster capacity",
 				promptTextReviewCapacity,
@@ -104,6 +121,7 @@ func promptCatalog() []promptDef {
 				),
 			),
 			drives: []string{"search", "list_resources", "rollback_service"},
+			reads:  []string{"service"},
 			handler: interpolatingHandler(
 				"Roll a service back",
 				promptTextRollBackService,
@@ -129,6 +147,7 @@ func promptCatalog() []promptDef {
 				"get_recommendations",
 				"update_service_resources",
 			},
+			reads: []string{"service"},
 			handler: interpolatingHandler(
 				"Right-size a service",
 				promptTextRightSizeService,
@@ -149,6 +168,9 @@ func promptCatalog() []promptDef {
 				),
 			),
 			drives: []string{"search", "list_resources", "update_node_availability"},
+			// Steps 3 and 4 read the services behind the node's tasks to check
+			// their placement constraints against the remaining nodes.
+			reads: []string{"node", "service"},
 			handler: interpolatingHandler(
 				"Drain a node for maintenance",
 				promptTextDrainNode,

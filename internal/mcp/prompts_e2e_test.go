@@ -209,6 +209,59 @@ func TestPromptsVisibleWhenEveryDrivenToolIs(t *testing.T) {
 	}
 }
 
+// TestPromptsHiddenWhenTheReadTypesAreDenied covers what the driven-tool check
+// cannot see. explain_unschedulable and review_capacity walk only ungated
+// cross-type tools, so every driven name passes allow for any grant holder —
+// but a caller granted volume:read alone would get an empty list from every
+// step. reads is what keeps them hidden.
+func TestPromptsHiddenWhenTheReadTypesAreDenied(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(readOnlyPolicy("volume:*"))
+
+	srv := newToolTestServer(
+		t,
+		cache.New(nil),
+		&fakeWriteClient{},
+		config.OpsImpactful,
+		func(o *Options) { o.ACL = evaluator },
+	)
+
+	if got := promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"})); len(got) != 0 {
+		t.Errorf("a volume-only caller was offered %v; every prompt walks services or nodes",
+			got)
+	}
+}
+
+// TestPromptsVisibleWhenTheReadTypesAre is the other half: node:read is what
+// review_capacity walks, and it is offered — the reads check must not hide a
+// sequence the caller can actually complete. explain_unschedulable stays
+// hidden, since it compares constraints against services too.
+func TestPromptsVisibleWhenTheReadTypesAre(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(readOnlyPolicy("node:*"))
+
+	srv := newToolTestServer(
+		t,
+		cache.New(nil),
+		&fakeWriteClient{},
+		config.OpsImpactful,
+		func(o *Options) { o.ACL = evaluator },
+	)
+
+	found := make(map[string]bool)
+	for _, name := range promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"})) {
+		found[name] = true
+	}
+
+	if !found["review_capacity"] {
+		t.Error("node:read walks review_capacity end to end; it must be offered")
+	}
+
+	if found["explain_unschedulable"] {
+		t.Error("explain_unschedulable reads services too; node:read alone must not reveal it")
+	}
+}
+
 // TestPromptsHiddenEntirelyWithoutGrants is the floor. A caller matching no
 // grant can read nothing, so there is no investigation to seed — even though
 // the cross-type read tools stay visible in tools/list on their own reasoning.
@@ -337,5 +390,43 @@ func TestPromptsListAtEachTier(t *testing.T) {
 				t.Errorf("tier %v did not list %q", testCase.level, name)
 			}
 		}
+	}
+}
+
+// TestPromptsVisibleToAStackOperator is the end-to-end payoff of expanding
+// grants by type. A stack grant covers the stack's services, so every step of
+// diagnose_service and roll_back_service succeeds for its holder — and both
+// were hidden before, along with prompts/get returning "not found" for a
+// sequence the caller could run.
+func TestPromptsVisibleToAStackOperator(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"stack:web"},
+		Permissions: []string{"write"},
+	}}})
+
+	srv := newToolTestServer(
+		t,
+		cache.New(nil),
+		&fakeWriteClient{},
+		config.OpsImpactful,
+		func(o *Options) { o.ACL = evaluator },
+	)
+
+	found := make(map[string]bool)
+	for _, name := range promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"})) {
+		found[name] = true
+	}
+
+	if !found["diagnose_service"] {
+		t.Error("a stack operator can walk diagnose_service; it must be offered")
+	}
+
+	if !found["roll_back_service"] {
+		t.Error("stack:write covers the stack's services; roll_back_service must be offered")
+	}
+
+	if found["drain_node"] {
+		t.Error("nodes belong to no stack; drain_node must stay hidden")
 	}
 }

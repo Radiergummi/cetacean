@@ -388,3 +388,86 @@ func TestToolVisibilityForAppliesGrants(t *testing.T) {
 		t.Error("service:read must not reveal scale_service")
 	}
 }
+
+// TestToolVisibilityForExpandsStackGrants is the reason the projection moved
+// into acl.TypeGrants. A stack grant covers the stack's services at call time,
+// so an operator holding one can run get_logs — but the old projection
+// compared literal type prefixes, saw only "stack", and hid the tool (and
+// every prompt driving it) from someone who could use it.
+func TestToolVisibilityForExpandsStackGrants(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(readOnlyPolicy("stack:web"))
+
+	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
+
+	got := srv.toolVisibilityFor(ctxWithIdentity())
+	if got.noGrants {
+		t.Fatal("identity holds a stack grant; noGrants must be false")
+	}
+
+	if !got.allow("get_logs") {
+		t.Error("a stack:read grant covers the stack's services and must reveal get_logs")
+	}
+
+	if !got.readable("service") {
+		t.Error("a stack:read grant must make services readable")
+	}
+
+	if got.allow("scale_service") {
+		t.Error("stack:read is not write; scale_service must stay hidden")
+	}
+
+	if got.readable("node") {
+		t.Error("nodes belong to no stack; a stack grant must not make them readable")
+	}
+}
+
+// TestCanReadAnyOfTypeSharesTheProjection pins the second consumer. Before,
+// notification fan-out did its own prefix comparison, so the same stack-granted
+// caller got no service list_changed notifications — and a caller matching no
+// grant at all got every one of them, because PermissionsFor returns nil for
+// "no policy" and "matched nothing" alike.
+func TestCanReadAnyOfTypeSharesTheProjection(t *testing.T) {
+	identity := &auth.Identity{Subject: "tester"}
+
+	t.Run("stack grant reaches member types", func(t *testing.T) {
+		e := acl.NewEvaluator()
+		e.SetPolicy(readOnlyPolicy("stack:web"))
+
+		srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
+
+		if !srv.canReadAnyOfType(identity, "service") {
+			t.Error("a stack grant covers the stack's services")
+		}
+
+		if srv.canReadAnyOfType(identity, "node") {
+			t.Error("a stack grant does not cover nodes")
+		}
+	})
+
+	t.Run("service grant reaches tasks", func(t *testing.T) {
+		e := acl.NewEvaluator()
+		e.SetPolicy(readOnlyPolicy("service:*"))
+
+		srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
+
+		if !srv.canReadAnyOfType(identity, "task") {
+			t.Error("tasks inherit from their parent service")
+		}
+	})
+
+	t.Run("no grant hears nothing", func(t *testing.T) {
+		e := acl.NewEvaluator()
+		e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"user:somebody-else"},
+			Permissions: []string{"read"},
+		}}})
+
+		srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
+
+		if srv.canReadAnyOfType(identity, "service") {
+			t.Error("a zero-grant caller must not be told a service changed")
+		}
+	})
+}

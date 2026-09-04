@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -24,6 +25,34 @@ func TestPromptCatalogDrivesOnlyRealTools(t *testing.T) {
 			if _, ok := tiers[tool]; !ok {
 				t.Errorf("prompt %q drives %q, which is not in toolCatalog()",
 					def.prompt.Name, tool)
+			}
+		}
+	}
+}
+
+// TestPromptReadsCoverItsDrivenTools keeps the two declarations from drifting.
+// reads is the wider one by construction: a type a driven tool is gated on is
+// a type the sequence reads, so every toolACLSpec type must appear in reads.
+// The reverse does not hold — that gap is exactly why reads exists, since the
+// ungated cross-type tools name no type at all.
+func TestPromptReadsCoverItsDrivenTools(t *testing.T) {
+	for _, def := range promptCatalog() {
+		if len(def.reads) == 0 {
+			t.Errorf("prompt %q declares no reads; it would be filtered out for every "+
+				"ACL-restricted caller", def.prompt.Name)
+
+			continue
+		}
+
+		for _, tool := range def.drives {
+			spec, gated := toolACLSpecs[tool]
+			if !gated || spec.resourceType == "*" {
+				continue
+			}
+
+			if !slices.Contains(def.reads, spec.resourceType) {
+				t.Errorf("prompt %q drives %q, gated on %q, but does not declare that "+
+					"type in reads", def.prompt.Name, tool, spec.resourceType)
 			}
 		}
 	}

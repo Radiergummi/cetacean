@@ -430,13 +430,15 @@ func (discardingResponseWriter) WriteHeader(int)             {}
 // as a floor, since a caller who can read nothing has nothing to investigate.
 type toolVisibility struct {
 	allow    func(name string) bool
+	readable func(resourceType string) bool
 	noGrants bool
 }
 
-// toolVisibilityFor flattens an identity's grants into a per-tool predicate.
-// Shared by filterToolsForIdentity and filterPromptsForIdentity so the
-// grant-flattening rules — "write" implies "read", "*" wildcards, and the
-// always-visible ungated tools — are stated exactly once.
+// toolVisibilityFor turns an identity's grants into a per-tool predicate and a
+// per-type read predicate. The grant-flattening itself — "write" implies
+// "read", "*" wildcards, and a stack or service grant reaching the types it
+// covers — lives in acl.TypeGrants, beside the call-time rule it shadows; what
+// is stated here is only the mapping from tools to the keys they check.
 func (s *Server) toolVisibilityFor(ctx context.Context) toolVisibility {
 	if s.acl == nil {
 		return toolVisibility{}
@@ -447,77 +449,44 @@ func (s *Server) toolVisibilityFor(ctx context.Context) toolVisibility {
 		return toolVisibility{}
 	}
 
+	// One policy read answers both questions. Asking separately would let a
+	// hot reload land in between and answer each from a different policy.
+	access := s.acl.TypeGrants(identity)
+	if access.AllowAll() {
+		return toolVisibility{}
+	}
+
 	// Drop everything gated for a zero-grant identity; ungated tools (search
 	// and the cross-type reads) stay visible, since each ACL-filters its own
 	// results at call time.
-	noGrantsVisibility := toolVisibility{
-		noGrants: true,
+	if !access.HasAnyGrant() {
+		return toolVisibility{
+			noGrants: true,
+			allow: func(name string) bool {
+				_, gated := toolACLSpecs[name]
+				return !gated
+			},
+			readable: func(string) bool { return false },
+		}
+	}
+
+	return toolVisibility{
 		allow: func(name string) bool {
-			_, gated := toolACLSpecs[name]
-			return !gated
+			spec, gated := toolACLSpecs[name]
+			if !gated {
+				return true
+			}
+			if spec.resourceType == "*" {
+				// Tool acts across all types — visible if any grant exists.
+				return true
+			}
+
+			return access.Can(spec.permission, spec.resourceType)
+		},
+		readable: func(resourceType string) bool {
+			return access.Can("read", resourceType)
 		},
 	}
-
-	perms := s.acl.PermissionsFor(identity)
-	if perms == nil {
-		// PermissionsFor returns nil both for "no policy loaded" (allow all)
-		// and "policy loaded, identity matched zero grants" (restrict) —
-		// HasAnyGrant is the only way to tell those two apart.
-		if s.acl.HasAnyGrant(identity) {
-			return toolVisibility{}
-		}
-		return noGrantsVisibility
-	}
-
-	// Unreachable today — PermissionsFor returns nil, not an empty map, for a
-	// zero-grant identity. Kept so a change upstream fails closed.
-	if len(perms) == 0 {
-		return noGrantsVisibility
-	}
-
-	allowedByType := make(map[string]map[string]bool, 2) // permission → type → bool
-	for pattern, perms := range perms {
-		resType, _, ok := splitResourceType(pattern)
-		if !ok {
-			continue
-		}
-		for _, perm := range perms {
-			byType, ok := allowedByType[perm]
-			if !ok {
-				byType = make(map[string]bool)
-				allowedByType[perm] = byType
-			}
-			byType[resType] = true
-		}
-	}
-
-	// "write" implies "read" — mirror Evaluator.hasPermission.
-	if writers, ok := allowedByType["write"]; ok {
-		readers := allowedByType["read"]
-		if readers == nil {
-			readers = make(map[string]bool, len(writers))
-			allowedByType["read"] = readers
-		}
-		for t := range writers {
-			readers[t] = true
-		}
-	}
-
-	return toolVisibility{allow: func(name string) bool {
-		spec, gated := toolACLSpecs[name]
-		if !gated {
-			return true
-		}
-		if spec.resourceType == "*" {
-			// Tool acts across all types — visible if any grant exists.
-			return true
-		}
-		byType := allowedByType[spec.permission]
-		if byType == nil {
-			return false
-		}
-		return byType[spec.resourceType] || byType["*"]
-	}}
 }
 
 // filterToolsForIdentity is wired as a WithToolFilter for tools/list. Tier
@@ -561,22 +530,24 @@ func (s *Server) filterPromptsForIdentity(
 		return prompts
 	}
 
-	drives := make(map[string][]string, len(s.registeredPrompts))
+	defs := make(map[string]promptDef, len(s.registeredPrompts))
 	for _, def := range s.registeredPrompts {
-		drives[def.prompt.Name] = def.drives
+		defs[def.prompt.Name] = def
 	}
 
 	out := make([]mcplib.Prompt, 0, len(prompts))
 	for _, prompt := range prompts {
-		// Fail closed: a prompt we cannot resolve to a driven-tool list, or one
-		// that declares none, has nothing to check visibility against — and
-		// "every driven tool is visible" is vacuously true for an empty set.
-		driven, known := drives[prompt.Name]
-		if !known || len(driven) == 0 {
+		// Fail closed: a prompt we cannot resolve back to its declaration, or
+		// one declaring no tools or no read types, has nothing to check
+		// visibility against — and both checks are vacuously true for an empty
+		// set.
+		def, known := defs[prompt.Name]
+		if !known || len(def.drives) == 0 || len(def.reads) == 0 {
 			continue
 		}
 
-		if allToolsVisible(driven, visibility.allow) {
+		if allToolsVisible(def.drives, visibility.allow) &&
+			allTypesReadable(def.reads, visibility.readable) {
 			out = append(out, prompt)
 		}
 	}
@@ -588,6 +559,26 @@ func (s *Server) filterPromptsForIdentity(
 func allToolsVisible(tools []string, allow func(name string) bool) bool {
 	for _, name := range tools {
 		if !allow(name) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// allTypesReadable reports whether the identity holds a read grant on every
+// resource type the prompt walks. This is what the driven-tool check cannot
+// answer: a sequence built from ungated cross-type tools is callable by anyone
+// while returning nothing but empty ACL-filtered lists.
+func allTypesReadable(types []string, readable func(resourceType string) bool) bool {
+	// Defensive: every non-allow-all visibility sets readable, and the
+	// allow-all path returns before reaching here.
+	if readable == nil {
+		return false
+	}
+
+	for _, resourceType := range types {
+		if !readable(resourceType) {
 			return false
 		}
 	}
@@ -643,19 +634,4 @@ func filterToolsByACLSpec(tools []mcplib.Tool, allow func(name string) bool) []m
 		}
 	}
 	return out
-}
-
-// splitResourceType pulls the type prefix from a grant resource pattern such
-// as "service:web-*" → ("service", "web-*", true). Patterns like "*" or
-// "*:*" yield ("*", ..., true) so callers can treat them as wildcards.
-func splitResourceType(pattern string) (string, string, bool) {
-	if pattern == "*" {
-		return "*", "*", true
-	}
-	for i := 0; i < len(pattern); i++ {
-		if pattern[i] == ':' {
-			return pattern[:i], pattern[i+1:], true
-		}
-	}
-	return "", "", false
 }

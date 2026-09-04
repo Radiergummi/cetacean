@@ -218,6 +218,138 @@ func (e *Evaluator) grantMatchesResource(g Grant, resource string) bool {
 	return false
 }
 
+// impliedTypes names, for a grant's resource type, the other resource types a
+// grant on it also covers — the type-level shadow of grantMatchesResource's
+// resolver walk. A stack grant reaches every resource StackOf can place in a
+// stack; a service grant reaches that service's tasks. Nothing reaches nodes,
+// plugins or the swarm itself, which belong to no stack.
+//
+// Keep in step with grantMatchesResource. TestTypeGrantsAgreesWithCan is the
+// guard: it drives the real evaluator over a resolver holding one resource of
+// each type and fails if the two disagree in either direction.
+var impliedTypes = map[string][]string{
+	"stack":   {"service", "task", "config", "secret", "network", "volume"},
+	"service": {"task"},
+}
+
+// TypeAccess is the type-level projection of an identity's grants: which
+// resource *types* it may exercise a permission on, without naming a resource.
+//
+// It exists because grantMatchesResource needs a concrete resource name to
+// resolve stack membership and task parentage, while callers that filter a
+// catalog — a tool list, a notification subscription — have only a type. The
+// projection is deliberately an over-approximation in exactly the way a
+// pattern already is: "service:web-*" reports the service type whether or not
+// a matching service exists. It answers "could this identity ever read a
+// service?", never "may it read this one" — Can remains the only authority
+// for that, and every call site still checks it.
+type TypeAccess struct {
+	// byPermission is permission → resource type → granted. The "*" key means
+	// every type; Can resolves it, so callers never see it.
+	byPermission map[string]map[string]bool
+
+	// allowAll mirrors Can's allow-all: a nil evaluator or no policy loaded.
+	allowAll bool
+
+	// anyGrant reports whether the identity matched at least one grant. It is
+	// what separates "no policy, allow everything" from "policy loaded, this
+	// caller matched nothing" — a distinction PermissionsFor's nil return
+	// cannot express, and the reason this type carries both.
+	anyGrant bool
+}
+
+// AllowAll reports that no policy is in force, so every type is permitted.
+func (t TypeAccess) AllowAll() bool { return t.allowAll }
+
+// HasAnyGrant reports whether the identity matched at least one grant.
+func (t TypeAccess) HasAnyGrant() bool { return t.anyGrant }
+
+// Can reports whether the identity may exercise permission on some resource of
+// resourceType. Write implies read, as it does in hasPermission.
+func (t TypeAccess) Can(permission, resourceType string) bool {
+	if t.allowAll {
+		return true
+	}
+
+	if t.granted(permission, resourceType) {
+		return true
+	}
+
+	return permission == "read" && t.granted("write", resourceType)
+}
+
+func (t TypeAccess) granted(permission, resourceType string) bool {
+	byType := t.byPermission[permission]
+	if byType == nil {
+		return false
+	}
+
+	return byType[resourceType] || byType["*"]
+}
+
+// TypeGrants projects an identity's grants onto the types it can act on,
+// expanding them the way Can expands them at call time. The whole answer comes
+// from one policy read, so a hot reload cannot land between two questions and
+// answer each from a different policy.
+func (e *Evaluator) TypeGrants(id *auth.Identity) TypeAccess {
+	if e == nil {
+		return TypeAccess{allowAll: true, anyGrant: true}
+	}
+	p := e.policy.Load()
+	if p == nil {
+		return TypeAccess{allowAll: true, anyGrant: true}
+	}
+
+	grants := e.collectGrants(id, p)
+	if len(grants) == 0 {
+		return TypeAccess{}
+	}
+
+	access := TypeAccess{
+		byPermission: make(map[string]map[string]bool, 2),
+		anyGrant:     true,
+	}
+
+	mark := func(permission, resourceType string) {
+		byType, ok := access.byPermission[permission]
+		if !ok {
+			byType = make(map[string]bool)
+			access.byPermission[permission] = byType
+		}
+		byType[resourceType] = true
+	}
+
+	for _, g := range grants {
+		for _, expr := range g.Resources {
+			resType, ok := grantResourceType(expr)
+			if !ok {
+				continue
+			}
+			for _, permission := range g.Permissions {
+				mark(permission, resType)
+				for _, implied := range impliedTypes[resType] {
+					mark(permission, implied)
+				}
+			}
+		}
+	}
+
+	return access
+}
+
+// grantResourceType pulls the type prefix from a grant resource expression
+// such as "service:web-*" → "service". A bare "*" is the wildcard type, which
+// TypeAccess.Can resolves against every type.
+func grantResourceType(expr string) (string, bool) {
+	if expr == "*" {
+		return "*", true
+	}
+
+	resType, _, ok := splitResource(expr)
+
+	return resType, ok
+}
+
 func splitResource(resource string) (string, string, bool) {
 	for i := range resource {
 		if resource[i] == ':' {
