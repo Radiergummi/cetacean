@@ -24,6 +24,15 @@ type serviceMetrics struct {
 	memory float64 // bytes
 }
 
+// nanoCPUsFromPercent converts a serviceMetrics CPU reading — a percentage of
+// one core, the unit Prometheus returns — into the NanoCPUs every spec field,
+// Current and Suggested value in this package is denominated in. The mismatch
+// between the two units is what the recommendations got wrong; keeping the
+// conversion in one place is what keeps the next CPU hint from repeating it.
+func nanoCPUsFromPercent(percent float64) float64 {
+	return percent / 100 * 1e9
+}
+
 // roundCPU rounds a NanoCPU value to the nearest 0.05 cores, with a minimum of 0.05 cores.
 // Returns NanoCPUs.
 func roundCPU(nanoCPUs float64) float64 {
@@ -188,7 +197,7 @@ func evaluate(
 
 			switch {
 			case cpuRatio > cfg.AtLimit:
-				suggested := roundCPU(instant.cpu / 100 * 1e9 * cfg.HeadroomMultiplier)
+				suggested := roundCPU(nanoCPUsFromPercent(instant.cpu) * cfg.HeadroomMultiplier)
 				hints = append(hints, Recommendation{
 					Category:   CategoryAtLimit,
 					Severity:   SeverityCritical,
@@ -197,14 +206,14 @@ func evaluate(
 					TargetName: spec.name,
 					Resource:   "cpu",
 					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
-					Current:    instant.cpu / 100 * 1e9,
+					Current:    nanoCPUsFromPercent(instant.cpu),
 					Configured: float64(spec.cpuLimit),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
 
 			case cpuRatio > cfg.ApproachingLimit:
-				suggested := roundCPU(instant.cpu / 100 * 1e9 * cfg.HeadroomMultiplier)
+				suggested := roundCPU(nanoCPUsFromPercent(instant.cpu) * cfg.HeadroomMultiplier)
 				hints = append(hints, Recommendation{
 					Category:   CategoryApproachingLimit,
 					Severity:   SeverityWarning,
@@ -213,7 +222,7 @@ func evaluate(
 					TargetName: spec.name,
 					Resource:   "cpu",
 					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
-					Current:    instant.cpu / 100 * 1e9,
+					Current:    nanoCPUsFromPercent(instant.cpu),
 					Configured: float64(spec.cpuLimit),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
@@ -268,7 +277,7 @@ func evaluate(
 			cpuResRatio := p95.cpu / cpuReservationPct
 
 			if cpuResRatio < cfg.OverProvisioned {
-				suggested := roundCPU(p95.cpu / 100 * 1e9 * cfg.HeadroomMultiplier)
+				suggested := roundCPU(nanoCPUsFromPercent(p95.cpu) * cfg.HeadroomMultiplier)
 				hints = append(hints, Recommendation{
 					Category:   CategoryOverProvisioned,
 					Severity:   SeverityInfo,
@@ -281,7 +290,7 @@ func evaluate(
 						formatDuration(cfg.Lookback),
 						cpuResRatio*100,
 					),
-					Current:    p95.cpu / 100 * 1e9,
+					Current:    nanoCPUsFromPercent(p95.cpu),
 					Configured: float64(spec.cpuReservation),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,

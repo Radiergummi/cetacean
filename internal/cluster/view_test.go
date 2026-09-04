@@ -162,7 +162,7 @@ func TestServiceDigestExplainsWhyAServiceIsNotRunning(t *testing.T) {
 		},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil)
+	got := ServiceDigest(svc, tasks)
 
 	if got.Reason != "no suitable node (scheduling constraints not satisfied on 1 node)" {
 		t.Errorf("reason = %q, want Status.Err verbatim", got.Reason)
@@ -184,7 +184,7 @@ func TestServiceDigestOmitsReasonWhenHealthy(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil)
+	got := ServiceDigest(svc, tasks)
 
 	if got.Reason != "" {
 		t.Errorf("reason = %q, want empty for a converged service", got.Reason)

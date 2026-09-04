@@ -1079,23 +1079,17 @@ func (s *Server) checkServiceRead(ctx context.Context, id string) error {
 	return s.checkRead(ctx, "service", svc.Spec.Name)
 }
 
-// checkTaskRead routes a task's ACL check to its parent service, the read-side
-// twin of checkTaskWrite: a caller who may read a service may read the output
-// of the replicas that service ran. Falls back to `task:<id>` when the cache
-// cannot resolve the parent, matching the write path's last resort.
+// checkTaskRead enforces the read permission on a task, keyed as `task:<id>`.
+//
+// It does not walk to the parent service the way checkTaskWrite does, because
+// the evaluator already does: acl.grantMatchesResource resolves a task through
+// its parent service and that service's stack, so the task's own key is
+// strictly the broader check. It is also the key every other task read passes
+// — REST's HandleTaskLogs and the cetacean://tasks/{id} resource both do — and
+// walking to the parent here would leave a `task:*` grant able to read task
+// logs on every path except this tool.
 func (s *Server) checkTaskRead(ctx context.Context, id string) error {
-	if s.acl == nil {
-		return nil
-	}
-	task, ok := s.cache.GetTask(id)
-	if !ok {
-		return s.checkRead(ctx, "task", id)
-	}
-	svc, ok := s.cache.GetService(task.ServiceID)
-	if !ok || svc.Spec.Name == "" {
-		return s.checkRead(ctx, "task", id)
-	}
-	return s.checkRead(ctx, "service", svc.Spec.Name)
+	return s.checkRead(ctx, "task", id)
 }
 
 // --- tool handlers ---

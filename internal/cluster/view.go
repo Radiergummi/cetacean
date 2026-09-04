@@ -235,8 +235,8 @@ func RowsForVolumes(volumes []*volume.Volume) []Row {
 }
 
 // RowsForStacks builds the list view of stacks. A stack is derived from labels
-// rather than being a Docker primitive, so its Detail is the thing that makes
-// it worth listing: how many services it holds.
+// rather than being a Docker primitive, so the count of services it holds is
+// what makes it worth listing, and that is its Desired.
 func RowsForStacks(stacks []cache.Stack) []Row {
 	rows := make([]Row, 0, len(stacks))
 
@@ -245,7 +245,6 @@ func RowsForStacks(stacks []cache.Stack) []Row {
 			ID:      st.Name,
 			Name:    st.Name,
 			Type:    "stack",
-			Stack:   st.Name,
 			Desired: len(st.Services),
 		})
 	}
@@ -311,12 +310,7 @@ type TaskFailure struct {
 const maxRecentFailures = 5
 
 // ServiceDigest builds the detail view of one service.
-func ServiceDigest(svc swarm.Service, tasks []swarm.Task, nodes []swarm.Node) Digest {
-	nodeNames := make(map[string]string, len(nodes))
-	for _, n := range nodes {
-		nodeNames[n.ID] = n.Description.Hostname
-	}
-
+func ServiceDigest(svc swarm.Service, tasks []swarm.Task) Digest {
 	var (
 		running  int
 		failures []TaskFailure
@@ -336,8 +330,7 @@ func ServiceDigest(svc swarm.Service, tasks []swarm.Task, nodes []swarm.Node) Di
 		// A task the orchestrator has already replaced explains history, not
 		// the current state, and including it would attribute an old failure
 		// to a service that has since recovered.
-		if task.DesiredState == swarm.TaskStateShutdown ||
-			task.DesiredState == swarm.TaskStateRemove {
+		if !taskIsLive(task) {
 			continue
 		}
 
