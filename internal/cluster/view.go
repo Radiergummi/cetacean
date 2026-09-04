@@ -142,7 +142,6 @@ func RowsForTasks(tasks []swarm.Task, services []swarm.Service, nodes []swarm.No
 			ID:     task.ID,
 			Name:   name,
 			Type:   "task",
-			Stack:  "",
 			State:  string(task.Status.State),
 			Detail: nodeNames[task.NodeID],
 		})
