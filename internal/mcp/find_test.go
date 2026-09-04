@@ -125,6 +125,164 @@ func TestFindResultMatchesItsOutputSchema(t *testing.T) {
 	}
 }
 
+// findResultItemSchemaKeys reads find's outputSchema down to the element
+// schema mcp-go generates for each entry in `items` — required keys, and the
+// full set of keys the element declares (the schema also sets
+// additionalProperties: false, so any key outside this set is a violation
+// too). Reading the schema itself, rather than hardcoding cluster.Row's field
+// names, means a caller of this helper tracks the type if Row ever changes.
+func findResultItemSchemaKeys(
+	t *testing.T,
+	td toolDef,
+) (required []string, allowed map[string]bool) {
+	t.Helper()
+
+	raw, err := json.Marshal(td.tool.OutputSchema)
+	if err != nil {
+		t.Fatalf("marshal schema: %v", err)
+	}
+
+	var parsed struct {
+		Properties struct {
+			Items struct {
+				Items struct {
+					Properties map[string]any `json:"properties"`
+					Required   []string       `json:"required"`
+				} `json:"items"`
+			} `json:"items"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+
+	element := parsed.Properties.Items.Items
+
+	allowed = make(map[string]bool, len(element.Properties))
+	for key := range element.Properties {
+		allowed[key] = true
+	}
+
+	return element.Required, allowed
+}
+
+// TestFindCompactItemsMatchTheirElementSchema is the check
+// TestFindResultMatchesItsOutputSchema does not do: that check only compares
+// the envelope's own top-level required keys (type/items/total) against the
+// payload, which findRawResult — a completely different shape — also
+// satisfies. This drives the real, output-schema-validating dispatch (the
+// same one TestCuratedToolOutputsValidate uses) and checks each returned Row
+// against the *element* schema advertised for `items`: every key the element
+// schema requires must be present, and no key outside what the element schema
+// declares may appear (mirroring its additionalProperties: false).
+func TestFindCompactItemsMatchTheirElementSchema(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsReadOnly)
+
+	td, ok := srv.findTool("find")
+	if !ok {
+		t.Fatal("find not registered")
+	}
+
+	required, allowed := findResultItemSchemaKeys(t, td)
+
+	_, env := mcpModern(t, srv.Handler(), 1, "tools/call",
+		`{"name":"find","arguments":{"type":"services"}}`)
+	if env.Error != nil {
+		t.Fatalf("tools/call error: %+v", env.Error)
+	}
+
+	var result struct {
+		IsError           bool            `json:"isError"`
+		StructuredContent json.RawMessage `json:"structuredContent"`
+	}
+	if err := json.Unmarshal(env.Result, &result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("find returned a tool error: %s", env.Result)
+	}
+
+	var envelope struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(result.StructuredContent, &envelope); err != nil {
+		t.Fatalf("decode structured content: %v", err)
+	}
+	if len(envelope.Items) == 0 {
+		t.Fatal("nothing to check — the seeded service did not come back")
+	}
+
+	for _, item := range envelope.Items {
+		for _, key := range required {
+			if _, present := item[key]; !present {
+				t.Errorf("item %+v missing required key %q", item, key)
+			}
+		}
+
+		for key := range item {
+			if !allowed[key] {
+				t.Errorf("item %+v carries key %q the element schema does not declare", item, key)
+			}
+		}
+	}
+}
+
+// TestFindRawModeDoesNotClaimStructuredContent guards the bug this whole
+// check exists for: raw hands back the untouched resource record, which is
+// not the compact Row shape find's outputSchema describes, and the server
+// validates structuredContent against that schema
+// (mcpserver.WithOutputSchemaValidation, server.go). Before markTextOnlyResult
+// was wired into the raw branch, every raw call failed here with "output
+// schema validation failed" over the real transport — invisible to a test
+// that calls td.handler directly, since that bypasses validation entirely.
+func TestFindRawModeDoesNotClaimStructuredContent(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsReadOnly)
+
+	_, env := mcpModern(t, srv.Handler(), 1, "tools/call",
+		`{"name":"find","arguments":{"type":"services","raw":true}}`)
+	if env.Error != nil {
+		t.Fatalf("tools/call error: %+v", env.Error)
+	}
+
+	var result struct {
+		IsError           bool            `json:"isError"`
+		StructuredContent json.RawMessage `json:"structuredContent"`
+		Content           []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(env.Result, &result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatalf("raw find must not fail output-schema validation: %s", env.Result)
+	}
+
+	if len(result.StructuredContent) != 0 && string(result.StructuredContent) != "null" {
+		t.Errorf(
+			"raw find must not present structuredContent — it does not conform to find's schema, got %s",
+			result.StructuredContent,
+		)
+	}
+
+	if len(result.Content) == 0 || !strings.Contains(result.Content[0].Text, "web") {
+		t.Errorf("raw find's untouched record missing from its text content: %s", env.Result)
+	}
+}
+
 // seedListables puts one of each listable resource type in the cache.
 func seedListables(t *testing.T) *cache.Cache {
 	t.Helper()

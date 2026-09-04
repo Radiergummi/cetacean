@@ -198,6 +198,8 @@ func (s *Server) registerTools() {
 		s.mcpServer.AddTool(
 			td.tool,
 			func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+				ctx, textOnly := withTextOnlyResultSignal(ctx)
+
 				text, err := handler(ctx, req)
 				if err != nil {
 					// On a plain call the failure belongs in the result, so
@@ -215,6 +217,17 @@ func (s *Server) registerTools() {
 
 					return mcplib.NewToolResultError(err.Error()), nil
 				}
+
+				// A handler that called markTextOnlyResult built a result it
+				// knows does not conform to the tool's declared outputSchema
+				// (find's raw mode is the one caller) — presenting it as
+				// structuredContent anyway would fail
+				// WithOutputSchemaValidation's check on the very call the
+				// handler asked for something other than the compact shape.
+				if *textOnly {
+					return mcplib.NewToolResultText(text), nil
+				}
+
 				return structuredToolResult(text), nil
 			},
 		)
@@ -1565,6 +1578,35 @@ func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
 	}
 
 	return out
+}
+
+// textOnlyResultKey is the context key backing withTextOnlyResultSignal /
+// markTextOnlyResult.
+type textOnlyResultKey struct{}
+
+// withTextOnlyResultSignal installs the opt-out flag registerTools reads once
+// a handler returns. A handler that needs to set it is typically several
+// calls deep in its own call graph (find.go's raw branch, reached through
+// toolFind), so the flag travels on ctx rather than becoming a second return
+// value every other handler would have to thread through unused.
+func withTextOnlyResultSignal(ctx context.Context) (context.Context, *bool) {
+	flag := new(bool)
+	return context.WithValue(ctx, textOnlyResultKey{}, flag), flag
+}
+
+// markTextOnlyResult tells registerTools this call's result must be returned
+// as text only, never as structuredContent, because — despite marshalling to
+// a JSON object — it does not conform to the tool's declared outputSchema.
+// find's raw mode is the one caller: raw hands back whatever shape the
+// underlying resource has, which is not the compact Row shape find's schema
+// describes, and structuredContent must conform to it under
+// WithOutputSchemaValidation. A no-op if ctx was not set up by registerTools
+// (e.g. a handler invoked directly, as the tool tests do), since there is
+// nothing to signal.
+func markTextOnlyResult(ctx context.Context) {
+	if flag, ok := ctx.Value(textOnlyResultKey{}).(*bool); ok {
+		*flag = true
+	}
 }
 
 // structuredToolResult wraps a handler's JSON text into a tool result that

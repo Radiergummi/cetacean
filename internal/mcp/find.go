@@ -69,9 +69,13 @@ type findResult struct {
 // findRawResult is find's `raw: true` envelope: the untouched resource records
 // (the same shape lookupResource already returns for widgets and resources)
 // rather than the compact Row. It exists for a caller that needs a field Row
-// does not carry, and is not advertised as an output schema — the tool always
-// advertises findResult, because the compact shape is what a well-behaved
-// caller gets by default.
+// does not carry, and is never advertised as an output schema — the tool
+// always advertises findResult, because the compact shape is what a
+// well-behaved caller gets by default. That leaves this result deliberately
+// non-conforming to the schema the client was told to expect, so toolFind
+// calls markTextOnlyResult before returning it, and registerTools skips the
+// structuredContent wrapper rather than shipping a payload that would fail
+// the server's own output-schema validation.
 type findRawResult struct {
 	Type  string `json:"type"`
 	Items []any  `json:"items"`
@@ -113,6 +117,12 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 
 		total := len(items)
 		items = paginate(items, req)
+
+		// findRawResult is not the shape find's outputSchema describes (that
+		// is findResult, the compact Row list) — presenting it as
+		// structuredContent would fail the server's output-schema
+		// validation on the very call that asked for the untouched record.
+		markTextOnlyResult(ctx)
 
 		return marshalResult(findRawResult{Type: resourceType, Items: items, Total: total})
 	}
