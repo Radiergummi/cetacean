@@ -224,10 +224,13 @@ func (e *Evaluator) grantMatchesResource(g Grant, resource string) bool {
 // stack; a service grant reaches that service's tasks. Nothing reaches nodes,
 // plugins or the swarm itself, which belong to no stack.
 //
-// cache.StackOf's switch is the authority on the stack list; keep the two in
-// step. TestTypeGrantsAgreesWithCan guards the half this package can see: it
-// drives the real evaluator over a resolver holding one resource of each type
-// and fails if the two rules disagree in either direction.
+// cache.StackOf's switch is the authority on the stack list. Two tests hold
+// the rules together: TestTypeGrantsAgreesWithCan drives the real evaluator
+// over a resolver holding one resource of each type and fails if this
+// projection and Can disagree in either direction, and
+// TestImpliedStackTypesMatchTheResolver drives the real Cache, so adding a
+// case to StackOf without adding it here fails rather than silently hiding
+// the new type from every listing.
 //
 // The expansion is unconditional where grantMatchesResource's is not — that
 // walk only happens when a resolver is attached. With no resolver, TypeGrants
