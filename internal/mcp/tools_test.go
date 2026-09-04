@@ -415,17 +415,37 @@ func TestToolCatalogTierFilter(t *testing.T) {
 }
 
 func TestToolScaleService(t *testing.T) {
+	// The cache holds the service as it was *before* the write: it is filled
+	// asynchronously by the event watcher, so this is what it really contains
+	// at the moment a mutation returns.
+	stale := uint64(2)
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
 		ID:   "svc1",
-		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+		Meta: swarm.Meta{Version: swarm.Version{Index: 10}},
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &stale}},
+		},
 	})
 
 	var calledWith uint64
 	wc := &fakeWriteClient{
 		scaleServiceFn: func(_ context.Context, _ string, replicas uint64) (swarm.Service, error) {
 			calledWith = replicas
-			return swarm.Service{ID: "svc1"}, nil
+			// docker.Client ends every converging write with a fresh
+			// InspectService, so the handler receives the post-mutation
+			// service. The stub models that.
+			return swarm.Service{
+				ID:   "svc1",
+				Meta: swarm.Meta{Version: swarm.Version{Index: 11}},
+				Spec: swarm.ServiceSpec{
+					Annotations: swarm.Annotations{Name: "web"},
+					Mode: swarm.ServiceMode{
+						Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+					},
+				},
+			}, nil
 		},
 	}
 	srv := newToolTestServer(t, c, wc, config.OpsOperational)
@@ -463,6 +483,23 @@ func TestToolScaleService(t *testing.T) {
 
 	if got.State == "" {
 		t.Error("state should be derived, so an agent knows whether the change has landed")
+	}
+
+	// The result must describe the write, not the cache. Reading the service
+	// back from the cache reported the state before the mutation — an agent
+	// that scaled 2 to 5 was told 2, which reads as "the call did nothing",
+	// and the stale Version would collide on any follow-up write.
+	switch {
+	case got.Replicas == nil:
+		t.Error("replicas is nil — the result must reflect the write, not the cache")
+	case *got.Replicas != 5:
+		t.Errorf("replicas = %d, want 5 — the result must reflect the write, not the cache",
+			*got.Replicas)
+	}
+
+	if got.Version != 11 {
+		t.Errorf("version = %d, want 11 — a stale version breaks the next write",
+			got.Version)
 	}
 }
 

@@ -1492,10 +1492,18 @@ type serviceMutationResult struct {
 // cache is the fresher of the two, and taking spec, running count and state
 // from one source keeps them mutually consistent.
 func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
-	if cached, ok := s.cache.GetService(svc.ID); ok {
-		svc = cached
-	}
-
+	// svc is Docker's own post-mutation view: every caller passes the value
+	// its write returned, and docker.Client produces that with a fresh
+	// InspectService. Spec and version therefore come from the write itself.
+	//
+	// Only the running count is read from the cache, because Docker's service
+	// object does not carry one. Reading the whole service from the cache —
+	// which this used to do, for the consistency of describing one moment —
+	// reported the state *before* the write instead: the cache is filled
+	// asynchronously by the event watcher, so it still holds the previous
+	// version when this runs. A caller that scaled 2 to 3 was told 3 tasks
+	// were desired only on its *next* call, and the stale Version it got back
+	// would collide on any follow-up write.
 	running := s.cache.RunningTaskCount(svc.ID)
 
 	out := serviceMutationResult{

@@ -25,10 +25,14 @@ type SearchResult struct {
 // capped at `limit` per type. Counts is the pre-cap total of matches per type
 // — clients use Counts to render "X matches, showing N" affordances. Total is
 // the sum of Counts.
+// The JSON names match the REST search response (`results`/`counts`/`total`)
+// so the same search reads identically over both transports. Without tags
+// these marshalled as the Go field names, and an MCP client saw `Hits` where
+// an HTTP client saw `results`.
 type SearchResults struct {
-	Hits   map[string][]SearchResult
-	Counts map[string]int
-	Total  int
+	Hits   map[string][]SearchResult `json:"results"`
+	Counts map[string]int            `json:"counts"`
+	Total  int                       `json:"total"`
 }
 
 // Search returns matches across all swarm resource types.
