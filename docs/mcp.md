@@ -254,7 +254,7 @@ rediscover which order of calls answers a question.
 | Prompt | Tier | Argument | What it does |
 |---|---|---|---|
 | `diagnose_service` | 0 | `service` | Walks tasks, the failing task's logs, metrics and recent changes to find why a service is unhealthy |
-| `explain_unschedulable` | 0 | `service` | Separates the four causes of an unplaced task: placement constraints, node labels, node availability, reservations |
+| `explain_unschedulable` | 0 | `service` | Separates the causes of an unplaced task: placement constraints, node labels and platform, node availability and state, replica caps, reservations |
 | `review_capacity` | 0 | — | Joins node capacity, reservations, real usage and sizing findings to say where the cluster is constrained |
 | `roll_back_service` | 1 | `service` | Confirms a service is actually degraded, then rolls it back and waits for the replicas to run |
 | `right_size_service` | 2 | `service` | Checks a sizing recommendation against measured use, then corrects the reservations |

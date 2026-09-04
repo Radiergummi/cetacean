@@ -59,8 +59,9 @@ func promptCatalog() []promptDef {
 			prompt: mcplib.NewPrompt("explain_unschedulable",
 				mcplib.WithPromptTitle("Explain why a service will not schedule"),
 				mcplib.WithPromptDescription(
-					"Separate the four causes of an unplaced task: placement constraints, "+
-						"node labels, node availability, and resource reservations. Reads only.",
+					"Separate the causes of an unplaced task: placement constraints, node "+
+						"labels and platform, node availability and state, per-node replica "+
+						"caps, and resource reservations. Reads only.",
 				),
 				mcplib.WithArgument("service",
 					mcplib.ArgumentTitle("Service"),
@@ -230,7 +231,12 @@ func (s *Server) toolTiers() map[string]config.OperationsLevel {
 // mis-tiering the prompt loudly — it drops out of every deployment below the
 // top tier — instead of under-tiering it into visibility it should not have.
 // TestPromptCatalogDrivesOnlyRealTools is the guard that catches a typo at
-// authoring time, before it ever reaches this fallback.
+// authoring time, before it ever reaches this fallback. That fallback is
+// asymmetric with the ACL side: allToolsVisible treats a name absent from
+// toolACLSpecs as visible, correctly, for genuinely ungated tools like
+// search — so a typo'd drives entry still passes filterPromptsForIdentity's
+// check, and the prompt is offered as a dead end rather than hidden. Tier
+// derivation can fail closed; the visibility check cannot, by design.
 func promptTier(def promptDef, tiers map[string]config.OperationsLevel) config.OperationsLevel {
 	tier := config.OpsReadOnly
 	for _, name := range def.drives {

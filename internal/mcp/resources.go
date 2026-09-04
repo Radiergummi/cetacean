@@ -44,7 +44,7 @@ var (
 			uri:         "cetacean://history",
 			name:        "history",
 			title:       "Recent change history",
-			description: "Ring buffer (up to 10,000 entries) of recent create/update/delete events across every cluster resource type, newest first. Useful for incident triage and 'what changed' questions.",
+			description: "The most recent create/update/delete events (currently up to 100) across every cluster resource type, newest first. Useful for incident triage and 'what changed' questions.",
 		},
 	}
 
