@@ -2,10 +2,13 @@ package cluster
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -165,7 +168,7 @@ func TestServiceDigestExplainsWhyAServiceIsNotRunning(t *testing.T) {
 		},
 	}}
 
-	got := ServiceDigest(svc, tasks)
+	got := ServiceDigest(svc, tasks, nil)
 
 	if got.Reason != "no suitable node (scheduling constraints not satisfied on 1 node)" {
 		t.Errorf("reason = %q, want Status.Err verbatim", got.Reason)
@@ -187,7 +190,7 @@ func TestServiceDigestOmitsReasonWhenHealthy(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks)
+	got := ServiceDigest(svc, tasks, nil)
 
 	if got.Reason != "" {
 		t.Errorf("reason = %q, want empty for a converged service", got.Reason)
@@ -204,7 +207,7 @@ func TestServiceDigestMarshalsEmptySlicesNotNull(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks)
+	got := ServiceDigest(svc, tasks, nil)
 
 	data, err := json.Marshal(got)
 	if err != nil {
@@ -233,7 +236,7 @@ func TestServiceDigestIgnoresNormalStartup(t *testing.T) {
 			Status: swarm.TaskStatus{State: swarm.TaskStatePreparing, Message: "preparing"}},
 	}
 
-	got := ServiceDigest(svc, tasks)
+	got := ServiceDigest(svc, tasks, nil)
 
 	if len(got.RecentFailures) != 0 {
 		t.Errorf(
@@ -266,7 +269,7 @@ func TestServiceDigestSinceIsTheOldestFailure(t *testing.T) {
 			}},
 	}
 
-	got := ServiceDigest(svc, tasks)
+	got := ServiceDigest(svc, tasks, nil)
 
 	want := older.UTC().Format(time.RFC3339)
 	if got.Since != want {
@@ -290,7 +293,7 @@ func TestServiceDigestReasonFallsBackToUpdateStatus(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks)
+	got := ServiceDigest(svc, tasks, nil)
 
 	if got.State != "updating" {
 		t.Fatalf("state = %q, want updating", got.State)
@@ -314,9 +317,229 @@ func TestServiceDigestFailuresTieBreakOnTaskID(t *testing.T) {
 			Status: swarm.TaskStatus{State: swarm.TaskStateRejected, Timestamp: same, Err: "a"}},
 	}
 
-	got := ServiceDigest(svc, tasks)
+	got := ServiceDigest(svc, tasks, nil)
 
 	if len(got.RecentFailures) != 2 || got.RecentFailures[0].TaskID != "t1" {
 		t.Errorf("order = %+v, want t1 before t2 on a timestamp tie", got.RecentFailures)
+	}
+}
+
+// Units are named because the alternative shipped a bug: a recommendation once
+// reported "configured 25, suggested 50000000" for the same quantity. A field
+// name that carries its unit cannot be misread.
+func TestServiceDetailsNameTheirUnits(t *testing.T) {
+	svc := replicated("api", 2)
+	svc.Spec.TaskTemplate.Resources = &swarm.ResourceRequirements{
+		Limits:       &swarm.Limit{NanoCPUs: 2e9, MemoryBytes: 1 << 30},
+		Reservations: &swarm.Resources{NanoCPUs: 5e8, MemoryBytes: 256 << 20},
+	}
+	svc.Spec.TaskTemplate.ContainerSpec.Healthcheck = &container.HealthConfig{
+		Test:     []string{"CMD", "true"},
+		Interval: 10 * time.Second,
+	}
+	svc.Spec.TaskTemplate.ContainerSpec.Env = []string{"DB_PASSWORD=hunter2", "PORT=8080"}
+
+	got := ServiceDetails(svc)
+
+	if got["cpuLimitCores"] != 2.0 {
+		t.Errorf("cpuLimitCores = %v, want 2", got["cpuLimitCores"])
+	}
+	if got["memoryLimitBytes"] != int64(1<<30) {
+		t.Errorf("memoryLimitBytes = %v, want 1073741824", got["memoryLimitBytes"])
+	}
+	if got["healthcheckInterval"] != "10s" {
+		t.Errorf("healthcheckInterval = %v, want \"10s\"", got["healthcheckInterval"])
+	}
+
+	// Env names only: env is where credentials live.
+	names, ok := got["envNames"].([]string)
+	if !ok {
+		t.Fatalf("envNames = %T, want []string", got["envNames"])
+	}
+	if !slices.Equal(names, []string{"DB_PASSWORD", "PORT"}) {
+		t.Errorf("envNames = %v, want the names sorted", names)
+	}
+
+	for key, value := range got {
+		if str, isStr := value.(string); isStr && strings.Contains(str, "hunter2") {
+			t.Fatalf("details[%q] leaked an env value", key)
+		}
+	}
+}
+
+// A network attachment carries only an ID; the related entry must resolve it
+// to the name a caller can act on, following the ID-and-Name-always-present
+// rule Row and Digest both hold to.
+func TestServiceDigestRelatedResolvesNetworkName(t *testing.T) {
+	svc := replicated("api", 1)
+	svc.Spec.TaskTemplate.Networks = []swarm.NetworkAttachmentConfig{
+		{Target: "net1"},
+	}
+
+	tasks := []swarm.Task{{
+		ID: "t1", ServiceID: "svc-api", DesiredState: swarm.TaskStateRunning,
+		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
+	}}
+
+	got := ServiceDigest(svc, tasks, []network.Summary{overlay("net1", "demo_overlay")})
+
+	if len(got.Related) != 1 {
+		t.Fatalf("related = %d, want 1", len(got.Related))
+	}
+	if got.Related[0].Name != "demo_overlay" {
+		t.Errorf("related[0].name = %q, want the network's name", got.Related[0].Name)
+	}
+	if got.Related[0].ID != "net1" {
+		t.Errorf("related[0].id = %q, want net1", got.Related[0].ID)
+	}
+	if got.Related[0].Type != "network" || got.Related[0].Relation != "attached-to" {
+		t.Errorf("related[0] = %+v, want type network / relation attached-to", got.Related[0])
+	}
+}
+
+// A caller may have been handed a networks slice already filtered by ACL, in
+// which case falling back to the ID beats emitting an entry with an empty
+// name.
+func TestServiceDigestRelatedFallsBackToIDWhenNetworkUnknown(t *testing.T) {
+	svc := replicated("api", 1)
+	svc.Spec.TaskTemplate.Networks = []swarm.NetworkAttachmentConfig{
+		{Target: "net1"},
+	}
+
+	tasks := []swarm.Task{{
+		ID: "t1", ServiceID: "svc-api", DesiredState: swarm.TaskStateRunning,
+		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
+	}}
+
+	got := ServiceDigest(svc, tasks, nil)
+
+	if len(got.Related) != 1 {
+		t.Fatalf("related = %d, want 1", len(got.Related))
+	}
+	if got.Related[0].Name != "net1" {
+		t.Errorf("related[0].name = %q, want the ID as a fallback", got.Related[0].Name)
+	}
+}
+
+// A bind mount names a host path, not a Cetacean resource — there is nothing
+// to traverse to, so only the volume mount earns a related entry.
+func TestServiceDigestRelatedOnlyIncludesVolumeMounts(t *testing.T) {
+	svc := replicated("api", 1)
+	svc.Spec.TaskTemplate.ContainerSpec.Mounts = []mount.Mount{
+		{Type: mount.TypeVolume, Source: "data", Target: "/data"},
+		{Type: mount.TypeBind, Source: "/host/path", Target: "/container/path"},
+	}
+
+	tasks := []swarm.Task{{
+		ID: "t1", ServiceID: "svc-api", DesiredState: swarm.TaskStateRunning,
+		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
+	}}
+
+	got := ServiceDigest(svc, tasks, nil)
+
+	if len(got.Related) != 1 {
+		t.Fatalf("related = %d, want 1 (the volume, not the bind mount)", len(got.Related))
+	}
+	if got.Related[0].Type != "volume" || got.Related[0].Relation != "mounts" {
+		t.Errorf("related[0] = %+v, want type volume / relation mounts", got.Related[0])
+	}
+	if got.Related[0].ID != "data" || got.Related[0].Name != "data" {
+		t.Errorf(
+			"related[0] id/name = %q/%q, want both to be the volume name",
+			got.Related[0].ID,
+			got.Related[0].Name,
+		)
+	}
+}
+
+// Ports are the spec's own CamelCase field names read verbatim once already;
+// the whole point of this representation is that a caller never has to know
+// that PublishedPort means "published".
+func TestServiceDetailsNamesPortFields(t *testing.T) {
+	svc := replicated("api", 1)
+	svc.Spec.EndpointSpec = &swarm.EndpointSpec{
+		Ports: []swarm.PortConfig{
+			{
+				PublishedPort: 8080,
+				TargetPort:    80,
+				Protocol:      swarm.PortConfigProtocolTCP,
+				PublishMode:   swarm.PortConfigPublishModeIngress,
+			},
+		},
+	}
+
+	got := ServiceDetails(svc)
+
+	data, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	if strings.Contains(string(data), "PublishedPort") {
+		t.Fatalf("json = %s, want no raw Docker field names", data)
+	}
+
+	ports, ok := got["ports"].([]map[string]any)
+	if !ok {
+		t.Fatalf("ports = %T, want []map[string]any", got["ports"])
+	}
+	if len(ports) != 1 {
+		t.Fatalf("ports = %d, want 1", len(ports))
+	}
+
+	port := ports[0]
+	if port["published"] != uint32(8080) {
+		t.Errorf("published = %v, want 8080", port["published"])
+	}
+	if port["target"] != uint32(80) {
+		t.Errorf("target = %v, want 80", port["target"])
+	}
+	if port["protocol"] != string(swarm.PortConfigProtocolTCP) {
+		t.Errorf("protocol = %v, want tcp", port["protocol"])
+	}
+	if port["mode"] != string(swarm.PortConfigPublishModeIngress) {
+		t.Errorf("mode = %v, want ingress", port["mode"])
+	}
+}
+
+// Delay and Monitor are time.Duration, i.e. unlabelled nanosecond integers in
+// Docker's own type. The global constraint is explicit: every numeric field
+// names its unit or is a duration string.
+func TestServiceDetailsUpdatePolicyUsesDurationStrings(t *testing.T) {
+	svc := replicated("api", 1)
+	svc.Spec.UpdateConfig = &swarm.UpdateConfig{
+		Parallelism: 2,
+		Delay:       10 * time.Second,
+	}
+
+	got := ServiceDetails(svc)
+
+	policy, ok := got["updatePolicy"].(map[string]any)
+	if !ok {
+		t.Fatalf("updatePolicy = %T, want map[string]any", got["updatePolicy"])
+	}
+	if policy["parallelism"] != uint64(2) {
+		t.Errorf("parallelism = %v, want 2", policy["parallelism"])
+	}
+	if policy["delay"] != "10s" {
+		t.Errorf("delay = %v, want \"10s\", not a nanosecond count", policy["delay"])
+	}
+}
+
+// A service with none of these configured must omit the keys entirely rather
+// than emit empty maps a caller has to check the length of.
+func TestServiceDetailsOmitsAbsentPolicyAndPorts(t *testing.T) {
+	svc := replicated("api", 1)
+
+	got := ServiceDetails(svc)
+
+	if _, ok := got["ports"]; ok {
+		t.Errorf("ports present = %v, want omitted", got["ports"])
+	}
+	if _, ok := got["updatePolicy"]; ok {
+		t.Errorf("updatePolicy present = %v, want omitted", got["updatePolicy"])
+	}
+	if _, ok := got["rollbackPolicy"]; ok {
+		t.Errorf("rollbackPolicy present = %v, want omitted", got["rollbackPolicy"])
 	}
 }

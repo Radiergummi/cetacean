@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -316,8 +317,11 @@ type TaskFailure struct {
 // loop can hold dozens of failed records and they all say the same thing.
 const maxRecentFailures = 5
 
-// ServiceDigest builds the detail view of one service.
-func ServiceDigest(svc swarm.Service, tasks []swarm.Task) Digest {
+// ServiceDigest builds the detail view of one service. networks resolves the
+// names of its network attachments, which carry only an ID; the caller may
+// have already filtered the slice by ACL, so a Target with no match falls
+// back to the ID rather than leaving Related.Name empty.
+func ServiceDigest(svc swarm.Service, tasks []swarm.Task, networks []network.Summary) Digest {
 	var (
 		running    int
 		oldestFail time.Time
@@ -387,7 +391,8 @@ func ServiceDigest(svc swarm.Service, tasks []swarm.Task) Digest {
 		Name:           svc.Spec.Name,
 		Type:           "service",
 		State:          state,
-		Related:        []Related{},
+		Details:        ServiceDetails(svc),
+		Related:        serviceRelated(svc, networks),
 		RecentFailures: failures,
 	}
 
@@ -422,4 +427,225 @@ func taskReason(task swarm.Task) string {
 	}
 
 	return task.Status.Message
+}
+
+// serviceRelated builds the cross-references for a service's Digest: the
+// networks it attaches to and the volumes it mounts. A bind or tmpfs mount
+// names a host path rather than a Cetacean resource, so it has nothing to
+// traverse to and is reported in Details instead.
+func serviceRelated(svc swarm.Service, networks []network.Summary) []Related {
+	networkNames := make(map[string]string, len(networks))
+	for _, net := range networks {
+		networkNames[net.ID] = net.Name
+	}
+
+	attachments := svc.Spec.TaskTemplate.Networks
+	related := make([]Related, 0, len(attachments))
+
+	for _, attachment := range attachments {
+		name := networkNames[attachment.Target]
+		if name == "" {
+			// The caller may have filtered the networks slice by ACL; falling
+			// back to the ID keeps Name non-empty rather than breaking the
+			// rule every Row and Digest relies on.
+			name = attachment.Target
+		}
+
+		related = append(related, Related{
+			ID:       attachment.Target,
+			Name:     name,
+			Type:     "network",
+			Relation: "attached-to",
+		})
+	}
+
+	if spec := svc.Spec.TaskTemplate.ContainerSpec; spec != nil {
+		for _, m := range spec.Mounts {
+			if m.Type != mount.TypeVolume {
+				continue
+			}
+
+			related = append(related, Related{
+				ID:       m.Source,
+				Name:     m.Source,
+				Type:     "volume",
+				Relation: "mounts",
+			})
+		}
+	}
+
+	slices.SortFunc(related, func(a, b Related) int {
+		if c := strings.Compare(a.Type, b.Type); c != 0 {
+			return c
+		}
+
+		if c := strings.Compare(a.Name, b.Name); c != 0 {
+			return c
+		}
+
+		return strings.Compare(a.ID, b.ID)
+	})
+
+	return related
+}
+
+// ServiceDetails is the type-specific body of a service's Digest.
+//
+// Every numeric field names its unit. Docker's own types express CPU in
+// NanoCPUs and durations in nanoseconds, which read as unlabelled large
+// integers and have already caused one shipped bug; a caller should not have to
+// know that 10000000000 is ten seconds.
+func ServiceDetails(svc swarm.Service) map[string]any {
+	details := map[string]any{
+		"mode":     serviceMode(svc),
+		"replicas": ReplicaCount(svc),
+	}
+
+	spec := svc.Spec.TaskTemplate.ContainerSpec
+	if spec != nil {
+		details["image"] = StripImageDigest(spec.Image)
+
+		if len(spec.Args) > 0 {
+			details["command"] = spec.Args
+		}
+
+		names := make([]string, 0, len(spec.Env))
+		for _, entry := range spec.Env {
+			name, _, _ := strings.Cut(entry, "=")
+			names = append(names, name)
+		}
+
+		slices.Sort(names)
+		details["envNames"] = names
+
+		if hc := spec.Healthcheck; hc != nil {
+			details["healthcheck"] = true
+
+			if hc.Interval > 0 {
+				details["healthcheckInterval"] = hc.Interval.String()
+			}
+		} else {
+			details["healthcheck"] = false
+		}
+
+		var bindMounts []map[string]any
+
+		for _, m := range spec.Mounts {
+			if m.Type == mount.TypeVolume {
+				continue
+			}
+
+			bindMounts = append(bindMounts, map[string]any{
+				"type":     string(m.Type),
+				"source":   m.Source,
+				"target":   m.Target,
+				"readOnly": m.ReadOnly,
+			})
+		}
+
+		if len(bindMounts) > 0 {
+			details["bindMounts"] = bindMounts
+		}
+	}
+
+	if res := svc.Spec.TaskTemplate.Resources; res != nil {
+		if res.Limits != nil {
+			if res.Limits.NanoCPUs > 0 {
+				details["cpuLimitCores"] = float64(res.Limits.NanoCPUs) / 1e9
+			}
+
+			if res.Limits.MemoryBytes > 0 {
+				details["memoryLimitBytes"] = res.Limits.MemoryBytes
+			}
+		}
+
+		if res.Reservations != nil {
+			if res.Reservations.NanoCPUs > 0 {
+				details["cpuReservationCores"] = float64(res.Reservations.NanoCPUs) / 1e9
+			}
+
+			if res.Reservations.MemoryBytes > 0 {
+				details["memoryReservationBytes"] = res.Reservations.MemoryBytes
+			}
+		}
+	}
+
+	if p := svc.Spec.TaskTemplate.Placement; p != nil && len(p.Constraints) > 0 {
+		details["placementConstraints"] = p.Constraints
+	}
+
+	if endpoint := svc.Spec.EndpointSpec; endpoint != nil && len(endpoint.Ports) > 0 {
+		ports := make([]map[string]any, 0, len(endpoint.Ports))
+
+		for _, port := range endpoint.Ports {
+			ports = append(ports, map[string]any{
+				"published": port.PublishedPort,
+				"target":    port.TargetPort,
+				"protocol":  string(port.Protocol),
+				"mode":      string(port.PublishMode),
+			})
+		}
+
+		details["ports"] = ports
+	}
+
+	if policy := updatePolicyDetails(svc.Spec.UpdateConfig); policy != nil {
+		details["updatePolicy"] = policy
+	}
+
+	if policy := updatePolicyDetails(svc.Spec.RollbackConfig); policy != nil {
+		details["rollbackPolicy"] = policy
+	}
+
+	if svc.UpdateStatus != nil && svc.UpdateStatus.State != "" {
+		details["updateState"] = string(svc.UpdateStatus.State)
+
+		if svc.UpdateStatus.Message != "" {
+			details["updateMessage"] = svc.UpdateStatus.Message
+		}
+	}
+
+	return details
+}
+
+// updatePolicyDetails names an UpdateConfig's fields for the update or
+// rollback policy in a service's Details. Delay and Monitor are
+// time.Duration, i.e. unlabelled nanosecond integers in Docker's own type, so
+// both are reported as duration strings instead.
+func updatePolicyDetails(cfg *swarm.UpdateConfig) map[string]any {
+	if cfg == nil {
+		return nil
+	}
+
+	policy := map[string]any{
+		"parallelism": cfg.Parallelism,
+	}
+
+	if cfg.Delay > 0 {
+		policy["delay"] = cfg.Delay.String()
+	}
+
+	if cfg.Monitor > 0 {
+		policy["monitor"] = cfg.Monitor.String()
+	}
+
+	if cfg.FailureAction != "" {
+		policy["failureAction"] = cfg.FailureAction
+	}
+
+	if cfg.Order != "" {
+		policy["order"] = cfg.Order
+	}
+
+	return policy
+}
+
+// serviceMode names a service's scheduling mode without exposing the nested
+// Docker union a caller would otherwise have to interpret.
+func serviceMode(svc swarm.Service) string {
+	if svc.Spec.Mode.Global != nil {
+		return "global"
+	}
+
+	return "replicated"
 }
