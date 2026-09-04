@@ -272,6 +272,13 @@ type Digest struct {
 	// to explain.
 	Reason string `json:"reason,omitempty"`
 
+	// Since is when the current State began: the oldest still-live failing
+	// task's timestamp, captured before RecentFailures is capped to the
+	// newest few, or the resource's own last-updated time when there is no
+	// failure to date it from. Answers "how long has this been going on"
+	// without a second call into history.
+	Since string `json:"since,omitempty"`
+
 	// Details is type-specific. It is deliberately open in the advertised
 	// output schema: eight describe_<type> tools would tighten it at the cost
 	// of eight entries in every tools/list, and the envelope is where the
@@ -312,9 +319,12 @@ const maxRecentFailures = 5
 // ServiceDigest builds the detail view of one service.
 func ServiceDigest(svc swarm.Service, tasks []swarm.Task) Digest {
 	var (
-		running  int
-		failures []TaskFailure
+		running    int
+		oldestFail time.Time
+		haveOldest bool
 	)
+
+	failures := make([]TaskFailure, 0, len(tasks))
 
 	for _, task := range tasks {
 		if task.ServiceID != svc.ID {
@@ -334,6 +344,22 @@ func ServiceDigest(svc swarm.Service, tasks []swarm.Task) Digest {
 			continue
 		}
 
+		// Ordinary mid-startup or mid-rollout states — preparing, starting,
+		// assigned, new — are not failures; DeriveServiceState already
+		// reports "pending" for those without help. A task only earns a
+		// place here when Swarm itself calls it an involuntary failure or
+		// gives an explicit cause for not running.
+		if !cache.IsFailureState(task.Status.State) && task.Status.Err == "" {
+			continue
+		}
+
+		// Captured before the cap below, so a service with more failures
+		// than maxRecentFailures can still be dated back to its first one.
+		if !haveOldest || task.Status.Timestamp.Before(oldestFail) {
+			oldestFail = task.Status.Timestamp
+			haveOldest = true
+		}
+
 		failures = append(failures, TaskFailure{
 			TaskID:  task.ID,
 			At:      task.Status.Timestamp.UTC().Format(time.RFC3339),
@@ -343,7 +369,11 @@ func ServiceDigest(svc swarm.Service, tasks []swarm.Task) Digest {
 	}
 
 	slices.SortFunc(failures, func(a, b TaskFailure) int {
-		return strings.Compare(b.At, a.At)
+		if c := strings.Compare(b.At, a.At); c != 0 {
+			return c
+		}
+
+		return strings.Compare(a.TaskID, b.TaskID)
 	})
 
 	if len(failures) > maxRecentFailures {
@@ -361,8 +391,22 @@ func ServiceDigest(svc swarm.Service, tasks []swarm.Task) Digest {
 		RecentFailures: failures,
 	}
 
-	if state != "running" && len(failures) > 0 {
-		digest.Reason = failures[0].Message
+	if haveOldest {
+		digest.Since = oldestFail.UTC().Format(time.RFC3339)
+	} else {
+		digest.Since = svc.UpdatedAt.UTC().Format(time.RFC3339)
+	}
+
+	if state != "running" {
+		switch {
+		case len(failures) > 0:
+			digest.Reason = failures[0].Message
+		case svc.UpdateStatus != nil && svc.UpdateStatus.Message != "":
+			// A failing task is the more actionable explanation; the update
+			// status is what is left to explain "updating" (and any other
+			// non-running state) once no task failure accounts for it.
+			digest.Reason = svc.UpdateStatus.Message
+		}
 	}
 
 	return digest

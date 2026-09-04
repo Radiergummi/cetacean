@@ -1,7 +1,10 @@
 package cluster
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -188,5 +191,132 @@ func TestServiceDigestOmitsReasonWhenHealthy(t *testing.T) {
 
 	if got.Reason != "" {
 		t.Errorf("reason = %q, want empty for a converged service", got.Reason)
+	}
+}
+
+// A nil Go slice and an empty one both report len() == 0, so the Go-value
+// assertions above never notice recentFailures marshalling to null. Only the
+// encoding proves the output schema's slices are always arrays.
+func TestServiceDigestMarshalsEmptySlicesNotNull(t *testing.T) {
+	svc := replicated("api", 1)
+	tasks := []swarm.Task{{
+		ID: "t1", ServiceID: "svc-api", DesiredState: swarm.TaskStateRunning,
+		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
+	}}
+
+	got := ServiceDigest(svc, tasks)
+
+	data, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	if !strings.Contains(string(data), `"recentFailures":[]`) {
+		t.Errorf("json = %s, want recentFailures as an empty array, not null", data)
+	}
+	if !strings.Contains(string(data), `"related":[]`) {
+		t.Errorf("json = %s, want related as an empty array, not null", data)
+	}
+}
+
+// Ordinary startup churn is not a failure. A task still coming up during a
+// scale-up sits in "preparing" with no error, and DeriveServiceState already
+// reports "pending" for the replica shortfall — recentFailures must not
+// double that up as though something were broken.
+func TestServiceDigestIgnoresNormalStartup(t *testing.T) {
+	svc := replicated("scaling", 3)
+
+	tasks := []swarm.Task{
+		{ID: "t1", ServiceID: "svc-scaling", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
+		{ID: "t2", ServiceID: "svc-scaling", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStatePreparing, Message: "preparing"}},
+	}
+
+	got := ServiceDigest(svc, tasks)
+
+	if len(got.RecentFailures) != 0 {
+		t.Errorf(
+			"recentFailures = %d, want none for a task still starting",
+			len(got.RecentFailures),
+		)
+	}
+	if got.Reason != "" {
+		t.Errorf("reason = %q, want empty: starting up is not a failure", got.Reason)
+	}
+}
+
+// Since dates the problem back to its first occurrence, not its most recent
+// one — recentFailures[0] answers "what does it look like now", since
+// answers "how long has it looked like this".
+func TestServiceDigestSinceIsTheOldestFailure(t *testing.T) {
+	svc := replicated("stuck", 2)
+
+	older := time.Date(2026, 9, 4, 16, 15, 11, 0, time.UTC)
+	newer := time.Date(2026, 9, 4, 17, 44, 8, 0, time.UTC)
+
+	tasks := []swarm.Task{
+		{ID: "t1", ServiceID: "svc-stuck", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{
+				State: swarm.TaskStateRejected, Timestamp: older, Err: "first failure",
+			}},
+		{ID: "t2", ServiceID: "svc-stuck", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{
+				State: swarm.TaskStateRejected, Timestamp: newer, Err: "second failure",
+			}},
+	}
+
+	got := ServiceDigest(svc, tasks)
+
+	want := older.UTC().Format(time.RFC3339)
+	if got.Since != want {
+		t.Errorf("since = %q, want %q (the older failure, not the newer one)", got.Since, want)
+	}
+}
+
+// A rolling update with no failing task still needs an explanation:
+// DeriveServiceState reports "updating" from UpdateStatus alone, and without
+// this fallback the digest would report a non-healthy state with nothing
+// behind it.
+func TestServiceDigestReasonFallsBackToUpdateStatus(t *testing.T) {
+	svc := replicated("api", 1)
+	svc.UpdateStatus = &swarm.UpdateStatus{
+		State:   swarm.UpdateStateUpdating,
+		Message: "update in progress (1 out of 1)",
+	}
+
+	tasks := []swarm.Task{{
+		ID: "t1", ServiceID: "svc-api", DesiredState: swarm.TaskStateRunning,
+		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
+	}}
+
+	got := ServiceDigest(svc, tasks)
+
+	if got.State != "updating" {
+		t.Fatalf("state = %q, want updating", got.State)
+	}
+	if got.Reason != "update in progress (1 out of 1)" {
+		t.Errorf("reason = %q, want the update status message", got.Reason)
+	}
+}
+
+// Two failures in the same second must still sort deterministically: At
+// alone cannot break the tie, and SortFunc is not stable.
+func TestServiceDigestFailuresTieBreakOnTaskID(t *testing.T) {
+	svc := replicated("stuck", 2)
+
+	same := time.Date(2026, 9, 4, 17, 44, 8, 0, time.UTC)
+
+	tasks := []swarm.Task{
+		{ID: "t2", ServiceID: "svc-stuck", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStateRejected, Timestamp: same, Err: "b"}},
+		{ID: "t1", ServiceID: "svc-stuck", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStateRejected, Timestamp: same, Err: "a"}},
+	}
+
+	got := ServiceDigest(svc, tasks)
+
+	if len(got.RecentFailures) != 2 || got.RecentFailures[0].TaskID != "t1" {
+		t.Errorf("order = %+v, want t1 before t2 on a timestamp tie", got.RecentFailures)
 	}
 }
