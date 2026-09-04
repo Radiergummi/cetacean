@@ -197,6 +197,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		// listChanged is false: the catalog is static and cannot change while
 		// the process runs.
 		mcpserver.WithPromptCapabilities(false),
+		mcpserver.WithPromptFilter(srv.filterPromptsForIdentity),
 		mcpserver.WithHooks(srv.installSubscriptionHooks()),
 		mcpserver.WithInstructions(mcpInstructions),
 		mcpserver.WithDescription(mcpDescription),
@@ -530,6 +531,58 @@ func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool
 	}
 
 	return filterToolsByACLSpec(tools, visibility.allow)
+}
+
+// filterPromptsForIdentity is wired as a WithPromptFilter for prompts/list.
+// mcp-go applies it at prompts/get as well, returning the same "not found" as
+// an unknown name, so a hidden prompt cannot be confirmed by guessing it.
+//
+// A prompt is a sequence, so visibility is all-or-nothing: if the caller
+// cannot perform one step, the runbook dead-ends partway — and for a
+// remediation prompt, possibly after the model has already written. One
+// unavailable tool hides the whole prompt.
+func (s *Server) filterPromptsForIdentity(
+	ctx context.Context,
+	prompts []mcplib.Prompt,
+) []mcplib.Prompt {
+	visibility := s.toolVisibilityFor(ctx)
+
+	// A caller matching no grant can read nothing, so there is no
+	// investigation to seed. The cross-type read tools stay visible in
+	// tools/list on their own reasoning — each ACL-filters its own results —
+	// but a prompt promising a sequence over them promises nothing.
+	if visibility.noGrants {
+		return nil
+	}
+
+	if visibility.allow == nil {
+		return prompts
+	}
+
+	drives := make(map[string][]string, len(s.registeredPrompts))
+	for _, def := range s.registeredPrompts {
+		drives[def.prompt.Name] = def.drives
+	}
+
+	out := make([]mcplib.Prompt, 0, len(prompts))
+	for _, prompt := range prompts {
+		if allToolsVisible(drives[prompt.Name], visibility.allow) {
+			out = append(out, prompt)
+		}
+	}
+
+	return out
+}
+
+// allToolsVisible reports whether every named tool passes allow.
+func allToolsVisible(tools []string, allow func(name string) bool) bool {
+	for _, name := range tools {
+		if !allow(name) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // toolACLSpec describes the resource type and permission required to call a

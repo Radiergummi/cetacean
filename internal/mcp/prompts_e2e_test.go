@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -150,4 +152,140 @@ func newPromptTestServer(t *testing.T, opsLevel config.OperationsLevel) *Server 
 	t.Helper()
 
 	return newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, opsLevel)
+}
+
+// listPromptsAs drives prompts/list with an identity on the request context,
+// which is how the ACL filter sees a caller.
+func listPromptsAs(t *testing.T, srv *Server, identity *auth.Identity) promptListing {
+	t.Helper()
+
+	request := modernRequest(t, 1, "prompts/list", `{}`)
+	request = request.WithContext(auth.ContextWithIdentity(request.Context(), identity))
+
+	_, envelope := sendMCP(t, srv.Handler(), request)
+	if envelope.Error != nil {
+		t.Fatalf("prompts/list failed: %+v", envelope.Error)
+	}
+
+	var listing promptListing
+	if err := json.Unmarshal(envelope.Result, &listing); err != nil {
+		t.Fatalf("decode prompts/list: %v (raw %s)", err, envelope.Result)
+	}
+
+	return listing
+}
+
+// TestPromptsHiddenWhenADrivenToolIsDenied — diagnose_service walks get_logs,
+// which needs service:read. A caller with only node grants cannot complete the
+// sequence, so it must not be offered.
+func TestPromptsHiddenWhenADrivenToolIsDenied(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(readOnlyPolicy("node:*"))
+
+	srv := newToolTestServer(
+		t,
+		cache.New(nil),
+		&fakeWriteClient{},
+		config.OpsImpactful,
+		func(o *Options) { o.ACL = evaluator },
+	)
+
+	got := promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"}))
+	for _, name := range got {
+		if name == "diagnose_service" {
+			t.Error("diagnose_service offered to a caller with no service:read grant")
+		}
+
+		if name == "drain_node" {
+			t.Error("drain_node offered to a caller with only node:read, not node:write")
+		}
+	}
+}
+
+// TestPromptsVisibleWhenEveryDrivenToolIs — the same caller with service:read
+// gets the diagnostic prompts and still not the remediation ones, which need
+// write.
+func TestPromptsVisibleWhenEveryDrivenToolIs(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(readOnlyPolicy("service:*"))
+
+	srv := newToolTestServer(
+		t,
+		cache.New(nil),
+		&fakeWriteClient{},
+		config.OpsImpactful,
+		func(o *Options) { o.ACL = evaluator },
+	)
+
+	got := promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"}))
+
+	found := make(map[string]bool, len(got))
+	for _, name := range got {
+		found[name] = true
+	}
+
+	if !found["diagnose_service"] {
+		t.Error("service:read must reveal diagnose_service")
+	}
+
+	if found["roll_back_service"] {
+		t.Error("service:read must not reveal roll_back_service, which writes")
+	}
+}
+
+// TestPromptsHiddenEntirelyWithoutGrants is the floor. A caller matching no
+// grant can read nothing, so there is no investigation to seed — even though
+// the cross-type read tools stay visible in tools/list on their own reasoning.
+func TestPromptsHiddenEntirelyWithoutGrants(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:*"},
+		Audience:    []string{"user:somebody-else"},
+		Permissions: []string{"read"},
+	}}})
+
+	srv := newToolTestServer(
+		t,
+		cache.New(nil),
+		&fakeWriteClient{},
+		config.OpsImpactful,
+		func(o *Options) { o.ACL = evaluator },
+	)
+
+	if got := promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"})); len(got) != 0 {
+		t.Errorf("a zero-grant caller was offered %v, want nothing", got)
+	}
+}
+
+// TestPromptsGetOnAHiddenPromptSaysNotFound is a disclosure property. mcp-go
+// enforces the filter at get time too and returns the same error as an unknown
+// name, so a hidden prompt cannot be confirmed by guessing it. Inherited rather
+// than built, and pinned because it is security-relevant.
+func TestPromptsGetOnAHiddenPromptSaysNotFound(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(readOnlyPolicy("node:*"))
+
+	srv := newToolTestServer(
+		t,
+		cache.New(nil),
+		&fakeWriteClient{},
+		config.OpsImpactful,
+		func(o *Options) { o.ACL = evaluator },
+	)
+
+	request := modernRequest(t, 1, "prompts/get",
+		`{"name":"diagnose_service","arguments":{"service":"web"}}`)
+	request = request.WithContext(
+		auth.ContextWithIdentity(request.Context(), &auth.Identity{Subject: "tester"}),
+	)
+
+	_, envelope := sendMCP(t, srv.Handler(), request)
+	if envelope.Error == nil {
+		t.Fatal("prompts/get returned a prompt the caller may not see")
+	}
+
+	if !strings.Contains(envelope.Error.Message, "not found") {
+		t.Errorf("error was %q; a hidden prompt must be indistinguishable from an unknown one",
+			envelope.Error.Message)
+	}
 }
