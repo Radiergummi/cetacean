@@ -66,6 +66,10 @@ function queueStream(...chunks: string[]) {
 }
 
 beforeEach(() => {
+  // These tests assert the reconnect *schedule*, so the jitter is pinned to
+  // its midpoint, where the backoff spread is exactly 1 and the curve is its
+  // nominal 1s/2s/4s. The spread itself is covered in lib/backoff.test.ts.
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
   queue.length = 0;
   requestedUrls.length = 0;
   requestInits = [];
@@ -84,6 +88,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -338,17 +343,39 @@ describe("streamLogsWithRetry", () => {
     expect(waits).toEqual([2000, 4000, 8000, 16_000]);
   });
 
-  it("waits the server's Retry-After instead of the backoff curve", async () => {
+  it("reports the stretched Retry-After as the deadline it will actually wait", async () => {
+    // retryAt drives the user-visible countdown, so it has to be the jittered
+    // delay rather than what the server asked for, or the countdown drifts
+    // against the retry it is counting down to.
+    queue.push(() => rateLimitedResponse(5));
+    const active = run();
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    const retry = active.retries[0]!;
+    expect(retry.retryAt - Date.now()).toBe(6250);
+
+    await vi.advanceTimersByTimeAsync(6250);
+    expect(requestedUrls).toHaveLength(2);
+
+    active.controller.abort();
+    await active.finished;
+  });
+
+  it("waits at least the server's Retry-After instead of the backoff curve", async () => {
     queue.push(() => rateLimitedResponse(5));
     const active = run();
 
     await vi.advanceTimersByTimeAsync(0);
     expect(active.retries[0]?.failure.retryAfterMilliseconds).toBe(5000);
 
-    await vi.advanceTimersByTimeAsync(4000);
+    // The server named a floor and handed the same one to every client it
+    // rejected, so the wait is stretched past it rather than landing on it.
+    // Math.random is pinned at 0.5, so 5s becomes 6.25s.
+    await vi.advanceTimersByTimeAsync(5000);
     expect(requestedUrls).toHaveLength(1);
 
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(1250);
     expect(requestedUrls).toHaveLength(2);
 
     active.controller.abort();

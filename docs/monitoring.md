@@ -18,10 +18,12 @@ sparklines, and stack-level drill-downs.
 
 ## Setup
 
-Deploy the bundled monitoring stack alongside Cetacean and point Cetacean at it:
+Deploy the bundled monitoring stack **first** — it creates the shared `monitoring` overlay network that
+Cetacean's own compose file joins as an external network — then deploy Cetacean and point it at Prometheus:
 
 ```bash
 docker stack deploy -c compose.monitoring.yaml monitoring
+docker stack deploy -c compose.yaml cetacean
 ```
 
 ```yaml
@@ -29,11 +31,28 @@ environment:
   CETACEAN_PROMETHEUS_URL: http://prometheus:9090
 ```
 
-Both stacks need to share an overlay network (`monitoring`) so they can reach each other by service name. The compose
-file deploys Prometheus on a manager node, with node-exporter and cAdvisor as global services (one per node).
+The compose file deploys Prometheus on a manager node, with node-exporter and cAdvisor as global services (one per
+node). Prometheus discovers them through the Docker socket (`dockerswarm_sd_configs`) rather than DNS, which is what
+supplies the node each task is running on.
 
-If you already run Prometheus, just set the URL and make sure it scrapes node-exporter and cAdvisor targets. Cetacean
-expects the standard metric names — custom relabeling is not supported.
+### The instance label
+
+Cetacean selects node series with `instance=~"<node address>:.*"`, falling back to the node's hostname. Scraping an
+exporter over an overlay network leaves `instance` set to the task's overlay IP, which matches no node — Prometheus
+looks healthy, and every node chart is empty.
+
+The bundled `prometheus.yml` therefore rewrites `instance` to the Swarm node address:
+
+```yaml
+relabel_configs:
+  - source_labels: [__meta_dockerswarm_node_address]
+    target_label: instance
+    replacement: ${1}:9100
+```
+
+If you already run Prometheus, set the URL and make sure it scrapes node-exporter and cAdvisor with `instance`
+carrying the node's address (or hostname). Cetacean expects the standard metric names, but relabeling `instance` is
+required, not optional, whenever the scrape goes over an overlay network.
 
 Cetacean auto-detects your monitoring setup and shows a status banner on the cluster overview when components are
 missing or unreachable.

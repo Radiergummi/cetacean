@@ -435,3 +435,172 @@ func TestServiceMutationResultIsCompact(t *testing.T) {
 		t.Errorf("mode = %q, want %q", got.Mode, "replicated")
 	}
 }
+
+// callAsTaskWithTTL is callAsTask with control over what the client sends for
+// params.task, so a test can drive the omitted-TTL case the server has to
+// correct for.
+func callAsTaskWithTTL(
+	t *testing.T,
+	handler http.Handler,
+	name string,
+	arguments map[string]any,
+	task map[string]any,
+) taskHandle {
+	t.Helper()
+
+	params, err := json.Marshal(map[string]any{
+		"name":      name,
+		"arguments": arguments,
+		"task":      task,
+	})
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+
+	_, envelope := mcpModern(t, handler, 1, "tools/call", string(params))
+	if envelope.Error != nil {
+		t.Fatalf("tools/call as task failed: %+v", envelope.Error)
+	}
+
+	var handle taskHandle
+	if err := json.Unmarshal(envelope.Result, &handle); err != nil {
+		t.Fatalf("decode create-task result: %v (raw %s)", err, envelope.Result)
+	}
+
+	return handle
+}
+
+// awaitTaskRelease polls tasks/get until mcp-go no longer holds the record,
+// which is how a released task presents to a client: an error, not a status.
+func awaitTaskRelease(
+	t *testing.T,
+	handler http.Handler,
+	taskID string,
+	within time.Duration,
+) {
+	t.Helper()
+
+	deadline := time.Now().Add(within)
+	for id := 2; time.Now().Before(deadline); id++ {
+		_, envelope := mcpModern(
+			t,
+			handler,
+			id,
+			"tasks/get",
+			fmt.Sprintf(`{"taskId":%q}`, taskID),
+		)
+		if envelope.Error != nil {
+			return
+		}
+
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	t.Fatalf("task %s was still retained after %v; its result has leaked", taskID, within)
+}
+
+// TestTaskWithoutTTLIsStillReleased is the retention guard, and it has to run
+// through the real transport because the whole mechanism lives in mcp-go:
+// scheduleTaskCleanup is private, starts only for a task carrying a TTL, and
+// nothing in our code can delete a record. We supply the TTL mcp-go already
+// knows how to honour, on the request it is about to read.
+//
+// That last part is the fragile assumption worth pinning: mcp-go calls the
+// BeforeCallTool hook with a *pointer* to the request and passes that same
+// value to handleToolCall on the next line (request_handler.go:520-521). If a
+// future bump reorders those two, or copies the request between them, the
+// clamp silently stops applying and the leak returns — this test fails instead.
+func TestTaskWithoutTTLIsStillReleased(t *testing.T) {
+	c := cache.New(nil)
+	seedService(t, c, "web", 1, 1)
+
+	handler := taskTestServerWithTTL(t, c, 150*time.Millisecond, time.Hour).Handler()
+
+	// A client that omits params.task.ttl entirely — the shape that leaks.
+	handle := callAsTaskWithTTL(t, handler, "scale_service", map[string]any{
+		"id":       "web",
+		"replicas": float64(1),
+	}, map[string]any{})
+
+	if handle.Task.TaskId == "" {
+		t.Fatal("no task handle returned")
+	}
+
+	awaitTaskRelease(t, handler, handle.Task.TaskId, 5*time.Second)
+}
+
+// TestOverLongTaskTTLIsClampedDown covers the other half. Without a ceiling
+// the fill-in is not a bound: one careless number, rather than an omission,
+// pins a result for as long as the client cared to name.
+func TestOverLongTaskTTLIsClampedDown(t *testing.T) {
+	c := cache.New(nil)
+	seedService(t, c, "web", 1, 1)
+
+	handler := taskTestServerWithTTL(t, c, 15*time.Minute, 150*time.Millisecond).Handler()
+
+	handle := callAsTaskWithTTL(t, handler, "scale_service", map[string]any{
+		"id":       "web",
+		"replicas": float64(1),
+	}, map[string]any{"ttl": (30 * 24 * time.Hour).Milliseconds()})
+
+	if handle.Task.TaskId == "" {
+		t.Fatal("no task handle returned")
+	}
+
+	awaitTaskRelease(t, handler, handle.Task.TaskId, 5*time.Second)
+}
+
+// TestPlainCallIsNotTurnedIntoATask is the regression guard for the way this
+// could go badly wrong: the hook sees every tools/call, and inventing task
+// params for one that carried none would make mcp-go answer with a task handle
+// instead of the tool's result, breaking every synchronous client.
+func TestPlainCallIsNotTurnedIntoATask(t *testing.T) {
+	c := cache.New(nil)
+	seedService(t, c, "web", 1, 1)
+
+	handler := taskTestServerWithTTL(t, c, 15*time.Minute, time.Hour).Handler()
+
+	_, envelope := mcpModern(t, handler, 1, "tools/call",
+		`{"name":"scale_service","arguments":{"id":"web","replicas":1}}`)
+	if envelope.Error != nil {
+		t.Fatalf("synchronous scale_service failed: %+v", envelope.Error)
+	}
+
+	var handle taskHandle
+	if err := json.Unmarshal(envelope.Result, &handle); err == nil && handle.Task.TaskId != "" {
+		t.Fatalf("a plain tools/call came back as task %q", handle.Task.TaskId)
+	}
+}
+
+// taskTestServerWithTTL is taskTestServer with the retention bounds set, so a
+// test can watch a release happen in milliseconds rather than minutes.
+func taskTestServerWithTTL(
+	t *testing.T,
+	c *cache.Cache,
+	taskTTL, maxTaskTTL time.Duration,
+) *Server {
+	t.Helper()
+
+	accept := func(_ context.Context, id string) (swarm.Service, error) {
+		return swarm.Service{ID: id}, nil
+	}
+
+	writeClient := &fakeWriteClient{
+		scaleServiceFn: func(_ context.Context, id string, _ uint64) (swarm.Service, error) {
+			return swarm.Service{ID: id}, nil
+		},
+		rollbackServiceFn: accept,
+		restartServiceFn:  accept,
+	}
+
+	return newToolTestServer(
+		t,
+		c,
+		writeClient,
+		config.OpsOperational,
+		func(o *Options) {
+			o.Config.TaskTTL = taskTTL
+			o.Config.MaxTaskTTL = maxTaskTTL
+		},
+	)
+}

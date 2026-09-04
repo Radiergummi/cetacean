@@ -32,7 +32,7 @@ var (
 			uri:         "cetacean://cluster",
 			name:        "cluster",
 			title:       "Swarm cluster overview",
-			description: "High-level cluster facts: swarm ID, raft state, CA config, orchestration defaults, manager and worker counts, installed plugins. Returns a single JSON document; updates push via notifications/resources/updated when any of those fields change.",
+			description: "High-level cluster facts: node, service, task and stack counts, node readiness (ready, down, draining), task counts by state, total and reserved CPU and memory across the cluster, the largest single node's capacity, converged and degraded service counts, and the last sync time. Returns a single JSON document; updates push via notifications/resources/updated when any of those fields change.",
 		},
 		{
 			uri:         "cetacean://recommendations",
@@ -44,7 +44,7 @@ var (
 			uri:         "cetacean://history",
 			name:        "history",
 			title:       "Recent change history",
-			description: "Ring buffer (up to 10,000 entries) of recent create/update/delete events across every cluster resource type, newest first. Useful for incident triage and 'what changed' questions.",
+			description: "The most recent create/update/delete events (currently up to 100) across every cluster resource type, newest first. Useful for incident triage and 'what changed' questions.",
 		},
 	}
 

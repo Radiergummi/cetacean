@@ -1,6 +1,6 @@
 import type { ApiError, LogLine } from "../../api/client";
 import { problemFromResponse, redirectToLogin } from "../../api/client";
-import { backoffDelay } from "../../lib/backoff";
+import { backoffDelay, retryAfterDelay } from "../../lib/backoff";
 
 /**
  * Why this reads SSE through fetch instead of using EventSource:
@@ -317,9 +317,15 @@ export async function streamLogsWithRetry(
       return;
     }
 
+    // A Retry-After is stretched rather than replaced: the server named a
+    // floor, and every client it rejected while the cap was full was given the
+    // same one. Without a spread they all wake in the same second, find the cap
+    // still full, and synchronize harder each round.
+    const retryAfter = outcome.failure.retryAfterMilliseconds;
     const delay =
-      outcome.failure.retryAfterMilliseconds ??
-      backoffDelay(attempt, { base: baseReconnectDelay, max: maxReconnectDelay });
+      retryAfter === undefined
+        ? backoffDelay(attempt, { base: baseReconnectDelay, max: maxReconnectDelay })
+        : retryAfterDelay(retryAfter);
 
     handlers.onRetrying({
       attempt,

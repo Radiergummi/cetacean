@@ -1010,18 +1010,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/mark3labs/mcp-go@v1.0.0-beta.1?type=module",
+      "bom-ref": "pkg:golang/github.com/mark3labs/mcp-go@v1.0.0?type=module",
       "type": "library",
       "name": "github.com/mark3labs/mcp-go",
-      "version": "v1.0.0-beta.1",
+      "version": "v1.0.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "86b3d99725027f290b740c8ef18afa0e49346a53dba5e2e391e4b406e34118af"
+          "content": "099a82cd7c148933acb6421d5b53323991ae33e2da28c1094aef99625b8de035"
         }
       ],
-      "purl": "pkg:golang/github.com/mark3labs/mcp-go@v1.0.0-beta.1?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/mark3labs/mcp-go@v1.0.0?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/mark3labs/mcp-go",

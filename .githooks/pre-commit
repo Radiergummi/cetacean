@@ -44,4 +44,13 @@ fi
 
 echo "pre-commit: dependency manifest changed, regenerating SBOM…"
 make sbom
-git add internal/api/sbom/sbom.cdx.json
+
+# Everything build-sbom.sh writes, not just the CycloneDX document: staging a
+# subset leaves the rest dirty in the working tree after the commit, and the
+# commit itself carries an SBOM whose attribution half disagrees with it. Kept
+# in step with SBOM_ARTIFACTS in the Makefile and the same list in
+# scripts/commit-sbom.sh.
+git add internal/api/sbom/sbom.cdx.json \
+        internal/api/sbom/licensetexts.json \
+        internal/api/sbom/notices.txt \
+        THIRD_PARTY_LICENSES
