@@ -228,6 +228,15 @@ tool result with `isError: true` (so the model can self-correct), not a protocol
 **Tier 0 — reads** (always available): `get_logs`, `search`, `list_resources`, `get_topology`, `get_metrics`,
 `get_recommendations`.
 
+`get_logs` reads either a service or a single task, named by `service` or `task` — exactly one, since the two are
+different streams and guessing between them would return output the caller did not ask for. A service merges the
+output of its live replicas; a task reads one replica, and is the only way to reach a replica that has already
+exited, because a dead replica's lines are no longer in the service stream. That makes the task form the one to
+reach for after a crash. It is also the more perishable: Swarm keeps a task's output only while it keeps the task
+record, five per replica slot by default (`--task-history-limit`), so a service restarting in a loop retains only
+seconds of history and should be read before anything else. A task's read grant is its parent service's, the same
+key `remove_task` writes against.
+
 `get_metrics` charts CPU, memory or network use for one service or one node over the last hour, six hours, day or
 week. It takes a target and a metric rather than PromQL: Cetacean owns the queries, resolves the service or node
 against its own cache, and checks the caller's read grant before querying — a tool accepting a raw query would hand

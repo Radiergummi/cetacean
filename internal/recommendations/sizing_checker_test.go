@@ -107,3 +107,38 @@ func TestSizingChecker_Interval(t *testing.T) {
 		t.Errorf("expected interval %v, got %v", 5*time.Minute, sc.Interval())
 	}
 }
+
+// TestSizingCheckerIgnoresServicesWithNoSeries — a Prometheus that answers
+// without error but returns no series for a service (no cAdvisor, an exporter
+// that has not scraped it yet, a service too new to have history) is silence,
+// not a measurement. Reading the absent key out of the result map yielded 0,
+// and 0 is under every over-provisioned threshold, so every service in a
+// cluster without container metrics was told to shrink to the floor.
+func TestSizingCheckerIgnoresServicesWithNoSeries(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			TaskTemplate: swarm.TaskSpec{
+				Resources: &swarm.ResourceRequirements{
+					Limits:       &swarm.Limit{NanoCPUs: 1e9, MemoryBytes: 1 << 30},
+					Reservations: &swarm.Resources{NanoCPUs: 0.5e9, MemoryBytes: 512 << 20},
+				},
+			},
+		},
+	})
+
+	checker := NewSizingChecker(mockQuery(nil, nil, nil, nil), c, defaultConfig())
+
+	for _, rec := range checker.Check(context.Background()) {
+		if rec.Category == CategoryOverProvisioned {
+			t.Errorf(
+				"emitted %s for %q with no series at all: %s",
+				rec.Category,
+				rec.TargetName,
+				rec.Message,
+			)
+		}
+	}
+}

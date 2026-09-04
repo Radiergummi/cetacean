@@ -181,6 +181,10 @@ func PlacementGraph(
 	runningPerService := make(map[string]int)
 
 	for _, task := range tasks {
+		if !taskIsLive(task) {
+			continue
+		}
+
 		if _, ok := visibleNodes[task.NodeID]; !ok {
 			continue
 		}
@@ -237,6 +241,21 @@ func PlacementGraph(
 	}
 
 	return newGraph(TopologyViewPlacement, nodes, edges)
+}
+
+// taskIsLive reports whether the orchestrator still intends this task to run.
+//
+// Swarm keeps a task record for every replica it has replaced, so a service
+// that has been updated — or one that restarts in a loop — accumulates
+// terminal records on whichever node ran them. Those are history, not slots
+// awaiting a start, and counting them as the denominator of a placement edge
+// renders a converged service as degraded: a single-replica service updated
+// twice read "1/3 running". DesiredState is the orchestrator's own answer,
+// which is why it decides this rather than the task's current state — a task
+// still coming up has no terminal state yet but is genuinely awaited.
+func taskIsLive(task swarm.Task) bool {
+	return task.DesiredState != swarm.TaskStateShutdown &&
+		task.DesiredState != swarm.TaskStateRemove
 }
 
 // serviceNode is the vertex a service contributes to either view, so the two

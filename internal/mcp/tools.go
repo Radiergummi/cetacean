@@ -13,6 +13,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 // ServiceLifecycleWriter is the subset of Docker service-lifecycle operations
@@ -235,9 +236,9 @@ func (s *Server) toolCatalog() []toolDef {
 		{
 			tool: mcplib.NewTool(
 				"get_logs",
-				mcplib.WithToolTitle("Read service logs"),
+				mcplib.WithToolTitle("Read service or task logs"),
 				mcplib.WithDescription(
-					"Fetch recent log lines for a Swarm service, merged across every replica task. Returns the most recent `tail` lines (default 100), optionally filtered by start time and minimum severity. This is a one-shot read; for live tails subscribe to the cetacean://services/{id}/logs resource.",
+					"Fetch recent log lines for a Swarm service or for one of its tasks. Name exactly one: `service` merges the output of every live replica; `task` reads a single replica, and is the only way to reach one that has already exited — use it to find out why a replica died, since a dead replica's lines are not in the service stream. Swarm discards a task's output once its record falls out of the history window (five per replica slot by default), so on a service that is restarting in a loop that history is only seconds deep and should be read first. Returns the most recent `tail` lines (default 100), optionally filtered by start time and minimum severity. This is a one-shot read; for live tails subscribe to the cetacean://services/{id}/logs resource.",
 				),
 				mcplib.WithOutputSchema[LogResourceResponse](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -245,8 +246,14 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
 				mcplib.WithString("service",
-					mcplib.Required(),
-					mcplib.Description("Service ID or name to read logs from."),
+					mcplib.Description(
+						"Service ID or name to read logs from, merged across its live replicas. Mutually exclusive with `task`.",
+					),
+				),
+				mcplib.WithString("task",
+					mcplib.Description(
+						"Task ID to read logs from, including a task that has already exited. Mutually exclusive with `service`.",
+					),
 				),
 				mcplib.WithNumber(
 					"tail",
@@ -1072,6 +1079,25 @@ func (s *Server) checkServiceRead(ctx context.Context, id string) error {
 	return s.checkRead(ctx, "service", svc.Spec.Name)
 }
 
+// checkTaskRead routes a task's ACL check to its parent service, the read-side
+// twin of checkTaskWrite: a caller who may read a service may read the output
+// of the replicas that service ran. Falls back to `task:<id>` when the cache
+// cannot resolve the parent, matching the write path's last resort.
+func (s *Server) checkTaskRead(ctx context.Context, id string) error {
+	if s.acl == nil {
+		return nil
+	}
+	task, ok := s.cache.GetTask(id)
+	if !ok {
+		return s.checkRead(ctx, "task", id)
+	}
+	svc, ok := s.cache.GetService(task.ServiceID)
+	if !ok || svc.Spec.Name == "" {
+		return s.checkRead(ctx, "task", id)
+	}
+	return s.checkRead(ctx, "service", svc.Spec.Name)
+}
+
 // --- tool handlers ---
 
 func (s *Server) toolSearch(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
@@ -1090,14 +1116,32 @@ func (s *Server) toolSearch(ctx context.Context, req mcplib.CallToolRequest) (st
 }
 
 func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-	service, err := req.RequireString("service")
-	if err != nil {
+	service := strings.TrimSpace(req.GetString("service", ""))
+	task := strings.TrimSpace(req.GetString("task", ""))
+
+	// Naming both would leave the tool to guess which stream the caller meant,
+	// and the two differ: a service merges its live replicas, a task is one
+	// replica including a dead one.
+	switch {
+	case service == "" && task == "":
+		return "", fmt.Errorf("one of `service` or `task` is required")
+	case service != "" && task != "":
+		return "", fmt.Errorf("`service` and `task` are mutually exclusive")
+	}
+
+	kind, target := docker.ServiceLog, service
+	check := s.checkServiceRead
+
+	if task != "" {
+		kind, target = docker.TaskLog, task
+		check = s.checkTaskRead
+	}
+
+	if err := check(ctx, target); err != nil {
 		return "", err
 	}
-	if err := s.checkServiceRead(ctx, service); err != nil {
-		return "", err
-	}
-	resp, err := s.readServiceLogsImpl(ctx, service, optsFromToolRequest(req))
+
+	resp, err := s.readLogsImpl(ctx, kind, target, optsFromToolRequest(req))
 	if err != nil {
 		return "", err
 	}

@@ -197,8 +197,8 @@ func evaluate(
 					TargetName: spec.name,
 					Resource:   "cpu",
 					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
-					Current:    instant.cpu,
-					Configured: cpuLimitPct,
+					Current:    instant.cpu / 100 * 1e9,
+					Configured: float64(spec.cpuLimit),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
@@ -213,8 +213,8 @@ func evaluate(
 					TargetName: spec.name,
 					Resource:   "cpu",
 					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
-					Current:    instant.cpu,
-					Configured: cpuLimitPct,
+					Current:    instant.cpu / 100 * 1e9,
+					Configured: float64(spec.cpuLimit),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
@@ -281,8 +281,8 @@ func evaluate(
 						formatDuration(cfg.Lookback),
 						cpuResRatio*100,
 					),
-					Current:    p95.cpu,
-					Configured: cpuReservationPct,
+					Current:    p95.cpu / 100 * 1e9,
+					Configured: float64(spec.cpuReservation),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
