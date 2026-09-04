@@ -122,14 +122,18 @@ func (s *Server) digestOf(
 	case swarm.Service:
 		return cluster.ServiceDigest(
 			resource,
-			s.readableTasks(ctx),
+			s.readableTasksMatching(ctx, func(task swarm.Task) bool {
+				return task.ServiceID == resource.ID
+			}),
 			s.filterNetworks(ctx, s.cache.ListNetworks()),
 		), nil
 
 	case swarm.Node:
 		return cluster.NodeDigest(
 			resource,
-			s.readableTasks(ctx),
+			s.readableTasksMatching(ctx, func(task swarm.Task) bool {
+				return task.NodeID == resource.ID
+			}),
 			s.filterServices(ctx, s.cache.ListServices()),
 		), nil
 
@@ -145,7 +149,15 @@ func (s *Server) digestOf(
 		// an ACL stack grant reaches its member types by definition
 		// (acl.impliedTypes), and dropping members here would report a stack
 		// as healthy because the service that is failing was filtered out.
-		return cluster.StackDigest(resource, s.readableTasks(ctx)), nil
+		members := make(map[string]bool, len(resource.Services))
+		for _, svc := range resource.Services {
+			members[svc.ID] = true
+		}
+
+		return cluster.StackDigest(resource, s.readableTasksMatching(
+			ctx,
+			func(task swarm.Task) bool { return members[task.ServiceID] },
+		)), nil
 
 	case swarm.Config:
 		return cluster.ConfigDigest(
@@ -181,13 +193,31 @@ func (s *Server) digestOf(
 	}
 }
 
-// readableTasks is every task the caller may read, as the raw records the
-// digest builders take. The ACL filter works on the enriched shape the task
-// resource serves, so the enrichment is built and then unwrapped — the
-// builders resolve parent names from the service and node slices they are
-// given, and would ignore the enriched fields anyway.
-func (s *Server) readableTasks(ctx context.Context) []swarm.Task {
-	enriched := s.filterTasks(ctx, cluster.EnrichTasks(s.cache, s.cache.ListTasks()))
+// readableTasksMatching returns the tasks the caller may read among those
+// keep selects, as the raw records the digest builders take.
+//
+// The narrowing happens before the enrichment because this runs on every
+// resources/read, and a subscription re-drives that after each cache event: a
+// digest needs one service's or one node's tasks, so enriching and filtering
+// the whole cluster's would make every detail read cost the size of the
+// cluster — the opposite of what the compact representation is for. The
+// enrichment is built at all only because filterTasks keys on the enriched
+// shape the task resource serves; the builders resolve parent names from the
+// service and node slices they are given and ignore the enriched fields, so it
+// is unwrapped again straight after.
+func (s *Server) readableTasksMatching(
+	ctx context.Context,
+	keep func(swarm.Task) bool,
+) []swarm.Task {
+	var matching []swarm.Task
+
+	for _, task := range s.cache.ListTasks() {
+		if keep(task) {
+			matching = append(matching, task)
+		}
+	}
+
+	enriched := s.filterTasks(ctx, cluster.EnrichTasks(s.cache, matching))
 
 	tasks := make([]swarm.Task, len(enriched))
 	for i, task := range enriched {
@@ -255,7 +285,11 @@ func digestibleResourceType(uri string) (string, bool) {
 		return "", false
 	}
 
-	if !slices.Contains(listableResourceTypes, parts[0]) {
+	// Gate on the same map describe resolves its `type` against, not on
+	// listableResourceTypes: a type added to the listing without a digest
+	// builder would otherwise be accepted here and then fall to digestOf's
+	// default branch, turning a working resource read into an error.
+	if _, ok := pluralToSingularRowType[parts[0]]; !ok {
 		return "", false
 	}
 

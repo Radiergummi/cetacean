@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -1894,6 +1895,69 @@ func TestHandleGetSecret_DataIsRedacted(t *testing.T) {
 	}
 	if resp.Secret.Spec.Data != nil {
 		t.Errorf("expected Spec.Data to be nil, got %v", resp.Secret.Spec.Data)
+	}
+}
+
+// TestHandleGetStack_MemberSecretDataIsRedacted covers the way around the two
+// tests either side of it: a stack rolls up whole member records out of the
+// cache, so reading it by name must not hand back the payload GET
+// /secrets/{id} withholds.
+//
+// The handler does no redacting itself, deliberately — the cache nils
+// Spec.Data on every write path, and GetStackDetail documents that re-walking
+// downstream would duplicate the contract and invite it to drift. This is the
+// response-side guard on that invariant, which stack detail was the one detail
+// endpoint to lack.
+func TestHandleGetStack_MemberSecretDataIsRedacted(t *testing.T) {
+	labels := map[string]string{"com.docker.stack.namespace": "mystack"}
+
+	c := cache.New(nil)
+
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.Labels = labels
+	c.SetService(svc)
+
+	sec := swarm.Secret{ID: "sec1"}
+	sec.Spec.Name = "db-password"
+	sec.Spec.Labels = labels
+	sec.Spec.Data = []byte("super-secret")
+	c.SetSecret(sec)
+
+	h := newTestHandlers(t, withCache(c))
+
+	req := httptest.NewRequest("GET", "/stacks/mystack", nil)
+	req.SetPathValue("name", "mystack")
+	w := httptest.NewRecorder()
+	h.HandleGetStack(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	// Spec.Data marshals as base64, so a leak looks like the encoded form —
+	// searching for the plaintext alone would pass on a response carrying the
+	// whole secret.
+	encoded := base64.StdEncoding.EncodeToString([]byte("super-secret"))
+
+	body := w.Body.String()
+	if strings.Contains(body, "super-secret") || strings.Contains(body, encoded) {
+		t.Errorf("stack detail leaked member secret data: %s", body)
+	}
+
+	var wrapper struct {
+		Stack cache.StackDetail `json:"stack"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &wrapper); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(wrapper.Stack.Secrets) != 1 {
+		t.Fatalf("expected the stack to still list its secret, got %d", len(wrapper.Stack.Secrets))
+	}
+
+	if wrapper.Stack.Secrets[0].Spec.Data != nil {
+		t.Errorf("expected Spec.Data to be nil, got %v", wrapper.Stack.Secrets[0].Spec.Data)
 	}
 }
 

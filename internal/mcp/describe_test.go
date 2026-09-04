@@ -2,7 +2,9 @@ package mcp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -287,6 +289,118 @@ func TestDescribeRejectsUnknownAndMissingArguments(t *testing.T) {
 		); err == nil {
 			t.Errorf("%s: expected an error, got none", name)
 		}
+	}
+}
+
+// TestDescribeStackOmitsMemberSecretData holds the end of the chain that keeps
+// secret payloads out of a stack read: a stack rolls up whole member records,
+// so reading one by name must not be the way around the redaction the secret
+// endpoints apply.
+//
+// Nothing in this package does that redacting, and deliberately so — the cache
+// nils Spec.Data on every write path (cache.go's secret ResourceMap onSet,
+// replaceSecrets, and the snapshot load), and GetStackDetail says in as many
+// words that re-walking here would duplicate the contract and invite it to
+// drift. This test is therefore the transport-side guard on that invariant: it
+// fails if a future change lets a payload reach the cache, and it covers both
+// the digest and the raw record, which is the shape describe added.
+func TestDescribeStackOmitsMemberSecretData(t *testing.T) {
+	const payload = "super-secret"
+
+	// Spec.Data marshals as base64, so a leak looks like the encoded form —
+	// searching for the plaintext alone would pass on a response that carries
+	// the whole secret.
+	encoded := base64.StdEncoding.EncodeToString([]byte(payload))
+
+	c := seededDescribeCache()
+
+	sec, _ := c.GetSecret("sec1")
+	sec.Spec.Data = []byte(payload)
+	c.SetSecret(sec)
+
+	srv := newResourceTestServer(t, c)
+
+	td, ok := srv.findTool("describe")
+	if !ok {
+		t.Fatal("describe not registered")
+	}
+
+	bodies := map[string]string{}
+
+	for _, raw := range []bool{false, true} {
+		out, err := td.handler(context.Background(), newCallToolRequest("describe", map[string]any{
+			"type": "stack",
+			"id":   "web",
+			"raw":  raw,
+		}))
+		if err != nil {
+			t.Fatalf("raw=%v: handler: %v", raw, err)
+		}
+
+		bodies[fmt.Sprintf("describe raw=%v", raw)] = out
+	}
+
+	body, err := srv.readResource(context.Background(), "cetacean://stacks/web")
+	if err != nil {
+		t.Fatalf("readResource: %v", err)
+	}
+
+	bodies["resources/read"] = body
+
+	for source, out := range bodies {
+		if strings.Contains(out, payload) || strings.Contains(out, encoded) {
+			t.Errorf("%s leaked the member secret's data: %s", source, out)
+		}
+	}
+
+	// The raw record must still carry the secret — redacted, not dropped.
+	var detail cache.StackDetail
+	if err := json.Unmarshal([]byte(bodies["describe raw=true"]), &detail); err != nil {
+		t.Fatalf("unmarshal raw stack: %v", err)
+	}
+
+	if len(detail.Secrets) != 1 {
+		t.Fatalf("expected the stack to still list its secret, got %d", len(detail.Secrets))
+	}
+
+	if detail.Secrets[0].Spec.Data != nil {
+		t.Errorf("expected Spec.Data to be nil, got %v", detail.Secrets[0].Spec.Data)
+	}
+}
+
+// TestDescribeStackUnderStackOnlyGrant holds what the unfiltered stack members
+// rest on: an ACL stack grant reaches the member types (acl.impliedTypes),
+// including the task:<id> resources readableTasksMatching keys on. Were that to
+// regress, a stack digest would quietly report zero running replicas rather
+// than fail.
+func TestDescribeStackUnderStackOnlyGrant(t *testing.T) {
+	c := seededDescribeCache()
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(readOnlyPolicy("stack:web"))
+
+	// The resolver is what lets a stack grant reach its members at all —
+	// main.go wires the cache in as one, and without it the evaluator cannot
+	// tell that task1 belongs to a service in this stack.
+	e.SetResolver(c)
+
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	digest := describeDigest(t, ctxWithIdentity(), srv, map[string]any{
+		"type": "stack",
+		"id":   "web",
+	})
+
+	if digest.State != "running" {
+		t.Errorf("state = %q, want running", digest.State)
+	}
+
+	if got := digest.Details["runningReplicas"]; got != float64(1) {
+		t.Errorf("runningReplicas = %v, want 1 — the stack's tasks were filtered away", got)
+	}
+
+	if !hasRelated(digest.Related, "service", "web") {
+		t.Errorf("stack digest does not list its member service: %+v", digest.Related)
 	}
 }
 
