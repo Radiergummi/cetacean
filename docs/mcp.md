@@ -156,6 +156,14 @@ an operator with read-only grants sees only the read tools. Resource reads retur
 whether a resource is absent or merely denied, so the policy doesn't leak existence. See
 [Authorization](authorization.md) for the grant model.
 
+Filtering a catalog is a coarser question than authorizing a call: a listing asks "could this identity ever act on a
+service?", where a call names one. Cetacean answers the coarse question by projecting grants onto resource *types*,
+expanding them exactly as a call does — a `stack:X` grant reaches the services, tasks, configs, secrets, networks and
+volumes in that stack, a `service:X` grant reaches that service's tasks, and `write` implies `read`. So a stack-scoped
+operator is shown the service tools their grant covers. The projection is an over-approximation in one direction only,
+the same one a pattern already is: `service:web-*` reports the service type whether or not a matching service exists.
+It never widens what a call may do — every listed tool is still checked against the named resource when invoked.
+
 ## Resources
 
 Resources are read-only views. Detail resources mirror the REST API responses exactly (same enrichment, same secret
@@ -244,6 +252,44 @@ the engine holds.
 Env-var and label tools follow JSON Merge Patch semantics: a `null` value deletes a key, and the patch is applied
 against a fresh inspect of the live spec to avoid clobbering concurrent changes. Mutating tools return `409` on a
 Docker version conflict.
+
+## Prompts
+
+Prompts are named sequences a client offers from a menu: picking one seeds the
+conversation with an investigation or a runbook, so an agent does not have to
+rediscover which order of calls answers a question.
+
+| Prompt | Tier | Argument | Reads | What it does |
+|---|---|---|---|---|
+| `diagnose_service` | 0 | `service` | `service` | Walks tasks, the failing task's logs, metrics and recent changes to find why a service is unhealthy |
+| `explain_unschedulable` | 0 | `service` | `service`, `node` | Separates the causes of an unplaced task: placement constraints, node labels and platform, node availability and state, replica caps, reservations |
+| `review_capacity` | 0 | — | `node` | Joins node capacity, reservations, real usage and sizing findings to say where the cluster is constrained |
+| `roll_back_service` | 1 | `service` | `service` | Confirms a service is actually degraded, then rolls it back and waits for the replicas to run |
+| `right_size_service` | 2 | `service` | `service` | Checks a sizing recommendation against measured use, then corrects the reservations |
+| `drain_node` | 3 | `node` | `node`, `service` | Checks quorum and that the work can be placed elsewhere, then drains and confirms the tasks moved |
+
+A prompt's tier is the highest tier of the tools it walks, so it is never
+offered where one of its steps would be refused. `CETACEAN_MCP_OPERATIONS_LEVEL`
+therefore controls prompts as it controls tools: at the default tier 1 you get
+the three diagnostic prompts plus `roll_back_service`.
+
+Prompts are also filtered by ACL, all-or-nothing: a prompt is offered only when
+**every** tool it walks is available to you *and* you hold read on every
+resource type in its Reads column. A sequence whose fourth step you cannot
+perform would dead-end partway, and for a remediation prompt possibly after a
+write. The read-type check is the second half because `search`,
+`list_resources`, `get_metrics` and `get_recommendations` are deliberately
+ungated — each ACL-filters its own results, so each stays visible to every
+caller — and a sequence built only from those would otherwise be offered to
+someone who would get an empty list from every step. A caller whose grants match
+nothing is offered no prompts at all. A prompt you cannot see reports
+`not found` from `prompts/get`, the same as a name that does not exist.
+
+Prompts read no cluster data. They expand to a single message with the resource
+name you supplied interpolated, and the name is not checked for existence — the
+text tells the model to resolve it with `search` first. A prompt is a plan for
+the model to carry out, not a report; every read and write it describes still
+goes through the ordinary tool and resource paths, with the ordinary ACL checks.
 
 ## Configuration
 

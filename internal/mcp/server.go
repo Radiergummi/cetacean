@@ -40,7 +40,7 @@ const ProviderName = "mcp-oauth"
 // Kept as package constants so the contract has a single source of truth
 // shared with the test that asserts it surfaces.
 const (
-	mcpInstructions = "Cetacean is a read-mostly observability and operations interface for a Docker Swarm cluster. Resolve a resource's ID or name with the search tool before reading its details or applying a write. Reads (the cetacean:// resources and the get_logs/search tools) are always available; mutating tools are gated by an operations tier and per-resource ACL, and may be hidden from tools/list or rejected at call time. Prefer the cetacean:// resources for detail and cross-references; use tools to change cluster state. Tool results include structuredContent you can parse directly."
+	mcpInstructions = "Cetacean is a read-mostly observability and operations interface for a Docker Swarm cluster. Resolve a resource's ID or name with the search tool before reading its details or applying a write. Reads (the cetacean:// resources and the get_logs/search tools) are subject to per-resource ACL like everything else; mutating tools are additionally gated by an operations tier, and either kind may be hidden from tools/list or rejected at call time. Prefer the cetacean:// resources for detail and cross-references; use tools to change cluster state. Tool results include structuredContent you can parse directly. Named investigation and remediation sequences over these resources and tools are available via prompts/list."
 
 	mcpDescription = "Read and safely operate a Docker Swarm cluster."
 )
@@ -97,6 +97,11 @@ type Server struct {
 	// per-identity tools/list filter (filterToolsForIdentity) inspects this
 	// slice to know which tools may need further hiding from a given caller.
 	registeredTools []toolDef
+
+	// registeredPrompts holds the prompts that passed the tier gate, so the
+	// per-identity prompts/list filter (filterPromptsForIdentity) can read
+	// each one's driven tools back.
+	registeredPrompts []promptDef
 
 	// notifications tracks per-session resource subscriptions and fans cache
 	// events out as MCP notifications. cancelNotifications is the listener
@@ -181,6 +186,18 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		mcpserver.WithResourceCapabilities(true, true),
 		mcpserver.WithToolCapabilities(true),
 		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
+		// registerPrompts()'s AddPrompt calls already enable this capability
+		// implicitly (AddPrompts -> implicitlyRegisterPromptCapabilities), the
+		// same mechanism mcp-go uses for tools and resources — so this option
+		// is redundant. It is declared anyway to match WithToolCapabilities and
+		// WithResourceCapabilities above, which are equally redundant against
+		// AddTool/AddResource; dropping just this one would read as though
+		// prompts were special.
+		//
+		// listChanged is false: the catalog is static and cannot change while
+		// the process runs.
+		mcpserver.WithPromptCapabilities(false),
+		mcpserver.WithPromptFilter(srv.filterPromptsForIdentity),
 		mcpserver.WithHooks(srv.installSubscriptionHooks()),
 		mcpserver.WithInstructions(mcpInstructions),
 		mcpserver.WithDescription(mcpDescription),
@@ -248,6 +265,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 	srv.registerResources()
 	srv.registerUIResources()
 	srv.registerTools()
+	srv.registerPrompts()
 	srv.cancelNotifications = srv.startNotifications()
 
 	httpSrv := mcpserver.NewStreamableHTTPServer(mcpSrv,
@@ -404,6 +422,61 @@ func (d discardingResponseWriter) Header() http.Header       { return d.h }
 func (discardingResponseWriter) Write(p []byte) (int, error) { return len(p), nil }
 func (discardingResponseWriter) WriteHeader(int)             {}
 
+// toolVisibility describes which tools an identity may see, and which resource
+// types it can read. Both are nil when everything is visible — no ACL wired, no
+// identity, or a nil policy, all of which mirror acl.Evaluator.Can's allow-all
+// behaviour.
+//
+// An identity matching no grant needs no special case: acl.TypeAccess answers
+// false for every type, so the gated tools fall out of tools/list while the
+// ungated ones stay (each ACL-filters its own results), and every prompt fails
+// the read check — a caller who can read nothing has nothing to investigate.
+type toolVisibility struct {
+	allow    func(name string) bool
+	readable func(resourceType string) bool
+}
+
+// toolVisibilityFor turns an identity's grants into a per-tool predicate and a
+// per-type read predicate. The grant-flattening itself — "write" implies
+// "read", "*" wildcards, and a stack or service grant reaching the types it
+// covers — lives in acl.TypeGrants, beside the call-time rule it shadows; what
+// is stated here is only the mapping from tools to the keys they check.
+func (s *Server) toolVisibilityFor(ctx context.Context) toolVisibility {
+	if s.acl == nil {
+		return toolVisibility{}
+	}
+
+	identity := auth.IdentityFromContext(ctx)
+	if identity == nil {
+		return toolVisibility{}
+	}
+
+	// One policy read answers both questions. Asking separately would let a
+	// hot reload land in between and answer each from a different policy.
+	access := s.acl.TypeGrants(identity)
+	if access.AllowAll() {
+		return toolVisibility{}
+	}
+
+	return toolVisibility{
+		allow: func(name string) bool {
+			spec, gated := toolACLSpecs[name]
+			if !gated {
+				return true
+			}
+			if spec.resourceType == "*" {
+				// Tool acts across all types — visible if any grant exists.
+				return access.HasAnyGrant()
+			}
+
+			return access.Can(spec.permission, spec.resourceType)
+		},
+		readable: func(resourceType string) bool {
+			return access.Can("read", resourceType)
+		},
+	}
+}
+
 // filterToolsForIdentity is wired as a WithToolFilter for tools/list. Tier
 // gating already happened at registration; this filter additionally hides
 // tools whose primary resource type the identity has zero grants on, so the
@@ -411,67 +484,79 @@ func (discardingResponseWriter) WriteHeader(int)             {}
 // advisory — call-time ACL still enforces, so returning the full slice would
 // never grant anything; the goal here is a truthful list.
 func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool) []mcplib.Tool {
-	if s.acl == nil {
+	visibility := s.toolVisibilityFor(ctx)
+	if visibility.allow == nil {
 		return tools
 	}
-	identity := auth.IdentityFromContext(ctx)
-	if identity == nil {
-		return tools
+
+	return filterToolsByACLSpec(tools, visibility.allow)
+}
+
+// filterPromptsForIdentity is wired as a WithPromptFilter for prompts/list.
+// mcp-go applies it at prompts/get as well, returning the same "not found" as
+// an unknown name, so a hidden prompt cannot be confirmed by guessing it.
+//
+// A prompt is a sequence, so visibility is all-or-nothing: if the caller
+// cannot perform one step, the runbook dead-ends partway — and for a
+// remediation prompt, possibly after the model has already written. One
+// unavailable tool hides the whole prompt.
+func (s *Server) filterPromptsForIdentity(
+	ctx context.Context,
+	prompts []mcplib.Prompt,
+) []mcplib.Prompt {
+	visibility := s.toolVisibilityFor(ctx)
+	if visibility.allow == nil {
+		return prompts
 	}
-	perms := s.acl.PermissionsFor(identity)
-	if perms == nil {
-		// nil policy = allow all (mirrors acl.Evaluator.Can).
-		return tools
+
+	defs := make(map[string]promptDef, len(s.registeredPrompts))
+	for _, def := range s.registeredPrompts {
+		defs[def.prompt.Name] = def
 	}
-	if len(perms) == 0 {
-		// Identity has zero grants. Drop everything except tools that don't
-		// require any ACL check (none today, but kept defensive).
-		return filterToolsByACLSpec(tools, func(name string) bool {
-			_, gated := toolACLSpecs[name]
-			return !gated
-		})
-	}
-	allowedByType := make(map[string]map[string]bool, 2) // permission → type → bool
-	for pattern, perms := range perms {
-		resType, _, ok := splitResourceType(pattern)
-		if !ok {
+
+	out := make([]mcplib.Prompt, 0, len(prompts))
+	for _, prompt := range prompts {
+		// Fail closed: a prompt we cannot resolve back to its declaration, or
+		// one declaring no tools or no read types, has nothing to check
+		// visibility against — and both checks are vacuously true for an empty
+		// set.
+		def, known := defs[prompt.Name]
+		if !known || len(def.drives) == 0 || len(def.reads) == 0 {
 			continue
 		}
-		for _, perm := range perms {
-			byType, ok := allowedByType[perm]
-			if !ok {
-				byType = make(map[string]bool)
-				allowedByType[perm] = byType
-			}
-			byType[resType] = true
+
+		if allToolsVisible(def.drives, visibility.allow) &&
+			allTypesReadable(def.reads, visibility.readable) {
+			out = append(out, prompt)
 		}
 	}
-	// "write" implies "read" — mirror Evaluator.hasPermission.
-	if writers, ok := allowedByType["write"]; ok {
-		readers := allowedByType["read"]
-		if readers == nil {
-			readers = make(map[string]bool, len(writers))
-			allowedByType["read"] = readers
-		}
-		for t := range writers {
-			readers[t] = true
-		}
-	}
-	return filterToolsByACLSpec(tools, func(name string) bool {
-		spec, gated := toolACLSpecs[name]
-		if !gated {
-			return true
-		}
-		if spec.resourceType == "*" {
-			// Tool acts across all types — visible if any grant exists.
-			return true
-		}
-		byType := allowedByType[spec.permission]
-		if byType == nil {
+
+	return out
+}
+
+// allToolsVisible reports whether every named tool passes allow.
+func allToolsVisible(tools []string, allow func(name string) bool) bool {
+	for _, name := range tools {
+		if !allow(name) {
 			return false
 		}
-		return byType[spec.resourceType] || byType["*"]
-	})
+	}
+
+	return true
+}
+
+// allTypesReadable reports whether the identity holds a read grant on every
+// resource type the prompt walks. This is what the driven-tool check cannot
+// answer: a sequence built from ungated cross-type tools is callable by anyone
+// while returning nothing but empty ACL-filtered lists.
+func allTypesReadable(types []string, readable func(resourceType string) bool) bool {
+	for _, resourceType := range types {
+		if !readable(resourceType) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // toolACLSpec describes the resource type and permission required to call a
@@ -522,19 +607,4 @@ func filterToolsByACLSpec(tools []mcplib.Tool, allow func(name string) bool) []m
 		}
 	}
 	return out
-}
-
-// splitResourceType pulls the type prefix from a grant resource pattern such
-// as "service:web-*" → ("service", "web-*", true). Patterns like "*" or
-// "*:*" yield ("*", ..., true) so callers can treat them as wildcards.
-func splitResourceType(pattern string) (string, string, bool) {
-	if pattern == "*" {
-		return "*", "*", true
-	}
-	for i := 0; i < len(pattern); i++ {
-		if pattern[i] == ':' {
-			return pattern[:i], pattern[i+1:], true
-		}
-	}
-	return "", "", false
 }

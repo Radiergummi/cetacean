@@ -657,3 +657,129 @@ func TestEvaluator_NilIdentityWithActivePolicy(t *testing.T) {
 		t.Fatal("nil identity should be denied when policy has audience restrictions")
 	}
 }
+
+// typeAgreementResolver holds one resource of every stack-capable type, all in
+// stack "web", plus a task belonging to service "api".
+func typeAgreementResolver() *stubResolver {
+	return &stubResolver{
+		stacks: map[string]string{
+			"service:api": "web",
+			"config:conf": "web",
+			"secret:sec":  "web",
+			"network:net": "web",
+			"volume:vol":  "web",
+		},
+		services: map[string]string{"t1": "api"},
+	}
+}
+
+// TestTypeGrantsAgreesWithCan is the guard on impliedTypes. TypeGrants states
+// at the type level what grantMatchesResource works out per resource, so the
+// two rules live in different functions and would otherwise drift silently —
+// which is exactly how a stack grant came to hide the service tools it covers.
+//
+// The fixture names a real resource for every grant pattern, so the type-level
+// approximation is exact here and the two must agree in both directions: a
+// disagreement is a bug, not the approximation showing.
+func TestTypeGrantsAgreesWithCan(t *testing.T) {
+	resource := map[string]string{
+		"service": "service:api",
+		"task":    "task:t1",
+		"stack":   "stack:web",
+		"config":  "config:conf",
+		"secret":  "secret:sec",
+		"network": "network:net",
+		"volume":  "volume:vol",
+		"node":    "node:n1",
+		"plugin":  "plugin:p1",
+		"swarm":   "swarm:default",
+	}
+
+	patterns := []string{
+		"*",
+		"stack:web",
+		"stack:*",
+		"service:api",
+		"service:*",
+		"task:t1",
+		"node:*",
+		"config:*",
+		"volume:vol",
+	}
+
+	identity := &auth.Identity{Subject: "tester"}
+
+	for _, pattern := range patterns {
+		for _, granted := range [][]string{{"read"}, {"write"}} {
+			name := pattern + "/" + granted[0]
+
+			t.Run(name, func(t *testing.T) {
+				e := NewEvaluator()
+				e.SetResolver(typeAgreementResolver())
+				e.SetPolicy(&Policy{Grants: []Grant{{
+					Resources:   []string{pattern},
+					Permissions: granted,
+				}}})
+
+				access := e.TypeGrants(identity)
+				if !access.HasAnyGrant() {
+					t.Fatal("identity holds a grant; HasAnyGrant must be true")
+				}
+
+				for _, permission := range []string{"read", "write"} {
+					for resourceType, concrete := range resource {
+						want := e.Can(identity, permission, concrete)
+
+						if got := access.Can(permission, resourceType); got != want {
+							t.Errorf("Can(%q, %q) = %t but TypeGrants.Can(%q, %q) = %t",
+								permission, concrete, want, permission, resourceType, got)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestTypeGrantsSeparatesNoPolicyFromNoMatch pins the distinction PermissionsFor
+// cannot express: both cases return nil there, and telling them apart used to
+// need a second policy read.
+func TestTypeGrantsSeparatesNoPolicyFromNoMatch(t *testing.T) {
+	identity := &auth.Identity{Subject: "tester"}
+
+	t.Run("no policy", func(t *testing.T) {
+		access := NewEvaluator().TypeGrants(identity)
+		if !access.AllowAll() || !access.HasAnyGrant() {
+			t.Fatalf("no policy must allow all, got %+v", access)
+		}
+
+		if !access.Can("write", "service") {
+			t.Error("no policy must permit every type")
+		}
+	})
+
+	t.Run("no matching grant", func(t *testing.T) {
+		e := NewEvaluator()
+		e.SetPolicy(&Policy{Grants: []Grant{{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"user:somebody-else"},
+			Permissions: []string{"read"},
+		}}})
+
+		access := e.TypeGrants(identity)
+		if access.AllowAll() || access.HasAnyGrant() {
+			t.Fatalf("an unmatched identity must report neither, got %+v", access)
+		}
+
+		if access.Can("read", "service") {
+			t.Error("an unmatched identity may read nothing")
+		}
+	})
+
+	t.Run("nil evaluator", func(t *testing.T) {
+		var e *Evaluator
+		if !e.TypeGrants(identity).Can("write", "node") {
+			t.Error("a nil evaluator must allow all, matching Can")
+		}
+	})
+}
