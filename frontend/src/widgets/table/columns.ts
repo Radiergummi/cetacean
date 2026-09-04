@@ -1,17 +1,26 @@
 /**
- * Column definitions for each resource type list_resources can return.
+ * Column definitions for each resource type the `find` tool can return.
  *
- * The records are the Docker Engine API types verbatim — Cetacean keeps no
- * domain models of its own — so the accessors read capitalised Docker fields
- * (`Spec.Name`, `Description.Hostname`) rather than the lower-cased shapes the
- * REST API's own view types use.
- *
- * Everything is optional-safe: a widget renders whatever the server sent, and a
- * host may be pointed at a cluster whose Docker version omits a field.
+ * `find` returns compact rows (`internal/cluster.Row`), not raw Docker Engine
+ * API objects, so every field lives under the same lower-cased keys for every
+ * resource type: `id`, `name`, `state`, `detail`, `stack`, and — only where a
+ * replica count means something — `desired`/`running`. What varies per type is
+ * only which of those columns to show and what to call them: `detail` is a
+ * service's image, a node's role, or a network's/volume's driver; `desired` is
+ * a stack's service count rather than a replica target.
  */
 
-/** A record from list_resources. Shape varies by resource type. */
-export type ResourceRecord = Record<string, unknown>;
+/** A row from `find`. Every resource type shares this shape. */
+export interface ResourceRecord {
+  id: string;
+  name: string;
+  type: string;
+  stack?: string;
+  state?: string;
+  detail?: string;
+  desired?: number;
+  running?: number;
+}
 
 export interface WidgetColumn {
   key: string;
@@ -21,102 +30,58 @@ export interface WidgetColumn {
 }
 
 /**
- * Reads a dotted path out of a record, tolerating missing intermediate objects.
+ * Renders a field as a display string, tolerating an absent value.
  */
-function path(record: ResourceRecord, dotted: string): unknown {
-  return dotted.split(".").reduce<unknown>((current, segment) => {
-    if (current === null || typeof current !== "object") {
-      return undefined;
-    }
-
-    return (current as Record<string, unknown>)[segment];
-  }, record);
-}
-
-/**
- * Reads a dotted path and renders it as a display string.
- */
-function text(dotted: string): (record: ResourceRecord) => string {
+function field(key: keyof ResourceRecord): (record: ResourceRecord) => string {
   return (record) => {
-    const found = path(record, dotted);
+    const found = record[key];
 
     if (found === undefined || found === null) {
       return "";
     }
 
-    if (typeof found === "string" || typeof found === "number" || typeof found === "boolean") {
-      return String(found);
-    }
-
-    return "";
+    return String(found);
   };
 }
 
-const identifier: WidgetColumn = { key: "id", header: "ID", value: text("ID") };
+const name: WidgetColumn = { key: "name", header: "Name", value: field("name") };
+const identifier: WidgetColumn = { key: "id", header: "ID", value: field("id") };
+const state: WidgetColumn = { key: "state", header: "State", value: field("state") };
+const stack: WidgetColumn = { key: "stack", header: "Stack", value: field("stack") };
+const running: WidgetColumn = { key: "running", header: "Running", value: field("running") };
+
+function detailColumn(header: string): WidgetColumn {
+  return { key: "detail", header, value: field("detail") };
+}
+
+function desiredColumn(header: string): WidgetColumn {
+  return { key: "desired", header, value: field("desired") };
+}
 
 const columnsByType: Record<string, WidgetColumn[]> = {
   services: [
-    { key: "name", header: "Name", value: text("Spec.Name") },
-    { key: "image", header: "Image", value: text("Spec.TaskTemplate.ContainerSpec.Image") },
+    name,
+    stack,
+    state,
+    detailColumn("Image"),
+    desiredColumn("Desired"),
+    running,
     identifier,
   ],
-  nodes: [
-    { key: "hostname", header: "Hostname", value: text("Description.Hostname") },
-    { key: "role", header: "Role", value: text("Spec.Role") },
-    { key: "availability", header: "Availability", value: text("Spec.Availability") },
-    { key: "state", header: "State", value: text("Status.State") },
-  ],
-  tasks: [
-    { key: "service", header: "Service", value: text("ServiceName") },
-    { key: "node", header: "Node", value: text("NodeHostname") },
-    { key: "state", header: "State", value: text("Status.State") },
-    identifier,
-  ],
-  stacks: [
-    { key: "name", header: "Name", value: text("Name") },
-    {
-      key: "services",
-      header: "Services",
-      value: (record) => {
-        const services = record["Services"];
-
-        return Array.isArray(services) ? String(services.length) : "";
-      },
-    },
-  ],
-  configs: [
-    { key: "name", header: "Name", value: text("Spec.Name") },
-    { key: "created", header: "Created", value: text("CreatedAt") },
-    identifier,
-  ],
-  secrets: [
-    { key: "name", header: "Name", value: text("Spec.Name") },
-    { key: "created", header: "Created", value: text("CreatedAt") },
-    identifier,
-  ],
-  networks: [
-    { key: "name", header: "Name", value: text("Name") },
-    { key: "driver", header: "Driver", value: text("Driver") },
-    { key: "scope", header: "Scope", value: text("Scope") },
-    identifier,
-  ],
-  volumes: [
-    { key: "name", header: "Name", value: text("Name") },
-    { key: "driver", header: "Driver", value: text("Driver") },
-    { key: "mountpoint", header: "Mount point", value: text("Mountpoint") },
-  ],
+  nodes: [name, state, detailColumn("Role"), identifier],
+  tasks: [name, state, detailColumn("Node"), identifier],
+  stacks: [name, desiredColumn("Services"), identifier],
+  configs: [name, stack, identifier],
+  secrets: [name, stack, identifier],
+  networks: [name, stack, detailColumn("Driver"), identifier],
+  volumes: [name, stack, detailColumn("Driver"), identifier],
 };
 
 /**
- * Columns for a resource type, falling back to a name/ID pair for a type this
- * widget has not been taught about — a new server type renders plainly rather
- * than as an empty table.
+ * Columns for a resource type. Every type falls through to the same universal
+ * columns when `columnsByType` has not been taught about it, since a compact
+ * row from an unknown type still carries `name`/`state`/`detail`/`id`.
  */
 export function columnsFor(resourceType: string): WidgetColumn[] {
-  return (
-    columnsByType[resourceType] ?? [
-      { key: "name", header: "Name", value: text("Spec.Name") },
-      identifier,
-    ]
-  );
+  return columnsByType[resourceType] ?? [name, state, detailColumn("Detail"), identifier];
 }
