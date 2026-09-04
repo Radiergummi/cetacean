@@ -32,7 +32,11 @@ services:
           - node.role == manager
 ```
 
+`compose.yaml` joins the shared `monitoring` overlay network as an external network, so create it first — or
+deploy the [monitoring stack](#adding-monitoring) before Cetacean, which creates it for you:
+
 ```bash
+docker network create --driver overlay monitoring
 docker stack deploy -c compose.yaml cetacean
 ```
 

@@ -1,0 +1,386 @@
+package mcp
+
+import (
+	"encoding/json"
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
+)
+
+// promptListing is the prompts/list result.
+type promptListing struct {
+	Prompts []struct {
+		Name        string `json:"name"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		Arguments   []struct {
+			Name     string `json:"name"`
+			Required bool   `json:"required"`
+		} `json:"arguments"`
+	} `json:"prompts"`
+}
+
+// listPrompts drives prompts/list through the real transport.
+func listPrompts(t *testing.T, handler http.Handler) promptListing {
+	t.Helper()
+
+	_, envelope := mcpModern(t, handler, 1, "prompts/list", `{}`)
+	if envelope.Error != nil {
+		t.Fatalf("prompts/list failed: %+v", envelope.Error)
+	}
+
+	var listing promptListing
+	if err := json.Unmarshal(envelope.Result, &listing); err != nil {
+		t.Fatalf("decode prompts/list: %v (raw %s)", err, envelope.Result)
+	}
+
+	return listing
+}
+
+// promptNames returns the listed prompt names, for asserting by name rather
+// than by count — a prompt moving tier should fail visibly.
+func promptNames(listing promptListing) []string {
+	names := make([]string, 0, len(listing.Prompts))
+	for _, prompt := range listing.Prompts {
+		names = append(names, prompt.Name)
+	}
+
+	return names
+}
+
+// TestPromptsAreRegisteredAndReachable guards registration and end-to-end
+// reachability. A unit test on promptCatalog() passes happily whether or not
+// registerPrompts() ever ran on a real server; this drives the real transport
+// so a missing registerPrompts() call, an empty catalog, or a broken handler
+// fails here instead of silently serving no prompts.
+func TestPromptsAreRegisteredAndReachable(t *testing.T) {
+	handler := newPromptTestServer(t, config.OpsReadOnly).Handler()
+
+	listing := listPrompts(t, handler)
+	if len(listing.Prompts) == 0 {
+		t.Fatal("prompts/list returned nothing; prompts are not registered")
+	}
+
+	_, envelope := mcpModern(t, handler, 2, "prompts/get",
+		`{"name":"review_capacity","arguments":{}}`)
+	if envelope.Error != nil {
+		t.Fatalf("prompts/get failed: %+v", envelope.Error)
+	}
+}
+
+// TestPromptsGetExpandsThroughTheTransport confirms the handler is reachable
+// and its argument survives JSON round-tripping.
+func TestPromptsGetExpandsThroughTheTransport(t *testing.T) {
+	handler := newPromptTestServer(t, config.OpsReadOnly).Handler()
+
+	_, envelope := mcpModern(t, handler, 1, "prompts/get",
+		`{"name":"diagnose_service","arguments":{"service":"web"}}`)
+	if envelope.Error != nil {
+		t.Fatalf("prompts/get failed: %+v", envelope.Error)
+	}
+
+	var result struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"messages"`
+	}
+
+	if err := json.Unmarshal(envelope.Result, &result); err != nil {
+		t.Fatalf("decode prompts/get: %v (raw %s)", err, envelope.Result)
+	}
+
+	if len(result.Messages) != 1 {
+		t.Fatalf("got %d messages, want 1", len(result.Messages))
+	}
+
+	if result.Messages[0].Role != "user" {
+		t.Errorf("role = %q, want user", result.Messages[0].Role)
+	}
+
+	if want := "web"; !strings.Contains(result.Messages[0].Content.Text, want) {
+		t.Errorf("expanded text does not name %q", want)
+	}
+}
+
+// TestPromptsGetRejectsAMissingArgument — the handler's guard has to survive
+// the transport, since mcp-go does not enforce Required itself.
+func TestPromptsGetRejectsAMissingArgument(t *testing.T) {
+	handler := newPromptTestServer(t, config.OpsReadOnly).Handler()
+
+	_, envelope := mcpModern(t, handler, 1, "prompts/get",
+		`{"name":"diagnose_service","arguments":{}}`)
+	if envelope.Error == nil {
+		t.Fatal("prompts/get with no argument succeeded; the service name is required")
+	}
+}
+
+// newPromptTestServer wires a server at the given operations level.
+func newPromptTestServer(t *testing.T, opsLevel config.OperationsLevel) *Server {
+	t.Helper()
+
+	return newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, opsLevel)
+}
+
+// listPromptsAs drives prompts/list with an identity on the request context,
+// which is how the ACL filter sees a caller.
+func listPromptsAs(t *testing.T, srv *Server, identity *auth.Identity) promptListing {
+	t.Helper()
+
+	request := modernRequest(t, 1, "prompts/list", `{}`)
+	request = request.WithContext(auth.ContextWithIdentity(request.Context(), identity))
+
+	_, envelope := sendMCP(t, srv.Handler(), request)
+	if envelope.Error != nil {
+		t.Fatalf("prompts/list failed: %+v", envelope.Error)
+	}
+
+	var listing promptListing
+	if err := json.Unmarshal(envelope.Result, &listing); err != nil {
+		t.Fatalf("decode prompts/list: %v (raw %s)", err, envelope.Result)
+	}
+
+	return listing
+}
+
+// visiblePrompts lists, as a set, the prompts a caller holding policy is
+// offered. Every ACL prompt test walks the same evaluator → server →
+// prompts/list path and differs only in the policy and the names it asserts on.
+func visiblePrompts(t *testing.T, policy *acl.Policy) map[string]bool {
+	t.Helper()
+
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(policy)
+
+	srv := newToolTestServer(
+		t,
+		cache.New(nil),
+		&fakeWriteClient{},
+		config.OpsImpactful,
+		func(o *Options) { o.ACL = evaluator },
+	)
+
+	found := make(map[string]bool)
+	for _, name := range promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"})) {
+		found[name] = true
+	}
+
+	return found
+}
+
+// TestPromptsForANodeOperator pins both halves of the filter against one
+// policy. diagnose_service walks get_logs, which needs service:read, and
+// explain_unschedulable reads services even though every tool it drives is
+// ungated — so neither is offered. review_capacity walks nodes end to end and
+// must be, and drain_node needs node:write rather than read.
+func TestPromptsForANodeOperator(t *testing.T) {
+	got := visiblePrompts(t, readOnlyPolicy("node:*"))
+
+	if got["diagnose_service"] {
+		t.Error("diagnose_service drives get_logs; a node-only caller may not see it")
+	}
+
+	if got["explain_unschedulable"] {
+		t.Error("explain_unschedulable reads services; node:read alone must not reveal it")
+	}
+
+	if got["drain_node"] {
+		t.Error("drain_node writes; node:read alone must not reveal it")
+	}
+
+	if !got["review_capacity"] {
+		t.Error("node:read walks review_capacity end to end; it must be offered")
+	}
+}
+
+// TestPromptsVisibleWhenEveryDrivenToolIs — a caller with service:read gets the
+// diagnostic prompts over services and still not the remediation ones, which
+// need write.
+func TestPromptsVisibleWhenEveryDrivenToolIs(t *testing.T) {
+	got := visiblePrompts(t, readOnlyPolicy("service:*"))
+
+	if !got["diagnose_service"] {
+		t.Error("service:read must reveal diagnose_service")
+	}
+
+	if got["roll_back_service"] {
+		t.Error("service:read must not reveal roll_back_service, which writes")
+	}
+}
+
+// TestPromptsHiddenWhenTheReadTypesAreDenied covers what the driven-tool check
+// cannot see. explain_unschedulable and review_capacity walk only ungated
+// cross-type tools, so every driven name passes allow for any grant holder —
+// but a caller granted volume:read alone would get an empty list from every
+// step. The declared read types are what keep them hidden.
+func TestPromptsHiddenWhenTheReadTypesAreDenied(t *testing.T) {
+	got := visiblePrompts(t, readOnlyPolicy("volume:*"))
+
+	if len(got) != 0 {
+		t.Errorf("a volume-only caller was offered %v; every prompt walks services or nodes",
+			got)
+	}
+}
+
+// TestPromptsVisibleToAStackOperator is the end-to-end payoff of expanding
+// grants by type. A stack grant covers the stack's services, so every step of
+// diagnose_service and roll_back_service succeeds for its holder — and both
+// were hidden before, with prompts/get reporting "not found" for a sequence the
+// caller could run.
+func TestPromptsVisibleToAStackOperator(t *testing.T) {
+	got := visiblePrompts(t, &acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"stack:web"},
+		Permissions: []string{"write"},
+	}}})
+
+	if !got["diagnose_service"] {
+		t.Error("a stack operator can walk diagnose_service; it must be offered")
+	}
+
+	if !got["roll_back_service"] {
+		t.Error("stack:write covers the stack's services; roll_back_service must be offered")
+	}
+
+	if got["drain_node"] {
+		t.Error("nodes belong to no stack; drain_node must stay hidden")
+	}
+}
+
+// TestPromptsHiddenEntirelyWithoutGrants is the floor. A caller matching no
+// grant can read nothing, so there is no investigation to seed — even though
+// the cross-type read tools stay visible in tools/list on their own reasoning.
+func TestPromptsHiddenEntirelyWithoutGrants(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:*"},
+		Audience:    []string{"user:somebody-else"},
+		Permissions: []string{"read"},
+	}}})
+
+	srv := newToolTestServer(
+		t,
+		cache.New(nil),
+		&fakeWriteClient{},
+		config.OpsImpactful,
+		func(o *Options) { o.ACL = evaluator },
+	)
+
+	if got := promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"})); len(got) != 0 {
+		t.Errorf("a zero-grant caller was offered %v, want nothing", got)
+	}
+
+	// Decoding into promptListing cannot tell a JSON "null" apart from "[]" —
+	// both unmarshal to a nil/empty Go slice — so check the raw envelope too.
+	// mcp-go's encoder may or may not insert a space after the colon, so
+	// compare with spaces stripped rather than pinning exact formatting.
+	request := modernRequest(t, 1, "prompts/list", `{}`)
+	request = request.WithContext(
+		auth.ContextWithIdentity(request.Context(), &auth.Identity{Subject: "tester"}),
+	)
+
+	_, envelope := sendMCP(t, srv.Handler(), request)
+	if envelope.Error != nil {
+		t.Fatalf("prompts/list failed: %+v", envelope.Error)
+	}
+
+	raw := strings.ReplaceAll(string(envelope.Result), " ", "")
+	if !strings.Contains(raw, `"prompts":[]`) {
+		t.Errorf("raw prompts/list result = %s, want an empty array, not null", envelope.Result)
+	}
+}
+
+// TestPromptsGetOnAHiddenPromptSaysNotFound is a disclosure property. mcp-go
+// enforces the filter at get time too and returns the same error as an unknown
+// name, so a hidden prompt cannot be confirmed by guessing it. Inherited rather
+// than built, and pinned because it is security-relevant.
+func TestPromptsGetOnAHiddenPromptSaysNotFound(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(readOnlyPolicy("node:*"))
+
+	srv := newToolTestServer(
+		t,
+		cache.New(nil),
+		&fakeWriteClient{},
+		config.OpsImpactful,
+		func(o *Options) { o.ACL = evaluator },
+	)
+
+	request := modernRequest(t, 1, "prompts/get",
+		`{"name":"diagnose_service","arguments":{"service":"web"}}`)
+	request = request.WithContext(
+		auth.ContextWithIdentity(request.Context(), &auth.Identity{Subject: "tester"}),
+	)
+
+	_, envelope := sendMCP(t, srv.Handler(), request)
+	if envelope.Error == nil {
+		t.Fatal("prompts/get returned a prompt the caller may not see")
+	}
+
+	if !strings.Contains(envelope.Error.Message, "not found") {
+		t.Errorf("error was %q; a hidden prompt must be indistinguishable from an unknown one",
+			envelope.Error.Message)
+	}
+}
+
+// TestPromptsListAtEachTier is what makes the gating observable: every tier
+// above 0 adds exactly one remediation prompt.
+func TestPromptsListAtEachTier(t *testing.T) {
+	for _, testCase := range []struct {
+		level config.OperationsLevel
+		want  []string
+	}{
+		{
+			level: config.OpsReadOnly,
+			want:  []string{"diagnose_service", "explain_unschedulable", "review_capacity"},
+		},
+		{
+			level: config.OpsOperational,
+			want: []string{
+				"diagnose_service", "explain_unschedulable", "review_capacity",
+				"roll_back_service",
+			},
+		},
+		{
+			level: config.OpsConfiguration,
+			want: []string{
+				"diagnose_service", "explain_unschedulable", "review_capacity",
+				"roll_back_service", "right_size_service",
+			},
+		},
+		{
+			level: config.OpsImpactful,
+			want: []string{
+				"diagnose_service", "explain_unschedulable", "review_capacity",
+				"roll_back_service", "right_size_service", "drain_node",
+			},
+		},
+	} {
+		handler := newPromptTestServer(t, testCase.level).Handler()
+
+		got := promptNames(listPrompts(t, handler))
+		if len(got) != len(testCase.want) {
+			t.Errorf("tier %v listed %v, want %v", testCase.level, got, testCase.want)
+
+			continue
+		}
+
+		listed := make(map[string]bool, len(got))
+		for _, name := range got {
+			listed[name] = true
+		}
+
+		for _, name := range testCase.want {
+			if !listed[name] {
+				t.Errorf("tier %v did not list %q", testCase.level, name)
+			}
+		}
+	}
+}

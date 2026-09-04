@@ -55,6 +55,22 @@ type MCPConfig struct {
 	// mutations it never collects.
 	MaxConcurrentTasks int
 
+	// TaskTTL is the retention mcp-go is given for a task whose client did not
+	// ask for one. mcp-go schedules cleanup only for a task carrying a TTL, so
+	// without this a client that omits the field pins its result for the life
+	// of the process. Zero disables the fill-in.
+	//
+	// The clock starts when the task is created, not when it finishes, so this
+	// must comfortably exceed the convergence timeout or a result expires
+	// before the client that asked for it can collect it.
+	TaskTTL time.Duration
+
+	// MaxTaskTTL caps the retention a client may ask for. Without it the fill-
+	// in above is not a bound at all: a client naming a large TTL pins a result
+	// for exactly as long as it likes. A request above this is served with the
+	// ceiling, not refused. Zero disables the cap.
+	MaxTaskTTL time.Duration
+
 	// DCREnabled enables Dynamic Client Registration (RFC 7591).
 	DCREnabled bool
 
@@ -91,11 +107,15 @@ func DefaultMCPConfig() MCPConfig {
 
 		RequireResourceIndicator: true,
 		MaxConcurrentTasks:       32,
-		DCREnabled:               true,
-		DCRRateLimit:             10,
-		DCRMaxClients:            1000,
-		CIMDEnabled:              true,
-		AuthBypass:               nil,
+		// 15m covers the 5m convergence timeout with a collection window well
+		// clear of it, since the TTL runs from creation.
+		TaskTTL:       15 * time.Minute,
+		MaxTaskTTL:    time.Hour,
+		DCREnabled:    true,
+		DCRRateLimit:  10,
+		DCRMaxClients: 1000,
+		CIMDEnabled:   true,
+		AuthBypass:    nil,
 	}
 }
 
@@ -125,6 +145,8 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fOpsLevel      *int
 		fRequireRI     *bool
 		fConsentTTL    *string
+		fTaskTTL       *string
+		fMaxTaskTTL    *string
 		fMaxTasks      *int
 		fDCREnabled    *bool
 		fDCRRateLimit  *int
@@ -141,6 +163,8 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fConsentTTL = fm.ConsentTTL
 		fOpsLevel = fm.OperationsLevel
 		fMaxTasks = fm.MaxConcurrentTasks
+		fTaskTTL = fm.TaskTTL
+		fMaxTaskTTL = fm.MaxTaskTTL
 		if fm.OAuth != nil {
 			fRequireRI = fm.OAuth.RequireResourceIndicator
 			fDCREnabled = fm.OAuth.DCREnabled
@@ -171,11 +195,33 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		return MCPConfig{}, err
 	}
 
-	consentTTL, err := resolveDuration(
+	// Non-negative rather than positive: zero is the documented way to turn
+	// remembered approvals off, and ConsentStore.Enabled() honours it.
+	consentTTL, err := resolveNonNegativeDuration(
 		nil,
 		"CETACEAN_MCP_CONSENT_TTL",
 		fConsentTTL,
 		def.ConsentTTL,
+	)
+	if err != nil {
+		return MCPConfig{}, err
+	}
+
+	taskTTL, err := resolveNonNegativeDuration(
+		nil,
+		"CETACEAN_MCP_TASK_TTL",
+		fTaskTTL,
+		def.TaskTTL,
+	)
+	if err != nil {
+		return MCPConfig{}, err
+	}
+
+	maxTaskTTL, err := resolveNonNegativeDuration(
+		nil,
+		"CETACEAN_MCP_MAX_TASK_TTL",
+		fMaxTaskTTL,
+		def.MaxTaskTTL,
 	)
 	if err != nil {
 		return MCPConfig{}, err
@@ -243,6 +289,8 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		RefreshTokenTTL:    refreshTTL,
 		ConsentTTL:         consentTTL,
 		MaxConcurrentTasks: maxConcurrentTasks,
+		TaskTTL:            taskTTL,
+		MaxTaskTTL:         maxTaskTTL,
 		RequireResourceIndicator: resolveBool(
 			nil,
 			"CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR",
