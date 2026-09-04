@@ -422,16 +422,18 @@ func (d discardingResponseWriter) Header() http.Header       { return d.h }
 func (discardingResponseWriter) Write(p []byte) (int, error) { return len(p), nil }
 func (discardingResponseWriter) WriteHeader(int)             {}
 
-// toolVisibility describes which tools an identity may see. allow is nil when
-// every tool is visible — no ACL wired, no identity, or a nil policy, all of
-// which mirror acl.Evaluator.Can's allow-all behaviour. noGrants marks an
-// identity that matched no grant at all; it still gets an allow func (the
-// ungated tools stay visible, as they do in tools/list) but prompts treat it
-// as a floor, since a caller who can read nothing has nothing to investigate.
+// toolVisibility describes which tools an identity may see, and which resource
+// types it can read. Both are nil when everything is visible — no ACL wired, no
+// identity, or a nil policy, all of which mirror acl.Evaluator.Can's allow-all
+// behaviour.
+//
+// An identity matching no grant needs no special case: acl.TypeAccess answers
+// false for every type, so the gated tools fall out of tools/list while the
+// ungated ones stay (each ACL-filters its own results), and every prompt fails
+// the read check — a caller who can read nothing has nothing to investigate.
 type toolVisibility struct {
 	allow    func(name string) bool
 	readable func(resourceType string) bool
-	noGrants bool
 }
 
 // toolVisibilityFor turns an identity's grants into a per-tool predicate and a
@@ -456,20 +458,6 @@ func (s *Server) toolVisibilityFor(ctx context.Context) toolVisibility {
 		return toolVisibility{}
 	}
 
-	// Drop everything gated for a zero-grant identity; ungated tools (search
-	// and the cross-type reads) stay visible, since each ACL-filters its own
-	// results at call time.
-	if !access.HasAnyGrant() {
-		return toolVisibility{
-			noGrants: true,
-			allow: func(name string) bool {
-				_, gated := toolACLSpecs[name]
-				return !gated
-			},
-			readable: func(string) bool { return false },
-		}
-	}
-
 	return toolVisibility{
 		allow: func(name string) bool {
 			spec, gated := toolACLSpecs[name]
@@ -478,7 +466,7 @@ func (s *Server) toolVisibilityFor(ctx context.Context) toolVisibility {
 			}
 			if spec.resourceType == "*" {
 				// Tool acts across all types — visible if any grant exists.
-				return true
+				return access.HasAnyGrant()
 			}
 
 			return access.Can(spec.permission, spec.resourceType)
@@ -517,15 +505,6 @@ func (s *Server) filterPromptsForIdentity(
 	prompts []mcplib.Prompt,
 ) []mcplib.Prompt {
 	visibility := s.toolVisibilityFor(ctx)
-
-	// A caller matching no grant can read nothing, so there is no
-	// investigation to seed. The cross-type read tools stay visible in
-	// tools/list on their own reasoning — each ACL-filters its own results —
-	// but a prompt promising a sequence over them promises nothing.
-	if visibility.noGrants {
-		return []mcplib.Prompt{}
-	}
-
 	if visibility.allow == nil {
 		return prompts
 	}
@@ -571,12 +550,6 @@ func allToolsVisible(tools []string, allow func(name string) bool) bool {
 // answer: a sequence built from ungated cross-type tools is callable by anyone
 // while returning nothing but empty ACL-filtered lists.
 func allTypesReadable(types []string, readable func(resourceType string) bool) bool {
-	// Defensive: every non-allow-all visibility sets readable, and the
-	// allow-all path returns before reaching here.
-	if readable == nil {
-		return false
-	}
-
 	for _, resourceType := range types {
 		if !readable(resourceType) {
 			return false

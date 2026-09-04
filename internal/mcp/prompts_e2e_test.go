@@ -151,94 +151,14 @@ func listPromptsAs(t *testing.T, srv *Server, identity *auth.Identity) promptLis
 	return listing
 }
 
-// TestPromptsHiddenWhenADrivenToolIsDenied — diagnose_service walks get_logs,
-// which needs service:read. A caller with only node grants cannot complete the
-// sequence, so it must not be offered.
-func TestPromptsHiddenWhenADrivenToolIsDenied(t *testing.T) {
+// visiblePrompts lists, as a set, the prompts a caller holding policy is
+// offered. Every ACL prompt test walks the same evaluator → server →
+// prompts/list path and differs only in the policy and the names it asserts on.
+func visiblePrompts(t *testing.T, policy *acl.Policy) map[string]bool {
+	t.Helper()
+
 	evaluator := acl.NewEvaluator()
-	evaluator.SetPolicy(readOnlyPolicy("node:*"))
-
-	srv := newToolTestServer(
-		t,
-		cache.New(nil),
-		&fakeWriteClient{},
-		config.OpsImpactful,
-		func(o *Options) { o.ACL = evaluator },
-	)
-
-	got := promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"}))
-	for _, name := range got {
-		if name == "diagnose_service" {
-			t.Error("diagnose_service offered to a caller with no service:read grant")
-		}
-
-		if name == "drain_node" {
-			t.Error("drain_node offered to a caller with only node:read, not node:write")
-		}
-	}
-}
-
-// TestPromptsVisibleWhenEveryDrivenToolIs — the same caller with service:read
-// gets the diagnostic prompts and still not the remediation ones, which need
-// write.
-func TestPromptsVisibleWhenEveryDrivenToolIs(t *testing.T) {
-	evaluator := acl.NewEvaluator()
-	evaluator.SetPolicy(readOnlyPolicy("service:*"))
-
-	srv := newToolTestServer(
-		t,
-		cache.New(nil),
-		&fakeWriteClient{},
-		config.OpsImpactful,
-		func(o *Options) { o.ACL = evaluator },
-	)
-
-	got := promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"}))
-
-	found := make(map[string]bool, len(got))
-	for _, name := range got {
-		found[name] = true
-	}
-
-	if !found["diagnose_service"] {
-		t.Error("service:read must reveal diagnose_service")
-	}
-
-	if found["roll_back_service"] {
-		t.Error("service:read must not reveal roll_back_service, which writes")
-	}
-}
-
-// TestPromptsHiddenWhenTheReadTypesAreDenied covers what the driven-tool check
-// cannot see. explain_unschedulable and review_capacity walk only ungated
-// cross-type tools, so every driven name passes allow for any grant holder —
-// but a caller granted volume:read alone would get an empty list from every
-// step. reads is what keeps them hidden.
-func TestPromptsHiddenWhenTheReadTypesAreDenied(t *testing.T) {
-	evaluator := acl.NewEvaluator()
-	evaluator.SetPolicy(readOnlyPolicy("volume:*"))
-
-	srv := newToolTestServer(
-		t,
-		cache.New(nil),
-		&fakeWriteClient{},
-		config.OpsImpactful,
-		func(o *Options) { o.ACL = evaluator },
-	)
-
-	if got := promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"})); len(got) != 0 {
-		t.Errorf("a volume-only caller was offered %v; every prompt walks services or nodes",
-			got)
-	}
-}
-
-// TestPromptsVisibleWhenTheReadTypesAre is the other half: node:read is what
-// review_capacity walks, and it is offered — the reads check must not hide a
-// sequence the caller can actually complete. explain_unschedulable stays
-// hidden, since it compares constraints against services too.
-func TestPromptsVisibleWhenTheReadTypesAre(t *testing.T) {
-	evaluator := acl.NewEvaluator()
-	evaluator.SetPolicy(readOnlyPolicy("node:*"))
+	evaluator.SetPolicy(policy)
 
 	srv := newToolTestServer(
 		t,
@@ -253,12 +173,84 @@ func TestPromptsVisibleWhenTheReadTypesAre(t *testing.T) {
 		found[name] = true
 	}
 
-	if !found["review_capacity"] {
-		t.Error("node:read walks review_capacity end to end; it must be offered")
+	return found
+}
+
+// TestPromptsForANodeOperator pins both halves of the filter against one
+// policy. diagnose_service walks get_logs, which needs service:read, and
+// explain_unschedulable reads services even though every tool it drives is
+// ungated — so neither is offered. review_capacity walks nodes end to end and
+// must be, and drain_node needs node:write rather than read.
+func TestPromptsForANodeOperator(t *testing.T) {
+	got := visiblePrompts(t, readOnlyPolicy("node:*"))
+
+	if got["diagnose_service"] {
+		t.Error("diagnose_service drives get_logs; a node-only caller may not see it")
 	}
 
-	if found["explain_unschedulable"] {
-		t.Error("explain_unschedulable reads services too; node:read alone must not reveal it")
+	if got["explain_unschedulable"] {
+		t.Error("explain_unschedulable reads services; node:read alone must not reveal it")
+	}
+
+	if got["drain_node"] {
+		t.Error("drain_node writes; node:read alone must not reveal it")
+	}
+
+	if !got["review_capacity"] {
+		t.Error("node:read walks review_capacity end to end; it must be offered")
+	}
+}
+
+// TestPromptsVisibleWhenEveryDrivenToolIs — a caller with service:read gets the
+// diagnostic prompts over services and still not the remediation ones, which
+// need write.
+func TestPromptsVisibleWhenEveryDrivenToolIs(t *testing.T) {
+	got := visiblePrompts(t, readOnlyPolicy("service:*"))
+
+	if !got["diagnose_service"] {
+		t.Error("service:read must reveal diagnose_service")
+	}
+
+	if got["roll_back_service"] {
+		t.Error("service:read must not reveal roll_back_service, which writes")
+	}
+}
+
+// TestPromptsHiddenWhenTheReadTypesAreDenied covers what the driven-tool check
+// cannot see. explain_unschedulable and review_capacity walk only ungated
+// cross-type tools, so every driven name passes allow for any grant holder —
+// but a caller granted volume:read alone would get an empty list from every
+// step. The declared read types are what keep them hidden.
+func TestPromptsHiddenWhenTheReadTypesAreDenied(t *testing.T) {
+	got := visiblePrompts(t, readOnlyPolicy("volume:*"))
+
+	if len(got) != 0 {
+		t.Errorf("a volume-only caller was offered %v; every prompt walks services or nodes",
+			got)
+	}
+}
+
+// TestPromptsVisibleToAStackOperator is the end-to-end payoff of expanding
+// grants by type. A stack grant covers the stack's services, so every step of
+// diagnose_service and roll_back_service succeeds for its holder — and both
+// were hidden before, with prompts/get reporting "not found" for a sequence the
+// caller could run.
+func TestPromptsVisibleToAStackOperator(t *testing.T) {
+	got := visiblePrompts(t, &acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"stack:web"},
+		Permissions: []string{"write"},
+	}}})
+
+	if !got["diagnose_service"] {
+		t.Error("a stack operator can walk diagnose_service; it must be offered")
+	}
+
+	if !got["roll_back_service"] {
+		t.Error("stack:write covers the stack's services; roll_back_service must be offered")
+	}
+
+	if got["drain_node"] {
+		t.Error("nodes belong to no stack; drain_node must stay hidden")
 	}
 }
 
@@ -390,43 +382,5 @@ func TestPromptsListAtEachTier(t *testing.T) {
 				t.Errorf("tier %v did not list %q", testCase.level, name)
 			}
 		}
-	}
-}
-
-// TestPromptsVisibleToAStackOperator is the end-to-end payoff of expanding
-// grants by type. A stack grant covers the stack's services, so every step of
-// diagnose_service and roll_back_service succeeds for its holder — and both
-// were hidden before, along with prompts/get returning "not found" for a
-// sequence the caller could run.
-func TestPromptsVisibleToAStackOperator(t *testing.T) {
-	evaluator := acl.NewEvaluator()
-	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
-		Resources:   []string{"stack:web"},
-		Permissions: []string{"write"},
-	}}})
-
-	srv := newToolTestServer(
-		t,
-		cache.New(nil),
-		&fakeWriteClient{},
-		config.OpsImpactful,
-		func(o *Options) { o.ACL = evaluator },
-	)
-
-	found := make(map[string]bool)
-	for _, name := range promptNames(listPromptsAs(t, srv, &auth.Identity{Subject: "tester"})) {
-		found[name] = true
-	}
-
-	if !found["diagnose_service"] {
-		t.Error("a stack operator can walk diagnose_service; it must be offered")
-	}
-
-	if !found["roll_back_service"] {
-		t.Error("stack:write covers the stack's services; roll_back_service must be offered")
-	}
-
-	if found["drain_node"] {
-		t.Error("nodes belong to no stack; drain_node must stay hidden")
 	}
 }

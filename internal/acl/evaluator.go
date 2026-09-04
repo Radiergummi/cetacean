@@ -224,9 +224,16 @@ func (e *Evaluator) grantMatchesResource(g Grant, resource string) bool {
 // stack; a service grant reaches that service's tasks. Nothing reaches nodes,
 // plugins or the swarm itself, which belong to no stack.
 //
-// Keep in step with grantMatchesResource. TestTypeGrantsAgreesWithCan is the
-// guard: it drives the real evaluator over a resolver holding one resource of
-// each type and fails if the two disagree in either direction.
+// cache.StackOf's switch is the authority on the stack list; keep the two in
+// step. TestTypeGrantsAgreesWithCan guards the half this package can see: it
+// drives the real evaluator over a resolver holding one resource of each type
+// and fails if the two rules disagree in either direction.
+//
+// The expansion is unconditional where grantMatchesResource's is not — that
+// walk only happens when a resolver is attached. With no resolver, TypeGrants
+// still reports a stack grant as reaching services while Can would not. That
+// widens a listing, never a call, which is the direction this projection is
+// already allowed to err in.
 var impliedTypes = map[string][]string{
 	"stack":   {"service", "task", "config", "secret", "network", "volume"},
 	"service": {"task"},
@@ -244,19 +251,19 @@ var impliedTypes = map[string][]string{
 // service?", never "may it read this one" — Can remains the only authority
 // for that, and every call site still checks it.
 type TypeAccess struct {
-	// byPermission is permission → resource type → granted. The "*" key means
-	// every type; Can resolves it, so callers never see it.
-	byPermission map[string]map[string]bool
+	// granted is keyed by permission and resource type, already expanded, so
+	// Can is a lookup rather than a rule. The "*" type means every type.
+	granted map[typeKey]bool
 
 	// allowAll mirrors Can's allow-all: a nil evaluator or no policy loaded.
 	allowAll bool
 
-	// anyGrant reports whether the identity matched at least one grant. It is
-	// what separates "no policy, allow everything" from "policy loaded, this
-	// caller matched nothing" — a distinction PermissionsFor's nil return
-	// cannot express, and the reason this type carries both.
+	// anyGrant separates that from "policy loaded, this caller matched
+	// nothing" — the two cases PermissionsFor's nil return conflates.
 	anyGrant bool
 }
+
+type typeKey struct{ permission, resourceType string }
 
 // AllowAll reports that no policy is in force, so every type is permitted.
 func (t TypeAccess) AllowAll() bool { return t.allowAll }
@@ -265,26 +272,14 @@ func (t TypeAccess) AllowAll() bool { return t.allowAll }
 func (t TypeAccess) HasAnyGrant() bool { return t.anyGrant }
 
 // Can reports whether the identity may exercise permission on some resource of
-// resourceType. Write implies read, as it does in hasPermission.
+// resourceType.
 func (t TypeAccess) Can(permission, resourceType string) bool {
 	if t.allowAll {
 		return true
 	}
 
-	if t.granted(permission, resourceType) {
-		return true
-	}
-
-	return permission == "read" && t.granted("write", resourceType)
-}
-
-func (t TypeAccess) granted(permission, resourceType string) bool {
-	byType := t.byPermission[permission]
-	if byType == nil {
-		return false
-	}
-
-	return byType[resourceType] || byType["*"]
+	return t.granted[typeKey{permission, resourceType}] ||
+		t.granted[typeKey{permission, "*"}]
 }
 
 // TypeGrants projects an identity's grants onto the types it can act on,
@@ -305,30 +300,24 @@ func (e *Evaluator) TypeGrants(id *auth.Identity) TypeAccess {
 		return TypeAccess{}
 	}
 
-	access := TypeAccess{
-		byPermission: make(map[string]map[string]bool, 2),
-		anyGrant:     true,
-	}
-
-	mark := func(permission, resourceType string) {
-		byType, ok := access.byPermission[permission]
-		if !ok {
-			byType = make(map[string]bool)
-			access.byPermission[permission] = byType
-		}
-		byType[resourceType] = true
-	}
-
+	access := TypeAccess{granted: make(map[typeKey]bool), anyGrant: true}
 	for _, g := range grants {
 		for _, expr := range g.Resources {
 			resType, ok := grantResourceType(expr)
 			if !ok {
 				continue
 			}
-			for _, permission := range g.Permissions {
-				mark(permission, resType)
+
+			// hasPermission owns "write implies read", so the projection is
+			// stored already expanded and Can needs no rule of its own.
+			for permission := range validPermissions {
+				if !hasPermission(g, permission) {
+					continue
+				}
+
+				access.granted[typeKey{permission, resType}] = true
 				for _, implied := range impliedTypes[resType] {
-					mark(permission, implied)
+					access.granted[typeKey{permission, implied}] = true
 				}
 			}
 		}

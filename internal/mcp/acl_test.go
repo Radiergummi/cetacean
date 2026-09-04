@@ -312,7 +312,7 @@ func TestToolVisibilityForReportsAllowAll(t *testing.T) {
 		srv := newResourceTestServer(t, c)
 
 		got := srv.toolVisibilityFor(ctxWithIdentity())
-		if got.allow != nil || got.noGrants {
+		if got.allow != nil {
 			t.Errorf("toolVisibilityFor = %+v, want allow-all", got)
 		}
 	})
@@ -321,7 +321,7 @@ func TestToolVisibilityForReportsAllowAll(t *testing.T) {
 		srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = acl.NewEvaluator() })
 
 		got := srv.toolVisibilityFor(context.Background())
-		if got.allow != nil || got.noGrants {
+		if got.allow != nil {
 			t.Errorf("toolVisibilityFor = %+v, want allow-all", got)
 		}
 	})
@@ -330,16 +330,17 @@ func TestToolVisibilityForReportsAllowAll(t *testing.T) {
 		srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = acl.NewEvaluator() })
 
 		got := srv.toolVisibilityFor(ctxWithIdentity())
-		if got.allow != nil || got.noGrants {
+		if got.allow != nil {
 			t.Errorf("toolVisibilityFor = %+v, want allow-all", got)
 		}
 	})
 }
 
-// TestToolVisibilityForReportsNoGrants covers the fact filterToolsForIdentity
-// discards today: an identity matching no grant at all. Prompts need it, since
-// a caller who can read nothing has no investigation to seed.
-func TestToolVisibilityForReportsNoGrants(t *testing.T) {
+// TestToolVisibilityForHidesEverythingGatedWithoutGrants covers an identity
+// matching no grant at all. It needs no special case — acl.TypeAccess answers
+// false for every type — but the resulting shape is load-bearing for prompts,
+// so it is pinned here as well as end to end.
+func TestToolVisibilityForHidesEverythingGatedWithoutGrants(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
 		Resources:   []string{"service:web-*"},
@@ -350,12 +351,8 @@ func TestToolVisibilityForReportsNoGrants(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
 
 	got := srv.toolVisibilityFor(ctxWithIdentity())
-	if !got.noGrants {
-		t.Error("toolVisibilityFor did not report zero grants for an unmatched identity")
-	}
-
 	if got.allow == nil {
-		t.Fatal("allow must still be set, so gated tools are hidden")
+		t.Fatal("allow must be set, so gated tools are hidden")
 	}
 
 	if got.allow("scale_service") {
@@ -364,6 +361,10 @@ func TestToolVisibilityForReportsNoGrants(t *testing.T) {
 
 	if !got.allow("search") {
 		t.Error("search is ungated and must stay visible")
+	}
+
+	if got.readable("service") {
+		t.Error("a zero-grant identity can read no type, which is what hides every prompt")
 	}
 }
 
@@ -376,10 +377,6 @@ func TestToolVisibilityForAppliesGrants(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
 
 	got := srv.toolVisibilityFor(ctxWithIdentity())
-	if got.noGrants {
-		t.Fatal("identity holds a grant; noGrants must be false")
-	}
-
 	if !got.allow("get_logs") {
 		t.Error("service:read must reveal get_logs")
 	}
@@ -401,10 +398,6 @@ func TestToolVisibilityForExpandsStackGrants(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
 
 	got := srv.toolVisibilityFor(ctxWithIdentity())
-	if got.noGrants {
-		t.Fatal("identity holds a stack grant; noGrants must be false")
-	}
-
 	if !got.allow("get_logs") {
 		t.Error("a stack:read grant covers the stack's services and must reveal get_logs")
 	}
