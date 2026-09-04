@@ -19,7 +19,7 @@
 set -euo pipefail
 
 # The artifacts `make sbom` owns. Kept in step with the same list in the
-# Makefile's sbom-check target.
+# Makefile's sbom-check target and in .githooks/pre-commit.
 files=(
   internal/api/sbom/sbom.cdx.json
   internal/api/sbom/licensetexts.json

@@ -45,7 +45,8 @@ check: lint fmt-check test
 ## Generate the CycloneDX SBOM (Go + frontend npm) embedded into the binary
 # The artifacts build-sbom.sh produces. Listed explicitly because
 # internal/api/sbom/ also holds Go source, so the directory is not a usable
-# stand-in. scripts/commit-sbom.sh carries the same list for the CI commit path.
+# stand-in. scripts/commit-sbom.sh carries the same list for the CI commit path,
+# and .githooks/pre-commit for the local one.
 SBOM_ARTIFACTS := internal/api/sbom/sbom.cdx.json \
                   internal/api/sbom/licensetexts.json \
                   internal/api/sbom/notices.txt \
