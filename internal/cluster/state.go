@@ -94,3 +94,27 @@ func DeriveServiceState(svc swarm.Service, runningCount int) string {
 	}
 	return "running"
 }
+
+// DeriveNodeState reports a node's practical condition, and is the single
+// definition both RowsForNodes and NodeDigest call — a list and a detail view
+// of the same node must never disagree about it.
+//
+// Status.State ("ready", "down", "disconnected") is Swarm's own read on
+// whether the node is reachable at all; Spec.Availability ("active", "pause",
+// "drain") is the operator's separate decision about whether the scheduler
+// may still place work there. Unreachable is the strictly worse fact, so it
+// takes precedence: only once Status.State says "ready" does a paused or
+// drained node's Availability become the more useful answer, because "ready"
+// alone would mislead a caller into thinking the scheduler could still use
+// it.
+func DeriveNodeState(node swarm.Node) string {
+	if node.Status.State != swarm.NodeStateReady {
+		return string(node.Status.State)
+	}
+
+	if node.Spec.Availability != swarm.NodeAvailabilityActive {
+		return string(node.Spec.Availability)
+	}
+
+	return string(swarm.NodeStateReady)
+}

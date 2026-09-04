@@ -13,19 +13,11 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// NodeDigest builds the detail view of one cluster node.
-//
-// A node being drained still reports Status.State "ready" — Swarm keeps
-// reporting the daemon's own health while gracefully evacuating it — but the
-// scheduler will not place anything there, so Availability is the field that
-// actually answers "can this take work" and overrides State whenever it says
-// the node is not active. Without this, a caller polling for "is it safe to
-// drain this node" would see "ready" and conclude the drain had not started.
+// NodeDigest builds the detail view of one cluster node. State comes from
+// DeriveNodeState, the same rule RowsForNodes uses, so a node cannot read
+// "ready" in a list and "drain" in its own digest.
 func NodeDigest(node swarm.Node, tasks []swarm.Task, services []swarm.Service) Digest {
-	state := string(node.Status.State)
-	if node.Spec.Availability != swarm.NodeAvailabilityActive {
-		state = string(node.Spec.Availability)
-	}
+	state := DeriveNodeState(node)
 
 	var reason string
 	if state != string(swarm.NodeStateReady) {
@@ -69,6 +61,7 @@ func NodeDigest(node swarm.Node, tasks []swarm.Task, services []swarm.Service) D
 
 	details := map[string]any{
 		"role":          string(node.Spec.Role),
+		"status":        string(node.Status.State),
 		"availability":  string(node.Spec.Availability),
 		"address":       node.Status.Addr,
 		"engineVersion": node.Description.Engine.EngineVersion,
@@ -110,9 +103,14 @@ func TaskDigest(task swarm.Task, service *swarm.Service, node *swarm.Node) Diges
 		// Docker's own naming convention: a replicated task is
 		// "<service>.<slot>", a global one "<service>.<node>", since a global
 		// service has no slot to distinguish its replicas by.
-		if service.Spec.Mode.Global != nil {
+		switch {
+		case service.Spec.Mode.Global != nil && task.NodeID != "":
 			name = fmt.Sprintf("%s.%s", service.Spec.Name, task.NodeID)
-		} else {
+		case service.Spec.Mode.Global != nil:
+			// An unassigned global task has no node yet; "<service>." with a
+			// trailing dot would read as a truncated name.
+			name = service.Spec.Name
+		default:
 			name = fmt.Sprintf("%s.%d", service.Spec.Name, task.Slot)
 		}
 	}
@@ -184,6 +182,11 @@ func TaskDigest(task swarm.Task, service *swarm.Service, node *swarm.Node) Diges
 	}
 }
 
+// stackStateRank orders service states from worst to best, so a single sorted
+// pass over a stack's members can find the worst one without a second scan
+// back through them to explain it.
+var stackStateRank = map[string]int{"failed": 0, "updating": 1, "pending": 2, "running": 3}
+
 // StackDigest builds the detail view of one stack. A stack has no Swarm
 // status of its own, so its State and Reason are derived from its member
 // services using the exact rule RowsForServices already applies to each one
@@ -191,6 +194,10 @@ func TaskDigest(task swarm.Task, service *swarm.Service, node *swarm.Node) Diges
 // different health for the same cluster. stack.Services already holds the
 // full swarm.Service records (cache.StackDetail, not the bare-name
 // cache.Stack), so there is nothing to resolve a second time.
+//
+// Related spans all five member types a stack can hold, not just services:
+// a stack is the one resource whose membership crosses that many types, and
+// Related exists precisely so a caller can traverse without a second search.
 func StackDigest(stack cache.StackDetail, tasks []swarm.Task) Digest {
 	running := make(map[string]int, len(stack.Services))
 	for _, task := range tasks {
@@ -206,52 +213,94 @@ func StackDigest(stack cache.StackDetail, tasks []swarm.Task) Digest {
 
 	members := make([]member, 0, len(stack.Services))
 
-	var desiredTotal, runningTotal int
+	var (
+		desiredTotal, runningTotal int
+		newest                     time.Time
+		haveNewest                 bool
+	)
 
 	for _, svc := range stack.Services {
 		members = append(members, member{svc: svc, state: DeriveServiceState(svc, running[svc.ID])})
 		desiredTotal += ReplicaCount(svc)
 		runningTotal += running[svc.ID]
+
+		if !haveNewest || svc.UpdatedAt.After(newest) {
+			newest = svc.UpdatedAt
+			haveNewest = true
+		}
 	}
 
 	slices.SortFunc(members, func(a, b member) int {
 		return strings.Compare(a.svc.Spec.Name, b.svc.Spec.Name)
 	})
 
+	// One pass over the name-sorted members: only a strictly worse state
+	// replaces the running best, so the first member at the worst rank found
+	// is the one the reason names — "first offending service in sorted
+	// order" without a second scan back through members to find it again.
 	state := "running"
 
-worstState:
-	for _, candidate := range []string{"failed", "updating", "pending"} {
-		for _, m := range members {
-			if m.state == candidate {
-				state = candidate
-
-				break worstState
-			}
-		}
-	}
-
 	var reason string
-	if state != "running" {
-		for _, m := range members {
-			if m.state == state {
-				reason = fmt.Sprintf("service %s is %s", m.svc.Spec.Name, state)
 
-				break
-			}
+	bestRank := stackStateRank["running"]
+
+	for _, m := range members {
+		if rank := stackStateRank[m.state]; rank < bestRank {
+			bestRank = rank
+			state = m.state
+			reason = fmt.Sprintf("service %s is %s", m.svc.Spec.Name, m.state)
 		}
 	}
 
-	related := make([]Related, 0, len(stack.Services))
+	related := make(
+		[]Related,
+		0,
+		len(
+			stack.Services,
+		)+len(
+			stack.Configs,
+		)+len(
+			stack.Secrets,
+		)+len(
+			stack.Networks,
+		)+len(
+			stack.Volumes,
+		),
+	)
+
 	for _, m := range members {
 		related = append(related, Related{
 			ID: m.svc.ID, Name: m.svc.Spec.Name, Type: "service", Relation: "contains",
 		})
 	}
 
+	for _, cfg := range stack.Configs {
+		related = append(related, Related{
+			ID: cfg.ID, Name: cfg.Spec.Name, Type: "config", Relation: "contains",
+		})
+	}
+
+	for _, sec := range stack.Secrets {
+		related = append(related, Related{
+			ID: sec.ID, Name: sec.Spec.Name, Type: "secret", Relation: "contains",
+		})
+	}
+
+	for _, net := range stack.Networks {
+		related = append(related, Related{
+			ID: net.ID, Name: net.Name, Type: "network", Relation: "contains",
+		})
+	}
+
+	for _, vol := range stack.Volumes {
+		related = append(related, Related{
+			ID: vol.Name, Name: vol.Name, Type: "volume", Relation: "contains",
+		})
+	}
+
 	sortRelated(related)
 
-	return Digest{
+	digest := Digest{
 		ID:     stack.Name,
 		Name:   stack.Name,
 		Type:   "stack",
@@ -259,12 +308,26 @@ worstState:
 		Reason: reason,
 		Details: map[string]any{
 			"services":        len(stack.Services),
+			"configs":         len(stack.Configs),
+			"secrets":         len(stack.Secrets),
+			"networks":        len(stack.Networks),
+			"volumes":         len(stack.Volumes),
 			"desiredReplicas": desiredTotal,
 			"runningReplicas": runningTotal,
 		},
 		Related:        related,
 		RecentFailures: make([]TaskFailure, 0),
 	}
+
+	// A stack is not a Docker primitive and has no timestamp of its own; the
+	// last time its composition changed — the newest member service's
+	// UpdatedAt — is the only honest answer, and leaving it empty would read
+	// as "unknown" rather than "not applicable".
+	if haveNewest {
+		digest.Since = newest.UTC().Format(time.RFC3339)
+	}
+
+	return digest
 }
 
 // ConfigDigest builds the detail view of one config. Config data is base64
@@ -308,7 +371,10 @@ func SecretDigest(sec swarm.Secret, users []cache.ServiceRef) Digest {
 	}
 }
 
-// NetworkDigest builds the detail view of one network.
+// NetworkDigest builds the detail view of one network. A network's ID tells
+// a caller nothing about whether a service could actually attach to it —
+// that's what the driver, scope and reachability booleans (internal,
+// attachable, ingress) and the subnets are for.
 func NetworkDigest(net network.Summary, users []cache.ServiceRef) Digest {
 	details := stackScopedDetails(net.Labels)
 	details["driver"] = net.Driver

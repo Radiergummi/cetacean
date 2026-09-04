@@ -108,7 +108,7 @@ func RowsForNodes(nodes []swarm.Node) []Row {
 			ID:     n.ID,
 			Name:   n.Description.Hostname,
 			Type:   "node",
-			State:  string(n.Status.State),
+			State:  DeriveNodeState(n),
 			Detail: string(n.Spec.Role),
 		})
 	}

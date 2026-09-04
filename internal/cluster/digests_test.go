@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -31,6 +32,64 @@ func TestNodeDigestReportsDrainOverReadyState(t *testing.T) {
 
 	if got.State != "drain" {
 		t.Errorf("state = %q, want drain (not the underlying ready status)", got.State)
+	}
+}
+
+// A node that is both unreachable and drained must report the strictly worse
+// fact — down beats drain — and Details must still carry both raw values, so
+// neither is lost to the one that becomes the headline State.
+func TestNodeDigestDownBeatsDrain(t *testing.T) {
+	node := swarm.Node{
+		ID:          "n1",
+		Description: swarm.NodeDescription{Hostname: "worker-a"},
+		Spec:        swarm.NodeSpec{Availability: swarm.NodeAvailabilityDrain},
+		Status:      swarm.NodeStatus{State: swarm.NodeStateDown},
+	}
+
+	got := NodeDigest(node, nil, nil)
+
+	if got.State != "down" {
+		t.Errorf("state = %q, want down (unreachable beats drained)", got.State)
+	}
+	if got.Details["status"] != "down" {
+		t.Errorf("details[status] = %v, want down", got.Details["status"])
+	}
+	if got.Details["availability"] != "drain" {
+		t.Errorf("details[availability] = %v, want drain", got.Details["availability"])
+	}
+}
+
+// RowsForNodes and NodeDigest must never disagree about the same node's
+// state: this is the exact divergence DeriveNodeState was extracted to
+// prevent.
+func TestRowsForNodesAgreesWithNodeDigest(t *testing.T) {
+	cases := []swarm.Node{
+		{ID: "n1", Status: swarm.NodeStatus{State: swarm.NodeStateReady}},
+		{
+			ID:     "n2",
+			Spec:   swarm.NodeSpec{Availability: swarm.NodeAvailabilityDrain},
+			Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		},
+		{ID: "n3", Status: swarm.NodeStatus{State: swarm.NodeStateDown}},
+		{
+			ID:     "n4",
+			Spec:   swarm.NodeSpec{Availability: swarm.NodeAvailabilityDrain},
+			Status: swarm.NodeStatus{State: swarm.NodeStateDown},
+		},
+	}
+
+	for _, node := range cases {
+		row := RowsForNodes([]swarm.Node{node})[0]
+		digest := NodeDigest(node, nil, nil)
+
+		if row.State != digest.State {
+			t.Errorf(
+				"node %s: row.State = %q, digest.State = %q, want them equal",
+				node.ID,
+				row.State,
+				digest.State,
+			)
+		}
 	}
 }
 
@@ -140,6 +199,41 @@ func TestTaskDigestHandlesNilService(t *testing.T) {
 	}
 }
 
+// Docker's own naming convention: a replicated task is named by its slot, a
+// global one by the node it landed on, since a global service has no slot to
+// distinguish its replicas by.
+func TestTaskDigestNamesReplicatedAndGlobalTasks(t *testing.T) {
+	svc := replicated("api", 3)
+
+	replicatedTask := swarm.Task{ID: "t1", ServiceID: svc.ID, Slot: 2}
+	if got := TaskDigest(replicatedTask, &svc, nil); got.Name != "api.2" {
+		t.Errorf("name = %q, want api.2", got.Name)
+	}
+
+	global := svc
+	global.Spec.Mode = swarm.ServiceMode{Global: &swarm.GlobalService{}}
+
+	globalTask := swarm.Task{ID: "t2", ServiceID: svc.ID, NodeID: "n1"}
+	if got := TaskDigest(globalTask, &global, nil); got.Name != "api.n1" {
+		t.Errorf("name = %q, want api.n1", got.Name)
+	}
+}
+
+// An unassigned global task has no node yet; naming it "<service>." with a
+// trailing dot would read as a truncated name rather than "not scheduled".
+func TestTaskDigestGlobalTaskWithoutNodeFallsBackToServiceName(t *testing.T) {
+	svc := replicated("api", 1)
+	svc.Spec.Mode = swarm.ServiceMode{Global: &swarm.GlobalService{}}
+
+	task := swarm.Task{ID: "t1", ServiceID: svc.ID}
+
+	got := TaskDigest(task, &svc, nil)
+
+	if got.Name != "api" {
+		t.Errorf("name = %q, want the service name with no trailing dot", got.Name)
+	}
+}
+
 // A stack with one failed and one running service must report the worse
 // state and name the offending service — a stack has no Swarm status of its
 // own to draw a reason from.
@@ -173,6 +267,71 @@ func TestStackDigestEmptyStackIsRunning(t *testing.T) {
 	}
 	if got.Reason != "" {
 		t.Errorf("reason = %q, want empty", got.Reason)
+	}
+}
+
+// A stack's membership spans five resource types, and Related exists so a
+// caller can traverse without a second search — listing only services would
+// leave a caller four searches short of knowing what the stack owns.
+func TestStackDigestRelatedIncludesAllMemberTypes(t *testing.T) {
+	stack := cache.StackDetail{
+		Name:     "demo",
+		Services: []swarm.Service{replicated("api", 1)},
+		Configs: []swarm.Config{
+			{ID: "c1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "conf"}}},
+		},
+		Secrets: []swarm.Secret{
+			{ID: "s1", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "sec"}}},
+		},
+		Networks: []network.Summary{overlay("net1", "demo_overlay")},
+		Volumes:  []volume.Volume{{Name: "data", Driver: "local"}},
+	}
+
+	got := StackDigest(stack, nil)
+
+	if len(got.Related) != 5 {
+		t.Fatalf("related = %d, want 5 (one per member type)", len(got.Related))
+	}
+
+	counts := map[string]int{}
+	for _, r := range got.Related {
+		if r.Relation != "contains" {
+			t.Errorf("related[%s].relation = %q, want contains", r.Type, r.Relation)
+		}
+		counts[r.Type]++
+	}
+
+	for _, want := range []string{"service", "config", "secret", "network", "volume"} {
+		if counts[want] != 1 {
+			t.Errorf("related type %q count = %d, want 1", want, counts[want])
+		}
+	}
+
+	for key, want := range map[string]any{
+		"services": 1, "configs": 1, "secrets": 1, "networks": 1, "volumes": 1,
+	} {
+		if got.Details[key] != want {
+			t.Errorf("details[%s] = %v, want %v", key, got.Details[key], want)
+		}
+	}
+}
+
+// A stack has no timestamp of its own; the newest member service's UpdatedAt
+// is the only honest answer for when its composition last changed.
+func TestStackDigestSinceIsNewestMemberUpdate(t *testing.T) {
+	older := replicated("old", 1)
+	older.UpdatedAt = time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+
+	newer := replicated("new", 1)
+	newer.UpdatedAt = time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC)
+
+	stack := cache.StackDetail{Name: "demo", Services: []swarm.Service{older, newer}}
+
+	got := StackDigest(stack, nil)
+
+	want := newer.UpdatedAt.UTC().Format(time.RFC3339)
+	if got.Since != want {
+		t.Errorf("since = %q, want %q (the newest member's UpdatedAt)", got.Since, want)
 	}
 }
 
@@ -261,6 +420,30 @@ func TestVolumeDigestReportsMountedByUsers(t *testing.T) {
 		if r.Relation != "mounted-by" || r.Type != "service" {
 			t.Errorf("related entry = %+v, want type service / relation mounted-by", r)
 		}
+	}
+}
+
+// Docker's volume CreatedAt is a free-form string, not guaranteed to be
+// RFC3339. A value that does not parse must leave Since omitted rather than
+// surface a bogus or half-parsed timestamp.
+func TestVolumeDigestOmitsSinceWhenCreatedAtDoesNotParse(t *testing.T) {
+	vol := volume.Volume{Name: "data", Driver: "local", CreatedAt: "not-a-timestamp"}
+
+	got := VolumeDigest(vol, nil)
+
+	if got.Since != "" {
+		t.Errorf("since = %q, want empty for an unparseable CreatedAt", got.Since)
+	}
+}
+
+// A CreatedAt that does parse as RFC3339 must be passed through.
+func TestVolumeDigestReportsSinceWhenCreatedAtParses(t *testing.T) {
+	vol := volume.Volume{Name: "data", Driver: "local", CreatedAt: "2026-09-04T12:00:00Z"}
+
+	got := VolumeDigest(vol, nil)
+
+	if got.Since != "2026-09-04T12:00:00Z" {
+		t.Errorf("since = %q, want the parsed timestamp", got.Since)
 	}
 }
 
