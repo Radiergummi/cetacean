@@ -98,10 +98,33 @@ func (s *Server) awaitServiceConvergence(
 		return nil
 	}
 
-	detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), convergenceTimeout)
+	return s.awaitServiceConvergenceFor(ctx, svc.ID, convergenceTimeout, nil)
+}
+
+// awaitServiceConvergenceFor waits up to timeout for svcID to settle, writing
+// the last progress line into observed. It is the core awaitServiceConvergence
+// wraps; watch needs the same wait with a caller-chosen bound and without the
+// task-augmentation early return, and one wait rather than two is what keeps
+// the two from drifting on the detachment above.
+func (s *Server) awaitServiceConvergenceFor(
+	ctx context.Context,
+	svcID string,
+	timeout time.Duration,
+	observed *string,
+) error {
+	detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	defer cancel()
 
-	return s.awaitConvergence(detached, serviceConverged(s.cache, svc.ID))
+	converged := serviceConverged(s.cache, svcID)
+
+	return s.awaitConvergence(detached, func() (bool, string) {
+		done, progress := converged()
+		if observed != nil {
+			*observed = progress
+		}
+
+		return done, progress
+	})
 }
 
 // serviceConverged watches one service by ID. The convergence rule itself lives

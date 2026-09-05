@@ -609,6 +609,7 @@ type toolACLSpec struct {
 // enforces) but means tools/list may advertise tools the caller cannot use.
 var toolACLSpecs = map[string]toolACLSpec{
 	"get_logs":               {"service", "read"},
+	"watch":                  {"service", "read"},
 	"scale_service":          {"service", "write"},
 	"update_service_image":   {"service", "write"},
 	"rollback_service":       {"service", "write"},

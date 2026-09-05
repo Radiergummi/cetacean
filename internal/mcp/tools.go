@@ -159,6 +159,7 @@ var toolIconCategory = map[string]string{
 	"get_recommendations": "read",
 	"get_events":          "read",
 	"get_cluster_status":  "read",
+	"watch":               "read",
 	"find":                "search",
 	"describe":            "read",
 
@@ -581,6 +582,31 @@ func (s *Server) toolCatalog() []toolDef {
 			),
 			tier:    config.OpsReadOnly,
 			handler: s.toolGetClusterStatus,
+		},
+		{
+			tool: mcplib.NewTool(
+				"watch",
+				mcplib.WithToolTitle("Wait for a service to settle"),
+				mcplib.WithDescription(
+					"Block until a service has reached its desired state — every replica running and no rolling update in flight — then report whether it settled and how long it took. Use it after a deploy or a scale instead of describing the service in a loop. On a timeout it reports how far the rollout actually got (\"waiting: 1/3 replicas running\"), which is the answer when a deploy is stuck. The wait cannot be cancelled once started, so `timeout` is the real bound; it defaults to 60 seconds and is capped at 5 minutes.",
+				),
+				mcplib.WithOutputSchema[watchResult](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("service",
+					mcplib.Required(),
+					mcplib.Description("Service ID or name to wait on."),
+				),
+				mcplib.WithNumber("timeout",
+					mcplib.Description(
+						"Seconds to wait before giving up (default 60, maximum 300).",
+					),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolWatch,
 		},
 
 		// Tier 1 — Operational.
