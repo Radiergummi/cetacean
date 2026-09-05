@@ -140,6 +140,7 @@ func (s *Server) digestOf(
 			resource,
 			s.filterRawTasks(ctx, s.cache.ListTasksByService(resource.ID)),
 			s.readableAttachedNetworks(ctx, resource),
+			s.serviceRestarts(resource.ID),
 		), nil
 
 	case swarm.Node:

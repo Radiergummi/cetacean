@@ -303,6 +303,30 @@ type Digest struct {
 	// RecentFailures are the task failures behind the current State, newest
 	// first, capped at maxRecentFailures.
 	RecentFailures []TaskFailure `json:"recentFailures"`
+
+	// Restarts counts involuntary task terminations behind a State that looks
+	// fine. Nil when no tracker was consulted — a service that has never
+	// restarted and one that was never measured are different answers, and a
+	// confident zero would conflate them. Services only.
+	Restarts *ServiceRestarts `json:"restarts,omitempty"`
+}
+
+// ServiceRestarts counts a service's involuntary task terminations over a
+// short window and a long one.
+//
+// One number cannot answer the question an operator is actually asking. A
+// service failing twenty times in the last hour is either a fault that started
+// during this deploy or one that has run for a week, and only the ratio of the
+// two windows tells them apart — so the digest carries both rather than a rate
+// the reader would have to trust blindly.
+//
+// This is the only channel through which a restart loop reaches a digest.
+// DeriveServiceState reports "running" whenever a replica is up, and
+// ServiceDigest drops tasks the orchestrator has already replaced, so a
+// service crash-looping every four seconds otherwise describes as healthy.
+type ServiceRestarts struct {
+	LastHour uint64 `json:"lastHour"`
+	LastWeek uint64 `json:"lastWeek"`
 }
 
 // Related is one cross-reference from a Digest.
@@ -331,7 +355,16 @@ const maxRecentFailures = 5
 // names of its network attachments, which carry only an ID; the caller may
 // have already filtered the slice by ACL, so a Target with no match falls
 // back to the ID rather than leaving Related.Name empty.
-func ServiceDigest(svc swarm.Service, tasks []swarm.Task, networks []network.Summary) Digest {
+//
+// restarts is the caller's reading of the restart tracker, or nil when it has
+// none to give; it is passed in rather than looked up so this stays a pure
+// function of the records handed to it, as every other builder here is.
+func ServiceDigest(
+	svc swarm.Service,
+	tasks []swarm.Task,
+	networks []network.Summary,
+	restarts *ServiceRestarts,
+) Digest {
 	var (
 		running    int
 		oldestFail time.Time
@@ -404,6 +437,7 @@ func ServiceDigest(svc swarm.Service, tasks []swarm.Task, networks []network.Sum
 		Details:        ServiceDetails(svc),
 		Related:        serviceRelated(svc, networks),
 		RecentFailures: failures,
+		Restarts:       restarts,
 	}
 
 	if haveOldest {

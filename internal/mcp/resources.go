@@ -212,16 +212,26 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 
 	switch resourceType {
 	case "cluster":
-		return s.cache.Snapshot(), nil
+		return newClusterOverview(s.cache.Snapshot()), nil
 
 	case "recommendations":
 		if s.recEngine == nil {
 			return []any{}, nil
 		}
-		return s.filterRecommendations(ctx, s.recEngine.Results()), nil
+		// Projected after filtering so the ACL check still sees the engine's
+		// own type, and so both this read and get_recommendations — which
+		// delegates here — state a remedy as a tool rather than a REST route.
+		return projectRecommendations(
+			s.filterRecommendations(ctx, s.recEngine.Results()),
+		), nil
 
 	case "history":
-		return s.filterHistory(ctx, s.cache.History().List(cache.HistoryQuery{Limit: 100})), nil
+		// Named after filtering, never before: filterHistory keys a task's ACL
+		// check on its ID, which is what the resolver resolves parentage from.
+		return nameHistoryTasks(
+			s.cache,
+			s.filterHistory(ctx, s.cache.History().List(cache.HistoryQuery{Limit: 100})),
+		), nil
 
 	case "nodes":
 		if resourceID == "" {

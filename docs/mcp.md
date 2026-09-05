@@ -176,6 +176,18 @@ Resources are read-only views, all returned as `application/json`.
 | `cetacean://recommendations` | Current recommendation engine findings |
 | `cetacean://history` | Recent resource change events |
 
+Two of the three are projected rather than served verbatim, because the cache's own shape would mislead a reader
+who has no dashboard code to compensate for it:
+
+- `cetacean://cluster` names the unit in every numeric field — `totalCPUCores`, `reservedCPUCores`,
+  `maxNodeCPUCores`, `totalMemoryBytes`, `reservedMemoryBytes`, `maxNodeMemoryBytes` — and reports both CPU
+  figures in cores. The REST response behind it holds total CPU in cores and reserved CPU in nanoCPUs under
+  unlabelled names, so dividing one by the other as spelled is wrong by nine orders of magnitude.
+- `cetacean://history` names a task event after its service (`demo_flaky.3`) instead of repeating the task's own
+  ID, which is what the cache records. `resourceId` still carries the ID. Without this a history read of a
+  restarting service is a wall of opaque identifiers, and the one resource meant to answer "what changed?"
+  cannot say what changed.
+
 **Templated** (`resources/templates/list`) return the same compact `Digest` the `describe` tool builds — a resource
 read and a `describe` call go through the same function, so a subscription payload and a tool result can never
 describe the same resource differently. The one exception is `services/{id}/logs`, a raw log stream rather than a
@@ -247,6 +259,12 @@ Alongside `id`/`name`/`type`/`state`, it adds:
   referenced by, so a caller can traverse without a second search.
 - `recentFailures` — always an array, never omitted: the task failures behind a failing state, newest first,
   capped at 5. Only a service digest ever populates it; every other type reports an empty array.
+- `restarts` — a service's involuntary task terminations, as `lastHour` and `lastWeek` counts. Services only;
+  omitted for every other type. This is the only field that reveals a restart loop: `state` reads `running`
+  whenever a replica happens to be up, and `recentFailures` deliberately drops the tasks the orchestrator has
+  already replaced, so a service crash-looping every few seconds otherwise describes as healthy. The two windows
+  answer different questions — `lastHour` whether it is failing *now*, the ratio between them whether the fault
+  is new or long-standing.
 
 Every numeric field in `details` names its unit — `cpuLimitCores` (a float, in cores) and `memoryLimitBytes` (in
 bytes) on a service digest, for instance — or is reported as a duration string like `"10s"` instead
@@ -348,7 +366,10 @@ reports that metrics are unavailable rather than returning empty series.
 
 `get_recommendations` returns the same findings as `cetacean://recommendations`, optionally filtered to one severity,
 as a tool a host can render — see [Widgets](#widgets-mcp-apps). Its totals count what the caller may read, not what
-the engine holds.
+the engine holds. A finding that has a remedy carries it as `fix` — `{"tool": "update_node", "section":
+"availability"}` — naming the tool to call. The REST API states the same remedy as a route (`fixAction`), which an
+MCP caller cannot issue; a finding whose route has no tool behind it reports no `fix` at all rather than a path
+that cannot be followed.
 
 **Tier 1 — operational**: `scale_service`, `update_service_image`, `rollback_service`, `restart_service`,
 `remove_task`.

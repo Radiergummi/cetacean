@@ -163,7 +163,7 @@ func TestServiceDigestExplainsWhyAServiceIsNotRunning(t *testing.T) {
 		},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil)
+	got := ServiceDigest(svc, tasks, nil, nil)
 
 	if got.Reason != "no suitable node (scheduling constraints not satisfied on 1 node)" {
 		t.Errorf("reason = %q, want Status.Err verbatim", got.Reason)
@@ -185,7 +185,7 @@ func TestServiceDigestOmitsReasonWhenHealthy(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil)
+	got := ServiceDigest(svc, tasks, nil, nil)
 
 	if got.Reason != "" {
 		t.Errorf("reason = %q, want empty for a converged service", got.Reason)
@@ -202,7 +202,7 @@ func TestServiceDigestMarshalsEmptySlicesNotNull(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil)
+	got := ServiceDigest(svc, tasks, nil, nil)
 
 	data, err := json.Marshal(got)
 	if err != nil {
@@ -231,7 +231,7 @@ func TestServiceDigestIgnoresNormalStartup(t *testing.T) {
 			Status: swarm.TaskStatus{State: swarm.TaskStatePreparing, Message: "preparing"}},
 	}
 
-	got := ServiceDigest(svc, tasks, nil)
+	got := ServiceDigest(svc, tasks, nil, nil)
 
 	if len(got.RecentFailures) != 0 {
 		t.Errorf(
@@ -264,7 +264,7 @@ func TestServiceDigestSinceIsTheOldestFailure(t *testing.T) {
 			}},
 	}
 
-	got := ServiceDigest(svc, tasks, nil)
+	got := ServiceDigest(svc, tasks, nil, nil)
 
 	want := older.UTC().Format(time.RFC3339)
 	if got.Since != want {
@@ -288,7 +288,7 @@ func TestServiceDigestReasonFallsBackToUpdateStatus(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil)
+	got := ServiceDigest(svc, tasks, nil, nil)
 
 	if got.State != "updating" {
 		t.Fatalf("state = %q, want updating", got.State)
@@ -312,7 +312,7 @@ func TestServiceDigestFailuresTieBreakOnTaskID(t *testing.T) {
 			Status: swarm.TaskStatus{State: swarm.TaskStateRejected, Timestamp: same, Err: "a"}},
 	}
 
-	got := ServiceDigest(svc, tasks, nil)
+	got := ServiceDigest(svc, tasks, nil, nil)
 
 	if len(got.RecentFailures) != 2 || got.RecentFailures[0].TaskID != "t1" {
 		t.Errorf("order = %+v, want t1 before t2 on a timestamp tie", got.RecentFailures)
@@ -376,7 +376,7 @@ func TestServiceDigestRelatedResolvesNetworkName(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, []network.Summary{overlay("net1", "demo_overlay")})
+	got := ServiceDigest(svc, tasks, []network.Summary{overlay("net1", "demo_overlay")}, nil)
 
 	if len(got.Related) != 1 {
 		t.Fatalf("related = %d, want 1", len(got.Related))
@@ -406,7 +406,7 @@ func TestServiceDigestRelatedFallsBackToIDWhenNetworkUnknown(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil)
+	got := ServiceDigest(svc, tasks, nil, nil)
 
 	if len(got.Related) != 1 {
 		t.Fatalf("related = %d, want 1", len(got.Related))
@@ -430,7 +430,7 @@ func TestServiceDigestRelatedOnlyIncludesVolumeMounts(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil)
+	got := ServiceDigest(svc, tasks, nil, nil)
 
 	if len(got.Related) != 1 {
 		t.Fatalf("related = %d, want 1 (the volume, not the bind mount)", len(got.Related))
