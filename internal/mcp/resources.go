@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -227,7 +229,15 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterNodes(ctx, s.cache.ListNodes()), nil
 		}
-		node, ok := s.cache.GetNode(resourceID)
+		node, ok, err := resolveOne(
+			s.cache.GetNode, s.cache.ListNodes,
+			func(n swarm.Node) string { return n.Description.Hostname },
+			func(n swarm.Node) string { return n.ID },
+			resourceID,
+		)
+		if err != nil {
+			return nil, err
+		}
 		if !ok {
 			return nil, notFound(uri)
 		}
@@ -240,7 +250,15 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterServices(ctx, s.cache.ListServices()), nil
 		}
-		svc, ok := s.cache.GetService(resourceID)
+		svc, ok, err := resolveOne(
+			s.cache.GetService, s.cache.ListServices,
+			func(v swarm.Service) string { return v.Spec.Name },
+			func(v swarm.Service) string { return v.ID },
+			resourceID,
+		)
+		if err != nil {
+			return nil, err
+		}
 		if !ok {
 			return nil, notFound(uri)
 		}
@@ -256,7 +274,15 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterTasks(ctx, cluster.EnrichTasks(s.cache, s.cache.ListTasks())), nil
 		}
-		task, ok := s.cache.GetTask(resourceID)
+		task, ok, err := resolveOne(
+			s.cache.GetTask, s.cache.ListTasks,
+			s.taskName,
+			func(v swarm.Task) string { return v.ID },
+			resourceID,
+		)
+		if err != nil {
+			return nil, err
+		}
 		if !ok {
 			return nil, notFound(uri)
 		}
@@ -285,7 +311,15 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterConfigs(ctx, s.cache.ListConfigs()), nil
 		}
-		cfg, ok := s.cache.GetConfig(resourceID)
+		cfg, ok, err := resolveOne(
+			s.cache.GetConfig, s.cache.ListConfigs,
+			func(v swarm.Config) string { return v.Spec.Name },
+			func(v swarm.Config) string { return v.ID },
+			resourceID,
+		)
+		if err != nil {
+			return nil, err
+		}
 		if !ok {
 			return nil, notFound(uri)
 		}
@@ -298,7 +332,15 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return cluster.RedactSecrets(s.filterSecrets(ctx, s.cache.ListSecrets())), nil
 		}
-		sec, ok := s.cache.GetSecret(resourceID)
+		sec, ok, err := resolveOne(
+			s.cache.GetSecret, s.cache.ListSecrets,
+			func(v swarm.Secret) string { return v.Spec.Name },
+			func(v swarm.Secret) string { return v.ID },
+			resourceID,
+		)
+		if err != nil {
+			return nil, err
+		}
 		if !ok {
 			return nil, notFound(uri)
 		}
@@ -311,7 +353,15 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterNetworks(ctx, s.cache.ListNetworks()), nil
 		}
-		net, ok := s.cache.GetNetwork(resourceID)
+		net, ok, err := resolveOne(
+			s.cache.GetNetwork, s.cache.ListNetworks,
+			func(v network.Summary) string { return v.Name },
+			func(v network.Summary) string { return v.ID },
+			resourceID,
+		)
+		if err != nil {
+			return nil, err
+		}
 		if !ok {
 			return nil, notFound(uri)
 		}

@@ -202,6 +202,19 @@ Clients call `resources/subscribe` with a URI. When the underlying cluster state
 when resources are created or removed. Both are ACL-filtered per notification: a client is only notified about
 resources its identity can read.
 
+### Argument completion
+
+Templated resource URIs and prompt arguments complete. A client editing `cetacean://services/{id}`, or a prompt's
+`service` argument, can call `completion/complete` and receive the **names** of the matching resources — not IDs,
+since a name is what a human picks from a list and what a read now resolves.
+
+Matching is a case-insensitive substring, the same rule `find`'s `query` uses: Docker names carry their stack as a
+prefix, so a caller typing `prometheus` is offered `monitoring_prometheus`. Completions are capped at 100 values,
+with `total` and `hasMore` reporting what was left out.
+
+Completion reads the same ACL-filtered listing every other read goes through, so it never reveals a resource the
+caller could not otherwise enumerate, and a secret's payload is redacted on that path before a name is taken from it.
+
 ## Compact resource shapes
 
 MCP tools and resource reads never hand back a raw Docker Engine object — eight services as raw `swarm.Service`
@@ -296,7 +309,9 @@ each match's untouched Docker record instead of a `Row` — see [Compact resourc
 an unhealthy one, how long it has held, type-specific details, cross-references, and the recent task failures
 behind a failing state. Its `type` argument is **singular** (`service`, `node`, `task`, `stack`, `config`,
 `secret`, `network`, `volume`) — the reverse of `find`'s plural, and an easy thing to get backwards. Both `type`
-and `id` are required; `id` accepts an ID or a name (hostname for a node, name for a stack or volume). `raw: true`
+and `id` are required; `id` accepts an ID or a name — a hostname for a node, the rendered `<service>.<slot>`
+for a task, the plain name for everything else. A name that matches more than one resource (Swarm does not enforce
+unique node hostnames) is refused, naming the matching IDs, rather than resolving to one of them. `raw: true`
 returns the untouched Docker record. Secret payloads and environment variable values are never returned, in
 either mode.
 

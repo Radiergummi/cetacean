@@ -198,6 +198,14 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		// the process runs.
 		mcpserver.WithPromptCapabilities(false),
 		mcpserver.WithPromptFilter(srv.filterPromptsForIdentity),
+		// The capability and the two providers are declared together on
+		// purpose: advertising `completions` is a promise that
+		// completion/complete will be answered, and mcp-go's default
+		// providers answer everything with an empty list. Wiring one without
+		// the other leaves a client offering a blank dropdown forever.
+		mcpserver.WithCompletions(),
+		mcpserver.WithResourceCompletionProvider(srv),
+		mcpserver.WithPromptCompletionProvider(srv),
 		mcpserver.WithHooks(srv.installSubscriptionHooks()),
 		mcpserver.WithInstructions(mcpInstructions),
 		mcpserver.WithDescription(mcpDescription),
