@@ -8,9 +8,15 @@ import (
 
 func gpuNode() swarm.Node {
 	return swarm.Node{
-		ID:          "n1",
-		Spec:        swarm.NodeSpec{Role: swarm.NodeRoleWorker, Annotations: swarm.Annotations{Labels: map[string]string{"gpu": "true", "zone": "eu"}}},
-		Description: swarm.NodeDescription{Hostname: "worker-1", Platform: swarm.Platform{OS: "linux", Architecture: "x86_64"}},
+		ID: "n1",
+		Spec: swarm.NodeSpec{
+			Role:        swarm.NodeRoleWorker,
+			Annotations: swarm.Annotations{Labels: map[string]string{"gpu": "true", "zone": "eu"}},
+		},
+		Description: swarm.NodeDescription{
+			Hostname: "worker-1",
+			Platform: swarm.Platform{OS: "linux", Architecture: "x86_64"},
+		},
 	}
 }
 
@@ -92,7 +98,10 @@ func TestNodeSatisfiesEngineLabels(t *testing.T) {
 // Every constraint must hold, and the reason names the first that did not —
 // a caller fixing placement fixes one constraint at a time.
 func TestNodeSatisfiesRequiresEveryConstraint(t *testing.T) {
-	ok, reason := NodeSatisfies(gpuNode(), []string{"node.labels.gpu==true", "node.labels.zone==us"})
+	ok, reason := NodeSatisfies(
+		gpuNode(),
+		[]string{"node.labels.gpu==true", "node.labels.zone==us"},
+	)
 	if ok {
 		t.Fatal("ok = true though the second constraint fails")
 	}

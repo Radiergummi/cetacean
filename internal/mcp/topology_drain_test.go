@@ -14,10 +14,13 @@ import (
 func drainCall(t *testing.T, srv *Server, node string) cluster.TopologyGraph {
 	t.Helper()
 
-	body, err := srv.toolGetTopology(context.Background(), toolRequest(t, "get_topology", map[string]any{
-		"view": "drain-impact",
-		"node": node,
-	}))
+	body, err := srv.toolGetTopology(
+		context.Background(),
+		toolRequest(t, "get_topology", map[string]any{
+			"view": "drain-impact",
+			"node": node,
+		}),
+	)
 	if err != nil {
 		t.Fatalf("toolGetTopology: %v", err)
 	}
@@ -89,9 +92,12 @@ func TestDrainImpactViewResolvesTheNodeByName(t *testing.T) {
 func TestDrainImpactViewRequiresANode(t *testing.T) {
 	srv := newResourceTestServer(t, drainTestCache(t))
 
-	_, err := srv.toolGetTopology(context.Background(), toolRequest(t, "get_topology", map[string]any{
-		"view": "drain-impact",
-	}))
+	_, err := srv.toolGetTopology(
+		context.Background(),
+		toolRequest(t, "get_topology", map[string]any{
+			"view": "drain-impact",
+		}),
+	)
 	if err == nil {
 		t.Fatal("expected an error naming the required node argument")
 	}
@@ -100,10 +106,13 @@ func TestDrainImpactViewRequiresANode(t *testing.T) {
 func TestDrainImpactViewRejectsAnUnknownNode(t *testing.T) {
 	srv := newResourceTestServer(t, drainTestCache(t))
 
-	_, err := srv.toolGetTopology(context.Background(), toolRequest(t, "get_topology", map[string]any{
-		"view": "drain-impact",
-		"node": "nosuch",
-	}))
+	_, err := srv.toolGetTopology(
+		context.Background(),
+		toolRequest(t, "get_topology", map[string]any{
+			"view": "drain-impact",
+			"node": "nosuch",
+		}),
+	)
 	if err == nil {
 		t.Fatal("expected an error for an unknown node")
 	}
@@ -114,9 +123,12 @@ func TestExistingViewsIgnoreTheNodeArgument(t *testing.T) {
 	srv := newResourceTestServer(t, drainTestCache(t))
 
 	for _, view := range []string{"network", "placement"} {
-		body, err := srv.toolGetTopology(context.Background(), toolRequest(t, "get_topology", map[string]any{
-			"view": view,
-		}))
+		body, err := srv.toolGetTopology(
+			context.Background(),
+			toolRequest(t, "get_topology", map[string]any{
+				"view": view,
+			}),
+		)
 		if err != nil {
 			t.Fatalf("%s: %v", view, err)
 		}

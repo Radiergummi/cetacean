@@ -11,7 +11,9 @@ func drainService(id, name string, replicas uint64, constraints ...string) swarm
 		ID: id,
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: name},
-			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+			},
 		},
 	}
 	if len(constraints) > 0 {
@@ -23,8 +25,12 @@ func drainService(id, name string, replicas uint64, constraints ...string) swarm
 
 func readyNode(id, hostname string, labels map[string]string) swarm.Node {
 	return swarm.Node{
-		ID:          id,
-		Spec:        swarm.NodeSpec{Role: swarm.NodeRoleWorker, Availability: swarm.NodeAvailabilityActive, Annotations: swarm.Annotations{Labels: labels}},
+		ID: id,
+		Spec: swarm.NodeSpec{
+			Role:         swarm.NodeRoleWorker,
+			Availability: swarm.NodeAvailabilityActive,
+			Annotations:  swarm.Annotations{Labels: labels},
+		},
 		Description: swarm.NodeDescription{Hostname: hostname},
 		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
 	}
