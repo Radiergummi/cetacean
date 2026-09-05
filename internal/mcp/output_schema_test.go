@@ -13,11 +13,17 @@ import (
 	"github.com/radiergummi/cetacean/internal/prom"
 )
 
-// TestCuratedToolsAdvertiseOutputSchema asserts that the tools whose result
-// shape Cetacean owns advertise an outputSchema, so 2025-06-18+ clients know
-// the structured shape to expect. Docker-passthrough mutations intentionally
-// carry no schema (their result is a raw swarm.Service).
-func TestCuratedToolsAdvertiseOutputSchema(t *testing.T) {
+// TestEveryToolAdvertisesOutputSchema asserts that every registered tool
+// declares an outputSchema, so a 2025-06-18+ client knows the structured shape
+// to expect before it calls.
+//
+// There is no exempt set any more. The eleven spec-editing mutations used to
+// be one, on the reasoning that their result was the raw Docker object and so
+// not a shape Cetacean owned; they now answer with the same compact projection
+// describe builds, scoped to the section they edited, and declare it. Driving
+// the whole registry rather than a list means a new tool has to decide its
+// result shape to pass, instead of quietly shipping without one.
+func TestEveryToolAdvertisesOutputSchema(t *testing.T) {
 	c := cache.New(nil)
 	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful)
 	handler := srv.Handler()
@@ -37,51 +43,13 @@ func TestCuratedToolsAdvertiseOutputSchema(t *testing.T) {
 		t.Fatalf("decode tools/list: %v", err)
 	}
 
-	schemas := map[string]json.RawMessage{}
-	for _, tl := range result.Tools {
-		schemas[tl.Name] = tl.OutputSchema
+	if len(result.Tools) == 0 {
+		t.Fatal("no tools registered")
 	}
 
-	curated := map[string]bool{
-		"find": true, "describe": true, "get_logs": true, "get_topology": true,
-		"get_metrics": true, "get_recommendations": true,
-		"remove_task": true, "remove_service": true, "remove_config": true,
-		"remove_secret": true, "remove_network": true, "remove_volume": true,
-		// The four lifecycle mutations return serviceMutationResult, a shape
-		// Cetacean owns, rather than a raw swarm.Service.
-		"scale_service": true, "update_service_image": true,
-		"rollback_service": true, "restart_service": true,
-	}
-
-	hasSchema := func(s json.RawMessage) bool {
-		return len(s) > 0 && string(s) != "null"
-	}
-
-	for name := range curated {
-		schema, ok := schemas[name]
-		if !ok {
-			t.Errorf("%s not registered", name)
-			continue
-		}
-		if !hasSchema(schema) {
-			t.Errorf("%s: expected an advertised outputSchema, got %q", name, string(schema))
-		}
-	}
-
-	// Enforce the whole contract, not a sample: every *other* registered tool is
-	// a Docker-passthrough mutation and must NOT advertise a schema (validation
-	// skips schemaless tools). Iterating the full registry means adding a tool
-	// without deciding its schema status fails this test rather than silently
-	// drifting.
-	for name, schema := range schemas {
-		if curated[name] {
-			continue
-		}
-		if hasSchema(schema) {
-			t.Errorf(
-				"%s: non-curated tool must not advertise an outputSchema, got %q",
-				name, string(schema),
-			)
+	for _, tool := range result.Tools {
+		if len(tool.OutputSchema) == 0 || string(tool.OutputSchema) == "null" {
+			t.Errorf("%s: no advertised outputSchema", tool.Name)
 		}
 	}
 }

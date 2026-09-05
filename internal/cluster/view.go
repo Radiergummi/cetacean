@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -589,6 +590,26 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 
 	if p := svc.Spec.TaskTemplate.Placement; p != nil && len(p.Constraints) > 0 {
 		details["placementConstraints"] = p.Constraints
+	}
+
+	if len(svc.Spec.Labels) > 0 {
+		details["labels"] = svc.Spec.Labels
+	}
+
+	// Option *names* only, the same rule envNames follows: a log driver's
+	// options routinely carry a credential (`splunk-token`, an authenticated
+	// syslog address), and a digest that named the driver honestly while
+	// handing over its token would be a worse leak than the one envNames
+	// exists to prevent.
+	if driver := svc.Spec.TaskTemplate.LogDriver; driver != nil && driver.Name != "" {
+		logDriver := map[string]any{"name": driver.Name}
+
+		if len(driver.Options) > 0 {
+			names := slices.Sorted(maps.Keys(driver.Options))
+			logDriver["optionNames"] = names
+		}
+
+		details["logDriver"] = logDriver
 	}
 
 	if endpoint := svc.Spec.EndpointSpec; endpoint != nil && len(endpoint.Ports) > 0 {

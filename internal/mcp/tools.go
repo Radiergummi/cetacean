@@ -599,6 +599,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Patch the environment-variable map of a service using JSON Merge Patch (RFC 7396) semantics: string values set or replace a key, null values delete it, omitted keys are preserved. Triggers a rolling deploy. Returns the updated service spec.",
 				),
+				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -624,6 +625,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Patch the labels on a service using JSON Merge Patch (RFC 7396) semantics: string values set or replace a key, null values delete it, omitted keys are preserved. Does not restart tasks. Returns the updated service spec.",
 				),
+				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -649,6 +651,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Patch the labels on a node using JSON Merge Patch (RFC 7396) semantics: string values set or replace a key, null values delete it, omitted keys are preserved. Node labels are commonly used as service placement constraints. Returns the updated node spec.",
 				),
+				mcplib.WithOutputSchema[nodeUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -675,6 +678,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Replace the ResourceRequirements (CPU/memory limits and reservations) on a service. Pass the full object — fields you omit are cleared. Triggers a rolling deploy. Returns the updated service spec.",
 				),
+				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -694,6 +698,7 @@ func (s *Server) toolCatalog() []toolDef {
 			tier: config.OpsConfiguration,
 			handler: updateServiceHandler(
 				s,
+				sectionResources,
 				"resources",
 				func(wc DockerWriteClient, ctx context.Context, id string, r swarm.ResourceRequirements) (swarm.Service, error) {
 					return wc.UpdateServiceResources(ctx, id, &r)
@@ -707,6 +712,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Replace the Placement object on a service (constraints, preferences, max replicas per node, platforms). Triggers a rolling deploy that may reschedule tasks to satisfy new constraints. Pass the full object — fields you omit are cleared. Returns the updated service spec.",
 				),
+				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -726,6 +732,7 @@ func (s *Server) toolCatalog() []toolDef {
 			tier: config.OpsConfiguration,
 			handler: updateServiceHandler(
 				s,
+				sectionPlacement,
 				"placement",
 				func(wc DockerWriteClient, ctx context.Context, id string, p swarm.Placement) (swarm.Service, error) {
 					return wc.UpdateServicePlacement(ctx, id, &p)
@@ -739,6 +746,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Replace the ingress port map on a service. Adds, removes, or remaps published ports; connections to removed or remapped ports are dropped. Triggers a rolling deploy. Returns the updated service spec.",
 				),
+				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -758,6 +766,7 @@ func (s *Server) toolCatalog() []toolDef {
 			tier: config.OpsConfiguration,
 			handler: updateServiceHandler(
 				s,
+				sectionPorts,
 				"ports",
 				func(wc DockerWriteClient, ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error) {
 					return wc.UpdateServicePorts(ctx, id, ports)
@@ -771,6 +780,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Replace the UpdateConfig (rolling-update parallelism, delay, failure action, monitor window, max failure ratio, order) on a service. Does NOT trigger a deploy by itself — applies to the next image or spec change. Returns the updated service spec.",
 				),
+				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -790,6 +800,7 @@ func (s *Server) toolCatalog() []toolDef {
 			tier: config.OpsConfiguration,
 			handler: updateServiceHandler(
 				s,
+				sectionUpdatePolicy,
 				"policy",
 				func(wc DockerWriteClient, ctx context.Context, id string, p swarm.UpdateConfig) (swarm.Service, error) {
 					return wc.UpdateServiceUpdatePolicy(ctx, id, &p)
@@ -803,6 +814,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Replace the RollbackConfig on a service. Does NOT trigger a rollback by itself — controls how rollback_service and automatic rollback-on-failure behave. Returns the updated service spec.",
 				),
+				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -822,6 +834,7 @@ func (s *Server) toolCatalog() []toolDef {
 			tier: config.OpsConfiguration,
 			handler: updateServiceHandler(
 				s,
+				sectionRollbackPolicy,
 				"policy",
 				func(wc DockerWriteClient, ctx context.Context, id string, p swarm.UpdateConfig) (swarm.Service, error) {
 					return wc.UpdateServiceRollbackPolicy(ctx, id, &p)
@@ -835,6 +848,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Set the log driver (name + options) for a service. Triggers a rolling deploy; subsequent log lines are routed through the new driver. Returns the updated service spec.",
 				),
+				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -854,6 +868,7 @@ func (s *Server) toolCatalog() []toolDef {
 			tier: config.OpsConfiguration,
 			handler: updateServiceHandler(
 				s,
+				sectionLogDriver,
 				"driver",
 				func(wc DockerWriteClient, ctx context.Context, id string, d swarm.Driver) (swarm.Service, error) {
 					return wc.UpdateServiceLogDriver(ctx, id, &d)
@@ -868,6 +883,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Set a node's availability state. `active` accepts new tasks; `pause` rejects new tasks but keeps existing ones running; `drain` evicts every task to other nodes. Draining a manager may destabilise the swarm — prefer draining workers.",
 				),
+				mcplib.WithOutputSchema[nodeUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -891,6 +907,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Change a node's role between `worker` and `manager`. Promoting adds a Raft voter; demoting removes one. Never reduce the manager count below the quorum threshold — for a 3-manager cluster, demote at most one manager at a time.",
 				),
+				mcplib.WithOutputSchema[nodeUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -1357,7 +1374,7 @@ func (s *Server) toolUpdateServiceEnv(
 	if err != nil {
 		return "", err
 	}
-	return marshalResult(updated)
+	return marshalResult(serviceUpdate(sectionEnv, updated))
 }
 
 func (s *Server) toolUpdateServiceLabels(
@@ -1384,7 +1401,7 @@ func (s *Server) toolUpdateServiceLabels(
 	if err != nil {
 		return "", err
 	}
-	return marshalResult(updated)
+	return marshalResult(serviceUpdate(sectionLabels, updated))
 }
 
 func (s *Server) toolUpdateNodeLabels(
@@ -1411,7 +1428,7 @@ func (s *Server) toolUpdateNodeLabels(
 	if err != nil {
 		return "", err
 	}
-	return marshalResult(updated)
+	return marshalResult(nodeUpdate(sectionLabels, updated))
 }
 
 // updateServiceHandler builds a tool handler for the recurring
@@ -1422,6 +1439,7 @@ func (s *Server) toolUpdateNodeLabels(
 // Go doesn't allow generic methods, so this is a free function taking *Server.
 func updateServiceHandler[T any](
 	s *Server,
+	section string,
 	argKey string,
 	call func(wc DockerWriteClient, ctx context.Context, id string, arg T) (swarm.Service, error),
 ) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
@@ -1445,7 +1463,7 @@ func updateServiceHandler[T any](
 		if err != nil {
 			return "", err
 		}
-		return marshalResult(svc)
+		return marshalResult(serviceUpdate(section, svc))
 	}
 }
 
@@ -1476,7 +1494,7 @@ func (s *Server) toolUpdateNodeAvailability(
 	if err != nil {
 		return "", err
 	}
-	return marshalResult(node)
+	return marshalResult(nodeUpdate(sectionAvailability, node))
 }
 
 func (s *Server) toolUpdateNodeRole(
@@ -1506,7 +1524,7 @@ func (s *Server) toolUpdateNodeRole(
 	if err != nil {
 		return "", err
 	}
-	return marshalResult(node)
+	return marshalResult(nodeUpdate(sectionRole, node))
 }
 
 func (s *Server) toolRemoveVolume(ctx context.Context, req mcplib.CallToolRequest) (string, error) {

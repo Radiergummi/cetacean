@@ -298,14 +298,10 @@ and `describe` additionally attach `resource_link` content items for the resourc
 of a listing, and for `describe` the resource itself plus everything it cross-references — so a host can offer
 somewhere to go next and a client can `resources/read` one without the model first working out how to spell a
 `cetacean://` URI. The links describe the page actually returned, filters and paging included, and are capped at 25:
-they are an affordance, not the payload, and every id is in `structuredContent` regardless. Every tool
-whose result shape Cetacean owns — the tier 0 reads, the four service lifecycle mutations, and the `remove_*` tools —
+they are an affordance, not the payload, and every id is in `structuredContent` regardless. Every registered tool
 advertises an output schema that the server validates results against, on every call — a tool declaring a schema
 must answer with conforming structured content whatever its arguments, so no argument switches a tool to a shape
-its schema does not describe. The spec-editing mutations (`update_service_env`, `update_service_resources`, the
-rest of that group, and the two node updates) deliberately declare none: their result is the resulting Docker
-object, and reflecting `swarm.Service` into a schema would add ~22 KB per tool to every `tools/list`, which the
-compact shapes exist to avoid. An input-validation failure comes back as a tool result with `isError: true` (so the
+its schema does not describe. An input-validation failure comes back as a tool result with `isError: true` (so the
 model can self-correct), not a protocol error.
 
 **Tier 0 — reads** (always available): `get_logs`, `find`, `describe`, `get_topology`, `get_metrics`,
@@ -467,9 +463,26 @@ retained for the task's lifetime, and a summary is the more useful answer after 
 
 `running` is the live count, `state` is the same derivation the dashboard and REST API report, and `version` is the
 Swarm version index for a caller doing its own concurrency checks. `replicas` is omitted for a global service,
-which has no desired count. The shape is advertised as an `outputSchema`, so a client can rely on it. The
-spec-editing tools (`update_service_env`, `update_service_resources`, and so on) still return the full service,
-because there the resulting spec *is* the answer.
+which has no desired count. The shape is advertised as an `outputSchema`, so a client can rely on it.
+
+The spec-editing tools answer in the same spirit, reporting the section they changed rather than the whole
+service:
+
+```json
+{"id":"web","name":"web","version":42,"section":"resources",
+ "details":{"cpuLimitCores":2,"memoryLimitBytes":1073741824}}
+```
+
+`details` is the same projection `describe` builds for that resource, narrowed to the edited section, so
+confirming an edit and describing the resource afterwards cannot disagree. The node tools
+(`update_node_labels`, `update_node_availability`, `update_node_role`) answer with `id`, `hostname`, `version`,
+`section` and `details`, plus `role` and `availability` on every one of them — draining a manager is a different
+act from draining a worker, and "did the drain take" is not answerable without the role it took effect on.
+
+This is also what keeps a credential out of the answer. These tools used to return the whole `swarm.Service`, so
+a call that only raised a CPU limit came back carrying the service's environment variable values and its log
+driver's options — a `splunk-token` among them. The projection reports `envNames` and the log driver's
+`optionNames`, never the values, which is the rule the rest of the interface already followed.
 
 Task augmentation is **optional** on all four. A plain `tools/call` with no `params.task` behaves exactly as
 before, returning as soon as Docker accepts the change.
