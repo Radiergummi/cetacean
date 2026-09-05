@@ -7,6 +7,7 @@ import (
 	"maps"
 	"strings"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
@@ -68,6 +69,20 @@ type ServiceSpecWriter interface {
 		ctx context.Context,
 		id string,
 		driver *swarm.Driver,
+	) (swarm.Service, error)
+	UpdateServiceHealthcheck(
+		ctx context.Context,
+		id string,
+		hc *container.HealthConfig,
+	) (swarm.Service, error)
+
+	// UpdateServiceContainerConfig takes a mutator rather than a value
+	// because it covers several unrelated container fields; the command
+	// section writes two of them and must leave the rest untouched.
+	UpdateServiceContainerConfig(
+		ctx context.Context,
+		id string,
+		apply func(spec *swarm.ContainerSpec),
 	) (swarm.Service, error)
 }
 
@@ -589,7 +604,7 @@ func (s *Server) toolCatalog() []toolDef {
 				"update_service",
 				mcplib.WithToolTitle("Update a service's specification"),
 				mcplib.WithDescription(
-					"Change one section of a service's specification, named by `section`. `env` and `labels` take a JSON Merge Patch (RFC 7396) object — a string sets or replaces a key, null deletes it, an omitted key is preserved. The other six replace their section wholesale: pass the complete object, because a field you omit is cleared. `resources` takes ResourceRequirements (CPU/memory limits and reservations); `placement` takes Placement (constraints, preferences, max replicas per node, platforms) and may reschedule tasks onto other nodes to satisfy new constraints; `ports` takes an array of PortConfig and drops connections to any port it removes or remaps; `update-policy` and `rollback-policy` take an UpdateConfig (parallelism, delay, failure action, monitor window, max failure ratio, order) and change nothing by themselves, applying to the next spec change and to rollback_service respectively; `log-driver` takes a Driver (name plus options) and routes subsequent log lines through it. Every section except labels and the two policies triggers a rolling deploy. Returns the section as it now stands, not the whole service — describe the service for the rest.",
+					"Change one section of a service's specification, named by `section`. `env` and `labels` take a JSON Merge Patch (RFC 7396) object — a string sets or replaces a key, null deletes it, an omitted key is preserved. The other six replace their section wholesale: pass the complete object, because a field you omit is cleared. `resources` takes ResourceRequirements (CPU/memory limits and reservations); `placement` takes Placement (constraints, preferences, max replicas per node, platforms) and may reschedule tasks onto other nodes to satisfy new constraints; `ports` takes an array of PortConfig and drops connections to any port it removes or remaps; `update-policy` and `rollback-policy` take an UpdateConfig (parallelism, delay, failure action, monitor window, max failure ratio, order) and change nothing by themselves, applying to the next spec change and to rollback_service respectively; `log-driver` takes a Driver (name plus options) and routes subsequent log lines through it. `healthcheck` takes a probe: `test` is the command as an array, for instance [`CMD`, `curl`, `-f`, `http://localhost/`], and `interval`, `timeout` and `startPeriod` are duration strings such as `10s` or `1m30s` rather than numbers; an empty `test` removes the healthcheck. `command` takes `command` (the entrypoint) and `args` (what follows it), the split Docker itself makes, and omitting one clears it. Every section except labels and the two policies triggers a rolling deploy. Returns the section as it now stands, not the whole service — describe the service for the rest.",
 				),
 				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
@@ -617,6 +632,8 @@ func (s *Server) toolCatalog() []toolDef {
 						sectionUpdatePolicy,
 						sectionRollbackPolicy,
 						sectionLogDriver,
+						sectionHealthcheck,
+						sectionCommand,
 					),
 					mcplib.Description("Which part of the specification to change."),
 				),

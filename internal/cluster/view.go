@@ -557,8 +557,17 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 	if spec != nil {
 		details["image"] = StripImageDigest(spec.Image)
 
+		// Docker's split, kept: Command is the entrypoint, Args is what
+		// follows it. This used to report Args under the name "command" and
+		// never reported Command at all, which hid an entrypoint override —
+		// and once a caller can write this section, writing Command and
+		// reading Args back under the same name is a trap.
+		if len(spec.Command) > 0 {
+			details["command"] = spec.Command
+		}
+
 		if len(spec.Args) > 0 {
-			details["command"] = spec.Args
+			details["args"] = spec.Args
 		}
 
 		names := make([]string, 0, len(spec.Env))
@@ -570,11 +579,32 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 		slices.Sort(names)
 		details["envNames"] = names
 
+		// Durations as strings, never the nanosecond integers Docker's own
+		// type carries: "10s" is a value a caller can read and write back,
+		// 10000000000 is one they have to decode. Each key is omitted when
+		// unset, so "not configured" reads as absence rather than as a zero
+		// a caller might mistake for a configured value.
 		if hc := spec.Healthcheck; hc != nil {
 			details["healthcheck"] = true
 
+			if len(hc.Test) > 0 {
+				details["healthcheckTest"] = hc.Test
+			}
+
 			if hc.Interval > 0 {
 				details["healthcheckInterval"] = hc.Interval.String()
+			}
+
+			if hc.Timeout > 0 {
+				details["healthcheckTimeout"] = hc.Timeout.String()
+			}
+
+			if hc.StartPeriod > 0 {
+				details["healthcheckStartPeriod"] = hc.StartPeriod.String()
+			}
+
+			if hc.Retries > 0 {
+				details["healthcheckRetries"] = hc.Retries
 			}
 		} else {
 			details["healthcheck"] = false

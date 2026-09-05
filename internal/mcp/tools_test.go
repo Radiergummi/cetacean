@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
@@ -47,6 +48,45 @@ type fakeWriteClient struct {
 	updateServiceUpdateFn func(ctx context.Context, id string, p *swarm.UpdateConfig) (swarm.Service, error)
 	updateServiceRbackFn  func(ctx context.Context, id string, p *swarm.UpdateConfig) (swarm.Service, error)
 	updateServiceLogDrvFn func(ctx context.Context, id string, d *swarm.Driver) (swarm.Service, error)
+
+	// updateServiceHealthFn and updateServiceContainerFn back the healthcheck
+	// and command sections. The container one takes a mutator, matching
+	// docker.Client.UpdateServiceContainerConfig, so a test can assert the
+	// edit left the rest of the spec alone.
+	updateServiceHealthFn func(
+		ctx context.Context,
+		id string,
+		hc *container.HealthConfig,
+	) (swarm.Service, error)
+	updateServiceContainerFn func(
+		ctx context.Context,
+		id string,
+		apply func(spec *swarm.ContainerSpec),
+	) (swarm.Service, error)
+}
+
+func (f *fakeWriteClient) UpdateServiceHealthcheck(
+	ctx context.Context,
+	id string,
+	hc *container.HealthConfig,
+) (swarm.Service, error) {
+	if f.updateServiceHealthFn == nil {
+		return swarm.Service{}, errNotImplemented
+	}
+
+	return f.updateServiceHealthFn(ctx, id, hc)
+}
+
+func (f *fakeWriteClient) UpdateServiceContainerConfig(
+	ctx context.Context,
+	id string,
+	apply func(spec *swarm.ContainerSpec),
+) (swarm.Service, error) {
+	if f.updateServiceContainerFn == nil {
+		return swarm.Service{}, errNotImplemented
+	}
+
+	return f.updateServiceContainerFn(ctx, id, apply)
 }
 
 var errNotImplemented = errors.New("fakeWriteClient: method not stubbed")

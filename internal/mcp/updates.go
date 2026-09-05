@@ -32,6 +32,8 @@ const (
 	sectionUpdatePolicy   = "update-policy"
 	sectionRollbackPolicy = "rollback-policy"
 	sectionLogDriver      = "log-driver"
+	sectionHealthcheck    = "healthcheck"
+	sectionCommand        = "command"
 	sectionAvailability   = "availability"
 	sectionRole           = "role"
 )
@@ -54,6 +56,15 @@ var serviceSectionKeys = map[string][]string{
 	sectionUpdatePolicy:   {"updatePolicy"},
 	sectionRollbackPolicy: {"rollbackPolicy"},
 	sectionLogDriver:      {"logDriver"},
+	sectionHealthcheck: {
+		"healthcheck",
+		"healthcheckTest",
+		"healthcheckInterval",
+		"healthcheckTimeout",
+		"healthcheckStartPeriod",
+		"healthcheckRetries",
+	},
+	sectionCommand: {"command", "args"},
 }
 
 // nodeSectionKeys is the node counterpart, over NodeDigest's details.
@@ -257,6 +268,27 @@ func (s *Server) toolUpdateService(
 		}
 
 		updated, err = writeClient.UpdateServiceLogDriver(ctx, id, &driver)
+
+	case sectionHealthcheck:
+		value, decodeErr := decodeSection[healthcheckValue](req, section)
+		if decodeErr != nil {
+			return "", decodeErr
+		}
+
+		hc, convErr := value.toHealthConfig()
+		if convErr != nil {
+			return "", convErr
+		}
+
+		updated, err = writeClient.UpdateServiceHealthcheck(ctx, id, hc)
+
+	case sectionCommand:
+		value, decodeErr := decodeSection[commandValue](req, section)
+		if decodeErr != nil {
+			return "", decodeErr
+		}
+
+		updated, err = writeClient.UpdateServiceContainerConfig(ctx, id, value.applyTo)
 	}
 
 	if err != nil {
