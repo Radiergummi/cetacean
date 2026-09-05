@@ -75,10 +75,16 @@ type fileMCP struct {
 	SigningKey      *string `toml:"signing_key"`
 	AccessTokenTTL  *string `toml:"access_token_ttl"`
 	RefreshTokenTTL *string `toml:"refresh_token_ttl"`
+	ConsentTTL      *string `toml:"consent_ttl"`
 
 	// MaxConcurrentTasks caps in-flight task-augmented tool calls.
-	MaxConcurrentTasks *int          `toml:"max_concurrent_tasks"`
-	OAuth              *fileMCPOAuth `toml:"oauth"`
+	MaxConcurrentTasks *int `toml:"max_concurrent_tasks"`
+
+	// TaskTTL and MaxTaskTTL bound how long a task's result is retained when
+	// the client does not say, and however long it does say.
+	TaskTTL    *string       `toml:"task_ttl"`
+	MaxTaskTTL *string       `toml:"max_task_ttl"`
+	OAuth      *fileMCPOAuth `toml:"oauth"`
 }
 
 type fileMCPOAuth struct {

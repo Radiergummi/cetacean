@@ -994,6 +994,42 @@ func TestFilterToolsForIdentity_HidesWritesWithoutGrants(t *testing.T) {
 	}
 }
 
+// TestFilterToolsForIdentity_HidesWritesWithZeroGrants is the tools/list-level
+// counterpart of TestToolVisibilityForReportsNoGrants: an identity matching no
+// grant at all (as opposed to one holding only a read grant) must still see
+// the catalog trimmed to the ungated tools, not the whole thing.
+func TestFilterToolsForIdentity_HidesWritesWithZeroGrants(t *testing.T) {
+	c := cache.New(nil)
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:*"},
+		Audience:    []string{"user:somebody-else"},
+		Permissions: []string{"read"},
+	}}})
+	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful,
+		func(o *Options) { o.ACL = e })
+
+	all := make([]mcplib.Tool, 0, len(srv.registeredTools))
+	for _, td := range srv.registeredTools {
+		all = append(all, td.tool)
+	}
+
+	ctx := ctxWithIdentity()
+	visible := srv.filterToolsForIdentity(ctx, all)
+
+	names := make(map[string]bool, len(visible))
+	for _, t := range visible {
+		names[t.Name] = true
+	}
+
+	if names["scale_service"] {
+		t.Error("scale_service must be hidden — identity matches no grant at all")
+	}
+	if !names["search"] {
+		t.Error("search is unconditionally visible (cross-type tool)")
+	}
+}
+
 // TestToolIconsAttachedFromBaseURL verifies every registered tool carries a
 // single verb-category icon whose src is an absolute URL under the un-authed
 // /assets/mcp-icons/ prefix, built from the configured IconBaseURL.

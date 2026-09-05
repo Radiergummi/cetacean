@@ -79,7 +79,7 @@ startup. The `_FILE` variant has lower precedence than the direct env var.
 </ConfigParam>
 
 <ConfigParam name="storage.data_dir" flag="-data-dir" env="CETACEAN_DATA_DIR" default="./data">
-  Directory where the snapshot file (`snapshot.json`) is stored. Must be writable by the Cetacean process. In Docker, mount this as a volume for persistence across container restarts.
+  Directory where the snapshot file (`snapshot.json`) is stored, along with `mcp-tokens.json` when the [MCP server](mcp.md) is enabled with authentication — that file keeps MCP clients authorized across a restart, and is written regardless of `storage.snapshot`. Must be writable by the Cetacean process. In Docker, mount this as a volume for persistence across container restarts.
 </ConfigParam>
 
 <ConfigParam name="tls.cert" flag="-tls-cert" env="CETACEAN_TLS_CERT">

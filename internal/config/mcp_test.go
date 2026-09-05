@@ -17,6 +17,16 @@ func TestMCPConfigDefaults(t *testing.T) {
 	if cfg.RefreshTokenTTL != 720*time.Hour {
 		t.Errorf("refresh token TTL = %v, want 720h", cfg.RefreshTokenTTL)
 	}
+
+	// A remembered approval must outlive the refresh token, or remembering
+	// buys nothing: skipping the prompt once the token expires is the point.
+	if cfg.ConsentTTL <= cfg.RefreshTokenTTL {
+		t.Errorf(
+			"consent TTL = %v, want longer than the refresh token TTL %v",
+			cfg.ConsentTTL,
+			cfg.RefreshTokenTTL,
+		)
+	}
 	if cfg.OperationsLevel != OpsInherit {
 		t.Errorf("operations level = %v, want OpsInherit", cfg.OperationsLevel)
 	}
@@ -42,6 +52,7 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	t.Setenv("CETACEAN_MCP_SIGNING_KEY", "test-secret")
 	t.Setenv("CETACEAN_MCP_ACCESS_TOKEN_TTL", "2h")
 	t.Setenv("CETACEAN_MCP_REFRESH_TOKEN_TTL", "48h")
+	t.Setenv("CETACEAN_MCP_CONSENT_TTL", "96h")
 	t.Setenv("CETACEAN_MCP_OPERATIONS_LEVEL", "2")
 	t.Setenv("CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR", "false")
 	t.Setenv("CETACEAN_MCP_DCR_ENABLED", "false")
@@ -66,6 +77,9 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	}
 	if cfg.MCP.RefreshTokenTTL != 48*time.Hour {
 		t.Errorf("refresh TTL = %v, want 48h", cfg.MCP.RefreshTokenTTL)
+	}
+	if cfg.MCP.ConsentTTL != 96*time.Hour {
+		t.Errorf("consent TTL = %v, want 96h", cfg.MCP.ConsentTTL)
 	}
 	if cfg.MCP.OperationsLevel != OpsConfiguration {
 		t.Errorf("ops level = %v, want OpsConfiguration", cfg.MCP.OperationsLevel)
@@ -352,5 +366,151 @@ func TestLoadMCP_MaxConcurrentTasks_File(t *testing.T) {
 
 	if cfg.MaxConcurrentTasks != 64 {
 		t.Errorf("MaxConcurrentTasks = %d, want 64", cfg.MaxConcurrentTasks)
+	}
+}
+
+func TestLoadMCP_TaskTTL_Default(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_TASK_TTL", "")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.TaskTTL != 15*time.Minute {
+		t.Errorf("TaskTTL = %v, want 15m", cfg.TaskTTL)
+	}
+}
+
+func TestLoadMCP_TaskTTL_Env(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_TASK_TTL", "45m")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.TaskTTL != 45*time.Minute {
+		t.Errorf("TaskTTL = %v, want 45m", cfg.TaskTTL)
+	}
+}
+
+// TestLoadMCP_TaskTTL_ZeroDisables — zero is a real setting here, not an
+// error: it turns the fill-in off and leaves retention to whatever the client
+// asks for.
+func TestLoadMCP_TaskTTL_ZeroDisables(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_TASK_TTL", "0")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP rejected a zero task TTL: %v", err)
+	}
+
+	if cfg.TaskTTL != 0 {
+		t.Errorf("TaskTTL = %v, want 0", cfg.TaskTTL)
+	}
+}
+
+func TestLoadMCP_TaskTTL_File(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_TASK_TTL", "")
+
+	value := "30m"
+
+	cfg, err := loadMCP(&fileMCP{TaskTTL: &value})
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.TaskTTL != 30*time.Minute {
+		t.Errorf("TaskTTL = %v, want 30m", cfg.TaskTTL)
+	}
+}
+
+func TestLoadMCP_TaskTTL_RejectsNegative(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_TASK_TTL", "-5m")
+
+	if _, err := loadMCP(nil); err == nil {
+		t.Error("loadMCP accepted a negative task TTL, want an error")
+	}
+}
+
+func TestLoadMCP_MaxTaskTTL_Default(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_TASK_TTL", "")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxTaskTTL != time.Hour {
+		t.Errorf("MaxTaskTTL = %v, want 1h", cfg.MaxTaskTTL)
+	}
+}
+
+func TestLoadMCP_MaxTaskTTL_Env(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_TASK_TTL", "6h")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxTaskTTL != 6*time.Hour {
+		t.Errorf("MaxTaskTTL = %v, want 6h", cfg.MaxTaskTTL)
+	}
+}
+
+// TestLoadMCP_MaxTaskTTL_ZeroDisables — zero lifts the ceiling rather than
+// pinning every task to nothing.
+func TestLoadMCP_MaxTaskTTL_ZeroDisables(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_TASK_TTL", "0")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP rejected a zero maximum task TTL: %v", err)
+	}
+
+	if cfg.MaxTaskTTL != 0 {
+		t.Errorf("MaxTaskTTL = %v, want 0", cfg.MaxTaskTTL)
+	}
+}
+
+func TestLoadMCP_MaxTaskTTL_File(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_MAX_TASK_TTL", "")
+
+	value := "2h"
+
+	cfg, err := loadMCP(&fileMCP{MaxTaskTTL: &value})
+	if err != nil {
+		t.Fatalf("loadMCP: %v", err)
+	}
+
+	if cfg.MaxTaskTTL != 2*time.Hour {
+		t.Errorf("MaxTaskTTL = %v, want 2h", cfg.MaxTaskTTL)
+	}
+}
+
+// TestLoadMCP_ConsentTTL_ZeroDisables — docs/mcp.md documents
+// CETACEAN_MCP_CONSENT_TTL=0 as the way to turn remembered approvals off, and
+// ConsentStore.Enabled() honours a zero TTL by never remembering. Rejecting it
+// at parse time meant the documented setting failed startup instead.
+func TestLoadMCP_ConsentTTL_ZeroDisables(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_CONSENT_TTL", "0")
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("loadMCP rejected the documented way to disable consent: %v", err)
+	}
+
+	if cfg.ConsentTTL != 0 {
+		t.Errorf("ConsentTTL = %v, want 0", cfg.ConsentTTL)
+	}
+}
+
+func TestLoadMCP_ConsentTTL_RejectsNegative(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_CONSENT_TTL", "-1h")
+
+	if _, err := loadMCP(nil); err == nil {
+		t.Error("loadMCP accepted a negative consent TTL, want an error")
 	}
 }

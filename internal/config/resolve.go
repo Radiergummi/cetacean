@@ -106,6 +106,38 @@ func resolveDuration(
 // resolveInt returns the first set value in precedence order:
 // flag > env > file > hardcoded default. Returns an error if any
 // explicitly set value is not a valid integer or is out of [min, max].
+// resolveNonNegativeDuration is resolveDuration for settings where zero is a
+// meaning rather than a mistake — "no default", "no ceiling" — and only a
+// negative value is wrong.
+func resolveNonNegativeDuration(
+	flag *string,
+	envKey string,
+	file *string,
+	def time.Duration,
+) (time.Duration, error) {
+	var raw string
+	var source string
+	switch envVal := os.Getenv(envKey); {
+	case flag != nil:
+		raw, source = *flag, "flag"
+	case envVal != "":
+		raw, source = envVal, envKey
+	case file != nil:
+		raw, source = *file, "config file"
+	default:
+		return def, nil
+	}
+
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration from %s %q: %w", source, raw, err)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("invalid duration from %s %q: must not be negative", source, raw)
+	}
+	return d, nil
+}
+
 func resolveInt(flag *int, envKey string, file *int, def, min, max int) (int, error) {
 	var raw string
 	var source string
