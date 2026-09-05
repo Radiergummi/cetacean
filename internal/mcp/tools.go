@@ -477,7 +477,7 @@ func (s *Server) toolCatalog() []toolDef {
 				"get_metrics",
 				mcplib.WithToolTitle("Chart a resource metric"),
 				mcplib.WithDescription(
-					"Return a time series of CPU, memory or network use for one service or one cluster node, over the last hour, six hours, day or week. Requires Prometheus (and cAdvisor for service metrics, node-exporter for node metrics); a Cetacean without them reports that metrics are unavailable rather than returning empty series. Cetacean owns the queries — name a target and a metric, not PromQL.",
+					"Return a time series of CPU, memory or network use, over the last hour, six hours, day or week. Chart one resource by naming `target` \"service\" or \"node\" with its `id`. Rank instead by asking for `top`: `target` \"cluster\" ranks the busiest services cluster-wide (or nodes, with `by`), and `target` \"node\" with an `id` and `top` ranks the services running on that one host — which is how to answer what is using the most CPU, and why a given node is hot. A ranking returns one series per member, named the way the cluster names it. Requires Prometheus (and cAdvisor for service metrics, node-exporter for node metrics); a Cetacean without them reports that metrics are unavailable rather than returning empty series. Cetacean owns the queries — name a target and a metric, not PromQL.",
 				),
 				mcplib.WithOutputSchema[metricsResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -487,18 +487,27 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithString("target",
 					mcplib.Required(),
 					mcplib.Description(
-						"What to measure: \"service\" or \"node\".",
+						"What to measure: \"service\", \"node\", or \"cluster\" to rank across the whole cluster.",
 					),
 				),
 				mcplib.WithString("id",
-					mcplib.Required(),
 					mcplib.Description(
-						"The service (ID or name) or node (ID or hostname) to measure.",
+						"The service (ID or name) or node (ID or hostname) to measure. Required for the \"service\" and \"node\" targets; the \"cluster\" target takes none.",
+					),
+				),
+				mcplib.WithNumber("top",
+					mcplib.Description(
+						"Return a ranking of the busiest members rather than one resource's own series: the top N (default 5, maximum 10). With target \"cluster\" it ranks the whole cluster; with target \"node\" it ranks the services running on that node.",
+					),
+				),
+				mcplib.WithString("by",
+					mcplib.Description(
+						"What a cluster-wide ranking ranks: \"service\" (default) or \"node\". Ignored by every other target.",
 					),
 				),
 				mcplib.WithString("metric",
 					mcplib.Description(
-						"Which metric: \"cpu\" (default), \"memory\" or \"network\". Service CPU is percent of a core and service memory is bytes; node CPU and memory are percentages. Network is two series, receive and transmit, in bytes per second.",
+						"Which metric: \"cpu\" (default), \"memory\" or \"network\". Service CPU is percent of a core and service memory is bytes; node CPU and memory are percentages. Network is two series, receive and transmit, in bytes per second — a ranking sums the two, since it asks which member moves the most traffic.",
 					),
 				),
 				mcplib.WithString("range",

@@ -216,19 +216,26 @@ func (s *Server) toolGetMetrics(
 		return "", err
 	}
 
+	metric := req.GetString("metric", metricCPU)
+	rangeKey := req.GetString("range", defaultMetricRange)
+
+	// A ranking and a single-resource chart differ in what they aggregate by,
+	// not just in what they select, so they are separate query catalogues and
+	// the branch happens before either is consulted.
+	if top := req.GetInt("top", 0); top > 0 || target == metricTargetCluster {
+		return s.rankMetrics(ctx, req, target, metric, rangeKey, top)
+	}
+
 	id, err := req.RequireString("id")
 	if err != nil {
 		return "", err
 	}
 
-	metric := req.GetString("metric", metricCPU)
-	rangeKey := req.GetString("range", defaultMetricRange)
-
 	metrics, ok := metricCatalog[target]
 	if !ok {
 		return "", fmt.Errorf(
-			"unknown target %q; expected %q or %q",
-			target, metricTargetService, metricTargetNode,
+			"unknown target %q; expected %q, %q or %q",
+			target, metricTargetService, metricTargetNode, metricTargetCluster,
 		)
 	}
 
@@ -359,14 +366,8 @@ func (s *Server) queryMetricSeries(
 
 	for _, result := range results {
 		for _, point := range result.Points {
-			seconds, fraction := int64(
-				point.Timestamp,
-			), point.Timestamp-float64(
-				int64(point.Timestamp),
-			)
-
 			points = append(points, metricPoint{
-				Time:  time.Unix(seconds, int64(fraction*1e9)).UTC().Format(time.RFC3339),
+				Time:  promTime(point.Timestamp),
 				Value: point.Value,
 			})
 		}
@@ -472,4 +473,17 @@ func rangeNames() []string {
 	slices.Sort(names)
 
 	return names
+}
+
+// promTime renders a Prometheus timestamp — a float of Unix seconds — as the
+// RFC 3339 string a metric point carries.
+//
+// Shared by the single-resource read and the ranking so the two cannot format
+// the same instant differently; a caller correlating a chart against
+// get_events reads both as text.
+func promTime(timestamp float64) string {
+	seconds := int64(timestamp)
+	fraction := timestamp - float64(seconds)
+
+	return time.Unix(seconds, int64(fraction*1e9)).UTC().Format(time.RFC3339)
 }
