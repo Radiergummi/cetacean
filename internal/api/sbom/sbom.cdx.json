@@ -2515,8 +2515,8 @@
       "type": "library",
       "name": "react-query-devtools",
       "group": "@tanstack",
-      "version": "5.102.7",
-      "bom-ref": "frontend@0.0.0|@tanstack/react-query-devtools@5.102.7",
+      "version": "5.102.8",
+      "bom-ref": "frontend@0.0.0|@tanstack/react-query-devtools@5.102.8",
       "author": "tannerlinsley",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "licenses": [
@@ -2527,7 +2527,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.102.7",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.102.8",
       "externalReferences": [
         {
           "url": "git+https://github.com/TanStack/query.git#packages/react-query-devtools",
@@ -2545,12 +2545,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/react-query-devtools/-/react-query-devtools-5.102.7.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/react-query-devtools/-/react-query-devtools-5.102.8.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "5abdc18af63b2db85bf6147db36f07fac5ebee883771d3ad995b45cf39fdb3b6c64217559a16e289b3fb340d1cce0c00d4d23ed81865537a0039cbb2be48bef2"
+              "content": "40a6fb038e0164e53b9f1b060388053757e87e3628bdaaf93b44fcdc57f863ed9e46ad3d44616b033ceeb55745ffafde99f49a303a21a7a7bbe7d0630777f113"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2567,8 +2567,8 @@
       "type": "library",
       "name": "react-query",
       "group": "@tanstack",
-      "version": "5.102.7",
-      "bom-ref": "frontend@0.0.0|@tanstack/react-query@5.102.7",
+      "version": "5.102.8",
+      "bom-ref": "frontend@0.0.0|@tanstack/react-query@5.102.8",
       "author": "tannerlinsley",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "licenses": [
@@ -2579,7 +2579,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.102.7",
+      "purl": "pkg:npm/%40tanstack/react-query@5.102.8",
       "externalReferences": [
         {
           "url": "git+https://github.com/TanStack/query.git#packages/react-query",
@@ -2597,12 +2597,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.102.7.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.102.8.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "6db77c4f88c3223f5a3db367d754ac8cd1fc6a9298e33b2992bc3adc946c3435e3a56e52445ed7d22a62ef2ac677c0c2b3c42161f85024aa848f560baeed436d"
+              "content": "4d805e6b83ae5d60fb3216921ead3af5359b15eeeb73058dea4cd3ec917438a8b52ba735813bf62330fa03a13126c08ca33764a8159eb885199aee0a420d0ee4"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3023,8 +3023,8 @@
     {
       "type": "library",
       "name": "lucide-react",
-      "version": "1.34.0",
-      "bom-ref": "frontend@0.0.0|lucide-react@1.34.0",
+      "version": "1.37.0",
+      "bom-ref": "frontend@0.0.0|lucide-react@1.37.0",
       "author": "Eric Fennis",
       "description": "A Lucide icon library package for React applications.",
       "licenses": [
@@ -3035,7 +3035,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.34.0",
+      "purl": "pkg:npm/lucide-react@1.37.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/lucide-icons/lucide.git#packages/lucide-react",
@@ -3053,12 +3053,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.34.0.tgz",
+          "url": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.37.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "be78c624d23b1ed939fa8596f205c6b9a2e0c2001bd13ebf8996c1ae9f4909f445c1d3566746139b77b2c6338b83037aafc8b201fdd403bd3336605104dbfbca"
+              "content": "2cfb01e2b0f54c3eb066ed5d8ca39ff6f5274b58d335a1dba255de6d70e089375bea3780d5a80826126c2326c29a32a640295c39a6a5d68d4e6a261a8447edc9"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3224,8 +3224,8 @@
     {
       "type": "library",
       "name": "react-router-dom",
-      "version": "7.18.2",
-      "bom-ref": "frontend@0.0.0|react-router-dom@7.18.2",
+      "version": "7.18.3",
+      "bom-ref": "frontend@0.0.0|react-router-dom@7.18.3",
       "author": "Remix Software",
       "description": "Declarative routing for React web applications",
       "licenses": [
@@ -3236,7 +3236,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/react-router-dom@7.18.2",
+      "purl": "pkg:npm/react-router-dom@7.18.3",
       "externalReferences": [
         {
           "url": "git+https://github.com/remix-run/react-router.git#packages/react-router-dom",
@@ -3254,12 +3254,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/react-router-dom/-/react-router-dom-7.18.2.tgz",
+          "url": "https://registry.npmjs.org/react-router-dom/-/react-router-dom-7.18.3.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "008289fe38069456f711b7c25e4e46cec862c2dfa5de6a9b0ab36398458c323a90c4d277b2f05ae9b833172082d92c37440d15585d64837b907f63858716fc87"
+              "content": "cad55bc8104ceef31f4426a6db9af458c852552a26f74f40f29fbc9b4fdfd70f39dddcffc5f16ee9eb404f64846d5a129c8f99a0f443a88b105d54fcf60a7b92"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -4922,8 +4922,8 @@
       "type": "library",
       "name": "query-devtools",
       "group": "@tanstack",
-      "version": "5.102.7",
-      "bom-ref": "frontend@0.0.0|@tanstack/query-devtools@5.102.7",
+      "version": "5.102.8",
+      "bom-ref": "frontend@0.0.0|@tanstack/query-devtools@5.102.8",
       "author": "tannerlinsley",
       "description": "Developer tools to interact with and visualize the TanStack Query cache",
       "licenses": [
@@ -4934,7 +4934,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/query-devtools@5.102.7",
+      "purl": "pkg:npm/%40tanstack/query-devtools@5.102.8",
       "externalReferences": [
         {
           "url": "git+https://github.com/TanStack/query.git#packages/query-devtools",
@@ -4952,12 +4952,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/query-devtools/-/query-devtools-5.102.7.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/query-devtools/-/query-devtools-5.102.8.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "f4b3af758b8dcc856e9a6865112d6b4f119fe99ff1ab4e36559de67e67ab23e83def872c9f5f8ae58ecbc8f81236fb64b863d06bb51a128b4abfcb7369d8e7ae"
+              "content": "66078c2ae17977fcce13eb605a6ddc49b0fa65c6ebe88ba056c9db1f351c4a2b26a8b6434943c128ce882d4c44c60c1eeab3c03a8c76c796c0e53f8f48e406d1"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -4974,8 +4974,8 @@
       "type": "library",
       "name": "query-core",
       "group": "@tanstack",
-      "version": "5.102.7",
-      "bom-ref": "frontend@0.0.0|@tanstack/query-core@5.102.7",
+      "version": "5.102.8",
+      "bom-ref": "frontend@0.0.0|@tanstack/query-core@5.102.8",
       "author": "tannerlinsley",
       "description": "The framework agnostic core that powers TanStack Query",
       "licenses": [
@@ -4986,7 +4986,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/query-core@5.102.7",
+      "purl": "pkg:npm/%40tanstack/query-core@5.102.8",
       "externalReferences": [
         {
           "url": "git+https://github.com/TanStack/query.git#packages/query-core",
@@ -5004,12 +5004,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.102.7.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.102.8.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "e131fc290ac22e836cf59be5d4b5b589a67d719c777464e07d9d419cbadc47130d9d7feda1efdd19b7ef17f0e4bdbcd1c9f2dfa4c29991e99bcf7a34ae7ba0b7"
+              "content": "64d8e4277dc2aaf3cd79cffa9590671ea2dcdc45463d9f7248b8586a153d4dcb9115d9b05dec2e8f47388704967061ea114c1c4ab29e67ea0672f3c1a9771072"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -5540,8 +5540,8 @@
     {
       "type": "library",
       "name": "react-router",
-      "version": "7.18.2",
-      "bom-ref": "frontend@0.0.0|react-router@7.18.2",
+      "version": "7.18.3",
+      "bom-ref": "frontend@0.0.0|react-router@7.18.3",
       "author": "Remix Software",
       "description": "Declarative routing for React",
       "licenses": [
@@ -5552,7 +5552,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/react-router@7.18.2",
+      "purl": "pkg:npm/react-router@7.18.3",
       "externalReferences": [
         {
           "url": "git+https://github.com/remix-run/react-router.git#packages/react-router",
@@ -5570,12 +5570,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/react-router/-/react-router-7.18.2.tgz",
+          "url": "https://registry.npmjs.org/react-router/-/react-router-7.18.3.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "69454c8c59b71803d34d92fba18af913b1138aa7d008744b1fe07ee5a7e7202bdfd2bee490ae1e47a48cbb06d24c9c3feedfb5da4853fca6a18a3e3d7ea38222"
+              "content": "8325e0b5daf9b80089e5bd50e2e7738d557eb5bfeb94720c24ab89d1ef3d4782b3833e3bcffae03f47482b192da881148431e5b864cf2491ffc1185aec2caab0"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -5592,7 +5592,7 @@
           "type": "library",
           "name": "set-cookie-parser",
           "version": "2.7.2",
-          "bom-ref": "frontend@0.0.0|react-router@7.18.2|set-cookie-parser@2.7.2",
+          "bom-ref": "frontend@0.0.0|react-router@7.18.3|set-cookie-parser@2.7.2",
           "author": "Nathan Friedly",
           "description": "Parses set-cookie headers into objects",
           "licenses": [
