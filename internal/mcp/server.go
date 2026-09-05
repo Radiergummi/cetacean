@@ -65,6 +65,7 @@ type DockerWriteClient interface {
 	ServiceSpecWriter
 	NodeWriter
 	ResourceRemover
+	ResourceCreator
 }
 
 // RecommendationEngine is the narrow surface of the recommendations engine
@@ -617,6 +618,8 @@ var toolACLSpecs = map[string]toolACLSpec{
 	"update_node_labels":   {"node", "write"},
 	"update_node":          {"node", "write"},
 	"remove_service":       {"service", "write"},
+	"create_config":        {"config", "write"},
+	"create_secret":        {"secret", "write"},
 	"remove_config":        {"config", "write"},
 	"remove_secret":        {"secret", "write"},
 	"remove_network":       {"network", "write"},

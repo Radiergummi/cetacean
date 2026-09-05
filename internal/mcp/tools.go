@@ -86,6 +86,14 @@ type ServiceSpecWriter interface {
 	) (swarm.Service, error)
 }
 
+// ResourceCreator creates the two resource types a service can reference by
+// name. Narrow, like every other write interface here, so a test fake
+// implements only what it exercises.
+type ResourceCreator interface {
+	CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error)
+	CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+}
+
 // NodeWriter is the subset of Docker node operations exposed via MCP tools.
 // UpdateNodeLabels is Tier 2; UpdateNodeAvailability/UpdateNodeRole are Tier 3.
 type NodeWriter interface {
@@ -138,6 +146,8 @@ var toolIconCategory = map[string]string{
 
 	"scale_service": "scale",
 
+	"create_secret":        "edit",
+	"create_config":        "edit",
 	"update_service_image": "edit",
 	"rollback_service":     "edit",
 	"restart_service":      "edit",
@@ -672,6 +682,86 @@ func (s *Server) toolCatalog() []toolDef {
 			),
 			tier:    config.OpsConfiguration,
 			handler: s.toolUpdateNodeLabels,
+		},
+		{
+			tool: mcplib.NewTool(
+				"create_secret",
+				mcplib.WithToolTitle("Create a secret"),
+				mcplib.WithDescription(
+					"Create a Swarm secret. Swarm secrets cannot be changed once created, so rotating one is three calls in order: this tool for the replacement, update_service_secrets to repoint each service that uses the old one (describe the old secret first — its related array names them), then remove_secret once nothing references it. The value is write-only: no tool ever returns it, including this one. Pass encoding as base64 for binary content or anything JSON string escaping would mangle, such as a certificate or a key file; without it the value is stored exactly as given, since plenty of ordinary passwords are also valid base64 and guessing would silently store the wrong thing.",
+				),
+				mcplib.WithOutputSchema[createResult](),
+				mcplib.WithReadOnlyHintAnnotation(false),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(false),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString(
+					"name",
+					mcplib.Required(),
+					mcplib.Description(
+						"Name for the new secret. Must not already exist in the cluster.",
+					),
+				),
+				mcplib.WithString("data",
+					mcplib.Required(),
+					mcplib.Description("The secret's value."),
+				),
+				mcplib.WithString(
+					"encoding",
+					mcplib.Enum("utf8", "base64"),
+					mcplib.Description(
+						"How `data` is encoded. Defaults to utf8, which stores it verbatim.",
+					),
+				),
+				mcplib.WithObject(
+					"labels",
+					mcplib.Description(
+						"Labels to set on the secret. Set com.docker.stack.namespace to attach it to a stack.",
+					),
+				),
+			),
+			tier:    config.OpsConfiguration,
+			handler: s.toolCreateSecret,
+		},
+		{
+			tool: mcplib.NewTool(
+				"create_config",
+				mcplib.WithToolTitle("Create a config"),
+				mcplib.WithDescription(
+					"Create a Swarm config. Like a secret, a config cannot be changed once created — replace it by creating a new one, repointing services with update_service_configs, and removing the old one. Unlike a secret, its content can be read back afterwards, so use a secret for anything sensitive. Pass encoding as base64 for a file whose content JSON string escaping would mangle.",
+				),
+				mcplib.WithOutputSchema[createResult](),
+				mcplib.WithReadOnlyHintAnnotation(false),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(false),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString(
+					"name",
+					mcplib.Required(),
+					mcplib.Description(
+						"Name for the new config. Must not already exist in the cluster.",
+					),
+				),
+				mcplib.WithString("data",
+					mcplib.Required(),
+					mcplib.Description("The config's content."),
+				),
+				mcplib.WithString(
+					"encoding",
+					mcplib.Enum("utf8", "base64"),
+					mcplib.Description(
+						"How `data` is encoded. Defaults to utf8, which stores it verbatim.",
+					),
+				),
+				mcplib.WithObject(
+					"labels",
+					mcplib.Description(
+						"Labels to set on the config. Set com.docker.stack.namespace to attach it to a stack.",
+					),
+				),
+			),
+			tier:    config.OpsConfiguration,
+			handler: s.toolCreateConfig,
 		},
 
 		// Tier 3 — Impactful.
