@@ -40,10 +40,52 @@ func (s *Server) toolGetTopology(
 			s.filterServices(ctx, s.cache.ListServices()),
 		))
 
+	case cluster.TopologyViewDrainImpact:
+		return s.drainImpact(ctx, req)
+
 	default:
 		return "", fmt.Errorf(
-			"unknown view %q; expected %q or %q",
-			view, cluster.TopologyViewNetwork, cluster.TopologyViewPlacement,
+			"unknown view %q; expected %q, %q or %q",
+			view,
+			cluster.TopologyViewNetwork,
+			cluster.TopologyViewPlacement,
+			cluster.TopologyViewDrainImpact,
 		)
 	}
+}
+
+// drainImpact answers the drain-impact view, which unlike the other two is
+// about one node and so needs it named.
+//
+// The node is resolved against the cache and read-checked before anything else
+// happens, for the same reason get_metrics resolves its target first: the
+// answer names the services running on it, so a caller must be permitted to
+// read the node itself, not merely to see the graph.
+func (s *Server) drainImpact(
+	ctx context.Context,
+	req mcplib.CallToolRequest,
+) (string, error) {
+	identifier := req.GetString("node", "")
+	if identifier == "" {
+		return "", fmt.Errorf("node: required for the %q view", cluster.TopologyViewDrainImpact)
+	}
+
+	node, found, err := s.cache.ResolveNode(identifier)
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return "", fmt.Errorf("no such node %q", identifier)
+	}
+
+	if err := s.checkRead(ctx, "node", nodeACLName(node)); err != nil {
+		return "", err
+	}
+
+	return marshalResult(cluster.DrainImpactGraph(
+		node,
+		s.filterNodes(ctx, s.cache.ListNodes()),
+		s.filterRawTasks(ctx, s.cache.ListTasks()),
+		s.filterServices(ctx, s.cache.ListServices()),
+	))
 }

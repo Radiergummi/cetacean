@@ -448,7 +448,7 @@ func (s *Server) toolCatalog() []toolDef {
 				"get_topology",
 				mcplib.WithToolTitle("Get cluster topology"),
 				mcplib.WithDescription(
-					"Return the cluster as a graph. The network view joins services to the overlay networks they attach to, answering which services can reach each other; the placement view joins cluster nodes to the services they run, answering what runs where. Use this instead of listing services and nodes separately when the question is about relationships.",
+					"Return the cluster as a graph. The network view joins services to the overlay networks they attach to, answering which services can reach each other; the placement view joins cluster nodes to the services they run, answering what runs where; the drain-impact view takes a `node` and joins the services running on it to the nodes that could take them, answering what would move if you drained it and what could not. In drain-impact a service with no edges is stranded and its `detail` names the placement constraint that blocked it — check this before draining a node rather than discovering it afterwards. Use this instead of listing services and nodes separately when the question is about relationships.",
 				),
 				mcplib.WithOutputSchema[cluster.TopologyGraph](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -458,7 +458,13 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithString(
 					"view",
 					mcplib.Description(
-						"Which projection to return: \"network\" (services joined to overlay networks, the default) or \"placement\" (cluster nodes joined to the services they run).",
+						"Which projection to return: \"network\" (services joined to overlay networks, the default), \"placement\" (cluster nodes joined to the services they run), or \"drain-impact\" (the services on one node joined to the nodes that could take them; requires `node`).",
+					),
+				),
+				mcplib.WithString(
+					"node",
+					mcplib.Description(
+						"Node ID or hostname to assess. Required by the \"drain-impact\" view and ignored by the others.",
 					),
 				),
 			),

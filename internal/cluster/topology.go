@@ -12,8 +12,9 @@ import (
 // The two topology projections. A view name is part of the MCP tool's argument
 // and result, so it is spelled once here rather than in each transport.
 const (
-	TopologyViewNetwork   = "network"
-	TopologyViewPlacement = "placement"
+	TopologyViewNetwork     = "network"
+	TopologyViewPlacement   = "placement"
+	TopologyViewDrainImpact = "drain-impact"
 )
 
 // TopologyGraph is a transport-neutral view of the cluster as a graph.
@@ -23,7 +24,14 @@ const (
 // fail validation. Both are sorted, so the same cluster state always produces
 // the same bytes.
 type TopologyGraph struct {
-	View  string         `json:"view"`
+	View string `json:"view"`
+
+	// Subject names the resource a view is *about*, where it is about one.
+	// The network and placement views describe the whole cluster and leave it
+	// empty; drain-impact describes one node, and the graph body — services on
+	// one side, candidate nodes on the other — has nowhere to say which.
+	Subject string `json:"subject,omitempty"`
+
 	Nodes []TopologyNode `json:"nodes"`
 	Edges []TopologyEdge `json:"edges"`
 }
