@@ -125,6 +125,26 @@ func (s *Server) filterServices(ctx context.Context, items []swarm.Service) []sw
 	)
 }
 
+// filterRawTasks keeps the tasks the caller may read, without enriching them.
+//
+// The ACL key is "task:<id>", a field swarm.Task already carries, so the
+// enriched shape filterTasks takes is not needed to make the decision — and
+// the digest builders resolve parent names from the slices they are given
+// rather than from enriched fields. Enriching first would resolve a service
+// name and a node hostname per task only to discard them, on a path
+// (resources/read) that a subscription re-drives after every cache event.
+func (s *Server) filterRawTasks(ctx context.Context, items []swarm.Task) []swarm.Task {
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(t swarm.Task) string {
+			return "task:" + t.ID
+		},
+	)
+}
+
 func (s *Server) filterTasks(
 	ctx context.Context,
 	items []cluster.EnrichedTask,

@@ -98,22 +98,7 @@ func NodeDigest(node swarm.Node, tasks []swarm.Task, services []swarm.Service) D
 // and the digest must still be usable rather than erroring or leaving the
 // name blank.
 func TaskDigest(task swarm.Task, service *swarm.Service, node *swarm.Node) Digest {
-	name := task.ID
-	if service != nil {
-		// Docker's own naming convention: a replicated task is
-		// "<service>.<slot>", a global one "<service>.<node>", since a global
-		// service has no slot to distinguish its replicas by.
-		switch {
-		case service.Spec.Mode.Global != nil && task.NodeID != "":
-			name = fmt.Sprintf("%s.%s", service.Spec.Name, task.NodeID)
-		case service.Spec.Mode.Global != nil:
-			// An unassigned global task has no node yet; "<service>." with a
-			// trailing dot would read as a truncated name.
-			name = service.Spec.Name
-		default:
-			name = fmt.Sprintf("%s.%d", service.Spec.Name, task.Slot)
-		}
-	}
+	name := TaskName(task, service)
 
 	var reason string
 	if task.Status.State != swarm.TaskStateRunning {
@@ -252,21 +237,10 @@ func StackDigest(stack cache.StackDetail, tasks []swarm.Task) Digest {
 		}
 	}
 
-	related := make(
-		[]Related,
-		0,
-		len(
-			stack.Services,
-		)+len(
-			stack.Configs,
-		)+len(
-			stack.Secrets,
-		)+len(
-			stack.Networks,
-		)+len(
-			stack.Volumes,
-		),
-	)
+	memberCount := len(stack.Services) + len(stack.Configs) + len(stack.Secrets) +
+		len(stack.Networks) + len(stack.Volumes)
+
+	related := make([]Related, 0, memberCount)
 
 	for _, m := range members {
 		related = append(related, Related{

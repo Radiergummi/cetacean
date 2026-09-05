@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -24,16 +25,7 @@ import (
 // filtering, secret redaction and task enrichment all happen on the one audited
 // path. A type added to the resource tree must be added here too, which
 // TestFindCoversEveryListableType enforces.
-var listableResourceTypes = []string{
-	"nodes",
-	"services",
-	"tasks",
-	"stacks",
-	"configs",
-	"secrets",
-	"networks",
-	"volumes",
-}
+var listableResourceTypes = slices.Sorted(maps.Keys(pluralToSingularRowType))
 
 // defaultListLimit bounds what a single call pulls into a widget frame. A
 // cluster can hold thousands of tasks, and a widget renders in an iframe the
@@ -109,7 +101,9 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		return "", err
 	}
 
-	if _, ok := toSlice(listed); !ok {
+	// A type test, not a conversion: the raw path projects filtered rows back
+	// onto the concrete slice by ID, so nothing needs it widened to []any.
+	if reflect.ValueOf(listed).Kind() != reflect.Slice {
 		return "", fmt.Errorf("resource type %q does not enumerate", resourceType)
 	}
 
@@ -118,14 +112,24 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		return "", err
 	}
 
-	rows = filterRows(rows, rowFilters{
+	filters := rowFilters{
 		query: query,
 		state: strings.TrimSpace(req.GetString("state", "")),
 		stack: strings.TrimSpace(req.GetString("stack", "")),
 		node:  strings.TrimSpace(req.GetString("node", "")),
 		image: strings.TrimSpace(req.GetString("image", "")),
 		label: strings.TrimSpace(req.GetString("label", "")),
-	}, labelsFor(listed))
+	}
+
+	// Only the label filter reads the labels, and it is the rarest of the six;
+	// building the map unconditionally walked every record on every listing.
+	// labelMatches answers false for a nil map, so nil is a valid absence.
+	var labels map[string]map[string]string
+	if filters.label != "" {
+		labels = labelsFor(listed)
+	}
+
+	rows = filterRows(rows, filters, labels)
 
 	if req.GetBool("raw", false) {
 		// raw changes the shape of what comes back, never the scope: a
@@ -333,8 +337,14 @@ func filterRows(
 
 	out := make([]cluster.Row, 0, len(rows))
 
+	// ContainsFold documents its second argument as already lowered, and these
+	// three do not change across the loop.
+	query := strings.ToLower(f.query)
+	node := strings.ToLower(f.node)
+	image := strings.ToLower(f.image)
+
 	for _, row := range rows {
-		if f.query != "" && !cluster.ContainsFold(row.Name, strings.ToLower(f.query)) {
+		if f.query != "" && !cluster.ContainsFold(row.Name, query) {
 			continue
 		}
 
@@ -349,11 +359,11 @@ func filterRows(
 		// node and image both test Detail: it holds the node hostname for a
 		// task row and the image for a service row, so each filter is only
 		// meaningful for the type that put it there.
-		if f.node != "" && !cluster.ContainsFold(row.Detail, strings.ToLower(f.node)) {
+		if f.node != "" && !cluster.ContainsFold(row.Detail, node) {
 			continue
 		}
 
-		if f.image != "" && !cluster.ContainsFold(row.Detail, strings.ToLower(f.image)) {
+		if f.image != "" && !cluster.ContainsFold(row.Detail, image) {
 			continue
 		}
 
@@ -509,22 +519,4 @@ func paginate[T any](items []T, req mcplib.CallToolRequest) []T {
 	}
 
 	return items[offset:min(offset+limit, total)]
-}
-
-// toSlice widens any slice to []any. lookupResource returns a differently typed
-// slice per resource ([]swarm.Node, []swarm.Service, ...), and the raw envelope
-// is uniform; reflection keeps this one function rather than eight type
-// switches that a new resource type could silently miss.
-func toSlice(v any) ([]any, bool) {
-	value := reflect.ValueOf(v)
-	if value.Kind() != reflect.Slice {
-		return nil, false
-	}
-
-	out := make([]any, value.Len())
-	for i := range out {
-		out[i] = value.Index(i).Interface()
-	}
-
-	return out, true
 }

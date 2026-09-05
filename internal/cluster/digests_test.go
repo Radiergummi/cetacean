@@ -62,6 +62,87 @@ func TestNodeDigestDownBeatsDrain(t *testing.T) {
 // RowsForNodes and NodeDigest must never disagree about the same node's
 // state: this is the exact divergence DeriveNodeState was extracted to
 // prevent.
+// A task's name was being derived three different ways in this package before
+// TaskName: a list row named a task after its service alone, so every replica
+// rendered identically, while the digest and the search results named the same
+// record "<service>.<slot>". One tool answering two ways for one record is the
+// drift this package exists to prevent, so the list and the detail are held
+// against each other the way the node state already is.
+func TestRowsForTasksAgreesWithTaskDigest(t *testing.T) {
+	replicatedService := replicated("api", 2)
+	globalService := swarm.Service{
+		ID: "svc-agent",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "agent"},
+			Mode:        swarm.ServiceMode{Global: &swarm.GlobalService{}},
+		},
+	}
+
+	cases := []struct {
+		name    string
+		task    swarm.Task
+		service swarm.Service
+	}{
+		{
+			"replicated slot 1",
+			swarm.Task{ID: "t1", ServiceID: "svc-api", Slot: 1},
+			replicatedService,
+		},
+		{
+			"replicated slot 2",
+			swarm.Task{ID: "t2", ServiceID: "svc-api", Slot: 2},
+			replicatedService,
+		},
+		{
+			"global on a node",
+			swarm.Task{ID: "t3", ServiceID: "svc-agent", NodeID: "n1"},
+			globalService,
+		},
+		{
+			"global not yet assigned",
+			swarm.Task{ID: "t4", ServiceID: "svc-agent"},
+			globalService,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			row := RowsForTasks(
+				[]swarm.Task{tc.task},
+				[]swarm.Service{tc.service},
+				nil,
+			)[0]
+			digest := TaskDigest(tc.task, &tc.service, nil)
+
+			if row.Name != digest.Name {
+				t.Errorf(
+					"row.Name = %q, digest.Name = %q, want them equal",
+					row.Name,
+					digest.Name,
+				)
+			}
+		})
+	}
+}
+
+// Two replicas of one service must not render as two identical rows — the
+// whole point of a list is telling them apart.
+func TestRowsForTasksDistinguishesReplicas(t *testing.T) {
+	svc := replicated("api", 2)
+	rows := RowsForTasks(
+		[]swarm.Task{
+			{ID: "t1", ServiceID: "svc-api", Slot: 1},
+			{ID: "t2", ServiceID: "svc-api", Slot: 2},
+		},
+		[]swarm.Service{svc},
+		nil,
+	)
+
+	if rows[0].Name == rows[1].Name {
+		t.Errorf("both replicas rendered as %q", rows[0].Name)
+	}
+}
+
 func TestRowsForNodesAgreesWithNodeDigest(t *testing.T) {
 	cases := []swarm.Node{
 		{ID: "n1", Status: swarm.NodeStatus{State: swarm.NodeStateReady}},

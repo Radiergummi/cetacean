@@ -62,18 +62,18 @@ the expensive ones.
 1. Resolve the name with the find tool, then read cetacean://services/<id>
    and note Spec.TaskTemplate.Placement - constraints, preferences and
    MaxReplicas.
-2. Call find for tasks, filter to this service, and read the pending
-   task's Status.Err and Status.Message. Swarm often states the reason outright
-   ("no suitable node"); if it does, stop there.
-3. Call find for nodes. For each placement constraint, check which
-   nodes satisfy it - node.labels.* come from a node's Spec.Labels, node.role
-   from Spec.Role, and node.hostname and node.platform.* from its description;
-   engine.labels.* come from Description.Engine.Labels. A constraint naming a
-   label no node carries can never be satisfied.
-4. Check each node's Availability and Status.State. A drain node accepts
-   nothing and a pause node accepts no new tasks, and a node whose
-   Status.State is down cannot take work either - so a cluster can look
-   healthy and still have nowhere to put this service.
+2. Call describe for this service and read its reason and recentFailures.
+   Swarm often states the cause outright ("no suitable node"); if it does, stop
+   there.
+3. Call find for nodes to list them, then describe each candidate. For each
+   placement constraint, check which nodes satisfy it - node.labels.* come from
+   a node's labels, node.role from its role, and node.hostname and
+   node.platform.* from its hostname and platform; engine.labels.* are not
+   carried, so read cetacean://nodes/<id> with raw if a constraint names one.
+   A constraint naming a label no node carries can never be satisfied.
+4. Check each node's state. A node reporting drain accepts nothing, a pause
+   node accepts no new tasks, and a down node cannot take work either - so a
+   cluster can look healthy and still have nowhere to put this service.
 5. Compare the task template's resource reservations against what nodes have
    left. Reservations, not limits, decide placement. If Placement.MaxReplicas
    is set, check whether that per-node cap is already reached on every
@@ -154,7 +154,7 @@ disagrees with the recommendation, report the disagreement and change nothing.`
 1. Resolve the name with the find tool, then read cetacean://nodes/<id> for
    its role, current availability and resources.
 2. If this node is a manager, count the cluster's managers first: call
-   find for nodes and count those whose Spec.Role is manager.
+   find for nodes and count the rows whose detail reads manager.
    Draining a manager does not remove it from the raft quorum, but losing it
    while drained does - and a two-manager quorum has no tolerance at all.
    Report and stop if the cluster has fewer than three managers, unless you

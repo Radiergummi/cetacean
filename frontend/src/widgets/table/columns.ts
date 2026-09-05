@@ -44,37 +44,57 @@ function field(key: keyof ResourceRecord): (record: ResourceRecord) => string {
   };
 }
 
-const name: WidgetColumn = { key: "name", header: "Name", value: field("name") };
-const identifier: WidgetColumn = { key: "id", header: "ID", value: field("id") };
-const state: WidgetColumn = { key: "state", header: "State", value: field("state") };
-const stack: WidgetColumn = { key: "stack", header: "Stack", value: field("stack") };
-const running: WidgetColumn = { key: "running", header: "Running", value: field("running") };
-
-function detailColumn(header: string): WidgetColumn {
-  return { key: "detail", header, value: field("detail") };
-}
-
-function desiredColumn(header: string): WidgetColumn {
-  return { key: "desired", header, value: field("desired") };
+/**
+ * A column reading one row key under a given header.
+ *
+ * Every column is the same shape — a row carries `id`, `name`, `state`,
+ * `detail`, `stack`, `desired` and `running` under exactly those names — so
+ * the only thing that varies per type is which keys it shows and what each
+ * header is called. `detail` and `desired` are why the header is a parameter
+ * rather than derived: the same key is the image on a service, the role on a
+ * node and the driver on a network.
+ */
+function column(key: keyof ResourceRecord, header: string): WidgetColumn {
+  return { key: String(key), header, value: field(key) };
 }
 
 const columnsByType: Record<string, WidgetColumn[]> = {
   services: [
-    name,
-    stack,
-    state,
-    detailColumn("Image"),
-    desiredColumn("Desired"),
-    running,
-    identifier,
+    column("name", "Name"),
+    column("stack", "Stack"),
+    column("state", "State"),
+    column("detail", "Image"),
+    column("desired", "Desired"),
+    column("running", "Running"),
+    column("id", "ID"),
   ],
-  nodes: [name, state, detailColumn("Role"), identifier],
-  tasks: [name, state, detailColumn("Node"), identifier],
-  stacks: [name, desiredColumn("Services"), identifier],
-  configs: [name, stack, identifier],
-  secrets: [name, stack, identifier],
-  networks: [name, stack, detailColumn("Driver"), identifier],
-  volumes: [name, stack, detailColumn("Driver"), identifier],
+  nodes: [
+    column("name", "Name"),
+    column("state", "State"),
+    column("detail", "Role"),
+    column("id", "ID"),
+  ],
+  tasks: [
+    column("name", "Name"),
+    column("state", "State"),
+    column("detail", "Node"),
+    column("id", "ID"),
+  ],
+  stacks: [column("name", "Name"), column("desired", "Services"), column("id", "ID")],
+  configs: [column("name", "Name"), column("stack", "Stack"), column("id", "ID")],
+  secrets: [column("name", "Name"), column("stack", "Stack"), column("id", "ID")],
+  networks: [
+    column("name", "Name"),
+    column("stack", "Stack"),
+    column("detail", "Driver"),
+    column("id", "ID"),
+  ],
+  volumes: [
+    column("name", "Name"),
+    column("stack", "Stack"),
+    column("detail", "Driver"),
+    column("id", "ID"),
+  ],
 };
 
 /**
@@ -83,5 +103,12 @@ const columnsByType: Record<string, WidgetColumn[]> = {
  * row from an unknown type still carries `name`/`state`/`detail`/`id`.
  */
 export function columnsFor(resourceType: string): WidgetColumn[] {
-  return columnsByType[resourceType] ?? [name, state, detailColumn("Detail"), identifier];
+  return (
+    columnsByType[resourceType] ?? [
+      column("name", "Name"),
+      column("state", "State"),
+      column("detail", "Detail"),
+      column("id", "ID"),
+    ]
+  );
 }

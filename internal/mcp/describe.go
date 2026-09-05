@@ -122,20 +122,14 @@ func (s *Server) digestOf(
 	case swarm.Service:
 		return cluster.ServiceDigest(
 			resource,
-			s.readableTasksMatching(ctx, func(task swarm.Task) bool {
-				return task.ServiceID == resource.ID
-			}),
-			s.filterNetworks(ctx, s.cache.ListNetworks()),
+			s.filterRawTasks(ctx, s.cache.ListTasksByService(resource.ID)),
+			s.readableAttachedNetworks(ctx, resource),
 		), nil
 
 	case swarm.Node:
-		return cluster.NodeDigest(
-			resource,
-			s.readableTasksMatching(ctx, func(task swarm.Task) bool {
-				return task.NodeID == resource.ID
-			}),
-			s.filterServices(ctx, s.cache.ListServices()),
-		), nil
+		tasks := s.filterRawTasks(ctx, s.cache.ListTasksByNode(resource.ID))
+
+		return cluster.NodeDigest(resource, tasks, s.readableServicesOf(ctx, tasks)), nil
 
 	case cluster.EnrichedTask:
 		return cluster.TaskDigest(
@@ -149,15 +143,12 @@ func (s *Server) digestOf(
 		// an ACL stack grant reaches its member types by definition
 		// (acl.impliedTypes), and dropping members here would report a stack
 		// as healthy because the service that is failing was filtered out.
-		members := make(map[string]bool, len(resource.Services))
+		var tasks []swarm.Task
 		for _, svc := range resource.Services {
-			members[svc.ID] = true
+			tasks = append(tasks, s.cache.ListTasksByService(svc.ID)...)
 		}
 
-		return cluster.StackDigest(resource, s.readableTasksMatching(
-			ctx,
-			func(task swarm.Task) bool { return members[task.ServiceID] },
-		)), nil
+		return cluster.StackDigest(resource, s.filterRawTasks(ctx, tasks)), nil
 
 	case swarm.Config:
 		return cluster.ConfigDigest(
@@ -193,38 +184,69 @@ func (s *Server) digestOf(
 	}
 }
 
-// readableTasksMatching returns the tasks the caller may read among those
-// keep selects, as the raw records the digest builders take.
+// readableAttachedNetworks resolves just the networks a service attaches to,
+// dropping any the caller may not read.
 //
-// The narrowing happens before the enrichment because this runs on every
-// resources/read, and a subscription re-drives that after each cache event: a
-// digest needs one service's or one node's tasks, so enriching and filtering
-// the whole cluster's would make every detail read cost the size of the
-// cluster — the opposite of what the compact representation is for. The
-// enrichment is built at all only because filterTasks keys on the enriched
-// shape the task resource serves; the builders resolve parent names from the
-// service and node slices they are given and ignore the enriched fields, so it
-// is unwrapped again straight after.
-func (s *Server) readableTasksMatching(
+// ServiceDigest resolves attachment IDs to names for its related entries, so
+// it needs the networks named — but only the one to three a service actually
+// attaches to. Listing and ACL-filtering every network in the cluster to
+// resolve those few is work repaid on every resources/read, which a
+// subscription re-drives after each cache event. A network left out because
+// the caller may not read it is not an error: the builder falls back to the
+// ID, which is what keeps an unreadable name out of the digest.
+func (s *Server) readableAttachedNetworks(
 	ctx context.Context,
-	keep func(swarm.Task) bool,
-) []swarm.Task {
-	var matching []swarm.Task
+	svc swarm.Service,
+) []network.Summary {
+	attachments := svc.Spec.TaskTemplate.Networks
+	if len(attachments) == 0 {
+		return nil
+	}
 
-	for _, task := range s.cache.ListTasks() {
-		if keep(task) {
-			matching = append(matching, task)
+	networks := make([]network.Summary, 0, len(attachments))
+
+	for _, attachment := range attachments {
+		net, ok := s.cache.GetNetwork(attachment.Target)
+		if !ok {
+			continue
+		}
+
+		if s.checkRead(ctx, "network", net.Name) != nil {
+			continue
+		}
+
+		networks = append(networks, net)
+	}
+
+	return networks
+}
+
+// readableServicesOf resolves the services these tasks belong to, dropping any
+// the caller may not read.
+//
+// NodeDigest needs the names of the services with tasks on this one node —
+// a handful — so resolving those by ID beats listing and ACL-filtering every
+// service in the cluster on a path a subscription re-drives per cache event.
+func (s *Server) readableServicesOf(
+	ctx context.Context,
+	tasks []swarm.Task,
+) []swarm.Service {
+	seen := make(map[string]bool, len(tasks))
+	services := make([]swarm.Service, 0, len(tasks))
+
+	for _, task := range tasks {
+		if task.ServiceID == "" || seen[task.ServiceID] {
+			continue
+		}
+
+		seen[task.ServiceID] = true
+
+		if svc := s.readableService(ctx, task.ServiceID); svc != nil {
+			services = append(services, *svc)
 		}
 	}
 
-	enriched := s.filterTasks(ctx, cluster.EnrichTasks(s.cache, matching))
-
-	tasks := make([]swarm.Task, len(enriched))
-	for i, task := range enriched {
-		tasks[i] = task.Task
-	}
-
-	return tasks
+	return services
 }
 
 // readableService resolves a task's parent service, or nil when the caller may

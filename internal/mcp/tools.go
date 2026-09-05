@@ -221,7 +221,7 @@ func (s *Server) registerTools() {
 
 				// A handler that called markTextOnlyResult built a result it
 				// knows does not conform to the tool's declared outputSchema
-				// (find's raw mode is the one caller) — presenting it as
+				// (find's and describe's raw modes) — presenting it as
 				// structuredContent anyway would fail
 				// WithOutputSchemaValidation's check on the very call the
 				// handler asked for something other than the compact shape.
@@ -1619,9 +1619,7 @@ func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
 type textOnlyResultKey struct{}
 
 // withTextOnlyResultSignal installs the opt-out flag registerTools reads once
-// a handler returns. A handler that needs to set it is typically several
-// calls deep in its own call graph (find.go's raw branch, reached through
-// toolFind), so the flag travels on ctx rather than becoming a second return
+// a handler returns. It travels on ctx rather than becoming a second return
 // value every other handler would have to thread through unused.
 func withTextOnlyResultSignal(ctx context.Context) (context.Context, *bool) {
 	flag := new(bool)
@@ -1631,12 +1629,12 @@ func withTextOnlyResultSignal(ctx context.Context) (context.Context, *bool) {
 // markTextOnlyResult tells registerTools this call's result must be returned
 // as text only, never as structuredContent, because — despite marshalling to
 // a JSON object — it does not conform to the tool's declared outputSchema.
-// find's raw mode is the one caller: raw hands back whatever shape the
-// underlying resource has, which is not the compact Row shape find's schema
-// describes, and structuredContent must conform to it under
-// WithOutputSchemaValidation. A no-op if ctx was not set up by registerTools
-// (e.g. a handler invoked directly, as the tool tests do), since there is
-// nothing to signal.
+// The callers are find's and describe's raw modes: raw hands back whatever
+// shape the underlying resource has, which is neither the compact Row shape
+// find's schema describes nor the Digest describe's does, and
+// structuredContent must conform under WithOutputSchemaValidation. A no-op if
+// ctx was not set up by registerTools (e.g. a handler invoked directly, as
+// the tool tests do), since there is nothing to signal.
 func markTextOnlyResult(ctx context.Context) {
 	if flag, ok := ctx.Value(textOnlyResultKey{}).(*bool); ok {
 		*flag = true

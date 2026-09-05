@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types/swarm"
+
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -96,10 +98,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 			}
 			detail := ""
 			if s.Spec.TaskTemplate.ContainerSpec != nil {
-				detail = s.Spec.TaskTemplate.ContainerSpec.Image
-				if i := strings.Index(detail, "@sha256:"); i > 0 {
-					detail = detail[:i]
-				}
+				detail = StripImageDigest(s.Spec.TaskTemplate.ContainerSpec.Image)
 			}
 			running := c.RunningTaskCount(s.ID)
 			matches = append(matches, SearchResult{
@@ -168,7 +167,8 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Type:   "nodes",
 				ID:     n.ID,
 				Name:   n.Description.Hostname,
-				Detail: fmt.Sprintf("%s, %s", n.Spec.Role, n.Status.State),
+				State:  DeriveNodeState(n),
+				Detail: string(n.Spec.Role),
 			})
 		}
 		allResults[stNodes] = typeResults{"nodes", matches, count}
@@ -181,9 +181,9 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		// Task names embed the service name (svcName.slot); build the lookup
 		// once here rather than at the top level so cluster-wide searches that
 		// never hit the tasks branch don't pay the allocation.
-		svcNames := make(map[string]string, len(services))
-		for _, s := range services {
-			svcNames[s.ID] = s.Spec.Name
+		svcByID := make(map[string]*swarm.Service, len(services))
+		for i := range services {
+			svcByID[services[i].ID] = &services[i]
 		}
 		var matches []SearchResult
 		count := 0
@@ -191,8 +191,12 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 			if ctx.Err() != nil {
 				return
 			}
-			svcName := svcNames[t.ServiceID]
-			taskName := fmt.Sprintf("%s.%d", svcName, t.Slot)
+			svc := svcByID[t.ServiceID]
+			svcName := ""
+			if svc != nil {
+				svcName = svc.Spec.Name
+			}
+			taskName := TaskName(t, svc)
 
 			hit := ContainsFold(svcName, ql)
 			if !hit && t.Spec.ContainerSpec != nil {
@@ -210,10 +214,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 			}
 			detail := ""
 			if t.Spec.ContainerSpec != nil {
-				detail = t.Spec.ContainerSpec.Image
-				if i := strings.Index(detail, "@sha256:"); i > 0 {
-					detail = detail[:i]
-				}
+				detail = StripImageDigest(t.Spec.ContainerSpec.Image)
 			}
 			matches = append(matches, SearchResult{
 				Type:   "tasks",

@@ -166,10 +166,9 @@ It never widens what a call may do — every listed tool is still checked agains
 
 ## Resources
 
-Resources are read-only views. Detail resources mirror the REST API responses exactly (same enrichment, same secret
-redaction). All return `application/json`.
+Resources are read-only views, all returned as `application/json`.
 
-**Static** (`resources/list`):
+**Static** (`resources/list`) mirror the REST API's cache-backed responses directly:
 
 | URI | Description |
 |---|---|
@@ -177,19 +176,24 @@ redaction). All return `application/json`.
 | `cetacean://recommendations` | Current recommendation engine findings |
 | `cetacean://history` | Recent resource change events |
 
-**Templated** (`resources/templates/list`):
+**Templated** (`resources/templates/list`) return the same compact `Digest` the `describe` tool builds — a resource
+read and a `describe` call go through the same function, so a subscription payload and a tool result can never
+describe the same resource differently. The one exception is `services/{id}/logs`, a raw log stream rather than a
+digest.
 
 | URI template | Description |
 |---|---|
-| `cetacean://nodes/{id}` | Node detail |
-| `cetacean://services/{id}` | Service detail with cross-references |
-| `cetacean://services/{id}/logs` | Service logs, merged across replicas (subscribable) |
-| `cetacean://tasks/{id}` | Task detail enriched with service name and node hostname |
-| `cetacean://stacks/{name}` | Stack rollup with member resources |
-| `cetacean://configs/{id}` | Config metadata + base64 data |
-| `cetacean://secrets/{id}` | Secret metadata (data redacted) |
-| `cetacean://networks/{id}` | Network detail |
-| `cetacean://volumes/{name}` | Volume detail |
+| `cetacean://nodes/{id}` | Node digest |
+| `cetacean://services/{id}` | Service digest with cross-references |
+| `cetacean://services/{id}/logs` | Service logs, merged across replicas (subscribable; not a digest) |
+| `cetacean://tasks/{id}` | Task digest — its parent service and node are reachable via `related`, not as top-level fields |
+| `cetacean://stacks/{name}` | Stack digest, rolling up its member resources |
+| `cetacean://configs/{id}` | Config digest — payload size in bytes, never the payload; call `describe` with `raw: true` for the base64 data |
+| `cetacean://secrets/{id}` | Secret digest (payload never read, not even its length) |
+| `cetacean://networks/{id}` | Network digest |
+| `cetacean://volumes/{name}` | Volume digest |
+
+See [Compact resource shapes](#compact-resource-shapes) for what a `Digest` carries.
 
 ### Subscriptions
 
@@ -197,6 +201,57 @@ Clients call `resources/subscribe` with a URI. When the underlying cluster state
 `notifications/resources/updated` for that URI and the client re-reads. `notifications/resources/list_changed` fires
 when resources are created or removed. Both are ACL-filtered per notification: a client is only notified about
 resources its identity can read.
+
+## Compact resource shapes
+
+MCP tools and resource reads never hand back a raw Docker Engine object — eight services as raw `swarm.Service`
+run to roughly fourteen thousand tokens, most of it `Platforms` entries and a duplicated `PreviousSpec`, and the
+field a caller actually asked for (is this thing healthy?) isn't in there at all, since health is derived from
+tasks rather than read off the spec. Instead, every list and every detail read returns one of two compact,
+transport-neutral shapes.
+
+**Row** — one entry in a list, returned by `find`. Every row carries `id`, `name` and `type` (singular: `service`,
+`node`, `task`, ...). `stack` (owning namespace), `state` (derived condition) and `detail` (the single most
+identifying secondary fact — a service's image, a node's role, a network's driver) are omitted where they don't
+apply. `desired`/`running` are populated only where a replica count means something, and the three cases genuinely
+differ:
+
+- **services** set both — the desired replica count and how many are currently running;
+- **stacks** set `desired` alone, and it counts *member services*, not replicas;
+- everything else — **nodes, tasks, configs, secrets, networks, volumes** — sets neither.
+
+**Digest** — the detail view of one resource, returned by `describe` and by every templated
+`cetacean://<type>/{id}` resource read (`services/{id}/logs` is the exception — a log stream, not a digest).
+Alongside `id`/`name`/`type`/`state`, it adds:
+
+- `reason` — the cause Swarm gave for a non-healthy `state`; omitted when the state is healthy.
+- `since` — when the current state began: the oldest still-live failing task's timestamp, or the resource's own
+  last-updated time when there's no failure to date it from.
+- `details` — a type-specific map of facts (a service's image, replica counts, reserved CPU/memory, ports,
+  placement constraints; a node's role and capacity; a network's driver and subnets; ...). Deliberately untyped in
+  the advertised schema — pinning it down would mean eight `describe_<type>` tools instead of one `describe`.
+- `related` — always an array, never omitted, even when empty: the resources this one references or is
+  referenced by, so a caller can traverse without a second search.
+- `recentFailures` — always an array, never omitted: the task failures behind a failing state, newest first,
+  capped at 5. Only a service digest ever populates it; every other type reports an empty array.
+
+Every numeric field in `details` names its unit — `cpuLimitCores` (a float, in cores) and `memoryLimitBytes` (in
+bytes) on a service digest, for instance — or is reported as a duration string like `"10s"` instead
+(`healthcheckInterval`, an update policy's `delay`/`monitor`). Docker's own types express these as unlabelled
+NanoCPU or nanosecond integers, which read as arbitrary large numbers. Environment variables are reported as
+`envNames`: names only, never values.
+
+### The `raw: true` escape hatch
+
+Both `find` (when `type` is given) and `describe` accept `raw: true`, returning the untouched Docker record
+instead of the compact shape. It exists so nothing the compact representation drops becomes permanently
+unreachable — but it is the deliberately expensive escape hatch: the whole point of the compact shapes is to avoid
+handing an agent the several-hundred-line object, so reach for `raw` only when a specific field a row or digest
+genuinely omits is needed.
+
+A `raw: true` result comes back as text content rather than structured content: the tool's advertised output
+schema describes the compact shape, and an untouched Docker object doesn't conform to it, so returning it as
+structured content would fail the server's own output-schema validation on the very call that asked for it.
 
 ## Icons
 
@@ -216,7 +271,7 @@ Tools are gated by operations level (`CETACEAN_MCP_OPERATIONS_LEVEL`, defaulting
 by per-resource ACL write permission. A tool above the configured tier is not registered at all; a tool the identity
 lacks grants for is hidden from `tools/list` and refused at call time. Each tool advertises the behavioural hints
 (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) that clients use to gate confirmation prompts.
-On connect, the server also sends top-level usage `instructions` (read-mostly model, resolve IDs via `search` first,
+On connect, the server also sends top-level usage `instructions` (read-mostly model, resolve IDs via `find` first,
 writes gated by tier + ACL) so agents know how to drive it. Each tool also advertises an `icon` grouped by verb
 category (read, search, scale, edit, node, remove) that clients can render (see [Icons](#icons)).
 
@@ -225,8 +280,25 @@ whose result shape Cetacean owns — the tier 0 reads, the four service lifecycl
 advertises an output schema that the server validates results against. An input-validation failure comes back as a
 tool result with `isError: true` (so the model can self-correct), not a protocol error.
 
-**Tier 0 — reads** (always available): `get_logs`, `search`, `list_resources`, `get_topology`, `get_metrics`,
+**Tier 0 — reads** (always available): `get_logs`, `find`, `describe`, `get_topology`, `get_metrics`,
 `get_recommendations`.
+
+`find` locates cluster resources. Give `type` (plural: `nodes`, `services`, `tasks`, `stacks`, `configs`,
+`secrets`, `networks`, or `volumes`) to enumerate that type, paged, as a list of `Row`s — optionally narrowed by
+`query` (name substring), `state`, `stack`, `node` (tasks only), `image` (services only) or `label` (`key` or
+`key=value`); `limit`/`offset` page the result (default and max `limit` 200). Omit `type` and give `query` to
+search by name, label or image reference across every type at once instead — one flat list sorted by name, each
+row carrying its own `type`, the way the two tools it replaces (`list_resources` and `search`) did between them;
+`limit` there instead bounds matches per resource type (default 3), and `offset` is ignored. `raw: true` returns
+each match's untouched Docker record instead of a `Row` — see [Compact resource shapes](#compact-resource-shapes).
+
+`describe` returns everything needed to act on one resource, as a `Digest`: its derived state, the reason behind
+an unhealthy one, how long it has held, type-specific details, cross-references, and the recent task failures
+behind a failing state. Its `type` argument is **singular** (`service`, `node`, `task`, `stack`, `config`,
+`secret`, `network`, `volume`) — the reverse of `find`'s plural, and an easy thing to get backwards. Both `type`
+and `id` are required; `id` accepts an ID or a name (hostname for a node, name for a stack or volume). `raw: true`
+returns the untouched Docker record. Secret payloads and environment variable values are never returned, in
+either mode.
 
 `get_logs` reads either a service or a single task, named by `service` or `task` — exactly one, since the two are
 different streams and guessing between them would return output the caller did not ask for. A service merges the
@@ -286,17 +358,17 @@ Prompts are also filtered by ACL, all-or-nothing: a prompt is offered only when
 **every** tool it walks is available to you *and* you hold read on every
 resource type in its Reads column. A sequence whose fourth step you cannot
 perform would dead-end partway, and for a remediation prompt possibly after a
-write. The read-type check is the second half because `search`,
-`list_resources`, `get_metrics` and `get_recommendations` are deliberately
-ungated — each ACL-filters its own results, so each stays visible to every
-caller — and a sequence built only from those would otherwise be offered to
-someone who would get an empty list from every step. A caller whose grants match
-nothing is offered no prompts at all. A prompt you cannot see reports
-`not found` from `prompts/get`, the same as a name that does not exist.
+write. The read-type check is the second half because `find`, `get_metrics`
+and `get_recommendations` are deliberately ungated — each ACL-filters its own
+results, so each stays visible to every caller — and a sequence built only
+from those would otherwise be offered to someone who would get an empty list
+from every step. A caller whose grants match nothing is offered no prompts at
+all. A prompt you cannot see reports `not found` from `prompts/get`, the same
+as a name that does not exist.
 
 Prompts read no cluster data. They expand to a single message with the resource
 name you supplied interpolated, and the name is not checked for existence — the
-text tells the model to resolve it with `search` first. A prompt is a plan for
+text tells the model to resolve it with `find` first. A prompt is a plan for
 the model to carry out, not a report; every read and write it describes still
 goes through the ordinary tool and resource paths, with the ordinary ACL checks.
 
@@ -424,8 +496,8 @@ ui://cetacean/metrics
 ui://cetacean/recommendations
 ```
 
-`ui://cetacean/table` renders a `list_resources` result: a searchable, sortable table of one resource type, showing
-how many records it holds when the page is a subset.
+`ui://cetacean/table` renders a `find` result: a searchable, sortable table of one resource type, showing how many
+records it holds when the page is a subset.
 
 `ui://cetacean/topology` renders a `get_topology` result as a graph to pan, zoom and drag — services joined to the
 overlay networks they attach to, or cluster nodes joined to the services they run. Switching between the two views

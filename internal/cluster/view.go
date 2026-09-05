@@ -122,9 +122,9 @@ func RowsForNodes(nodes []swarm.Node) []Row {
 // name the task's parents: a task's own record holds only their IDs, and a
 // caller reading a task list is asking which service is broken and where.
 func RowsForTasks(tasks []swarm.Task, services []swarm.Service, nodes []swarm.Node) []Row {
-	serviceNames := make(map[string]string, len(services))
-	for _, svc := range services {
-		serviceNames[svc.ID] = svc.Spec.Name
+	serviceByID := make(map[string]*swarm.Service, len(services))
+	for i := range services {
+		serviceByID[services[i].ID] = &services[i]
 	}
 
 	nodeNames := make(map[string]string, len(nodes))
@@ -135,14 +135,9 @@ func RowsForTasks(tasks []swarm.Task, services []swarm.Service, nodes []swarm.No
 	rows := make([]Row, 0, len(tasks))
 
 	for _, task := range tasks {
-		name := serviceNames[task.ServiceID]
-		if name == "" {
-			name = task.ID
-		}
-
 		rows = append(rows, Row{
 			ID:     task.ID,
-			Name:   name,
+			Name:   TaskName(task, serviceByID[task.ServiceID]),
 			Type:   "task",
 			State:  string(task.Status.State),
 			Detail: nodeNames[task.NodeID],
