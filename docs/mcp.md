@@ -357,12 +357,32 @@ record, five per replica slot by default (`--task-history-limit`), so a service 
 seconds of history and should be read before anything else. A task's read grant is its parent service's, the same
 key `remove_task` writes against.
 
+`get_topology` projects the cluster as a graph, in three views. `network` joins services to the overlay networks they
+attach to; `placement` joins cluster nodes to the services they run; `drain-impact` takes a `node` and joins the
+services running on it to the nodes that could take them, answering what would actually move if you drained it. In
+that view a service with **no edges is stranded**, and its `detail` names the placement constraint that blocked it —
+a state without its cause is what the whole read surface exists not to return. Global services are reported as
+`global` rather than movable or stranded, because draining does not relocate their task, it stops it running there.
+Placement constraints are evaluated exactly, the way Swarm enforces them; spare capacity is deliberately not
+considered, since reservations after a drain are a moving target and `get_cluster_status` already reports
+reserved-against-total. This is steps 3 and 4 of the `drain_node` prompt done server-side.
+
 `get_metrics` charts CPU, memory or network use for one service or one node over the last hour, six hours, day or
 week. It takes a target and a metric rather than PromQL: Cetacean owns the queries, resolves the service or node
 against its own cache, and checks the caller's read grant before querying — a tool accepting a raw query would hand
 the caller a label selector of their own and with it a way around every grant. It needs Prometheus
 (`CETACEAN_PROMETHEUS_URL`), plus cAdvisor for service metrics and node-exporter for node metrics; without them it
 reports that metrics are unavailable rather than returning empty series.
+
+Asking for `top` turns it into a ranking. `target: "cluster"` ranks the cluster's own members — the busiest services
+by default, nodes with `by: "node"` — and `target: "node"` with an id ranks the services running on that one host,
+which is what answers "why is this node hot?". A ranking is one series per member named the way the cluster names it
+(node-exporter's `instance` is host:port and is resolved back through the cache), so the result shape, its schema and
+the widget are the same as for a single resource. When an ACL policy is active the caller's grants are compiled into
+the query rather than applied to its result: ranking the whole cluster and filtering afterwards would return an empty
+answer whenever the true top N were all invisible to them, which they could not tell from an idle cluster. The node
+scope matches on Prometheus's standard `instance` label, not on `node_hostname` — that one is a relabel Cetacean's
+shipped `prometheus.yml` defines, and a cluster running its own config would not have it.
 
 `get_recommendations` returns the same findings as `cetacean://recommendations`, optionally filtered to one severity,
 as a tool a host can render — see [Widgets](#widgets-mcp-apps). Its totals count what the caller may read, not what
