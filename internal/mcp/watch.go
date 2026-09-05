@@ -60,7 +60,9 @@ func (s *Server) toolWatch(
 		return "", err
 	}
 
-	timeout := time.Duration(req.GetInt("timeout", int(defaultWatchTimeout.Seconds()))) * time.Second
+	timeout := time.Duration(
+		req.GetInt("timeout", int(defaultWatchTimeout.Seconds())),
+	) * time.Second
 	if timeout <= 0 || timeout > maxWatchTimeout {
 		timeout = maxWatchTimeout
 	}
@@ -69,7 +71,12 @@ func (s *Server) toolWatch(
 
 	result := watchResult{Outcome: "converged"}
 
-	if waitErr := s.awaitServiceConvergenceFor(ctx, svc.ID, timeout, &result.Observed); waitErr != nil {
+	if waitErr := s.awaitServiceConvergenceFor(
+		ctx,
+		svc.ID,
+		timeout,
+		&result.Observed,
+	); waitErr != nil {
 		result.Outcome = "timeout"
 	}
 

@@ -26,7 +26,10 @@ func TestGetClusterStatusNamesTheBrokenService(t *testing.T) {
 
 	srv := newResourceTestServer(t, c)
 
-	body, err := srv.toolGetClusterStatus(context.Background(), toolRequest(t, "get_cluster_status", nil))
+	body, err := srv.toolGetClusterStatus(
+		context.Background(),
+		toolRequest(t, "get_cluster_status", nil),
+	)
 	if err != nil {
 		t.Fatalf("toolGetClusterStatus: %v", err)
 	}
@@ -49,7 +52,10 @@ func TestGetClusterStatusNamesTheBrokenService(t *testing.T) {
 func TestGetClusterStatusMarshalsEmptyArrays(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil))
 
-	body, err := srv.toolGetClusterStatus(context.Background(), toolRequest(t, "get_cluster_status", nil))
+	body, err := srv.toolGetClusterStatus(
+		context.Background(),
+		toolRequest(t, "get_cluster_status", nil),
+	)
 	if err != nil {
 		t.Fatalf("toolGetClusterStatus: %v", err)
 	}

@@ -322,8 +322,8 @@ must answer with conforming structured content whatever its arguments, so no arg
 its schema does not describe. An input-validation failure comes back as a tool result with `isError: true` (so the
 model can self-correct), not a protocol error.
 
-**Tier 0 — reads** (always available): `get_logs`, `find`, `describe`, `get_topology`, `get_metrics`,
-`get_recommendations`.
+**Tier 0 — reads** (always available): `get_cluster_status`, `get_logs`, `get_events`, `find`, `describe`,
+`get_topology`, `get_metrics`, `get_recommendations`, `watch`.
 
 `find` locates cluster resources. Give `type` (plural: `nodes`, `services`, `tasks`, `stacks`, `configs`,
 `secrets`, `networks`, or `volumes`) to enumerate that type, paged, as a list of `Row`s — optionally narrowed by
@@ -370,6 +370,26 @@ the engine holds. A finding that has a remedy carries it as `fix` — `{"tool": 
 "availability"}` — naming the tool to call. The REST API states the same remedy as a route (`fixAction`), which an
 MCP caller cannot issue; a finding whose route has no tool behind it reports no `fix` at all rather than a path
 that cannot be followed.
+
+`get_cluster_status` is the landing call. It answers whether the cluster is healthy and, when it is not, **names** the
+services and nodes that are wrong rather than counting them — every entry is a row carrying the id and name a
+follow-up `describe` needs. `cetacean://cluster` still serves the raw aggregate for a client that wants to subscribe
+to it; this is the form that answers a question.
+
+`get_events` is the change timeline, filtered by time, resource type or a single resource. `cetacean://history` keeps
+its fixed newest-100 window because a resource is the only thing a client can subscribe to, but that window is minutes
+of wall-clock on a cluster with a restarting service, and all of it task churn — narrowing by `types` is usually
+necessary. Entries share their shape with `get_logs`, so reading changes and output on one timeline is two calls
+whose results interleave without translation. That is the answer to "this started at 14:02 — what else happened?"
+
+`get_logs` reads one service, one task, a whole stack, or the whole cluster. The wide scopes merge server-side and
+attribute every line to the service it came from, so grepping the cluster with `contains` costs one call and the
+matches, rather than one call per service and every line of each. A wide read covers at most 25 services and lists
+any it could not reach in `errors` rather than failing the whole read.
+
+`watch` blocks until a service has settled and reports whether it did. The convergence rule is the same one the
+converging mutations use — this exposes it as a read, so an agent can ask "has it deployed yet?" without deploying
+something. The wait detaches from the request, so `tasks/cancel` cannot interrupt it and `timeout` is the real bound.
 
 **Tier 1 — operational**: `scale_service`, `update_service_image`, `rollback_service`, `restart_service`,
 `remove_task`.
