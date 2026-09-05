@@ -608,22 +608,24 @@ type toolACLSpec struct {
 // entry here defaults to "always visible", which is safe (call-time ACL still
 // enforces) but means tools/list may advertise tools the caller cannot use.
 var toolACLSpecs = map[string]toolACLSpec{
-	"get_logs":             {"service", "read"},
-	"scale_service":        {"service", "write"},
-	"update_service_image": {"service", "write"},
-	"rollback_service":     {"service", "write"},
-	"restart_service":      {"service", "write"},
-	"remove_task":          {"service", "write"}, // task ACL delegates to parent service
-	"update_service":       {"service", "write"},
-	"update_node_labels":   {"node", "write"},
-	"update_node":          {"node", "write"},
-	"remove_service":       {"service", "write"},
-	"create_config":        {"config", "write"},
-	"create_secret":        {"secret", "write"},
-	"remove_config":        {"config", "write"},
-	"remove_secret":        {"secret", "write"},
-	"remove_network":       {"network", "write"},
-	"remove_volume":        {"volume", "write"},
+	"get_logs":               {"service", "read"},
+	"scale_service":          {"service", "write"},
+	"update_service_image":   {"service", "write"},
+	"rollback_service":       {"service", "write"},
+	"restart_service":        {"service", "write"},
+	"remove_task":            {"service", "write"}, // task ACL delegates to parent service
+	"update_service":         {"service", "write"},
+	"update_node_labels":     {"node", "write"},
+	"update_node":            {"node", "write"},
+	"remove_service":         {"service", "write"},
+	"update_service_secrets": {"service", "write"},
+	"update_service_configs": {"service", "write"},
+	"create_config":          {"config", "write"},
+	"create_secret":          {"secret", "write"},
+	"remove_config":          {"config", "write"},
+	"remove_secret":          {"secret", "write"},
+	"remove_network":         {"network", "write"},
+	"remove_volume":          {"volume", "write"},
 	// "find" is intentionally absent — it returns hits across many types,
 	// each individually ACL-filtered, so it should remain visible even to
 	// callers with grants on only a subset.

@@ -84,6 +84,16 @@ type ServiceSpecWriter interface {
 		id string,
 		apply func(spec *swarm.ContainerSpec),
 	) (swarm.Service, error)
+	UpdateServiceSecrets(
+		ctx context.Context,
+		id string,
+		secrets []*swarm.SecretReference,
+	) (swarm.Service, error)
+	UpdateServiceConfigs(
+		ctx context.Context,
+		id string,
+		configs []*swarm.ConfigReference,
+	) (swarm.Service, error)
 }
 
 // ResourceCreator creates the two resource types a service can reference by
@@ -146,12 +156,14 @@ var toolIconCategory = map[string]string{
 
 	"scale_service": "scale",
 
-	"create_secret":        "edit",
-	"create_config":        "edit",
-	"update_service_image": "edit",
-	"rollback_service":     "edit",
-	"restart_service":      "edit",
-	"update_service":       "edit",
+	"create_secret":          "edit",
+	"create_config":          "edit",
+	"update_service_secrets": "edit",
+	"update_service_configs": "edit",
+	"update_service_image":   "edit",
+	"rollback_service":       "edit",
+	"restart_service":        "edit",
+	"update_service":         "edit",
 
 	"update_node_labels": "node",
 	"update_node":        "node",
@@ -762,6 +774,74 @@ func (s *Server) toolCatalog() []toolDef {
 			),
 			tier:    config.OpsConfiguration,
 			handler: s.toolCreateConfig,
+		},
+		{
+			tool: mcplib.NewTool(
+				"update_service_secrets",
+				mcplib.WithToolTitle("Change which secrets a service receives"),
+				mcplib.WithDescription(
+					"Replace the complete set of secrets a service's containers receive. Swarm secrets cannot be changed in place, so rotating one is: create_secret for the replacement, this tool to repoint each service that uses the old one, then remove_secret once nothing references it. Describe the old secret first — its related array names the services to repoint. The list replaces rather than merges: pass every secret the service should end up with, because one you leave out is detached and the container loses it. Each entry names a secret rather than giving its ID. Triggers a rolling deploy, and you must be permitted to read a secret in order to attach it.",
+				),
+				mcplib.WithOutputSchema[serviceUpdateResult](),
+				mcplib.WithReadOnlyHintAnnotation(false),
+				mcplib.WithDestructiveHintAnnotation(true),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("id",
+					mcplib.Required(),
+					mcplib.Description("Service ID or name."),
+				),
+				mcplib.WithArray("secrets",
+					mcplib.Required(),
+					mcplib.Description(
+						"The complete set of secrets the service should receive. Each entry takes `name` (the secret's name) and an optional `target` (the file it is mounted as, relative to /run/secrets unless absolute; defaults to the secret's name). An empty array detaches every secret.",
+					),
+					mcplib.Items(map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"name":   map[string]any{"type": "string"},
+							"target": map[string]any{"type": "string"},
+						},
+						"required": []string{"name"},
+					}),
+				),
+			),
+			tier:    config.OpsConfiguration,
+			handler: s.toolUpdateServiceSecrets,
+		},
+		{
+			tool: mcplib.NewTool(
+				"update_service_configs",
+				mcplib.WithToolTitle("Change which configs a service receives"),
+				mcplib.WithDescription(
+					"Replace the complete set of configs a service's containers receive. Like secrets, Swarm configs cannot be changed in place: create the replacement with create_config, repoint the services here, then remove the old one. The list replaces rather than merges, so pass every config the service should end up with — one you leave out is detached. Each entry names a config rather than giving its ID. Triggers a rolling deploy, and you must be permitted to read a config in order to attach it.",
+				),
+				mcplib.WithOutputSchema[serviceUpdateResult](),
+				mcplib.WithReadOnlyHintAnnotation(false),
+				mcplib.WithDestructiveHintAnnotation(true),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("id",
+					mcplib.Required(),
+					mcplib.Description("Service ID or name."),
+				),
+				mcplib.WithArray("configs",
+					mcplib.Required(),
+					mcplib.Description(
+						"The complete set of configs the service should receive. Each entry takes `name` (the config's name) and an optional `target` (the absolute path it is mounted at; defaults to the config's name). An empty array detaches every config.",
+					),
+					mcplib.Items(map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"name":   map[string]any{"type": "string"},
+							"target": map[string]any{"type": "string"},
+						},
+						"required": []string{"name"},
+					}),
+				),
+			),
+			tier:    config.OpsConfiguration,
+			handler: s.toolUpdateServiceConfigs,
 		},
 
 		// Tier 3 — Impactful.

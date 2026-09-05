@@ -63,8 +63,42 @@ type fakeWriteClient struct {
 		id string,
 		apply func(spec *swarm.ContainerSpec),
 	) (swarm.Service, error)
-	createSecretFn func(ctx context.Context, spec swarm.SecretSpec) (string, error)
-	createConfigFn func(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	createSecretFn         func(ctx context.Context, spec swarm.SecretSpec) (string, error)
+	createConfigFn         func(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	updateServiceSecretsFn func(
+		ctx context.Context,
+		id string,
+		secrets []*swarm.SecretReference,
+	) (swarm.Service, error)
+	updateServiceConfigsFn func(
+		ctx context.Context,
+		id string,
+		configs []*swarm.ConfigReference,
+	) (swarm.Service, error)
+}
+
+func (f *fakeWriteClient) UpdateServiceSecrets(
+	ctx context.Context,
+	id string,
+	secrets []*swarm.SecretReference,
+) (swarm.Service, error) {
+	if f.updateServiceSecretsFn == nil {
+		return swarm.Service{}, errNotImplemented
+	}
+
+	return f.updateServiceSecretsFn(ctx, id, secrets)
+}
+
+func (f *fakeWriteClient) UpdateServiceConfigs(
+	ctx context.Context,
+	id string,
+	configs []*swarm.ConfigReference,
+) (swarm.Service, error) {
+	if f.updateServiceConfigsFn == nil {
+		return swarm.Service{}, errNotImplemented
+	}
+
+	return f.updateServiceConfigsFn(ctx, id, configs)
 }
 
 func (f *fakeWriteClient) CreateSecret(
@@ -413,11 +447,16 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 		// worst of them.
 		"update_service": true,
 		"update_node":    true,
-		"remove_service": true,
-		"remove_config":  true,
-		"remove_secret":  true,
-		"remove_network": true,
-		"remove_volume":  true,
+		// The attachment editors replace a set rather than merging into it,
+		// so a name left out of the list is detached — a running container
+		// losing a credential or a config file it was reading.
+		"update_service_secrets": true,
+		"update_service_configs": true,
+		"remove_service":         true,
+		"remove_config":          true,
+		"remove_secret":          true,
+		"remove_network":         true,
+		"remove_volume":          true,
 	}
 
 	for _, td := range srv.registeredTools {

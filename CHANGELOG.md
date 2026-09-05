@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- AI agents can now change which secrets and configs a service receives, completing the rotation sequence: create the replacement, repoint the services, remove the old one. A service description now also lists the secrets and configs a service receives — names only, never their contents — so a rotation can be confirmed
 - AI agents can now create secrets and configs. Swarm secrets cannot be changed once created, so rotating a password means creating a replacement, pointing the services at it and removing the old one — Cetacean could previously only do the last step, which made the whole sequence impossible rather than merely awkward. A secret's value is write-only: no tool returns it, including the one that creates it
 - AI agents can now add, change or remove a service's health check, and change its command and arguments. Cetacean already reported which services had no health check and had no way to act on it — an agent can now fix one and see the recommendation clear. Health check timings are written as durations such as `10s` rather than as nanosecond counts
 - MCP server now speaks protocol revision 2026-07-28, with its stateless core: AI agents connect and work without a handshake or a session

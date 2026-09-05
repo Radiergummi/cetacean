@@ -203,3 +203,102 @@ func TestCreateToolsSitAtTheConfigurationTier(t *testing.T) {
 		}
 	}
 }
+
+// TestCreatedSecretIsImmediatelyUsable is the sequence both tools' descriptions
+// tell a caller to follow: create the replacement, then repoint the service at
+// it. It failed against a live cluster — create_secret returned an ID and the
+// very next call answered "no such secret" — because resolution reads the
+// cache and the watcher fills that asynchronously, some hundreds of
+// milliseconds later.
+//
+// A caller doing exactly what the tool says must not have to sleep and retry,
+// so a create seeds the cache with what it just made.
+func TestCreatedSecretIsImmediatelyUsable(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Meta: swarm.Meta{Version: swarm.Version{Index: 41}},
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{Image: "nginx:alpine"},
+			},
+		},
+	})
+
+	writeClient := &fakeWriteClient{
+		createSecretFn: func(_ context.Context, _ swarm.SecretSpec) (string, error) {
+			return "freshid", nil
+		},
+		updateServiceSecretsFn: func(
+			_ context.Context, _ string, refs []*swarm.SecretReference,
+		) (swarm.Service, error) {
+			updated, _ := c.GetService("svc1")
+			updated.Spec.TaskTemplate.ContainerSpec.Secrets = refs
+
+			return updated, nil
+		},
+	}
+
+	handler := newToolTestServer(t, c, writeClient, config.OpsConfiguration).Handler()
+
+	callTool(t, handler,
+		`{"name":"create_secret","arguments":{"name":"rot_v1","data":"pw"}}`)
+
+	// No sync, no sleep — the next call is the one an agent would make.
+	callTool(t, handler, `{"name":"update_service_secrets","arguments":`+
+		`{"id":"web","secrets":[{"name":"rot_v1"}]}}`)
+}
+
+// The seeded record must never carry the payload: the cache is read by every
+// listing, and a secret's value has no business being in it.
+func TestSeededSecretCarriesNoPayload(t *testing.T) {
+	c := cache.New(nil)
+
+	writeClient := &fakeWriteClient{
+		createSecretFn: func(_ context.Context, _ swarm.SecretSpec) (string, error) {
+			return "freshid", nil
+		},
+	}
+
+	handler := newToolTestServer(t, c, writeClient, config.OpsConfiguration).Handler()
+
+	callTool(t, handler,
+		`{"name":"create_secret","arguments":{"name":"rot_v1","data":"hunter2"}}`)
+
+	sec, ok := c.GetSecret("freshid")
+	if !ok {
+		t.Fatal("the created secret did not reach the cache")
+	}
+	if len(sec.Spec.Data) != 0 {
+		t.Errorf("the cached secret carries its payload: %q", sec.Spec.Data)
+	}
+	if sec.Spec.Name != "rot_v1" {
+		t.Errorf("cached name = %q, want rot_v1", sec.Spec.Name)
+	}
+}
+
+// The same for configs, whose content is readable but still need not be
+// duplicated into the cache by a create — the watcher will bring it.
+func TestCreatedConfigIsImmediatelyResolvable(t *testing.T) {
+	c := cache.New(nil)
+
+	writeClient := &fakeWriteClient{
+		createConfigFn: func(_ context.Context, _ swarm.ConfigSpec) (string, error) {
+			return "cfgid", nil
+		},
+	}
+
+	handler := newToolTestServer(t, c, writeClient, config.OpsConfiguration).Handler()
+
+	callTool(t, handler,
+		`{"name":"create_config","arguments":{"name":"nginx_conf","data":"server {}"}}`)
+
+	if _, found, err := c.ResolveConfig("nginx_conf"); err != nil || !found {
+		t.Errorf(
+			"ResolveConfig(nginx_conf) found=%v err=%v, want it resolvable at once",
+			found,
+			err,
+		)
+	}
+}

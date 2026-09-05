@@ -610,6 +610,30 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 			details["healthcheck"] = false
 		}
 
+		// Names only, the rule envNames and the log driver's optionNames
+		// already follow. Which secrets a container receives is exactly what
+		// makes a rotation verifiable — "did the repoint land?" — while the
+		// values behind them stay unreachable through every read.
+		if refs := spec.Secrets; len(refs) > 0 {
+			names := make([]string, 0, len(refs))
+			for _, ref := range refs {
+				names = append(names, ref.SecretName)
+			}
+
+			slices.Sort(names)
+			details["secretNames"] = names
+		}
+
+		if refs := spec.Configs; len(refs) > 0 {
+			names := make([]string, 0, len(refs))
+			for _, ref := range refs {
+				names = append(names, ref.ConfigName)
+			}
+
+			slices.Sort(names)
+			details["configNames"] = names
+		}
+
 		var bindMounts []map[string]any
 
 		for _, m := range spec.Mounts {

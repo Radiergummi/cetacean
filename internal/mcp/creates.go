@@ -118,6 +118,23 @@ func (s *Server) toolCreateSecret(
 		return "", fmt.Errorf("create secret: %w", err)
 	}
 
+	// Seeded so the very next call can use it. Both tools tell a caller to
+	// create the replacement and then repoint the service, and resolution
+	// reads the cache — which the watcher fills asynchronously, a few hundred
+	// milliseconds later. Against a live cluster that made the documented
+	// sequence fail on its second step with "no such secret", for a secret
+	// whose ID had just been returned.
+	//
+	// Data is deliberately zeroed: the cache backs every listing, and a
+	// secret's value has no business being in it. The watcher's own record
+	// arrives moments later and carries none either.
+	s.cache.SetSecret(swarm.Secret{
+		ID: id,
+		Spec: swarm.SecretSpec{
+			Annotations: swarm.Annotations{Name: name, Labels: labels},
+		},
+	})
+
 	return marshalResult(createResult{ID: id, Name: name, Type: "secret"})
 }
 
@@ -161,6 +178,16 @@ func (s *Server) toolCreateConfig(
 	if err != nil {
 		return "", fmt.Errorf("create config: %w", err)
 	}
+
+	// Seeded for the same reason create_secret seeds: the next call in the
+	// sequence resolves by name against the cache. The content is left out —
+	// the watcher brings it, and nothing between here and then needs it.
+	s.cache.SetConfig(swarm.Config{
+		ID: id,
+		Spec: swarm.ConfigSpec{
+			Annotations: swarm.Annotations{Name: name, Labels: labels},
+		},
+	})
 
 	return marshalResult(createResult{ID: id, Name: name, Type: "config"})
 }

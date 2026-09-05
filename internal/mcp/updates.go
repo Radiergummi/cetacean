@@ -34,6 +34,8 @@ const (
 	sectionLogDriver      = "log-driver"
 	sectionHealthcheck    = "healthcheck"
 	sectionCommand        = "command"
+	sectionSecrets        = "secrets"
+	sectionConfigs        = "configs"
 	sectionAvailability   = "availability"
 	sectionRole           = "role"
 )
@@ -65,6 +67,8 @@ var serviceSectionKeys = map[string][]string{
 		"healthcheckRetries",
 	},
 	sectionCommand: {"command", "args"},
+	sectionSecrets: {"secretNames"},
+	sectionConfigs: {"configNames"},
 }
 
 // nodeSectionKeys is the node counterpart, over NodeDigest's details.
