@@ -3,23 +3,27 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 /**
- * Services as list_resources returns them: raw Docker Engine API records, with
- * capitalised field names. Getting this wrong in the widget is invisible to the
- * Go compiler, which is why the shape is spelled out here rather than mocked.
+ * Services as `find` returns them: compact rows, not raw Docker Engine API
+ * records. Getting this wrong in the widget is invisible to the Go compiler,
+ * which is why the shape is spelled out here rather than mocked.
  */
 const services = [
   {
-    ID: "svc-b",
-    Spec: { Name: "monitoring", TaskTemplate: { ContainerSpec: { Image: "prom/prometheus" } } },
+    id: "svc-b",
+    name: "monitoring",
+    type: "service",
+    detail: "prom/prometheus",
   },
   {
-    ID: "svc-a",
-    Spec: { Name: "cetacean", TaskTemplate: { ContainerSpec: { Image: "cetacean:latest" } } },
+    id: "svc-a",
+    name: "cetacean",
+    type: "service",
+    detail: "cetacean:latest",
   },
 ];
 
 describe("ResourceTable", () => {
-  it("renders a row per record, reading nested Docker fields", () => {
+  it("renders a row per record, reading the compact row fields", () => {
     render(
       <ResourceTable
         resourceType="services"
@@ -99,24 +103,25 @@ describe("ResourceTable", () => {
     render(
       <ResourceTable
         resourceType="services"
-        records={[{ ID: "svc-c", Spec: { Name: "no-image" } }]}
+        records={[{ id: "svc-c", name: "no-image", type: "service" }]}
         total={1}
       />,
     );
 
-    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
-  it("falls back to a plain name/ID table for a type it has no columns for", () => {
+  it("renders from the universal row fields for a type it has no columns for", () => {
     render(
       <ResourceTable
         resourceType="widgets"
-        records={[{ ID: "w1", Spec: { Name: "future-type" } }]}
+        records={[{ id: "w1", name: "future-type", type: "widget", state: "running" }]}
         total={1}
       />,
     );
 
     expect(screen.getByText("future-type")).toBeInTheDocument();
+    expect(screen.getByText("running")).toBeInTheDocument();
     expect(screen.getByText("w1")).toBeInTheDocument();
   });
 });

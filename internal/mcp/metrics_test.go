@@ -24,6 +24,11 @@ type fakeQuerier struct {
 	steps   []string
 	series  []prom.Series
 	err     error
+
+	// responder, when set, answers per query rather than returning the same
+	// series for everything — needed to tell the metric query apart from the
+	// exporter probe that follows an empty one.
+	responder func(query string) []prom.Series
 }
 
 func (f *fakeQuerier) RangeQuery(
@@ -34,6 +39,10 @@ func (f *fakeQuerier) RangeQuery(
 	f.starts = append(f.starts, start)
 	f.ends = append(f.ends, end)
 	f.steps = append(f.steps, step)
+
+	if f.responder != nil {
+		return f.responder(query), f.err
+	}
 
 	return f.series, f.err
 }
@@ -104,7 +113,9 @@ func callGetMetrics(t *testing.T, srv *Server, args map[string]any) (metricsResu
 // the cache and the *cached name* is what reaches PromQL. Without that, a
 // caller could pass a label expression as the id and query anything.
 func TestGetMetricsSelectsOnTheCachedServiceName(t *testing.T) {
-	querier := &fakeQuerier{}
+	// Returns data: these pin the queries, and an empty answer would
+	// send get_metrics down the exporter probe instead.
+	querier := &fakeQuerier{series: onePoint()}
 	srv := metricsServer(t, querier)
 
 	if _, err := callGetMetrics(t, srv, map[string]any{
@@ -136,7 +147,9 @@ func TestGetMetricsSelectsOnTheCachedServiceName(t *testing.T) {
 }
 
 func TestGetMetricsAcceptsAServiceNameAsWellAsAnID(t *testing.T) {
-	querier := &fakeQuerier{}
+	// Returns data: these pin the queries, and an empty answer would
+	// send get_metrics down the exporter probe instead.
+	querier := &fakeQuerier{series: onePoint()}
 	srv := metricsServer(t, querier)
 
 	result, err := callGetMetrics(t, srv, map[string]any{
@@ -173,7 +186,9 @@ func TestGetMetricsAppliesACL(t *testing.T) {
 }
 
 func TestGetMetricsMatchesANodeByItsAddressThenItsHostname(t *testing.T) {
-	querier := &fakeQuerier{}
+	// Returns data: these pin the queries, and an empty answer would
+	// send get_metrics down the exporter probe instead.
+	querier := &fakeQuerier{series: onePoint()}
 	srv := metricsServer(t, querier)
 
 	if _, err := callGetMetrics(t, srv, map[string]any{
@@ -239,7 +254,9 @@ func TestGetMetricsReturnsBothNetworkDirections(t *testing.T) {
 }
 
 func TestGetMetricsResolutionFollowsTheRange(t *testing.T) {
-	querier := &fakeQuerier{}
+	// Returns data: these pin the queries, and an empty answer would
+	// send get_metrics down the exporter probe instead.
+	querier := &fakeQuerier{series: onePoint()}
 	srv := metricsServer(t, querier)
 
 	for _, tc := range []struct{ rangeKey, step string }{
@@ -316,5 +333,107 @@ func TestGetMetricsPointsAtTheMetricsWidget(t *testing.T) {
 
 	if got := td.tool.Meta.AdditionalFields[uiResourceURIMetaKey]; got != uiResourceURI("metrics") {
 		t.Errorf("_meta[%q] = %v, want %q", uiResourceURIMetaKey, got, uiResourceURI("metrics"))
+	}
+}
+
+// onePoint is a minimal non-empty answer.
+func onePoint() []prom.Series {
+	return []prom.Series{{Points: []prom.Point{{Timestamp: 1, Value: 1}}}}
+}
+
+// TestGetMetricsReportsAMissingExporter — an empty series is ambiguous between
+// "this resource is idle" and "nothing is collecting", and the tool promises
+// to report the second rather than return empty. right_size_service tells the
+// model to stop on that signal, so an empty series would read as measured zero
+// usage and invite shrinking a service to nothing.
+func TestGetMetricsReportsAMissingExporter(t *testing.T) {
+	cases := []struct {
+		name   string
+		args   map[string]any
+		expect string
+	}{
+		{
+			name: "service without cadvisor",
+			args: map[string]any{
+				"target": "service",
+				"id":     "monitoring_prometheus",
+				"metric": "cpu",
+			},
+			expect: "cAdvisor",
+		},
+		{
+			name:   "node without node-exporter",
+			args:   map[string]any{"target": "node", "id": "worker-2", "metric": "cpu"},
+			expect: "node-exporter",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Everything empty: the metric query and the probe alike.
+			srv := metricsServer(t, &fakeQuerier{})
+
+			_, err := callGetMetrics(t, srv, tc.args)
+			if err == nil {
+				t.Fatal("an empty result with no exporter must report unavailability")
+			}
+
+			if !strings.Contains(err.Error(), "metrics are unavailable") {
+				t.Errorf("error = %q, want it to report metrics unavailable", err)
+			}
+
+			if !strings.Contains(err.Error(), tc.expect) {
+				t.Errorf("error = %q, want it to name %s", err, tc.expect)
+			}
+		})
+	}
+}
+
+// TestGetMetricsKeepsAnEmptySeriesWhenTheExporterReports is the other half: a
+// genuinely idle resource on a healthy cluster still answers with an empty
+// series rather than an error.
+func TestGetMetricsKeepsAnEmptySeriesWhenTheExporterReports(t *testing.T) {
+	querier := &fakeQuerier{
+		responder: func(query string) []prom.Series {
+			// The probe counts the exporter's own metric family; the metric
+			// query selects on the resource.
+			if strings.HasPrefix(query, "count(") {
+				return onePoint()
+			}
+
+			return nil
+		},
+	}
+
+	srv := metricsServer(t, querier)
+
+	result, err := callGetMetrics(t, srv, map[string]any{
+		"target": "service", "id": "monitoring_prometheus", "metric": "cpu",
+	})
+	if err != nil {
+		t.Fatalf("a reporting exporter with no data for this resource is not an error: %v", err)
+	}
+
+	if len(result.Series) != 1 || len(result.Series[0].Points) != 0 {
+		t.Errorf("series = %+v, want one empty series", result.Series)
+	}
+}
+
+// TestGetMetricsDoesNotProbeWhenItHasData — the probe is the explanation for an
+// empty answer, so it must cost nothing on the ordinary path.
+func TestGetMetricsDoesNotProbeWhenItHasData(t *testing.T) {
+	querier := &fakeQuerier{series: onePoint()}
+	srv := metricsServer(t, querier)
+
+	if _, err := callGetMetrics(t, srv, map[string]any{
+		"target": "node", "id": "worker-2", "metric": "cpu",
+	}); err != nil {
+		t.Fatalf("get_metrics: %v", err)
+	}
+
+	for _, query := range querier.queries {
+		if strings.HasPrefix(query, "count(node_uname_info") {
+			t.Errorf("probed for the exporter despite having data: %q", query)
+		}
 	}
 }

@@ -72,6 +72,38 @@ type metricSpec struct {
 	queries []metricQuery
 }
 
+// exporterProbe answers "is anything collecting for this target at all?".
+//
+// It is asked only when every series came back empty, which is ambiguous on
+// its own: a service that is genuinely idle and a cluster with no cAdvisor
+// both produce no points. The tool promises to report unavailability rather
+// than return empty series, and right_size_service tells the model to stop on
+// exactly that signal — an empty series would otherwise read as measured zero
+// usage and invite shrinking a service to nothing.
+//
+// Presence of the exporter's own metric family is the test, never a `job`
+// label: the job name belongs to whoever wrote the Prometheus config, which
+// HandleMonitoringStatus makes the same argument about for node-exporter. The
+// service probe requires the Swarm service label too, because a cAdvisor that
+// reports only its own root cgroup — cgroup v2 without a host cgroup
+// namespace does exactly that — emits container metrics that can never be
+// attributed to a service.
+type exporterProbe struct {
+	query   string
+	missing string
+}
+
+var exporterProbes = map[string]exporterProbe{
+	metricTargetService: {
+		query:   `count(container_cpu_usage_seconds_total{` + swarmServiceLabel + `!=""})`,
+		missing: "cAdvisor is not reporting per-container metrics for this cluster",
+	},
+	metricTargetNode: {
+		query:   `count(node_uname_info)`,
+		missing: "node-exporter is not reporting node metrics for this cluster",
+	},
+}
+
 // metricCatalog holds every query get_metrics can run.
 //
 // These mirror the queries the dashboard composes in
@@ -249,6 +281,10 @@ func (s *Server) toolGetMetrics(
 		series = append(series, metricSeries{Name: query.series, Points: points})
 	}
 
+	if err := s.requireExporter(ctx, target, series, start, end, window.step); err != nil {
+		return "", err
+	}
+
 	return marshalResult(metricsResult{
 		Target: target,
 		ID:     id,
@@ -258,6 +294,42 @@ func (s *Server) toolGetMetrics(
 		Range:  rangeKey,
 		Series: series,
 	})
+}
+
+// requireExporter reports metrics as unavailable when nothing came back and
+// the exporter behind this target is not reporting at all.
+//
+// A probe failure is not an error: the point is to explain an empty result,
+// and failing the whole call because the explanation could not be fetched
+// would turn a degraded answer into no answer.
+func (s *Server) requireExporter(
+	ctx context.Context,
+	target string,
+	series []metricSeries,
+	start, end time.Time,
+	step time.Duration,
+) error {
+	for _, one := range series {
+		if len(one.Points) > 0 {
+			return nil
+		}
+	}
+
+	probe, ok := exporterProbes[target]
+	if !ok {
+		return nil
+	}
+
+	points, err := s.queryMetricSeries(ctx, probe.query, start, end, step)
+	if err != nil {
+		return nil //nolint:nilerr // a probe failure explains nothing; see above
+	}
+
+	if len(points) > 0 {
+		return nil
+	}
+
+	return fmt.Errorf("metrics are unavailable: %s", probe.missing)
 }
 
 // queryMetricSeries runs one query and flattens what comes back.

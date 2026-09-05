@@ -336,3 +336,59 @@ func TestReplicaCount(t *testing.T) {
 		t.Errorf("ReplicaCount(global) = %d, want 0", got)
 	}
 }
+
+// TestPlacementGraphIgnoresReplacedTasks — Swarm keeps a task record for every
+// replaced replica, so a service that has merely been updated or has restarted
+// accumulates terminal records on the node it runs on. Counting those as slots
+// that ought to be running renders a converged service as degraded: a
+// single-replica service updated twice read "1/3 running". Only tasks the
+// orchestrator still wants running belong in the denominator.
+func TestPlacementGraphIgnoresReplacedTasks(t *testing.T) {
+	clusterNode := swarm.Node{
+		ID:          "node-1",
+		Description: swarm.NodeDescription{Hostname: "worker-a"},
+		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+	}
+
+	tasks := []swarm.Task{
+		{
+			ID:           "live",
+			NodeID:       "node-1",
+			ServiceID:    "svc-api",
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+		},
+		{
+			ID:           "replaced-1",
+			NodeID:       "node-1",
+			ServiceID:    "svc-api",
+			DesiredState: swarm.TaskStateShutdown,
+			Status:       swarm.TaskStatus{State: swarm.TaskStateShutdown},
+		},
+		{
+			ID:           "replaced-2",
+			NodeID:       "node-1",
+			ServiceID:    "svc-api",
+			DesiredState: swarm.TaskStateShutdown,
+			Status:       swarm.TaskStatus{State: swarm.TaskStateFailed},
+		},
+	}
+
+	graph := PlacementGraph(
+		[]swarm.Node{clusterNode},
+		tasks,
+		[]swarm.Service{replicated("api", 1)},
+	)
+
+	if len(graph.Edges) != 1 {
+		t.Fatalf("edges = %+v, want one", graph.Edges)
+	}
+
+	if got := graph.Edges[0].Label; got != "1 running" {
+		t.Errorf(
+			"edge label = %q, want %q: the two replaced tasks are not slots awaiting a start",
+			got,
+			"1 running",
+		)
+	}
+}

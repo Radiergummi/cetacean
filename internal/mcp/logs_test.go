@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/swarm"
+
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
@@ -34,6 +36,7 @@ type fakeLogStreamer struct {
 	frames []byte
 	err    error
 	// captured call args
+	calledKind  docker.LogKind
 	calledID    string
 	calledTail  string
 	calledSince string
@@ -41,11 +44,12 @@ type fakeLogStreamer struct {
 
 func (f *fakeLogStreamer) Logs(
 	_ context.Context,
-	_ docker.LogKind,
+	kind docker.LogKind,
 	id, tail string,
 	_ bool,
 	since, _ string,
 ) (io.ReadCloser, error) {
+	f.calledKind = kind
 	f.calledID = id
 	f.calledTail = tail
 	f.calledSince = since
@@ -140,9 +144,9 @@ func TestReadServiceLogsCursorKeepsFullPrecision(t *testing.T) {
 	}
 	srv := newLogTestServer(t, c, streamer)
 
-	got, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{})
+	got, err := srv.readLogsImpl(context.Background(), docker.ServiceLog, "svc1", logOptions{})
 	if err != nil {
-		t.Fatalf("readServiceLogsImpl: %v", err)
+		t.Fatalf("readLogsImpl: %v", err)
 	}
 
 	if got.Cursor != "2024-01-01T00:00:57.999999999Z" {
@@ -164,9 +168,9 @@ func TestReadServiceLogsCursorIsTheNewestNotTheLastToArrive(t *testing.T) {
 	}
 	srv := newLogTestServer(t, c, streamer)
 
-	got, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{})
+	got, err := srv.readLogsImpl(context.Background(), docker.ServiceLog, "svc1", logOptions{})
 	if err != nil {
-		t.Fatalf("readServiceLogsImpl: %v", err)
+		t.Fatalf("readLogsImpl: %v", err)
 	}
 
 	if got.Cursor != "2024-01-01T00:00:05.000000000Z" {
@@ -193,12 +197,12 @@ func TestReadServiceLogsTruncatesToRequestedTail(t *testing.T) {
 
 	srv := newLogTestServer(t, c, &fakeLogStreamer{frames: frames})
 
-	got, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{
+	got, err := srv.readLogsImpl(context.Background(), docker.ServiceLog, "svc1", logOptions{
 		tail:  5,
 		since: "2024-01-01T00:00:00.000000000Z",
 	})
 	if err != nil {
-		t.Fatalf("readServiceLogsImpl: %v", err)
+		t.Fatalf("readLogsImpl: %v", err)
 	}
 
 	if len(got.Lines) != 5 {
@@ -287,13 +291,14 @@ func TestReadServiceLogsHonoursCursor(t *testing.T) {
 	}
 	srv := newLogTestServer(t, c, streamer)
 
-	got, err := srv.readServiceLogsImpl(
+	got, err := srv.readLogsImpl(
 		context.Background(),
+		docker.ServiceLog,
 		"svc1",
 		logOptions{since: "2024-01-01T00:00:01.000000000Z"},
 	)
 	if err != nil {
-		t.Fatalf("readServiceLogsImpl: %v", err)
+		t.Fatalf("readLogsImpl: %v", err)
 	}
 
 	if len(got.Lines) != 1 {
@@ -321,9 +326,9 @@ func TestReadServiceLogsCursorSkipsUntimestampedTrailingLine(t *testing.T) {
 	}
 	srv := newLogTestServer(t, c, streamer)
 
-	got, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{})
+	got, err := srv.readLogsImpl(context.Background(), docker.ServiceLog, "svc1", logOptions{})
 	if err != nil {
-		t.Fatalf("readServiceLogsImpl: %v", err)
+		t.Fatalf("readLogsImpl: %v", err)
 	}
 
 	if len(got.Lines) != 2 {
@@ -347,13 +352,14 @@ func TestReadServiceLogsCursorFallsBackToIncomingSinceWhenNoneTimestamped(t *tes
 	}
 	srv := newLogTestServer(t, c, streamer)
 
-	got, err := srv.readServiceLogsImpl(
+	got, err := srv.readLogsImpl(
 		context.Background(),
+		docker.ServiceLog,
 		"svc1",
 		logOptions{since: "2024-01-01T00:00:00.000000000Z"},
 	)
 	if err != nil {
-		t.Fatalf("readServiceLogsImpl: %v", err)
+		t.Fatalf("readLogsImpl: %v", err)
 	}
 
 	if len(got.Lines) != 1 {
@@ -375,12 +381,12 @@ func TestReadServiceLogsClampsPathologicalTail(t *testing.T) {
 	}
 	srv := newLogTestServer(t, c, streamer)
 
-	_, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{
+	_, err := srv.readLogsImpl(context.Background(), docker.ServiceLog, "svc1", logOptions{
 		tail:  math.MaxInt,
 		since: "2024-01-01T00:00:01.000000000Z",
 	})
 	if err != nil {
-		t.Fatalf("readServiceLogsImpl: %v", err)
+		t.Fatalf("readLogsImpl: %v", err)
 	}
 
 	tail, err := strconv.Atoi(streamer.calledTail)
@@ -399,7 +405,12 @@ func TestReadServiceLogsRejectsUnparseableSince(t *testing.T) {
 	c := cache.New(nil)
 	srv := newLogTestServer(t, c, &fakeLogStreamer{})
 
-	_, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{since: "5m"})
+	_, err := srv.readLogsImpl(
+		context.Background(),
+		docker.ServiceLog,
+		"svc1",
+		logOptions{since: "5m"},
+	)
 	if err == nil {
 		t.Fatal("expected an error for a since value that is not an RFC 3339 timestamp")
 	}
@@ -430,5 +441,71 @@ func TestGetLogsPointsAtTheLogWidget(t *testing.T) {
 	uri := uiResourceURI("logs")
 	if got := td.tool.Meta.AdditionalFields[uiResourceURIMetaKey]; got != uri {
 		t.Errorf("_meta[%q] = %v, want %q", uiResourceURIMetaKey, got, uri)
+	}
+}
+
+// TestGetLogsToolReadsATaskDirectly — the output of a replica that has already
+// died is what an operator needs after a crash, and Swarm keeps it only until
+// the task record falls out of the history window. Reading the parent service
+// does not substitute: the service's own log stream drops a task's lines once
+// it is gone. Docker exposes it, docker.Client.Logs has always had the
+// TaskLog branch and REST already uses it — only this tool hardcoded
+// ServiceLog.
+func TestGetLogsToolReadsATaskDirectly(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "flaky"}},
+	})
+	c.SetTask(swarm.Task{ID: "task1", ServiceID: "svc1"})
+
+	streamer := &fakeLogStreamer{
+		frames: buildLogFrame(1, "2024-01-01T00:00:00.000000000Z fatal: connection refused\n"),
+	}
+	srv := newLogTestServer(t, c, streamer)
+
+	td, ok := srv.findTool("get_logs")
+	if !ok {
+		t.Fatal("get_logs not registered")
+	}
+
+	out, err := td.handler(context.Background(), newCallToolRequest("get_logs", map[string]any{
+		"task": "task1",
+	}))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+
+	if streamer.calledKind != docker.TaskLog {
+		t.Errorf("streamer kind = %v, want docker.TaskLog", streamer.calledKind)
+	}
+
+	if streamer.calledID != "task1" {
+		t.Errorf("streamer id = %q, want the task's own id", streamer.calledID)
+	}
+
+	var resp LogResourceResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("unmarshal: %v: %s", err, out)
+	}
+
+	if len(resp.Lines) != 1 {
+		t.Fatalf("lines = %d, want the dead task's final line", len(resp.Lines))
+	}
+}
+
+// TestGetLogsToolRejectsBothTargets — service and task name different streams,
+// and silently preferring one would hand back logs the caller did not ask for.
+func TestGetLogsToolRejectsBothTargets(t *testing.T) {
+	c := cache.New(nil)
+	srv := newLogTestServer(t, c, &fakeLogStreamer{})
+	td, _ := srv.findTool("get_logs")
+
+	_, err := td.handler(context.Background(), newCallToolRequest("get_logs", map[string]any{
+		"service": "svc1",
+		"task":    "task1",
+	}))
+	if err == nil {
+		t.Fatal("expected an error when both service and task are given")
 	}
 }

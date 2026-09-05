@@ -125,6 +125,26 @@ func (s *Server) filterServices(ctx context.Context, items []swarm.Service) []sw
 	)
 }
 
+// filterRawTasks keeps the tasks the caller may read, without enriching them.
+//
+// The ACL key is "task:<id>", a field swarm.Task already carries, so the
+// enriched shape filterTasks takes is not needed to make the decision — and
+// the digest builders resolve parent names from the slices they are given
+// rather than from enriched fields. Enriching first would resolve a service
+// name and a node hostname per task only to discard them, on a path
+// (resources/read) that a subscription re-drives after every cache event.
+func (s *Server) filterRawTasks(ctx context.Context, items []swarm.Task) []swarm.Task {
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(t swarm.Task) string {
+			return "task:" + t.ID
+		},
+	)
+}
+
 func (s *Server) filterTasks(
 	ctx context.Context,
 	items []cluster.EnrichedTask,
@@ -196,6 +216,26 @@ func (s *Server) filterVolumes(ctx context.Context, items []volume.Volume) []vol
 		items,
 		func(v volume.Volume) string {
 			return "volume:" + v.Name
+		},
+	)
+}
+
+// filterServiceRefs drops the services an identity may not read from one of
+// the cache's reverse indexes (ServicesUsingConfig and friends). A digest's
+// "used by" list is built from those, and would otherwise name services the
+// caller cannot see just because they can read the config those services
+// mount.
+func (s *Server) filterServiceRefs(
+	ctx context.Context,
+	items []cache.ServiceRef,
+) []cache.ServiceRef {
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(ref cache.ServiceRef) string {
+			return "service:" + ref.Name
 		},
 	)
 }

@@ -12,7 +12,7 @@ import (
 //
 // The same data is already readable at cetacean://recommendations, but a host
 // can only push a *tool* result into a widget — so this exists for the same
-// reason list_resources does, and delegates to the resource read rather than
+// reason find does, and delegates to the resource read rather than
 // reaching for the engine itself, keeping ACL filtering on one path.
 type recommendationsResult struct {
 	Items   []recommendations.Recommendation `json:"items"`

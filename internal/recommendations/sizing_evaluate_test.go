@@ -327,11 +327,11 @@ func TestEvaluate_OverProvisioned_ReservationNotLimit(t *testing.T) {
 		t.Fatalf("expected over-provisioned hint for cpu, got: %+v", result)
 	}
 
-	// Configured must be the reservation percentage (100%), not the limit percentage (1000%).
-	cpuReservationPct := float64(spec.cpuReservation) / 1e9 * 100 // 100%
-	if cpuHint.Configured != cpuReservationPct {
-		t.Errorf("cpu Configured = %v, want reservation pct %v (not limit pct %v)",
-			cpuHint.Configured, cpuReservationPct, float64(spec.cpuLimit)/1e9*100)
+	// Configured must be the reservation, not the limit — in NanoCPUs, the unit
+	// Suggested and the fixAction's PATCH body both use.
+	if cpuHint.Configured != float64(spec.cpuReservation) {
+		t.Errorf("cpu Configured = %v, want reservation %v NanoCPUs (not limit %v)",
+			cpuHint.Configured, float64(spec.cpuReservation), float64(spec.cpuLimit))
 	}
 
 	if memHint == nil {
@@ -387,4 +387,56 @@ func TestRoundMemory(t *testing.T) {
 			t.Errorf("roundMemory(%v) = %v, want %v", tc.input, got, tc.expected)
 		}
 	}
+}
+
+// TestOverProvisionedCPUReportsNanoCPUs — a recommendation's three numbers must
+// share a unit, or a caller cannot compare them. The memory findings are bytes
+// throughout; CPU reported Current and Configured as percent-of-a-core while
+// Suggested was NanoCPUs, so one record read "configured 25, suggested
+// 50000000". NanoCPUs is the unit that stays: it is what the fixAction's PATCH
+// body takes, and what the dashboard already divides by 1e9 to render.
+func TestOverProvisionedCPUReportsNanoCPUs(t *testing.T) {
+	spec := serviceSpec{
+		id:                "svc1",
+		name:              "web",
+		cpuLimit:          1e9,
+		cpuReservation:    250e6, // 0.25 cores
+		memoryLimit:       1 << 30,
+		memoryReservation: 512 << 20,
+	}
+
+	// 2% of one core — well under 20% of the 25% reservation.
+	p95 := &serviceMetrics{cpu: 2, memory: 1 << 20}
+
+	hint := findHint(t, evaluate(spec, nil, p95, defaultConfig()), CategoryOverProvisioned, "cpu")
+
+	if hint.Configured != 250e6 {
+		t.Errorf(
+			"configured = %v, want 250000000 NanoCPUs to match suggested's unit",
+			hint.Configured,
+		)
+	}
+
+	if hint.Current != 20e6 {
+		t.Errorf("current = %v, want 20000000 NanoCPUs (2%% of a core)", hint.Current)
+	}
+}
+
+func findHint(
+	t *testing.T,
+	hints []Recommendation,
+	category Category,
+	resource string,
+) Recommendation {
+	t.Helper()
+
+	for _, h := range hints {
+		if h.Category == category && h.Resource == resource {
+			return h
+		}
+	}
+
+	t.Fatalf("no %s hint for %s in %+v", category, resource, hints)
+
+	return Recommendation{}
 }

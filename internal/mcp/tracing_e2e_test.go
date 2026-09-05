@@ -62,7 +62,7 @@ func findSpan(t *testing.T, exporter *tracetest.InMemoryExporter, name string) t
 func TestRequestJoinsTraceFromMeta(t *testing.T) {
 	srv, exporter := tracedTestServer(t)
 
-	params := `{"name":"search","arguments":{"query":"web"},"_meta":{"traceparent":"` + callerHeader + `"}}`
+	params := `{"name":"find","arguments":{"query":"web"},"_meta":{"traceparent":"` + callerHeader + `"}}`
 
 	_, envelope := mcpModern(t, srv.Handler(), 1, "tools/call", params)
 	if envelope.Error != nil {
@@ -123,7 +123,7 @@ func TestUntracedRequestStartsItsOwnTrace(t *testing.T) {
 func TestToolCallAnnotatesParentSpan(t *testing.T) {
 	srv, exporter := tracedTestServer(t)
 
-	params := `{"name":"search","arguments":{"query":"web"}}`
+	params := `{"name":"find","arguments":{"query":"web"}}`
 
 	_, envelope := mcpModern(t, srv.Handler(), 1, "tools/call", params)
 	if envelope.Error != nil {
@@ -135,7 +135,7 @@ func TestToolCallAnnotatesParentSpan(t *testing.T) {
 	var found bool
 
 	for _, attr := range span.Attributes {
-		if string(attr.Key) == "mcp.tool.name" && attr.Value.AsString() == "search" {
+		if string(attr.Key) == "mcp.tool.name" && attr.Value.AsString() == "find" {
 			found = true
 		}
 	}
@@ -145,7 +145,7 @@ func TestToolCallAnnotatesParentSpan(t *testing.T) {
 	}
 
 	// The tool handler's own span nests inside the request span.
-	tool := findSpan(t, exporter, "tool.search")
+	tool := findSpan(t, exporter, "tool.find")
 	if tool.Parent.SpanID() != span.SpanContext.SpanID() {
 		t.Errorf(
 			"tool span parent = %v, want the request span %v",

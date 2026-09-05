@@ -335,7 +335,7 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsImpactful)
 
 	readOnly := map[string]bool{
-		"get_logs": true, "search": true, "list_resources": true, "get_topology": true,
+		"get_logs": true, "find": true, "describe": true, "get_topology": true,
 		"get_metrics": true, "get_recommendations": true,
 	}
 	destructive := map[string]bool{
@@ -391,8 +391,8 @@ func TestToolCatalogTierFilter(t *testing.T) {
 	if _, ok := srv.findTool("scale_service"); ok {
 		t.Error("scale_service should not be registered at OpsReadOnly")
 	}
-	if _, ok := srv.findTool("search"); !ok {
-		t.Error("search (read tool) should be registered at OpsReadOnly")
+	if _, ok := srv.findTool("find"); !ok {
+		t.Error("find (read tool) should be registered at OpsReadOnly")
 	}
 
 	srv = newToolTestServer(t, c, &fakeWriteClient{}, config.OpsOperational)
@@ -415,17 +415,37 @@ func TestToolCatalogTierFilter(t *testing.T) {
 }
 
 func TestToolScaleService(t *testing.T) {
+	// The cache holds the service as it was *before* the write: it is filled
+	// asynchronously by the event watcher, so this is what it really contains
+	// at the moment a mutation returns.
+	stale := uint64(2)
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
 		ID:   "svc1",
-		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+		Meta: swarm.Meta{Version: swarm.Version{Index: 10}},
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &stale}},
+		},
 	})
 
 	var calledWith uint64
 	wc := &fakeWriteClient{
 		scaleServiceFn: func(_ context.Context, _ string, replicas uint64) (swarm.Service, error) {
 			calledWith = replicas
-			return swarm.Service{ID: "svc1"}, nil
+			// docker.Client ends every converging write with a fresh
+			// InspectService, so the handler receives the post-mutation
+			// service. The stub models that.
+			return swarm.Service{
+				ID:   "svc1",
+				Meta: swarm.Meta{Version: swarm.Version{Index: 11}},
+				Spec: swarm.ServiceSpec{
+					Annotations: swarm.Annotations{Name: "web"},
+					Mode: swarm.ServiceMode{
+						Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+					},
+				},
+			}, nil
 		},
 	}
 	srv := newToolTestServer(t, c, wc, config.OpsOperational)
@@ -464,6 +484,23 @@ func TestToolScaleService(t *testing.T) {
 	if got.State == "" {
 		t.Error("state should be derived, so an agent knows whether the change has landed")
 	}
+
+	// The result must describe the write, not the cache. Reading the service
+	// back from the cache reported the state before the mutation — an agent
+	// that scaled 2 to 5 was told 2, which reads as "the call did nothing",
+	// and the stale Version would collide on any follow-up write.
+	switch {
+	case got.Replicas == nil:
+		t.Error("replicas is nil — the result must reflect the write, not the cache")
+	case *got.Replicas != 5:
+		t.Errorf("replicas = %d, want 5 — the result must reflect the write, not the cache",
+			*got.Replicas)
+	}
+
+	if got.Version != 11 {
+		t.Errorf("version = %d, want 11 — a stale version breaks the next write",
+			got.Version)
+	}
 }
 
 func TestToolScaleServiceRejectsNegativeReplicas(t *testing.T) {
@@ -490,41 +527,6 @@ func TestToolScaleServiceMissingArgs(t *testing.T) {
 	}))
 	if err == nil {
 		t.Fatal("expected error when replicas missing")
-	}
-}
-
-func TestToolSearch(t *testing.T) {
-	c := cache.New(nil)
-	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web-frontend"}},
-	})
-
-	srv := newToolTestServer(t, c, nil, config.OpsReadOnly)
-	td, _ := srv.findTool("search")
-
-	out, err := td.handler(context.Background(), newCallToolRequest("search", map[string]any{
-		"query": "web",
-	}))
-	if err != nil {
-		t.Fatalf("handler: %v", err)
-	}
-	if !strings.Contains(out, "web-frontend") {
-		t.Errorf("search output missing match: %s", out)
-	}
-}
-
-func TestToolSearchRejectsEmptyQuery(t *testing.T) {
-	srv := newToolTestServer(t, cache.New(nil), nil, config.OpsReadOnly)
-	td, _ := srv.findTool("search")
-
-	for _, q := range []string{"", "   ", "\t\n"} {
-		_, err := td.handler(context.Background(), newCallToolRequest("search", map[string]any{
-			"query": q,
-		}))
-		if err == nil {
-			t.Errorf("query %q: expected error, got nil", q)
-		}
 	}
 }
 
@@ -989,8 +991,8 @@ func TestFilterToolsForIdentity_HidesWritesWithoutGrants(t *testing.T) {
 	if names["remove_config"] {
 		t.Error("remove_config must be hidden — identity has no config write grant")
 	}
-	if !names["search"] {
-		t.Error("search is unconditionally visible (cross-type tool)")
+	if !names["find"] {
+		t.Error("find is unconditionally visible (cross-type tool)")
 	}
 }
 
@@ -1025,8 +1027,8 @@ func TestFilterToolsForIdentity_HidesWritesWithZeroGrants(t *testing.T) {
 	if names["scale_service"] {
 		t.Error("scale_service must be hidden — identity matches no grant at all")
 	}
-	if !names["search"] {
-		t.Error("search is unconditionally visible (cross-type tool)")
+	if !names["find"] {
+		t.Error("find is unconditionally visible (cross-type tool)")
 	}
 }
 

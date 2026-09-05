@@ -171,8 +171,10 @@ func TestMCPEndToEnd(t *testing.T) {
 	if len(readResult.Contents) != 1 {
 		t.Fatalf("expected 1 content entry, got %d", len(readResult.Contents))
 	}
-	if !strings.Contains(readResult.Contents[0].Text, `"Name":"web"`) {
-		t.Errorf("service content missing Name=web: %s", readResult.Contents[0].Text)
+	// The templated resource reads serve the compact digest, whose name is
+	// lower-cased `name` rather than swarm.Service's embedded Annotations.
+	if !strings.Contains(readResult.Contents[0].Text, `"name":"web"`) {
+		t.Errorf("service content missing name=web: %s", readResult.Contents[0].Text)
 	}
 
 	// 4) tools/list — should include the read-only tools at OpsReadOnly tier.
@@ -192,20 +194,20 @@ func TestMCPEndToEnd(t *testing.T) {
 	for _, tl := range toolsResult.Tools {
 		names[tl.Name] = true
 	}
-	if !names["search"] {
-		t.Error("tools/list missing search")
+	if !names["find"] {
+		t.Error("tools/list missing find")
 	}
 	if names["scale_service"] {
 		t.Error("scale_service should be filtered out at OpsReadOnly")
 	}
 
-	// 5) tools/call for search — should hit the seeded service.
-	_, env = mcpModern(t, handler, 5, "tools/call", `{"name":"search","arguments":{"query":"web"}}`)
+	// 5) tools/call for find — should hit the seeded service.
+	_, env = mcpModern(t, handler, 5, "tools/call", `{"name":"find","arguments":{"query":"web"}}`)
 	if env.Error != nil {
 		t.Fatalf("tools/call error: %+v", env.Error)
 	}
 	if !strings.Contains(string(env.Result), "web") {
-		t.Errorf("search result missing web: %s", string(env.Result))
+		t.Errorf("find result missing web: %s", string(env.Result))
 	}
 }
 
@@ -305,10 +307,10 @@ func TestMCPIntegration_ResourcesReadHonoursACL(t *testing.T) {
 	}
 }
 
-// TestMCPIntegration_SearchToolFiltersByACL drives the search tool through
+// TestMCPIntegration_FindToolFiltersByACL drives the find tool through
 // tools/call and confirms denied resources are filtered out before reaching
 // the caller (covers M-02 at HTTP level).
-func TestMCPIntegration_SearchToolFiltersByACL(t *testing.T) {
+func TestMCPIntegration_FindToolFiltersByACL(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
 		ID:   "svc-public",
@@ -338,9 +340,9 @@ func TestMCPIntegration_SearchToolFiltersByACL(t *testing.T) {
 
 	// "acme" matches both services by name; ACL must hide the secret one.
 	_, env := mcpModernWithToken(t, handler, token, 2, "tools/call",
-		`{"name":"search","arguments":{"query":"acme"}}`)
+		`{"name":"find","arguments":{"query":"acme"}}`)
 	if env.Error != nil {
-		t.Fatalf("search returned error: %+v", env.Error)
+		t.Fatalf("find returned error: %+v", env.Error)
 	}
 	result := string(env.Result)
 	if !strings.Contains(result, "public-acme") {

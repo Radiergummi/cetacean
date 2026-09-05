@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"fmt"
+
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -32,6 +34,38 @@ func EnrichTasks(c *cache.Cache, tasks []swarm.Task) []EnrichedTask {
 		out[i] = EnrichTask(c, t)
 	}
 	return out
+}
+
+// TaskName is what to call a task, following Docker's own convention: a
+// replicated task is "<service>.<slot>", a global one "<service>.<node>" since
+// a global service has no slot to distinguish its replicas by.
+//
+// It is shared rather than inlined because a task's name was being derived
+// three different ways in this package — a list row named a task after its
+// service alone, so every replica of one service rendered identically, while
+// the digest and the search results named the same records "<service>.<slot>".
+// One tool reporting two names for one record is exactly the drift this
+// package exists to prevent, so the rule lives here and has one caller each.
+//
+// service is a pointer because a caller may hold a task whose parent it cannot
+// read; a nil service falls back to the task's own ID, which is always present.
+func TaskName(task swarm.Task, service *swarm.Service) string {
+	if service == nil {
+		return task.ID
+	}
+
+	switch {
+	case service.Spec.Mode.Global != nil && task.NodeID != "":
+		return service.Spec.Name + "." + task.NodeID
+
+	case service.Spec.Mode.Global != nil:
+		// An unassigned global task has no node yet; "<service>." with a
+		// trailing dot would read as a truncated name.
+		return service.Spec.Name
+
+	default:
+		return fmt.Sprintf("%s.%d", service.Spec.Name, task.Slot)
+	}
 }
 
 // RedactSecret returns a copy of the secret with Spec.Data set to nil.

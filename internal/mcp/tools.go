@@ -13,6 +13,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 // ServiceLifecycleWriter is the subset of Docker service-lifecycle operations
@@ -115,10 +116,10 @@ type toolDef struct {
 var toolIconCategory = map[string]string{
 	"get_logs":            "read",
 	"get_topology":        "read",
-	"list_resources":      "read",
 	"get_metrics":         "read",
 	"get_recommendations": "read",
-	"search":              "search",
+	"find":                "search",
+	"describe":            "read",
 
 	"scale_service": "scale",
 
@@ -198,6 +199,8 @@ func (s *Server) registerTools() {
 		s.mcpServer.AddTool(
 			td.tool,
 			func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+				ctx, textOnly := withTextOnlyResultSignal(ctx)
+
 				text, err := handler(ctx, req)
 				if err != nil {
 					// On a plain call the failure belongs in the result, so
@@ -215,6 +218,17 @@ func (s *Server) registerTools() {
 
 					return mcplib.NewToolResultError(err.Error()), nil
 				}
+
+				// A handler that called markTextOnlyResult built a result it
+				// knows does not conform to the tool's declared outputSchema
+				// (find's and describe's raw modes) — presenting it as
+				// structuredContent anyway would fail
+				// WithOutputSchemaValidation's check on the very call the
+				// handler asked for something other than the compact shape.
+				if *textOnly {
+					return mcplib.NewToolResultText(text), nil
+				}
+
 				return structuredToolResult(text), nil
 			},
 		)
@@ -235,9 +249,9 @@ func (s *Server) toolCatalog() []toolDef {
 		{
 			tool: mcplib.NewTool(
 				"get_logs",
-				mcplib.WithToolTitle("Read service logs"),
+				mcplib.WithToolTitle("Read service or task logs"),
 				mcplib.WithDescription(
-					"Fetch recent log lines for a Swarm service, merged across every replica task. Returns the most recent `tail` lines (default 100), optionally filtered by start time and minimum severity. This is a one-shot read; for live tails subscribe to the cetacean://services/{id}/logs resource.",
+					"Fetch recent log lines for a Swarm service or for one of its tasks. Name exactly one: `service` merges the output of every live replica; `task` reads a single replica, and is the only way to reach one that has already exited — use it to find out why a replica died, since a dead replica's lines are not in the service stream. Swarm discards a task's output once its record falls out of the history window (five per replica slot by default), so on a service that is restarting in a loop that history is only seconds deep and should be read first. Returns the most recent `tail` lines (default 100), optionally filtered by start time and minimum severity. This is a one-shot read; for live tails subscribe to the cetacean://services/{id}/logs resource.",
 				),
 				mcplib.WithOutputSchema[LogResourceResponse](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -245,8 +259,14 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
 				mcplib.WithString("service",
-					mcplib.Required(),
-					mcplib.Description("Service ID or name to read logs from."),
+					mcplib.Description(
+						"Service ID or name to read logs from, merged across its live replicas. Mutually exclusive with `task`.",
+					),
+				),
+				mcplib.WithString("task",
+					mcplib.Description(
+						"Task ID to read logs from, including a task that has already exited. Mutually exclusive with `service`.",
+					),
 				),
 				mcplib.WithNumber(
 					"tail",
@@ -273,59 +293,105 @@ func (s *Server) toolCatalog() []toolDef {
 		},
 		{
 			tool: mcplib.NewTool(
-				"search",
-				mcplib.WithToolTitle("Search swarm resources"),
+				"find",
+				mcplib.WithToolTitle("Find cluster resources"),
 				mcplib.WithDescription(
-					"Search across every cluster resource (nodes, services, tasks, stacks, configs, secrets, networks, volumes) by name, label, or image reference. Returns ranked matches grouped by resource type. Use this to locate a resource before fetching its details or applying a write.",
+					"Locate cluster resources. Give `type` (nodes, services, tasks, stacks, configs, secrets, networks, or volumes) to enumerate that type, paged, optionally narrowed by query/state/stack/node/image/label; the returned records are the same ones the cetacean:// resources expose, filtered to what the caller may see. Omit `type` and give `query` to search by name, label, or image reference across every type at once, returned as one list sorted by name, each row carrying its own type. Use the cross-type search to locate a resource before fetching its details or applying a write; use a typed listing to browse or tabulate a whole type.",
 				),
-				mcplib.WithOutputSchema[cluster.SearchResults](),
-				mcplib.WithReadOnlyHintAnnotation(true),
-				mcplib.WithDestructiveHintAnnotation(false),
-				mcplib.WithIdempotentHintAnnotation(true),
-				mcplib.WithOpenWorldHintAnnotation(false),
-				mcplib.WithString(
-					"query",
-					mcplib.Required(),
-					mcplib.Description(
-						"Substring to match against resource names, labels, and (for services) image references. Case-insensitive.",
-					),
-				),
-				mcplib.WithNumber("limit",
-					mcplib.Description("Maximum results per resource type. Default 3."),
-				),
-			),
-			tier:    config.OpsReadOnly,
-			handler: s.toolSearch,
-		},
-		{
-			tool: mcplib.NewTool(
-				"list_resources",
-				mcplib.WithToolTitle("List cluster resources"),
-				mcplib.WithDescription(
-					"Enumerate every resource of one type (nodes, services, tasks, stacks, configs, secrets, networks, volumes), paged. Returns the same records the cetacean:// resources expose, filtered to what the caller may see. Use search to find a specific resource; use this to browse or tabulate a whole type.",
-				),
-				mcplib.WithOutputSchema[listResourcesResult](),
+				mcplib.WithOutputSchema[findResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
 				mcplib.WithString(
 					"type",
-					mcplib.Required(),
 					mcplib.Description(
-						"Resource type to list: nodes, services, tasks, stacks, configs, secrets, networks, or volumes.",
+						"Resource type to enumerate: nodes, services, tasks, stacks, configs, secrets, networks, or volumes. Omit to search across every type at once (requires `query`).",
+					),
+				),
+				mcplib.WithString(
+					"query",
+					mcplib.Description(
+						"Substring to match against resource names — and, when `type` is omitted, also labels and image references. Case-insensitive. Required when `type` is omitted.",
+					),
+				),
+				mcplib.WithString("state",
+					mcplib.Description(
+						"With `type`, keep only rows whose derived state matches exactly (case-insensitive).",
+					),
+				),
+				mcplib.WithString("stack",
+					mcplib.Description(
+						"With `type`, keep only rows in this stack namespace (exact match, case-insensitive).",
+					),
+				),
+				mcplib.WithString("node",
+					mcplib.Description(
+						"With `type: tasks`, keep only rows running on a node whose hostname contains this (case-insensitive).",
+					),
+				),
+				mcplib.WithString("image",
+					mcplib.Description(
+						"With `type: services`, keep only rows whose image contains this (case-insensitive).",
+					),
+				),
+				mcplib.WithString("label",
+					mcplib.Description(
+						"With `type`, keep only rows carrying this label: `key` for presence, `key=value` for an exact value.",
 					),
 				),
 				mcplib.WithNumber("limit",
-					mcplib.Description("Maximum records to return. Default and maximum 200."),
+					mcplib.Description(
+						"With `type`, the maximum records to return (default and maximum 200). Without `type`, the maximum matches per resource type in the cross-type search (default 3).",
+					),
 				),
 				mcplib.WithNumber("offset",
-					mcplib.Description("Records to skip, for paging. Default 0."),
+					mcplib.Description(
+						"With `type`, records to skip, for paging. Default 0. Ignored in the cross-type search.",
+					),
+				),
+				mcplib.WithBoolean("raw",
+					mcplib.Description(
+						"With `type`, return each match's untouched resource record instead of the compact row shape. Default false.",
+					),
 				),
 			),
 			tier:    config.OpsReadOnly,
-			handler: s.toolListResources,
+			handler: s.toolFind,
 			widget:  "table",
+		},
+		{
+			tool: mcplib.NewTool(
+				"describe",
+				mcplib.WithToolTitle("Describe one cluster resource"),
+				mcplib.WithDescription(
+					"Return everything needed to act on one resource: its derived state, the reason Swarm gave for that state when it is not healthy, how long the state has held, the type-specific facts (a service's image, replica counts, reserved CPU in cores and memory in bytes, ports, placement constraints and environment variable *names*; a node's role, availability, capacity; a network's driver and subnets), the resources it references or is referenced by, and the recent task failures behind a failing state. Name the type in the singular (service, node, task, stack, config, secret, network, volume) and give an ID or a name. Use this instead of a resource read when following up on a finding from find or get_recommendations; secret payloads and environment variable values are never returned.",
+				),
+				mcplib.WithOutputSchema[cluster.Digest](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("type",
+					mcplib.Required(),
+					mcplib.Description(
+						"Resource type, singular: service, node, task, stack, config, secret, network or volume.",
+					),
+				),
+				mcplib.WithString("id",
+					mcplib.Required(),
+					mcplib.Description(
+						"The resource's ID, or its name (hostname for a node, name for a stack or volume).",
+					),
+				),
+				mcplib.WithBoolean("raw",
+					mcplib.Description(
+						"Return the untouched Docker record instead of the digest. Default false.",
+					),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolDescribe,
 		},
 		{
 			tool: mcplib.NewTool(
@@ -1072,32 +1138,48 @@ func (s *Server) checkServiceRead(ctx context.Context, id string) error {
 	return s.checkRead(ctx, "service", svc.Spec.Name)
 }
 
-// --- tool handlers ---
-
-func (s *Server) toolSearch(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-	query, err := req.RequireString("query")
-	if err != nil {
-		return "", err
-	}
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return "", fmt.Errorf("query must not be empty")
-	}
-	limit := req.GetInt("limit", 3)
-
-	results := s.filterSearchResults(ctx, cluster.Search(ctx, s.cache, query, limit))
-	return marshalResult(results)
+// checkTaskRead enforces the read permission on a task, keyed as `task:<id>`.
+//
+// It does not walk to the parent service the way checkTaskWrite does, because
+// the evaluator already does: acl.grantMatchesResource resolves a task through
+// its parent service and that service's stack, so the task's own key is
+// strictly the broader check. It is also the key every other task read passes
+// — REST's HandleTaskLogs and the cetacean://tasks/{id} resource both do — and
+// walking to the parent here would leave a `task:*` grant able to read task
+// logs on every path except this tool.
+func (s *Server) checkTaskRead(ctx context.Context, id string) error {
+	return s.checkRead(ctx, "task", id)
 }
 
+// --- tool handlers ---
+
 func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-	service, err := req.RequireString("service")
-	if err != nil {
+	service := strings.TrimSpace(req.GetString("service", ""))
+	task := strings.TrimSpace(req.GetString("task", ""))
+
+	// Naming both would leave the tool to guess which stream the caller meant,
+	// and the two differ: a service merges its live replicas, a task is one
+	// replica including a dead one.
+	switch {
+	case service == "" && task == "":
+		return "", fmt.Errorf("one of `service` or `task` is required")
+	case service != "" && task != "":
+		return "", fmt.Errorf("`service` and `task` are mutually exclusive")
+	}
+
+	kind, target := docker.ServiceLog, service
+	check := s.checkServiceRead
+
+	if task != "" {
+		kind, target = docker.TaskLog, task
+		check = s.checkTaskRead
+	}
+
+	if err := check(ctx, target); err != nil {
 		return "", err
 	}
-	if err := s.checkServiceRead(ctx, service); err != nil {
-		return "", err
-	}
-	resp, err := s.readServiceLogsImpl(ctx, service, optsFromToolRequest(req))
+
+	resp, err := s.readLogsImpl(ctx, kind, target, optsFromToolRequest(req))
 	if err != nil {
 		return "", err
 	}
@@ -1492,10 +1574,18 @@ type serviceMutationResult struct {
 // cache is the fresher of the two, and taking spec, running count and state
 // from one source keeps them mutually consistent.
 func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
-	if cached, ok := s.cache.GetService(svc.ID); ok {
-		svc = cached
-	}
-
+	// svc is Docker's own post-mutation view: every caller passes the value
+	// its write returned, and docker.Client produces that with a fresh
+	// InspectService. Spec and version therefore come from the write itself.
+	//
+	// Only the running count is read from the cache, because Docker's service
+	// object does not carry one. Reading the whole service from the cache —
+	// which this used to do, for the consistency of describing one moment —
+	// reported the state *before* the write instead: the cache is filled
+	// asynchronously by the event watcher, so it still holds the previous
+	// version when this runs. A caller that scaled 2 to 3 was told 3 tasks
+	// were desired only on its *next* call, and the stale Version it got back
+	// would collide on any follow-up write.
 	running := s.cache.RunningTaskCount(svc.ID)
 
 	out := serviceMutationResult{
@@ -1522,6 +1612,33 @@ func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
 	}
 
 	return out
+}
+
+// textOnlyResultKey is the context key backing withTextOnlyResultSignal /
+// markTextOnlyResult.
+type textOnlyResultKey struct{}
+
+// withTextOnlyResultSignal installs the opt-out flag registerTools reads once
+// a handler returns. It travels on ctx rather than becoming a second return
+// value every other handler would have to thread through unused.
+func withTextOnlyResultSignal(ctx context.Context) (context.Context, *bool) {
+	flag := new(bool)
+	return context.WithValue(ctx, textOnlyResultKey{}, flag), flag
+}
+
+// markTextOnlyResult tells registerTools this call's result must be returned
+// as text only, never as structuredContent, because — despite marshalling to
+// a JSON object — it does not conform to the tool's declared outputSchema.
+// The callers are find's and describe's raw modes: raw hands back whatever
+// shape the underlying resource has, which is neither the compact Row shape
+// find's schema describes nor the Digest describe's does, and
+// structuredContent must conform under WithOutputSchemaValidation. A no-op if
+// ctx was not set up by registerTools (e.g. a handler invoked directly, as
+// the tool tests do), since there is nothing to signal.
+func markTextOnlyResult(ctx context.Context) {
+	if flag, ok := ctx.Value(textOnlyResultKey{}).(*bool); ok {
+		*flag = true
+	}
 }
 
 // structuredToolResult wraps a handler's JSON text into a tool result that

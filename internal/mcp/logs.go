@@ -44,13 +44,21 @@ const (
 	logFetchTimeout = 5 * time.Second
 )
 
-// readServiceLogsImpl drives both the cetacean://services/{id}/logs read and
-// the get_logs tool so they produce identical output. Returns an empty
-// response (not an error) when no LogStreamer is wired — keeps unit tests
-// that don't need a Docker client working.
-func (s *Server) readServiceLogsImpl(
+// readLogsImpl drives the cetacean://services/{id}/logs read and the get_logs
+// tool so they produce identical output. Returns an empty response (not an
+// error) when no LogStreamer is wired — keeps unit tests that don't need a
+// Docker client working.
+//
+// kind selects the Docker endpoint: a service merges the output of its live
+// replicas, while a task reads one replica's own stream and is the only way to
+// reach a replica that has already exited. Swarm keeps a dead task's output
+// only until its record falls out of the history window
+// (TaskHistoryRetentionLimit, 5 by default), so on a service that restarts in
+// a loop that window is seconds deep.
+func (s *Server) readLogsImpl(
 	ctx context.Context,
-	serviceID string,
+	kind docker.LogKind,
+	targetID string,
 	opts logOptions,
 ) (LogResourceResponse, error) {
 	if s.logs == nil {
@@ -84,8 +92,8 @@ func (s *Server) readServiceLogsImpl(
 
 	reader, err := s.logs.Logs(
 		fetchCtx,
-		docker.ServiceLog,
-		serviceID,
+		kind,
+		targetID,
 		strconv.Itoa(tail),
 		false,
 		opts.since,

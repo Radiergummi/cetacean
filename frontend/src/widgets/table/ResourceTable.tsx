@@ -17,7 +17,7 @@ interface Props {
  * exercise (does search filter? does the header sort?) lives here.
  *
  * Filtering and sorting are client-side over the page the server returned.
- * A widget renders in an iframe against one `list_resources` call, so there is
+ * A widget renders in an iframe against one `find` call, so there is
  * no round trip to spend on a keystroke; `total` is what tells the reader when
  * they are looking at a subset.
  */
@@ -97,7 +97,7 @@ export function ResourceTable({ resourceType, records, total }: Props) {
         <DataTable
           columns={tableColumns}
           data={visible}
-          keyFn={(record) => String(record["ID"] ?? record["Name"] ?? JSON.stringify(record))}
+          keyFn={({ id }) => id}
         />
       )}
     </div>

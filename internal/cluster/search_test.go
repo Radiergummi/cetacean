@@ -2,6 +2,9 @@ package cluster_test
 
 import (
 	"context"
+	"encoding/json"
+	"maps"
+	"slices"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -160,5 +163,39 @@ func TestSearchLimit(t *testing.T) {
 	}
 	if len(services) > 2 {
 		t.Errorf("len(services) = %d, want at most 2 (limit enforced)", len(services))
+	}
+}
+
+// TestSearchResultsMarshalLikeTheRESTResponse — the same search is served over
+// HTTP and over MCP, and this package exists so the two cannot describe it
+// differently. Without JSON tags the struct marshalled its Go field names, so
+// an MCP client saw `Hits` where an HTTP client saw `results`.
+func TestSearchResultsMarshalLikeTheRESTResponse(t *testing.T) {
+	encoded, err := json.Marshal(cluster.SearchResults{
+		Hits: map[string][]cluster.SearchResult{
+			"services": {{Type: "services", ID: "a", Name: "web"}},
+		},
+		Counts: map[string]int{"services": 1},
+		Total:  1,
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	for _, key := range []string{"results", "counts", "total"} {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("missing key %q; got %v", key, slices.Sorted(maps.Keys(decoded)))
+		}
+	}
+
+	for _, key := range []string{"Hits", "Counts", "Total"} {
+		if _, ok := decoded[key]; ok {
+			t.Errorf("key %q leaks the Go field name", key)
+		}
 	}
 }

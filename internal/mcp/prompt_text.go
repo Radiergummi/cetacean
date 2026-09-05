@@ -35,9 +35,9 @@ const (
 
 Work through this order and stop as soon as you can name the cause.
 
-1. Resolve the name with the search tool to get the service ID, then read
+1. Resolve the name with the find tool to get the service ID, then read
    cetacean://services/<id> for its mode, desired replicas and update status.
-2. Call list_resources for tasks and find this service's tasks. Compare the
+2. Call find for tasks and locate this service's tasks. Compare the
    running count against desired. Note any task in failed, rejected or
    orphaned, and its Status.Err. The call returns at most 200 items but
    reports the true total, so page with offset if you need more.
@@ -59,21 +59,21 @@ apply a change as part of this investigation.`
 this one symptom; check them in this order, because the cheap checks rule out
 the expensive ones.
 
-1. Resolve the name with the search tool, then read cetacean://services/<id>
+1. Resolve the name with the find tool, then read cetacean://services/<id>
    and note Spec.TaskTemplate.Placement - constraints, preferences and
    MaxReplicas.
-2. Call list_resources for tasks, filter to this service, and read the pending
-   task's Status.Err and Status.Message. Swarm often states the reason outright
-   ("no suitable node"); if it does, stop there.
-3. Call list_resources for nodes. For each placement constraint, check which
-   nodes satisfy it - node.labels.* come from a node's Spec.Labels, node.role
-   from Spec.Role, and node.hostname and node.platform.* from its description;
-   engine.labels.* come from Description.Engine.Labels. A constraint naming a
-   label no node carries can never be satisfied.
-4. Check each node's Availability and Status.State. A drain node accepts
-   nothing and a pause node accepts no new tasks, and a node whose
-   Status.State is down cannot take work either - so a cluster can look
-   healthy and still have nowhere to put this service.
+2. Call describe for this service and read its reason and recentFailures.
+   Swarm often states the cause outright ("no suitable node"); if it does, stop
+   there.
+3. Call find for nodes to list them, then describe each candidate. For each
+   placement constraint, check which nodes satisfy it - node.labels.* come from
+   a node's labels, node.role from its role, and node.hostname and
+   node.platform.* from its hostname and platform; engine.labels.* are not
+   carried, so read cetacean://nodes/<id> with raw if a constraint names one.
+   A constraint naming a label no node carries can never be satisfied.
+4. Check each node's state. A node reporting drain accepts nothing, a pause
+   node accepts no new tasks, and a down node cannot take work either - so a
+   cluster can look healthy and still have nowhere to put this service.
 5. Compare the task template's resource reservations against what nodes have
    left. Reservations, not limits, decide placement. If Placement.MaxReplicas
    is set, check whether that per-node cap is already reached on every
@@ -86,7 +86,7 @@ pending.`
 	promptTextReviewCapacity = `Review whether this Swarm cluster has capacity headroom.
 
 1. Read cetacean://cluster for the node count and aggregate capacity.
-2. Call list_resources for nodes and note each node's role, availability and
+2. Call find for nodes and note each node's role, availability and
    resources. Manager nodes running workloads are a resilience risk even when
    they have room.
 3. Call get_metrics for each node's cpu and memory over the last day, or the
@@ -104,12 +104,12 @@ part of this review.`
 	promptTextRollBackService = `You have been asked to roll %s back to its previous version. Confirm the
 rollback is warranted before performing it.
 
-1. Resolve the name with the search tool, then read cetacean://services/<id>.
+1. Resolve the name with the find tool, then read cetacean://services/<id>.
    Check UpdateStatus.State: rollback_started means a rollback is already
    running, so report that and stop rather than starting a second one;
    rollback_paused means one stalled and needs a human, not another attempt;
    updating means the deployment may still converge on its own.
-2. Call list_resources for tasks and confirm this service actually has failing
+2. Call find for tasks and confirm this service actually has failing
    or unplaced tasks. If every task is running and healthy, stop and report
    that - there is nothing to roll back, and rolling back a healthy service is
    an outage you caused.
@@ -135,7 +135,7 @@ guess.
    Cetacean cannot measure it - sizing findings require Prometheus. Confirm
    with get_metrics: if it reports metrics unavailable, say so and stop
    rather than reporting the service as correctly sized.
-2. Resolve the name with the search tool, then read cetacean://services/<id>
+2. Resolve the name with the find tool, then read cetacean://services/<id>
    for its current Resources.Reservations and Resources.Limits.
 3. Call get_metrics for cpu and memory over the last week and check the finding
    against the series yourself. A service whose load is weekly or bursty can
@@ -151,21 +151,21 @@ disagrees with the recommendation, report the disagreement and change nothing.`
 
 	promptTextDrainNode = `Drain node %s for maintenance, without moving work somewhere it cannot run.
 
-1. Resolve the name with the search tool, then read cetacean://nodes/<id> for
+1. Resolve the name with the find tool, then read cetacean://nodes/<id> for
    its role, current availability and resources.
 2. If this node is a manager, count the cluster's managers first: call
-   list_resources for nodes and count those whose Spec.Role is manager.
+   find for nodes and count the rows whose detail reads manager.
    Draining a manager does not remove it from the raft quorum, but losing it
    while drained does - and a two-manager quorum has no tolerance at all.
    Report and stop if the cluster has fewer than three managers, unless you
    have been told otherwise.
-3. Call list_resources for tasks and list every task currently on this node,
+3. Call find for tasks and list every task currently on this node,
    with its service. This is the work that has to land elsewhere. The call
    returns at most 200 items but reports the true total, so page with offset
    until you have them all. If the list comes back empty, do not conclude the
    node is idle: confirm you can read tasks at all, and if you cannot, report
    that and leave the node active.
-4. Call list_resources for nodes and check that the remaining active nodes
+4. Call find for nodes and check that the remaining active nodes
    satisfy each of those services' placement constraints and have the
    reservations spare. A service constrained to this node alone has nowhere to
    go and will sit pending.

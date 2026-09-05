@@ -29,8 +29,8 @@ func TestToolInputValidationIsExecutionError(t *testing.T) {
 	}{
 		// scale_service rejects replicas < 0.
 		{"scale_service", `{"id":"svc1","replicas":-1}`},
-		// search rejects an empty query.
-		{"search", `{"query":""}`},
+		// find rejects an empty query when type is omitted.
+		{"find", `{"query":""}`},
 	}
 
 	for _, call := range calls {
