@@ -49,17 +49,15 @@ type Row struct {
 	Running int `json:"running,omitempty"`
 }
 
-// RowsForServices builds the list view of services. Tasks are needed because a
-// service's state and running count are derived from them, not from its spec.
-func RowsForServices(services []swarm.Service, tasks []swarm.Task) []Row {
-	running := make(map[string]int, len(services))
-
-	for _, task := range tasks {
-		if task.Status.State == swarm.TaskStateRunning {
-			running[task.ServiceID]++
-		}
-	}
-
+// RowsForServices builds the list view of services. The running counts are
+// needed because a service's state and running count are derived from its
+// tasks, not from its spec.
+//
+// It takes the counts rather than the tasks themselves so the caller can
+// aggregate them wherever they already live — cache.RunningTaskCounts does it
+// under one read lock — instead of cloning the whole task table to reduce it
+// to one integer per service here.
+func RowsForServices(services []swarm.Service, running map[string]int) []Row {
 	rows := make([]Row, 0, len(services))
 
 	for _, svc := range services {
@@ -121,7 +119,17 @@ func RowsForNodes(nodes []swarm.Node) []Row {
 // RowsForTasks builds the list view of tasks. Services and nodes are needed to
 // name the task's parents: a task's own record holds only their IDs, and a
 // caller reading a task list is asking which service is broken and where.
-func RowsForTasks(tasks []swarm.Task, services []swarm.Service, nodes []swarm.Node) []Row {
+//
+// Both parent slices must already be filtered to what the caller may read, the
+// way TaskDigest's are: a parent absent from them falls back to the ID the task
+// record carries anyway, so a row never names a resource from behind the
+// caller's grants. Passing the unfiltered cache listings made find disclose a
+// service name that describe withheld for the very same task.
+//
+// The tasks arrive enriched because that is the shape the resource listing
+// already produces; taking it directly saves copying the whole task table back
+// out to name it.
+func RowsForTasks(tasks []EnrichedTask, services []swarm.Service, nodes []swarm.Node) []Row {
 	serviceByID := make(map[string]*swarm.Service, len(services))
 	for i := range services {
 		serviceByID[services[i].ID] = &services[i]
@@ -135,12 +143,20 @@ func RowsForTasks(tasks []swarm.Task, services []swarm.Service, nodes []swarm.No
 	rows := make([]Row, 0, len(tasks))
 
 	for _, task := range tasks {
+		// The hostname when it is readable, the node ID otherwise — the same
+		// fallback TaskDigest makes, and no disclosure either way, since the
+		// task record the caller can already read carries the ID itself.
+		where, ok := nodeNames[task.NodeID]
+		if !ok {
+			where = task.NodeID
+		}
+
 		rows = append(rows, Row{
 			ID:     task.ID,
-			Name:   TaskName(task, serviceByID[task.ServiceID]),
+			Name:   TaskName(task.Task, serviceByID[task.ServiceID]),
 			Type:   "task",
 			State:  string(task.Status.State),
-			Detail: nodeNames[task.NodeID],
+			Detail: where,
 		})
 	}
 

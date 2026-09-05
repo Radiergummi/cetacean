@@ -85,7 +85,7 @@ func (s *Server) completeResourceNames(
 		return nil, err
 	}
 
-	rows, err := rowsFor(s.cache, resourceType, listed)
+	rows, err := s.rowsFor(ctx, resourceType, listed)
 	if err != nil {
 		return nil, err
 	}

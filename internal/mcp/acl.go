@@ -127,12 +127,13 @@ func (s *Server) filterServices(ctx context.Context, items []swarm.Service) []sw
 
 // filterRawTasks keeps the tasks the caller may read, without enriching them.
 //
-// The ACL key is "task:<id>", a field swarm.Task already carries, so the
-// enriched shape filterTasks takes is not needed to make the decision — and
-// the digest builders resolve parent names from the slices they are given
-// rather than from enriched fields. Enriching first would resolve a service
-// name and a node hostname per task only to discard them, on a path
-// (resources/read) that a subscription re-drives after every cache event.
+// The ACL key is "task:<id>", a field swarm.Task already carries, so nothing
+// has to be enriched to make the decision — and the digest and row builders
+// resolve parent names from the slices they are given rather than from
+// enriched fields. Enriching first would resolve a service name and a node
+// hostname per task only to discard them, on a path (resources/read) that a
+// subscription re-drives after every cache event, and would resolve them from
+// behind the caller's grants besides.
 func (s *Server) filterRawTasks(ctx context.Context, items []swarm.Task) []swarm.Task {
 	return acl.Filter(
 		s.acl,
@@ -140,21 +141,6 @@ func (s *Server) filterRawTasks(ctx context.Context, items []swarm.Task) []swarm
 		"read",
 		items,
 		func(t swarm.Task) string {
-			return "task:" + t.ID
-		},
-	)
-}
-
-func (s *Server) filterTasks(
-	ctx context.Context,
-	items []cluster.EnrichedTask,
-) []cluster.EnrichedTask {
-	return acl.Filter(
-		s.acl,
-		auth.IdentityFromContext(ctx),
-		"read",
-		items,
-		func(t cluster.EnrichedTask) string {
 			return "task:" + t.ID
 		},
 	)
@@ -282,4 +268,44 @@ func (s *Server) filterHistory(
 		}
 	}
 	return filtered
+}
+
+// readableEnrichedTasks filters tasks to the ones the caller may read, then
+// names their parents from the services and nodes the caller may read too.
+//
+// The enrichment has to be ACL-aware because ServiceName and NodeHostname are
+// the enriched task's whole point, and cluster.EnrichTasks resolves them
+// straight out of the cache: a caller holding a bare `task:*` grant was told
+// the name of every service and node in the cluster, which is exactly what
+// TaskDigest goes out of its way not to do. Filtering the tasks first also
+// keeps the work proportional to what is actually returned.
+func (s *Server) readableEnrichedTasks(
+	ctx context.Context,
+	tasks []swarm.Task,
+) []cluster.EnrichedTask {
+	return cluster.EnrichTasksWithin(
+		s.filterRawTasks(ctx, tasks),
+		s.filterServices(ctx, s.cache.ListServices()),
+		s.filterNodes(ctx, s.cache.ListNodes()),
+	)
+}
+
+// readableEnrichedTask is readableEnrichedTasks for a single, already
+// permitted task: resolving its two parents by ID beats listing and filtering
+// both types to name them.
+func (s *Server) readableEnrichedTask(
+	ctx context.Context,
+	task swarm.Task,
+) cluster.EnrichedTask {
+	enriched := cluster.EnrichedTask{Task: task}
+
+	if svc := s.readableService(ctx, task.ServiceID); svc != nil {
+		enriched.ServiceName = svc.Spec.Name
+	}
+
+	if node := s.readableNode(ctx, task.NodeID); node != nil {
+		enriched.NodeHostname = node.Description.Hostname
+	}
+
+	return enriched
 }

@@ -22,14 +22,7 @@ func TestRowsForServicesCarryDerivedState(t *testing.T) {
 	svc := replicated("api", 3)
 	svc.Spec.Labels = map[string]string{"com.docker.stack.namespace": "demo"}
 
-	tasks := []swarm.Task{
-		{ID: "t1", ServiceID: "svc-api", DesiredState: swarm.TaskStateRunning,
-			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
-		{ID: "t2", ServiceID: "svc-api", DesiredState: swarm.TaskStateRunning,
-			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
-	}
-
-	rows := RowsForServices([]swarm.Service{svc}, tasks)
+	rows := RowsForServices([]swarm.Service{svc}, map[string]int{"svc-api": 2})
 
 	if len(rows) != 1 {
 		t.Fatalf("rows = %d, want 1", len(rows))
@@ -76,8 +69,8 @@ func TestBuildersProduceIdentifiableRows(t *testing.T) {
 		}}), "node", nil},
 
 		{"tasks", RowsForTasks(
-			[]swarm.Task{{ID: "t1", ServiceID: "svc-api", NodeID: "n1",
-				Status: swarm.TaskStatus{State: swarm.TaskStateRunning}}},
+			[]EnrichedTask{{Task: swarm.Task{ID: "t1", ServiceID: "svc-api", NodeID: "n1",
+				Status: swarm.TaskStatus{State: swarm.TaskStateRunning}}}},
 			[]swarm.Service{replicated("api", 1)},
 			[]swarm.Node{{ID: "n1", Description: swarm.NodeDescription{Hostname: "worker-a"}}},
 		), "task", nil},

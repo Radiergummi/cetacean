@@ -26,10 +26,18 @@ func (s *Server) resolveTask(identifier string) (swarm.Task, bool, error) {
 		return task, true, nil
 	}
 
-	serviceName, _, found := strings.Cut(identifier, ".")
-	if !found {
+	// Cut at the *last* separator, not the first: Docker permits a dot in a
+	// service name, while neither half of the suffix cluster.TaskName appends
+	// can hold one — a slot is a number and a node ID is hex. Splitting at the
+	// first dot resolved "api.example.com.2" against a service called "api"
+	// and found nothing, so a name a completion had just offered read back as
+	// not found.
+	dot := strings.LastIndex(identifier, ".")
+	if dot < 0 {
 		return swarm.Task{}, false, nil
 	}
+
+	serviceName := identifier[:dot]
 
 	service, ok, err := s.cache.ResolveService(serviceName)
 	if err != nil || !ok {

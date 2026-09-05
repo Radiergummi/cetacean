@@ -8,6 +8,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -238,5 +240,53 @@ func TestReadRecommendationsWithoutEngineReturnsEmptyArray(t *testing.T) {
 	}
 	if strings.TrimSpace(body) != "[]" {
 		t.Errorf("expected empty array, got %q", body)
+	}
+}
+
+// The enriched task shape is what cetacean://tasks returns and what find's
+// raw mode hands back, and its whole point is naming the task's parents. That
+// resolution used to read the unfiltered cache, so a bare `task:*` grant was
+// told the name of every service and node the tasks touched — a bypass of the
+// rule TaskDigest and RowsForTasks both follow.
+func TestEnrichedTaskNamesOnlyReadableParents(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc-secret",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "classified-payroll"}},
+	})
+	c.SetNode(swarm.Node{
+		ID:          "node-1",
+		Description: swarm.NodeDescription{Hostname: "vault-host"},
+	})
+	c.SetTask(swarm.Task{ID: "task-1", ServiceID: "svc-secret", NodeID: "node-1", Slot: 1})
+
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"task:*"},
+		Audience:    []string{"user:agent@example.com"},
+		Permissions: []string{"read"},
+	}}})
+
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = evaluator })
+	ctx := auth.ContextWithIdentity(
+		context.Background(),
+		&auth.Identity{Subject: "agent@example.com"},
+	)
+
+	for _, uri := range []string{"cetacean://tasks", "cetacean://tasks/task-1"} {
+		body, err := srv.readResource(ctx, uri)
+		if err != nil {
+			t.Fatalf("readResource(%q): %v", uri, err)
+		}
+
+		for _, name := range []string{"classified-payroll", "vault-host"} {
+			if strings.Contains(body, name) {
+				t.Errorf("%s disclosed %q, which the caller may not read: %s", uri, name, body)
+			}
+		}
+
+		if !strings.Contains(body, "task-1") {
+			t.Errorf("%s dropped the task itself: %s", uri, body)
+		}
 	}
 }

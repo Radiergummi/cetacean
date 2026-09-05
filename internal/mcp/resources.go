@@ -254,7 +254,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 
 	case "tasks":
 		if resourceID == "" {
-			return s.filterTasks(ctx, cluster.EnrichTasks(s.cache, s.cache.ListTasks())), nil
+			return s.readableEnrichedTasks(ctx, s.cache.ListTasks()), nil
 		}
 		task, err := resolved(s.resolveTask(resourceID))(uri)
 		if err != nil {
@@ -263,7 +263,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err := s.checkRead(ctx, "task", task.ID); err != nil {
 			return nil, err
 		}
-		return cluster.EnrichTask(s.cache, task), nil
+		return s.readableEnrichedTask(ctx, task), nil
 
 	case "stacks":
 		if resourceID == "" {

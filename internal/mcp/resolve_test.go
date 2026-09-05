@@ -149,3 +149,27 @@ func TestLookupResolvesATaskByItsRenderedName(t *testing.T) {
 		t.Errorf("got %s, want it to name task-xyz", body)
 	}
 }
+
+// Docker permits a dot in a service name, and the suffix TaskName appends
+// never holds one — so the split has to come off the end. Splitting at the
+// first dot looked for a service called "api" and found nothing, which made a
+// task name completion had just offered fail to read back.
+func TestLookupResolvesATaskWhoseServiceNameHasDots(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc-api",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "api.example.com"}},
+	})
+	c.SetTask(swarm.Task{ID: "task-xyz", ServiceID: "svc-api", Slot: 2})
+
+	srv := newResourceTestServer(t, c)
+
+	body, err := srv.readResource(context.Background(), "cetacean://tasks/api.example.com.2")
+	if err != nil {
+		t.Fatalf("readResource: %v", err)
+	}
+
+	if !strings.Contains(body, "task-xyz") {
+		t.Errorf("got %s, want it to name task-xyz", body)
+	}
+}

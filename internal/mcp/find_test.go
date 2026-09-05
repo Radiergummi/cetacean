@@ -7,7 +7,10 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
+	mcplib "github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -742,5 +745,57 @@ func TestToolFindRejectsEmptyQueryWithoutType(t *testing.T) {
 		if err == nil {
 			t.Errorf("query %q: expected error, got nil", q)
 		}
+	}
+}
+
+// find and describe must disclose the same thing about the same task. A task
+// row names its parent service and the node it runs on, and describe routes
+// both through the caller's read grants (readableService/readableNode) so a
+// digest cannot become a side channel for a resource the caller may not list.
+// find passed the unfiltered cache listings into RowsForTasks, so it named a
+// service describe withheld — one tool answering around the other's grants.
+func TestFindNamesATasksParentsOnlyWhenDescribeWould(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc-secret",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "classified-payroll"}},
+	})
+	c.SetNode(swarm.Node{
+		ID:          "node-1",
+		Description: swarm.NodeDescription{Hostname: "vault-host"},
+	})
+	c.SetTask(swarm.Task{ID: "task-1", ServiceID: "svc-secret", NodeID: "node-1", Slot: 1})
+
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"task:*"},
+		Audience:    []string{"user:agent@example.com"},
+		Permissions: []string{"read"},
+	}}})
+
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = evaluator })
+	ctx := auth.ContextWithIdentity(
+		context.Background(),
+		&auth.Identity{Subject: "agent@example.com"},
+	)
+
+	found, err := srv.toolFind(ctx, mcplib.CallToolRequest{
+		Params: mcplib.CallToolParams{Arguments: map[string]any{"type": "tasks"}},
+	})
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+
+	for _, name := range []string{"classified-payroll", "vault-host"} {
+		if strings.Contains(found, name) {
+			t.Errorf("find disclosed %q, which the caller has no grant to read: %s", name, found)
+		}
+	}
+
+	// The IDs stay: the task record the caller may read carries them itself,
+	// so withholding them would cost the caller a reference without hiding
+	// anything.
+	if !strings.Contains(found, "node-1") {
+		t.Errorf("find dropped the node ID the task record already carries: %s", found)
 	}
 }

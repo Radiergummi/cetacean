@@ -108,7 +108,7 @@ func TestRowsForTasksAgreesWithTaskDigest(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			row := RowsForTasks(
-				[]swarm.Task{tc.task},
+				[]EnrichedTask{{Task: tc.task}},
 				[]swarm.Service{tc.service},
 				nil,
 			)[0]
@@ -130,9 +130,9 @@ func TestRowsForTasksAgreesWithTaskDigest(t *testing.T) {
 func TestRowsForTasksDistinguishesReplicas(t *testing.T) {
 	svc := replicated("api", 2)
 	rows := RowsForTasks(
-		[]swarm.Task{
-			{ID: "t1", ServiceID: "svc-api", Slot: 1},
-			{ID: "t2", ServiceID: "svc-api", Slot: 2},
+		[]EnrichedTask{
+			{Task: swarm.Task{ID: "t1", ServiceID: "svc-api", Slot: 1}},
+			{Task: swarm.Task{ID: "t2", ServiceID: "svc-api", Slot: 2}},
 		},
 		[]swarm.Service{svc},
 		nil,

@@ -107,7 +107,7 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		return "", fmt.Errorf("resource type %q does not enumerate", resourceType)
 	}
 
-	rows, err := rowsFor(s.cache, resourceType, listed)
+	rows, err := s.rowsFor(ctx, resourceType, listed)
 	if err != nil {
 		return "", err
 	}
@@ -184,7 +184,16 @@ func (s *Server) findAcrossTypes(
 
 	results := s.filterSearchResults(ctx, cluster.Search(ctx, s.cache, query, limit))
 
-	rows := make([]cluster.Row, 0, results.Total)
+	// Sized by the hits actually held, not by results.Total: Total is the
+	// pre-cap count across the whole cluster, so on a broad query it would
+	// reserve thousands of rows to hold the handful `limit` let through.
+	capacity := 0
+	for _, hits := range results.Hits {
+		capacity += len(hits)
+	}
+
+	rows := make([]cluster.Row, 0, capacity)
+
 	for pluralType, hits := range results.Hits {
 		for _, hit := range hits {
 			rows = append(rows, cluster.Row{
@@ -221,7 +230,18 @@ func sortFindRows(rows []cluster.Row) {
 // knows that type. The type assertions mirror exactly what each
 // lookupResource branch returns, so a mismatch here is a bug in this
 // function, not a caller error — hence the error message names both sides.
-func rowsFor(c *cache.Cache, resourceType string, listed any) ([]cluster.Row, error) {
+//
+// It takes the context because a row can name a resource other than the one it
+// describes — a task row names its parent service and the node it runs on — and
+// those names have to pass the caller's read grants first, exactly as
+// digestOf's do.
+func (s *Server) rowsFor(
+	ctx context.Context,
+	resourceType string,
+	listed any,
+) ([]cluster.Row, error) {
+	c := s.cache
+
 	switch resourceType {
 	case "services":
 		items, ok := listed.([]swarm.Service)
@@ -229,7 +249,7 @@ func rowsFor(c *cache.Cache, resourceType string, listed any) ([]cluster.Row, er
 			return nil, fmt.Errorf("find: services returned %T, not []swarm.Service", listed)
 		}
 
-		return cluster.RowsForServices(items, c.ListTasks()), nil
+		return cluster.RowsForServices(items, c.RunningTaskCounts()), nil
 
 	case "nodes":
 		items, ok := listed.([]swarm.Node)
@@ -245,12 +265,14 @@ func rowsFor(c *cache.Cache, resourceType string, listed any) ([]cluster.Row, er
 			return nil, fmt.Errorf("find: tasks returned %T, not []cluster.EnrichedTask", listed)
 		}
 
-		tasks := make([]swarm.Task, len(items))
-		for i, t := range items {
-			tasks[i] = t.Task
-		}
-
-		return cluster.RowsForTasks(tasks, c.ListServices(), c.ListNodes()), nil
+		// Both parent listings are ACL-filtered before the builder sees them:
+		// a task row that named a service or node the caller may not read
+		// would make find a way around the grants describe honours.
+		return cluster.RowsForTasks(
+			items,
+			s.filterServices(ctx, c.ListServices()),
+			s.filterNodes(ctx, c.ListNodes()),
+		), nil
 
 	case "stacks":
 		items, ok := listed.([]cache.Stack)
