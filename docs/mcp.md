@@ -489,13 +489,23 @@ Prompts are also filtered by ACL, all-or-nothing: a prompt is offered only when
 **every** tool it walks is available to you *and* you hold read on every
 resource type in its Reads column. A sequence whose fourth step you cannot
 perform would dead-end partway, and for a remediation prompt possibly after a
-write. The read-type check is the second half because `find`, `get_metrics`
-and `get_recommendations` are deliberately ungated — each ACL-filters its own
-results, so each stays visible to every caller — and a sequence built only
-from those would otherwise be offered to someone who would get an empty list
-from every step. A caller whose grants match nothing is offered no prompts at
+write. The read-type check is the second half because the cross-type reads —
+`find`, `describe`, `get_events`, `get_cluster_status`, `get_topology`,
+`get_metrics` and `get_recommendations` — are deliberately ungated, each
+ACL-filtering its own results so each stays visible to every caller. A sequence
+built only from those (`review_capacity` is one) would otherwise be offered to
+someone who would get an empty list from every step. A caller whose grants match nothing is offered no prompts at
 all. A prompt you cannot see reports `not found` from `prompts/get`, the same
 as a name that does not exist.
+
+Where a composite read exists, the sequence calls it rather than describing the
+join: `drain_node` reaches for `get_topology`'s drain-impact view instead of
+paging tasks and comparing constraints by eye, `review_capacity` opens on
+`get_cluster_status` and ranks nodes with one `get_metrics` call rather than one
+per node, the two prompts that need a change history call `get_events` narrowed
+to their service, and every step that waits calls `watch`. That is the point of
+those verbs: the knowledge stays in the sequence, but the work does not stay in
+the model's context.
 
 Prompts read no cluster data. They expand to a single message with the resource
 name you supplied interpolated, and the name is not checked for existence — the

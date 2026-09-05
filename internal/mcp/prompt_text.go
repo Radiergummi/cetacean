@@ -46,9 +46,10 @@ Work through this order and stop as soon as you can name the cause.
 4. If the tasks are running but the service still misbehaves, call get_metrics
    for cpu and memory over the last hour. A container at its memory limit is
    killed and restarted without ever logging why.
-5. Read cetacean://history for changes to this service. A fault that started
-   minutes after an image update is usually the update. The history read
-   returns the most recent entries across all resources, so if you do not see
+5. Call get_events with this service's id as resource to see what changed and
+   when. A fault that started minutes after an image update is usually the
+   update. Its entries carry the same timestamps get_logs lines do, so a change
+   and the output around it read as one timeline. If it returns nothing for
    this service, say so rather than concluding nothing changed.
 6. Call get_recommendations and report any finding naming this service.
 
@@ -85,14 +86,18 @@ pending.`
 
 	promptTextReviewCapacity = `Review whether this Swarm cluster has capacity headroom.
 
-1. Read cetacean://cluster for the node count and aggregate capacity.
+1. Call get_cluster_status. It reports the node count, total and reserved CPU
+   and memory, and names any node or service that is degraded - being short of
+   capacity and being unhealthy are different problems, and one call separates
+   them.
 2. Call find for nodes and note each node's role, availability and
    resources. Manager nodes running workloads are a resilience risk even when
    they have room.
-3. Call get_metrics for each node's cpu and memory over the last day, or the
-   last week if load is weekly. Compare actual use against reservations rather
-   than limits: Swarm schedules on reservations, so a cluster can refuse to
-   place a task while sitting mostly idle.
+3. Call get_metrics with target cluster and by node to rank the busiest hosts,
+   once for cpu and once for memory, over the last day - or the last week if
+   load is weekly. Compare actual use against reservations rather than limits:
+   Swarm schedules on reservations, so a cluster can refuse to place a task
+   while sitting mostly idle.
 4. Call get_recommendations and report every sizing and cluster finding.
 5. State the headroom as "the largest service that could still be placed", not
    as a percentage - a percentage hides fragmentation across nodes.
@@ -113,15 +118,18 @@ rollback is warranted before performing it.
    or unplaced tasks. If every task is running and healthy, stop and report
    that - there is nothing to roll back, and rolling back a healthy service is
    an outage you caused.
-3. Read cetacean://history to confirm what changed and when. A rollback undoes
-   the last spec update, which may not be the change that broke it. The
-   history read returns the most recent entries across all resources, so if
-   you do not see this service, say so rather than concluding nothing changed.
+3. Call get_events with this service's id as resource to confirm what changed
+   and when. A rollback undoes the last spec update, which may not be the
+   change that broke it. If it returns nothing for this service, say so rather
+   than concluding nothing changed.
 4. Call rollback_service as a task (params.task, with a ttl), so the call
    reports when the previous version's replicas are actually running rather
    than when Docker accepted the request.
 5. Poll tasks/get until the task settles. On failure read statusMessage: a
-   rollback can fail for the same reason the update did.
+   rollback can fail for the same reason the update did. If your client cannot
+   make a task-augmented call, call rollback_service plainly and then the watch
+   tool, which returns when the replicas are running or reports how far the
+   rollout got.
 
 Report the version rolled back to and the running replica count afterwards. If
 step 2 showed a healthy service, report that and make no change.`
@@ -143,8 +151,10 @@ guess.
 4. Apply the change with update_service, section resources. It sets the whole resource
    block in one call, so give it reservations and limits together, and never
    set a reservation above a limit.
-5. Confirm the tasks rescheduled and are running. Changing reservations
-   replaces every task, so this is a rolling restart, not a metadata edit.
+5. Call the watch tool and confirm the tasks rescheduled and are running.
+   Changing reservations replaces every task, so this is a rolling restart
+   rather than a metadata edit, and a reservation that fits no node leaves the
+   service pending instead of running.
 
 Report the old and new values and the evidence for them. If the metric window
 disagrees with the recommendation, report the disagreement and change nothing.`
@@ -159,20 +169,22 @@ disagrees with the recommendation, report the disagreement and change nothing.`
    while drained does - and a two-manager quorum has no tolerance at all.
    Report and stop if the cluster has fewer than three managers, unless you
    have been told otherwise.
-3. Call find for tasks and list every task currently on this node,
-   with its service. This is the work that has to land elsewhere. The call
-   returns at most 200 items but reports the true total, so page with offset
-   until you have them all. If the list comes back empty, do not conclude the
-   node is idle: confirm you can read tasks at all, and if you cannot, report
-   that and leave the node active.
-4. Call find for nodes and check that the remaining active nodes
-   satisfy each of those services' placement constraints and have the
-   reservations spare. A service constrained to this node alone has nowhere to
-   go and will sit pending.
-5. Only then call update_node, section availability, with drain.
-6. Poll the affected services' tasks until they are running elsewhere. Report
-   any that stayed pending, with the constraint that blocked them.
+3. Call get_topology with view drain-impact and this node. It joins the
+   services running here to the nodes that could take them, evaluating each
+   placement constraint the way Swarm enforces it. A service with no edges is
+   stranded and its detail names the constraint that blocked it; a global
+   service is reported as global, because draining stops its task rather than
+   moving it. If anything is stranded, report it and stop - that work has
+   nowhere to go. If the graph carries a note saying nodes were hidden from the
+   assessment, say so: a stranded verdict is then about what you can see rather
+   than about the cluster. If no service comes back at all, do not conclude the
+   node is idle - confirm you can read tasks, and if you cannot, report that
+   and leave the node active.
+4. Only then call update_node, section availability, with drain.
+5. Call the watch tool for each affected service until its replicas are running
+   again. Report any that stayed pending, with the constraint that blocked
+   them.
 
 Report what moved, where it moved to, and anything that could not move. If step
-2 or 4 found a blocker, report it and leave the node active.`
+2 or 3 found a blocker, report it and leave the node active.`
 )
