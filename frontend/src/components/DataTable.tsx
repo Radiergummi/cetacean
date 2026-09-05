@@ -209,7 +209,7 @@ export default function DataTable<T>({
     observer.observe(sentinelRef.current);
 
     return () => observer.disconnect();
-  }, [hasMore]);
+  }, [hasMore, onLoadMoreRef]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent) => {

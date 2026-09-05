@@ -31,7 +31,7 @@ export function useDebouncedInvalidation(
           void queryClient.invalidateQueries({ queryKey: [...key] });
         }
       }, delay);
-    }, [queryClient, delay]),
+    }, [queryClient, delay, queryKeysRef]),
   );
 
   useEffect(() => {

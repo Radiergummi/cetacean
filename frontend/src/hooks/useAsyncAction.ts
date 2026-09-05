@@ -22,28 +22,31 @@ export function useAsyncAction(options?: AsyncActionOptions) {
 
   const toastRef = useLatestRef(options?.toast);
 
-  const execute = useCallback(async (action: () => Promise<unknown>, errorMessage: string) => {
-    setLoading(true);
-    setError(null);
-    setCause(null);
+  const execute = useCallback(
+    async (action: () => Promise<unknown>, errorMessage: string) => {
+      setLoading(true);
+      setError(null);
+      setCause(null);
 
-    try {
-      await action();
-    } catch (caught) {
-      if (mountedRef.current) {
-        setError(getErrorMessage(caught, errorMessage));
-        setCause(caught);
+      try {
+        await action();
+      } catch (caught) {
+        if (mountedRef.current) {
+          setError(getErrorMessage(caught, errorMessage));
+          setCause(caught);
 
-        if (toastRef.current) {
-          showErrorToast(caught, errorMessage);
+          if (toastRef.current) {
+            showErrorToast(caught, errorMessage);
+          }
+        }
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
         }
       }
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
-    }
-  }, []);
+    },
+    [toastRef],
+  );
 
   return { loading, error, cause, execute };
 }
