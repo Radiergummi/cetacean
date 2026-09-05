@@ -353,15 +353,25 @@ the engine holds.
 **Tier 1 — operational**: `scale_service`, `update_service_image`, `rollback_service`, `restart_service`,
 `remove_task`.
 
-**Tier 2 — configuration**: `update_service_env`, `update_service_labels`, `update_node_labels`,
-`update_service_resources`, `update_service_placement`, `update_service_ports`, `update_service_update_policy`,
-`update_service_rollback_policy`, `update_service_log_driver`.
+**Tier 2 — configuration**: `update_service`, `update_node_labels`.
 
-**Tier 3 — impactful / destructive**: `update_node_availability`, `update_node_role`, `remove_service`,
-`remove_config`, `remove_secret`, `remove_network`, `remove_volume`.
+**Tier 3 — impactful / destructive**: `update_node`, `remove_service`, `remove_config`, `remove_secret`,
+`remove_network`, `remove_volume`.
 
-Env-var and label tools follow JSON Merge Patch semantics: a `null` value deletes a key, and the patch is applied
-against a fresh inspect of the live spec to avoid clobbering concurrent changes. Mutating tools return `409` on a
+`update_service` names the part of the spec it changes in a `section` argument — `env`, `labels`, `resources`,
+`placement`, `ports`, `update-policy`, `rollback-policy` or `log-driver` — and takes that section's new
+value under `value`. It replaced eight tools that differed only in which field they wrote, and which between
+them cost about two thousand tokens of every `tools/list`. The trade is that `value` is whatever the section
+takes, so the input schema cannot describe it and the section's decoder validates it instead, naming the section
+and the shape it wanted when a payload does not fit.
+
+`update_node` works the same way over `availability` and `role`. Node **labels** stay a tool of their own,
+`update_node_labels`, because they sit at a lower operations tier: folding them in would have meant a deployment
+that lets an agent relabel a node also lets it demote a manager.
+
+The `env` and `labels` sections, and `update_node_labels`, follow JSON Merge Patch semantics: a `null` value
+deletes a key, and the patch is applied against a fresh inspect of the live spec to avoid clobbering concurrent
+changes. Every other section is a wholesale replacement — a field you omit is cleared. Mutating tools return `409` on a
 Docker version conflict.
 
 ## Prompts
@@ -475,7 +485,7 @@ service:
 
 `details` is the same projection `describe` builds for that resource, narrowed to the edited section, so
 confirming an edit and describing the resource afterwards cannot disagree. The node tools
-(`update_node_labels`, `update_node_availability`, `update_node_role`) answer with `id`, `hostname`, `version`,
+(`update_node_labels`, `update_node`) answer with `id`, `hostname`, `version`,
 `section` and `details`, plus `role` and `availability` on every one of them — draining a manager is a different
 act from draining a worker, and "did the drain take" is not answerable without the role it took effect on.
 

@@ -83,18 +83,19 @@ func TestSpecEditingToolsNeverReturnSecrets(t *testing.T) {
 	handler := newToolTestServer(t, c, writeClient, config.OpsImpactful).Handler()
 
 	calls := map[string]string{
-		"update_service_resources": `{"id":"web","resources":{"Limits":{"NanoCPUs":1000000000}}}`,
-		"update_service_placement": `{"id":"web","placement":{"Constraints":["node.role==worker"]}}`,
-		"update_service_ports":     `{"id":"web","ports":[{"TargetPort":80}]}`,
-		"update_service_labels":    `{"id":"web","labels":{"tier":"edge"}}`,
-		"update_service_env":       `{"id":"web","env":{"DATABASE_PASSWORD":"hunter2"}}`,
-		"update_service_log_driver": `{"id":"web",` +
-			`"driver":{"Name":"splunk","Options":{"splunk-token":"tok-secret"}}}`,
+		sectionResources: `{"Limits":{"NanoCPUs":1000000000}}`,
+		sectionPlacement: `{"Constraints":["node.role==worker"]}`,
+		sectionPorts:     `[{"TargetPort":80}]`,
+		sectionLabels:    `{"tier":"edge"}`,
+		sectionEnv:       `{"DATABASE_PASSWORD":"hunter2"}`,
+		sectionLogDriver: `{"Name":"splunk","Options":{"splunk-token":"tok-secret"}}`,
 	}
 
-	for tool, args := range calls {
-		t.Run(tool, func(t *testing.T) {
-			result := callTool(t, handler, `{"name":"`+tool+`","arguments":`+args+`}`)
+	for section, value := range calls {
+		t.Run(section, func(t *testing.T) {
+			result := callTool(t, handler,
+				`{"name":"update_service","arguments":{"id":"web","section":"`+
+					section+`","value":`+value+`}}`)
 
 			body, err := json.Marshal(result)
 			if err != nil {
@@ -152,8 +153,8 @@ func TestSpecEditingToolsReportTheEditedSection(t *testing.T) {
 	handler := newToolTestServer(t, c, writeClient, config.OpsImpactful).Handler()
 
 	resources := callTool(t, handler,
-		`{"name":"update_service_resources","arguments":`+
-			`{"id":"web","resources":{"Limits":{"NanoCPUs":2000000000}}}}`)
+		`{"name":"update_service","arguments":{"id":"web","section":"resources",`+
+			`"value":{"Limits":{"NanoCPUs":2000000000}}}}`)
 
 	var got serviceUpdateResult
 	if err := json.Unmarshal(resources.StructuredContent, &got); err != nil {
@@ -175,7 +176,7 @@ func TestSpecEditingToolsReportTheEditedSection(t *testing.T) {
 	}
 
 	env := callTool(t, handler,
-		`{"name":"update_service_env","arguments":{"id":"web","env":{"A":"1"}}}`)
+		`{"name":"update_service","arguments":{"id":"web","section":"env","value":{"A":"1"}}}`)
 
 	var envResult serviceUpdateResult
 	if err := json.Unmarshal(env.StructuredContent, &envResult); err != nil {
@@ -216,8 +217,11 @@ func TestNodeUpdateReportsRoleAndAvailability(t *testing.T) {
 
 	handler := newToolTestServer(t, c, writeClient, config.OpsImpactful).Handler()
 
-	result := callTool(t, handler,
-		`{"name":"update_node_availability","arguments":{"id":"node1","availability":"drain"}}`)
+	result := callTool(
+		t,
+		handler,
+		`{"name":"update_node","arguments":{"id":"node1","section":"availability","value":"drain"}}`,
+	)
 
 	var got nodeUpdateResult
 	if err := json.Unmarshal(result.StructuredContent, &got); err != nil {

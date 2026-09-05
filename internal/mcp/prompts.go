@@ -144,7 +144,7 @@ func promptCatalog() []promptDef {
 				"find",
 				"get_metrics",
 				"get_recommendations",
-				"update_service_resources",
+				"update_service",
 			},
 			reads: []string{"service"},
 			handler: interpolatingHandler(
@@ -166,7 +166,7 @@ func promptCatalog() []promptDef {
 					mcplib.RequiredArgument(),
 				),
 			),
-			drives: []string{"find", "update_node_availability"},
+			drives: []string{"find", "update_node"},
 			// Steps 3 and 4 read the services behind the node's tasks to check
 			// their placement constraints against the remaining nodes.
 			reads: []string{"node", "service"},

@@ -193,6 +193,14 @@ func TestEveryToolResultConformsToItsOutputSchema(t *testing.T) {
 		updateNodeRoleFn: func(context.Context, string, swarm.NodeRole) (swarm.Node, error) {
 			return node, nil
 		},
+		updateServiceResFn: func(
+			context.Context, string, *swarm.ResourceRequirements,
+		) (swarm.Service, error) {
+			return svc, nil
+		},
+		updateServicePortsFn: func(context.Context, string, []swarm.PortConfig) (swarm.Service, error) {
+			return svc, nil
+		},
 	}
 
 	handler := newToolTestServer(t, c, writeClient, config.OpsImpactful).Handler()
@@ -242,15 +250,19 @@ func TestEveryToolResultConformsToItsOutputSchema(t *testing.T) {
 		{"remove_secret", "remove_secret", `{"id":"sec1"}`},
 		{"remove_network", "remove_network", `{"id":"net1"}`},
 		{"remove_volume", "remove_volume", `{"name":"data"}`},
-		{"update_service_env", "update_service_env", `{"id":"web","env":{"A":"2"}}`},
-		{"update_service_labels", "update_service_labels", `{"id":"web","labels":{"a":"2"}}`},
+		{"update_service/env", "update_service",
+			`{"id":"web","section":"env","value":{"A":"2"}}`},
+		{"update_service/labels", "update_service",
+			`{"id":"web","section":"labels","value":{"a":"2"}}`},
+		{"update_service/resources", "update_service",
+			`{"id":"web","section":"resources","value":{"Limits":{"NanoCPUs":1000000000}}}`},
+		{"update_service/ports", "update_service",
+			`{"id":"web","section":"ports","value":[{"TargetPort":80}]}`},
 		{"update_node_labels", "update_node_labels", `{"id":"node1","labels":{"a":"2"}}`},
-		{
-			"update_node_availability",
-			"update_node_availability",
-			`{"id":"node1","availability":"drain"}`,
-		},
-		{"update_node_role", "update_node_role", `{"id":"node1","role":"worker"}`},
+		{"update_node/availability", "update_node",
+			`{"id":"node1","section":"availability","value":"drain"}`},
+		{"update_node/role", "update_node",
+			`{"id":"node1","section":"role","value":"worker"}`},
 	}
 
 	for _, call := range calls {

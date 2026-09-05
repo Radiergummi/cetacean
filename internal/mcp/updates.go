@@ -1,7 +1,13 @@
 package mcp
 
 import (
+	"context"
+	"fmt"
+	"maps"
+	"slices"
+
 	"github.com/docker/docker/api/types/swarm"
+	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -136,4 +142,205 @@ func stringDetail(details map[string]any, key string) string {
 	value, _ := details[key].(string)
 
 	return value
+}
+
+// toolUpdateService dispatches one section of a service's specification to the
+// writer that owns it.
+//
+// The eight sections were eight tools until they were folded into this one.
+// They shared a tier, an ACL check and a result shape, and differed only in
+// which field of the spec they replaced — while each one spent about a
+// kilobyte of every tools/list, over two thousand tokens of an agent's context
+// before it had read a single service.
+//
+// The cost of folding is the input schema: `value` is whatever the section
+// takes, so JSON Schema cannot describe it and the section's own decoder is
+// what validates it. That is why decodeSection reports the section it was
+// decoding and the shape it wanted — a model that guessed the payload wrong
+// has to be told which of eight shapes it was being held to.
+func (s *Server) toolUpdateService(
+	ctx context.Context,
+	req mcplib.CallToolRequest,
+) (string, error) {
+	id, err := req.RequireString("id")
+	if err != nil {
+		return "", err
+	}
+
+	section, err := req.RequireString("section")
+	if err != nil {
+		return "", err
+	}
+
+	if _, ok := serviceSectionKeys[section]; !ok {
+		return "", fmt.Errorf(
+			"unknown section %q; expected one of %v",
+			section, slices.Sorted(maps.Keys(serviceSectionKeys)),
+		)
+	}
+
+	// Before the write client is even resolved, for the same reason every
+	// other mutation checks first: a refusal must not depend on whether
+	// Docker happens to be reachable.
+	if err := s.checkServiceWrite(ctx, id); err != nil {
+		return "", err
+	}
+
+	writeClient, err := s.requireWriteClient()
+	if err != nil {
+		return "", err
+	}
+
+	var updated swarm.Service
+
+	switch section {
+	case sectionEnv:
+		patch, patchErr := requireStringMapPatch(req, "value")
+		if patchErr != nil {
+			return "", patchErr
+		}
+
+		updated, err = writeClient.UpdateServiceEnv(ctx, id, mergePatchMutator(patch))
+
+	case sectionLabels:
+		patch, patchErr := requireStringMapPatch(req, "value")
+		if patchErr != nil {
+			return "", patchErr
+		}
+
+		updated, err = writeClient.UpdateServiceLabels(ctx, id, mergePatchMutator(patch))
+
+	case sectionResources:
+		resources, decodeErr := decodeSection[swarm.ResourceRequirements](req, section)
+		if decodeErr != nil {
+			return "", decodeErr
+		}
+
+		updated, err = writeClient.UpdateServiceResources(ctx, id, &resources)
+
+	case sectionPlacement:
+		placement, decodeErr := decodeSection[swarm.Placement](req, section)
+		if decodeErr != nil {
+			return "", decodeErr
+		}
+
+		updated, err = writeClient.UpdateServicePlacement(ctx, id, &placement)
+
+	case sectionPorts:
+		ports, decodeErr := decodeSection[[]swarm.PortConfig](req, section)
+		if decodeErr != nil {
+			return "", decodeErr
+		}
+
+		updated, err = writeClient.UpdateServicePorts(ctx, id, ports)
+
+	case sectionUpdatePolicy:
+		policy, decodeErr := decodeSection[swarm.UpdateConfig](req, section)
+		if decodeErr != nil {
+			return "", decodeErr
+		}
+
+		updated, err = writeClient.UpdateServiceUpdatePolicy(ctx, id, &policy)
+
+	case sectionRollbackPolicy:
+		policy, decodeErr := decodeSection[swarm.UpdateConfig](req, section)
+		if decodeErr != nil {
+			return "", decodeErr
+		}
+
+		updated, err = writeClient.UpdateServiceRollbackPolicy(ctx, id, &policy)
+
+	case sectionLogDriver:
+		driver, decodeErr := decodeSection[swarm.Driver](req, section)
+		if decodeErr != nil {
+			return "", decodeErr
+		}
+
+		updated, err = writeClient.UpdateServiceLogDriver(ctx, id, &driver)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return marshalResult(serviceUpdate(section, updated))
+}
+
+// toolUpdateNode is the node counterpart, over the two sections that need the
+// impactful tier. Labels stay a tool of their own because they do not: folding
+// them in would have raised the level a deployment needs to relabel a node to
+// the level it needs to demote a manager.
+func (s *Server) toolUpdateNode(
+	ctx context.Context,
+	req mcplib.CallToolRequest,
+) (string, error) {
+	id, err := req.RequireString("id")
+	if err != nil {
+		return "", err
+	}
+
+	section, err := req.RequireString("section")
+	if err != nil {
+		return "", err
+	}
+
+	value, err := req.RequireString("value")
+	if err != nil {
+		return "", err
+	}
+
+	if err := s.checkNodeWrite(ctx, id); err != nil {
+		return "", err
+	}
+
+	writeClient, err := s.requireWriteClient()
+	if err != nil {
+		return "", err
+	}
+
+	var updated swarm.Node
+
+	switch section {
+	case sectionAvailability:
+		availability, parseErr := parseNodeAvailability(value)
+		if parseErr != nil {
+			return "", parseErr
+		}
+
+		updated, err = writeClient.UpdateNodeAvailability(ctx, id, availability)
+
+	case sectionRole:
+		role, parseErr := parseNodeRole(value)
+		if parseErr != nil {
+			return "", parseErr
+		}
+
+		updated, err = writeClient.UpdateNodeRole(ctx, id, role)
+
+	default:
+		return "", fmt.Errorf(
+			"unknown section %q; expected %q or %q",
+			section, sectionAvailability, sectionRole,
+		)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return marshalResult(nodeUpdate(section, updated))
+}
+
+// decodeSection decodes the `value` argument as the shape one section expects,
+// naming both in the error. The folded tool cannot express eight payload
+// shapes in one input schema, so this is where a wrong one is caught, and the
+// message is all the model gets to work out which shape it should have sent.
+func decodeSection[T any](req mcplib.CallToolRequest, section string) (T, error) {
+	var out T
+
+	if err := decodeArgInto(req, "value", &out); err != nil {
+		return out, fmt.Errorf("section %q: %w", section, err)
+	}
+
+	return out, nil
 }

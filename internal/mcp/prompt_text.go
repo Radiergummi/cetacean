@@ -140,7 +140,7 @@ guess.
 3. Call get_metrics for cpu and memory over the last week and check the finding
    against the series yourself. A service whose load is weekly or bursty can
    look over-provisioned over a day and be correctly sized over a week.
-4. Apply the change with update_service_resources. It sets the whole resource
+4. Apply the change with update_service, section resources. It sets the whole resource
    block in one call, so give it reservations and limits together, and never
    set a reservation above a limit.
 5. Confirm the tasks rescheduled and are running. Changing reservations
@@ -169,7 +169,7 @@ disagrees with the recommendation, report the disagreement and change nothing.`
    satisfy each of those services' placement constraints and have the
    reservations spare. A service constrained to this node alone has nowhere to
    go and will sit pending.
-5. Only then call update_node_availability with drain.
+5. Only then call update_node, section availability, with drain.
 6. Poll the affected services' tasks until they are running elsewhere. Report
    any that stayed pending, with the constraint that blocked them.
 
