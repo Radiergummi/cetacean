@@ -459,18 +459,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/felixge/httpsnoop@v1.0.4?type=module",
+      "bom-ref": "pkg:golang/github.com/felixge/httpsnoop@v1.1.0?type=module",
       "type": "library",
       "name": "github.com/felixge/httpsnoop",
-      "version": "v1.0.4",
+      "version": "v1.1.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3454d5d998f56cbe2673db2a5800976d01550418365b718fbeaa7cfc4492d968"
+          "content": "dd8b548f7d99664a99b6ddec659b0296cca6c3f403b957e9361a00df5cde3917"
         }
       ],
-      "purl": "pkg:golang/github.com/felixge/httpsnoop@v1.0.4?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/felixge/httpsnoop@v1.1.0?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/felixge/httpsnoop",
@@ -633,18 +633,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/go-logr/logr@v1.4.3?type=module",
+      "bom-ref": "pkg:golang/github.com/go-logr/logr@v1.4.4?type=module",
       "type": "library",
       "name": "github.com/go-logr/logr",
-      "version": "v1.4.3",
+      "version": "v1.4.4",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0a39c3947abc8a47fa138f76aba78a6e818e0b44fc08368ebe41c2220f227442"
+          "content": "b46e3187dc8cb110808a874b553c72ae4cd267dfa8d0bd4a83ff9c3d571b3fff"
         }
       ],
-      "purl": "pkg:golang/github.com/go-logr/logr@v1.4.3?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/go-logr/logr@v1.4.4?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/go-logr/logr",
@@ -865,18 +865,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/grpc-ecosystem/grpc-gateway/v2@v2.29.0?type=module",
+      "bom-ref": "pkg:golang/github.com/grpc-ecosystem/grpc-gateway/v2@v2.30.0?type=module",
       "type": "library",
       "name": "github.com/grpc-ecosystem/grpc-gateway/v2",
-      "version": "v2.29.0",
+      "version": "v2.30.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e558a99ef1296eaaf6800d956ccfa76156e4205dbc7396507ea081439836c5f9"
+          "content": "fd39e971bd84d0fcffb4df6cddb7c463643c78f0845fd8ae4be727794c27727c"
         }
       ],
-      "purl": "pkg:golang/github.com/grpc-ecosystem/grpc-gateway/v2@v2.29.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/grpc-ecosystem/grpc-gateway/v2@v2.30.0?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/grpc-ecosystem/grpc-gateway",
@@ -1445,18 +1445,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/santhosh-tekuri/jsonschema/v6@v6.0.2?type=module",
+      "bom-ref": "pkg:golang/github.com/santhosh-tekuri/jsonschema/v6@v6.0.3?type=module",
       "type": "library",
       "name": "github.com/santhosh-tekuri/jsonschema/v6",
-      "version": "v6.0.2",
+      "version": "v6.0.3",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "291cc56f69bb62d765742124cece8aaa6270e27a8455918aec83769099234ee4"
+          "content": "d44601e48ce365ac2bae710b522efc7fd7cfbb9ec7b978e675d64f8eb96cff6f"
         }
       ],
-      "purl": "pkg:golang/github.com/santhosh-tekuri/jsonschema/v6@v6.0.2?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/santhosh-tekuri/jsonschema/v6@v6.0.3?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/santhosh-tekuri/jsonschema",
@@ -1700,18 +1700,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.67.0?type=module",
+      "bom-ref": "pkg:golang/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.70.0?type=module",
       "type": "library",
       "name": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
-      "version": "v0.67.0",
+      "version": "v0.70.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3b2aeccb3badb564d2babdaa37f2e6d26d9af32ab222351505973114fb97ab6a"
+          "content": "2ccbb2080c9f6a54a30f28dd0bae672ba374ce84d3eb7f84feef795f4268bd92"
         }
       ],
-      "purl": "pkg:golang/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.67.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.70.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -1723,18 +1723,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/go.opentelemetry.io/otel@v1.43.0?type=module",
+      "bom-ref": "pkg:golang/go.opentelemetry.io/otel@v1.46.0?type=module",
       "type": "library",
       "name": "go.opentelemetry.io/otel",
-      "version": "v1.43.0",
+      "version": "v1.46.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "99820cd37767879cdf37b1dabad144e227888a0f5a9a4340353fb1715c408fd2"
+          "content": "147b79fc20f25718bff08335087ed513fad182ade42c76b69924d530ef005b27"
         }
       ],
-      "purl": "pkg:golang/go.opentelemetry.io/otel@v1.43.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/go.opentelemetry.io/otel@v1.46.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -1746,18 +1746,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.43.0?type=module",
+      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.46.0?type=module",
       "type": "library",
       "name": "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
-      "version": "v1.43.0",
+      "version": "v1.46.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f3c638b360bca13ba2d4b18ce9b4d6930d0808670e2c2008e65eb3b03d63db49"
+          "content": "3859f02c9afea45de21eb9464b36f1caea3affa1f20659e537509610998155cc"
         }
       ],
-      "purl": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.43.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.46.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -1769,18 +1769,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.43.0?type=module",
+      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.46.0?type=module",
       "type": "library",
       "name": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
-      "version": "v1.43.0",
+      "version": "v1.46.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "de26492a5099b9fc91ccfce542150859599f96dad7b86c9f8d112018fdd45237"
+          "content": "2ab0b562b41e4ade3a21331601b810c75335795d7fd532b3b6dac1cf298f9acb"
         }
       ],
-      "purl": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.43.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.46.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -1792,18 +1792,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/metric@v1.43.0?type=module",
+      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/metric@v1.46.0?type=module",
       "type": "library",
       "name": "go.opentelemetry.io/otel/metric",
-      "version": "v1.43.0",
+      "version": "v1.46.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "77beb7f107889ce9eec0e38d3e9e0900e19f6c212961bf8ae83556bddc46ce03"
+          "content": "c819e45ef815ec05c520b65ce4ae8865efc2045177392ec127ca2febf963d0af"
         }
       ],
-      "purl": "pkg:golang/go.opentelemetry.io/otel/metric@v1.43.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/go.opentelemetry.io/otel/metric@v1.46.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -1815,18 +1815,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/sdk@v1.43.0?type=module",
+      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/sdk@v1.46.0?type=module",
       "type": "library",
       "name": "go.opentelemetry.io/otel/sdk",
-      "version": "v1.43.0",
+      "version": "v1.46.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a62e6613cea2e6b4de2d7aa817f861881b5435cac01872ca41d860e21e15f438"
+          "content": "87908d4108c46ee41763f25f66d82dde2ec75455776873ced8e0303b679360f2"
         }
       ],
-      "purl": "pkg:golang/go.opentelemetry.io/otel/sdk@v1.43.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/go.opentelemetry.io/otel/sdk@v1.46.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -1838,18 +1838,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/trace@v1.43.0?type=module",
+      "bom-ref": "pkg:golang/go.opentelemetry.io/otel/trace@v1.46.0?type=module",
       "type": "library",
       "name": "go.opentelemetry.io/otel/trace",
-      "version": "v1.43.0",
+      "version": "v1.46.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "06436b1e9ba9fb8938c3e659f3a099a071c4928870b3c018f964d7d3d9e4fb70"
+          "content": "3942f2edc71d26766d27450360538819a0a6896cc9f158b61bf46cbbad2ab357"
         }
       ],
-      "purl": "pkg:golang/go.opentelemetry.io/otel/trace@v1.43.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/go.opentelemetry.io/otel/trace@v1.46.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -1861,18 +1861,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/go.opentelemetry.io/proto/otlp@v1.10.0?type=module",
+      "bom-ref": "pkg:golang/go.opentelemetry.io/proto/otlp@v1.11.0?type=module",
       "type": "library",
       "name": "go.opentelemetry.io/proto/otlp",
-      "version": "v1.10.0",
+      "version": "v1.11.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "210456813e6cace0987e25a7a6a518cfd09599b3bc6c598a730631a6e0922f68"
+          "content": "e6bad8b34624ca3e74b1d53f254d31f1eb54f8bb9b5d66fe8040fa4db11d3089"
         }
       ],
-      "purl": "pkg:golang/go.opentelemetry.io/proto/otlp@v1.10.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/go.opentelemetry.io/proto/otlp@v1.11.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -1930,18 +1930,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/golang.org/x/crypto@v0.54.0?type=module",
+      "bom-ref": "pkg:golang/golang.org/x/crypto@v0.55.0?type=module",
       "type": "library",
       "name": "golang.org/x/crypto",
-      "version": "v0.54.0",
+      "version": "v0.55.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "60b200e7d2b87e23731f38e766ddad50942342d5167d66de1c1a8ab64dde49cc"
+          "content": "f8a5878db80e68043ae9d87f625919287973f59525abad40162ac047d9ed3fc3"
         }
       ],
-      "purl": "pkg:golang/golang.org/x/crypto@v0.54.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/golang.org/x/crypto@v0.55.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -1976,18 +1976,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/golang.org/x/net@v0.57.0?type=module",
+      "bom-ref": "pkg:golang/golang.org/x/net@v0.58.0?type=module",
       "type": "library",
       "name": "golang.org/x/net",
-      "version": "v0.57.0",
+      "version": "v0.58.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "2b9fb70e58ef22e0c6f7f26ff6bbf2332c18345090f5149463a38e4d3913fad1"
+          "content": "ca7586eeba988b871ca5312e3d9d901961e4b5510cf433028fdcb30c4d10ed3a"
         }
       ],
-      "purl": "pkg:golang/golang.org/x/net@v0.57.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/golang.org/x/net@v0.58.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -2091,18 +2091,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/golang.org/x/text@v0.40.0?type=module",
+      "bom-ref": "pkg:golang/golang.org/x/text@v0.41.0?type=module",
       "type": "library",
       "name": "golang.org/x/text",
-      "version": "v0.40.0",
+      "version": "v0.41.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "51bd99ebfc63805d56ad8433da7b884ce11e80a16d888cbeae279127994764ab"
+          "content": "bf3fec780d259d7f3b3ad86ed9fff42f6e11720ad70fdfd81534ae1a38f7ac7f"
         }
       ],
-      "purl": "pkg:golang/golang.org/x/text@v0.40.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/golang.org/x/text@v0.41.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -2137,18 +2137,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260519071638-aa98bba5eb94?type=module",
+      "bom-ref": "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260819154853-08b0e4226688?type=module",
       "type": "library",
       "name": "google.golang.org/genproto/googleapis/api",
-      "version": "v0.0.0-20260519071638-aa98bba5eb94",
+      "version": "v0.0.0-20260819154853-08b0e4226688",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0dd746eb5944e4b917eb5e38cf6da2d2099af41301b39699f41f2564ba1bc72c"
+          "content": "6b1d8ace849121953f334708c6b8b7a4ac72f7dbe7887d4f571582eac8bf7992"
         }
       ],
-      "purl": "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260519071638-aa98bba5eb94?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260819154853-08b0e4226688?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -2160,18 +2160,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260519071638-aa98bba5eb94?type=module",
+      "bom-ref": "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260819154853-08b0e4226688?type=module",
       "type": "library",
       "name": "google.golang.org/genproto/googleapis/rpc",
-      "version": "v0.0.0-20260519071638-aa98bba5eb94",
+      "version": "v0.0.0-20260819154853-08b0e4226688",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7990a3aff68017c73971c9b9a5be93e045e021e8b93250003d63c993ee40adf6"
+          "content": "718340cc8dac53086609ca23f53c6f8a14abaacc6deae2248f7ac3461483996e"
         }
       ],
-      "purl": "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260519071638-aa98bba5eb94?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260819154853-08b0e4226688?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -2183,18 +2183,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/google.golang.org/grpc@v1.82.1?type=module",
+      "bom-ref": "pkg:golang/google.golang.org/grpc@v1.83.1?type=module",
       "type": "library",
       "name": "google.golang.org/grpc",
-      "version": "v1.82.1",
+      "version": "v1.83.1",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "367031cc6440d3aefbbc26b805490e0273b9f857d0a9597d8945de0f422a7061"
+          "content": "1c83b4f8112d04feaca32aafa82f2c3548d9edb4ecfb484542e145f91032fbe6"
         }
       ],
-      "purl": "pkg:golang/google.golang.org/grpc@v1.82.1?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/google.golang.org/grpc@v1.83.1?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -2206,18 +2206,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/google.golang.org/protobuf@v1.36.11?type=module",
+      "bom-ref": "pkg:golang/google.golang.org/protobuf@v1.36.12?type=module",
       "type": "library",
       "name": "google.golang.org/protobuf",
-      "version": "v1.36.11",
+      "version": "v1.36.12",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7d5e99c21368703c812cad1d8fe7e0f1e92d7157a0041b84a25a5b4d0c813551"
+          "content": "a4938a0c33b279712b52ba028a11407792d0bb05c14a9567286ae3e68fdfc317"
         }
       ],
-      "purl": "pkg:golang/google.golang.org/protobuf@v1.36.11?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/google.golang.org/protobuf@v1.36.12?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {

@@ -223,7 +223,7 @@
   "go:github.com/expr-lang/expr@v1.17.8": {
    "license": "f2c369e1796dc84c37cf34a966033e88"
   },
-  "go:github.com/felixge/httpsnoop@v1.0.4": {
+  "go:github.com/felixge/httpsnoop@v1.1.0": {
    "license": "8108e14b5cb2b6bcd51583d3849ef0c2"
   },
   "go:github.com/fsnotify/fsnotify@v1.10.1": {
@@ -241,7 +241,7 @@
   "go:github.com/go-json-experiment/json@v0.0.0-20260214004413-d219187c3433": {
    "license": "14a34c4db2d21bf9cf80d028b802cd22"
   },
-  "go:github.com/go-logr/logr@v1.4.3": {
+  "go:github.com/go-logr/logr@v1.4.4": {
    "license": "b40930bbcf80744c86c46a12bc9da056"
   },
   "go:github.com/go-logr/stdr@v1.2.2": {
@@ -265,7 +265,7 @@
   "go:github.com/google/uuid@v1.6.0": {
    "license": "0a8d61ed3cbfd5312326e8126c31ce9c"
   },
-  "go:github.com/grpc-ecosystem/grpc-gateway/v2@v2.29.0": {
+  "go:github.com/grpc-ecosystem/grpc-gateway/v2@v2.30.0": {
    "license": "a15b1d1b168954c92ff7fb1620382418"
   },
   "go:github.com/hdevalence/ed25519consensus@v0.2.0": {
@@ -329,7 +329,7 @@
   "go:github.com/safchain/ethtool@v0.3.0": {
    "license": "c6596eb7be8581c18be736c846fb9173"
   },
-  "go:github.com/santhosh-tekuri/jsonschema/v6@v6.0.2": {
+  "go:github.com/santhosh-tekuri/jsonschema/v6@v6.0.3": {
    "license": "c8858a5a76440bbca484e134cf7df463"
   },
   "go:github.com/spf13/cast@v1.7.1": {
@@ -356,28 +356,28 @@
   "go:go.opentelemetry.io/auto/sdk@v1.2.1": {
    "license": "c71d239df91726fc519c6eb72d318ec6"
   },
-  "go:go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.67.0": {
+  "go:go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.70.0": {
    "license": "1ae07514be1d7bb33f0698f8d91fb51b"
   },
-  "go:go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.43.0": {
+  "go:go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.46.0": {
    "license": "1ae07514be1d7bb33f0698f8d91fb51b"
   },
-  "go:go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.43.0": {
+  "go:go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.46.0": {
    "license": "1ae07514be1d7bb33f0698f8d91fb51b"
   },
-  "go:go.opentelemetry.io/otel/metric@v1.43.0": {
+  "go:go.opentelemetry.io/otel/metric@v1.46.0": {
    "license": "1ae07514be1d7bb33f0698f8d91fb51b"
   },
-  "go:go.opentelemetry.io/otel/sdk@v1.43.0": {
+  "go:go.opentelemetry.io/otel/sdk@v1.46.0": {
    "license": "1ae07514be1d7bb33f0698f8d91fb51b"
   },
-  "go:go.opentelemetry.io/otel/trace@v1.43.0": {
+  "go:go.opentelemetry.io/otel/trace@v1.46.0": {
    "license": "1ae07514be1d7bb33f0698f8d91fb51b"
   },
-  "go:go.opentelemetry.io/otel@v1.43.0": {
+  "go:go.opentelemetry.io/otel@v1.46.0": {
    "license": "1ae07514be1d7bb33f0698f8d91fb51b"
   },
-  "go:go.opentelemetry.io/proto/otlp@v1.10.0": {
+  "go:go.opentelemetry.io/proto/otlp@v1.11.0": {
    "license": "c71d239df91726fc519c6eb72d318ec6"
   },
   "go:go4.org/mem@v0.0.0-20240501181205-ae6ca9944745": {
@@ -386,13 +386,13 @@
   "go:go4.org/netipx@v0.0.0-20231129151722-fdeea329fbba": {
    "license": "1bfc4f32f4ec8ca8fce54bd2d97784f0"
   },
-  "go:golang.org/x/crypto@v0.54.0": {
+  "go:golang.org/x/crypto@v0.55.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
   "go:golang.org/x/exp@v0.0.0-20260410095643-746e56fc9e2f": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
-  "go:golang.org/x/net@v0.57.0": {
+  "go:golang.org/x/net@v0.58.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
   "go:golang.org/x/oauth2@v0.36.0": {
@@ -407,23 +407,23 @@
   "go:golang.org/x/term@v0.45.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
-  "go:golang.org/x/text@v0.40.0": {
+  "go:golang.org/x/text@v0.41.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
   "go:golang.org/x/time@v0.15.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
-  "go:google.golang.org/genproto/googleapis/api@v0.0.0-20260519071638-aa98bba5eb94": {
+  "go:google.golang.org/genproto/googleapis/api@v0.0.0-20260819154853-08b0e4226688": {
    "license": "cfc7749b96f63bd31c3c42b5c471bf75"
   },
-  "go:google.golang.org/genproto/googleapis/rpc@v0.0.0-20260519071638-aa98bba5eb94": {
+  "go:google.golang.org/genproto/googleapis/rpc@v0.0.0-20260819154853-08b0e4226688": {
    "license": "cfc7749b96f63bd31c3c42b5c471bf75"
   },
-  "go:google.golang.org/grpc@v1.82.1": {
+  "go:google.golang.org/grpc@v1.83.1": {
    "license": "cfc7749b96f63bd31c3c42b5c471bf75",
    "notice": "693ff28ec216d5112ac1bbfe64ef5390"
   },
-  "go:google.golang.org/protobuf@v1.36.11": {
+  "go:google.golang.org/protobuf@v1.36.12": {
    "license": "4835612df0098ca95f8e7d9e3bffcb02"
   },
   "go:gopkg.in/yaml.v3@v3.0.1": {
