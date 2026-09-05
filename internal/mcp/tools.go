@@ -157,6 +157,7 @@ var toolIconCategory = map[string]string{
 	"get_topology":        "read",
 	"get_metrics":         "read",
 	"get_recommendations": "read",
+	"get_events":          "read",
 	"find":                "search",
 	"describe":            "read",
 
@@ -508,6 +509,46 @@ func (s *Server) toolCatalog() []toolDef {
 			tier:    config.OpsReadOnly,
 			handler: s.toolGetRecommendations,
 			widget:  "recommendations",
+		},
+		{
+			tool: mcplib.NewTool(
+				"get_events",
+				mcplib.WithToolTitle("Read the cluster change timeline"),
+				mcplib.WithDescription(
+					"Return what changed in the cluster and when — resource creates, updates and deletes — newest first, narrowed by time, type or a single resource. Use it to answer what happened overnight, whether a fault is new, and what else changed around the moment something broke; pair it with get_logs, which returns the same entry shape, to read changes and output on one timeline. Filtering by `types` is usually necessary: a service restarting in a loop produces a task event every few seconds and buries everything else.",
+				),
+				mcplib.WithOutputSchema[eventsResult](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("since",
+					mcplib.Description(
+						"RFC 3339 timestamp; only entries strictly after this time.",
+					),
+				),
+				mcplib.WithString("until",
+					mcplib.Description(
+						"RFC 3339 timestamp; only entries at or before this time.",
+					),
+				),
+				mcplib.WithArray("types",
+					mcplib.Description(
+						"Resource types to include: node, service, task, stack, config, secret, network, volume. Omit for all.",
+					),
+					mcplib.Items(map[string]any{"type": "string"}),
+				),
+				mcplib.WithString("resource",
+					mcplib.Description("Only entries for this resource ID."),
+				),
+				mcplib.WithNumber("limit",
+					mcplib.Description(
+						"Maximum entries to return (default 100, maximum 500).",
+					),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolGetEvents,
 		},
 
 		// Tier 1 — Operational.

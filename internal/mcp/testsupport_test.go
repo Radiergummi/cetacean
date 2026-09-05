@@ -166,3 +166,15 @@ func session(name string) mcpserver.ClientSession {
 
 	return value.(mcpserver.ClientSession)
 }
+
+// toolRequest builds the CallToolRequest a handler sees, so a tool test
+// exercises the same argument decoding a real call does.
+func toolRequest(t *testing.T, name string, args map[string]any) mcplib.CallToolRequest {
+	t.Helper()
+
+	var req mcplib.CallToolRequest
+	req.Params.Name = name
+	req.Params.Arguments = args
+
+	return req
+}
