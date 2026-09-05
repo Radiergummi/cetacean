@@ -54,6 +54,33 @@ If you already run Prometheus, set the URL and make sure it scrapes node-exporte
 carrying the node's address (or hostname). Cetacean expects the standard metric names, but relabeling `instance` is
 required, not optional, whenever the scrape goes over an overlay network.
 
+### cAdvisor needs the containerd socket
+
+cAdvisor reads container metadata through containerd rather than through dockerd, and dials
+`/run/containerd/containerd.sock`. Docker Engine runs its own containerd under `/run/docker/containerd`, so mounting
+only the Docker socket is not enough: the docker factory fails to register, and with `--docker_only` cAdvisor then
+reports the root cgroup and nothing else. Prometheus looks healthy, `container_*` metrics exist, and every one of them
+is missing `container_label_com_docker_swarm_service_name` — so per-service charts are empty and no sizing
+recommendation is ever produced. The bundled compose file therefore mounts:
+
+```yaml
+- type: bind
+  source: /run/docker/containerd
+  target: /run/containerd
+  read_only: true
+```
+
+If your Docker uses a system containerd instead of its own, use `/run/containerd` as the source. To check which case
+you are in, count the labelled series:
+
+```
+count(container_memory_usage_bytes{container_label_com_docker_swarm_service_name!=""})
+```
+
+One or zero means the factory did not register; `docker service logs monitoring_cadvisor` names the socket it could
+not reach. Cetacean itself reports this rather than charting zeros — `get_metrics` for a service answers "cAdvisor is
+not reporting per-container metrics for this cluster".
+
 Cetacean auto-detects your monitoring setup and shows a status banner on the cluster overview when components are
 missing or unreachable.
 
