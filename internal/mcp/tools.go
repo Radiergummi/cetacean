@@ -199,7 +199,7 @@ func (s *Server) registerTools() {
 		s.mcpServer.AddTool(
 			td.tool,
 			func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
-				ctx, textOnly := withTextOnlyResultSignal(ctx)
+				ctx, annotations := withResultAnnotations(ctx)
 
 				text, err := handler(ctx, req)
 				if err != nil {
@@ -225,11 +225,17 @@ func (s *Server) registerTools() {
 				// structuredContent anyway would fail
 				// WithOutputSchemaValidation's check on the very call the
 				// handler asked for something other than the compact shape.
-				if *textOnly {
-					return mcplib.NewToolResultText(text), nil
+				if annotations.textOnly {
+					return withResourceLinks(
+						mcplib.NewToolResultText(text),
+						annotations.links,
+					), nil
 				}
 
-				return structuredToolResult(text), nil
+				return withResourceLinks(
+					structuredToolResult(text),
+					annotations.links,
+				), nil
 			},
 		)
 	}
@@ -296,7 +302,7 @@ func (s *Server) toolCatalog() []toolDef {
 				"find",
 				mcplib.WithToolTitle("Find cluster resources"),
 				mcplib.WithDescription(
-					"Locate cluster resources. Give `type` (nodes, services, tasks, stacks, configs, secrets, networks, or volumes) to enumerate that type, paged, optionally narrowed by query/state/stack/node/image/label; the returned records are the same ones the cetacean:// resources expose, filtered to what the caller may see. Omit `type` and give `query` to search by name, label, or image reference across every type at once, returned as one list sorted by name, each row carrying its own type. Use the cross-type search to locate a resource before fetching its details or applying a write; use a typed listing to browse or tabulate a whole type.",
+					"Locate cluster resources. Give `type` (nodes, services, tasks, stacks, configs, secrets, networks, or volumes) to enumerate that type, paged, optionally narrowed by query/state/stack/node/image/label; the returned records are the same ones the cetacean:// resources expose, filtered to what the caller may see. Omit `type` and give `query` to search by name, label, or image reference across every type at once, returned as one list sorted by name, each row carrying its own type; there `limit` caps the matches per type and there is no paging, so `total` counts every match across the cluster and `counts` breaks it down per type — narrow with `type` to page through one of them. Use the cross-type search to locate a resource before fetching its details or applying a write; use a typed listing to browse or tabulate a whole type.",
 				),
 				mcplib.WithOutputSchema[findResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -1127,11 +1133,20 @@ func (s *Server) checkTaskWrite(ctx context.Context, id string) error {
 // key is `service:<name>` rather than `service:<id>`, matching the resource
 // read path in lookupResource. Used by toolGetLogs which doesn't go through
 // lookupResource.
+//
+// It resolves rather than looking the ID up, because get_logs advertises its
+// `service` argument as "Service ID or name" and Docker honours both — so a
+// plain GetService turned a name, the identifier find and the completions
+// hand back, into "service not found" on every cluster that has an ACL policy
+// and into a working call on every cluster that has not.
 func (s *Server) checkServiceRead(ctx context.Context, id string) error {
 	if s.acl == nil {
 		return nil
 	}
-	svc, ok := s.cache.GetService(id)
+	svc, ok, err := s.cache.ResolveService(id)
+	if err != nil {
+		return err
+	}
 	if !ok {
 		return fmt.Errorf("service %q not found", id)
 	}
@@ -1614,16 +1629,40 @@ func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
 	return out
 }
 
-// textOnlyResultKey is the context key backing withTextOnlyResultSignal /
-// markTextOnlyResult.
-type textOnlyResultKey struct{}
+// resultAnnotationsKey is the context key backing withResultAnnotations and
+// the two functions handlers use to write to it.
+type resultAnnotationsKey struct{}
 
-// withTextOnlyResultSignal installs the opt-out flag registerTools reads once
-// a handler returns. It travels on ctx rather than becoming a second return
-// value every other handler would have to thread through unused.
-func withTextOnlyResultSignal(ctx context.Context) (context.Context, *bool) {
-	flag := new(bool)
-	return context.WithValue(ctx, textOnlyResultKey{}, flag), flag
+// resultAnnotations is what a handler learned about the shape of its own
+// result and cannot express in the string it returns. registerTools is the
+// only place a CallToolResult is assembled, so this is how the two halves
+// meet.
+type resultAnnotations struct {
+	// textOnly suppresses structuredContent — see markTextOnlyResult.
+	textOnly bool
+
+	// links are the cetacean:// resources the result refers to, offered to
+	// the client as resource_link content — see attachResourceLinks.
+	links []mcplib.ResourceLink
+}
+
+// withResultAnnotations installs the block registerTools reads once a handler
+// returns. It travels on ctx rather than becoming a second return value every
+// other handler would have to thread through unused.
+func withResultAnnotations(ctx context.Context) (context.Context, *resultAnnotations) {
+	annotations := new(resultAnnotations)
+
+	return context.WithValue(ctx, resultAnnotationsKey{}, annotations), annotations
+}
+
+// resultAnnotationsFrom recovers the block, or nil when ctx was not set up by
+// registerTools — which is the case whenever a handler is invoked directly, as
+// the tool tests do. Both writers below are then no-ops, since there is
+// nothing on the other end to read them.
+func resultAnnotationsFrom(ctx context.Context) *resultAnnotations {
+	annotations, _ := ctx.Value(resultAnnotationsKey{}).(*resultAnnotations)
+
+	return annotations
 }
 
 // markTextOnlyResult tells registerTools this call's result must be returned
@@ -1632,12 +1671,26 @@ func withTextOnlyResultSignal(ctx context.Context) (context.Context, *bool) {
 // The callers are find's and describe's raw modes: raw hands back whatever
 // shape the underlying resource has, which is neither the compact Row shape
 // find's schema describes nor the Digest describe's does, and
-// structuredContent must conform under WithOutputSchemaValidation. A no-op if
-// ctx was not set up by registerTools (e.g. a handler invoked directly, as
-// the tool tests do), since there is nothing to signal.
+// structuredContent must conform under WithOutputSchemaValidation.
 func markTextOnlyResult(ctx context.Context) {
-	if flag, ok := ctx.Value(textOnlyResultKey{}).(*bool); ok {
-		*flag = true
+	if annotations := resultAnnotationsFrom(ctx); annotations != nil {
+		annotations.textOnly = true
+	}
+}
+
+// attachResourceLinks offers the cetacean:// resources a result refers to as
+// resource_link content items, so a host can render them as somewhere to go
+// next and a client can resources/read one without the model first working
+// out how to spell the URI.
+//
+// They ride alongside the result rather than inside it: the shapes find and
+// describe advertise as output schemas describe cluster resources, and a link
+// is a statement about where to read one — the spec gives content items for
+// exactly that, and putting URIs in the schema would make every widget and
+// every consumer of structuredContent carry them too.
+func attachResourceLinks(ctx context.Context, links []mcplib.ResourceLink) {
+	if annotations := resultAnnotationsFrom(ctx); annotations != nil {
+		annotations.links = links
 	}
 }
 

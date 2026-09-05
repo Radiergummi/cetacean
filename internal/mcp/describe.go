@@ -98,6 +98,11 @@ func (s *Server) toolDescribe(ctx context.Context, req mcplib.CallToolRequest) (
 		return "", err
 	}
 
+	// The digest names the resources this one references; the links turn those
+	// names into somewhere the client can go, which is the traversal describe
+	// exists to enable.
+	attachResourceLinks(ctx, resourceLinksForDigest(digest))
+
 	return marshalResult(digest)
 }
 

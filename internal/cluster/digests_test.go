@@ -110,7 +110,6 @@ func TestRowsForTasksAgreesWithTaskDigest(t *testing.T) {
 			row := RowsForTasks(
 				[]EnrichedTask{{Task: tc.task}},
 				[]swarm.Service{tc.service},
-				nil,
 			)[0]
 			digest := TaskDigest(tc.task, &tc.service, nil)
 
@@ -135,7 +134,6 @@ func TestRowsForTasksDistinguishesReplicas(t *testing.T) {
 			{Task: swarm.Task{ID: "t2", ServiceID: "svc-api", Slot: 2}},
 		},
 		[]swarm.Service{svc},
-		nil,
 	)
 
 	if rows[0].Name == rows[1].Name {

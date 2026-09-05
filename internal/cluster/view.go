@@ -116,28 +116,26 @@ func RowsForNodes(nodes []swarm.Node) []Row {
 	return rows
 }
 
-// RowsForTasks builds the list view of tasks. Services and nodes are needed to
-// name the task's parents: a task's own record holds only their IDs, and a
-// caller reading a task list is asking which service is broken and where.
+// RowsForTasks builds the list view of tasks. Services are needed to name each
+// task's parent: a task's own record holds only its ID, and a caller reading a
+// task list is asking which service is broken and where.
 //
-// Both parent slices must already be filtered to what the caller may read, the
-// way TaskDigest's are: a parent absent from them falls back to the ID the task
-// record carries anyway, so a row never names a resource from behind the
+// The node half of that answer comes off the enriched task rather than a second
+// slice, because EnrichTasksWithin has already resolved it — against the same
+// ACL-filtered node listing this would have taken — and re-deriving it made
+// every find and every completion keystroke clone, sort and filter the whole
+// node table a second time to recover a string it was handed.
+//
+// The services slice must already be filtered to what the caller may read, the
+// way TaskDigest's is, and the tasks must have been enriched from an equally
+// filtered node listing: a parent absent from either falls back to the ID the
+// task record carries anyway, so a row never names a resource from behind the
 // caller's grants. Passing the unfiltered cache listings made find disclose a
 // service name that describe withheld for the very same task.
-//
-// The tasks arrive enriched because that is the shape the resource listing
-// already produces; taking it directly saves copying the whole task table back
-// out to name it.
-func RowsForTasks(tasks []EnrichedTask, services []swarm.Service, nodes []swarm.Node) []Row {
+func RowsForTasks(tasks []EnrichedTask, services []swarm.Service) []Row {
 	serviceByID := make(map[string]*swarm.Service, len(services))
 	for i := range services {
 		serviceByID[services[i].ID] = &services[i]
-	}
-
-	nodeNames := make(map[string]string, len(nodes))
-	for _, n := range nodes {
-		nodeNames[n.ID] = n.Description.Hostname
 	}
 
 	rows := make([]Row, 0, len(tasks))
@@ -146,8 +144,8 @@ func RowsForTasks(tasks []EnrichedTask, services []swarm.Service, nodes []swarm.
 		// The hostname when it is readable, the node ID otherwise — the same
 		// fallback TaskDigest makes, and no disclosure either way, since the
 		// task record the caller can already read carries the ID itself.
-		where, ok := nodeNames[task.NodeID]
-		if !ok {
+		where := task.NodeHostname
+		if where == "" {
 			where = task.NodeID
 		}
 

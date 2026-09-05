@@ -32,12 +32,15 @@ func (s *Server) resolveTask(identifier string) (swarm.Task, bool, error) {
 	// first dot resolved "api.example.com.2" against a service called "api"
 	// and found nothing, so a name a completion had just offered read back as
 	// not found.
-	dot := strings.LastIndex(identifier, ".")
-	if dot < 0 {
-		return swarm.Task{}, false, nil
+	//
+	// No separator at all is not a miss either: cluster.TaskName renders an
+	// unassigned global task as the bare service name, there being no node yet
+	// to tell its replicas apart, and a completion offers that string like any
+	// other. The scan below decides; a genuine miss pays one name resolution.
+	serviceName := identifier
+	if dot := strings.LastIndex(identifier, "."); dot >= 0 {
+		serviceName = identifier[:dot]
 	}
-
-	serviceName := identifier[:dot]
 
 	service, ok, err := s.cache.ResolveService(serviceName)
 	if err != nil || !ok {

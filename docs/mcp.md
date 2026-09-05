@@ -272,6 +272,9 @@ Every tool and resource advertises an `icon` that MCP clients can render beside 
 category (read, search, scale, edit, node, remove); resource icons reflect the resource type (node, service, stack,
 config, secret, network, volume, task, service logs, cluster, recommendations, history).
 
+The server itself carries the same identity a tool does: a display `title`, a `description`, a `websiteUrl` and an
+icon, so a host listing several MCP servers shows Cetacean by name rather than by its programmatic id.
+
 The icons are plain SVGs served by Cetacean itself under the unauthenticated `/assets/mcp-icons/` prefix, so a client
 loads them without a bearer token in every auth mode. Their URLs are absolute and derived from the canonical external
 base URL — so when Cetacean runs behind a reverse proxy, **set `CETACEAN_MCP_ISSUER`** (the same value the OAuth
@@ -288,7 +291,12 @@ On connect, the server also sends top-level usage `instructions` (read-mostly mo
 writes gated by tier + ACL) so agents know how to drive it. Each tool also advertises an `icon` grouped by verb
 category (read, search, scale, edit, node, remove) that clients can render (see [Icons](#icons)).
 
-Tool results carry machine-readable `structuredContent` (the parsed JSON object) alongside the text form. Every tool
+Tool results carry machine-readable `structuredContent` (the parsed JSON object) alongside the text form. `find`
+and `describe` additionally attach `resource_link` content items for the resources their result is about — the rows
+of a listing, and for `describe` the resource itself plus everything it cross-references — so a host can offer
+somewhere to go next and a client can `resources/read` one without the model first working out how to spell a
+`cetacean://` URI. The links describe the page actually returned, filters and paging included, and are capped at 25:
+they are an affordance, not the payload, and every id is in `structuredContent` regardless. Every tool
 whose result shape Cetacean owns — the tier 0 reads, the four service lifecycle mutations, and the `remove_*` tools —
 advertises an output schema that the server validates results against. An input-validation failure comes back as a
 tool result with `isError: true` (so the model can self-correct), not a protocol error.
@@ -302,8 +310,12 @@ tool result with `isError: true` (so the model can self-correct), not a protocol
 `key=value`); `limit`/`offset` page the result (default and max `limit` 200). Omit `type` and give `query` to
 search by name, label or image reference across every type at once instead — one flat list sorted by name, each
 row carrying its own `type`, the way the two tools it replaces (`list_resources` and `search`) did between them;
-`limit` there instead bounds matches per resource type (default 3), and `offset` is ignored. `raw: true` returns
-each match's untouched Docker record instead of a `Row` — see [Compact resource shapes](#compact-resource-shapes).
+`limit` there instead bounds matches per resource type (default 3), and `offset` is ignored. Because there is no
+paging in that mode, a cross-type result also carries `counts` — the per-type breakdown behind `total`, the same
+field the HTTP search response uses — so "137 matches, showing 6" is legible without a second call, and narrowing
+with `type` is the way to page through one of them. A typed listing omits `counts`: there `total` already means
+one type, and `offset` reaches the rest. `raw: true` returns each match's untouched Docker record instead of a
+`Row` — see [Compact resource shapes](#compact-resource-shapes).
 
 `describe` returns everything needed to act on one resource, as a `Digest`: its derived state, the reason behind
 an unhealthy one, how long it has held, type-specific details, cross-references, and the recent task failures

@@ -51,11 +51,22 @@ var pluralToSingularRowType = map[string]string{
 // findResult is the envelope for a list of resources.
 //
 // Total is the count before paging and after filtering, so a caller can say
-// "showing 200 of 1,432" without a second call.
+// "showing 200 of 1,432" without a second call. In a typed listing that is a
+// promise the caller can act on: `offset` pages through to the rest.
+//
+// Counts is populated only by the cross-type search, where it has to be. There
+// `limit` caps the hits *per type* and there is no paging at all, so Total —
+// the number of matches across the cluster — is a number the caller cannot
+// reach the tail of, and one figure over eight types says nothing about where
+// the matches are. Counts is the per-type breakdown cluster.Search already
+// computes for exactly this, and the same field the HTTP search response
+// carries, so one search reads the same over both transports. It stays absent
+// on a typed listing, where Total already means one type and paging works.
 type findResult struct {
-	Type  string        `json:"type"`
-	Items []cluster.Row `json:"items"`
-	Total int           `json:"total"`
+	Type   string         `json:"type"`
+	Items  []cluster.Row  `json:"items"`
+	Total  int            `json:"total"`
+	Counts map[string]int `json:"counts,omitempty"`
 }
 
 // findRawResult is find's `raw: true` envelope: the untouched resource records
@@ -157,11 +168,18 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		// validation on the very call that asked for the untouched record.
 		markTextOnlyResult(ctx)
 
+		// The links come off the rows the raw records were projected from, so
+		// raw mode changes the shape of the answer without costing the caller
+		// the way onward — the same reason the filters apply to it.
+		attachResourceLinks(ctx, resourceLinksForRows(paginate(rows, req)))
+
 		return marshalResult(findRawResult{Type: resourceType, Items: items, Total: total})
 	}
 
 	total := len(rows)
 	rows = paginate(rows, req)
+
+	attachResourceLinks(ctx, resourceLinksForRows(rows))
 
 	return marshalResult(findResult{Type: resourceType, Items: rows, Total: total})
 }
@@ -208,7 +226,13 @@ func (s *Server) findAcrossTypes(
 
 	sortFindRows(rows)
 
-	return marshalResult(findResult{Items: rows, Total: results.Total})
+	attachResourceLinks(ctx, resourceLinksForRows(rows))
+
+	return marshalResult(findResult{
+		Items:  rows,
+		Total:  results.Total,
+		Counts: results.Counts,
+	})
 }
 
 // sortFindRows puts a cross-type row list into a stable order. Rows are built
@@ -265,14 +289,11 @@ func (s *Server) rowsFor(
 			return nil, fmt.Errorf("find: tasks returned %T, not []cluster.EnrichedTask", listed)
 		}
 
-		// Both parent listings are ACL-filtered before the builder sees them:
+		// The services are ACL-filtered before the builder sees them, and the
+		// tasks arrive already enriched from an equally filtered node listing:
 		// a task row that named a service or node the caller may not read
 		// would make find a way around the grants describe honours.
-		return cluster.RowsForTasks(
-			items,
-			s.filterServices(ctx, c.ListServices()),
-			s.filterNodes(ctx, c.ListNodes()),
-		), nil
+		return cluster.RowsForTasks(items, s.filterServices(ctx, c.ListServices())), nil
 
 	case "stacks":
 		items, ok := listed.([]cache.Stack)

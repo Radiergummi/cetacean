@@ -239,7 +239,7 @@ func TestDescribeRawReturnsTheUntouchedRecord(t *testing.T) {
 		t.Fatal("describe not registered")
 	}
 
-	ctx, textOnly := withTextOnlyResultSignal(context.Background())
+	ctx, annotations := withResultAnnotations(context.Background())
 
 	out, err := td.handler(ctx, newCallToolRequest("describe", map[string]any{
 		"type": "service",
@@ -250,7 +250,7 @@ func TestDescribeRawReturnsTheUntouchedRecord(t *testing.T) {
 		t.Fatalf("handler: %v", err)
 	}
 
-	if !*textOnly {
+	if !annotations.textOnly {
 		t.Error("raw result was not marked text-only; it would fail output-schema validation")
 	}
 

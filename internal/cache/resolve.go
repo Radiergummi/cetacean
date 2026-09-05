@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/docker/docker/api/types/network"
@@ -20,9 +21,15 @@ type AmbiguousNameError struct {
 }
 
 func (e *AmbiguousNameError) Error() string {
+	// Sorted, because the IDs were collected by ranging over a map: an
+	// unsorted message renders differently on identical state, which is
+	// awkward to assert on and worse to read twice in a transcript.
+	ids := slices.Clone(e.IDs)
+	slices.Sort(ids)
+
 	return fmt.Sprintf(
 		"%q is ambiguous: it names %d resources (%s); use an ID instead",
-		e.Name, len(e.IDs), strings.Join(e.IDs, ", "),
+		e.Name, len(ids), strings.Join(ids, ", "),
 	)
 }
 

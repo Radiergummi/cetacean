@@ -799,3 +799,85 @@ func TestFindNamesATasksParentsOnlyWhenDescribeWould(t *testing.T) {
 		t.Errorf("find dropped the node ID the task record already carries: %s", found)
 	}
 }
+
+// A cross-type search reports a total the caller cannot reach the tail of:
+// `limit` caps the hits per type, there is no offset, and one figure over
+// eight types says nothing about where the matches are. Counts — the per-type
+// breakdown cluster.Search already computes, and the field the HTTP search
+// response carries — is what makes "137 matches, showing 6" legible instead of
+// looking like a listing that lost most of itself.
+func TestFindAcrossTypesReportsPerTypeCounts(t *testing.T) {
+	c := cache.New(nil)
+
+	// Two services and two nodes match, but limit lets one of each through.
+	for _, name := range []string{"web-frontend", "web-backend"} {
+		c.SetService(swarm.Service{
+			ID:   "svc-" + name,
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name}},
+		})
+	}
+
+	for _, host := range []string{"web-node-a", "web-node-b"} {
+		c.SetNode(swarm.Node{
+			ID:          "node-" + host,
+			Description: swarm.NodeDescription{Hostname: host},
+		})
+	}
+
+	srv := newToolTestServer(t, c, nil, config.OpsReadOnly)
+	td, _ := srv.findTool("find")
+
+	out, err := td.handler(context.Background(), newCallToolRequest("find", map[string]any{
+		"query": "web",
+		"limit": float64(1),
+	}))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+
+	var result findResult
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("unmarshal: %v: %s", err, out)
+	}
+
+	if len(result.Items) != 2 {
+		t.Fatalf("items = %d, want one per matching type (limit is per type)", len(result.Items))
+	}
+
+	if result.Total != 4 {
+		t.Errorf("total = %d, want 4 — every match, not just the shown ones", result.Total)
+	}
+
+	if got := result.Counts["services"]; got != 2 {
+		t.Errorf("counts[services] = %d, want 2", got)
+	}
+
+	if got := result.Counts["nodes"]; got != 2 {
+		t.Errorf("counts[nodes] = %d, want 2", got)
+	}
+}
+
+// Counts answers a question a typed listing does not have: there, total means
+// one type and `offset` reaches the rest, so a breakdown would be a map with
+// one key restating the number beside it.
+func TestFindTypedListingCarriesNoCounts(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	srv := newToolTestServer(t, c, nil, config.OpsReadOnly)
+	td, _ := srv.findTool("find")
+
+	out, err := td.handler(context.Background(), newCallToolRequest("find", map[string]any{
+		"type": "services",
+	}))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+
+	if strings.Contains(out, `"counts"`) {
+		t.Errorf("typed listing carried counts: %s", out)
+	}
+}

@@ -38,11 +38,19 @@ const ProviderName = "mcp-oauth"
 // mcpInstructions and mcpDescription are the server-level usage contract sent
 // to clients in the initialize response (WithInstructions/WithDescription).
 // Kept as package constants so the contract has a single source of truth
-// shared with the test that asserts it surfaces.
+// shared with the test that asserts it surfaces. mcpTitle and mcpWebsiteURL
+// are the rest of the server's identity: a host listing several servers shows
+// the title, falling back to the programmatic name ("cetacean") when there is
+// none, and offers the website as the "what is this" link beside it.
 const (
 	mcpInstructions = "Cetacean is a read-mostly observability and operations interface for a Docker Swarm cluster. Resolve a resource's ID or name with the find tool before reading its details or applying a write. Reads (the cetacean:// resources and the get_logs/find tools) are subject to per-resource ACL like everything else; mutating tools are additionally gated by an operations tier, and either kind may be hidden from tools/list or rejected at call time. Prefer the cetacean:// resources for detail and cross-references; use tools to change cluster state. Tool results include structuredContent you can parse directly. Named investigation and remediation sequences over these resources and tools are available via prompts/list."
 
 	mcpDescription = "Read and safely operate a Docker Swarm cluster."
+
+	mcpTitle = "Cetacean — Docker Swarm"
+
+	//nolint:gosec // G101: the project's public documentation site, not a credential — gosec flags the URL-shaped constant name.
+	mcpWebsiteURL = "https://cetacean.mazetti.me"
 )
 
 // DockerWriteClient is the narrow surface of Docker write operations the MCP
@@ -206,9 +214,28 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		mcpserver.WithCompletions(),
 		mcpserver.WithResourceCompletionProvider(srv),
 		mcpserver.WithPromptCompletionProvider(srv),
+		// A panic in a tool handler must not take the process down with it.
+		// The synchronous path is already covered — /mcp is mounted behind
+		// api's recovery middleware — but a task-augmented call is not:
+		// mcp-go runs it from executeRegularToolAsTask on a bare goroutine,
+		// after the HTTP response has been written, with no recover of its
+		// own. That goroutine does apply the tool middleware chain, which is
+		// exactly what WithRecovery installs, so this is the only thing
+		// standing between a nil dereference in scale_service and a dead
+		// dashboard. WithResourceRecovery is the same guard one layer over,
+		// and turns a resource panic into a JSON-RPC error rather than a
+		// truncated 500 the client cannot correlate.
+		mcpserver.WithRecovery(),
+		mcpserver.WithResourceRecovery(),
 		mcpserver.WithHooks(srv.installSubscriptionHooks()),
 		mcpserver.WithInstructions(mcpInstructions),
 		mcpserver.WithDescription(mcpDescription),
+		mcpserver.WithTitle(mcpTitle),
+		mcpserver.WithWebsiteURL(mcpWebsiteURL),
+		// Nil when no icon base URL is configured, exactly as a tool's icons
+		// are: an icon `src` must be an absolute https:// or data: URI per the
+		// spec, so without a canonical external base there is no icon to name.
+		mcpserver.WithIcons(srv.icon("server", "cetacean")...),
 		mcpserver.WithExtensions(serverExtensions()),
 		// Enforce advertised output schemas: a tool result whose
 		// structuredContent does not conform to its declared outputSchema is

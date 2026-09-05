@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -298,5 +300,90 @@ func TestHandlerAuthBypassIgnoredWhenModeNotListed(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401 when active mode is not in AuthBypass", rec.Code)
+	}
+}
+
+// A host listing several MCP servers shows the title, falls back to the
+// programmatic name when there is none, and offers the website as the "what is
+// this" link beside it. Cetacean declared only a name and a description, so it
+// rendered as "cetacean" with nowhere to go.
+func TestServerDiscoverCarriesTheFullIdentity(t *testing.T) {
+	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) {
+		o.IconBaseURL = "https://swarm.example.com"
+	})
+
+	_, envelope := mcpModern(t, srv.Handler(), 1, "server/discover", `{}`)
+	if envelope.Error != nil {
+		t.Fatalf("server/discover: %+v", envelope.Error)
+	}
+
+	// server/discover carries the implementation block in _meta under the
+	// spec's reverse-DNS key, not as the top-level serverInfo of the
+	// initialize handshake it replaced.
+	type implementation struct {
+		Name        string `json:"name"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		WebsiteURL  string `json:"websiteUrl"`
+		Icons       []struct {
+			Src      string `json:"src"`
+			MIMEType string `json:"mimeType"`
+		} `json:"icons"`
+	}
+
+	var discovered struct {
+		Meta struct {
+			ServerInfo implementation `json:"io.modelcontextprotocol/serverInfo"`
+		} `json:"_meta"`
+	}
+
+	if err := json.Unmarshal(envelope.Result, &discovered); err != nil {
+		t.Fatalf("decode server/discover: %v (raw %s)", err, envelope.Result)
+	}
+
+	info := discovered.Meta.ServerInfo
+
+	if info.Name != "cetacean" {
+		t.Errorf("name = %q, want cetacean", info.Name)
+	}
+
+	if info.Title != mcpTitle {
+		t.Errorf("title = %q, want %q", info.Title, mcpTitle)
+	}
+
+	if info.Description != mcpDescription {
+		t.Errorf("description = %q, want %q", info.Description, mcpDescription)
+	}
+
+	if info.WebsiteURL != mcpWebsiteURL {
+		t.Errorf("websiteUrl = %q, want %q", info.WebsiteURL, mcpWebsiteURL)
+	}
+
+	if len(info.Icons) != 1 {
+		t.Fatalf("icons = %+v, want exactly one", info.Icons)
+	}
+
+	// An icon src must be an absolute https:// or data: URI per the spec — a
+	// relative path is what a client cannot resolve, having no base to
+	// resolve it against.
+	want := "https://swarm.example.com/assets/mcp-icons/server/cetacean.svg"
+	if info.Icons[0].Src != want {
+		t.Errorf("icon src = %q, want %q", info.Icons[0].Src, want)
+	}
+}
+
+// Without a canonical external base there is no absolute URI to name, so the
+// server says nothing about icons rather than publishing one a client cannot
+// fetch — the same rule the per-tool icons follow.
+func TestServerDiscoverOmitsIconsWithoutABaseURL(t *testing.T) {
+	srv := newResourceTestServer(t, cache.New(nil))
+
+	_, envelope := mcpModern(t, srv.Handler(), 1, "server/discover", `{}`)
+	if envelope.Error != nil {
+		t.Fatalf("server/discover: %+v", envelope.Error)
+	}
+
+	if bytes.Contains(envelope.Result, []byte(`"icons"`)) {
+		t.Errorf("icons advertised with no base URL to build them from: %s", envelope.Result)
 	}
 }

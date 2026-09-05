@@ -8,6 +8,8 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -171,5 +173,70 @@ func TestLookupResolvesATaskWhoseServiceNameHasDots(t *testing.T) {
 
 	if !strings.Contains(body, "task-xyz") {
 		t.Errorf("got %s, want it to name task-xyz", body)
+	}
+}
+
+// An unassigned global task has no node to distinguish its replicas by, so
+// cluster.TaskName renders it as the bare service name — and a completion
+// offers that string like any other. Requiring a separator made the one
+// identifier the tool had just handed back read as not found.
+func TestLookupResolvesAnUnassignedGlobalTaskByName(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc-agent",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "agent"},
+			Mode:        swarm.ServiceMode{Global: &swarm.GlobalService{}},
+		},
+	})
+	c.SetTask(swarm.Task{ID: "task-pending", ServiceID: "svc-agent"})
+
+	srv := newResourceTestServer(t, c)
+
+	body, err := srv.readResource(context.Background(), "cetacean://tasks/agent")
+	if err != nil {
+		t.Fatalf("readResource: %v", err)
+	}
+
+	if !strings.Contains(body, "task-pending") {
+		t.Errorf("got %s, want it to name task-pending", body)
+	}
+}
+
+// get_logs advertises its `service` argument as "Service ID or name", and
+// Docker honours both — but the ACL check in front of it looked the ID up
+// instead of resolving, so the same call succeeded on a cluster with no policy
+// and failed with "service not found" on one that had a policy granting it.
+func TestServiceLogACLCheckAcceptsAName(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:web"},
+		Audience:    []string{"user:agent@example.com"},
+		Permissions: []string{"read"},
+	}}})
+
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc-abc123",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = evaluator })
+
+	ctx := auth.ContextWithIdentity(
+		context.Background(),
+		&auth.Identity{Subject: "agent@example.com"},
+	)
+
+	if err := srv.checkServiceRead(ctx, "web"); err != nil {
+		t.Errorf("checkServiceRead by name: %v", err)
+	}
+
+	if err := srv.checkServiceRead(ctx, "svc-abc123"); err != nil {
+		t.Errorf("checkServiceRead by ID: %v", err)
+	}
+
+	if err := srv.checkServiceRead(ctx, "nope"); err == nil {
+		t.Error("checkServiceRead resolved a service that does not exist")
 	}
 }

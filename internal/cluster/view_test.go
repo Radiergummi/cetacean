@@ -69,10 +69,12 @@ func TestBuildersProduceIdentifiableRows(t *testing.T) {
 		}}), "node", nil},
 
 		{"tasks", RowsForTasks(
-			[]EnrichedTask{{Task: swarm.Task{ID: "t1", ServiceID: "svc-api", NodeID: "n1",
-				Status: swarm.TaskStatus{State: swarm.TaskStateRunning}}}},
+			[]EnrichedTask{{
+				Task: swarm.Task{ID: "t1", ServiceID: "svc-api", NodeID: "n1",
+					Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
+				NodeHostname: "worker-a",
+			}},
 			[]swarm.Service{replicated("api", 1)},
-			[]swarm.Node{{ID: "n1", Description: swarm.NodeDescription{Hostname: "worker-a"}}},
 		), "task", nil},
 
 		{"configs", RowsForConfigs([]swarm.Config{{
