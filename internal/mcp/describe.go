@@ -83,16 +83,6 @@ func (s *Server) toolDescribe(ctx context.Context, req mcplib.CallToolRequest) (
 		return "", err
 	}
 
-	if req.GetBool("raw", false) {
-		// The untouched Docker record is not the shape describe's outputSchema
-		// describes (that is cluster.Digest), and mcp-go validates results
-		// against it — presenting this as structuredContent would fail the
-		// very call that asked for the raw record.
-		markTextOnlyResult(ctx)
-
-		return marshalResult(resolved)
-	}
-
 	digest, err := s.digestOf(ctx, plural, resolved)
 	if err != nil {
 		return "", err
@@ -103,7 +93,28 @@ func (s *Server) toolDescribe(ctx context.Context, req mcplib.CallToolRequest) (
 	// exists to enable.
 	attachResourceLinks(ctx, resourceLinksForDigest(digest))
 
-	return marshalResult(digest)
+	result := describeResult{Digest: digest}
+	if req.GetBool("raw", false) {
+		result.Raw = resolved
+	}
+
+	return marshalResult(result)
+}
+
+// describeResult is what describe returns: the digest, plus the untouched
+// Docker record beside it when the caller asked for one.
+//
+// The digest is embedded rather than nested, so an ordinary describe answers
+// with exactly the object it always did — the fields sit at the top level and
+// cluster.Digest stays the shape both transports build. Raw is an addition to
+// that object rather than a replacement of it, because a tool advertising an
+// output schema must return content conforming to it, and one tool has one
+// schema whatever its arguments: returning the bare record instead, as this
+// once did, left a strict client rejecting the very call that asked for it.
+type describeResult struct {
+	cluster.Digest
+
+	Raw any `json:"raw,omitempty"`
 }
 
 // digestOf builds the detail view of one already-resolved resource, and is the

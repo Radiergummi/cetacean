@@ -62,27 +62,20 @@ var pluralToSingularRowType = map[string]string{
 // computes for exactly this, and the same field the HTTP search response
 // carries, so one search reads the same over both transports. It stays absent
 // on a typed listing, where Total already means one type and paging works.
+//
+// Raw carries the untouched resource records behind Items when the caller
+// asked for them, one per row and in the same order. It rides *beside* the
+// compact rows rather than replacing them because a tool that advertises an
+// output schema must return content conforming to it — the reference client
+// rejects a result that omits structuredContent when a schema was declared —
+// and one tool has one schema, whatever its arguments. Absent otherwise, so
+// the ordinary listing is unchanged.
 type findResult struct {
 	Type   string         `json:"type"`
 	Items  []cluster.Row  `json:"items"`
 	Total  int            `json:"total"`
 	Counts map[string]int `json:"counts,omitempty"`
-}
-
-// findRawResult is find's `raw: true` envelope: the untouched resource records
-// (the same shape lookupResource already returns for widgets and resources)
-// rather than the compact Row. It exists for a caller that needs a field Row
-// does not carry, and is never advertised as an output schema — the tool
-// always advertises findResult, because the compact shape is what a
-// well-behaved caller gets by default. That leaves this result deliberately
-// non-conforming to the schema the client was told to expect, so toolFind
-// calls markTextOnlyResult before returning it, and registerTools skips the
-// structuredContent wrapper rather than shipping a payload that would fail
-// the server's own output-schema validation.
-type findRawResult struct {
-	Type  string `json:"type"`
-	Items []any  `json:"items"`
-	Total int    `json:"total"`
+	Raw    []any          `json:"raw,omitempty"`
 }
 
 // toolFind locates cluster resources: enumerate one type (optionally narrowed
@@ -142,46 +135,31 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 
 	rows = filterRows(rows, filters, labels)
 
-	if req.GetBool("raw", false) {
-		// raw changes the shape of what comes back, never the scope: a
-		// caller who asked for one stack's worth of services must not
-		// silently get every service back because raw skipped the filters
-		// that shape would have applied. Project the *filtered* rows' IDs
-		// back onto the untouched records — never pair the two slices by
-		// index, since rowsFor's builders each sort their own output and
-		// positional correspondence with `listed` does not hold.
-		byID := rawItemsByID(listed)
-
-		items := make([]any, 0, len(rows))
-		for _, row := range rows {
-			if item, ok := byID[row.ID]; ok {
-				items = append(items, item)
-			}
-		}
-
-		total := len(items)
-		items = paginate(items, req)
-
-		// findRawResult is not the shape find's outputSchema describes (that
-		// is findResult, the compact Row list) — presenting it as
-		// structuredContent would fail the server's output-schema
-		// validation on the very call that asked for the untouched record.
-		markTextOnlyResult(ctx)
-
-		// The links come off the rows the raw records were projected from, so
-		// raw mode changes the shape of the answer without costing the caller
-		// the way onward — the same reason the filters apply to it.
-		attachResourceLinks(ctx, resourceLinksForRows(paginate(rows, req)))
-
-		return marshalResult(findRawResult{Type: resourceType, Items: items, Total: total})
-	}
-
 	total := len(rows)
 	rows = paginate(rows, req)
 
 	attachResourceLinks(ctx, resourceLinksForRows(rows))
 
-	return marshalResult(findResult{Type: resourceType, Items: rows, Total: total})
+	result := findResult{Type: resourceType, Items: rows, Total: total}
+
+	// raw changes what the answer carries, never its scope: a caller who asked
+	// for one stack's worth of services must not silently get every service
+	// back because raw skipped the filters and paging that shape applied.
+	// Project the returned rows' IDs back onto the untouched records — never
+	// pair the two slices by index, since rowsFor's builders each sort their
+	// own output and positional correspondence with `listed` does not hold.
+	if req.GetBool("raw", false) {
+		byID := rawItemsByID(listed)
+
+		result.Raw = make([]any, 0, len(rows))
+		for _, row := range rows {
+			if item, ok := byID[row.ID]; ok {
+				result.Raw = append(result.Raw, item)
+			}
+		}
+	}
+
+	return marshalResult(result)
 }
 
 // findAcrossTypes searches every listable resource type by name, label or

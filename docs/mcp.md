@@ -256,15 +256,17 @@ NanoCPU or nanosecond integers, which read as arbitrary large numbers. Environme
 
 ### The `raw: true` escape hatch
 
-Both `find` (when `type` is given) and `describe` accept `raw: true`, returning the untouched Docker record
-instead of the compact shape. It exists so nothing the compact representation drops becomes permanently
-unreachable — but it is the deliberately expensive escape hatch: the whole point of the compact shapes is to avoid
-handing an agent the several-hundred-line object, so reach for `raw` only when a specific field a row or digest
-genuinely omits is needed.
+Both `find` (when `type` is given) and `describe` accept `raw: true`, adding the untouched Docker record to the
+result under `raw`. It exists so nothing the compact representation drops becomes permanently unreachable — but it
+is the deliberately expensive escape hatch: the whole point of the compact shapes is to avoid handing an agent the
+several-hundred-line object, so reach for `raw` only when a specific field a row or digest genuinely omits is
+needed.
 
-A `raw: true` result comes back as text content rather than structured content: the tool's advertised output
-schema describes the compact shape, and an untouched Docker object doesn't conform to it, so returning it as
-structured content would fail the server's own output-schema validation on the very call that asked for it.
+The raw records ride *beside* the compact shape rather than replacing it — `find` fills a `raw` array holding one
+record per row it returned, in the same order, and `describe` adds a `raw` object next to the digest's fields. A
+tool that advertises an output schema must return structured content conforming to it, and a tool has one schema
+whatever its arguments, so raw has to be an addition to the declared shape rather than a substitute for it. The
+compact half of a raw result is the same one a plain call returns, filters and paging included.
 
 ## Icons
 
@@ -298,8 +300,13 @@ somewhere to go next and a client can `resources/read` one without the model fir
 `cetacean://` URI. The links describe the page actually returned, filters and paging included, and are capped at 25:
 they are an affordance, not the payload, and every id is in `structuredContent` regardless. Every tool
 whose result shape Cetacean owns — the tier 0 reads, the four service lifecycle mutations, and the `remove_*` tools —
-advertises an output schema that the server validates results against. An input-validation failure comes back as a
-tool result with `isError: true` (so the model can self-correct), not a protocol error.
+advertises an output schema that the server validates results against, on every call — a tool declaring a schema
+must answer with conforming structured content whatever its arguments, so no argument switches a tool to a shape
+its schema does not describe. The spec-editing mutations (`update_service_env`, `update_service_resources`, the
+rest of that group, and the two node updates) deliberately declare none: their result is the resulting Docker
+object, and reflecting `swarm.Service` into a schema would add ~22 KB per tool to every `tools/list`, which the
+compact shapes exist to avoid. An input-validation failure comes back as a tool result with `isError: true` (so the
+model can self-correct), not a protocol error.
 
 **Tier 0 — reads** (always available): `get_logs`, `find`, `describe`, `get_topology`, `get_metrics`,
 `get_recommendations`.
@@ -314,8 +321,8 @@ row carrying its own `type`, the way the two tools it replaces (`list_resources`
 paging in that mode, a cross-type result also carries `counts` — the per-type breakdown behind `total`, the same
 field the HTTP search response uses — so "137 matches, showing 6" is legible without a second call, and narrowing
 with `type` is the way to page through one of them. A typed listing omits `counts`: there `total` already means
-one type, and `offset` reaches the rest. `raw: true` returns each match's untouched Docker record instead of a
-`Row` — see [Compact resource shapes](#compact-resource-shapes).
+one type, and `offset` reaches the rest. `raw: true` adds each match's untouched Docker record under `raw`,
+beside the rows — see [Compact resource shapes](#compact-resource-shapes).
 
 `describe` returns everything needed to act on one resource, as a `Digest`: its derived state, the reason behind
 an unhealthy one, how long it has held, type-specific details, cross-references, and the recent task failures
@@ -324,8 +331,8 @@ behind a failing state. Its `type` argument is **singular** (`service`, `node`, 
 and `id` are required; `id` accepts an ID or a name — a hostname for a node, the rendered `<service>.<slot>`
 for a task, the plain name for everything else. A name that matches more than one resource (Swarm does not enforce
 unique node hostnames) is refused, naming the matching IDs, rather than resolving to one of them. `raw: true`
-returns the untouched Docker record. Secret payloads and environment variable values are never returned, in
-either mode.
+adds the untouched Docker record under `raw`, beside the digest. Secret payloads and environment variable values
+are never returned, in either mode.
 
 `get_logs` reads either a service or a single task, named by `service` or `task` — exactly one, since the two are
 different streams and guessing between them would return output the caller did not ask for. A service merges the

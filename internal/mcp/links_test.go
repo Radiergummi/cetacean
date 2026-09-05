@@ -158,8 +158,8 @@ func TestFindRawStillOffersLinks(t *testing.T) {
 	result := callTool(t, handler,
 		`{"name":"find","arguments":{"type":"services","raw":true}}`)
 
-	if len(result.StructuredContent) != 0 {
-		t.Error("raw result carried structuredContent; it does not match the output schema")
+	if len(result.StructuredContent) == 0 {
+		t.Error("raw result carried no structuredContent, though find declares an output schema")
 	}
 
 	if got := linkURIs(result.Content); len(got) == 0 {

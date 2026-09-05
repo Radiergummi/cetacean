@@ -227,9 +227,9 @@ func TestDescribeSecretOmitsData(t *testing.T) {
 }
 
 // TestDescribeRawReturnsTheUntouchedRecord covers both halves of raw mode: the
-// Docker record comes back whole, and the handler signals that the result must
-// not be presented as structuredContent — raw does not conform to the Digest
-// schema describe advertises, and mcp-go validates against it.
+// Docker record comes back whole, under `raw`, and the digest is still there
+// beside it — describe advertises an output schema, and a tool that does must
+// return content conforming to it whatever its arguments.
 func TestDescribeRawReturnsTheUntouchedRecord(t *testing.T) {
 	c := seededDescribeCache()
 	srv := newResourceTestServer(t, c)
@@ -239,9 +239,7 @@ func TestDescribeRawReturnsTheUntouchedRecord(t *testing.T) {
 		t.Fatal("describe not registered")
 	}
 
-	ctx, annotations := withResultAnnotations(context.Background())
-
-	out, err := td.handler(ctx, newCallToolRequest("describe", map[string]any{
+	out, err := td.handler(context.Background(), newCallToolRequest("describe", map[string]any{
 		"type": "service",
 		"id":   "svc1",
 		"raw":  true,
@@ -250,13 +248,23 @@ func TestDescribeRawReturnsTheUntouchedRecord(t *testing.T) {
 		t.Fatalf("handler: %v", err)
 	}
 
-	if !annotations.textOnly {
-		t.Error("raw result was not marked text-only; it would fail output-schema validation")
+	var result struct {
+		ID   string          `json:"id"`
+		Name string          `json:"name"`
+		Type string          `json:"type"`
+		Raw  json.RawMessage `json:"raw"`
+	}
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("unmarshal: %v: %s", err, out)
+	}
+
+	if result.ID != "svc1" || result.Type != "service" {
+		t.Errorf("digest fields missing from a raw result: %s", out)
 	}
 
 	var svc swarm.Service
-	if err := json.Unmarshal([]byte(out), &svc); err != nil {
-		t.Fatalf("unmarshal: %v: %s", err, out)
+	if err := json.Unmarshal(result.Raw, &svc); err != nil {
+		t.Fatalf("unmarshal raw: %v: %s", err, out)
 	}
 
 	if svc.Spec.Name != "web" {
@@ -353,11 +361,17 @@ func TestDescribeStackOmitsMemberSecretData(t *testing.T) {
 		}
 	}
 
-	// The raw record must still carry the secret — redacted, not dropped.
-	var detail cache.StackDetail
-	if err := json.Unmarshal([]byte(bodies["describe raw=true"]), &detail); err != nil {
+	// The raw record must still carry the secret — redacted, not dropped. It
+	// sits under `raw`, beside the digest, so that a raw describe still
+	// conforms to the output schema the tool advertises.
+	var rawStack struct {
+		Raw cache.StackDetail `json:"raw"`
+	}
+	if err := json.Unmarshal([]byte(bodies["describe raw=true"]), &rawStack); err != nil {
 		t.Fatalf("unmarshal raw stack: %v", err)
 	}
+
+	detail := rawStack.Raw
 
 	if len(detail.Secrets) != 1 {
 		t.Fatalf("expected the stack to still list its secret, got %d", len(detail.Secrets))

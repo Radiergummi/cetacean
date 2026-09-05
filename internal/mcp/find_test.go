@@ -237,15 +237,15 @@ func TestFindCompactItemsMatchTheirElementSchema(t *testing.T) {
 	}
 }
 
-// TestFindRawModeDoesNotClaimStructuredContent guards the bug this whole
-// check exists for: raw hands back the untouched resource record, which is
-// not the compact Row shape find's outputSchema describes, and the server
-// validates structuredContent against that schema
-// (mcpserver.WithOutputSchemaValidation, server.go). Before markTextOnlyResult
-// was wired into the raw branch, every raw call failed here with "output
-// schema validation failed" over the real transport — invisible to a test
-// that calls td.handler directly, since that bypasses validation entirely.
-func TestFindRawModeDoesNotClaimStructuredContent(t *testing.T) {
+// TestFindRawModeReturnsConformingStructuredContent guards the contract raw
+// mode used to break: a tool that advertises an outputSchema must return
+// structuredContent conforming to it, whatever its arguments. raw once
+// answered with text content and no structuredContent at all, which the
+// server's own validator was happy with — it skips a result that has none —
+// and which the reference client rejects outright ("has an output schema but
+// did not return structured content"). The untouched records ride under `raw`
+// beside the compact rows instead, which the schema declares.
+func TestFindRawModeReturnsConformingStructuredContent(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
 		ID:   "svc1",
@@ -263,9 +263,6 @@ func TestFindRawModeDoesNotClaimStructuredContent(t *testing.T) {
 	var result struct {
 		IsError           bool            `json:"isError"`
 		StructuredContent json.RawMessage `json:"structuredContent"`
-		Content           []struct {
-			Text string `json:"text"`
-		} `json:"content"`
 	}
 	if err := json.Unmarshal(env.Result, &result); err != nil {
 		t.Fatalf("decode result: %v", err)
@@ -275,15 +272,24 @@ func TestFindRawModeDoesNotClaimStructuredContent(t *testing.T) {
 		t.Fatalf("raw find must not fail output-schema validation: %s", env.Result)
 	}
 
-	if len(result.StructuredContent) != 0 && string(result.StructuredContent) != "null" {
-		t.Errorf(
-			"raw find must not present structuredContent — it does not conform to find's schema, got %s",
-			result.StructuredContent,
+	if len(result.StructuredContent) == 0 || string(result.StructuredContent) == "null" {
+		t.Fatalf(
+			"raw find returned no structuredContent, but find declares an output schema: %s",
+			env.Result,
 		)
 	}
 
-	if len(result.Content) == 0 || !strings.Contains(result.Content[0].Text, "web") {
-		t.Errorf("raw find's untouched record missing from its text content: %s", env.Result)
+	var found findResult
+	if err := json.Unmarshal(result.StructuredContent, &found); err != nil {
+		t.Fatalf("decode structuredContent as findResult: %v", err)
+	}
+
+	if len(found.Items) != 1 || found.Items[0].Name != "web" {
+		t.Errorf("compact rows missing from a raw result: %s", result.StructuredContent)
+	}
+
+	if len(found.Raw) != 1 {
+		t.Fatalf("raw records = %d, want 1: %s", len(found.Raw), result.StructuredContent)
 	}
 }
 
@@ -502,23 +508,23 @@ func TestFindRawModeHonoursFilters(t *testing.T) {
 		t.Fatalf("handler: %v", err)
 	}
 
-	var raw findRawResult
-	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+	var found findResult
+	if err := json.Unmarshal([]byte(out), &found); err != nil {
 		t.Fatalf("unmarshal: %v: %s", err, out)
 	}
 
-	if raw.Total != 1 || len(raw.Items) != 1 {
+	if found.Total != 1 || len(found.Raw) != 1 {
 		t.Fatalf(
-			"stack=demo raw total/items = %d/%d, want 1/1 — the filter was not applied",
-			raw.Total,
-			len(raw.Items),
+			"stack=demo raw total/records = %d/%d, want 1/1 — the filter was not applied",
+			found.Total,
+			len(found.Raw),
 		)
 	}
 
 	// The surviving item must be the *untouched* svc-web record: its digest
 	// is still on the image (RowsForServices strips it; raw must not), and
 	// its worker sibling's fields must not leak in.
-	item, err := json.Marshal(raw.Items[0])
+	item, err := json.Marshal(found.Raw[0])
 	if err != nil {
 		t.Fatalf("marshal item: %v", err)
 	}

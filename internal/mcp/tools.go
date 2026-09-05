@@ -219,19 +219,9 @@ func (s *Server) registerTools() {
 					return mcplib.NewToolResultError(err.Error()), nil
 				}
 
-				// A handler that called markTextOnlyResult built a result it
-				// knows does not conform to the tool's declared outputSchema
-				// (find's and describe's raw modes) — presenting it as
-				// structuredContent anyway would fail
-				// WithOutputSchemaValidation's check on the very call the
-				// handler asked for something other than the compact shape.
-				if annotations.textOnly {
-					return withResourceLinks(
-						mcplib.NewToolResultText(text),
-						annotations.links,
-					), nil
-				}
-
+				// Every result is structured: a tool that advertises an
+				// output schema must return content conforming to it, so a
+				// handler has no way to opt out of the shape it declared.
 				return withResourceLinks(
 					structuredToolResult(text),
 					annotations.links,
@@ -358,7 +348,7 @@ func (s *Server) toolCatalog() []toolDef {
 				),
 				mcplib.WithBoolean("raw",
 					mcplib.Description(
-						"With `type`, return each match's untouched resource record instead of the compact row shape. Default false.",
+						"With `type`, add each match's untouched resource record to the result, under `raw`, beside the compact rows. Default false.",
 					),
 				),
 			),
@@ -373,7 +363,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Return everything needed to act on one resource: its derived state, the reason Swarm gave for that state when it is not healthy, how long the state has held, the type-specific facts (a service's image, replica counts, reserved CPU in cores and memory in bytes, ports, placement constraints and environment variable *names*; a node's role, availability, capacity; a network's driver and subnets), the resources it references or is referenced by, and the recent task failures behind a failing state. Name the type in the singular (service, node, task, stack, config, secret, network, volume) and give an ID or a name. Use this instead of a resource read when following up on a finding from find or get_recommendations; secret payloads and environment variable values are never returned.",
 				),
-				mcplib.WithOutputSchema[cluster.Digest](),
+				mcplib.WithOutputSchema[describeResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -392,7 +382,7 @@ func (s *Server) toolCatalog() []toolDef {
 				),
 				mcplib.WithBoolean("raw",
 					mcplib.Description(
-						"Return the untouched Docker record instead of the digest. Default false.",
+						"Add the untouched Docker record to the result, under `raw`, beside the digest. Default false.",
 					),
 				),
 			),
@@ -1630,17 +1620,13 @@ func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
 }
 
 // resultAnnotationsKey is the context key backing withResultAnnotations and
-// the two functions handlers use to write to it.
+// the function handlers use to write to it.
 type resultAnnotationsKey struct{}
 
-// resultAnnotations is what a handler learned about the shape of its own
-// result and cannot express in the string it returns. registerTools is the
-// only place a CallToolResult is assembled, so this is how the two halves
-// meet.
+// resultAnnotations is what a handler learned about its own result and cannot
+// express in the string it returns. registerTools is the only place a
+// CallToolResult is assembled, so this is how the two halves meet.
 type resultAnnotations struct {
-	// textOnly suppresses structuredContent — see markTextOnlyResult.
-	textOnly bool
-
 	// links are the cetacean:// resources the result refers to, offered to
 	// the client as resource_link content — see attachResourceLinks.
 	links []mcplib.ResourceLink
@@ -1657,25 +1643,12 @@ func withResultAnnotations(ctx context.Context) (context.Context, *resultAnnotat
 
 // resultAnnotationsFrom recovers the block, or nil when ctx was not set up by
 // registerTools — which is the case whenever a handler is invoked directly, as
-// the tool tests do. Both writers below are then no-ops, since there is
-// nothing on the other end to read them.
+// the tool tests do. The writer below is then a no-op, since there is nothing
+// on the other end to read it.
 func resultAnnotationsFrom(ctx context.Context) *resultAnnotations {
 	annotations, _ := ctx.Value(resultAnnotationsKey{}).(*resultAnnotations)
 
 	return annotations
-}
-
-// markTextOnlyResult tells registerTools this call's result must be returned
-// as text only, never as structuredContent, because — despite marshalling to
-// a JSON object — it does not conform to the tool's declared outputSchema.
-// The callers are find's and describe's raw modes: raw hands back whatever
-// shape the underlying resource has, which is neither the compact Row shape
-// find's schema describes nor the Digest describe's does, and
-// structuredContent must conform under WithOutputSchemaValidation.
-func markTextOnlyResult(ctx context.Context) {
-	if annotations := resultAnnotationsFrom(ctx); annotations != nil {
-		annotations.textOnly = true
-	}
 }
 
 // attachResourceLinks offers the cetacean:// resources a result refers to as
