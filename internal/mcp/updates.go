@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"maps"
 	"slices"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -69,6 +68,33 @@ var serviceSectionKeys = map[string][]string{
 	sectionCommand: {"command", "args"},
 	sectionSecrets: {"secretNames"},
 	sectionConfigs: {"configNames"},
+}
+
+// updateServiceSections is the set of sections update_service dispatches, and
+// is deliberately narrower than serviceSectionKeys.
+//
+// The two are not the same question. serviceSectionKeys answers "how is this
+// section reported", and the attachment editors need an entry there because
+// they reply through serviceUpdate like everything else. Whether update_service
+// can *perform* the edit is a separate matter: an attachment editor takes a
+// list of resource references, resolves each one and checks a read grant on
+// it, which is a different argument shape and a different authorization step
+// — so it is a tool of its own.
+//
+// Validating against the projection table conflated the two. update_service
+// accepted section "secrets", reached no case in the switch, and answered with
+// a zero-valued result that reads as a write that landed.
+var updateServiceSections = []string{
+	sectionEnv,
+	sectionLabels,
+	sectionResources,
+	sectionPlacement,
+	sectionPorts,
+	sectionUpdatePolicy,
+	sectionRollbackPolicy,
+	sectionLogDriver,
+	sectionHealthcheck,
+	sectionCommand,
 }
 
 // nodeSectionKeys is the node counterpart, over NodeDigest's details.
@@ -187,10 +213,21 @@ func (s *Server) toolUpdateService(
 		return "", err
 	}
 
-	if _, ok := serviceSectionKeys[section]; !ok {
+	if !slices.Contains(updateServiceSections, section) {
+		// A section this tool does not dispatch but the projection knows
+		// about is reached by a tool of its own, and the error is the only
+		// place a caller who guessed finds out which one.
+		if _, ok := serviceSectionKeys[section]; ok {
+			return "", fmt.Errorf(
+				"section %q is not edited through update_service; "+
+					"use the update_service_%s tool, which takes a list of references",
+				section, section,
+			)
+		}
+
 		return "", fmt.Errorf(
 			"unknown section %q; expected one of %v",
-			section, slices.Sorted(maps.Keys(serviceSectionKeys)),
+			section, updateServiceSections,
 		)
 	}
 

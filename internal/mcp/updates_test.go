@@ -3,9 +3,11 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -39,6 +41,26 @@ func serviceWithSecrets() swarm.Service {
 			},
 		},
 	}
+}
+
+// dispatchedServiceSections is one valid argument per section update_service
+// dispatches, driven end to end by TestSpecEditingToolsNeverReturnSecrets.
+//
+// It is package-level so TestEveryAdvertisedSectionIsDispatched can hold it
+// against updateServiceSections in both directions: a section that reaches no
+// case in the switch returns a zero-valued result the identity assertion
+// below catches, but only if something actually calls it.
+var dispatchedServiceSections = map[string]string{
+	sectionResources:      `{"Limits":{"NanoCPUs":1000000000}}`,
+	sectionPlacement:      `{"Constraints":["node.role==worker"]}`,
+	sectionPorts:          `[{"TargetPort":80}]`,
+	sectionLabels:         `{"tier":"edge"}`,
+	sectionEnv:            `{"DATABASE_PASSWORD":"hunter2"}`,
+	sectionLogDriver:      `{"Name":"splunk","Options":{"splunk-token":"tok-secret"}}`,
+	sectionUpdatePolicy:   `{"Parallelism":2}`,
+	sectionRollbackPolicy: `{"Parallelism":1}`,
+	sectionHealthcheck:    `{"test":["CMD-SHELL","curl -f localhost || exit 1"],"interval":"10s"}`,
+	sectionCommand:        `{"command":["nginx"],"args":["-g","daemon off;"]}`,
 }
 
 // The bug this whole change exists for: a tool that only raises a CPU limit
@@ -78,20 +100,29 @@ func TestSpecEditingToolsNeverReturnSecrets(t *testing.T) {
 		updateServiceLogDrvFn: func(context.Context, string, *swarm.Driver) (swarm.Service, error) {
 			return svc, nil
 		},
+		updateServiceUpdateFn: func(context.Context, string, *swarm.UpdateConfig) (swarm.Service, error) {
+			return svc, nil
+		},
+		updateServiceRbackFn: func(context.Context, string, *swarm.UpdateConfig) (swarm.Service, error) {
+			return svc, nil
+		},
+		updateServiceHealthFn: func(
+			context.Context, string, *container.HealthConfig,
+		) (swarm.Service, error) {
+			return svc, nil
+		},
+		updateServiceContainerFn: func(
+			_ context.Context, _ string, apply func(spec *swarm.ContainerSpec),
+		) (swarm.Service, error) {
+			apply(svc.Spec.TaskTemplate.ContainerSpec)
+
+			return svc, nil
+		},
 	}
 
 	handler := newToolTestServer(t, c, writeClient, config.OpsImpactful).Handler()
 
-	calls := map[string]string{
-		sectionResources: `{"Limits":{"NanoCPUs":1000000000}}`,
-		sectionPlacement: `{"Constraints":["node.role==worker"]}`,
-		sectionPorts:     `[{"TargetPort":80}]`,
-		sectionLabels:    `{"tier":"edge"}`,
-		sectionEnv:       `{"DATABASE_PASSWORD":"hunter2"}`,
-		sectionLogDriver: `{"Name":"splunk","Options":{"splunk-token":"tok-secret"}}`,
-	}
-
-	for section, value := range calls {
+	for section, value := range dispatchedServiceSections {
 		t.Run(section, func(t *testing.T) {
 			result := callTool(t, handler,
 				`{"name":"update_service","arguments":{"id":"web","section":"`+
@@ -238,5 +269,63 @@ func TestNodeUpdateReportsRoleAndAvailability(t *testing.T) {
 
 	if got.Availability != "drain" {
 		t.Errorf("availability = %q, want drain", got.Availability)
+	}
+}
+
+// The attachment editors answer through serviceUpdate, so they need an entry
+// in the projection table — but they are tools of their own, taking a list of
+// references rather than a spec fragment, and update_service cannot dispatch
+// them. Validating the section against the projection table conflated the two:
+// update_service accepted section "secrets", matched no case in the switch,
+// and returned a zero-valued serviceUpdateResult that reads as a successful
+// write. A model told the rotation landed would move on and remove the old
+// secret.
+func TestUpdateServiceRefusesTheAttachmentSections(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(serviceWithSecrets())
+
+	handler := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful).Handler()
+
+	for _, section := range []string{sectionSecrets, sectionConfigs} {
+		t.Run(section, func(t *testing.T) {
+			_, envelope := mcpModern(t, handler, 1, "tools/call",
+				`{"name":"update_service","arguments":{"id":"web","section":"`+
+					section+`","value":[]}}`)
+
+			var result toolCallResult
+			if err := json.Unmarshal(envelope.Result, &result); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+
+			if !result.IsError {
+				t.Fatalf("update_service accepted section %q: %s", section, envelope.Result)
+			}
+
+			// Refusing is not enough on its own: the section exists, it is
+			// just reached by a different tool, and the error is the only
+			// place a model finds out which.
+			if !strings.Contains(string(envelope.Result), "update_service_"+section) {
+				t.Errorf("the error does not name the tool that does this: %s", envelope.Result)
+			}
+		})
+	}
+}
+
+// Every section update_service advertises must reach a case in its switch. The
+// table in TestSpecEditingToolsNeverReturnSecrets drives them for real and
+// would catch a section that falls through — it asserts the identity survives,
+// which a zero-valued result fails — but only for the sections it lists, and
+// it listed six of ten.
+func TestEveryAdvertisedSectionIsDispatched(t *testing.T) {
+	for _, section := range updateServiceSections {
+		if _, ok := dispatchedServiceSections[section]; !ok {
+			t.Errorf("section %q is advertised but not covered by the dispatch test table", section)
+		}
+	}
+
+	for section := range dispatchedServiceSections {
+		if !slices.Contains(updateServiceSections, section) {
+			t.Errorf("section %q is dispatched but not advertised", section)
+		}
 	}
 }
