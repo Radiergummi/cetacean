@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
-
-	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // maxCompletionValues caps a completion response. The MCP schema documents the
@@ -15,15 +13,6 @@ import (
 // count a client is not being shown travels back as Total and HasMore rather
 // than being silently dropped.
 const maxCompletionValues = 100
-
-// promptArgumentTypes maps a prompt argument to the resource type whose names
-// answer it. The prompts declare these arguments as "Name or ID", and a name
-// is what an agent can act on, so completion is the difference between picking
-// a service and pasting one.
-var promptArgumentTypes = map[string]string{
-	"service": "services",
-	"node":    "nodes",
-}
 
 // CompleteResourceArgument offers the names that fill a templated
 // cetacean:// URI, implementing mcp-go's ResourceCompletionProvider.
@@ -37,12 +26,10 @@ func (s *Server) CompleteResourceArgument(
 	argument mcplib.CompleteArgument,
 	_ mcplib.CompleteContext,
 ) (*mcplib.Completion, error) {
-	path := strings.TrimPrefix(uri, "cetacean://")
-	if path == uri {
-		return noCompletions(), nil
-	}
-
-	resourceType, _, _ := strings.Cut(path, "/")
+	// No guard on the scheme: a URI that is not a cetacean:// one cuts to
+	// something that is not a resource type, which completes to nothing by
+	// the same path an unknown type does.
+	resourceType, _, _ := strings.Cut(strings.TrimPrefix(uri, "cetacean://"), "/")
 
 	return s.completeResourceNames(ctx, resourceType, argument.Value)
 }
@@ -55,10 +42,16 @@ func (s *Server) CompletePromptArgument(
 	argument mcplib.CompleteArgument,
 	_ mcplib.CompleteContext,
 ) (*mcplib.Completion, error) {
-	// The argument name carries the type, and every prompt naming a service
-	// means the same thing by it, so the prompt itself does not narrow the
-	// answer. An argument that names no resource type completes to nothing.
-	return s.completeResourceNames(ctx, promptArgumentTypes[argument.Name], argument.Value)
+	// A prompt names its arguments after the resource type they take, so the
+	// singular→plural map describe already derives answers this too — a hand
+	// written pair here would leave a prompt gaining a `stack` or `network`
+	// argument silently completing to nothing. An argument naming no resource
+	// type completes to nothing, which is what an unknown key yields.
+	return s.completeResourceNames(
+		ctx,
+		describableResourceTypes[argument.Name],
+		argument.Value,
+	)
 }
 
 // completeResourceNames is the one body behind both providers: enumerate the
@@ -76,7 +69,9 @@ func (s *Server) completeResourceNames(
 	typed string,
 ) (*mcplib.Completion, error) {
 	if _, ok := pluralToSingularRowType[resourceType]; !ok {
-		return noCompletions(), nil
+		// Values is a non-nil slice because the field is required in the
+		// response schema and a nil slice marshals to null.
+		return &mcplib.Completion{Values: []string{}}, nil
 	}
 
 	// Neither of the next two can be reached by a caller: the type was just
@@ -95,19 +90,15 @@ func (s *Server) completeResourceNames(
 		return nil, err
 	}
 
-	// Substring rather than prefix, matching find's `query`: Docker names
-	// carry their stack as a prefix, so a caller typing "prometheus" means
-	// "monitoring_prometheus" and a prefix match would offer them nothing.
-	needle := strings.ToLower(strings.TrimSpace(typed))
+	// find's own filter, rather than a second substring rule beside it: a
+	// completion narrows by exactly what `find` means by `query`, and the two
+	// would drift the moment that rule gains a case.
+	rows = filterRows(rows, rowFilters{query: strings.TrimSpace(typed)}, nil)
 
 	values := make([]string, 0, len(rows))
 
 	for _, row := range rows {
 		if row.Name == "" {
-			continue
-		}
-
-		if needle != "" && !cluster.ContainsFold(row.Name, needle) {
 			continue
 		}
 
@@ -127,11 +118,4 @@ func (s *Server) completeResourceNames(
 		Total:   total,
 		HasMore: total > len(values),
 	}, nil
-}
-
-// noCompletions is the empty answer, spelled once. Values is a non-nil slice
-// because the field is required in the response schema and a nil slice
-// marshals to null.
-func noCompletions() *mcplib.Completion {
-	return &mcplib.Completion{Values: []string{}}
 }

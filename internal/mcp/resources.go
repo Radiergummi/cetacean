@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -229,17 +227,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterNodes(ctx, s.cache.ListNodes()), nil
 		}
-		node, ok, err := resolveOne(
-			s.cache.GetNode, s.cache.ListNodes,
-			func(n swarm.Node) string { return n.Description.Hostname },
-			func(n swarm.Node) string { return n.ID },
-			resourceID,
-		)
+		node, err := resolved(s.cache.ResolveNode(resourceID))(uri)
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, notFound(uri)
 		}
 		if err := s.checkRead(ctx, "node", nodeACLName(node)); err != nil {
 			return nil, err
@@ -250,23 +240,15 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterServices(ctx, s.cache.ListServices()), nil
 		}
-		svc, ok, err := resolveOne(
-			s.cache.GetService, s.cache.ListServices,
-			func(v swarm.Service) string { return v.Spec.Name },
-			func(v swarm.Service) string { return v.ID },
-			resourceID,
-		)
+		svc, err := resolved(s.cache.ResolveService(resourceID))(uri)
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, notFound(uri)
 		}
 		if err := s.checkRead(ctx, "service", svc.Spec.Name); err != nil {
 			return nil, err
 		}
 		if subResource == "logs" {
-			return s.readServiceLogs(ctx, resourceID)
+			return s.readServiceLogs(ctx, svc.ID)
 		}
 		return svc, nil
 
@@ -274,17 +256,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterTasks(ctx, cluster.EnrichTasks(s.cache, s.cache.ListTasks())), nil
 		}
-		task, ok, err := resolveOne(
-			s.cache.GetTask, s.cache.ListTasks,
-			s.taskName,
-			func(v swarm.Task) string { return v.ID },
-			resourceID,
-		)
+		task, err := resolved(s.resolveTask(resourceID))(uri)
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, notFound(uri)
 		}
 		if err := s.checkRead(ctx, "task", task.ID); err != nil {
 			return nil, err
@@ -311,17 +285,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterConfigs(ctx, s.cache.ListConfigs()), nil
 		}
-		cfg, ok, err := resolveOne(
-			s.cache.GetConfig, s.cache.ListConfigs,
-			func(v swarm.Config) string { return v.Spec.Name },
-			func(v swarm.Config) string { return v.ID },
-			resourceID,
-		)
+		cfg, err := resolved(s.cache.ResolveConfig(resourceID))(uri)
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, notFound(uri)
 		}
 		if err := s.checkRead(ctx, "config", cfg.Spec.Name); err != nil {
 			return nil, err
@@ -332,17 +298,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return cluster.RedactSecrets(s.filterSecrets(ctx, s.cache.ListSecrets())), nil
 		}
-		sec, ok, err := resolveOne(
-			s.cache.GetSecret, s.cache.ListSecrets,
-			func(v swarm.Secret) string { return v.Spec.Name },
-			func(v swarm.Secret) string { return v.ID },
-			resourceID,
-		)
+		sec, err := resolved(s.cache.ResolveSecret(resourceID))(uri)
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, notFound(uri)
 		}
 		if err := s.checkRead(ctx, "secret", sec.Spec.Name); err != nil {
 			return nil, err
@@ -353,17 +311,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterNetworks(ctx, s.cache.ListNetworks()), nil
 		}
-		net, ok, err := resolveOne(
-			s.cache.GetNetwork, s.cache.ListNetworks,
-			func(v network.Summary) string { return v.Name },
-			func(v network.Summary) string { return v.ID },
-			resourceID,
-		)
+		net, err := resolved(s.cache.ResolveNetwork(resourceID))(uri)
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, notFound(uri)
 		}
 		if err := s.checkRead(ctx, "network", net.Name); err != nil {
 			return nil, err

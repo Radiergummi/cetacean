@@ -382,16 +382,13 @@ func (s *Server) queryMetricSeries(
 // serviceMetricSelector resolves a service by ID or name and returns the label
 // selector matching its containers.
 func (s *Server) serviceMetricSelector(ctx context.Context, id string) (string, string, error) {
-	service, ok := s.cache.GetService(id)
-	if !ok {
-		index := slices.IndexFunc(s.cache.ListServices(), func(candidate swarm.Service) bool {
-			return candidate.Spec.Name == id
-		})
-		if index < 0 {
-			return "", "", fmt.Errorf("service %q not found", id)
-		}
+	service, ok, err := s.cache.ResolveService(id)
+	if err != nil {
+		return "", "", err
+	}
 
-		service = s.cache.ListServices()[index]
+	if !ok {
+		return "", "", fmt.Errorf("service %q not found", id)
 	}
 
 	if err := s.checkRead(ctx, "service", service.Spec.Name); err != nil {
@@ -406,16 +403,13 @@ func (s *Server) serviceMetricSelector(ctx context.Context, id string) (string, 
 // nodeMetricSelector resolves a node by ID or hostname and returns the
 // selector matching its node-exporter instance.
 func (s *Server) nodeMetricSelector(ctx context.Context, id string) (string, string, error) {
-	node, ok := s.cache.GetNode(id)
-	if !ok {
-		index := slices.IndexFunc(s.cache.ListNodes(), func(candidate swarm.Node) bool {
-			return candidate.Description.Hostname == id
-		})
-		if index < 0 {
-			return "", "", fmt.Errorf("node %q not found", id)
-		}
+	node, ok, err := s.cache.ResolveNode(id)
+	if err != nil {
+		return "", "", err
+	}
 
-		node = s.cache.ListNodes()[index]
+	if !ok {
+		return "", "", fmt.Errorf("node %q not found", id)
 	}
 
 	if err := s.checkRead(ctx, "node", nodeACLName(node)); err != nil {
