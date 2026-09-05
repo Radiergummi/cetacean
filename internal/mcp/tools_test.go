@@ -453,7 +453,7 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 	readOnly := map[string]bool{
 		"get_logs": true, "find": true, "describe": true, "get_topology": true,
 		"get_metrics": true, "get_recommendations": true,
-		"get_events": true,
+		"get_events": true, "get_cluster_status": true,
 	}
 	destructive := map[string]bool{
 		"update_service_image": true,

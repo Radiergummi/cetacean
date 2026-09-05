@@ -158,6 +158,7 @@ var toolIconCategory = map[string]string{
 	"get_metrics":         "read",
 	"get_recommendations": "read",
 	"get_events":          "read",
+	"get_cluster_status":  "read",
 	"find":                "search",
 	"describe":            "read",
 
@@ -549,6 +550,22 @@ func (s *Server) toolCatalog() []toolDef {
 			),
 			tier:    config.OpsReadOnly,
 			handler: s.toolGetEvents,
+		},
+		{
+			tool: mcplib.NewTool(
+				"get_cluster_status",
+				mcplib.WithToolTitle("Check overall cluster health"),
+				mcplib.WithDescription(
+					"Answer whether the cluster is healthy and, when it is not, name what is wrong: the services not in their desired state, the nodes that are down or draining, the rollouts in flight, and how much CPU and memory is reserved against what the cluster has. Start here — it is the one call that says whether to look further and where, and every entry carries the id and name to describe next.",
+				),
+				mcplib.WithOutputSchema[cluster.ClusterStatus](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolGetClusterStatus,
 		},
 
 		// Tier 1 — Operational.
