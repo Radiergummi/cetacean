@@ -137,7 +137,7 @@ func (s *Server) rankScope(ctx context.Context, by string) (string, error) {
 
 		names := make([]string, 0, len(services))
 		for _, svc := range services {
-			names = append(names, escapePromQLValue(svc.Spec.Name))
+			names = append(names, promQLRegexValue(svc.Spec.Name))
 		}
 
 		if len(names) == 0 {
@@ -152,7 +152,7 @@ func (s *Server) rankScope(ctx context.Context, by string) (string, error) {
 		hosts := make([]string, 0, len(nodes))
 		for _, node := range nodes {
 			if host := instanceHost(node); host != "" {
-				hosts = append(hosts, escapePromQLValue(host))
+				hosts = append(hosts, promQLRegexValue(host))
 			}
 		}
 
@@ -349,7 +349,18 @@ func (s *Server) rankTarget(
 			return "", "", "", "", err
 		}
 
-		return rankByService, "," + scope, id, name, nil
+		// The instance narrows the query to that host, but this branch ranks
+		// *services* — so the caller's service grants have to reach the query
+		// as well, exactly as the cluster branch arranges. Without them, a
+		// caller holding a node grant is told the name and load of every
+		// service running on it, which is the disclosure rankScope exists to
+		// prevent.
+		services, err := s.rankScope(ctx, rankByService)
+		if err != nil {
+			return "", "", "", "", err
+		}
+
+		return rankByService, "," + scope + services, id, name, nil
 
 	default:
 		return "", "", "", "", fmt.Errorf(

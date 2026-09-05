@@ -3,10 +3,12 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -141,5 +143,50 @@ func TestExistingViewsIgnoreTheNodeArgument(t *testing.T) {
 		if got.Subject != "" {
 			t.Errorf("%s: subject = %q, want empty for a cluster-wide view", view, got.Subject)
 		}
+	}
+}
+
+// The candidates are the nodes the caller may read, so a service the
+// assessment calls stranded may in fact be placeable on one they cannot see.
+// "no other node is ready and active" is a confident wrong answer on the one
+// question this view exists to get right, so the graph says what it was
+// assessed against.
+func TestDrainImpactSaysWhenGrantsNarrowedTheCandidates(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(readOnlyPolicy("node:worker-1", "service:*", "task:*"))
+
+	srv := newResourceTestServer(t, drainTestCache(t), func(o *Options) { o.ACL = evaluator })
+
+	body, err := srv.toolGetTopology(
+		ctxWithIdentity(),
+		toolRequest(t, "get_topology", map[string]any{
+			"view": "drain-impact",
+			"node": "worker-1",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("toolGetTopology: %v", err)
+	}
+
+	var got cluster.TopologyGraph
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if got.Note == "" {
+		t.Fatal("no note, so a stranded verdict reads as a statement about the cluster")
+	}
+	if !strings.Contains(got.Note, "hidden") {
+		t.Errorf("note = %q, want it to say nodes were hidden", got.Note)
+	}
+}
+
+// With nothing hidden the note would be noise on every call, and a reader who
+// sees it once has to be able to trust it means something.
+func TestDrainImpactHasNoNoteWhenEveryNodeIsVisible(t *testing.T) {
+	srv := newResourceTestServer(t, drainTestCache(t))
+
+	if got := drainCall(t, srv, "worker-1"); got.Note != "" {
+		t.Errorf("note = %q, want none when no node was hidden", got.Note)
 	}
 }

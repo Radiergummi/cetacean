@@ -85,6 +85,13 @@ func NewHistory(size int) *History {
 	}
 }
 
+// Size is the ring's capacity — the most entries List can ever return. A
+// caller applying its own filters after the read needs it, or it has to guess
+// a window and silently under-report whatever falls outside it.
+func (h *History) Size() int {
+	return h.size
+}
+
 func (h *History) Count() uint64 {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

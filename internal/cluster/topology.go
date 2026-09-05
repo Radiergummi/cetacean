@@ -32,6 +32,13 @@ type TopologyGraph struct {
 	// one side, candidate nodes on the other — has nowhere to say which.
 	Subject string `json:"subject,omitempty"`
 
+	// Note is a caveat about the answer rather than about any one vertex.
+	// A drain-impact assessment reaches conclusions from the nodes it was
+	// given, and those are the nodes the caller may read — so when ACL
+	// filtering hid any, "stranded" is a statement about the caller's view of
+	// the cluster and has to say so.
+	Note string `json:"note,omitempty"`
+
 	Nodes []TopologyNode `json:"nodes"`
 	Edges []TopologyEdge `json:"edges"`
 }

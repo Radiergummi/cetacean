@@ -41,7 +41,11 @@ const (
 //
 // clusterNodes, tasks and services must already be filtered to what the caller
 // may read; a service whose tasks reference nothing visible simply does not
-// appear, the same rule the other two views follow.
+// appear, the same rule the other two views follow. That cuts both ways here,
+// unlike in the other two: the candidates are the nodes the caller may read,
+// so a service this reports as stranded may be placeable on one they cannot
+// see. A caller that narrowed the list is expected to say so in the graph's
+// Note — internal/mcp's drainImpact does.
 func DrainImpactGraph(
 	target swarm.Node,
 	clusterNodes []swarm.Node,

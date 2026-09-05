@@ -84,11 +84,15 @@ func (s *Server) readLogsImpl(
 		wanted = maxLogTail
 	}
 
-	// Docker ignores `since` for service logs, so a cursored read has to pull
-	// a wider window and narrow it here. The widening is an implementation
-	// detail: the caller asked for `tail` lines and gets at most that many.
+	// Every narrowing below happens after the fetch — Docker ignores `since`
+	// for service logs, and it knows nothing of `contains` or `level` at all —
+	// so any of them has to pull a wider window than the caller asked for.
+	// Without it a grep returns the matches among the newest `tail` lines
+	// rather than the newest `tail` matches, which on a scoped read is 50
+	// lines per service. The widening is an implementation detail: the caller
+	// asked for `tail` lines and gets at most that many.
 	tail := wanted
-	if opts.since != "" {
+	if opts.since != "" || opts.contains != "" || opts.level != "" {
 		tail = min(tail*10, maxLogTail)
 	}
 

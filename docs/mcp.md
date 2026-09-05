@@ -365,7 +365,10 @@ a state without its cause is what the whole read surface exists not to return. G
 `global` rather than movable or stranded, because draining does not relocate their task, it stops it running there.
 Placement constraints are evaluated exactly, the way Swarm enforces them; spare capacity is deliberately not
 considered, since reservations after a drain are a moving target and `get_cluster_status` already reports
-reserved-against-total. This is steps 3 and 4 of the `drain_node` prompt done server-side.
+reserved-against-total. The candidates are the nodes the caller may read, so where ACL grants hid any, the graph
+carries a `note` saying what the assessment was narrowed to — a service reported stranded may be placeable on a node
+the caller cannot see, and this is the one view that must not answer that question confidently and wrongly. This is
+steps 3 and 4 of the `drain_node` prompt done server-side.
 
 `get_metrics` charts CPU, memory or network use for one service or one node over the last hour, six hours, day or
 week. It takes a target and a metric rather than PromQL: Cetacean owns the queries, resolves the service or node

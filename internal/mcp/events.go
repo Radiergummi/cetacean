@@ -51,22 +51,28 @@ func (s *Server) toolGetEvents(
 	}
 
 	limit := req.GetInt("limit", defaultEventLimit)
-	if limit <= 0 || limit > maxEventLimit {
+	if limit <= 0 {
+		limit = defaultEventLimit
+	}
+	if limit > maxEventLimit {
 		limit = maxEventLimit
 	}
 
 	wanted := requestedTypes(req)
 
-	// Over-read, because the type and time filters are applied after the ring
-	// returns and would otherwise silently shorten the page.
-	entries := s.cache.History().List(cache.HistoryQuery{
-		ResourceID: req.GetString("resource", ""),
-		Limit:      maxEventLimit * 4,
-	})
-	entries = s.filterHistory(ctx, entries)
-	entries = nameHistoryTasks(s.cache, entries)
+	history := s.cache.History()
 
-	timeline := make([]cluster.TimelineEntry, 0, len(entries))
+	// The whole ring rather than a page of it, because every filter below is
+	// applied after the ring returns. A busy cluster records mostly task
+	// churn, so a page would fill with it and a read for types: ["service"]
+	// would come back empty and truncated: false — which says "that is all
+	// there was" about a window the caller never asked for.
+	entries := history.List(cache.HistoryQuery{
+		ResourceID: req.GetString("resource", ""),
+		Limit:      history.Size(),
+	})
+
+	matched := make([]cache.HistoryEntry, 0, limit)
 
 	for _, e := range entries {
 		if len(wanted) > 0 && !wanted[string(e.Type)] {
@@ -79,8 +85,28 @@ func (s *Server) toolGetEvents(
 			continue
 		}
 
+		matched = append(matched, e)
+	}
+
+	// The ACL filter runs before the count, because total has to be how many
+	// entries the caller may actually read. Task naming runs after the cut,
+	// because a name only matters for an entry that is returned and every
+	// lookup takes the cache's read lock.
+	matched = s.filterHistory(ctx, matched)
+
+	total := len(matched)
+	truncated := total > limit
+	if truncated {
+		matched = matched[:limit]
+	}
+
+	matched = nameHistoryTasks(s.cache, matched)
+
+	timeline := make([]cluster.TimelineEntry, 0, len(matched))
+
+	for _, e := range matched {
 		timeline = append(timeline, cluster.TimelineEntry{
-			At:         e.Timestamp.UTC().Format(time.RFC3339Nano),
+			At:         cluster.TimelineTime(e.Timestamp),
 			Kind:       "change",
 			Type:       string(e.Type),
 			Name:       e.Name,
@@ -90,12 +116,6 @@ func (s *Server) toolGetEvents(
 	}
 
 	cluster.SortTimeline(timeline)
-
-	total := len(timeline)
-	truncated := total > limit
-	if truncated {
-		timeline = timeline[:limit]
-	}
 
 	return marshalResult(eventsResult{
 		Entries:   timeline,

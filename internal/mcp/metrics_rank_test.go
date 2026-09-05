@@ -4,7 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/swarm"
+
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/prom"
 )
 
@@ -112,7 +115,7 @@ func TestGetMetricsRanksServicesOnOneNode(t *testing.T) {
 	}
 
 	query := querier.queries[0]
-	if !strings.Contains(query, `instance=~"10.0.0.7:.*"`) {
+	if !strings.Contains(query, `instance=~"10\\.0\\.0\\.7:.*"`) {
 		t.Errorf("query is not scoped to the node: %s", query)
 	}
 	if !strings.Contains(query, "by ("+swarmServiceLabel+")") {
@@ -224,5 +227,69 @@ func TestGetMetricsSingleTargetIsUnchanged(t *testing.T) {
 	}
 	if strings.Contains(querier.queries[0], "topk") {
 		t.Errorf("a single-target read must not rank: %s", querier.queries[0])
+	}
+}
+
+// Ranking within one node ranks *services*, so it needs the caller's service
+// grants as much as the cluster-wide ranking does. Scoping only to the node's
+// instance would name — and chart the load of — every service running on a
+// host the caller happens to be able to read.
+func TestGetMetricsRanksServicesOnANodeOnlyWithinTheCallersGrants(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(readOnlyPolicy("node:*", "service:monitoring_*"))
+
+	querier := &fakeQuerier{series: labelledSeries(swarmServiceLabel, "monitoring_prometheus")}
+	srv := metricsServer(t, querier, func(o *Options) { o.ACL = evaluator })
+
+	if _, err := callGetMetrics(t, srv, map[string]any{
+		"target": "node",
+		"id":     "node1",
+		"top":    float64(5),
+	}); err != nil {
+		t.Fatalf("get_metrics: %v", err)
+	}
+
+	query := querier.queries[0]
+	if !strings.Contains(query, `instance=~"10\\.0\\.0\\.7:.*"`) {
+		t.Errorf("query is not scoped to the node: %s", query)
+	}
+	if !strings.Contains(query, "monitoring_prometheus") {
+		t.Errorf("query does not restrict to readable services: %s", query)
+	}
+	if strings.Contains(query, "secret-app") {
+		t.Errorf("query names a service the caller may not read: %s", query)
+	}
+}
+
+// A name's regex metacharacters have to be quoted before it is joined into an
+// alternation: `=~` compiles what it is given, so an unquoted "monitoring.api"
+// would also match "monitoringxapi" — a service the caller has no grant for.
+func TestGetMetricsQuotesRegexMetacharactersInAScope(t *testing.T) {
+	c := seedMetricsCache(t)
+	c.SetService(swarm.Service{
+		ID:   "svc3",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "monitoring.api"}},
+	})
+
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(readOnlyPolicy("service:monitoring.api"))
+
+	querier := &fakeQuerier{series: labelledSeries(swarmServiceLabel, "monitoring.api")}
+	srv := newToolTestServer(
+		t, c, &fakeWriteClient{}, config.OpsReadOnly,
+		func(o *Options) { o.Prometheus = querier },
+		func(o *Options) { o.ACL = evaluator },
+	)
+
+	if _, err := callGetMetrics(t, srv, map[string]any{
+		"target": "cluster",
+		"top":    float64(5),
+	}); err != nil {
+		t.Fatalf("get_metrics: %v", err)
+	}
+
+	query := querier.queries[0]
+	if !strings.Contains(query, `monitoring\\.api`) {
+		t.Errorf("the dot is not regex-quoted, so the matcher reaches past the grant: %s", query)
 	}
 }

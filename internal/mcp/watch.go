@@ -60,13 +60,6 @@ func (s *Server) toolWatch(
 		return "", err
 	}
 
-	timeout := time.Duration(
-		req.GetInt("timeout", int(defaultWatchTimeout.Seconds())),
-	) * time.Second
-	if timeout <= 0 || timeout > maxWatchTimeout {
-		timeout = maxWatchTimeout
-	}
-
 	started := time.Now()
 
 	result := watchResult{Outcome: "converged"}
@@ -74,7 +67,7 @@ func (s *Server) toolWatch(
 	if waitErr := s.awaitServiceConvergenceFor(
 		ctx,
 		svc.ID,
-		timeout,
+		watchTimeout(req),
 		&result.Observed,
 	); waitErr != nil {
 		result.Outcome = "timeout"
@@ -83,4 +76,26 @@ func (s *Server) toolWatch(
 	result.ElapsedSeconds = time.Since(started).Seconds()
 
 	return marshalResult(result)
+}
+
+// watchTimeout resolves how long a wait may run.
+//
+// Zero or negative means "no preference", not "wait as long as you are
+// allowed to": the wait is detached from the request context, so tasks/cancel
+// cannot interrupt it, and a caller spelling it that way would be held for the
+// full ceiling instead of the documented minute.
+func watchTimeout(req mcplib.CallToolRequest) time.Duration {
+	timeout := time.Duration(
+		req.GetInt("timeout", int(defaultWatchTimeout.Seconds())),
+	) * time.Second
+
+	if timeout <= 0 {
+		return defaultWatchTimeout
+	}
+
+	if timeout > maxWatchTimeout {
+		return maxWatchTimeout
+	}
+
+	return timeout
 }

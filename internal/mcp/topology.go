@@ -82,10 +82,28 @@ func (s *Server) drainImpact(
 		return "", err
 	}
 
-	return marshalResult(cluster.DrainImpactGraph(
+	all := s.cache.ListNodes()
+	visible := s.filterNodes(ctx, all)
+
+	graph := cluster.DrainImpactGraph(
 		node,
-		s.filterNodes(ctx, s.cache.ListNodes()),
+		visible,
 		s.filterRawTasks(ctx, s.cache.ListTasks()),
 		s.filterServices(ctx, s.cache.ListServices()),
-	))
+	)
+
+	// The candidates are the nodes the caller may read, so a service the
+	// assessment calls stranded may in fact be placeable on one it cannot
+	// see. The view exists to keep a drain from stranding work, and a
+	// confident wrong answer is the failure it must not produce — so where the
+	// node list was narrowed, the answer says what it was narrowed to.
+	if hidden := len(all) - len(visible); hidden > 0 {
+		graph.Note = fmt.Sprintf(
+			"assessed against the %d node(s) you can read; %d more are hidden by "+
+				"your grants, so a service reported stranded may be placeable on one of them",
+			len(visible), hidden,
+		)
+	}
+
+	return marshalResult(graph)
 }

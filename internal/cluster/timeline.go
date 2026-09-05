@@ -3,6 +3,7 @@ package cluster
 import (
 	"slices"
 	"strings"
+	"time"
 )
 
 // TimelineEntry is one thing that happened, whether Cetacean observed it as a
@@ -16,6 +17,8 @@ import (
 type TimelineEntry struct {
 	// At is RFC 3339, always UTC, at fixed nanosecond width so string
 	// comparison is time comparison and a cursor can be a plain string.
+	// Format it with TimelineTime; time.RFC3339Nano cannot be used, for the
+	// reason given there.
 	At string `json:"at"`
 
 	// Kind is "change" or "log".
@@ -35,6 +38,18 @@ type TimelineEntry struct {
 	// Message is the change's action ("create", "update", "delete") or the
 	// log line's text.
 	Message string `json:"message,omitempty"`
+}
+
+// timelineTimeFormat is RFC 3339 at fixed nanosecond width — the same layout
+// internal/logs stamps its lines with, so a change and a log line remain
+// comparable. time.RFC3339Nano is not usable here because it *trims* trailing
+// zeros: ":00Z" and ":00.5Z" then compare on 'Z' against '.', sorting the
+// earlier of the two as though it were the newer.
+const timelineTimeFormat = "2006-01-02T15:04:05.000000000Z07:00"
+
+// TimelineTime renders an instant as a TimelineEntry.At value.
+func TimelineTime(t time.Time) string {
+	return t.UTC().Format(timelineTimeFormat)
 }
 
 // SortTimeline orders entries newest first, breaking ties on kind and message.

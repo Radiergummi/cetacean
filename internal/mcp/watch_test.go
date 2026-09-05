@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -92,5 +93,29 @@ func TestWatchRejectsAnUnknownService(t *testing.T) {
 	}))
 	if err == nil {
 		t.Fatal("expected an error for an unknown service")
+	}
+}
+
+// The wait is detached from the request context, so tasks/cancel cannot
+// interrupt it and the timeout is the only bound there is. A caller spelling
+// "no preference" as 0 must get the documented minute, not the five-minute
+// ceiling they cannot escape.
+func TestWatchTimeoutFallsBackToTheDefaultNotTheCeiling(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+		want time.Duration
+	}{
+		{"unset", map[string]any{}, defaultWatchTimeout},
+		{"zero", map[string]any{"timeout": float64(0)}, defaultWatchTimeout},
+		{"negative", map[string]any{"timeout": float64(-1)}, defaultWatchTimeout},
+		{"explicit", map[string]any{"timeout": float64(30)}, 30 * time.Second},
+		{"over the ceiling", map[string]any{"timeout": float64(9000)}, maxWatchTimeout},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := watchTimeout(toolRequest(t, "watch", tc.args)); got != tc.want {
+				t.Errorf("watchTimeout = %s, want %s", got, tc.want)
+			}
+		})
 	}
 }

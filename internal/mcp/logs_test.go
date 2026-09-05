@@ -519,3 +519,36 @@ func TestGetLogsToolRejectsBothTargets(t *testing.T) {
 		t.Fatal("expected an error when both service and task are given")
 	}
 }
+
+// `contains` narrows after the fetch, because Docker knows nothing about it.
+// Fetching only `tail` lines and grepping those returns the matches among the
+// newest N lines rather than the newest N matches — so on a scoped read, where
+// the per-service tail is 50, an error sixty lines back is simply invisible.
+func TestGetLogsWidensTheFetchForAServerSideFilter(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opts logOptions
+		want string
+	}{
+		{"plain", logOptions{tail: 50}, "50"},
+		{"contains", logOptions{tail: 50, contains: "OutOfMemory"}, "500"},
+		{"level", logOptions{tail: 50, level: "error"}, "500"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			streamer := &fakeLogStreamer{
+				frames: buildLogFrame(1, "2024-01-01T00:00:00.000000000Z OutOfMemory error\n"),
+			}
+			srv := newLogTestServer(t, cache.New(nil), streamer)
+
+			if _, err := srv.readLogsImpl(
+				context.Background(), docker.ServiceLog, "svc1", tc.opts,
+			); err != nil {
+				t.Fatalf("readLogsImpl: %v", err)
+			}
+
+			if streamer.calledTail != tc.want {
+				t.Errorf("streamer tail = %q, want %q", streamer.calledTail, tc.want)
+			}
+		})
+	}
+}

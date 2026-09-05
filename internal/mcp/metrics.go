@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -435,11 +436,11 @@ func (s *Server) nodeMetricSelector(ctx context.Context, id string) (string, str
 // exporter may report fully qualified — is the fallback.
 func instanceSelector(node swarm.Node) string {
 	if address := node.Status.Addr; address != "" {
-		return fmt.Sprintf(`instance=~"%s:.*"`, escapePromQLValue(address))
+		return fmt.Sprintf(`instance=~"%s:.*"`, promQLRegexValue(address))
 	}
 
 	if hostname := node.Description.Hostname; hostname != "" {
-		return fmt.Sprintf(`instance=~"%s(\\..+)?:.*"`, escapePromQLValue(hostname))
+		return fmt.Sprintf(`instance=~"%s(\\..+)?:.*"`, promQLRegexValue(hostname))
 	}
 
 	return ""
@@ -451,6 +452,17 @@ func instanceSelector(node swarm.Node) string {
 // a quote would otherwise produce a query that does not parse.
 func escapePromQLValue(value string) string {
 	return strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`).Replace(value)
+}
+
+// promQLRegexValue quotes a value for use inside a PromQL regex matcher.
+//
+// Escaping for the string literal is not enough there, because `=~` compiles
+// what it is given: a service legitimately named "api.v2" would also match
+// "apixv2", and an alternation built from the names a caller may read would
+// silently reach past their grants. Regex-quote first and escape after — the
+// backslashes QuoteMeta adds are themselves string escapes.
+func promQLRegexValue(value string) string {
+	return escapePromQLValue(regexp.QuoteMeta(value))
 }
 
 func metricNames(metrics map[string]metricSpec) []string {
