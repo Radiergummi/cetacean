@@ -285,7 +285,7 @@ func (s *Server) toolCatalog() []toolDef {
 				"get_logs",
 				mcplib.WithToolTitle("Read service or task logs"),
 				mcplib.WithDescription(
-					"Fetch recent log lines for a Swarm service or for one of its tasks. Name exactly one: `service` merges the output of every live replica; `task` reads a single replica, and is the only way to reach one that has already exited — use it to find out why a replica died, since a dead replica's lines are not in the service stream. Swarm discards a task's output once its record falls out of the history window (five per replica slot by default), so on a service that is restarting in a loop that history is only seconds deep and should be read first. Returns the most recent `tail` lines (default 100), optionally filtered by start time and minimum severity. This is a one-shot read; for live tails subscribe to the cetacean://services/{id}/logs resource.",
+					"Fetch recent log lines from one service, one task, a whole stack, or the whole cluster. Name exactly one scope: `service` merges the output of every live replica; `task` reads a single replica and is the only way to reach one that has already exited; `stack` and `cluster` merge across services server-side, so grepping the cluster is one call rather than one per service, and every line says which service it came from. Swarm discards a task's output once its record falls out of the history window (five per replica slot by default), so on a service restarting in a loop that history is only seconds deep and should be read first. Narrow with `contains` for a substring, `level` for a minimum severity and `since` for a start time — on a wide read `contains` is what keeps the answer small. A wide read covers at most 25 services and reports any it could not reach in `errors` rather than failing. This is a one-shot read; for live tails subscribe to the cetacean://services/{id}/logs resource.",
 				),
 				mcplib.WithOutputSchema[LogResourceResponse](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -300,6 +300,21 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithString("task",
 					mcplib.Description(
 						"Task ID to read logs from, including a task that has already exited. Mutually exclusive with `service`.",
+					),
+				),
+				mcplib.WithString("stack",
+					mcplib.Description(
+						"Stack name; merges the logs of every service in it. Mutually exclusive with `service` and `task`.",
+					),
+				),
+				mcplib.WithBoolean("cluster",
+					mcplib.Description(
+						"Read every service in the cluster, merged. Mutually exclusive with `service`, `task` and `stack`.",
+					),
+				),
+				mcplib.WithString("contains",
+					mcplib.Description(
+						"Keep only lines containing this substring (case-insensitive). Applied server-side, so a wide read costs the matches rather than every line.",
 					),
 				),
 				mcplib.WithNumber(
@@ -1235,6 +1250,24 @@ func (s *Server) checkTaskRead(ctx context.Context, id string) error {
 // --- tool handlers ---
 
 func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
+	if stack := req.GetString("stack", ""); stack != "" {
+		resp, err := s.readScopedLogs(ctx, "stack", stack, optsFromToolRequest(req))
+		if err != nil {
+			return "", err
+		}
+
+		return marshalResult(resp)
+	}
+
+	if req.GetBool("cluster", false) {
+		resp, err := s.readScopedLogs(ctx, "cluster", "", optsFromToolRequest(req))
+		if err != nil {
+			return "", err
+		}
+
+		return marshalResult(resp)
+	}
+
 	service := strings.TrimSpace(req.GetString("service", ""))
 	task := strings.TrimSpace(req.GetString("task", ""))
 

@@ -11,6 +11,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -35,6 +36,11 @@ func buildLogFrame(stream byte, payload string) []byte {
 type fakeLogStreamer struct {
 	frames []byte
 	err    error
+
+	// mu guards the captured args below. A scoped read fans out over several
+	// services at once, so one streamer is written from several goroutines;
+	// the reads all happen after the fan-out has been waited on.
+	mu sync.Mutex
 	// captured call args
 	calledKind  docker.LogKind
 	calledID    string
@@ -49,12 +55,16 @@ func (f *fakeLogStreamer) Logs(
 	_ bool,
 	since, _ string,
 ) (io.ReadCloser, error) {
+	f.mu.Lock()
 	f.calledKind = kind
 	f.calledID = id
 	f.calledTail = tail
 	f.calledSince = since
-	if f.err != nil {
-		return nil, f.err
+	err := f.err
+	f.mu.Unlock()
+
+	if err != nil {
+		return nil, err
 	}
 	return io.NopCloser(bytes.NewReader(f.frames)), nil
 }

@@ -36,6 +36,11 @@ type LogStreamer interface {
 type LogResourceResponse struct {
 	Lines  []logs.LogLine `json:"lines"`
 	Cursor string         `json:"cursor,omitempty"`
+
+	// Errors names the services a scoped read could not reach, so a partial
+	// answer says which part is missing rather than pretending to be whole.
+	// Always an array, never null.
+	Errors []string `json:"errors,omitempty"`
 }
 
 const (
@@ -118,6 +123,7 @@ func (s *Server) readLogsImpl(
 	}
 
 	lines = filterLogLines(lines, opts.level)
+	lines = filterLogContains(lines, opts.contains)
 	lines = logs.FilterSince(lines, opts.since)
 
 	// Docker interleaves the output of a service's tasks, so arrival order is
@@ -150,6 +156,11 @@ type logOptions struct {
 	tail  int
 	since string
 	level string
+
+	// contains narrows to lines holding this substring, case-insensitively.
+	// Applied server-side because the point of a cluster-wide read is that the
+	// caller pays for matches rather than for every line of every service.
+	contains string
 }
 
 // filterLogLines drops lines below the given minimum log level. Empty level
@@ -205,8 +216,9 @@ func lineLevelRank(msg string) int {
 // CallToolRequest.
 func optsFromToolRequest(req mcplib.CallToolRequest) logOptions {
 	return logOptions{
-		tail:  req.GetInt("tail", defaultLogTail),
-		since: req.GetString("since", ""),
-		level: req.GetString("level", ""),
+		tail:     req.GetInt("tail", defaultLogTail),
+		since:    req.GetString("since", ""),
+		level:    req.GetString("level", ""),
+		contains: req.GetString("contains", ""),
 	}
 }
