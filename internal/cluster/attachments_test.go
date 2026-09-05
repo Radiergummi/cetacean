@@ -3,6 +3,7 @@ package cluster
 import (
 	"testing"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 )
 
@@ -112,5 +113,68 @@ func TestServiceDetailsNeverCarriesSecretContent(t *testing.T) {
 		if _, isRef := value.([]*swarm.SecretReference); isRef {
 			t.Errorf("key %q carries raw SecretReference structs", key)
 		}
+	}
+}
+
+// mountTargets is what confirms a mounts write landed.
+//
+// bindMounts already reports the security-relevant mounts in full, but it
+// deliberately skips volumes — so on its own it cannot answer "is the data
+// volume still mounted?" after a wholesale replacement, which is exactly the
+// question a caller who just replaced the set is asking. A target path is a
+// mount's identity here: two things cannot be mounted at one path.
+func TestServiceDetailsReportsMountTargets(t *testing.T) {
+	svc := swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Mounts: []mount.Mount{
+						{Type: mount.TypeVolume, Source: "data", Target: "/var/lib/data"},
+						{Type: mount.TypeBind, Source: "/etc/certs", Target: "/certs"},
+					},
+				},
+			},
+		},
+	}
+
+	got := ServiceDetails(svc)
+
+	targets, ok := got["mountTargets"].([]string)
+	if !ok {
+		t.Fatalf(
+			"mountTargets = %v (%T), want a string slice",
+			got["mountTargets"],
+			got["mountTargets"],
+		)
+	}
+
+	// Sorted, for the same reason the attachment names are: a result may be
+	// cached by ETag and two reads must serialise identically.
+	if len(targets) != 2 || targets[0] != "/certs" || targets[1] != "/var/lib/data" {
+		t.Errorf("mountTargets = %v, want [/certs /var/lib/data] sorted", targets)
+	}
+
+	// The volume is the one bindMounts drops, which is why both keys answer
+	// the section rather than either alone.
+	binds, _ := got["bindMounts"].([]map[string]any)
+	if len(binds) != 1 || binds[0]["target"] != "/certs" {
+		t.Errorf("bindMounts = %v, want only the bind", got["bindMounts"])
+	}
+}
+
+// A service that mounts nothing omits the key, like every other optional one.
+func TestServiceDetailsOmitsMountTargetsWhenNone(t *testing.T) {
+	svc := swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations:  swarm.Annotations{Name: "web"},
+			TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{}},
+		},
+	}
+
+	if _, present := ServiceDetails(svc)["mountTargets"]; present {
+		t.Error("mountTargets present on a service with no mounts")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -243,5 +244,167 @@ func TestAttachmentEditorsMatchTheRESTTier(t *testing.T) {
 		if !found[name] {
 			t.Errorf("%s is not registered", name)
 		}
+	}
+}
+
+// update_service_mounts sits at the configuration level, matching the REST
+// route, and the tier is therefore *not* where the danger of a host bind is
+// communicated. Binding /var/run/docker.sock into a container is a root shell
+// on the host and control of the whole cluster; the tool does not refuse it —
+// an operator at this level may legitimately want it, and Cetacean does not
+// decide for the caller — so the description is the only place a model reads
+// what it is about to do.
+func TestUpdateServiceMountsMatchesTheRESTTier(t *testing.T) {
+	srv := newResourceTestServer(t, cache.New(nil))
+
+	for _, def := range srv.toolCatalog() {
+		if def.tool.Name != "update_service_mounts" {
+			continue
+		}
+
+		if def.tier != config.OpsConfiguration {
+			t.Errorf(
+				"tier = %v, want OpsConfiguration to match the REST route for the same operation",
+				def.tier,
+			)
+		}
+
+		description := strings.ToLower(def.tool.Description)
+		for _, warning := range []string{"host", "docker socket"} {
+			if !strings.Contains(description, warning) {
+				t.Errorf(
+					"the description does not warn about %q: %s",
+					warning,
+					def.tool.Description,
+				)
+			}
+		}
+
+		return
+	}
+
+	t.Fatal("update_service_mounts is not registered")
+}
+
+func TestUpdateServiceMountsReplacesTheSet(t *testing.T) {
+	var got []mount.Mount
+
+	c := attachmentTestCache(t)
+	writeClient := &fakeWriteClient{
+		updateServiceMountsFn: func(
+			_ context.Context, _ string, mounts []mount.Mount,
+		) (swarm.Service, error) {
+			got = mounts
+
+			updated, _ := c.GetService("svc1")
+			updated.Spec.TaskTemplate.ContainerSpec.Mounts = mounts
+
+			return updated, nil
+		},
+	}
+
+	handler := newToolTestServer(t, c, writeClient, config.OpsConfiguration).Handler()
+
+	result := callTool(t, handler, `{"name":"update_service_mounts","arguments":`+
+		`{"id":"web","mounts":[{"type":"volume","source":"data","target":"/var/lib/data"}]}}`)
+
+	if len(got) != 1 {
+		t.Fatalf("mounts = %d, want 1", len(got))
+	}
+	if got[0].Type != mount.TypeVolume || got[0].Source != "data" ||
+		got[0].Target != "/var/lib/data" {
+		t.Errorf("mount = %+v", got[0])
+	}
+
+	// The answer names what is mounted now, so a caller can confirm the
+	// replacement without a second read.
+	var compact serviceUpdateResult
+	if err := json.Unmarshal(result.StructuredContent, &compact); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	targets, _ := compact.Details["mountTargets"].([]any)
+	if len(targets) != 1 || targets[0] != "/var/lib/data" {
+		t.Errorf("details = %+v, want the target it now mounts", compact.Details)
+	}
+}
+
+// Replacement, not merge — the rule every wholesale section here follows. An
+// empty list unmounts everything, which is how a bind is removed.
+func TestUpdateServiceMountsReplacesWholesale(t *testing.T) {
+	var called bool
+	var got []mount.Mount
+
+	c := attachmentTestCache(t)
+	writeClient := &fakeWriteClient{
+		updateServiceMountsFn: func(
+			_ context.Context, _ string, mounts []mount.Mount,
+		) (swarm.Service, error) {
+			called = true
+			got = mounts
+
+			updated, _ := c.GetService("svc1")
+
+			return updated, nil
+		},
+	}
+
+	handler := newToolTestServer(t, c, writeClient, config.OpsConfiguration).Handler()
+
+	callTool(t, handler, `{"name":"update_service_mounts","arguments":{"id":"web","mounts":[]}}`)
+
+	if !called {
+		t.Fatal("the write was skipped; an empty list must still unmount everything")
+	}
+	if len(got) != 0 {
+		t.Errorf("mounts = %v, want none", got)
+	}
+}
+
+// An unknown mount type is named rather than passed to Docker, which answers
+// with an error that does not say what the three valid types are.
+func TestUpdateServiceMountsRejectsAnUnknownType(t *testing.T) {
+	c := attachmentTestCache(t)
+
+	handler := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsConfiguration).Handler()
+
+	_, envelope := mcpModern(t, handler, 1, "tools/call",
+		`{"name":"update_service_mounts","arguments":`+
+			`{"id":"web","mounts":[{"type":"magic","target":"/x"}]}}`)
+
+	var result toolCallResult
+	if err := json.Unmarshal(envelope.Result, &result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if !result.IsError {
+		t.Fatal("expected an error for an unknown mount type")
+	}
+	if !strings.Contains(string(envelope.Result), "magic") {
+		t.Errorf("the error does not name the bad type: %s", envelope.Result)
+	}
+	if strings.Contains(string(envelope.Result), "not stubbed") {
+		t.Error("the tool reached the write client despite an invalid mount")
+	}
+}
+
+// A mount with no target has nowhere to land. Docker rejects it too, but only
+// after the rolling deploy has been requested.
+func TestUpdateServiceMountsRequiresATarget(t *testing.T) {
+	c := attachmentTestCache(t)
+
+	handler := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsConfiguration).Handler()
+
+	_, envelope := mcpModern(t, handler, 1, "tools/call",
+		`{"name":"update_service_mounts","arguments":`+
+			`{"id":"web","mounts":[{"type":"volume","source":"data"}]}}`)
+
+	var result toolCallResult
+	if err := json.Unmarshal(envelope.Result, &result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if !result.IsError {
+		t.Fatal("expected an error for a mount with no target")
 	}
 }

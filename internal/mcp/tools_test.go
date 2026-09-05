@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
@@ -75,6 +76,23 @@ type fakeWriteClient struct {
 		id string,
 		configs []*swarm.ConfigReference,
 	) (swarm.Service, error)
+	updateServiceMountsFn func(
+		ctx context.Context,
+		id string,
+		mounts []mount.Mount,
+	) (swarm.Service, error)
+}
+
+func (f *fakeWriteClient) UpdateServiceMounts(
+	ctx context.Context,
+	id string,
+	mounts []mount.Mount,
+) (swarm.Service, error) {
+	if f.updateServiceMountsFn == nil {
+		return swarm.Service{}, errNotImplemented
+	}
+
+	return f.updateServiceMountsFn(ctx, id, mounts)
 }
 
 func (f *fakeWriteClient) UpdateServiceSecrets(
@@ -452,11 +470,15 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 		// losing a credential or a config file it was reading.
 		"update_service_secrets": true,
 		"update_service_configs": true,
-		"remove_service":         true,
-		"remove_config":          true,
-		"remove_secret":          true,
-		"remove_network":         true,
-		"remove_volume":          true,
+		// Mounts replace wholesale too, and the omission costs more than a
+		// detached config: a container can lose data it was writing to the
+		// volume that dropped out of the list.
+		"update_service_mounts": true,
+		"remove_service":        true,
+		"remove_config":         true,
+		"remove_secret":         true,
+		"remove_network":        true,
+		"remove_volume":         true,
 	}
 
 	for _, td := range srv.registeredTools {

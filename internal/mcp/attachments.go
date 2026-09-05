@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 )
@@ -201,4 +203,102 @@ func (s *Server) toolUpdateServiceConfigs(
 	}
 
 	return marshalResult(serviceUpdate(sectionConfigs, updated))
+}
+
+// mountValue is one entry of the mounts array.
+//
+// It is a wire shape of its own rather than mount.Mount because that struct
+// carries five nested option blocks — volume driver config, bind propagation,
+// tmpfs sizing — none of which a service editor needs, and all of which would
+// land in the input schema a model reads before every call.
+type mountValue struct {
+	// Type is one of volume, bind or tmpfs, validated by name here so an
+	// unknown one is refused before a rolling deploy is requested.
+	Type string `json:"type"`
+
+	// Source is the volume name for a volume mount and the host path for a
+	// bind. A tmpfs has none: it is memory.
+	Source string `json:"source,omitempty"`
+
+	Target   string `json:"target"`
+	ReadOnly bool   `json:"readOnly,omitempty"`
+}
+
+// mountTypes are the three Swarm supports, named here so the error can list
+// them. Docker's own rejection of a bad type does not.
+var mountTypes = []mount.Type{mount.TypeVolume, mount.TypeBind, mount.TypeTmpfs}
+
+// toMount converts the wire shape, refusing what Docker would refuse later.
+func (v mountValue) toMount(index int) (mount.Mount, error) {
+	if v.Target == "" {
+		return mount.Mount{}, fmt.Errorf("mounts[%d]: target is required", index)
+	}
+
+	if !slices.Contains(mountTypes, mount.Type(v.Type)) {
+		return mount.Mount{}, fmt.Errorf(
+			"mounts[%d]: %q is not a mount type; expected one of %v",
+			index, v.Type, mountTypes,
+		)
+	}
+
+	return mount.Mount{
+		Type:     mount.Type(v.Type),
+		Source:   v.Source,
+		Target:   v.Target,
+		ReadOnly: v.ReadOnly,
+	}, nil
+}
+
+// toolUpdateServiceMounts replaces the set of filesystem mounts a service's
+// containers receive.
+//
+// It sits at the configuration level with the other two attachment editors,
+// matching the REST route for the same operation. That is a deliberate choice
+// against the spec, which argued the tier should be raised because a bind
+// mount of the Docker socket is a root shell on the host: the operations level
+// is the operator's single dial and must mean one thing whichever transport
+// they reach for, so the warning lives in the tool's description, where the
+// model actually reads it.
+func (s *Server) toolUpdateServiceMounts(
+	ctx context.Context,
+	req mcplib.CallToolRequest,
+) (string, error) {
+	id, err := req.RequireString("id")
+	if err != nil {
+		return "", err
+	}
+
+	if err := s.checkServiceWrite(ctx, id); err != nil {
+		return "", err
+	}
+
+	writeClient, err := s.requireWriteClient()
+	if err != nil {
+		return "", err
+	}
+
+	var values []mountValue
+	if err := decodeArgInto(req, "mounts", &values); err != nil {
+		return "", err
+	}
+
+	// Every entry is converted before any of them is written, so a list with
+	// one bad mount in it does not half-apply.
+	mounts := make([]mount.Mount, 0, len(values))
+
+	for i, value := range values {
+		converted, convErr := value.toMount(i)
+		if convErr != nil {
+			return "", convErr
+		}
+
+		mounts = append(mounts, converted)
+	}
+
+	updated, err := writeClient.UpdateServiceMounts(ctx, id, mounts)
+	if err != nil {
+		return "", fmt.Errorf("update service mounts: %w", err)
+	}
+
+	return marshalResult(serviceUpdate(sectionMounts, updated))
 }

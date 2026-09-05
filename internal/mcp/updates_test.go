@@ -286,7 +286,7 @@ func TestUpdateServiceRefusesTheAttachmentSections(t *testing.T) {
 
 	handler := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful).Handler()
 
-	for _, section := range []string{sectionSecrets, sectionConfigs} {
+	for _, section := range []string{sectionSecrets, sectionConfigs, sectionMounts} {
 		t.Run(section, func(t *testing.T) {
 			_, envelope := mcpModern(t, handler, 1, "tools/call",
 				`{"name":"update_service","arguments":{"id":"web","section":"`+

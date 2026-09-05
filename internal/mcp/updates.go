@@ -35,6 +35,7 @@ const (
 	sectionCommand        = "command"
 	sectionSecrets        = "secrets"
 	sectionConfigs        = "configs"
+	sectionMounts         = "mounts"
 	sectionAvailability   = "availability"
 	sectionRole           = "role"
 )
@@ -68,6 +69,11 @@ var serviceSectionKeys = map[string][]string{
 	sectionCommand: {"command", "args"},
 	sectionSecrets: {"secretNames"},
 	sectionConfigs: {"configNames"},
+
+	// Both keys: bindMounts reports the security-relevant mounts in full but
+	// skips volumes, so it cannot on its own confirm a wholesale replacement
+	// left the data volume in place.
+	sectionMounts: {"mountTargets", "bindMounts"},
 }
 
 // updateServiceSections is the set of sections update_service dispatches, and
@@ -220,7 +226,7 @@ func (s *Server) toolUpdateService(
 		if _, ok := serviceSectionKeys[section]; ok {
 			return "", fmt.Errorf(
 				"section %q is not edited through update_service; "+
-					"use the update_service_%s tool, which takes a list of references",
+					"use the update_service_%s tool, which takes the whole list at once",
 				section, section,
 			)
 		}

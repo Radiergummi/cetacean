@@ -620,6 +620,7 @@ var toolACLSpecs = map[string]toolACLSpec{
 	"remove_service":         {"service", "write"},
 	"update_service_secrets": {"service", "write"},
 	"update_service_configs": {"service", "write"},
+	"update_service_mounts":  {"service", "write"},
 	"create_config":          {"config", "write"},
 	"create_secret":          {"secret", "write"},
 	"remove_config":          {"config", "write"},

@@ -634,6 +634,21 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 			details["configNames"] = names
 		}
 
+		// Targets first, over every mount: bindMounts below reports the
+		// security-relevant ones in full but skips volumes, so it cannot on
+		// its own answer whether a data volume survived a wholesale
+		// replacement. A target is a mount's identity — two things cannot be
+		// mounted at one path.
+		if len(spec.Mounts) > 0 {
+			targets := make([]string, 0, len(spec.Mounts))
+			for _, m := range spec.Mounts {
+				targets = append(targets, m.Target)
+			}
+
+			slices.Sort(targets)
+			details["mountTargets"] = targets
+		}
+
 		var bindMounts []map[string]any
 
 		for _, m := range spec.Mounts {

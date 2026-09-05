@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
@@ -94,6 +95,11 @@ type ServiceSpecWriter interface {
 		id string,
 		configs []*swarm.ConfigReference,
 	) (swarm.Service, error)
+	UpdateServiceMounts(
+		ctx context.Context,
+		id string,
+		mounts []mount.Mount,
+	) (swarm.Service, error)
 }
 
 // ResourceCreator creates the two resource types a service can reference by
@@ -160,6 +166,7 @@ var toolIconCategory = map[string]string{
 	"create_config":          "edit",
 	"update_service_secrets": "edit",
 	"update_service_configs": "edit",
+	"update_service_mounts":  "edit",
 	"update_service_image":   "edit",
 	"rollback_service":       "edit",
 	"restart_service":        "edit",
@@ -842,6 +849,49 @@ func (s *Server) toolCatalog() []toolDef {
 			),
 			tier:    config.OpsConfiguration,
 			handler: s.toolUpdateServiceConfigs,
+		},
+		{
+			tool: mcplib.NewTool(
+				"update_service_mounts",
+				mcplib.WithToolTitle("Change a service's filesystem mounts"),
+				mcplib.WithDescription(
+					"Replace the complete set of filesystem mounts a service's containers receive: named volumes, host bind mounts and tmpfs. The list replaces rather than merges, so pass every mount the service should end up with — one you leave out is unmounted, and a container may lose data it was writing there. Triggers a rolling deploy. Note that a bind mount hands the container the host's filesystem at that path, and binding the Docker socket (/var/run/docker.sock) gives it control of the whole cluster; this tool will do it if asked, so check with the operator before mounting a host path they did not name.",
+				),
+				mcplib.WithOutputSchema[serviceUpdateResult](),
+				mcplib.WithReadOnlyHintAnnotation(false),
+				mcplib.WithDestructiveHintAnnotation(true),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("id",
+					mcplib.Required(),
+					mcplib.Description("Service ID or name."),
+				),
+				mcplib.WithArray("mounts",
+					mcplib.Required(),
+					mcplib.Description(
+						"The complete set of mounts the service should receive. Each entry takes `type` (volume, bind or tmpfs), `target` (the absolute path inside the container), an optional `source` (the volume name for a volume, the host path for a bind; a tmpfs has none) and an optional `readOnly`. An empty array unmounts everything.",
+					),
+					mcplib.Items(map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"type": map[string]any{
+								"type": "string",
+								"enum": []string{
+									string(mount.TypeVolume),
+									string(mount.TypeBind),
+									string(mount.TypeTmpfs),
+								},
+							},
+							"source":   map[string]any{"type": "string"},
+							"target":   map[string]any{"type": "string"},
+							"readOnly": map[string]any{"type": "boolean"},
+						},
+						"required": []string{"type", "target"},
+					}),
+				),
+			),
+			tier:    config.OpsConfiguration,
+			handler: s.toolUpdateServiceMounts,
 		},
 
 		// Tier 3 — Impactful.
