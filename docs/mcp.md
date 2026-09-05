@@ -374,14 +374,15 @@ that cannot be followed.
 **Tier 1 — operational**: `scale_service`, `update_service_image`, `rollback_service`, `restart_service`,
 `remove_task`.
 
-**Tier 2 — configuration**: `update_service`, `update_node_labels`.
+**Tier 2 — configuration**: `update_service`, `update_node_labels`, `create_secret`, `create_config`,
+`update_service_secrets`, `update_service_configs`, `update_service_mounts`.
 
 **Tier 3 — impactful / destructive**: `update_node`, `remove_service`, `remove_config`, `remove_secret`,
 `remove_network`, `remove_volume`.
 
 `update_service` names the part of the spec it changes in a `section` argument — `env`, `labels`, `resources`,
-`placement`, `ports`, `update-policy`, `rollback-policy` or `log-driver` — and takes that section's new
-value under `value`. It replaced eight tools that differed only in which field they wrote, and which between
+`placement`, `ports`, `update-policy`, `rollback-policy`, `log-driver`, `healthcheck` or `command` — and takes
+that section's new value under `value`. It replaced eight tools that differed only in which field they wrote, and which between
 them cost about two thousand tokens of every `tools/list`. The trade is that `value` is whatever the section
 takes, so the input schema cannot describe it and the section's decoder validates it instead, naming the section
 and the shape it wanted when a payload does not fit.
@@ -389,6 +390,32 @@ and the shape it wanted when a payload does not fit.
 `update_node` works the same way over `availability` and `role`. Node **labels** stay a tool of their own,
 `update_node_labels`, because they sit at a lower operations tier: folding them in would have meant a deployment
 that lets an agent relabel a node also lets it demote a manager.
+
+`healthcheck` takes the probe as `test` (Docker's exec form, e.g. `["CMD-SHELL", "curl -f localhost || exit 1"]`)
+plus optional `interval`, `timeout`, `startPeriod` and `retries`. Durations are strings — `"10s"`, `"1m30s"` — never
+nanosecond integers, which are a scale a caller sooner or later writes wrong. An empty `test` removes the check.
+This is what closes the loop on `get_recommendations`, which reports services with no health check and until now
+could not be acted on. `command` takes `command` (the entrypoint) and `args`, the split Docker itself makes.
+
+Secrets, configs and mounts are **not** sections of `update_service`. Each takes a list rather than a spec fragment,
+and attaching a secret checks a read grant on the secret as well as a write grant on the service, so each is a tool
+of its own — `update_service_secrets`, `update_service_configs` and `update_service_mounts`. Passing one as a
+`section` is refused with the name of the tool to use instead.
+
+All three replace the set wholesale: pass every entry the service should end up with, because one left out is
+detached. `update_service_mounts` covers named volumes, host bind mounts and tmpfs — note that a bind mount hands
+the container the host's filesystem at that path, and binding `/var/run/docker.sock` gives it control of the whole
+cluster. The tool will do it if asked; the operations level is not what stops it.
+
+Swarm secrets and configs are immutable, so rotating one is three calls in order: `create_secret` for the
+replacement, `update_service_secrets` to repoint each service that uses it — `describe` the secret first, its
+`related` array names them — and `remove_secret` for the old one once nothing references it. Cetacean could
+previously only do the last of the three, which made the whole sequence impossible.
+
+Every MCP tool requires the same operations level as the REST route for the same operation, so there is no separate
+MCP tier table to keep in step. That includes the three attachment editors, which sit at tier 2 rather than being
+raised for MCP alone: the operations level is the operator's single dial and means one thing whichever transport
+they reach for.
 
 The `env` and `labels` sections, and `update_node_labels`, follow JSON Merge Patch semantics: a `null` value
 deletes a key, and the patch is applied against a fresh inspect of the live spec to avoid clobbering concurrent
