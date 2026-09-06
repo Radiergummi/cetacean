@@ -552,3 +552,53 @@ func TestGetLogsWidensTheFetchForAServerSideFilter(t *testing.T) {
 		})
 	}
 }
+
+// The wide scopes must be rejected against the narrow ones exactly as service
+// and task are against each other. Checking them in order and returning from
+// the first match resolves a conflict by the order the checks happen to be
+// written in: a call naming `service` and `cluster` would read the whole
+// cluster and never mention that `service` was ignored.
+func TestGetLogsToolRejectsConflictingScopes(t *testing.T) {
+	c := cache.New(nil)
+	srv := newLogTestServer(t, c, &fakeLogStreamer{})
+	td, _ := srv.findTool("get_logs")
+
+	conflicts := []map[string]any{
+		{"service": "svc1", "cluster": true},
+		{"service": "svc1", "stack": "demo"},
+		{"task": "task1", "cluster": true},
+		{"stack": "demo", "cluster": true},
+	}
+
+	for _, args := range conflicts {
+		_, err := td.handler(context.Background(), newCallToolRequest("get_logs", args))
+		if err == nil {
+			t.Errorf("%v: expected an error; a call may name exactly one scope", args)
+
+			continue
+		}
+
+		if !strings.Contains(err.Error(), "mutually exclusive") {
+			t.Errorf("%v: error = %q, want it to say the scopes are mutually exclusive", args, err)
+		}
+	}
+}
+
+// Naming no scope at all is still an error, and the message must name every
+// scope rather than only the two it used to offer.
+func TestGetLogsToolRequiresAScope(t *testing.T) {
+	c := cache.New(nil)
+	srv := newLogTestServer(t, c, &fakeLogStreamer{})
+	td, _ := srv.findTool("get_logs")
+
+	_, err := td.handler(context.Background(), newCallToolRequest("get_logs", map[string]any{}))
+	if err == nil {
+		t.Fatal("expected an error when no scope is given")
+	}
+
+	for _, scope := range []string{"service", "task", "stack", "cluster"} {
+		if !strings.Contains(err.Error(), scope) {
+			t.Errorf("error = %q, want it to name %q", err, scope)
+		}
+	}
+}

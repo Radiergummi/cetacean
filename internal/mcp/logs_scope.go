@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -75,13 +77,23 @@ func (s *Server) readScopedLogs(
 		return LogResourceResponse{Lines: []logs.LogLine{}, Errors: []string{}}, nil
 	}
 
-	services, err := s.servicesInScope(ctx, scope, target)
+	services, inScope, err := s.servicesInScope(ctx, scope, target)
 	if err != nil {
 		return LogResourceResponse{}, err
 	}
 
+	// Each service resumes from its own position. One cursor for the whole
+	// fan-out is whichever service was furthest ahead, and logs.FilterSince is
+	// a flat cut — so a line another service stamps earlier but Docker flushes
+	// late is dropped on the resume and never returned by any later call.
+	resumed, perServiceResume := decodeScopedCursor(opts.since)
+
 	perService := opts
 	perService.tail = scopedTailPerService
+
+	if perServiceResume {
+		perService.since = ""
+	}
 
 	var (
 		mu       sync.Mutex
@@ -101,7 +113,12 @@ func (s *Server) readScopedLogs(
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			resp, err := s.readLogsImpl(ctx, docker.ServiceLog, svc.ID, perService)
+			svcOpts := perService
+			if perServiceResume {
+				svcOpts.since = resumed[svc.ID]
+			}
+
+			resp, err := s.readLogsImpl(ctx, docker.ServiceLog, svc.ID, svcOpts)
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -137,9 +154,19 @@ func (s *Server) readScopedLogs(
 	// the same tail bounds, because it is the same function.
 	resp := finishLogRead(merged, boundLogTail(opts.tail), opts.since)
 	resp.Errors = failures
+	resp.Cursor = nextScopedCursor(services, resumed, resp.Lines)
 
-	if resp.Lines == nil {
-		resp.Lines = []logs.LogLine{}
+	// The cap is disclosed in the tool description, but the description is not
+	// the half a model reasons over: a cluster-wide grep that read 25 of 60
+	// services and matched nothing answers identically to a clean cluster
+	// unless the payload itself says how far it looked.
+	if dropped := inScope - len(services); dropped > 0 {
+		resp.Note = fmt.Sprintf(
+			"read the %d alphabetically-first of %d service(s) in scope; the "+
+				"remaining %d were not read — narrow the scope with `stack` or "+
+				"`service` to cover them",
+			len(services), inScope, dropped,
+		)
 	}
 
 	return resp, nil
@@ -148,14 +175,15 @@ func (s *Server) readScopedLogs(
 // servicesInScope resolves a scope to the services it covers, already filtered
 // to what the caller may read — so a cluster-wide grep cannot become a way to
 // read output from a service the caller has no grant for.
+//
+// inScope is how many services the scope actually held, before the fan-out cap
+// cut it down. The caller needs both numbers to say what it did not read.
 func (s *Server) servicesInScope(
 	ctx context.Context,
 	scope string,
 	target string,
-) ([]swarm.Service, error) {
+) (picked []swarm.Service, inScope int, err error) {
 	all := s.filterServices(ctx, s.cache.ListServices())
-
-	var picked []swarm.Service
 
 	switch scope {
 	case "cluster":
@@ -163,7 +191,7 @@ func (s *Server) servicesInScope(
 
 	case "stack":
 		if target == "" {
-			return nil, fmt.Errorf("stack: a stack name is required")
+			return nil, 0, fmt.Errorf("stack: a stack name is required")
 		}
 
 		for _, svc := range all {
@@ -173,11 +201,11 @@ func (s *Server) servicesInScope(
 		}
 
 		if len(picked) == 0 {
-			return nil, fmt.Errorf("stack %q has no services you can read", target)
+			return nil, 0, fmt.Errorf("stack %q has no services you can read", target)
 		}
 
 	default:
-		return nil, fmt.Errorf("scope %q: want \"cluster\" or \"stack\"", scope)
+		return nil, 0, fmt.Errorf("scope %q: want \"cluster\" or \"stack\"", scope)
 	}
 
 	// Sorted so the per-service cap below is deterministic rather than
@@ -186,9 +214,93 @@ func (s *Server) servicesInScope(
 		return picked[i].Spec.Name < picked[j].Spec.Name
 	})
 
+	inScope = len(picked)
+
 	if len(picked) > maxScopedServices {
 		picked = picked[:maxScopedServices]
 	}
 
-	return picked, nil
+	return picked, inScope, nil
+}
+
+// scopedCursorPrefix marks a cursor holding one position per service rather
+// than a single timestamp. The response documents its cursor as opaque, so
+// widening what it carries needs no shape change — but a caller may also pass a
+// plain timestamp as `since`, and the two have to be told apart.
+const scopedCursorPrefix = "cs1:"
+
+// nextScopedCursor records where each service in scope was left.
+//
+// The positions come from the lines actually returned, never from what was
+// fetched: the merged tail cut can drop a service's lines entirely, and a
+// position past a line the caller never saw loses it for good. A service that
+// returned nothing keeps the position it arrived with, and a service no longer
+// in scope is forgotten rather than carried forever.
+func nextScopedCursor(
+	services []swarm.Service,
+	resumed map[string]string,
+	delivered []logs.LogLine,
+) string {
+	positions := make(map[string]string, len(services))
+
+	for _, svc := range services {
+		if previous := resumed[svc.ID]; previous != "" {
+			positions[svc.ID] = previous
+		}
+	}
+
+	// finishLogRead sorted the lines oldest-first, so the last one seen for a
+	// service is its newest and the plain assignment is the max.
+	for _, line := range delivered {
+		id := line.Attrs["serviceId"]
+		if id == "" {
+			continue
+		}
+
+		if cursor, ok := logs.ParseCursor(line.Timestamp); ok {
+			positions[id] = cursor
+		}
+	}
+
+	return encodeScopedCursor(positions)
+}
+
+// encodeScopedCursor renders one position per service. An empty set renders as
+// an empty cursor: nothing was delivered, so there is nothing to resume past.
+func encodeScopedCursor(positions map[string]string) string {
+	if len(positions) == 0 {
+		return ""
+	}
+
+	// encoding/json sorts map keys, so the same positions always encode
+	// identically — a cursor whose bytes shifted between identical reads would
+	// look like progress to a client comparing them.
+	body, err := json.Marshal(positions)
+	if err != nil {
+		return ""
+	}
+
+	return scopedCursorPrefix + base64.RawURLEncoding.EncodeToString(body)
+}
+
+// decodeScopedCursor reads a cursor encodeScopedCursor produced. Anything else
+// — a caller's own `since`, or a cursor from a single-service read — reports
+// false and applies to every service alike, which is what it meant.
+func decodeScopedCursor(cursor string) (map[string]string, bool) {
+	encoded, found := strings.CutPrefix(cursor, scopedCursorPrefix)
+	if !found {
+		return nil, false
+	}
+
+	body, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, false
+	}
+
+	var positions map[string]string
+	if err := json.Unmarshal(body, &positions); err != nil {
+		return nil, false
+	}
+
+	return positions, true
 }

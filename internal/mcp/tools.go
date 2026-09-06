@@ -300,7 +300,44 @@ func (s *Server) requireWriteClient() (DockerWriteClient, error) {
 // --- tool handlers ---
 
 func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-	if stack := req.GetString("stack", ""); stack != "" {
+	stack := strings.TrimSpace(req.GetString("stack", ""))
+	clusterWide := req.GetBool("cluster", false)
+	service := strings.TrimSpace(req.GetString("service", ""))
+	task := strings.TrimSpace(req.GetString("task", ""))
+
+	// Naming two scopes would leave the tool to guess which stream the caller
+	// meant, and they differ: a service merges its live replicas, a task is one
+	// replica including a dead one, and the two wide scopes fan out over many.
+	// Checking them in order and returning from the first match would resolve
+	// the conflict by the order they happen to be written in — a call passing
+	// `service` and `cluster` would silently read the whole cluster.
+	named := make([]string, 0, 4)
+
+	for _, scope := range []struct {
+		name  string
+		given bool
+	}{
+		{"service", service != ""},
+		{"task", task != ""},
+		{"stack", stack != ""},
+		{"cluster", clusterWide},
+	} {
+		if scope.given {
+			named = append(named, "`"+scope.name+"`")
+		}
+	}
+
+	switch {
+	case len(named) == 0:
+		return "", fmt.Errorf("one of `service`, `task`, `stack` or `cluster` is required")
+	case len(named) > 1:
+		return "", fmt.Errorf(
+			"%s are mutually exclusive; name exactly one scope",
+			strings.Join(named, ", "),
+		)
+	}
+
+	if stack != "" {
 		resp, err := s.readScopedLogs(ctx, "stack", stack, optsFromToolRequest(req))
 		if err != nil {
 			return "", err
@@ -309,26 +346,13 @@ func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (s
 		return marshalResult(resp)
 	}
 
-	if req.GetBool("cluster", false) {
+	if clusterWide {
 		resp, err := s.readScopedLogs(ctx, "cluster", "", optsFromToolRequest(req))
 		if err != nil {
 			return "", err
 		}
 
 		return marshalResult(resp)
-	}
-
-	service := strings.TrimSpace(req.GetString("service", ""))
-	task := strings.TrimSpace(req.GetString("task", ""))
-
-	// Naming both would leave the tool to guess which stream the caller meant,
-	// and the two differ: a service merges its live replicas, a task is one
-	// replica including a dead one.
-	switch {
-	case service == "" && task == "":
-		return "", fmt.Errorf("one of `service` or `task` is required")
-	case service != "" && task != "":
-		return "", fmt.Errorf("`service` and `task` are mutually exclusive")
 	}
 
 	kind, target := docker.ServiceLog, service

@@ -39,8 +39,18 @@ type LogResourceResponse struct {
 
 	// Errors names the services a scoped read could not reach, so a partial
 	// answer says which part is missing rather than pretending to be whole.
-	// Always an array, never null.
-	Errors []string `json:"errors,omitempty"`
+	// Always an array, never null — `omitempty` is deliberately absent, since
+	// dropping the field on the common path is exactly the "never null"
+	// promise broken in the other direction.
+	Errors []string `json:"errors"`
+
+	// Note is a caveat about the read as a whole rather than about any one
+	// line: a scope wider than one fan-out may cover, so far. It exists
+	// because the cap is otherwise invisible in the payload — a cluster-wide
+	// grep that read a quarter of the services and matched nothing is
+	// indistinguishable from a clean cluster, and the model reasons over the
+	// result, not over the tool description.
+	Note string `json:"note,omitempty"`
 }
 
 const (
@@ -67,7 +77,7 @@ func (s *Server) readLogsImpl(
 	opts logOptions,
 ) (LogResourceResponse, error) {
 	if s.logs == nil {
-		return LogResourceResponse{Lines: []logs.LogLine{}}, nil
+		return LogResourceResponse{Lines: []logs.LogLine{}, Errors: []string{}}, nil
 	}
 
 	if opts.since != "" {
@@ -161,7 +171,11 @@ func finishLogRead(lines []logs.LogLine, wanted int, since string) LogResourceRe
 		lines = lines[len(lines)-wanted:]
 	}
 
-	resp := LogResourceResponse{Lines: lines, Cursor: since}
+	if lines == nil {
+		lines = []logs.LogLine{}
+	}
+
+	resp := LogResourceResponse{Lines: lines, Cursor: since, Errors: []string{}}
 
 	for _, line := range slices.Backward(lines) {
 		if cursor, ok := logs.ParseCursor(line.Timestamp); ok {
