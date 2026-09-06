@@ -119,3 +119,60 @@ func TestWatchTimeoutFallsBackToTheDefaultNotTheCeiling(t *testing.T) {
 		})
 	}
 }
+
+// A wait cannot be cancelled once started, so nothing but a concurrency bound
+// stops a client that loops `watch` — or reconnects on timeout — from
+// accumulating detached pollers. `watch` is tier 0, so a read-only deployment
+// is reachable too.
+func TestWatchRefusesBeyondItsConcurrencyBound(t *testing.T) {
+	srv := &Server{watches: make(chan struct{}, 2)}
+
+	first, ok := srv.claimWatch()
+	if !ok {
+		t.Fatal("first claim refused")
+	}
+
+	second, ok := srv.claimWatch()
+	if !ok {
+		t.Fatal("second claim refused")
+	}
+
+	if _, ok := srv.claimWatch(); ok {
+		t.Error("third claim granted past a bound of 2")
+	}
+
+	// Releasing one frees exactly one slot.
+	first()
+
+	third, ok := srv.claimWatch()
+	if !ok {
+		t.Fatal("claim refused after a release")
+	}
+
+	if _, ok := srv.claimWatch(); ok {
+		t.Error("a released slot let two claims through")
+	}
+
+	second()
+	third()
+
+	for range 2 {
+		if _, ok := srv.claimWatch(); !ok {
+			t.Error("claim refused after every slot was released")
+		}
+	}
+}
+
+// A Server built without New has no channel and must stay unbounded rather
+// than refusing every wait.
+func TestWatchIsUnboundedWithoutAChannel(t *testing.T) {
+	srv := &Server{}
+
+	for range 100 {
+		release, ok := srv.claimWatch()
+		if !ok {
+			t.Fatal("claim refused on a Server with no bound wired")
+		}
+		release()
+	}
+}

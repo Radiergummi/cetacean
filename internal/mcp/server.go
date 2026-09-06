@@ -117,7 +117,12 @@ type Server struct {
 	// detach returned by cache.AddOnChangeListener.
 	notifications       *NotificationManager
 	cancelNotifications func()
-	closeOnce           sync.Once
+
+	// watches bounds concurrent `watch` waits — see maxConcurrentWatches. A nil
+	// channel disables the bound, which is what a Server built without New gets;
+	// only New wires it, and only New serves real traffic.
+	watches   chan struct{}
+	closeOnce sync.Once
 }
 
 // Options bundles the dependencies for New. OAuth is optional — when nil, the
@@ -189,6 +194,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		allowedOrigins: opts.AllowedOrigins,
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
+		watches:        make(chan struct{}, maxConcurrentWatches),
 	}
 
 	serverOptions := []mcpserver.ServerOption{

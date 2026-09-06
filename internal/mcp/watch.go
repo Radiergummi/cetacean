@@ -13,6 +13,17 @@ import (
 const (
 	maxWatchTimeout     = 5 * time.Minute
 	defaultWatchTimeout = 60 * time.Second
+
+	// maxConcurrentWatches bounds how many waits may be in flight at once.
+	//
+	// A wait detaches from its request context, so a client that disconnects,
+	// times out or reconnects leaves the poll running to its own ceiling. The
+	// converging mutations are bounded by mcp-go's MaxConcurrentTasks; nothing
+	// bounded this, and `watch` is a tier-0 read, so a read-only deployment is
+	// reachable too — a client looping it accumulates uncancellable pollers for
+	// up to five minutes each. Deliberately not configurable: it exists to stop
+	// accumulation, not to be tuned.
+	maxConcurrentWatches = 16
 )
 
 // watchResult reports how a wait ended.
@@ -60,6 +71,18 @@ func (s *Server) toolWatch(
 		return "", err
 	}
 
+	// Claimed after the read check, so a call the caller was never allowed to
+	// make cannot occupy a slot.
+	if release, ok := s.claimWatch(); ok {
+		defer release()
+	} else {
+		return "", fmt.Errorf(
+			"too many waits in flight (limit %d); a wait cannot be cancelled once "+
+				"started, so retry once one has settled or timed out",
+			maxConcurrentWatches,
+		)
+	}
+
 	started := time.Now()
 
 	result := watchResult{Outcome: "converged"}
@@ -98,4 +121,25 @@ func watchTimeout(req mcplib.CallToolRequest) time.Duration {
 	}
 
 	return timeout
+}
+
+// claimWatch takes one of the concurrent-wait slots, reporting whether it got
+// one. The release function returns it.
+//
+// A Server without the channel — one built in a test rather than by New — is
+// unbounded, which is the right answer there: the bound protects a process
+// serving untrusted callers, and a test that wanted to observe it would wire
+// the channel itself.
+func (s *Server) claimWatch() (release func(), ok bool) {
+	if s.watches == nil {
+		return func() {}, true
+	}
+
+	select {
+	case s.watches <- struct{}{}:
+		return func() { <-s.watches }, true
+
+	default:
+		return nil, false
+	}
 }
