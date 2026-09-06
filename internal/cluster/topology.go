@@ -82,7 +82,7 @@ type TopologyEdge struct {
 // per attachment.
 //
 // Deliberately not the pairwise "these two services can reach each other" graph
-// the deprecated REST /topology/networks endpoint emits. That form is quadratic
+// the REST /topology projection emits. That form is quadratic
 // in the services sharing a network — an ingress network with forty services on
 // it is 780 edges — and a reader cannot tell from it which network a given pair
 // share without reading the edge metadata. The bipartite form carries the same
@@ -90,12 +90,7 @@ type TopologyEdge struct {
 //
 // Both slices must already be filtered to what the caller may read.
 func NetworkGraph(services []swarm.Service, networks []network.Summary) TopologyGraph {
-	overlays := make(map[string]network.Summary, len(networks))
-	for _, n := range networks {
-		if n.Driver == "overlay" {
-			overlays[n.ID] = n
-		}
-	}
+	overlays := OverlayNetworks(networks)
 
 	nodes := make([]TopologyNode, 0, len(services)+len(overlays))
 	edges := make([]TopologyEdge, 0, len(services))
@@ -104,7 +99,7 @@ func NetworkGraph(services []swarm.Service, networks []network.Summary) Topology
 	for _, svc := range services {
 		nodes = append(nodes, serviceNode(svc, ""))
 
-		for networkID, aliases := range serviceAttachments(svc, overlays) {
+		for networkID, aliases := range ServiceAttachments(svc, overlays) {
 			attached[networkID] = struct{}{}
 			edges = append(edges, TopologyEdge{
 				Source: svc.ID,
@@ -132,8 +127,31 @@ func NetworkGraph(services []swarm.Service, networks []network.Summary) Topology
 	return newGraph(TopologyViewNetwork, nodes, edges)
 }
 
-// serviceAttachments returns the overlay networks a service is on, mapped to
+// OverlayNetworks indexes the overlay networks among networks by ID.
+//
+// Only overlays carry service-to-service connectivity, so every topology
+// projection filters to them first; they share the filter for the same reason
+// they share ServiceAttachments.
+func OverlayNetworks(networks []network.Summary) map[string]network.Summary {
+	overlays := make(map[string]network.Summary, len(networks))
+
+	for _, n := range networks {
+		if n.Driver == "overlay" {
+			overlays[n.ID] = n
+		}
+	}
+
+	return overlays
+}
+
+// ServiceAttachments returns the overlay networks a service is on, mapped to
 // its aliases there.
+//
+// Exported because it is the join every topology projection makes, and they
+// used to make it three different ways: the REST projections derived
+// membership from Endpoint.VirtualIPs alone and so dropped every dnsrr service
+// from the graph, while this one had always taken the union. A service is on a
+// network or it is not, whichever transport is asking.
 //
 // Two sources, because neither alone is complete. Endpoint.VirtualIPs is the
 // realised attachment, but a service published with endpoint mode dnsrr has no
@@ -141,7 +159,7 @@ func NetworkGraph(services []swarm.Service, networks []network.Summary) Topology
 // networks are the desired attachment, present from the moment the spec is
 // accepted but silent about aliases the scheduler resolved. Their union is the
 // set of networks the service is meant to be reachable on.
-func serviceAttachments(
+func ServiceAttachments(
 	svc swarm.Service,
 	overlays map[string]network.Summary,
 ) map[string][]string {
@@ -196,7 +214,7 @@ func PlacementGraph(
 	runningPerService := make(map[string]int)
 
 	for _, task := range tasks {
-		if !taskIsLive(task) {
+		if !TaskIsLive(task) {
 			continue
 		}
 
@@ -228,7 +246,7 @@ func PlacementGraph(
 			Label:  n.Description.Hostname,
 			Type:   "node",
 			Detail: string(n.Spec.Role),
-			State:  DeriveNodeState(n),
+			State:  deriveNodeState(n),
 		})
 	}
 
@@ -258,7 +276,12 @@ func PlacementGraph(
 	return newGraph(TopologyViewPlacement, nodes, edges)
 }
 
-// taskIsLive reports whether the orchestrator still intends this task to run.
+// TaskIsLive reports whether the orchestrator still intends this task to run.
+//
+// Exported for the same reason ServiceAttachments is: every placement view
+// needs it, and the REST projection used to count every task a node had ever
+// held, so a replaced replica was reported twice and a node holding only a
+// shutdown task was reported as running the service.
 //
 // Swarm keeps a task record for every replica it has replaced, so a service
 // that has been updated — or one that restarts in a loop — accumulates
@@ -268,7 +291,7 @@ func PlacementGraph(
 // twice read "1/3 running". DesiredState is the orchestrator's own answer,
 // which is why it decides this rather than the task's current state — a task
 // still coming up has no terminal state yet but is genuinely awaited.
-func taskIsLive(task swarm.Task) bool {
+func TaskIsLive(task swarm.Task) bool {
 	return task.DesiredState != swarm.TaskStateShutdown &&
 		task.DesiredState != swarm.TaskStateRemove
 }

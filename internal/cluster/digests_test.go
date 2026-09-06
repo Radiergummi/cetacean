@@ -60,7 +60,7 @@ func TestNodeDigestDownBeatsDrain(t *testing.T) {
 }
 
 // RowsForNodes and NodeDigest must never disagree about the same node's
-// state: this is the exact divergence DeriveNodeState was extracted to
+// state: this is the exact divergence deriveNodeState was extracted to
 // prevent.
 // A task's name was being derived three different ways in this package before
 // TaskName: a list row named a task after its service alone, so every replica

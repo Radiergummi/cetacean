@@ -66,7 +66,7 @@ func DrainImpactGraph(
 	onTarget := make(map[string]int)
 
 	for _, task := range tasks {
-		if task.NodeID != target.ID || !taskIsLive(task) {
+		if task.NodeID != target.ID || !TaskIsLive(task) {
 			continue
 		}
 
@@ -104,7 +104,7 @@ func DrainImpactGraph(
 			Label:  n.Description.Hostname,
 			Type:   "node",
 			Detail: string(n.Spec.Role),
-			State:  DeriveNodeState(n),
+			State:  deriveNodeState(n),
 		})
 	}
 
@@ -159,7 +159,7 @@ func placementFor(
 	var blocked string
 
 	for _, n := range candidates {
-		ok, reason := NodeSatisfies(n, constraints)
+		ok, reason := nodeSatisfies(n, constraints)
 		if !ok {
 			blocked = reason
 

@@ -399,19 +399,7 @@ func buildNetworkJGF(
 	networks []network.Summary,
 	contextURL string,
 ) jgf.Graph {
-	// Build overlay network lookup for fast filtering.
-	type overlayInfo struct {
-		name   string
-		driver string
-		scope  string
-	}
-
-	overlaySet := make(map[string]overlayInfo, len(networks))
-	for _, n := range networks {
-		if n.Driver == "overlay" {
-			overlaySet[n.ID] = overlayInfo{name: n.Name, driver: n.Driver, scope: n.Scope}
-		}
-	}
+	overlays := cluster.OverlayNetworks(networks)
 
 	nodes := make(map[string]jgf.Node, len(services))
 	netServices := make(map[string][]string)
@@ -456,21 +444,20 @@ func buildNetworkJGF(
 			Metadata: meta,
 		}
 
-		// Collect aliases per network.
-		for _, na := range svc.Spec.TaskTemplate.Networks {
-			if _, ok := overlaySet[na.Target]; ok && len(na.Aliases) > 0 {
-				if svcAliases[na.Target] == nil {
-					svcAliases[na.Target] = make(map[string][]string)
-				}
-				svcAliases[na.Target][urn] = na.Aliases
-			}
-		}
+		// One join for both membership and aliases — see
+		// cluster.ServiceAttachments for why neither source alone is enough.
+		for networkID, aliases := range cluster.ServiceAttachments(svc, overlays) {
+			netServices[networkID] = append(netServices[networkID], svc.ID)
 
-		// Build netServices from VIPs.
-		for _, vip := range svc.Endpoint.VirtualIPs {
-			if _, ok := overlaySet[vip.NetworkID]; ok {
-				netServices[vip.NetworkID] = append(netServices[vip.NetworkID], svc.ID)
+			if len(aliases) == 0 {
+				continue
 			}
+
+			if svcAliases[networkID] == nil {
+				svcAliases[networkID] = make(map[string][]string)
+			}
+
+			svcAliases[networkID][urn] = aliases
 		}
 
 		// Track stack membership.
@@ -506,12 +493,12 @@ func buildNetworkJGF(
 
 		netEntries := make([]any, 0, len(netIDs))
 		for _, netID := range netIDs {
-			info := overlaySet[netID]
+			info := overlays[netID]
 			entry := map[string]any{
 				"id":     jgf.URN("network", netID),
-				"name":   info.name,
-				"driver": info.driver,
-				"scope":  info.scope,
+				"name":   info.Name,
+				"driver": info.Driver,
+				"scope":  info.Scope,
 			}
 
 			// Collect aliases for this network that belong to either endpoint.
@@ -618,7 +605,8 @@ func buildPlacementJGF(
 
 		tasks := c.ListTasksByNode(n.ID)
 		for _, t := range tasks {
-			if !readableServiceIDs[t.ServiceID] {
+			// A replaced task still sits on its node — see cluster.TaskIsLive.
+			if !readableServiceIDs[t.ServiceID] || !cluster.TaskIsLive(t) {
 				continue
 			}
 

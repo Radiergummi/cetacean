@@ -107,7 +107,7 @@ func RowsForNodes(nodes []swarm.Node) []Row {
 			ID:     n.ID,
 			Name:   n.Description.Hostname,
 			Type:   "node",
-			State:  DeriveNodeState(n),
+			State:  deriveNodeState(n),
 			Detail: string(n.Spec.Role),
 		})
 	}
@@ -387,7 +387,7 @@ func ServiceDigest(
 		// A task the orchestrator has already replaced explains history, not
 		// the current state, and including it would attribute an old failure
 		// to a service that has since recovered.
-		if !taskIsLive(task) {
+		if !TaskIsLive(task) {
 			continue
 		}
 

@@ -6,7 +6,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 )
 
-// NodeSatisfies reports whether a node meets every placement constraint in a
+// nodeSatisfies reports whether a node meets every placement constraint in a
 // service's spec, and names the first constraint that it does not.
 //
 // This is the rule the drain-impact view turns on: a service pinned to a label
@@ -20,7 +20,7 @@ import (
 // satisfied, with the constraint as the reason. Reading an unevaluable
 // constraint as satisfied would report a service movable that Swarm will
 // refuse to place, which is the one wrong answer this view must not give.
-func NodeSatisfies(node swarm.Node, constraints []string) (bool, string) {
+func nodeSatisfies(node swarm.Node, constraints []string) (bool, string) {
 	for _, raw := range constraints {
 		key, op, value, ok := splitConstraint(raw)
 		if !ok {

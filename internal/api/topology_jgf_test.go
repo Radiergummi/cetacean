@@ -687,3 +687,100 @@ func TestHandleTopologyDOT_ETag304(t *testing.T) {
 		t.Errorf("expected 304, got %d", w2.Code)
 	}
 }
+
+// A service published with endpoint mode dnsrr has no virtual IP, so deriving
+// network membership from Endpoint.VirtualIPs alone drops it from the graph.
+// cluster.NetworkGraph unions the VIPs with the task template's networks; the
+// JGF projection must join on the same rule or the two topologies disagree.
+func TestBuildNetworkJGFSeesDNSRRAttachments(t *testing.T) {
+	services := []swarm.Service{
+		{
+			ID: "svc1",
+			Spec: swarm.ServiceSpec{
+				Annotations: swarm.Annotations{Name: "web"},
+				TaskTemplate: swarm.TaskSpec{
+					Networks: []swarm.NetworkAttachmentConfig{{Target: "net1"}},
+				},
+			},
+			Endpoint: swarm.Endpoint{
+				VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
+			},
+		},
+		{
+			// dnsrr: attached in the spec, but never given a virtual IP.
+			ID: "svc2",
+			Spec: swarm.ServiceSpec{
+				Annotations: swarm.Annotations{Name: "api"},
+				TaskTemplate: swarm.TaskSpec{
+					Networks: []swarm.NetworkAttachmentConfig{
+						{Target: "net1", Aliases: []string{"api"}},
+					},
+				},
+				EndpointSpec: &swarm.EndpointSpec{Mode: swarm.ResolutionModeDNSRR},
+			},
+		},
+	}
+	networks := []network.Summary{{ID: "net1", Name: "app_default", Driver: "overlay"}}
+
+	g := buildNetworkJGF(services, networks, "/api/context.jsonld")
+
+	if len(g.Edges) != 1 {
+		t.Fatalf("edges=%d, want 1 — the dnsrr service must still share net1", len(g.Edges))
+	}
+
+	source, target := g.Edges[0].Source, g.Edges[0].Target
+	if source != jgf.URN("service", "svc1") || target != jgf.URN("service", "svc2") {
+		t.Errorf("edge %s→%s, want svc1→svc2", source, target)
+	}
+}
+
+// After a rolling update the node still holds the shutdown task alongside its
+// replacement. cluster.PlacementGraph drops it — the orchestrator no longer
+// intends it to run — and the JGF projection must too, or the dashboard counts
+// the same replica twice and a node holding only a replaced task is reported
+// as running the service.
+func TestBuildPlacementJGFIgnoresReplacedTasks(t *testing.T) {
+	c := cache.New(nil)
+	c.SetTask(swarm.Task{
+		ID:           "task-old",
+		ServiceID:    "svc1",
+		NodeID:       "node1",
+		Slot:         1,
+		DesiredState: swarm.TaskStateShutdown,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateShutdown},
+	})
+	c.SetTask(swarm.Task{
+		ID:           "task-new",
+		ServiceID:    "svc1",
+		NodeID:       "node1",
+		Slot:         1,
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+
+	clusterNodes := []swarm.Node{
+		{ID: "node1", Description: swarm.NodeDescription{Hostname: "worker-1"}},
+	}
+
+	g := buildPlacementJGF(
+		clusterNodes,
+		c,
+		map[string]string{"svc1": "web"},
+		map[string]string{"svc1": "nginx"},
+		map[string]bool{"svc1": true},
+		"/api/context.jsonld",
+	)
+
+	if len(g.Hyperedges) != 1 {
+		t.Fatalf("hyperedges=%d, want 1", len(g.Hyperedges))
+	}
+
+	tasks, _ := g.Hyperedges[0].Metadata["tasks"].([]map[string]any)
+	if len(tasks) != 1 {
+		t.Fatalf("tasks=%d, want 1 — the replaced task must not be counted", len(tasks))
+	}
+
+	if id, _ := tasks[0]["id"].(string); id != jgf.URN("task", "task-new") {
+		t.Errorf("task=%v, want the live replacement", id)
+	}
+}

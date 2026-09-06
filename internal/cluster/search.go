@@ -167,7 +167,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Type:   "nodes",
 				ID:     n.ID,
 				Name:   n.Description.Hostname,
-				State:  DeriveNodeState(n),
+				State:  deriveNodeState(n),
 				Detail: string(n.Spec.Role),
 			})
 		}
