@@ -602,3 +602,77 @@ func TestGetLogsToolRequiresAScope(t *testing.T) {
 		}
 	}
 }
+
+// Docker ignores `since` for service logs, so the window is enforced here by
+// filtering after the fetch — and the fetch itself is bounded by `tail`. When
+// a service is chatty enough to fill that bound before reaching the start of
+// the requested window, the answer covers a fraction of what was asked for and
+// says nothing about it: a five-minute request against a service emitting
+// hundreds of lines a second came back holding seven seconds. "Nothing
+// happened in the last hour" and "here are the newest 100 lines" are not the
+// same answer, and only the payload can tell them apart.
+func TestReadLogsReportsAWindowTheTailCeilingCutShort(t *testing.T) {
+	// One line past the ceiling the widened fetch uses, all newer than the
+	// `since` below, so filtering removes nothing and only the ceiling binds.
+	var frames []byte
+	for i := range maxLogTail {
+		frames = append(frames, buildLogFrame(1, fmt.Sprintf(
+			"2026-09-06T14:03:%02d.%06dZ line %d\n", i%60, i, i,
+		))...)
+	}
+
+	streamer := &fakeLogStreamer{frames: frames}
+	srv := newLogTestServer(t, cache.New(nil), streamer)
+
+	resp, err := srv.readLogsImpl(
+		context.Background(), docker.ServiceLog, "svc",
+		logOptions{tail: 10, since: "2026-09-06T13:58:00Z"},
+	)
+	if err != nil {
+		t.Fatalf("readLogsImpl: %v", err)
+	}
+
+	if !resp.Truncated {
+		t.Error("the read hit its line ceiling before the requested window and did not say so")
+	}
+
+	if resp.Oldest == "" {
+		t.Error("Oldest must report how far back the answer actually reaches")
+	}
+
+	if resp.Note == "" {
+		t.Error("a shortened window needs a note; the model reasons over the payload")
+	}
+}
+
+// The common case must stay quiet. A read that reached the start of its window
+// has nothing to caveat, and a note on every call trains the reader to skip it.
+func TestReadLogsDoesNotClaimTruncationWhenTheWindowWasCovered(t *testing.T) {
+	frames := append(
+		buildLogFrame(1, "2026-09-06T14:03:01.000000Z first\n"),
+		buildLogFrame(1, "2026-09-06T14:03:02.000000Z second\n")...,
+	)
+
+	streamer := &fakeLogStreamer{frames: frames}
+	srv := newLogTestServer(t, cache.New(nil), streamer)
+
+	resp, err := srv.readLogsImpl(
+		context.Background(), docker.ServiceLog, "svc",
+		logOptions{tail: 100, since: "2026-09-06T13:58:00Z"},
+	)
+	if err != nil {
+		t.Fatalf("readLogsImpl: %v", err)
+	}
+
+	if resp.Truncated {
+		t.Error("reported truncation on a read that covered its whole window")
+	}
+
+	if resp.Note != "" {
+		t.Errorf("unexpected note on a complete read: %q", resp.Note)
+	}
+
+	if resp.Oldest != "2026-09-06T14:03:01.000000Z" {
+		t.Errorf("Oldest = %q, want the earliest line returned", resp.Oldest)
+	}
+}

@@ -96,10 +96,11 @@ func (s *Server) readScopedLogs(
 	}
 
 	var (
-		mu       sync.Mutex
-		merged   []logs.LogLine
-		failures []string
-		wg       sync.WaitGroup
+		mu        sync.Mutex
+		merged    []logs.LogLine
+		failures  []string
+		shortened []string
+		wg        sync.WaitGroup
 	)
 
 	sem := make(chan struct{}, scopedConcurrency)
@@ -129,6 +130,15 @@ func (s *Server) readScopedLogs(
 				return
 			}
 
+			// A per-service ceiling shortens the merged window too, and
+			// finishLogRead below builds a fresh response that would drop the
+			// note. Name the services rather than just counting them: on a
+			// wide read it is usually one noisy service that cut the window
+			// short for everything, and knowing which one is the fix.
+			if resp.Truncated {
+				shortened = append(shortened, svc.Spec.Name)
+			}
+
 			for _, line := range resp.Lines {
 				if line.Attrs == nil {
 					line.Attrs = map[string]string{}
@@ -144,6 +154,7 @@ func (s *Server) readScopedLogs(
 	wg.Wait()
 
 	sort.Strings(failures)
+	sort.Strings(shortened)
 
 	if failures == nil {
 		failures = []string{}
@@ -160,14 +171,28 @@ func (s *Server) readScopedLogs(
 	// the half a model reasons over: a cluster-wide grep that read 25 of 60
 	// services and matched nothing answers identically to a clean cluster
 	// unless the payload itself says how far it looked.
+	var notes []string
+
 	if dropped := inScope - len(services); dropped > 0 {
-		resp.Note = fmt.Sprintf(
+		notes = append(notes, fmt.Sprintf(
 			"read the %d alphabetically-first of %d service(s) in scope; the "+
 				"remaining %d were not read — narrow the scope with `stack` or "+
 				"`service` to cover them",
 			len(services), inScope, dropped,
-		)
+		))
 	}
+
+	if len(shortened) > 0 {
+		resp.Truncated = true
+		notes = append(notes, fmt.Sprintf(
+			"hit the per-service line ceiling before the start of the "+
+				"requested window on %s, so this answer covers less time than "+
+				"asked for — narrow it with `contains` or `level`",
+			strings.Join(shortened, ", "),
+		))
+	}
+
+	resp.Note = strings.Join(notes, "; ")
 
 	return resp, nil
 }

@@ -2,13 +2,16 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -638,5 +641,163 @@ func TestRun_ReconnectsAfterEventStreamError(t *testing.T) {
 	nodes := c.ListNodes()
 	if len(nodes) != 3 {
 		t.Errorf("expected 3 nodes after two reconnect syncs, got %d", len(nodes))
+	}
+}
+
+// Swarm garbage-collects a task's record once it falls out of the history
+// window, and emits no removal event when it does — the only trace is that the
+// next inspect 404s. Holding the record on that failure left the cache serving
+// a task Docker had forgotten, still carrying whatever status it was last
+// inspected with: a service restarting in a loop accumulated thirty of them,
+// most reported "running", until the five-minutely full re-sync swept them.
+//
+// A not-found that survives every retry is the daemon's answer, not a race, so
+// it deletes. The retries themselves still have to run: during a stack deploy
+// a 404 means "not registered yet", which is why this is decided after they
+// are exhausted rather than on the first one.
+func TestHandleEventDeletesTaskThatNoLongerExists(t *testing.T) {
+	mc := newMockClient()
+	mc.inspectFn = func(context.Context, events.Type, string) (any, error) {
+		return nil, cerrdefs.ErrNotFound
+	}
+
+	c := cache.New(nil)
+	c.SetTask(swarm.Task{
+		ID:           "t1",
+		ServiceID:    "svc",
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+
+	w := NewWatcher(mc, c, "")
+	w.handleEvent(context.Background(), events.Message{
+		Type:  "task",
+		Actor: events.Actor{ID: "t1"},
+	})
+
+	if _, ok := c.GetTask("t1"); ok {
+		t.Error("task Docker no longer has is still in the cache")
+	}
+}
+
+// A transient failure is not evidence of absence. Dropping the record on one
+// would turn a daemon hiccup into a resource vanishing from every listing,
+// which is the opposite failure and a worse one: the periodic re-sync repairs
+// a stale record, but nothing repairs a caller that already acted on an empty
+// result.
+func TestHandleEventKeepsTaskWhenInspectFailsTransiently(t *testing.T) {
+	mc := newMockClient()
+	mc.inspectFn = func(context.Context, events.Type, string) (any, error) {
+		return nil, errors.New("connection reset by peer")
+	}
+
+	c := cache.New(nil)
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc"})
+
+	w := NewWatcher(mc, c, "")
+	w.handleEvent(context.Background(), events.Message{
+		Type:  "task",
+		Actor: events.Actor{ID: "t1"},
+	})
+
+	if _, ok := c.GetTask("t1"); !ok {
+		t.Error("task dropped on a transient inspect failure")
+	}
+}
+
+// A container dying is the last event a failed task ever produces, and Swarm
+// reconciles the task record a moment after the container it wraps. Inspecting
+// on the event itself therefore reads the task as still running, desired
+// running — and because nothing further arrives, the cache keeps that reading
+// until the five-minutely full re-sync. Every replica figure derived from it
+// overcounts in the meantime: a service crash-looping every eight seconds
+// reported four running replicas against a desired one, and the convergence
+// wait behind every deploy could not settle.
+//
+// Re-inspecting once, shortly after, is what closes the gap: by then Swarm has
+// caught up and the terminal state is there to read.
+func TestContainerDeathReinspectsUntilSwarmCatchesUp(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		// First read sees Swarm's pre-reconciliation view, as production does.
+		if calls.Add(1) == 1 {
+			return swarm.Task{
+				ID: id, ServiceID: "svc",
+				DesiredState: swarm.TaskStateRunning,
+				Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+			}, nil
+		}
+
+		return swarm.Task{
+			ID: id, ServiceID: "svc",
+			DesiredState: swarm.TaskStateShutdown,
+			Status:       swarm.TaskStatus{State: swarm.TaskStateFailed},
+		}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	w.settleDelay = 10 * time.Millisecond
+
+	w.handleEvent(context.Background(), events.Message{
+		Type:   events.ContainerEventType,
+		Action: "die",
+		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
+			"com.docker.swarm.task.id": "t1",
+		}},
+	})
+
+	w.waitForSettles()
+
+	task, ok := c.GetTask("t1")
+	if !ok {
+		t.Fatal("task missing from cache")
+	}
+
+	if task.DesiredState != swarm.TaskStateShutdown {
+		t.Errorf("DesiredState = %q, want shutdown — the re-inspect did not land",
+			task.DesiredState)
+	}
+
+	if got := c.RunningTaskCount("svc"); got != 0 {
+		t.Errorf("RunningTaskCount = %d, want 0 for a task Swarm has shut down", got)
+	}
+}
+
+// An ordinary container event is not a death and must not pay for a second
+// inspect: a busy cluster produces these constantly, and doubling every one
+// would double the load the watcher puts on the daemon.
+func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		calls.Add(1)
+
+		return swarm.Task{
+			ID: id, ServiceID: "svc",
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+		}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	w.settleDelay = 10 * time.Millisecond
+
+	w.handleEvent(context.Background(), events.Message{
+		Type:   events.ContainerEventType,
+		Action: "start",
+		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
+			"com.docker.swarm.task.id": "t1",
+		}},
+	})
+
+	w.waitForSettles()
+
+	if got := calls.Load(); got != 1 {
+		t.Errorf("inspected %d times for a container start; want 1", got)
 	}
 }

@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -787,9 +788,23 @@ func decodeArgInto(req mcplib.CallToolRequest, key string, target any) error {
 	if err != nil {
 		return fmt.Errorf("re-encode %q: %w", key, err)
 	}
-	if err := json.Unmarshal(b, target); err != nil {
+
+	// Unknown fields are refused rather than dropped. The shapes these tools
+	// read and the shapes they write are not the same — describe renders a
+	// port as {"published":…,"target":…} while swarm.PortConfig wants
+	// PublishedPort and TargetPort — and read-modify-write is the natural way
+	// to edit a section the caller is told to replace wholesale. Silently
+	// ignoring the keys that did not match turned that round trip into a
+	// different service: the two ports decoded to zero and Docker published
+	// nothing, with no error anywhere. A named key in the error is what tells
+	// the caller which spelling it got wrong.
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+
+	if err := dec.Decode(target); err != nil {
 		return fmt.Errorf("decode %q: %w", key, err)
 	}
+
 	return nil
 }
 

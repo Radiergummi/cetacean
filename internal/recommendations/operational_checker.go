@@ -90,6 +90,16 @@ func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
 func (oc *OperationalChecker) flakyServiceRecs() []Recommendation {
 	var recs []Recommendation
 
+	// The tracker is built at startup, so on a young process the lookback in
+	// the message below is longer than the period actually counted. Saying
+	// "over the past 7d" for half an hour of observation understates a chronic
+	// fault by orders of magnitude and makes it read as new, so the window is
+	// reported as the shorter of the two.
+	counted := oc.lookback
+	if since := time.Since(oc.cache.RestartTrackingSince()); since < counted {
+		counted = since
+	}
+
 	for _, svc := range oc.cache.ListServices() {
 		count := oc.cache.RestartCount(svc.ID, oc.lookback)
 		if count <= 5 {
@@ -105,7 +115,7 @@ func (oc *OperationalChecker) flakyServiceRecs() []Recommendation {
 			Message: fmt.Sprintf(
 				"Service has had %d task failures over the past %s",
 				count,
-				formatPromDuration(oc.lookback),
+				formatPromDuration(counted),
 			),
 		})
 	}

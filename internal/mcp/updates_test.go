@@ -341,3 +341,53 @@ func TestEveryAdvertisedSectionIsDispatched(t *testing.T) {
 		}
 	}
 }
+
+// The shape describe emits and the shape update_service accepts are not the
+// same: describe renders a port as {"published":8099,"target":80} while
+// swarm.PortConfig wants PublishedPort and TargetPort. Go's decoder matches
+// field names case-insensitively, so "protocol" landed and those two did not
+// — they decoded to zero, and Docker accepted a port config publishing
+// nothing, silently replacing a working *:8099->80 with *:30000->0.
+//
+// Read-modify-write is the natural way to edit a section a caller is told to
+// replace wholesale, so the round trip has to fail loudly rather than quietly
+// produce a different service. This pins every section at once: an argument
+// carrying a key the target type has no field for is rejected.
+func TestDecodeSectionRejectsKeysTheSectionHasNoFieldFor(t *testing.T) {
+	req := newCallToolRequest("update_service", map[string]any{
+		"value": []any{map[string]any{
+			"mode": "ingress", "protocol": "tcp", "published": 8099, "target": 80,
+		}},
+	})
+
+	_, err := decodeSection[[]swarm.PortConfig](req, "ports")
+	if err == nil {
+		t.Fatal("describe's own port shape decoded silently; it must be refused")
+	}
+
+	// Which key it names first does not matter — "mode" is as wrong as
+	// "published" — but it has to name one, because the caller's next move is
+	// to correct a spelling and a type name alone does not say which.
+	if !strings.Contains(err.Error(), "unknown field") {
+		t.Errorf("error must name the offending key, got %q", err)
+	}
+}
+
+// A port with no target publishes nothing. Docker accepts it and assigns an
+// ephemeral published port pointing at container port 0, so the service ends
+// up with a port config that cannot serve — the shape of the corruption above,
+// reachable by any caller who simply omits the field.
+func TestUpdateServicePortsRejectsAPortWithNoTarget(t *testing.T) {
+	req := newCallToolRequest("update_service", map[string]any{
+		"value": []any{map[string]any{"Protocol": "tcp", "PublishMode": "ingress"}},
+	})
+
+	ports, err := decodeSection[[]swarm.PortConfig](req, "ports")
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if err := validatePorts(ports); err == nil {
+		t.Error("a port with TargetPort 0 was accepted")
+	}
+}

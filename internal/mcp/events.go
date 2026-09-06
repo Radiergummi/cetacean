@@ -26,6 +26,16 @@ type eventsResult struct {
 	// Truncated says the window held more than Limit, so a caller narrowing
 	// by time knows it is looking at a page rather than the whole answer.
 	Truncated bool `json:"truncated"`
+
+	// TrackingSince is the start of the only window this timeline can answer
+	// for: the ring is built at startup and is not persisted, so after a
+	// restart it begins there, and once it wraps it begins wherever its oldest
+	// surviving entry does. Without it a `since` reaching back twelve hours
+	// answers identically whether nothing changed or the record only goes back
+	// half an hour — and the second is the common case on a cluster with a
+	// service restarting in a loop, whose churn evicts everything else.
+	// Compare it against the `since` you asked for.
+	TrackingSince string `json:"trackingSince,omitempty"`
 }
 
 // toolGetEvents serves the change timeline, filtered.
@@ -105,11 +115,17 @@ func (s *Server) toolGetEvents(
 
 	cluster.SortTimeline(timeline)
 
-	return marshalResult(eventsResult{
+	result := eventsResult{
 		Entries:   timeline,
 		Total:     total,
 		Truncated: truncated,
-	})
+	}
+
+	if oldest, ok := history.Oldest(); ok {
+		result.TrackingSince = oldest.UTC().Format(time.RFC3339Nano)
+	}
+
+	return marshalResult(result)
 }
 
 // optionalTime parses an RFC 3339 argument, naming the format when it cannot.

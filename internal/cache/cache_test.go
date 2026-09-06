@@ -1366,3 +1366,64 @@ func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
 		t.Errorf("ReservedMemory=%d, want %d", snap.ReservedMemory, 512*1024*1024)
 	}
 }
+
+// A task the orchestrator has already given up on is not a replica of the
+// desired state, however its last-observed status reads. Swarm marks a task
+// for shutdown the moment it decides to replace or reap it, so a rolling
+// update and a scale-down both leave records that are still
+// Status.State: running while on their way out — and a task Docker has since
+// garbage-collected keeps whatever status it was last inspected with forever,
+// because a 404 on inspect cannot update it. Counting either inflates every
+// replica figure in the product at once, since all three counters below feed
+// find, describe, the topology views and the convergence wait.
+func TestRunningCountsIgnoreTasksDestinedForShutdown(t *testing.T) {
+	c := New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: new(uint64(2))},
+			},
+		},
+	})
+
+	tasks := []struct {
+		id      string
+		desired swarm.TaskState
+		status  swarm.TaskState
+		counts  bool
+	}{
+		{"live-1", swarm.TaskStateRunning, swarm.TaskStateRunning, true},
+		{"live-2", swarm.TaskStateRunning, swarm.TaskStateRunning, true},
+		{"replaced", swarm.TaskStateShutdown, swarm.TaskStateRunning, false},
+		{"reaped", swarm.TaskStateRemove, swarm.TaskStateRunning, false},
+		{"starting", swarm.TaskStateRunning, swarm.TaskStatePreparing, false},
+	}
+
+	want := 0
+	for _, tc := range tasks {
+		c.SetTask(swarm.Task{
+			ID:           tc.id,
+			ServiceID:    "svc",
+			DesiredState: tc.desired,
+			Status:       swarm.TaskStatus{State: tc.status},
+		})
+
+		if tc.counts {
+			want++
+		}
+	}
+
+	if got := c.RunningTaskCount("svc"); got != want {
+		t.Errorf("RunningTaskCount = %d, want %d", got, want)
+	}
+
+	if got := c.RunningTaskCounts()["svc"]; got != want {
+		t.Errorf("RunningTaskCounts = %d, want %d", got, want)
+	}
+
+	if got := c.Snapshot().RunningByService["svc"]; got != want {
+		t.Errorf("Snapshot RunningByService = %d, want %d", got, want)
+	}
+}
