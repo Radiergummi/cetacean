@@ -80,6 +80,13 @@
 # [acl]
 # policy = ""                               # Inline policy string (JSON, YAML, or TOML)
 # policy_file = ""                          # Path to policy file (hot-reloaded on change)
+#
+# Provider grant sources. These complement the policy above rather than
+# replacing it: grants carried by the identity are added to whatever the
+# policy already grants it.
+# tailscale_capability = ""                 # Tailscale CapMap key holding per-user grants
+# oidc_claim = ""                           # OIDC token claim holding grants
+# headers_acl = ""                          # HTTP header holding grants (JSON)
 
 # --- Recommendation sizing thresholds ---
 # See docs/recommendations.md for check categories.
@@ -94,7 +101,7 @@
 # lookback = "168h"                         # Time window for p95 queries (default 7 days)
 
 # --- MCP server (Model Context Protocol) ---
-# See docs/specs/2026-04-11-mcp-server-design.md for protocol details.
+# See docs/mcp.md for the tools, resources and prompts the server exposes.
 # Disabled by default; when enabled the server mounts /mcp and (when auth
 # mode is not "none") /.well-known/oauth-* + /oauth/* endpoints.
 
