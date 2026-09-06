@@ -309,3 +309,125 @@ func (s *Server) readableEnrichedTask(
 
 	return enriched
 }
+
+// checkWrite enforces the "write" permission on resourceType:resourceName for
+// the identity in ctx. Returns nil if ACL is disabled or no identity is on the
+// context (the bearer middleware would have rejected the request earlier in
+// that case). All MCP tool handlers route through this helper so denial errors
+// have a uniform shape.
+func (s *Server) checkWrite(ctx context.Context, resourceType, resourceName string) error {
+	if s.acl == nil {
+		return nil
+	}
+	identity := auth.IdentityFromContext(ctx)
+	if identity == nil {
+		return nil
+	}
+	if !s.acl.Can(identity, "write", resourceType+":"+resourceName) {
+		return fmt.Errorf("write access denied for %s:%s", resourceType, resourceName)
+	}
+	return nil
+}
+
+// checkServiceWrite resolves the service name from the cache so the ACL key
+// is `service:<name>` rather than `service:<id>`, matching REST behaviour.
+func (s *Server) checkServiceWrite(ctx context.Context, id string) error {
+	name := id
+	if svc, ok := s.cache.GetService(id); ok && svc.Spec.Name != "" {
+		name = svc.Spec.Name
+	}
+	return s.checkWrite(ctx, "service", name)
+}
+
+// checkNodeWrite resolves the node hostname from the cache so the ACL key is
+// `node:<hostname>` rather than `node:<id>`, matching REST behaviour.
+func (s *Server) checkNodeWrite(ctx context.Context, id string) error {
+	name := id
+	if node, ok := s.cache.GetNode(id); ok && node.Description.Hostname != "" {
+		name = node.Description.Hostname
+	}
+	return s.checkWrite(ctx, "node", name)
+}
+
+// checkConfigWrite resolves the config Spec.Name from the cache so the ACL key
+// is `config:<name>` rather than `config:<id>`, matching REST behaviour.
+func (s *Server) checkConfigWrite(ctx context.Context, id string) error {
+	name := id
+	if cfg, ok := s.cache.GetConfig(id); ok && cfg.Spec.Name != "" {
+		name = cfg.Spec.Name
+	}
+	return s.checkWrite(ctx, "config", name)
+}
+
+// checkSecretWrite resolves the secret Spec.Name from the cache so the ACL key
+// is `secret:<name>` rather than `secret:<id>`, matching REST behaviour.
+func (s *Server) checkSecretWrite(ctx context.Context, id string) error {
+	name := id
+	if sec, ok := s.cache.GetSecret(id); ok && sec.Spec.Name != "" {
+		name = sec.Spec.Name
+	}
+	return s.checkWrite(ctx, "secret", name)
+}
+
+// checkNetworkWrite resolves the network Name from the cache so the ACL key is
+// `network:<name>` rather than `network:<id>`, matching REST behaviour.
+func (s *Server) checkNetworkWrite(ctx context.Context, id string) error {
+	name := id
+	if net, ok := s.cache.GetNetwork(id); ok && net.Name != "" {
+		name = net.Name
+	}
+	return s.checkWrite(ctx, "network", name)
+}
+
+// checkTaskWrite routes the ACL check to the task's parent service so an MCP
+// `remove_task` evaluates the same key REST DELETE /tasks/{id} does
+// (`service:<name>`). Falls back to `task:<id>` when the cache cannot resolve
+// the parent service — that path is also what REST takes as a last resort.
+func (s *Server) checkTaskWrite(ctx context.Context, id string) error {
+	task, ok := s.cache.GetTask(id)
+	if !ok {
+		return s.checkWrite(ctx, "task", id)
+	}
+	svc, ok := s.cache.GetService(task.ServiceID)
+	if !ok || svc.Spec.Name == "" {
+		return s.checkWrite(ctx, "task", id)
+	}
+	return s.checkWrite(ctx, "service", svc.Spec.Name)
+}
+
+// checkServiceRead resolves the service Spec.Name from the cache so the ACL
+// key is `service:<name>` rather than `service:<id>`, matching the resource
+// read path in lookupResource. Used by toolGetLogs which doesn't go through
+// lookupResource.
+//
+// It resolves rather than looking the ID up, because get_logs advertises its
+// `service` argument as "Service ID or name" and Docker honours both — so a
+// plain GetService turned a name, the identifier find and the completions
+// hand back, into "service not found" on every cluster that has an ACL policy
+// and into a working call on every cluster that has not.
+func (s *Server) checkServiceRead(ctx context.Context, id string) error {
+	if s.acl == nil {
+		return nil
+	}
+	svc, ok, err := s.cache.ResolveService(id)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("service %q not found", id)
+	}
+	return s.checkRead(ctx, "service", svc.Spec.Name)
+}
+
+// checkTaskRead enforces the read permission on a task, keyed as `task:<id>`.
+//
+// It does not walk to the parent service the way checkTaskWrite does, because
+// the evaluator already does: acl.grantMatchesResource resolves a task through
+// its parent service and that service's stack, so the task's own key is
+// strictly the broader check. It is also the key every other task read passes
+// — REST's HandleTaskLogs and the cetacean://tasks/{id} resource both do — and
+// walking to the parent here would leave a `task:*` grant able to read task
+// logs on every path except this tool.
+func (s *Server) checkTaskRead(ctx context.Context, id string) error {
+	return s.checkRead(ctx, "task", id)
+}
