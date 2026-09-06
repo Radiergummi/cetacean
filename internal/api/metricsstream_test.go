@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	promapi "github.com/radiergummi/cetacean/internal/api/prometheus"
+	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
 
 func TestMetricsStream_MissingQuery(t *testing.T) {
