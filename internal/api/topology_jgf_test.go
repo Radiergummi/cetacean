@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/api/jgf"
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -782,5 +784,140 @@ func TestBuildPlacementJGFIgnoresReplacedTasks(t *testing.T) {
 
 	if id, _ := tasks[0]["id"].(string); id != jgf.URN("task", "task-new") {
 		t.Errorf("task=%v, want the live replacement", id)
+	}
+}
+
+// Two services sharing several overlays produce one edge carrying all of them,
+// and that array was filled by ranging a map — so two calls over identical
+// state serialised differently and flipped the response's ETag, turning every
+// conditional request into a 200. The edges themselves are sorted for exactly
+// this reason; the networks inside them must be too.
+func TestBuildNetworkJGFOrdersSharedNetworksDeterministically(t *testing.T) {
+	attach := func(id, name string, targets ...string) swarm.Service {
+		configs := make([]swarm.NetworkAttachmentConfig, 0, len(targets))
+		vips := make([]swarm.EndpointVirtualIP, 0, len(targets))
+
+		for _, target := range targets {
+			configs = append(configs, swarm.NetworkAttachmentConfig{Target: target})
+			vips = append(vips, swarm.EndpointVirtualIP{NetworkID: target})
+		}
+
+		return swarm.Service{
+			ID: id,
+			Spec: swarm.ServiceSpec{
+				Annotations:  swarm.Annotations{Name: name},
+				TaskTemplate: swarm.TaskSpec{Networks: configs},
+			},
+			Endpoint: swarm.Endpoint{VirtualIPs: vips},
+		}
+	}
+
+	shared := []string{"net-d", "net-a", "net-c", "net-b"}
+	services := []swarm.Service{
+		attach("svc1", "web", shared...),
+		attach("svc2", "api", shared...),
+	}
+
+	networks := make([]network.Summary, 0, len(shared))
+	for _, id := range shared {
+		networks = append(networks, network.Summary{ID: id, Name: id, Driver: "overlay"})
+	}
+
+	names := func() []string {
+		g := buildNetworkJGF(services, networks, "/api/context.jsonld")
+		if len(g.Edges) != 1 {
+			t.Fatalf("edges=%d, want 1", len(g.Edges))
+		}
+
+		entries, ok := g.Edges[0].Metadata["networks"].([]any)
+		if !ok {
+			t.Fatalf("networks metadata = %T, want a slice", g.Edges[0].Metadata["networks"])
+		}
+
+		got := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			got = append(got, entry.(map[string]any)["id"].(string))
+		}
+
+		return got
+	}
+
+	first := names()
+
+	want := make([]string, 0, len(shared))
+	for _, id := range slices.Sorted(slices.Values(shared)) {
+		want = append(want, jgf.URN("network", id))
+	}
+
+	if !slices.Equal(first, want) {
+		t.Errorf("networks = %v, want them sorted: %v", first, want)
+	}
+
+	// Ranging a map is not reliably out of order on any single call, so repeat:
+	// what matters is that every call agrees.
+	for range 20 {
+		if got := names(); !slices.Equal(got, first) {
+			t.Fatalf("networks = %v on a later call, %v on the first", got, first)
+		}
+	}
+}
+
+// The removed projections need routes of their own. Without them the SPA
+// catch-all answers both paths with 200 and an HTML page, so a JSON client of
+// the old endpoint receives a rendered dashboard rather than an error — and
+// the e2e test asserting the endpoint no longer serves a graph passes only
+// because it never ran against a real server.
+func TestRemovedTopologyProjectionsAreGone(t *testing.T) {
+	c := cache.New(nil)
+	h := newTestHandlers(t, withCache(c))
+	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	defer b.Close()
+
+	srv := httptest.NewServer(newTestRouter(t, h, b, nil))
+	defer srv.Close()
+
+	for _, path := range []string{"/topology/networks", "/topology/placement"} {
+		t.Run(path, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, srv.URL+path, nil)
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			req.Header.Set("Accept", "application/json")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("get %s: %v", path, err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusGone {
+				t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusGone)
+			}
+
+			if ct := resp.Header.Get(
+				"Content-Type",
+			); !strings.HasPrefix(
+				ct,
+				"application/problem+json",
+			) {
+				t.Errorf("content-type = %q, want a problem document", ct)
+			}
+
+			var problem struct {
+				Status int    `json:"status"`
+				Title  string `json:"title"`
+				Detail string `json:"detail"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&problem); err != nil {
+				t.Fatalf("decode problem: %v", err)
+			}
+
+			if problem.Status != http.StatusGone {
+				t.Errorf("problem status = %d, want %d", problem.Status, http.StatusGone)
+			}
+			if !strings.Contains(problem.Detail, "/topology") {
+				t.Errorf("detail = %q, want it to point at the replacement", problem.Detail)
+			}
+		})
 	}
 }

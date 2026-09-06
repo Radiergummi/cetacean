@@ -229,6 +229,12 @@ func buildNetworkJGF(
 		sourceURN := jgf.URN("service", k.a)
 		targetURN := jgf.URN("service", k.b)
 
+		// netIDs was filled by ranging a map, so two calls over identical
+		// state would otherwise emit this array in different orders and flip
+		// the response's ETag — the edges themselves are sorted below for the
+		// same reason.
+		sort.Strings(netIDs)
+
 		netEntries := make([]any, 0, len(netIDs))
 		for _, netID := range netIDs {
 			info := overlays[netID]

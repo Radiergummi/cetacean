@@ -623,6 +623,24 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		}
 	})
 
+	// The two projections removed in 0.13.0 need explicit routes, or the SPA
+	// catch-all on "/" answers them: neither path carries a mid-path extension,
+	// so a JSON client of the old endpoint gets 200 and a rendered dashboard
+	// instead of an error — a worse failure than the deprecation it replaced,
+	// because nothing about it looks like one. 410 rather than 404 says the
+	// path is gone for good rather than merely absent today.
+	for _, removed := range []string{"/topology/networks", "/topology/placement"} {
+		mux.HandleFunc("GET "+removed, func(w http.ResponseWriter, r *http.Request) {
+			writeErrorCode(
+				w,
+				r,
+				"API012",
+				"this projection was removed; GET /topology serves the whole graph, "+
+					"and both views are derived from it",
+			)
+		})
+	}
+
 	// Profiling (opt-in via CETACEAN_PPROF=true)
 	if cfg.EnablePprof {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
