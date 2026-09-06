@@ -7,13 +7,17 @@ import (
 )
 
 // TimelineEntry is one thing that happened, whether Cetacean observed it as a
-// resource change or a container wrote it to stdout.
+// resource change or a container wrote it to stdout. Kind says which.
 //
-// The two share a shape so that "this started at 14:02 — what else happened?"
-// is a single ordered read rather than a correlation the caller performs
-// across two payloads with different field names and different time formats.
-// That question is the one incident response actually turns on, and it was
-// unanswerable while history and logs were separate shapes.
+// Only the change side is on this shape so far: get_events answers with it,
+// while the log reads still answer with logs.LogLine. What the two already
+// share is the *time format* — internal/logs stamps its lines with the same
+// fixed-width layout TimelineTime produces — so "this started at 14:02 — what
+// else happened?" is a merge on the timestamp across the two payloads rather
+// than a reconciliation of two time formats. That question is the one incident
+// response actually turns on. Moving the log reads onto this shape would make
+// it a single ordered read instead; until that happens, nothing may tell a
+// caller the field names already match.
 type TimelineEntry struct {
 	// At is RFC 3339, always UTC, at fixed nanosecond width so string
 	// comparison is time comparison and a cursor can be a plain string.

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -186,5 +187,79 @@ func TestGetEventsTreatsAZeroLimitAsTheDefault(t *testing.T) {
 
 	if len(got.Entries) != defaultEventLimit {
 		t.Errorf("entries = %d, want the default of %d", len(got.Entries), defaultEventLimit)
+	}
+}
+
+// A resource with a long history must be readable past the per-resource index,
+// which holds only 64 entries: answering out of it capped every read at 64 and
+// then reported `truncated: false`, telling the caller that was all there was.
+func TestGetEventsReadsPastThePerResourceIndex(t *testing.T) {
+	const updates = 150
+
+	c := cache.New(nil)
+	for i := range updates {
+		c.SetService(swarm.Service{
+			ID: "svc1",
+			Spec: swarm.ServiceSpec{
+				Annotations: swarm.Annotations{
+					Name:   "web",
+					Labels: map[string]string{"generation": strconv.Itoa(i)},
+				},
+			},
+		})
+	}
+
+	srv := newResourceTestServer(t, c)
+
+	got := eventsCall(t, srv, map[string]any{"resource": "svc1", "limit": float64(maxEventLimit)})
+
+	if got.Total != updates {
+		t.Errorf("total = %d, want %d: the index must not bound the answer", got.Total, updates)
+	}
+	if len(got.Entries) != updates {
+		t.Errorf("entries = %d, want %d", len(got.Entries), updates)
+	}
+	if got.Truncated {
+		t.Error("truncated = true, but every entry was returned")
+	}
+
+	for _, e := range got.Entries {
+		if e.ResourceID != "svc1" {
+			t.Fatalf("entry for %q leaked into a query for svc1", e.ResourceID)
+		}
+	}
+}
+
+// And when the window really does hold more than the caller asked for, it says
+// so — the flag has to be computed over everything that matched, not over what
+// an index happened to keep.
+func TestGetEventsReportsTruncationOverTheWholeResourceHistory(t *testing.T) {
+	const updates = 150
+
+	c := cache.New(nil)
+	for i := range updates {
+		c.SetService(swarm.Service{
+			ID: "svc1",
+			Spec: swarm.ServiceSpec{
+				Annotations: swarm.Annotations{
+					Name:   "web",
+					Labels: map[string]string{"generation": strconv.Itoa(i)},
+				},
+			},
+		})
+	}
+
+	srv := newResourceTestServer(t, c)
+
+	got := eventsCall(t, srv, map[string]any{"resource": "svc1", "limit": float64(10)})
+
+	if !got.Truncated {
+		t.Error("truncated = false, but only 10 of 150 entries were returned")
+	}
+	if got.Total != updates {
+		t.Errorf("total = %d, want %d", got.Total, updates)
+	}
+	if len(got.Entries) != 10 {
+		t.Errorf("entries = %d, want the 10 asked for", len(got.Entries))
 	}
 }

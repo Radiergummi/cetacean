@@ -280,7 +280,7 @@ func (s *Server) readTools() []toolDef {
 				"get_events",
 				mcplib.WithToolTitle("Read the cluster change timeline"),
 				mcplib.WithDescription(
-					"Return what changed in the cluster and when — resource creates, updates and deletes — newest first, narrowed by time, type or a single resource. Use it to answer what happened overnight, whether a fault is new, and what else changed around the moment something broke; pair it with get_logs, which returns the same entry shape, to read changes and output on one timeline. Filtering by `types` is usually necessary: a service restarting in a loop produces a task event every few seconds and buries everything else.",
+					"Return what changed in the cluster and when — resource creates, updates and deletes — newest first, narrowed by time, type or a single resource. Use it to answer what happened overnight, whether a fault is new, and what else changed around the moment something broke; pair it with get_logs, whose lines carry timestamps in the same format, to read changes and output on one timeline — merge the two on time, not by field name, since an event is `at`/`kind`/`type`/`name`/`resourceId`/`message` and a log line is `timestamp`/`message`/`stream`/`attrs`. Filtering by `types` is usually necessary: a service restarting in a loop produces a task event every few seconds and buries everything else.",
 				),
 				mcplib.WithOutputSchema[eventsResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),

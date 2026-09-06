@@ -58,44 +58,29 @@ func (s *Server) toolGetEvents(
 		limit = maxEventLimit
 	}
 
-	wanted := requestedTypes(req)
-
 	history := s.cache.History()
 
-	// The whole ring rather than a page of it, because the type and `until`
-	// filters below are applied after the ring returns. A busy cluster records
-	// mostly task churn, so a page would fill with it and a read for
-	// types: ["service"] would come back empty and truncated: false — which
-	// says "that is all there was" about a window the caller never asked for.
+	// Every filter but the ACL one is pushed into the walk, so the ring copies
+	// what matched rather than everything it holds for the caller to reduce
+	// afterwards. On a busy cluster recording mostly task churn, a read for
+	// types: ["service"] used to copy ten thousand entries to keep a handful.
 	//
-	// The caller's `since` is the one bound that can be pushed down: entries come back
-	// newest-first, so it ends the walk rather than filtering its result, and
-	// a five-minute window no longer copies ten thousand entries to discard
-	// almost all of them.
+	// The limit stays the whole ring, and that is deliberate rather than
+	// overlooked: the ACL filter below runs after the read, and `total` has to
+	// be how many entries the caller may actually read. Bounding the copy would
+	// mean counting entries about resources they cannot see — so an unfiltered
+	// read still walks the ring, and pays for it to keep the count honest.
 	entries := history.List(cache.HistoryQuery{
 		ResourceID: req.GetString("resource", ""),
+		Types:      requestedTypes(req),
 		Limit:      history.Size(),
 		After:      since,
+		Before:     until,
 	})
 
-	matched := make([]cache.HistoryEntry, 0, limit)
-
-	for _, e := range entries {
-		if len(wanted) > 0 && !wanted[string(e.Type)] {
-			continue
-		}
-		if !until.IsZero() && e.Timestamp.After(until) {
-			continue
-		}
-
-		matched = append(matched, e)
-	}
-
-	// The ACL filter runs before the count, because total has to be how many
-	// entries the caller may actually read. Task naming runs after the cut,
-	// because a name only matters for an entry that is returned and every
-	// lookup takes the cache's read lock.
-	matched = s.filterHistory(ctx, matched)
+	// Task naming runs after the cut, because a name only matters for an entry
+	// that is returned and every lookup takes the cache's read lock.
+	matched := s.filterHistory(ctx, entries)
 
 	total := len(matched)
 	truncated := total > limit
@@ -146,17 +131,22 @@ func optionalTime(req mcplib.CallToolRequest, arg string) (time.Time, error) {
 	return parsed, nil
 }
 
-// requestedTypes reads the `types` array into a set, or returns nil for "all".
-func requestedTypes(req mcplib.CallToolRequest) map[string]bool {
+// requestedTypes reads the `types` array, or returns nil for "all".
+//
+// An unrecognised name is passed through rather than rejected: it simply
+// matches nothing, which is the same answer as filtering it out afterwards and
+// spares the caller a second list of valid types to keep in step with the
+// cache's own.
+func requestedTypes(req mcplib.CallToolRequest) []cache.EventType {
 	raw := req.GetStringSlice("types", nil)
 	if len(raw) == 0 {
 		return nil
 	}
 
-	set := make(map[string]bool, len(raw))
+	types := make([]cache.EventType, 0, len(raw))
 	for _, t := range raw {
-		set[t] = true
+		types = append(types, cache.EventType(t))
 	}
 
-	return set
+	return types
 }
