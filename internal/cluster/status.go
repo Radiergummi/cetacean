@@ -17,6 +17,13 @@ import (
 type ClusterStatus struct {
 	// Healthy is the one-line answer: nothing degraded, nothing unreachable,
 	// nothing mid-rollout that has stalled.
+	//
+	// A node deliberately drained or paused is not a fault — it is the cluster
+	// doing what it was told — so it lands in DrainingNodes and leaves this
+	// true. Draining a node is the one operation whose own follow-up check
+	// would otherwise report the cluster broken for as long as the maintenance
+	// lasted. An update still rolling is likewise the system working; only one
+	// Swarm has paused counts against it.
 	Healthy bool `json:"healthy"`
 
 	NodeCount    int `json:"nodeCount"`
@@ -25,9 +32,11 @@ type ClusterStatus struct {
 	StackCount   int `json:"stackCount"`
 
 	// UnhealthyServices are the services not in their desired state, and
-	// Rollouts those mid-update. Both are always arrays, never null.
+	// Rollouts those mid-update, and DrainingNodes those deliberately made
+	// unavailable. All are always arrays, never null.
 	UnhealthyServices []Row `json:"unhealthyServices"`
 	UnhealthyNodes    []Row `json:"unhealthyNodes"`
+	DrainingNodes     []Row `json:"drainingNodes"`
 	Rollouts          []Row `json:"rollouts"`
 
 	Capacity ClusterCapacity `json:"capacity"`
@@ -84,27 +93,86 @@ func BuildClusterStatus(
 		StackCount:        snap.StackCount,
 		UnhealthyServices: []Row{},
 		UnhealthyNodes:    []Row{},
+		DrainingNodes:     []Row{},
 		Rollouts:          []Row{},
 		Capacity:          CapacityOf(snap),
 	}
 
-	for _, row := range RowsForServices(services, running) {
-		switch row.State {
-		case "failed", "pending":
-			status.UnhealthyServices = append(status.UnhealthyServices, row)
+	// Rows are sorted, so the raw services are indexed rather than walked
+	// alongside them: a rollout's state lives on the Docker record, not on the
+	// projection.
+	byID := make(map[string]swarm.Service, len(services))
+	for _, svc := range services {
+		byID[svc.ID] = svc
+	}
 
-		case "updating":
+	stalled := 0
+
+	for _, row := range RowsForServices(services, running) {
+		svc := byID[row.ID]
+
+		// A stalled rollout is a rollout even though the service does not read
+		// as "updating": a paused update is settled as far as the replica count
+		// goes, so a service whose deploy Swarm gave up on sits at "running" on
+		// its old spec and says nothing about the change that never landed.
+		if isStalled := rolloutStalled(svc); isStalled || row.State == "updating" {
 			status.Rollouts = append(status.Rollouts, row)
+
+			if isStalled {
+				stalled++
+			}
+		}
+
+		// Not exclusive with the above: a service failing mid-deploy is both a
+		// rollout and something wrong.
+		if row.State == "failed" || row.State == "pending" {
+			status.UnhealthyServices = append(status.UnhealthyServices, row)
 		}
 	}
 
 	for _, row := range RowsForNodes(nodes) {
-		if row.State != "ready" {
+		switch row.State {
+		case string(swarm.NodeStateReady):
+			// Nominal: ready and accepting work.
+
+		case string(swarm.NodeAvailabilityDrain), string(swarm.NodeAvailabilityPause):
+			status.DrainingNodes = append(status.DrainingNodes, row)
+
+		default:
 			status.UnhealthyNodes = append(status.UnhealthyNodes, row)
 		}
 	}
 
-	status.Healthy = len(status.UnhealthyServices) == 0 && len(status.UnhealthyNodes) == 0
+	status.Healthy = len(status.UnhealthyServices) == 0 &&
+		len(status.UnhealthyNodes) == 0 &&
+		stalled == 0
 
 	return status
+}
+
+// rolloutStalled reports whether a spec change has stopped short rather than
+// merely being in progress.
+//
+// Swarm pauses an update whose tasks keep failing, and a rollback likewise;
+// those are the states that need someone to look. An update still rolling is
+// the system working, and counting it as unhealthy would report every ordinary
+// deploy as a fault.
+//
+// This reads the Docker record rather than the derived state on purpose.
+// serviceUpdateInFlight treats a paused update as settled — correctly, since
+// waiting on it would never finish — so such a service derives its state from
+// its replica count and reads as "running" on the spec it failed to leave.
+// That is precisely the case a health check must not miss.
+func rolloutStalled(svc swarm.Service) bool {
+	if svc.UpdateStatus == nil {
+		return false
+	}
+
+	switch svc.UpdateStatus.State {
+	case swarm.UpdateStatePaused, swarm.UpdateStateRollbackPaused:
+		return true
+
+	default:
+		return false
+	}
 }
