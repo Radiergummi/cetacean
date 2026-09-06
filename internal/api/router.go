@@ -622,14 +622,6 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			)
 		}
 	})
-	mux.HandleFunc(
-		"GET /topology/networks",
-		contentNegotiated(h.HandleNetworkTopology, feedHandlers{}, spa),
-	)
-	mux.HandleFunc(
-		"GET /topology/placement",
-		contentNegotiated(h.HandlePlacementTopology, feedHandlers{}, spa),
-	)
 
 	// Profiling (opt-in via CETACEAN_PPROF=true)
 	if cfg.EnablePprof {
