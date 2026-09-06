@@ -116,7 +116,18 @@ func (s *Server) rankScope(ctx context.Context, by string) (string, error) {
 
 	switch by {
 	case rankByService:
-		services := s.filterServices(ctx, s.cache.ListServices())
+		all := s.cache.ListServices()
+		services := s.filterServices(ctx, all)
+
+		// An evaluator exists on every deployment with authentication enabled,
+		// policy or not, and with no policy it grants everything — so keying
+		// off its presence alone joined every service name in the cluster into
+		// the selector to restrict nothing. Whether the caller's grants
+		// actually hide anything is the question, and the filtered listing
+		// answers it exactly.
+		if len(services) == len(all) {
+			return "", nil
+		}
 
 		names := make([]string, 0, len(services))
 		for _, svc := range services {
@@ -130,7 +141,12 @@ func (s *Server) rankScope(ctx context.Context, by string) (string, error) {
 		return fmt.Sprintf(`,%s=~"%s"`, swarmServiceLabel, strings.Join(names, "|")), nil
 
 	default:
-		nodes := s.filterNodes(ctx, s.cache.ListNodes())
+		all := s.cache.ListNodes()
+		nodes := s.filterNodes(ctx, all)
+
+		if len(nodes) == len(all) {
+			return "", nil
+		}
 
 		hosts := make([]string, 0, len(nodes))
 		for _, node := range nodes {

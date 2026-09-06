@@ -7,6 +7,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/prom"
 )
@@ -291,5 +292,65 @@ func TestGetMetricsQuotesRegexMetacharactersInAScope(t *testing.T) {
 	query := querier.queries[0]
 	if !strings.Contains(query, `monitoring\\.api`) {
 		t.Errorf("the dot is not regex-quoted, so the matcher reaches past the grant: %s", query)
+	}
+}
+
+// An evaluator exists on every deployment that turns authentication on, policy
+// or not — and with no policy it grants everything. Keying the selector off the
+// evaluator's presence therefore joined every service name in the cluster into
+// a PromQL alternation that excluded nothing, on every ranked call.
+func TestRankScopeIsEmptyWhenGrantsHideNothing(t *testing.T) {
+	c := cache.New(nil)
+	for _, name := range []string{"web", "api", "worker"} {
+		c.SetService(swarm.Service{
+			ID:   name,
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name}},
+		})
+	}
+	c.SetNode(swarm.Node{
+		ID:          "n1",
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+	})
+
+	// An evaluator with no policy: authenticated callers may read everything.
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = acl.NewEvaluator() })
+
+	for _, by := range []string{rankByService, "node"} {
+		got, err := srv.rankScope(ctxWithIdentity(), by)
+		if err != nil {
+			t.Fatalf("rankScope(%q): %v", by, err)
+		}
+		if got != "" {
+			t.Errorf("rankScope(%q) = %q, want empty: nothing is hidden from this caller", by, got)
+		}
+	}
+}
+
+// And when grants genuinely narrow the cluster, the selector still carries them
+// into the query — ranking everything and filtering the result afterwards would
+// hand a restricted caller an empty answer.
+func TestRankScopeRestrictsWhenGrantsHideSomething(t *testing.T) {
+	c := cache.New(nil)
+	for _, name := range []string{"public-api", "secret-svc"} {
+		c.SetService(swarm.Service{
+			ID:   name,
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name}},
+		})
+	}
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(readOnlyPolicy("service:public-*"))
+
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	got, err := srv.rankScope(ctxWithIdentity(), rankByService)
+	if err != nil {
+		t.Fatalf("rankScope: %v", err)
+	}
+	if !strings.Contains(got, "public-api") {
+		t.Errorf("rankScope = %q, want the readable service named", got)
+	}
+	if strings.Contains(got, "secret-svc") {
+		t.Errorf("rankScope = %q, must not name a service the caller cannot read", got)
 	}
 }
