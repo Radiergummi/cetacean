@@ -85,10 +85,16 @@ func (s *Server) drainImpact(
 	all := s.cache.ListNodes()
 	visible := s.filterNodes(ctx, all)
 
+	// The cluster's tasks rather than the target node's: DrainImpactGraph
+	// measures a service's per-node replica cap against what each *candidate*
+	// already runs, and the node's own index reports every candidate empty.
+	// Filtering by ACL costs nothing here — a task inherits its parent
+	// service's grant, so the count stays exact for every service the graph
+	// can name.
 	graph := cluster.DrainImpactGraph(
 		node,
 		visible,
-		s.filterRawTasks(ctx, s.cache.ListTasksByNode(node.ID)),
+		s.filterRawTasks(ctx, s.cache.ListTasks()),
 		s.filterServices(ctx, s.cache.ListServices()),
 	)
 

@@ -32,16 +32,17 @@ const (
 // the model pays for in its context and can get wrong, on a question where
 // being wrong means draining a node and stranding the work.
 //
-// An affected service with no edge is stranded, and Detail carries the
-// constraint that blocked it: a state without its cause is exactly what this
-// view must not return. Capacity is deliberately not considered — placement
-// constraints are what Swarm enforces exactly, while spare reservations after
-// a drain are a moving target, and cluster capacity is already reported by the
-// cluster status read.
+// An affected service with no edge is stranded, and Detail carries the filter
+// that blocked it: a state without its cause is exactly what this view must
+// not return. Which filters those are is nodeCanHost's answer — the three
+// Swarm enforces exactly. Capacity is deliberately not among them: spare
+// reservations after a drain are a moving target, and cluster capacity is
+// already reported by the cluster status read.
 //
-// Only the target's own tasks are read, so a caller holding the node's task
-// index may pass that rather than the cluster's — internal/mcp's drainImpact
-// does, and a wider slice is merely filtered down again here.
+// tasks must cover the cluster, not just the target: the per-node replica cap
+// is measured against the tasks a *candidate* already carries, so a node-scoped
+// slice would report every candidate empty and call a capped service movable
+// onto nodes that are full.
 //
 // clusterNodes, tasks and services must already be filtered to what the caller
 // may read; a service whose tasks reference nothing visible simply does not
@@ -65,8 +66,13 @@ func DrainImpactGraph(
 	// with at least one are the work that has to land somewhere else.
 	onTarget := make(map[string]int)
 
+	// And, per service, what every *other* node already carries — the replica
+	// budget a service with MaxReplicas has left there. Tasks on the target are
+	// deliberately absent: they are the ones leaving, so they occupy nothing.
+	placed := make(map[string]map[string]int)
+
 	for _, task := range tasks {
-		if task.NodeID != target.ID || !TaskIsLive(task) {
+		if !TaskIsLive(task) {
 			continue
 		}
 
@@ -74,7 +80,19 @@ func DrainImpactGraph(
 			continue
 		}
 
-		onTarget[task.ServiceID]++
+		if task.NodeID == target.ID {
+			onTarget[task.ServiceID]++
+
+			continue
+		}
+
+		byNode := placed[task.ServiceID]
+		if byNode == nil {
+			byNode = make(map[string]int)
+			placed[task.ServiceID] = byNode
+		}
+
+		byNode[task.NodeID]++
 	}
 
 	// Candidates are every *other* node that can still accept work. A node
@@ -111,7 +129,7 @@ func DrainImpactGraph(
 	for serviceID, running := range onTarget {
 		svc := servicesByID[serviceID]
 
-		state, detail, accepted := placementFor(svc, running, candidates)
+		state, detail, accepted := placementFor(svc, running, candidates, placed[serviceID])
 
 		vertex := serviceNode(svc, state)
 		vertex.Detail = detail
@@ -137,29 +155,37 @@ func DrainImpactGraph(
 // edge to. running is how many of its tasks the drained node carries — the
 // amount of work actually in question.
 //
-// The blocking constraint reported for a stranded service is the one that
-// failed on the *last* candidate examined rather than a summary of all of
-// them: every candidate failing on the same constraint is the usual case, and
-// naming one constraint a caller can act on beats listing the same string once
-// per node.
+// The blocking reason reported for a stranded service is the one that failed
+// on the *last* candidate examined rather than a summary of all of them: every
+// candidate failing on the same filter is the usual case, and naming one a
+// caller can act on beats listing the same string once per node.
+//
+// A service whose work only *partly* fits elsewhere is reported stranded with
+// no edges, not movable. "Movable" claims the whole vertex can leave — the
+// detail says "N task(s) here; M node(s) can take them" — and an operator
+// draining on that basis is left with pending replicas, so the state a caller
+// acts on has to be the pessimistic one. The detail then says how much room
+// there actually is.
+//
+// placed maps a candidate node ID to how many of this service's live tasks it
+// already runs, which is what nodeCanHost measures the per-node replica cap
+// against. A nil map is a service with no tasks anywhere else.
 func placementFor(
 	svc swarm.Service,
 	running int,
 	candidates []swarm.Node,
+	placed map[string]int,
 ) (state, detail string, accepted []string) {
 	if svc.Spec.Mode.Global != nil {
 		return drainStateGlobal, "one task per node; draining stops it here rather than moving it", nil
 	}
 
-	var constraints []string
-	if p := svc.Spec.TaskTemplate.Placement; p != nil {
-		constraints = p.Constraints
-	}
+	placement := svc.Spec.TaskTemplate.Placement
 
 	var blocked string
 
 	for _, n := range candidates {
-		ok, reason := nodeSatisfies(n, constraints)
+		ok, reason := nodeCanHost(n, placement, placed[n.ID])
 		if !ok {
 			blocked = reason
 
@@ -170,6 +196,29 @@ func placementFor(
 	}
 
 	if len(accepted) > 0 {
+		// A candidate with one free slot is not the same as room for all the
+		// work. Under a per-node cap the slots have to add up across every
+		// candidate, or the surplus replicas sit pending after the drain —
+		// which is the same wrong answer as naming a node that would refuse
+		// the task outright, arrived at one replica later.
+		if placement != nil && placement.MaxReplicas > 0 {
+			var free uint64
+
+			for _, id := range accepted {
+				if held := uint64(placed[id]); held < placement.MaxReplicas {
+					free += placement.MaxReplicas - held
+				}
+			}
+
+			if free < uint64(running) {
+				return drainStateStranded, fmt.Sprintf(
+					"%d task(s) here, but the %d candidate node(s) have room for %d "+
+						"between them: at most %d replica(s) per node",
+					running, len(accepted), free, placement.MaxReplicas,
+				), nil
+			}
+		}
+
 		return drainStateMovable, fmt.Sprintf(
 			"%d task(s) here; %d node(s) can take them",
 			running, len(accepted),

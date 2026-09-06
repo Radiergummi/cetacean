@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -226,4 +227,193 @@ func findVertex(t *testing.T, graph TopologyGraph, id string) TopologyNode {
 	t.Fatalf("no vertex %q in %+v", id, graph.Nodes)
 
 	return TopologyNode{}
+}
+
+// A per-node replica cap is a hard scheduling filter, exactly as a constraint
+// is: a service already at its cap on every remaining node has nowhere to go,
+// and calling it movable would strand the replica as pending after the drain.
+func TestDrainImpactStrandsAServiceAtItsPerNodeReplicaCap(t *testing.T) {
+	drained := readyNode("n1", "worker-1", nil)
+	second := readyNode("n2", "worker-2", nil)
+	third := readyNode("n3", "worker-3", nil)
+
+	web := drainService("svc1", "web", 3)
+	web.Spec.TaskTemplate.Placement = &swarm.Placement{MaxReplicas: 1}
+
+	got := DrainImpactGraph(
+		drained,
+		[]swarm.Node{drained, second, third},
+		[]swarm.Task{
+			liveTask("t1", "svc1", "n1"),
+			liveTask("t2", "svc1", "n2"),
+			liveTask("t3", "svc1", "n3"),
+		},
+		[]swarm.Service{web},
+	)
+
+	svc := findVertex(t, got, "svc1")
+	if svc.State != "stranded" {
+		t.Fatalf(
+			"state = %q, want stranded: every candidate is at max_replicas_per_node",
+			svc.State,
+		)
+	}
+	if !strings.Contains(svc.Detail, "at most 1 replica") {
+		t.Errorf("detail = %q, want the replica cap named", svc.Detail)
+	}
+	if len(got.Edges) != 0 {
+		t.Errorf("edges = %+v, want none: no candidate has a free slot", got.Edges)
+	}
+}
+
+// The cap only blocks a node that has actually reached it — and the tasks on
+// the node being drained are the ones leaving, so they occupy nothing on the
+// candidate. Here n2 holds 1 of at most 3, which leaves room for both replicas
+// coming off n1.
+func TestDrainImpactAllowsCandidatesUnderTheReplicaCap(t *testing.T) {
+	drained := readyNode("n1", "worker-1", nil)
+	spare := readyNode("n2", "worker-2", nil)
+
+	web := drainService("svc1", "web", 3)
+	web.Spec.TaskTemplate.Placement = &swarm.Placement{MaxReplicas: 3}
+
+	got := DrainImpactGraph(
+		drained,
+		[]swarm.Node{drained, spare},
+		[]swarm.Task{
+			liveTask("t1", "svc1", "n1"),
+			liveTask("t2", "svc1", "n1"),
+			liveTask("t3", "svc1", "n2"),
+		},
+		[]swarm.Service{web},
+	)
+
+	svc := findVertex(t, got, "svc1")
+	if svc.State != "movable" {
+		t.Fatalf("state = %q, want movable: n2 runs 1 of at most 3", svc.State)
+	}
+	if len(got.Edges) != 1 || got.Edges[0].Target != "n2" {
+		t.Errorf("edges = %+v, want svc1 -> n2", got.Edges)
+	}
+}
+
+// A service whose image supports only one platform cannot move onto a node of
+// another, which Swarm enforces as strictly as it enforces a constraint.
+func TestDrainImpactStrandsAServicePinnedToAnotherPlatform(t *testing.T) {
+	drained := readyNode("n1", "worker-1", nil)
+	drained.Description.Platform = swarm.Platform{OS: "linux", Architecture: "arm64"}
+
+	spare := readyNode("n2", "worker-2", nil)
+	spare.Description.Platform = swarm.Platform{OS: "linux", Architecture: "amd64"}
+
+	edge := drainService("svc1", "edge", 1)
+	edge.Spec.TaskTemplate.Placement = &swarm.Placement{
+		Platforms: []swarm.Platform{{OS: "linux", Architecture: "arm64"}},
+	}
+
+	got := DrainImpactGraph(
+		drained,
+		[]swarm.Node{drained, spare},
+		[]swarm.Task{liveTask("t1", "svc1", "n1")},
+		[]swarm.Service{edge},
+	)
+
+	svc := findVertex(t, got, "svc1")
+	if svc.State != "stranded" {
+		t.Fatalf("state = %q, want stranded: the only candidate is amd64", svc.State)
+	}
+	if !strings.Contains(svc.Detail, "linux/amd64") ||
+		!strings.Contains(svc.Detail, "linux/arm64") {
+		t.Errorf("detail = %q, want both the node's platform and the service's named", svc.Detail)
+	}
+}
+
+// The same check must not strand a service the candidate can in fact run.
+func TestDrainImpactAllowsAMatchingPlatform(t *testing.T) {
+	drained := readyNode("n1", "worker-1", nil)
+	drained.Description.Platform = swarm.Platform{OS: "linux", Architecture: "arm64"}
+
+	spare := readyNode("n2", "worker-2", nil)
+	spare.Description.Platform = swarm.Platform{OS: "linux", Architecture: "arm64"}
+
+	edge := drainService("svc1", "edge", 1)
+	edge.Spec.TaskTemplate.Placement = &swarm.Placement{
+		Platforms: []swarm.Platform{
+			{OS: "linux", Architecture: "amd64"},
+			{OS: "linux", Architecture: "arm64"},
+		},
+	}
+
+	got := DrainImpactGraph(
+		drained,
+		[]swarm.Node{drained, spare},
+		[]swarm.Task{liveTask("t1", "svc1", "n1")},
+		[]swarm.Service{edge},
+	)
+
+	if state := findVertex(t, got, "svc1").State; state != "movable" {
+		t.Errorf("state = %q, want movable: the candidate matches one supported platform", state)
+	}
+}
+
+// A free slot somewhere is not room for everything leaving. Two replicas on
+// the drained node and one candidate holding one of a two-replica cap leaves
+// exactly one slot — so one of the two would sit pending, and calling the
+// service movable is the same wrong answer as naming a node that would refuse
+// the task outright.
+func TestDrainImpactStrandsWhenCandidatesCannotAbsorbEveryTask(t *testing.T) {
+	drained := readyNode("n1", "worker-1", nil)
+	spare := readyNode("n2", "worker-2", nil)
+
+	web := drainService("svc1", "web", 3)
+	web.Spec.TaskTemplate.Placement = &swarm.Placement{MaxReplicas: 2}
+
+	got := DrainImpactGraph(
+		drained,
+		[]swarm.Node{drained, spare},
+		[]swarm.Task{
+			liveTask("t1", "svc1", "n1"),
+			liveTask("t2", "svc1", "n1"),
+			liveTask("t3", "svc1", "n2"),
+		},
+		[]swarm.Service{web},
+	)
+
+	svc := findVertex(t, got, "svc1")
+	if svc.State != "stranded" {
+		t.Fatalf("state = %q, want stranded: 2 tasks leaving, 1 slot free", svc.State)
+	}
+	if !strings.Contains(svc.Detail, "room for 1") {
+		t.Errorf("detail = %q, want the actual free capacity named", svc.Detail)
+	}
+	if len(got.Edges) != 0 {
+		t.Errorf("edges = %+v, want none: movability is claimed for the whole vertex", got.Edges)
+	}
+}
+
+// And when the slots do add up, the service is movable as before.
+func TestDrainImpactMovesWhenCandidatesHaveRoomForEveryTask(t *testing.T) {
+	drained := readyNode("n1", "worker-1", nil)
+	spare := readyNode("n2", "worker-2", nil)
+
+	web := drainService("svc1", "web", 2)
+	web.Spec.TaskTemplate.Placement = &swarm.Placement{MaxReplicas: 2}
+
+	got := DrainImpactGraph(
+		drained,
+		[]swarm.Node{drained, spare},
+		[]swarm.Task{
+			liveTask("t1", "svc1", "n1"),
+			liveTask("t2", "svc1", "n1"),
+		},
+		[]swarm.Service{web},
+	)
+
+	svc := findVertex(t, got, "svc1")
+	if svc.State != "movable" {
+		t.Fatalf("state = %q, want movable: 2 tasks leaving, 2 slots free", svc.State)
+	}
+	if len(got.Edges) != 1 || got.Edges[0].Target != "n2" {
+		t.Errorf("edges = %+v, want svc1 -> n2", got.Edges)
+	}
 }
