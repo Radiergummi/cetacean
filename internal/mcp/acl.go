@@ -127,12 +127,13 @@ func (s *Server) filterServices(ctx context.Context, items []swarm.Service) []sw
 
 // filterRawTasks keeps the tasks the caller may read, without enriching them.
 //
-// The ACL key is "task:<id>", a field swarm.Task already carries, so the
-// enriched shape filterTasks takes is not needed to make the decision — and
-// the digest builders resolve parent names from the slices they are given
-// rather than from enriched fields. Enriching first would resolve a service
-// name and a node hostname per task only to discard them, on a path
-// (resources/read) that a subscription re-drives after every cache event.
+// The ACL key is "task:<id>", a field swarm.Task already carries, so nothing
+// has to be enriched to make the decision — and the digest and row builders
+// resolve parent names from the slices they are given rather than from
+// enriched fields. Enriching first would resolve a service name and a node
+// hostname per task only to discard them, on a path (resources/read) that a
+// subscription re-drives after every cache event, and would resolve them from
+// behind the caller's grants besides.
 func (s *Server) filterRawTasks(ctx context.Context, items []swarm.Task) []swarm.Task {
 	return acl.Filter(
 		s.acl,
@@ -140,21 +141,6 @@ func (s *Server) filterRawTasks(ctx context.Context, items []swarm.Task) []swarm
 		"read",
 		items,
 		func(t swarm.Task) string {
-			return "task:" + t.ID
-		},
-	)
-}
-
-func (s *Server) filterTasks(
-	ctx context.Context,
-	items []cluster.EnrichedTask,
-) []cluster.EnrichedTask {
-	return acl.Filter(
-		s.acl,
-		auth.IdentityFromContext(ctx),
-		"read",
-		items,
-		func(t cluster.EnrichedTask) string {
 			return "task:" + t.ID
 		},
 	)
@@ -282,4 +268,166 @@ func (s *Server) filterHistory(
 		}
 	}
 	return filtered
+}
+
+// readableEnrichedTasks filters tasks to the ones the caller may read, then
+// names their parents from the services and nodes the caller may read too.
+//
+// The enrichment has to be ACL-aware because ServiceName and NodeHostname are
+// the enriched task's whole point, and cluster.EnrichTasks resolves them
+// straight out of the cache: a caller holding a bare `task:*` grant was told
+// the name of every service and node in the cluster, which is exactly what
+// TaskDigest goes out of its way not to do. Filtering the tasks first also
+// keeps the work proportional to what is actually returned.
+func (s *Server) readableEnrichedTasks(
+	ctx context.Context,
+	tasks []swarm.Task,
+) []cluster.EnrichedTask {
+	return cluster.EnrichTasksWithin(
+		s.filterRawTasks(ctx, tasks),
+		s.filterServices(ctx, s.cache.ListServices()),
+		s.filterNodes(ctx, s.cache.ListNodes()),
+	)
+}
+
+// readableEnrichedTask is readableEnrichedTasks for a single, already
+// permitted task: resolving its two parents by ID beats listing and filtering
+// both types to name them.
+func (s *Server) readableEnrichedTask(
+	ctx context.Context,
+	task swarm.Task,
+) cluster.EnrichedTask {
+	enriched := cluster.EnrichedTask{Task: task}
+
+	if svc := s.readableService(ctx, task.ServiceID); svc != nil {
+		enriched.ServiceName = svc.Spec.Name
+	}
+
+	if node := s.readableNode(ctx, task.NodeID); node != nil {
+		enriched.NodeHostname = node.Description.Hostname
+	}
+
+	return enriched
+}
+
+// checkWrite enforces the "write" permission on resourceType:resourceName for
+// the identity in ctx. Returns nil if ACL is disabled or no identity is on the
+// context (the bearer middleware would have rejected the request earlier in
+// that case). All MCP tool handlers route through this helper so denial errors
+// have a uniform shape.
+func (s *Server) checkWrite(ctx context.Context, resourceType, resourceName string) error {
+	if s.acl == nil {
+		return nil
+	}
+	identity := auth.IdentityFromContext(ctx)
+	if identity == nil {
+		return nil
+	}
+	if !s.acl.Can(identity, "write", resourceType+":"+resourceName) {
+		return fmt.Errorf("write access denied for %s:%s", resourceType, resourceName)
+	}
+	return nil
+}
+
+// checkServiceWrite resolves the service name from the cache so the ACL key
+// is `service:<name>` rather than `service:<id>`, matching REST behaviour.
+func (s *Server) checkServiceWrite(ctx context.Context, id string) error {
+	name := id
+	if svc, ok := s.cache.GetService(id); ok && svc.Spec.Name != "" {
+		name = svc.Spec.Name
+	}
+	return s.checkWrite(ctx, "service", name)
+}
+
+// checkNodeWrite resolves the node hostname from the cache so the ACL key is
+// `node:<hostname>` rather than `node:<id>`, matching REST behaviour.
+func (s *Server) checkNodeWrite(ctx context.Context, id string) error {
+	name := id
+	if node, ok := s.cache.GetNode(id); ok && node.Description.Hostname != "" {
+		name = node.Description.Hostname
+	}
+	return s.checkWrite(ctx, "node", name)
+}
+
+// checkConfigWrite resolves the config Spec.Name from the cache so the ACL key
+// is `config:<name>` rather than `config:<id>`, matching REST behaviour.
+func (s *Server) checkConfigWrite(ctx context.Context, id string) error {
+	name := id
+	if cfg, ok := s.cache.GetConfig(id); ok && cfg.Spec.Name != "" {
+		name = cfg.Spec.Name
+	}
+	return s.checkWrite(ctx, "config", name)
+}
+
+// checkSecretWrite resolves the secret Spec.Name from the cache so the ACL key
+// is `secret:<name>` rather than `secret:<id>`, matching REST behaviour.
+func (s *Server) checkSecretWrite(ctx context.Context, id string) error {
+	name := id
+	if sec, ok := s.cache.GetSecret(id); ok && sec.Spec.Name != "" {
+		name = sec.Spec.Name
+	}
+	return s.checkWrite(ctx, "secret", name)
+}
+
+// checkNetworkWrite resolves the network Name from the cache so the ACL key is
+// `network:<name>` rather than `network:<id>`, matching REST behaviour.
+func (s *Server) checkNetworkWrite(ctx context.Context, id string) error {
+	name := id
+	if net, ok := s.cache.GetNetwork(id); ok && net.Name != "" {
+		name = net.Name
+	}
+	return s.checkWrite(ctx, "network", name)
+}
+
+// checkTaskWrite routes the ACL check to the task's parent service so an MCP
+// `remove_task` evaluates the same key REST DELETE /tasks/{id} does
+// (`service:<name>`). Falls back to `task:<id>` when the cache cannot resolve
+// the parent service — that path is also what REST takes as a last resort.
+func (s *Server) checkTaskWrite(ctx context.Context, id string) error {
+	task, ok := s.cache.GetTask(id)
+	if !ok {
+		return s.checkWrite(ctx, "task", id)
+	}
+	svc, ok := s.cache.GetService(task.ServiceID)
+	if !ok || svc.Spec.Name == "" {
+		return s.checkWrite(ctx, "task", id)
+	}
+	return s.checkWrite(ctx, "service", svc.Spec.Name)
+}
+
+// checkServiceRead resolves the service Spec.Name from the cache so the ACL
+// key is `service:<name>` rather than `service:<id>`, matching the resource
+// read path in lookupResource. Used by toolGetLogs which doesn't go through
+// lookupResource.
+//
+// It resolves rather than looking the ID up, because get_logs advertises its
+// `service` argument as "Service ID or name" and Docker honours both — so a
+// plain GetService turned a name, the identifier find and the completions
+// hand back, into "service not found" on every cluster that has an ACL policy
+// and into a working call on every cluster that has not.
+func (s *Server) checkServiceRead(ctx context.Context, id string) error {
+	if s.acl == nil {
+		return nil
+	}
+	svc, ok, err := s.cache.ResolveService(id)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("service %q not found", id)
+	}
+	return s.checkRead(ctx, "service", svc.Spec.Name)
+}
+
+// checkTaskRead enforces the read permission on a task, keyed as `task:<id>`.
+//
+// It does not walk to the parent service the way checkTaskWrite does, because
+// the evaluator already does: acl.grantMatchesResource resolves a task through
+// its parent service and that service's stack, so the task's own key is
+// strictly the broader check. It is also the key every other task read passes
+// — REST's HandleTaskLogs and the cetacean://tasks/{id} resource both do — and
+// walking to the parent here would leave a `task:*` grant able to read task
+// logs on every path except this tool.
+func (s *Server) checkTaskRead(ctx context.Context, id string) error {
+	return s.checkRead(ctx, "task", id)
 }

@@ -4,9 +4,14 @@
  * Returns null for unknown/private registries.
  */
 export function imageRegistryUrl(image: string): string | null {
-  // Strip digest (`@sha256:...`) and tag (`:tag`)
+  // Strip digest (`@sha256:...`), then tag (`:tag`). A tag can only appear in
+  // the final path segment, so splitting on the first colon would eat the port
+  // of a registry like `registry.example.com:5000/team/image` and leave the
+  // hostname looking like an official Docker Hub image.
   const withoutDigest = image.split("@")[0] ?? image;
-  const namePart = withoutDigest.split(":")[0] ?? withoutDigest;
+  const lastSlash = withoutDigest.lastIndexOf("/");
+  const lastColon = withoutDigest.lastIndexOf(":");
+  const namePart = lastColon > lastSlash ? withoutDigest.slice(0, lastColon) : withoutDigest;
 
   const segments = namePart.split("/");
   const firstSegment = segments[0] ?? "";

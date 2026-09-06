@@ -58,6 +58,7 @@ func promptCatalog() []promptDef {
 				"find",
 				"get_logs",
 				"get_metrics",
+				"get_events",
 				"get_recommendations",
 			},
 			reads: []string{"service"},
@@ -81,7 +82,7 @@ func promptCatalog() []promptDef {
 					mcplib.RequiredArgument(),
 				),
 			),
-			drives: []string{"find"},
+			drives: []string{"find", "describe"},
 			// Step 3 compares each placement constraint against the nodes, so
 			// a caller who cannot read nodes cannot separate the causes.
 			reads: []string{"service", "node"},
@@ -99,8 +100,13 @@ func promptCatalog() []promptDef {
 						"where the cluster is constrained. Reads only.",
 				),
 			),
-			drives: []string{"find", "get_metrics", "get_recommendations"},
-			reads:  []string{"node"},
+			drives: []string{
+				"get_cluster_status",
+				"find",
+				"get_metrics",
+				"get_recommendations",
+			},
+			reads: []string{"node"},
 			handler: staticHandler(
 				"Review cluster capacity",
 				promptTextReviewCapacity,
@@ -119,7 +125,7 @@ func promptCatalog() []promptDef {
 					mcplib.RequiredArgument(),
 				),
 			),
-			drives: []string{"find", "rollback_service"},
+			drives: []string{"find", "get_events", "rollback_service", "watch"},
 			reads:  []string{"service"},
 			handler: interpolatingHandler(
 				"Roll a service back",
@@ -141,10 +147,11 @@ func promptCatalog() []promptDef {
 				),
 			),
 			drives: []string{
+				"get_recommendations",
 				"find",
 				"get_metrics",
-				"get_recommendations",
-				"update_service_resources",
+				"update_service",
+				"watch",
 			},
 			reads: []string{"service"},
 			handler: interpolatingHandler(
@@ -166,9 +173,10 @@ func promptCatalog() []promptDef {
 					mcplib.RequiredArgument(),
 				),
 			),
-			drives: []string{"find", "update_node_availability"},
-			// Steps 3 and 4 read the services behind the node's tasks to check
-			// their placement constraints against the remaining nodes.
+			drives: []string{"find", "get_topology", "update_node", "watch"},
+			// Step 3's drain-impact view reads the services behind the node's
+			// tasks to check their placement constraints against the remaining
+			// nodes, and step 5 waits on each of them.
 			reads: []string{"node", "service"},
 			handler: interpolatingHandler(
 				"Drain a node for maintenance",

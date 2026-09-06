@@ -92,6 +92,13 @@ var errorRegistry = map[string]ErrorDef{
 	"API011": {Code: "API011", Title: "Patch Application Failed", Status: http.StatusBadRequest,
 		Description: "The JSON Patch could not be applied to the resource.",
 		Suggestion:  "Check the patch operations for correctness."},
+	"API012": {
+		Code:        "API012",
+		Title:       "Endpoint Removed",
+		Status:      http.StatusGone,
+		Description: "This endpoint was deprecated and has since been removed.",
+		Suggestion:  "See the endpoint named in the detail, or GET /api for the current surface.",
+	},
 
 	// ── AUT: authentication ───────────────────────────────────────────
 	"AUT001": {Code: "AUT001", Title: "Not Authenticated", Status: http.StatusUnauthorized,

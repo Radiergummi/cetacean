@@ -363,7 +363,7 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 - [ ] DOT contains service nodes with attributes, `subgraph cluster_<stack>` grouping, and `--` edges with network labels
 - [ ] JGF network graph uses `urn:cetacean:service:<id>` URNs for node keys and hyperedges for stack membership
 - [ ] JGF placement graph uses `urn:cetacean:node:<id>` and `urn:cetacean:service:<id>` URNs with task data in hyperedge metadata
-- [ ] Deprecated endpoints `/topology/networks` and `/topology/placement` return `Deprecation: true` and `Link: </topology>; rel="successor-version"` headers
+- [ ] Removed endpoints `/topology/networks` and `/topology/placement` return `410 Gone` as `application/problem+json` (error code `API012`) for every Accept, pointing at `/topology`
 - [ ] ETag caching works on all topology export formats (same data → same ETag)
 
 ---

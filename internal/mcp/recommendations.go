@@ -15,9 +15,9 @@ import (
 // reason find does, and delegates to the resource read rather than
 // reaching for the engine itself, keeping ACL filtering on one path.
 type recommendationsResult struct {
-	Items   []recommendations.Recommendation `json:"items"`
-	Total   int                              `json:"total"`
-	Summary recommendations.Summary          `json:"summary"`
+	Items   []mcpRecommendation     `json:"items"`
+	Total   int                     `json:"total"`
+	Summary recommendations.Summary `json:"summary"`
 }
 
 // toolGetRecommendations returns the recommendations the caller may see.
@@ -36,11 +36,11 @@ func (s *Server) toolGetRecommendations(
 
 	// The resource read answers with an empty []any when the engine is off,
 	// which is the honest answer — no recommendations, rather than an error.
-	items, _ := listed.([]recommendations.Recommendation)
+	items, _ := listed.([]mcpRecommendation)
 
 	severity := req.GetString("severity", "")
 	if severity != "" {
-		filtered := make([]recommendations.Recommendation, 0, len(items))
+		filtered := make([]mcpRecommendation, 0, len(items))
 
 		for _, item := range items {
 			if string(item.Severity) == severity {
@@ -52,12 +52,12 @@ func (s *Server) toolGetRecommendations(
 	}
 
 	if items == nil {
-		items = []recommendations.Recommendation{}
+		items = []mcpRecommendation{}
 	}
 
 	return marshalResult(recommendationsResult{
 		Items:   items,
 		Total:   len(items),
-		Summary: recommendations.ComputeSummary(items),
+		Summary: recommendations.ComputeSummary(baseRecommendations(items)),
 	})
 }

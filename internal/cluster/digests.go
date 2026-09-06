@@ -14,10 +14,10 @@ import (
 )
 
 // NodeDigest builds the detail view of one cluster node. State comes from
-// DeriveNodeState, the same rule RowsForNodes uses, so a node cannot read
+// deriveNodeState, the same rule RowsForNodes uses, so a node cannot read
 // "ready" in a list and "drain" in its own digest.
 func NodeDigest(node swarm.Node, tasks []swarm.Task, services []swarm.Service) Digest {
-	state := DeriveNodeState(node)
+	state := deriveNodeState(node)
 
 	var reason string
 	if state != string(swarm.NodeStateReady) {
@@ -33,7 +33,7 @@ func NodeDigest(node swarm.Node, tasks []swarm.Task, services []swarm.Service) D
 	related := make([]Related, 0)
 
 	for _, task := range tasks {
-		if task.NodeID != node.ID || !taskIsLive(task) {
+		if task.NodeID != node.ID || !TaskIsLive(task) {
 			continue
 		}
 

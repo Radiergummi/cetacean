@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
@@ -47,6 +49,120 @@ type fakeWriteClient struct {
 	updateServiceUpdateFn func(ctx context.Context, id string, p *swarm.UpdateConfig) (swarm.Service, error)
 	updateServiceRbackFn  func(ctx context.Context, id string, p *swarm.UpdateConfig) (swarm.Service, error)
 	updateServiceLogDrvFn func(ctx context.Context, id string, d *swarm.Driver) (swarm.Service, error)
+
+	// updateServiceHealthFn and updateServiceContainerFn back the healthcheck
+	// and command sections. The container one takes a mutator, matching
+	// docker.Client.UpdateServiceContainerConfig, so a test can assert the
+	// edit left the rest of the spec alone.
+	updateServiceHealthFn func(
+		ctx context.Context,
+		id string,
+		hc *container.HealthConfig,
+	) (swarm.Service, error)
+	updateServiceContainerFn func(
+		ctx context.Context,
+		id string,
+		apply func(spec *swarm.ContainerSpec),
+	) (swarm.Service, error)
+	createSecretFn         func(ctx context.Context, spec swarm.SecretSpec) (string, error)
+	createConfigFn         func(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	updateServiceSecretsFn func(
+		ctx context.Context,
+		id string,
+		secrets []*swarm.SecretReference,
+	) (swarm.Service, error)
+	updateServiceConfigsFn func(
+		ctx context.Context,
+		id string,
+		configs []*swarm.ConfigReference,
+	) (swarm.Service, error)
+	updateServiceMountsFn func(
+		ctx context.Context,
+		id string,
+		mounts []mount.Mount,
+	) (swarm.Service, error)
+}
+
+func (f *fakeWriteClient) UpdateServiceMounts(
+	ctx context.Context,
+	id string,
+	mounts []mount.Mount,
+) (swarm.Service, error) {
+	if f.updateServiceMountsFn == nil {
+		return swarm.Service{}, errNotImplemented
+	}
+
+	return f.updateServiceMountsFn(ctx, id, mounts)
+}
+
+func (f *fakeWriteClient) UpdateServiceSecrets(
+	ctx context.Context,
+	id string,
+	secrets []*swarm.SecretReference,
+) (swarm.Service, error) {
+	if f.updateServiceSecretsFn == nil {
+		return swarm.Service{}, errNotImplemented
+	}
+
+	return f.updateServiceSecretsFn(ctx, id, secrets)
+}
+
+func (f *fakeWriteClient) UpdateServiceConfigs(
+	ctx context.Context,
+	id string,
+	configs []*swarm.ConfigReference,
+) (swarm.Service, error) {
+	if f.updateServiceConfigsFn == nil {
+		return swarm.Service{}, errNotImplemented
+	}
+
+	return f.updateServiceConfigsFn(ctx, id, configs)
+}
+
+func (f *fakeWriteClient) CreateSecret(
+	ctx context.Context,
+	spec swarm.SecretSpec,
+) (string, error) {
+	if f.createSecretFn == nil {
+		return "", errNotImplemented
+	}
+
+	return f.createSecretFn(ctx, spec)
+}
+
+func (f *fakeWriteClient) CreateConfig(
+	ctx context.Context,
+	spec swarm.ConfigSpec,
+) (string, error) {
+	if f.createConfigFn == nil {
+		return "", errNotImplemented
+	}
+
+	return f.createConfigFn(ctx, spec)
+}
+
+func (f *fakeWriteClient) UpdateServiceHealthcheck(
+	ctx context.Context,
+	id string,
+	hc *container.HealthConfig,
+) (swarm.Service, error) {
+	if f.updateServiceHealthFn == nil {
+		return swarm.Service{}, errNotImplemented
+	}
+
+	return f.updateServiceHealthFn(ctx, id, hc)
+}
+
+func (f *fakeWriteClient) UpdateServiceContainerConfig(
+	ctx context.Context,
+	id string,
+	apply func(spec *swarm.ContainerSpec),
+) (swarm.Service, error) {
+	if f.updateServiceContainerFn == nil {
+		return swarm.Service{}, errNotImplemented
+	}
+
+	return f.updateServiceContainerFn(ctx, id, apply)
 }
 
 var errNotImplemented = errors.New("fakeWriteClient: method not stubbed")
@@ -314,7 +430,7 @@ func newCallToolRequest(name string, args map[string]any) mcplib.CallToolRequest
 func TestTierThreeNodeToolsCarryDestructiveHint(t *testing.T) {
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsImpactful)
 
-	for _, name := range []string{"update_node_availability", "update_node_role"} {
+	for _, name := range []string{"update_node"} {
 		td, ok := srv.findTool(name)
 		if !ok {
 			t.Fatalf("%s should be registered at OpsImpactful", name)
@@ -337,21 +453,33 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 	readOnly := map[string]bool{
 		"get_logs": true, "find": true, "describe": true, "get_topology": true,
 		"get_metrics": true, "get_recommendations": true,
+		"get_events": true, "get_cluster_status": true, "watch": true,
 	}
 	destructive := map[string]bool{
-		"update_service_image":     true,
-		"rollback_service":         true,
-		"restart_service":          true,
-		"remove_task":              true,
-		"update_service_placement": true,
-		"update_service_ports":     true,
-		"update_node_availability": true,
-		"update_node_role":         true,
-		"remove_service":           true,
-		"remove_config":            true,
-		"remove_secret":            true,
-		"remove_network":           true,
-		"remove_volume":            true,
+		"update_service_image": true,
+		"rollback_service":     true,
+		"restart_service":      true,
+		"remove_task":          true,
+		// update_service covers eight sections, two of which are
+		// destructive (replacing the ports drops connections, replacing the
+		// placement can evict tasks); one annotation has to describe the
+		// worst of them.
+		"update_service": true,
+		"update_node":    true,
+		// The attachment editors replace a set rather than merging into it,
+		// so a name left out of the list is detached — a running container
+		// losing a credential or a config file it was reading.
+		"update_service_secrets": true,
+		"update_service_configs": true,
+		// Mounts replace wholesale too, and the omission costs more than a
+		// detached config: a container can lose data it was writing to the
+		// volume that dropped out of the list.
+		"update_service_mounts": true,
+		"remove_service":        true,
+		"remove_config":         true,
+		"remove_secret":         true,
+		"remove_network":        true,
+		"remove_volume":         true,
 	}
 
 	for _, td := range srv.registeredTools {
@@ -399,15 +527,15 @@ func TestToolCatalogTierFilter(t *testing.T) {
 	if _, ok := srv.findTool("scale_service"); !ok {
 		t.Error("scale_service should be registered at OpsOperational")
 	}
-	if _, ok := srv.findTool("update_service_env"); ok {
-		t.Error("update_service_env (tier 2) should not be registered at OpsOperational")
+	if _, ok := srv.findTool("update_service"); ok {
+		t.Error("update_service (tier 2) should not be registered at OpsOperational")
 	}
 	if _, ok := srv.findTool("remove_service"); ok {
 		t.Error("remove_service (tier 3) should not be registered at OpsOperational")
 	}
 
 	srv = newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful)
-	for _, name := range []string{"scale_service", "update_service_env", "remove_service", "remove_volume"} {
+	for _, name := range []string{"scale_service", "update_service", "remove_service", "remove_volume"} {
 		if _, ok := srv.findTool(name); !ok {
 			t.Errorf("%s should be registered at OpsImpactful", name)
 		}
@@ -581,13 +709,14 @@ func TestToolUpdateServiceEnv(t *testing.T) {
 		},
 	}
 	srv := newToolTestServer(t, c, wc, config.OpsConfiguration)
-	td, _ := srv.findTool("update_service_env")
+	td, _ := srv.findTool("update_service")
 
 	_, err := td.handler(
 		context.Background(),
-		newCallToolRequest("update_service_env", map[string]any{
-			"id":  "svc1",
-			"env": map[string]any{"DEBUG": "true", "PORT": "8080"},
+		newCallToolRequest("update_service", map[string]any{
+			"section": sectionEnv,
+			"id":      "svc1",
+			"value":   map[string]any{"DEBUG": "true", "PORT": "8080"},
 		}),
 	)
 	if err != nil {
@@ -620,13 +749,14 @@ func TestToolUpdateServiceEnvMergePatchDeletesNull(t *testing.T) {
 		},
 	}
 	srv := newToolTestServer(t, c, wc, config.OpsConfiguration)
-	td, _ := srv.findTool("update_service_env")
+	td, _ := srv.findTool("update_service")
 
 	_, err := td.handler(
 		context.Background(),
-		newCallToolRequest("update_service_env", map[string]any{
-			"id":  "svc1",
-			"env": map[string]any{"DROP_ME": nil, "ADDED": "yes"},
+		newCallToolRequest("update_service", map[string]any{
+			"section": sectionEnv,
+			"id":      "svc1",
+			"value":   map[string]any{"DROP_ME": nil, "ADDED": "yes"},
 		}),
 	)
 	if err != nil {
@@ -671,13 +801,14 @@ func TestToolUpdateServiceEnvMergesAgainstFreshSpec(t *testing.T) {
 		},
 	}
 	srv := newToolTestServer(t, c, wc, config.OpsConfiguration)
-	td, _ := srv.findTool("update_service_env")
+	td, _ := srv.findTool("update_service")
 
 	_, err := td.handler(
 		context.Background(),
-		newCallToolRequest("update_service_env", map[string]any{
-			"id":  "svc1",
-			"env": map[string]any{"FOO": "fresh"},
+		newCallToolRequest("update_service", map[string]any{
+			"section": sectionEnv,
+			"id":      "svc1",
+			"value":   map[string]any{"FOO": "fresh"},
 		}),
 	)
 	if err != nil {
@@ -698,13 +829,14 @@ func TestToolUpdateServiceEnvRejectsNonStringValues(t *testing.T) {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	})
 	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsConfiguration)
-	td, _ := srv.findTool("update_service_env")
+	td, _ := srv.findTool("update_service")
 
 	_, err := td.handler(
 		context.Background(),
-		newCallToolRequest("update_service_env", map[string]any{
-			"id":  "svc1",
-			"env": map[string]any{"PORT": float64(8080)},
+		newCallToolRequest("update_service", map[string]any{
+			"section": sectionEnv,
+			"id":      "svc1",
+			"value":   map[string]any{"PORT": float64(8080)},
 		}),
 	)
 	if err == nil {
@@ -722,13 +854,14 @@ func TestToolUpdateNodeAvailability(t *testing.T) {
 		},
 	}
 	srv := newToolTestServer(t, c, wc, config.OpsImpactful)
-	td, _ := srv.findTool("update_node_availability")
+	td, _ := srv.findTool("update_node")
 
 	_, err := td.handler(
 		context.Background(),
-		newCallToolRequest("update_node_availability", map[string]any{
-			"id":           "node1",
-			"availability": "drain",
+		newCallToolRequest("update_node", map[string]any{
+			"section": sectionAvailability,
+			"id":      "node1",
+			"value":   "drain",
 		}),
 	)
 	if err != nil {
@@ -742,13 +875,14 @@ func TestToolUpdateNodeAvailability(t *testing.T) {
 func TestToolUpdateNodeAvailabilityRejectsInvalid(t *testing.T) {
 	c := cache.New(nil)
 	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful)
-	td, _ := srv.findTool("update_node_availability")
+	td, _ := srv.findTool("update_node")
 
 	_, err := td.handler(
 		context.Background(),
-		newCallToolRequest("update_node_availability", map[string]any{
-			"id":           "node1",
-			"availability": "bogus",
+		newCallToolRequest("update_node", map[string]any{
+			"section": sectionAvailability,
+			"id":      "node1",
+			"value":   "bogus",
 		}),
 	)
 	if err == nil {
@@ -766,13 +900,14 @@ func TestToolUpdateServiceResourcesRoundtripsJSON(t *testing.T) {
 		},
 	}
 	srv := newToolTestServer(t, c, wc, config.OpsConfiguration)
-	td, _ := srv.findTool("update_service_resources")
+	td, _ := srv.findTool("update_service")
 
 	_, err := td.handler(
 		context.Background(),
-		newCallToolRequest("update_service_resources", map[string]any{
-			"id": "svc1",
-			"resources": map[string]any{
+		newCallToolRequest("update_service", map[string]any{
+			"section": sectionResources,
+			"id":      "svc1",
+			"value": map[string]any{
 				"Limits": map[string]any{
 					"NanoCPUs":    float64(500_000_000),
 					"MemoryBytes": float64(256 * 1024 * 1024),

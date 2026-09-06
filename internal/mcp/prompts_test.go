@@ -347,8 +347,8 @@ func getPromptRequest(name string, args map[string]string) mcplib.GetPromptReque
 func TestRemediationPromptsConfirmBeforeActing(t *testing.T) {
 	for name, mutation := range map[string]string{
 		"roll_back_service":  "rollback_service",
-		"right_size_service": "update_service_resources",
-		"drain_node":         "update_node_availability",
+		"right_size_service": "update_service",
+		"drain_node":         "update_node",
 	} {
 		def := findPrompt(t, name)
 

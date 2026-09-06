@@ -176,6 +176,18 @@ Resources are read-only views, all returned as `application/json`.
 | `cetacean://recommendations` | Current recommendation engine findings |
 | `cetacean://history` | Recent resource change events |
 
+Two of the three are projected rather than served verbatim, because the cache's own shape would mislead a reader
+who has no dashboard code to compensate for it:
+
+- `cetacean://cluster` names the unit in every numeric field — `totalCPUCores`, `reservedCPUCores`,
+  `maxNodeCPUCores`, `totalMemoryBytes`, `reservedMemoryBytes`, `maxNodeMemoryBytes` — and reports both CPU
+  figures in cores. The REST response behind it holds total CPU in cores and reserved CPU in nanoCPUs under
+  unlabelled names, so dividing one by the other as spelled is wrong by nine orders of magnitude.
+- `cetacean://history` names a task event after its service (`demo_flaky.3`) instead of repeating the task's own
+  ID, which is what the cache records. `resourceId` still carries the ID. Without this a history read of a
+  restarting service is a wall of opaque identifiers, and the one resource meant to answer "what changed?"
+  cannot say what changed.
+
 **Templated** (`resources/templates/list`) return the same compact `Digest` the `describe` tool builds — a resource
 read and a `describe` call go through the same function, so a subscription payload and a tool result can never
 describe the same resource differently. The one exception is `services/{id}/logs`, a raw log stream rather than a
@@ -201,6 +213,19 @@ Clients call `resources/subscribe` with a URI. When the underlying cluster state
 `notifications/resources/updated` for that URI and the client re-reads. `notifications/resources/list_changed` fires
 when resources are created or removed. Both are ACL-filtered per notification: a client is only notified about
 resources its identity can read.
+
+### Argument completion
+
+Templated resource URIs and prompt arguments complete. A client editing `cetacean://services/{id}`, or a prompt's
+`service` argument, can call `completion/complete` and receive the **names** of the matching resources — not IDs,
+since a name is what a human picks from a list and what a read now resolves.
+
+Matching is a case-insensitive substring, the same rule `find`'s `query` uses: Docker names carry their stack as a
+prefix, so a caller typing `prometheus` is offered `monitoring_prometheus`. Completions are capped at 100 values,
+with `total` and `hasMore` reporting what was left out.
+
+Completion reads the same ACL-filtered listing every other read goes through, so it never reveals a resource the
+caller could not otherwise enumerate, and a secret's payload is redacted on that path before a name is taken from it.
 
 ## Compact resource shapes
 
@@ -234,6 +259,12 @@ Alongside `id`/`name`/`type`/`state`, it adds:
   referenced by, so a caller can traverse without a second search.
 - `recentFailures` — always an array, never omitted: the task failures behind a failing state, newest first,
   capped at 5. Only a service digest ever populates it; every other type reports an empty array.
+- `restarts` — a service's involuntary task terminations, as `lastHour` and `lastWeek` counts. Services only;
+  omitted for every other type. This is the only field that reveals a restart loop: `state` reads `running`
+  whenever a replica happens to be up, and `recentFailures` deliberately drops the tasks the orchestrator has
+  already replaced, so a service crash-looping every few seconds otherwise describes as healthy. The two windows
+  answer different questions — `lastHour` whether it is failing *now*, the ratio between them whether the fault
+  is new or long-standing.
 
 Every numeric field in `details` names its unit — `cpuLimitCores` (a float, in cores) and `memoryLimitBytes` (in
 bytes) on a service digest, for instance — or is reported as a duration string like `"10s"` instead
@@ -243,21 +274,26 @@ NanoCPU or nanosecond integers, which read as arbitrary large numbers. Environme
 
 ### The `raw: true` escape hatch
 
-Both `find` (when `type` is given) and `describe` accept `raw: true`, returning the untouched Docker record
-instead of the compact shape. It exists so nothing the compact representation drops becomes permanently
-unreachable — but it is the deliberately expensive escape hatch: the whole point of the compact shapes is to avoid
-handing an agent the several-hundred-line object, so reach for `raw` only when a specific field a row or digest
-genuinely omits is needed.
+Both `find` (when `type` is given) and `describe` accept `raw: true`, adding the untouched Docker record to the
+result under `raw`. It exists so nothing the compact representation drops becomes permanently unreachable — but it
+is the deliberately expensive escape hatch: the whole point of the compact shapes is to avoid handing an agent the
+several-hundred-line object, so reach for `raw` only when a specific field a row or digest genuinely omits is
+needed.
 
-A `raw: true` result comes back as text content rather than structured content: the tool's advertised output
-schema describes the compact shape, and an untouched Docker object doesn't conform to it, so returning it as
-structured content would fail the server's own output-schema validation on the very call that asked for it.
+The raw records ride *beside* the compact shape rather than replacing it — `find` fills a `raw` array holding one
+record per row it returned, in the same order, and `describe` adds a `raw` object next to the digest's fields. A
+tool that advertises an output schema must return structured content conforming to it, and a tool has one schema
+whatever its arguments, so raw has to be an addition to the declared shape rather than a substitute for it. The
+compact half of a raw result is the same one a plain call returns, filters and paging included.
 
 ## Icons
 
 Every tool and resource advertises an `icon` that MCP clients can render beside it. Tool icons are grouped by verb
 category (read, search, scale, edit, node, remove); resource icons reflect the resource type (node, service, stack,
 config, secret, network, volume, task, service logs, cluster, recommendations, history).
+
+The server itself carries the same identity a tool does: a display `title`, a `description`, a `websiteUrl` and an
+icon, so a host listing several MCP servers shows Cetacean by name rather than by its programmatic id.
 
 The icons are plain SVGs served by Cetacean itself under the unauthenticated `/assets/mcp-icons/` prefix, so a client
 loads them without a bearer token in every auth mode. Their URLs are absolute and derived from the canonical external
@@ -275,13 +311,19 @@ On connect, the server also sends top-level usage `instructions` (read-mostly mo
 writes gated by tier + ACL) so agents know how to drive it. Each tool also advertises an `icon` grouped by verb
 category (read, search, scale, edit, node, remove) that clients can render (see [Icons](#icons)).
 
-Tool results carry machine-readable `structuredContent` (the parsed JSON object) alongside the text form. Every tool
-whose result shape Cetacean owns — the tier 0 reads, the four service lifecycle mutations, and the `remove_*` tools —
-advertises an output schema that the server validates results against. An input-validation failure comes back as a
-tool result with `isError: true` (so the model can self-correct), not a protocol error.
+Tool results carry machine-readable `structuredContent` (the parsed JSON object) alongside the text form. `find`
+and `describe` additionally attach `resource_link` content items for the resources their result is about — the rows
+of a listing, and for `describe` the resource itself plus everything it cross-references — so a host can offer
+somewhere to go next and a client can `resources/read` one without the model first working out how to spell a
+`cetacean://` URI. The links describe the page actually returned, filters and paging included, and are capped at 25:
+they are an affordance, not the payload, and every id is in `structuredContent` regardless. Every registered tool
+advertises an output schema that the server validates results against, on every call — a tool declaring a schema
+must answer with conforming structured content whatever its arguments, so no argument switches a tool to a shape
+its schema does not describe. An input-validation failure comes back as a tool result with `isError: true` (so the
+model can self-correct), not a protocol error.
 
-**Tier 0 — reads** (always available): `get_logs`, `find`, `describe`, `get_topology`, `get_metrics`,
-`get_recommendations`.
+**Tier 0 — reads** (always available): `get_cluster_status`, `get_logs`, `get_events`, `find`, `describe`,
+`get_topology`, `get_metrics`, `get_recommendations`, `watch`.
 
 `find` locates cluster resources. Give `type` (plural: `nodes`, `services`, `tasks`, `stacks`, `configs`,
 `secrets`, `networks`, or `volumes`) to enumerate that type, paged, as a list of `Row`s — optionally narrowed by
@@ -289,16 +331,22 @@ tool result with `isError: true` (so the model can self-correct), not a protocol
 `key=value`); `limit`/`offset` page the result (default and max `limit` 200). Omit `type` and give `query` to
 search by name, label or image reference across every type at once instead — one flat list sorted by name, each
 row carrying its own `type`, the way the two tools it replaces (`list_resources` and `search`) did between them;
-`limit` there instead bounds matches per resource type (default 3), and `offset` is ignored. `raw: true` returns
-each match's untouched Docker record instead of a `Row` — see [Compact resource shapes](#compact-resource-shapes).
+`limit` there instead bounds matches per resource type (default 3), and `offset` is ignored. Because there is no
+paging in that mode, a cross-type result also carries `counts` — the per-type breakdown behind `total`, the same
+field the HTTP search response uses — so "137 matches, showing 6" is legible without a second call, and narrowing
+with `type` is the way to page through one of them. A typed listing omits `counts`: there `total` already means
+one type, and `offset` reaches the rest. `raw: true` adds each match's untouched Docker record under `raw`,
+beside the rows — see [Compact resource shapes](#compact-resource-shapes).
 
 `describe` returns everything needed to act on one resource, as a `Digest`: its derived state, the reason behind
 an unhealthy one, how long it has held, type-specific details, cross-references, and the recent task failures
 behind a failing state. Its `type` argument is **singular** (`service`, `node`, `task`, `stack`, `config`,
 `secret`, `network`, `volume`) — the reverse of `find`'s plural, and an easy thing to get backwards. Both `type`
-and `id` are required; `id` accepts an ID or a name (hostname for a node, name for a stack or volume). `raw: true`
-returns the untouched Docker record. Secret payloads and environment variable values are never returned, in
-either mode.
+and `id` are required; `id` accepts an ID or a name — a hostname for a node, the rendered `<service>.<slot>`
+for a task, the plain name for everything else. A name that matches more than one resource (Swarm does not enforce
+unique node hostnames) is refused, naming the matching IDs, rather than resolving to one of them. `raw: true`
+adds the untouched Docker record under `raw`, beside the digest. Secret payloads and environment variable values
+are never returned, in either mode.
 
 `get_logs` reads either a service or a single task, named by `service` or `task` — exactly one, since the two are
 different streams and guessing between them would return output the caller did not ask for. A service merges the
@@ -309,6 +357,19 @@ record, five per replica slot by default (`--task-history-limit`), so a service 
 seconds of history and should be read before anything else. A task's read grant is its parent service's, the same
 key `remove_task` writes against.
 
+`get_topology` projects the cluster as a graph, in three views. `network` joins services to the overlay networks they
+attach to; `placement` joins cluster nodes to the services they run; `drain-impact` takes a `node` and joins the
+services running on it to the nodes that could take them, answering what would actually move if you drained it. In
+that view a service with **no edges is stranded**, and its `detail` names the placement constraint that blocked it —
+a state without its cause is what the whole read surface exists not to return. Global services are reported as
+`global` rather than movable or stranded, because draining does not relocate their task, it stops it running there.
+Placement constraints are evaluated exactly, the way Swarm enforces them; spare capacity is deliberately not
+considered, since reservations after a drain are a moving target and `get_cluster_status` already reports
+reserved-against-total. The candidates are the nodes the caller may read, so where ACL grants hid any, the graph
+carries a `note` saying what the assessment was narrowed to — a service reported stranded may be placeable on a node
+the caller cannot see, and this is the one view that must not answer that question confidently and wrongly. This is
+steps 3 and 4 of the `drain_node` prompt done server-side.
+
 `get_metrics` charts CPU, memory or network use for one service or one node over the last hour, six hours, day or
 week. It takes a target and a metric rather than PromQL: Cetacean owns the queries, resolves the service or node
 against its own cache, and checks the caller's read grant before querying — a tool accepting a raw query would hand
@@ -316,22 +377,96 @@ the caller a label selector of their own and with it a way around every grant. I
 (`CETACEAN_PROMETHEUS_URL`), plus cAdvisor for service metrics and node-exporter for node metrics; without them it
 reports that metrics are unavailable rather than returning empty series.
 
+Asking for `top` turns it into a ranking. `target: "cluster"` ranks the cluster's own members — the busiest services
+by default, nodes with `by: "node"` — and `target: "node"` with an id ranks the services running on that one host,
+which is what answers "why is this node hot?". A ranking is one series per member named the way the cluster names it
+(node-exporter's `instance` is host:port and is resolved back through the cache), so the result shape, its schema and
+the widget are the same as for a single resource. When an ACL policy is active the caller's grants are compiled into
+the query rather than applied to its result: ranking the whole cluster and filtering afterwards would return an empty
+answer whenever the true top N were all invisible to them, which they could not tell from an idle cluster. The node
+scope matches on Prometheus's standard `instance` label, not on `node_hostname` — that one is a relabel Cetacean's
+shipped `prometheus.yml` defines, and a cluster running its own config would not have it.
+
 `get_recommendations` returns the same findings as `cetacean://recommendations`, optionally filtered to one severity,
 as a tool a host can render — see [Widgets](#widgets-mcp-apps). Its totals count what the caller may read, not what
-the engine holds.
+the engine holds. A finding that has a remedy carries it as `fix` — `{"tool": "update_node", "section":
+"availability"}` — naming the tool to call. The REST API states the same remedy as a route (`fixAction`), which an
+MCP caller cannot issue; a finding whose route has no tool behind it reports no `fix` at all rather than a path
+that cannot be followed.
+
+`get_cluster_status` is the landing call. It answers whether the cluster is healthy and, when it is not, **names** the
+services and nodes that are wrong rather than counting them — every entry is a row carrying the id and name a
+follow-up `describe` needs. `cetacean://cluster` still serves the raw aggregate for a client that wants to subscribe
+to it; this is the form that answers a question.
+
+`get_events` is the change timeline, filtered by time, resource type or a single resource. `cetacean://history` keeps
+its fixed newest-100 window because a resource is the only thing a client can subscribe to, but that window is minutes
+of wall-clock on a cluster with a restarting service, and all of it task churn — narrowing by `types` is usually
+necessary. Entries carry timestamps in the same fixed-width format `get_logs` lines do, so reading changes and
+output on one timeline is two calls whose results interleave on time. The field names differ — an event is
+`at`/`kind`/`type`/`name`/`resourceId`/`message`, a log line `timestamp`/`message`/`stream`/`attrs` — so merge them
+on the timestamp rather than by key. That is the answer to "this started at 14:02 — what else happened?"
+
+`get_logs` reads one service, one task, a whole stack, or the whole cluster — exactly one of them per call; naming
+two is an error rather than a silent choice between them. The wide scopes merge server-side and attribute every line
+to the service it came from, so grepping the cluster with `contains` costs one call and the matches, rather than one
+call per service and every line of each. A wide read covers at most 25 services: any it could not reach are listed in
+`errors` rather than failing the whole read, and any it did not get to at all are reported in `note`, so a partial
+answer cannot be mistaken for a whole one.
+
+`watch` blocks until a service has settled and reports whether it did. The convergence rule is the same one the
+converging mutations use — this exposes it as a read, so an agent can ask "has it deployed yet?" without deploying
+something. The wait detaches from the request, so `tasks/cancel` cannot interrupt it and `timeout` is the real bound.
 
 **Tier 1 — operational**: `scale_service`, `update_service_image`, `rollback_service`, `restart_service`,
 `remove_task`.
 
-**Tier 2 — configuration**: `update_service_env`, `update_service_labels`, `update_node_labels`,
-`update_service_resources`, `update_service_placement`, `update_service_ports`, `update_service_update_policy`,
-`update_service_rollback_policy`, `update_service_log_driver`.
+**Tier 2 — configuration**: `update_service`, `update_node_labels`, `create_secret`, `create_config`,
+`update_service_secrets`, `update_service_configs`, `update_service_mounts`.
 
-**Tier 3 — impactful / destructive**: `update_node_availability`, `update_node_role`, `remove_service`,
-`remove_config`, `remove_secret`, `remove_network`, `remove_volume`.
+**Tier 3 — impactful / destructive**: `update_node`, `remove_service`, `remove_config`, `remove_secret`,
+`remove_network`, `remove_volume`.
 
-Env-var and label tools follow JSON Merge Patch semantics: a `null` value deletes a key, and the patch is applied
-against a fresh inspect of the live spec to avoid clobbering concurrent changes. Mutating tools return `409` on a
+`update_service` names the part of the spec it changes in a `section` argument — `env`, `labels`, `resources`,
+`placement`, `ports`, `update-policy`, `rollback-policy`, `log-driver`, `healthcheck` or `command` — and takes
+that section's new value under `value`. It replaced eight tools that differed only in which field they wrote, and which between
+them cost about two thousand tokens of every `tools/list`. The trade is that `value` is whatever the section
+takes, so the input schema cannot describe it and the section's decoder validates it instead, naming the section
+and the shape it wanted when a payload does not fit.
+
+`update_node` works the same way over `availability` and `role`. Node **labels** stay a tool of their own,
+`update_node_labels`, because they sit at a lower operations tier: folding them in would have meant a deployment
+that lets an agent relabel a node also lets it demote a manager.
+
+`healthcheck` takes the probe as `test` (Docker's exec form, e.g. `["CMD-SHELL", "curl -f localhost || exit 1"]`)
+plus optional `interval`, `timeout`, `startPeriod` and `retries`. Durations are strings — `"10s"`, `"1m30s"` — never
+nanosecond integers, which are a scale a caller sooner or later writes wrong. An empty `test` removes the check.
+This is what closes the loop on `get_recommendations`, which reports services with no health check and until now
+could not be acted on. `command` takes `command` (the entrypoint) and `args`, the split Docker itself makes.
+
+Secrets, configs and mounts are **not** sections of `update_service`. Each takes a list rather than a spec fragment,
+and attaching a secret checks a read grant on the secret as well as a write grant on the service, so each is a tool
+of its own — `update_service_secrets`, `update_service_configs` and `update_service_mounts`. Passing one as a
+`section` is refused with the name of the tool to use instead.
+
+All three replace the set wholesale: pass every entry the service should end up with, because one left out is
+detached. `update_service_mounts` covers named volumes, host bind mounts and tmpfs — note that a bind mount hands
+the container the host's filesystem at that path, and binding `/var/run/docker.sock` gives it control of the whole
+cluster. The tool will do it if asked; the operations level is not what stops it.
+
+Swarm secrets and configs are immutable, so rotating one is three calls in order: `create_secret` for the
+replacement, `update_service_secrets` to repoint each service that uses it — `describe` the secret first, its
+`related` array names them — and `remove_secret` for the old one once nothing references it. Cetacean could
+previously only do the last of the three, which made the whole sequence impossible.
+
+Every MCP tool requires the same operations level as the REST route for the same operation, so there is no separate
+MCP tier table to keep in step. That includes the three attachment editors, which sit at tier 2 rather than being
+raised for MCP alone: the operations level is the operator's single dial and means one thing whichever transport
+they reach for.
+
+The `env` and `labels` sections, and `update_node_labels`, follow JSON Merge Patch semantics: a `null` value
+deletes a key, and the patch is applied against a fresh inspect of the live spec to avoid clobbering concurrent
+changes. Every other section is a wholesale replacement — a field you omit is cleared. Mutating tools return `409` on a
 Docker version conflict.
 
 ## Prompts
@@ -358,19 +493,35 @@ Prompts are also filtered by ACL, all-or-nothing: a prompt is offered only when
 **every** tool it walks is available to you *and* you hold read on every
 resource type in its Reads column. A sequence whose fourth step you cannot
 perform would dead-end partway, and for a remediation prompt possibly after a
-write. The read-type check is the second half because `find`, `get_metrics`
-and `get_recommendations` are deliberately ungated — each ACL-filters its own
-results, so each stays visible to every caller — and a sequence built only
-from those would otherwise be offered to someone who would get an empty list
-from every step. A caller whose grants match nothing is offered no prompts at
+write. The read-type check is the second half because the cross-type reads —
+`find`, `describe`, `get_events`, `get_cluster_status`, `get_topology`,
+`get_metrics` and `get_recommendations` — are deliberately ungated, each
+ACL-filtering its own results so each stays visible to every caller. A sequence
+built only from those (`review_capacity` is one) would otherwise be offered to
+someone who would get an empty list from every step. A caller whose grants match nothing is offered no prompts at
 all. A prompt you cannot see reports `not found` from `prompts/get`, the same
 as a name that does not exist.
+
+Where a composite read exists, the sequence calls it rather than describing the
+join: `drain_node` reaches for `get_topology`'s drain-impact view instead of
+paging tasks and comparing constraints by eye, `review_capacity` opens on
+`get_cluster_status` and ranks nodes with one `get_metrics` call rather than one
+per node, the two prompts that need a change history call `get_events` narrowed
+to their service, and every step that waits calls `watch`. That is the point of
+those verbs: the knowledge stays in the sequence, but the work does not stay in
+the model's context.
 
 Prompts read no cluster data. They expand to a single message with the resource
 name you supplied interpolated, and the name is not checked for existence — the
 text tells the model to resolve it with `find` first. A prompt is a plan for
 the model to carry out, not a report; every read and write it describes still
 goes through the ordinary tool and resource paths, with the ordinary ACL checks.
+
+Which sequences exist is a demand-side question rather than a design one.
+[The MCP evaluation set](mcp_evaluation.md) records seventy things people
+actually ask their agent about a cluster, maps the six prompts onto the asks
+they serve, and names the clusters of asks that recur often enough — and cost
+enough calls unaided — to be worth a prompt of their own.
 
 ## Configuration
 
@@ -433,9 +584,26 @@ retained for the task's lifetime, and a summary is the more useful answer after 
 
 `running` is the live count, `state` is the same derivation the dashboard and REST API report, and `version` is the
 Swarm version index for a caller doing its own concurrency checks. `replicas` is omitted for a global service,
-which has no desired count. The shape is advertised as an `outputSchema`, so a client can rely on it. The
-spec-editing tools (`update_service_env`, `update_service_resources`, and so on) still return the full service,
-because there the resulting spec *is* the answer.
+which has no desired count. The shape is advertised as an `outputSchema`, so a client can rely on it.
+
+The spec-editing tools answer in the same spirit, reporting the section they changed rather than the whole
+service:
+
+```json
+{"id":"web","name":"web","version":42,"section":"resources",
+ "details":{"cpuLimitCores":2,"memoryLimitBytes":1073741824}}
+```
+
+`details` is the same projection `describe` builds for that resource, narrowed to the edited section, so
+confirming an edit and describing the resource afterwards cannot disagree. The node tools
+(`update_node_labels`, `update_node`) answer with `id`, `hostname`, `version`,
+`section` and `details`, plus `role` and `availability` on every one of them — draining a manager is a different
+act from draining a worker, and "did the drain take" is not answerable without the role it took effect on.
+
+This is also what keeps a credential out of the answer. These tools used to return the whole `swarm.Service`, so
+a call that only raised a CPU limit came back carrying the service's environment variable values and its log
+driver's options — a `splunk-token` among them. The projection reports `envNames` and the log driver's
+`optionNames`, never the values, which is the rule the rest of the interface already followed.
 
 Task augmentation is **optional** on all four. A plain `tools/call` with no `params.task` behaves exactly as
 before, returning as soon as Docker accepts the change.
