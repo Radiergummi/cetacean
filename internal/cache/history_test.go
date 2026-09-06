@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -374,5 +375,204 @@ func TestHistoryListAfterBoundsBothPaths(t *testing.T) {
 		if !e.Timestamp.After(cutoff) {
 			t.Errorf("entry %q at %v is not after the cutoff", e.Name, e.Timestamp)
 		}
+	}
+}
+
+// The per-resource index holds only indexRingSize entries, so a query asking
+// for more than that has to come off the main ring instead. Answering out of
+// the index would hand back 64 entries and let the caller report them as
+// everything the resource ever did — internal/mcp's get_events computes its
+// `truncated` flag from exactly this count.
+func TestListByResourceBeyondTheIndexRing(t *testing.T) {
+	const entries = indexRingSize * 3
+
+	h := NewHistory(10000)
+
+	for range entries {
+		h.Append(HistoryEntry{
+			Type:       EventService,
+			Action:     "update",
+			ResourceID: "svc1",
+			Name:       "web",
+		})
+
+		// Interleave another resource, so the walk has to filter rather than
+		// simply read every slot it passes.
+		h.Append(HistoryEntry{
+			Type:       EventService,
+			Action:     "update",
+			ResourceID: "svc2",
+			Name:       "api",
+		})
+	}
+
+	wide := h.List(HistoryQuery{ResourceID: "svc1", Limit: 500})
+	if len(wide) != entries {
+		t.Fatalf(
+			"got %d entries, want all %d: the index cannot bound a wider read",
+			len(wide),
+			entries,
+		)
+	}
+
+	for _, e := range wide {
+		if e.ResourceID != "svc1" {
+			t.Fatalf("entry for %q leaked into a query for svc1", e.ResourceID)
+		}
+	}
+
+	// Newest first, as on both paths.
+	for i := 1; i < len(wide); i++ {
+		if wide[i-1].ID < wide[i].ID {
+			t.Fatalf(
+				"entry %d (id %d) is older than the one after it (id %d)",
+				i,
+				wide[i-1].ID,
+				wide[i].ID,
+			)
+		}
+	}
+
+	// A query the index *can* answer still takes the fast path and agrees with
+	// the scan about which entries are newest.
+	narrow := h.List(HistoryQuery{ResourceID: "svc1", Limit: 10})
+	if len(narrow) != 10 {
+		t.Fatalf("got %d entries, want 10", len(narrow))
+	}
+
+	for i, e := range narrow {
+		if e.ID != wide[i].ID {
+			t.Errorf("entry %d: indexed id %d, scanned id %d", i, e.ID, wide[i].ID)
+		}
+	}
+}
+
+// Paging a single resource with a cursor must not stop at the index window
+// either. The Atom detail feeds page at 50 — comfortably under indexRingSize —
+// so gating the index on the limit alone left them reporting a resource's
+// history exhausted after 64 entries, and made the behaviour depend on a
+// number the caller happened to pick.
+func TestListByResourcePagesPastTheIndexRingWithACursor(t *testing.T) {
+	const entries = indexRingSize * 4
+
+	h := NewHistory(10000)
+	for range entries {
+		h.Append(
+			HistoryEntry{Type: EventService, ResourceID: "svc1", Name: "web", Action: "update"},
+		)
+		h.Append(
+			HistoryEntry{Type: EventService, ResourceID: "svc2", Name: "api", Action: "update"},
+		)
+	}
+
+	// Walk the whole history one page at a time, exactly as a feed reader does.
+	const page = 50
+
+	var (
+		seen   int
+		cursor uint64
+	)
+
+	for {
+		got := h.List(HistoryQuery{ResourceID: "svc1", BeforeID: cursor, Limit: page})
+		if len(got) == 0 {
+			break
+		}
+
+		for _, e := range got {
+			if e.ResourceID != "svc1" {
+				t.Fatalf("entry for %q leaked into a query for svc1", e.ResourceID)
+			}
+		}
+
+		seen += len(got)
+		cursor = got[len(got)-1].ID
+
+		if seen > entries {
+			t.Fatalf("paging returned %d entries, more than the %d recorded", seen, entries)
+		}
+	}
+
+	if seen != entries {
+		t.Errorf(
+			"paging reached %d of %d entries before the feed reported it exhausted",
+			seen,
+			entries,
+		)
+	}
+}
+
+// The type and upper-time bounds belong in the walk, not in the caller. A
+// caller reducing the result afterwards cannot have its copy bounded: List
+// would have to hand back every candidate, which on a full ring of task churn
+// is ten thousand entries copied to keep a handful.
+func TestListFiltersByTypesAndUpperTimeBound(t *testing.T) {
+	base := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+
+	h := NewHistory(100)
+	for i, kind := range []EventType{EventService, EventTask, EventNode, EventService} {
+		h.Append(HistoryEntry{
+			Type:       kind,
+			Action:     "update",
+			ResourceID: string(kind) + strconv.Itoa(i),
+			Timestamp:  base.Add(time.Duration(i) * time.Minute),
+		})
+	}
+
+	services := h.List(HistoryQuery{Types: []EventType{EventService}, Limit: 50})
+	if len(services) != 2 {
+		t.Fatalf("got %d entries, want the 2 service events", len(services))
+	}
+	for _, e := range services {
+		if e.Type != EventService {
+			t.Errorf("entry of type %q leaked into a service-only query", e.Type)
+		}
+	}
+
+	// Several types at once, which is what the tool's `types` argument takes.
+	pair := h.List(HistoryQuery{Types: []EventType{EventTask, EventNode}, Limit: 50})
+	if len(pair) != 2 {
+		t.Errorf("got %d entries, want the task and node events", len(pair))
+	}
+
+	// Before is inclusive at its own instant and cannot end the walk, since
+	// entries are visited newest-first.
+	upTo := h.List(HistoryQuery{Before: base.Add(time.Minute), Limit: 50})
+	if len(upTo) != 2 {
+		t.Fatalf("got %d entries, want the 2 at or before the bound", len(upTo))
+	}
+	for _, e := range upTo {
+		if e.Timestamp.After(base.Add(time.Minute)) {
+			t.Errorf("entry at %v is after the upper bound", e.Timestamp)
+		}
+	}
+
+	// An unrecognised type matches nothing rather than everything.
+	if got := h.List(HistoryQuery{Types: []EventType{"nonsense"}, Limit: 50}); len(got) != 0 {
+		t.Errorf("got %d entries for an unknown type, want none", len(got))
+	}
+}
+
+// Both list paths must honour the new filters, or one query means two things
+// depending on whether a resource was named.
+func TestListByResourceHonoursTypesAndUpperTimeBound(t *testing.T) {
+	base := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+
+	h := NewHistory(100)
+	h.Append(HistoryEntry{Type: EventService, ResourceID: "svc1", Timestamp: base})
+	h.Append(HistoryEntry{Type: EventTask, ResourceID: "svc1", Timestamp: base.Add(time.Minute)})
+
+	byType := h.List(HistoryQuery{
+		ResourceID: "svc1",
+		Types:      []EventType{EventService},
+		Limit:      10,
+	})
+	if len(byType) != 1 || byType[0].Type != EventService {
+		t.Errorf("got %+v, want only the service entry", byType)
+	}
+
+	byTime := h.List(HistoryQuery{ResourceID: "svc1", Before: base, Limit: 10})
+	if len(byTime) != 1 || byTime[0].Timestamp.After(base) {
+		t.Errorf("got %+v, want only the entry at or before the bound", byTime)
 	}
 }

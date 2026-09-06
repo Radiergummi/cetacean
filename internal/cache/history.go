@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,24 @@ type HistoryQuery struct {
 	BeforeID     uint64
 	NameContains string // case-insensitive substring match on Name
 	Limit        int
+
+	// Types narrows to entries of any of these types, where Type narrows to
+	// exactly one. Empty means every type. Both may be set, in which case an
+	// entry has to satisfy both — only ever the intersection, which no caller
+	// asks for.
+	//
+	// It exists because a caller filtering by type *after* the read cannot have
+	// its copy bounded: List would have to return every candidate for the
+	// caller to reduce, which on a full ring is ten thousand entries copied
+	// under the read lock every Append contends with. Pushed down, the walk
+	// counts what matched and copies only what is returned.
+	Types []EventType
+
+	// Before bounds the result at the newer end: only entries at or before it.
+	// Unlike After it cannot end the walk — entries are visited newest-first,
+	// so the ones this excludes come first — so it skips rather than breaks.
+	// Zero means unbounded.
+	Before time.Time
 
 	// After bounds the walk rather than the result: entries are visited
 	// newest-first, so the first one at or before it ends the scan. A caller
@@ -58,6 +77,17 @@ type indexRing struct {
 }
 
 const indexRingSize = 64
+
+// maxListPrealloc bounds what List reserves up front.
+//
+// A caller that applies its own filters after the read passes the ring's whole
+// size as the limit — internal/mcp's get_events does, so that a narrow `types`
+// filter cannot come back empty and call itself complete. Most such reads are
+// also bounded by `After` and stop within a few entries, and reserving the
+// whole ring for them costs about a megabyte a call. A read that genuinely
+// walks the ring end to end still grows to fit; it just pays for the growth
+// instead of for the reservation.
+const maxListPrealloc = 512
 
 func (r *indexRing) push(idx int) {
 	r.indices[r.cursor] = idx
@@ -202,22 +232,35 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 	}
 
 	// Fast path: when filtering by resource ID, use the per-resource index
-	// instead of scanning the entire ring buffer.
+	// instead of scanning the entire ring buffer — but only when the index can
+	// answer the whole question.
+	//
+	// It holds the newest indexRingSize entries per resource, so it runs out in
+	// two different ways: a limit larger than the index, and a `BeforeID` cursor
+	// that pages off the end of it. Gating on the limit alone leaves the cursor
+	// broken and makes the behaviour depend on a number the caller picked — the
+	// Atom detail feeds page at 50, comfortably under the index size, and would
+	// still report a resource's history exhausted after 64 entries. So the
+	// index answers only when it can prove it is complete: either it holds
+	// every entry this resource ever had, or it filled the request outright.
+	// Anything else falls through to the scan below, which reads the main ring.
 	if q.ResourceID != "" {
-		return h.listByResource(q, limit)
+		if found, complete := h.listByResource(q, limit); complete {
+			return found
+		}
 	}
 
-	result := make([]HistoryEntry, 0, limit)
+	result := make([]HistoryEntry, 0, min(limit, maxListPrealloc))
 
 	// Iterate newest-first from cursor-1 backwards
-	total := h.size
+	slots := h.size
 	if !h.full {
-		total = h.cursor
+		slots = h.cursor
 	}
 
 	pastCursor := q.BeforeID == 0
 
-	for i := 0; i < total && len(result) < limit; i++ {
+	for i := range slots {
 		idx := h.cursor - 1 - i
 		if idx < 0 {
 			idx += h.size
@@ -236,33 +279,70 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 			break
 		}
 
-		if q.Type != "" && e.Type != q.Type {
-			continue
-		}
-
-		if q.NameContains != "" && !strings.Contains(
-			strings.ToLower(e.Name), strings.ToLower(q.NameContains),
-		) {
+		if !q.matches(e) {
 			continue
 		}
 
 		result = append(result, e)
+
+		if len(result) == limit {
+			break
+		}
 	}
 
 	return result
+}
+
+// matches applies the filters that skip an entry rather than end the walk. The
+// two list paths share it so a filter added here is honoured on both, which is
+// the same reason listByResource takes the whole query.
+func (q HistoryQuery) matches(e HistoryEntry) bool {
+	if q.ResourceID != "" && e.ResourceID != q.ResourceID {
+		return false
+	}
+
+	if q.Type != "" && e.Type != q.Type {
+		return false
+	}
+
+	if len(q.Types) > 0 && !slices.Contains(q.Types, e.Type) {
+		return false
+	}
+
+	if !q.Before.IsZero() && e.Timestamp.After(q.Before) {
+		return false
+	}
+
+	if q.NameContains != "" && !strings.Contains(
+		strings.ToLower(e.Name), strings.ToLower(q.NameContains),
+	) {
+		return false
+	}
+
+	return true
 }
 
 // listByResource answers a query already known to name a resource, taking the
 // whole query rather than five of its fields so a field added to HistoryQuery
 // is honoured on both paths or on neither — a filter the indexed path silently
 // ignored would make one query mean two things.
-func (h *History) listByResource(q HistoryQuery, limit int) []HistoryEntry {
+//
+// complete reports whether the answer can be trusted as the whole one. The
+// index is a fixed-size window, so a short result means either that the
+// resource genuinely has no more entries or that the window ran out — and only
+// the caller's fallback to a full scan can tell those apart.
+func (h *History) listByResource(
+	q HistoryQuery,
+	limit int,
+) (entries []HistoryEntry, complete bool) {
 	ring := h.byResource[q.ResourceID]
 	if ring == nil {
-		return nil
+		// Nothing was ever recorded under this ID: an empty answer is the
+		// complete one. The index is never pruned, so its absence is proof.
+		return nil, true
 	}
 
-	result := make([]HistoryEntry, 0, limit)
+	result := make([]HistoryEntry, 0, min(limit, indexRingSize))
 	pastCursor := q.BeforeID == 0
 
 	ring.iterNewest(func(idx int) bool {
@@ -286,19 +366,17 @@ func (h *History) listByResource(q HistoryQuery, limit int) []HistoryEntry {
 			return false
 		}
 
-		if q.Type != "" && e.Type != q.Type {
-			return true
-		}
-
-		if q.NameContains != "" && !strings.Contains(
-			strings.ToLower(e.Name), strings.ToLower(q.NameContains),
-		) {
+		if !q.matches(e) {
 			return true
 		}
 
 		result = append(result, e)
+
 		return len(result) < limit
 	})
 
-	return result
+	// A ring that has never wrapped holds every entry this resource ever had,
+	// so a short answer off it is genuinely short. Otherwise only a filled
+	// request proves the window did not cut the answer off.
+	return result, !ring.full || len(result) == limit
 }
