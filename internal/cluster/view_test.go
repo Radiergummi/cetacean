@@ -538,3 +538,64 @@ func TestServiceDetailsOmitsAbsentPolicyAndPorts(t *testing.T) {
 		t.Errorf("rollbackPolicy present = %v, want omitted", got["rollbackPolicy"])
 	}
 }
+
+// A crash loop is made entirely of tasks the orchestrator has already
+// replaced: Swarm marks a task for shutdown the instant it fails and starts
+// another, so by the time anything reads the digest every failure it has is a
+// replaced one. Excluding them left "why is this restarting in a loop"
+// answered with an empty list — the one question the field exists for.
+//
+// The exclusion was written for a different case, a service that failed once
+// and has since recovered, and it only ever appeared to work because the cache
+// held those tasks with a stale DesiredState that let them through. Once the
+// watcher learned to observe the terminal transition, the guard did what it
+// said and the failures vanished. What separates the two cases is the task's
+// state, not the orchestrator's intent for it: a shutdown that was clean is
+// not a failure and is excluded a few lines down regardless.
+func TestServiceDigestReportsFailuresSwarmHasAlreadyReplaced(t *testing.T) {
+	svc := replicated("flaky", 1)
+
+	tasks := []swarm.Task{
+		{ID: "t-old", ServiceID: "svc-flaky", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{
+				State: swarm.TaskStateFailed,
+				Err:   "task: non-zero exit (1)",
+			}},
+		{ID: "t-new", ServiceID: "svc-flaky", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
+	}
+
+	got := ServiceDigest(svc, tasks, nil, nil)
+
+	if len(got.RecentFailures) != 1 {
+		t.Fatalf(
+			"recentFailures = %d, want the replaced task that failed",
+			len(got.RecentFailures),
+		)
+	}
+
+	if got.RecentFailures[0].TaskID != "t-old" {
+		t.Errorf("recentFailures[0] = %q, want t-old", got.RecentFailures[0].TaskID)
+	}
+}
+
+// A replaced task that stopped cleanly is history and stays out: a rolling
+// update leaves one behind for every replica it moved, and reporting those as
+// failures would make every successful deploy look like an incident.
+func TestServiceDigestIgnoresCleanlyReplacedTasks(t *testing.T) {
+	svc := replicated("rolled", 1)
+
+	tasks := []swarm.Task{
+		{ID: "t-old", ServiceID: "svc-rolled", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{State: swarm.TaskStateShutdown}},
+		{ID: "t-new", ServiceID: "svc-rolled", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
+	}
+
+	if got := ServiceDigest(svc, tasks, nil, nil); len(got.RecentFailures) != 0 {
+		t.Errorf(
+			"recentFailures = %d, want none for a cleanly replaced task",
+			len(got.RecentFailures),
+		)
+	}
+}
