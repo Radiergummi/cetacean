@@ -402,13 +402,17 @@ to it; this is the form that answers a question.
 `get_events` is the change timeline, filtered by time, resource type or a single resource. `cetacean://history` keeps
 its fixed newest-100 window because a resource is the only thing a client can subscribe to, but that window is minutes
 of wall-clock on a cluster with a restarting service, and all of it task churn — narrowing by `types` is usually
-necessary. Entries share their shape with `get_logs`, so reading changes and output on one timeline is two calls
-whose results interleave without translation. That is the answer to "this started at 14:02 — what else happened?"
+necessary. Entries carry timestamps in the same fixed-width format `get_logs` lines do, so reading changes and
+output on one timeline is two calls whose results interleave on time. The field names differ — an event is
+`at`/`kind`/`type`/`name`/`resourceId`/`message`, a log line `timestamp`/`message`/`stream`/`attrs` — so merge them
+on the timestamp rather than by key. That is the answer to "this started at 14:02 — what else happened?"
 
-`get_logs` reads one service, one task, a whole stack, or the whole cluster. The wide scopes merge server-side and
-attribute every line to the service it came from, so grepping the cluster with `contains` costs one call and the
-matches, rather than one call per service and every line of each. A wide read covers at most 25 services and lists
-any it could not reach in `errors` rather than failing the whole read.
+`get_logs` reads one service, one task, a whole stack, or the whole cluster — exactly one of them per call; naming
+two is an error rather than a silent choice between them. The wide scopes merge server-side and attribute every line
+to the service it came from, so grepping the cluster with `contains` costs one call and the matches, rather than one
+call per service and every line of each. A wide read covers at most 25 services: any it could not reach are listed in
+`errors` rather than failing the whole read, and any it did not get to at all are reported in `note`, so a partial
+answer cannot be mistaken for a whole one.
 
 `watch` blocks until a service has settled and reports whether it did. The convergence rule is the same one the
 converging mutations use — this exposes it as a read, so an agent can ask "has it deployed yet?" without deploying
@@ -512,6 +516,12 @@ name you supplied interpolated, and the name is not checked for existence — th
 text tells the model to resolve it with `find` first. A prompt is a plan for
 the model to carry out, not a report; every read and write it describes still
 goes through the ordinary tool and resource paths, with the ordinary ACL checks.
+
+Which sequences exist is a demand-side question rather than a design one.
+[The MCP evaluation set](mcp_evaluation.md) records seventy things people
+actually ask their agent about a cluster, maps the six prompts onto the asks
+they serve, and names the clusters of asks that recur often enough — and cost
+enough calls unaided — to be worth a prompt of their own.
 
 ## Configuration
 
