@@ -576,3 +576,57 @@ func TestListByResourceHonoursTypesAndUpperTimeBound(t *testing.T) {
 		t.Errorf("got %+v, want only the entry at or before the bound", byTime)
 	}
 }
+
+// The ring is the whole of Cetacean's memory of what changed, and it is built
+// at startup: after a restart it begins at the moment the process came up, and
+// once it wraps it begins wherever the oldest surviving entry does. Neither is
+// visible in a query's result, so "one service changed in the last twelve
+// hours" and "I have only been watching for half an hour" answer identically —
+// and the narrow query even reports truncated:false, asserting completeness
+// over a window it never held.
+func TestHistoryOldestReportsTheHorizonItCanAnswerFor(t *testing.T) {
+	h := NewHistory(3)
+
+	if _, ok := h.Oldest(); ok {
+		t.Error("an empty ring reported a horizon")
+	}
+
+	first := time.Now().Add(-time.Hour)
+	for i := range 2 {
+		h.Append(HistoryEntry{
+			Timestamp:  first.Add(time.Duration(i) * time.Minute),
+			Type:       EventService,
+			Action:     "update",
+			ResourceID: "svc",
+		})
+	}
+
+	oldest, ok := h.Oldest()
+	if !ok {
+		t.Fatal("a populated ring reported no horizon")
+	}
+
+	if !oldest.Equal(first) {
+		t.Errorf("Oldest = %v, want the first entry at %v", oldest, first)
+	}
+
+	// Once it wraps, the horizon has to move with the surviving entries rather
+	// than stay at the first thing ever recorded.
+	for i := 2; i < 6; i++ {
+		h.Append(HistoryEntry{
+			Timestamp:  first.Add(time.Duration(i) * time.Minute),
+			Type:       EventService,
+			Action:     "update",
+			ResourceID: "svc",
+		})
+	}
+
+	oldest, ok = h.Oldest()
+	if !ok {
+		t.Fatal("a wrapped ring reported no horizon")
+	}
+
+	if want := first.Add(3 * time.Minute); !oldest.Equal(want) {
+		t.Errorf("Oldest = %v, want %v — the horizon must follow the ring", oldest, want)
+	}
+}

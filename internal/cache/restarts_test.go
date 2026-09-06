@@ -283,3 +283,54 @@ func TestCache_ReplaceAll_ForgetsRemovedServices(t *testing.T) {
 		t.Errorf("expected forget on service removal, got %d", got)
 	}
 }
+
+// The counts are labelled by the window they cover, but a tracker can only
+// answer for as long as it has been watching. It is built at startup, so a
+// freshly-restarted Cetacean reports "107 failures in the last week" for a
+// service that has failed twenty thousand times over two days — and, worse,
+// reports the same figure for the hour and the week, which is exactly the
+// signal a reader uses to tell a new fault from a chronic one. Reporting the
+// horizon is what stops "since I started counting" reading as "in the last
+// seven days".
+func TestRestartTrackerReportsHowFarBackItCanAccountFor(t *testing.T) {
+	rt := NewRestartTracker(7*24*time.Hour, time.Hour)
+
+	start := time.Now()
+	since := rt.TrackingSince()
+
+	if since.Before(start.Add(-time.Minute)) || since.After(time.Now()) {
+		t.Errorf("a fresh tracker claims to reach back to %v; it has only just started", since)
+	}
+
+	// Restoring a snapshot moves the horizon back to the oldest bucket it
+	// recovered: that history really is accounted for, and refusing to say so
+	// would understate a tracker that did survive the restart.
+	old := time.Now().Add(-48 * time.Hour)
+	rt.Restore(RestartTrackerSnapshot{
+		Horizon: 7 * 24 * time.Hour,
+		Bucket:  time.Hour,
+		Services: map[string]map[int64]uint32{
+			"svc": {old.Truncate(time.Hour).Unix(): 4},
+		},
+	})
+
+	if since := rt.TrackingSince(); since.After(old.Add(time.Hour)) {
+		t.Errorf("TrackingSince = %v after restoring a bucket from %v", since, old)
+	}
+}
+
+// The horizon can never reach further back than the retention window, however
+// long the process has been up: buckets past it are pruned, so claiming to
+// account for them would be the same lie in the other direction.
+func TestRestartTrackerHorizonIsCappedByRetention(t *testing.T) {
+	rt := NewRestartTracker(2*time.Hour, time.Hour)
+	rt.Restore(RestartTrackerSnapshot{
+		Horizon:  2 * time.Hour,
+		Bucket:   time.Hour,
+		Services: map[string]map[int64]uint32{"svc": {time.Now().Add(-72 * time.Hour).Unix(): 9}},
+	})
+
+	if since := rt.TrackingSince(); since.Before(time.Now().Add(-3 * time.Hour)) {
+		t.Errorf("TrackingSince = %v, beyond the 2h retention horizon", since)
+	}
+}

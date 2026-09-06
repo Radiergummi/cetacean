@@ -44,6 +44,21 @@ type LogResourceResponse struct {
 	// promise broken in the other direction.
 	Errors []string `json:"errors"`
 
+	// Oldest is the timestamp of the earliest line returned, so a caller can
+	// compare the window it asked for against the one it got without parsing
+	// the lines. Empty when nothing matched.
+	Oldest string `json:"oldest,omitempty"`
+
+	// Truncated reports that the fetch hit its own line ceiling before it
+	// reached the start of the window the caller asked for, so the answer
+	// covers less time than `since` requested. Docker ignores `since` for
+	// service logs, so the window is enforced by filtering after a fetch that
+	// `tail` bounds — on a chatty service that bound binds first, and a
+	// five-minute request comes back holding seconds. Without this the two
+	// indistinguishable answers are "nothing happened" and "I did not look
+	// that far".
+	Truncated bool `json:"truncated,omitempty"`
+
 	// Note is a caveat about the read as a whole rather than about any one
 	// line: a scope wider than one fan-out may cover, so far. It exists
 	// because the cap is otherwise invisible in the payload — a cluster-wide
@@ -130,11 +145,37 @@ func (s *Server) readLogsImpl(
 		return LogResourceResponse{}, fmt.Errorf("parse logs: %w", err)
 	}
 
+	// Whether the fetch itself was bounded has to be decided before the
+	// narrowings below discard the evidence: once `since` has filtered the
+	// lines away, a ceiling-bound read and a quiet service look identical.
+	ceilingHit := len(lines) >= tail
+
 	lines = filterLogLines(lines, opts.level)
 	lines = filterLogContains(lines, opts.contains)
 	lines = logs.FilterSince(lines, opts.since)
 
-	return finishLogRead(lines, wanted, opts.since), nil
+	resp := finishLogRead(lines, wanted, opts.since)
+	if ceilingHit && opts.since != "" {
+		resp.Truncated = true
+		resp.Note = fmt.Sprintf(
+			"reached the %d-line fetch ceiling before the start of the "+
+				"requested window; this answer covers only back to %s, not %s "+
+				"— narrow it with `contains` or `level`, or read a shorter window",
+			tail, orNone(resp.Oldest), opts.since,
+		)
+	}
+
+	return resp, nil
+}
+
+// orNone renders an empty timestamp as something a sentence can hold, for the
+// case where the ceiling was hit and then every line was filtered away.
+func orNone(timestamp string) string {
+	if timestamp == "" {
+		return "no matching line"
+	}
+
+	return timestamp
 }
 
 // boundLogTail clamps a caller's requested tail to the defaults, so the two
@@ -176,6 +217,9 @@ func finishLogRead(lines []logs.LogLine, wanted int, since string) LogResourceRe
 	}
 
 	resp := LogResourceResponse{Lines: lines, Cursor: since, Errors: []string{}}
+	if len(lines) > 0 {
+		resp.Oldest = lines[0].Timestamp
+	}
 
 	for _, line := range slices.Backward(lines) {
 		if cursor, ok := logs.ParseCursor(line.Timestamp); ok {

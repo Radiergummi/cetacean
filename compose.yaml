@@ -12,8 +12,18 @@ services:
         source: /var/run/docker.sock
         target: /var/run/docker.sock
         read_only: true
+      # CETACEAN_SNAPSHOT is on by default and writes to CETACEAN_DATA_DIR.
+      # Without somewhere durable to put it the snapshot lands in the
+      # container's own filesystem and dies with every task, taking the
+      # restart-failure history with it — so a freshly-replaced Cetacean
+      # reports a service that has been crash-looping for days as though the
+      # fault began minutes ago.
+      - type: volume
+        source: cetacean_data
+        target: /data
     environment:
       CETACEAN_PROMETHEUS_URL: "${CETACEAN_PROMETHEUS_URL:-}"
+      CETACEAN_DATA_DIR: /data
     networks:
       - monitoring
     deploy:
@@ -27,6 +37,9 @@ services:
         reservations:
           cpus: "0.5"
           memory: 256M
+
+volumes:
+  cetacean_data:
 
 networks:
   monitoring:

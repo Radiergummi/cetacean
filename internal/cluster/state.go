@@ -34,10 +34,18 @@ func serviceUpdateInFlight(svc swarm.Service) bool {
 // state, and a human-readable line describing what is still outstanding.
 //
 // Docker's write APIs return as soon as the swarm accepts a spec change, long
-// before the new state is real. This is what turns "accepted" into "running",
-// and it is deliberately stricter than DeriveServiceState: it requires the
-// running count to *equal* the desired one, so a scale-down is not called done
-// while surplus tasks are still being reaped.
+// before the new state is real. This is what turns "accepted" into "running".
+//
+// The count must *reach* the desired one rather than equal it. Equality was
+// meant to keep a scale-down from being called done while surplus tasks were
+// still being reaped, but cache.countsAsRunningReplica already excludes those
+// — a task Swarm has marked for shutdown is not a replica of the desired
+// state — so equality bought nothing and cost a wait that could never end: a
+// count that overshoots, whether because the watcher has not caught up or
+// because a garbage-collected task is stuck at its last-inspected status,
+// leaves a caller polling a predicate that is never true. Reporting settled a
+// moment early is the better failure; serviceUpdateInFlight above is what
+// actually holds a rollout open.
 func ServiceConverged(svc swarm.Service, runningCount int) (bool, string) {
 	// An in-flight rolling update means tasks are still being replaced; wait it
 	// out rather than reporting a transient count match as success.
@@ -53,7 +61,7 @@ func ServiceConverged(svc swarm.Service, runningCount int) (bool, string) {
 	}
 
 	desired := int(*svc.Spec.Mode.Replicated.Replicas)
-	if runningCount == desired {
+	if runningCount >= desired {
 		return true, fmt.Sprintf("converged: %d/%d replicas running", runningCount, desired)
 	}
 

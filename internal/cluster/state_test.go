@@ -156,22 +156,55 @@ func TestServiceConvergedWaitsOutRollback(t *testing.T) {
 	}
 }
 
-// TestServiceConvergedRequiresExactCount pins the deliberate difference from
-// DeriveServiceState: a scale-down is not done while surplus tasks are still
-// being reaped, even though the service is already "running" to a reader.
-func TestServiceConvergedRequiresExactCount(t *testing.T) {
-	replicas := uint64(2)
+// A wait that can never terminate is a worse failure than one that ends a
+// moment early. The running count comes from a cache the watcher fills
+// asynchronously, so it can briefly exceed the desired one — and before the
+// count learned to ignore tasks destined for shutdown it did so for the whole
+// five minutes between full re-syncs, reporting "waiting: 3/2 replicas
+// running" for a rolling update Docker had already marked completed. Requiring
+// equality made that unrecoverable; the surplus a scale-down leaves behind is
+// already excluded by the count itself, which is what equality was guarding.
+func TestServiceConvergedWithSurplusRunningTasks(t *testing.T) {
 	svc := swarm.Service{
 		Spec: swarm.ServiceSpec{
-			Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: new(uint64(2))},
+			},
 		},
+		UpdateStatus: &swarm.UpdateStatus{State: swarm.UpdateStateCompleted},
 	}
 
-	if done, _ := cluster.ServiceConverged(svc, 5); done {
-		t.Error("reported converged with 5 running and 2 desired")
+	converged, observed := cluster.ServiceConverged(svc, 3)
+	if !converged {
+		t.Errorf("ServiceConverged(desired 2, running 3) = false, %q; want converged", observed)
 	}
 
-	if got := cluster.DeriveServiceState(svc, 5); got != "running" {
-		t.Errorf("DeriveServiceState = %q, want %q", got, "running")
+	// This replaces TestServiceConvergedRequiresExactCount, which pinned the
+	// opposite. Its rationale — that a scale-down is not done while surplus
+	// tasks are reaped — is now enforced a layer down, by the replica count
+	// itself: Swarm marks a reaped task for shutdown, and
+	// cache.countsAsRunningReplica drops it, so an overshoot here means the
+	// cache is wrong rather than the service being mid-scale-down. The two
+	// functions still have to agree on what "enough replicas" means.
+	if got := cluster.DeriveServiceState(svc, 3); got != "running" {
+		t.Errorf("DeriveServiceState = %q, want %q — the two must agree", got, "running")
+	}
+}
+
+// An update still in flight outranks the count: a start-first rollout has both
+// the outgoing and incoming task running at once, and reporting that as
+// settled would call a deploy done before it is.
+func TestServiceConvergedWaitsOutAnUpdateEvenWithEnoughRunning(t *testing.T) {
+	svc := swarm.Service{
+		Spec: swarm.ServiceSpec{
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: new(uint64(2))},
+			},
+		},
+		UpdateStatus: &swarm.UpdateStatus{State: swarm.UpdateStateUpdating},
+	}
+
+	if converged, _ := cluster.ServiceConverged(svc, 3); converged {
+		t.Error("ServiceConverged reported an in-flight update as settled")
 	}
 }

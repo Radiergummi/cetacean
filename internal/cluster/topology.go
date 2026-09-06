@@ -7,6 +7,8 @@ import (
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // The two topology projections. A view name is part of the MCP tool's argument
@@ -278,22 +280,12 @@ func PlacementGraph(
 
 // TaskIsLive reports whether the orchestrator still intends this task to run.
 //
-// Exported for the same reason ServiceAttachments is: every placement view
-// needs it, and the REST projection used to count every task a node had ever
-// held, so a replaced replica was reported twice and a node holding only a
-// shutdown task was reported as running the service.
-//
-// Swarm keeps a task record for every replica it has replaced, so a service
-// that has been updated — or one that restarts in a loop — accumulates
-// terminal records on whichever node ran them. Those are history, not slots
-// awaiting a start, and counting them as the denominator of a placement edge
-// renders a converged service as degraded: a single-replica service updated
-// twice read "1/3 running". DesiredState is the orchestrator's own answer,
-// which is why it decides this rather than the task's current state — a task
-// still coming up has no terminal state yet but is genuinely awaited.
+// The rule itself lives in internal/cache, because the cache's replica
+// counters need it and cannot import this package. This is the name the
+// topology and digest builders already call it by, kept so the projections
+// read the way they always did while there is only one definition to drift.
 func TaskIsLive(task swarm.Task) bool {
-	return task.DesiredState != swarm.TaskStateShutdown &&
-		task.DesiredState != swarm.TaskStateRemove
+	return cache.TaskIsLive(task)
 }
 
 // serviceNode is the vertex a service contributes to either view, so the two

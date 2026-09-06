@@ -26,7 +26,8 @@ const (
 // that have no tracker at all.
 func (s *Server) serviceRestarts(serviceID string) *cluster.ServiceRestarts {
 	return &cluster.ServiceRestarts{
-		LastHour: s.cache.RestartCount(serviceID, restartWindowShort),
-		LastWeek: s.cache.RestartCount(serviceID, restartWindowLong),
+		LastHour:      s.cache.RestartCount(serviceID, restartWindowShort),
+		LastWeek:      s.cache.RestartCount(serviceID, restartWindowLong),
+		TrackingSince: s.cache.RestartTrackingSince().UTC().Format(time.RFC3339),
 	}
 }

@@ -216,6 +216,13 @@ func New(onChange OnChangeFunc) *Cache {
 
 func (c *Cache) History() *History { return c.history }
 
+// RestartTrackingSince is the earliest moment the restart tracker can account
+// for. Reported beside every restart count, because a count is otherwise
+// labelled by a window it may not span — see RestartTracker.TrackingSince.
+func (c *Cache) RestartTrackingSince() time.Time {
+	return c.restarts.TrackingSince()
+}
+
 // RestartCount returns the number of involuntary task terminations recorded for
 // serviceID within the lookback window (capped at the tracker horizon).
 func (c *Cache) RestartCount(serviceID string, lookback time.Duration) uint64 {
@@ -774,13 +781,47 @@ func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
 	return out
 }
 
+// TaskIsLive reports whether the orchestrator still intends this task to run.
+//
+// Swarm keeps a task record for every replica it has replaced, so a service
+// that has been updated — or one that restarts in a loop — accumulates
+// terminal records. Those are history, not slots awaiting a start.
+// DesiredState is the orchestrator's own answer, which is why it decides this
+// rather than the task's current state — a task still coming up has no
+// terminal state yet but is genuinely awaited.
+//
+// It lives here rather than beside the topology builders that named it because
+// the replica counters below need it and internal/cluster imports this package
+// rather than the other way round. cluster.TaskIsLive delegates to it, so the
+// placement views, the digests and every replica figure apply one rule.
+func TaskIsLive(task swarm.Task) bool {
+	return task.DesiredState != swarm.TaskStateShutdown &&
+		task.DesiredState != swarm.TaskStateRemove
+}
+
+// countsAsRunningReplica reports whether a task should be counted towards a
+// service's running replica total.
+//
+// Status.State alone is not enough, for two reasons that both bite hard. A
+// task Swarm has marked for shutdown — during a rolling update, or a
+// scale-down — keeps Status.State: running while it drains, so counting it
+// reports more replicas than the service has. And a task Docker has since
+// garbage-collected past its history limit keeps whatever status it was last
+// inspected with *forever*, because the inspect that would correct it 404s: a
+// service restarting in a loop accumulated thirty such records, every one of
+// them reported running, inflating find, describe, the placement view and the
+// convergence wait at once.
+func countsAsRunningReplica(task swarm.Task) bool {
+	return task.Status.State == swarm.TaskStateRunning && TaskIsLive(task)
+}
+
 // RunningTaskCount returns the number of tasks in "running" state for a service.
 func (c *Cache) RunningTaskCount(serviceID string) int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	count := 0
 	for id := range c.tasksByService[serviceID] {
-		if t, ok := c.tasks[id]; ok && t.Status.State == swarm.TaskStateRunning {
+		if t, ok := c.tasks[id]; ok && countsAsRunningReplica(t) {
 			count++
 		}
 	}
@@ -801,7 +842,7 @@ func (c *Cache) RunningTaskCounts() map[string]int {
 
 	counts := make(map[string]int, len(c.services))
 	for _, t := range c.tasks {
-		if t.Status.State == swarm.TaskStateRunning {
+		if countsAsRunningReplica(t) {
 			counts[t.ServiceID]++
 		}
 	}
@@ -896,7 +937,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 	// same map to name the degraded services.
 	runningByService := make(map[string]int, len(c.services))
 	for _, t := range c.tasks {
-		if t.Status.State == swarm.TaskStateRunning {
+		if countsAsRunningReplica(t) {
 			runningByService[t.ServiceID]++
 		}
 	}

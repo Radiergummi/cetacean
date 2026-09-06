@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Replica counts are correct again for services that restart frequently. A task Swarm has replaced, or one Docker has already removed, was still counted as running until the next five-minutely re-sync, so a service crash-looping every few seconds was reported as having as many as thirteen running replicas against a desired one. The same wrong figure reached the resource listings, a stack's summary, the placement graph and the cluster's task total
+- Waiting for a deploy no longer reports failure on a rollout that succeeded. Because the running count could exceed the desired one, the wait was left looking for an exact match that never came and timed out with "waiting: 3/2 replicas running" on services Docker had already finished updating — the answer an agent acts on by rolling back work that was fine
+- A service restarting in a loop is now reported as failing. It was described as healthy whenever it happened to be sampled between restarts, was missing from the cluster's list of what is wrong, and its recent failures were listed as none — so the one question the failure list exists to answer came back empty
+- Editing a service's ports by reading them and writing them back no longer destroys the published port. The two shapes differ, and the unrecognised fields were dropped rather than refused, so the service ended up publishing an unusable port with no error anywhere. Any service section given a field it does not have is now refused, naming the field, and a port with no target port is rejected
+- Log reads now say when they could not reach the start of the requested window. A busy service fills the read's line budget before that, so asking for the last five minutes could return the last few seconds and read as though nothing had happened
+- The change timeline now reports how far back it can answer for. The record is kept in memory and starts afresh when Cetacean restarts, so a question reaching back further than that was answered from a much shorter window without saying so
+- Restart counts now report how far back they were counted, so a fault that has run for days is no longer indistinguishable from one that began within the hour when Cetacean has been up for less than its counting window
+- The example Compose file now gives Cetacean a volume for its state. Without one its saved state, including the restart history behind the flaky-service recommendation, was lost every time the container was replaced
+
 ## [0.13.0] - 2026-09-06
 
 ### Added

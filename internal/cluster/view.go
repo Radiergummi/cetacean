@@ -327,6 +327,15 @@ type Digest struct {
 type ServiceRestarts struct {
 	LastHour uint64 `json:"lastHour"`
 	LastWeek uint64 `json:"lastWeek"`
+
+	// TrackingSince is the earliest moment the counts above can account for.
+	// The tracker is built at startup, so on a Cetacean that has not been up
+	// for a week — or one whose snapshot does not persist — both figures are
+	// bounded by it rather than by their labels, and the ratio the two windows
+	// exist to expose collapses: identical counts read as a fault that began
+	// within the hour when it may have run for days. Compare it against the
+	// window before concluding "new".
+	TrackingSince string `json:"trackingSince,omitempty"`
 }
 
 // Related is one cross-reference from a Digest.
@@ -384,19 +393,31 @@ func ServiceDigest(
 			continue
 		}
 
-		// A task the orchestrator has already replaced explains history, not
-		// the current state, and including it would attribute an old failure
-		// to a service that has since recovered.
-		if !TaskIsLive(task) {
-			continue
-		}
-
 		// Ordinary mid-startup or mid-rollout states — preparing, starting,
 		// assigned, new — are not failures; DeriveServiceState already
 		// reports "pending" for those without help. A task only earns a
 		// place here when Swarm itself calls it an involuntary failure or
-		// gives an explicit cause for not running.
+		// gives an explicit cause for not running. This is also what keeps a
+		// rolling update quiet: it leaves a cleanly shut-down task behind for
+		// every replica it moved, and none of them are failures.
 		if !cache.IsFailureState(task.Status.State) && task.Status.Err == "" {
+			continue
+		}
+
+		// Whether the orchestrator has since replaced the task decides nothing
+		// here, and excluding replaced ones emptied the list precisely when it
+		// mattered: a crash loop is made entirely of replaced tasks, because
+		// Swarm marks one for shutdown the instant it fails and starts
+		// another. The guard only ever looked correct because the cache held
+		// those tasks with a stale DesiredState that let them through; once
+		// the watcher learned to observe the terminal transition it did what
+		// it said, and "why is this restarting in a loop" came back empty.
+		//
+		// It still has to hold for a task that is merely *unplaced* rather
+		// than failed — one carrying an explicit cause but no failure state,
+		// which is how an unschedulable replica reports. A replaced one of
+		// those is genuinely history.
+		if !cache.IsFailureState(task.Status.State) && !TaskIsLive(task) {
 			continue
 		}
 

@@ -43,6 +43,10 @@ type Store interface {
 	DeleteService(string)
 	SetTask(swarm.Task)
 	DeleteTask(string)
+
+	// GetTask lets the watcher tell an already-settled task from one whose
+	// terminal state Swarm has not published yet — see scheduleSettle.
+	GetTask(string) (swarm.Task, bool)
 	SetConfig(swarm.Config)
 	DeleteConfig(string)
 	SetSecret(swarm.Secret)
@@ -68,6 +72,15 @@ type Watcher struct {
 	syncOnce     sync.Once
 	ready        chan struct{}
 	snapshotPath string
+
+	// settleDelay is how long to wait before re-reading a task whose container
+	// has just exited. See scheduleSettle.
+	settleDelay time.Duration
+
+	// settles tracks the re-reads still outstanding, so a test can wait for
+	// them instead of sleeping and production can be sure they are not
+	// silently dropped.
+	settles sync.WaitGroup
 }
 
 func NewWatcher(client DockerClient, store Store, snapshotPath string) *Watcher {
@@ -76,7 +89,13 @@ func NewWatcher(client DockerClient, store Store, snapshotPath string) *Watcher 
 		store:        store,
 		ready:        make(chan struct{}),
 		snapshotPath: snapshotPath,
+		settleDelay:  defaultSettleDelay,
 	}
+}
+
+// waitForSettles blocks until every scheduled re-read has finished.
+func (w *Watcher) waitForSettles() {
+	w.settles.Wait()
 }
 
 // Ready returns a channel that is closed after the first full sync completes.
@@ -169,6 +188,12 @@ func (w *Watcher) Resync(ctx context.Context) error {
 const (
 	debounceWindow = 50 * time.Millisecond
 	workerCount    = 4
+
+	// defaultSettleDelay is how long Swarm is given to reconcile a task record
+	// after the container behind it exits. Long enough that the second read
+	// sees the terminal state, short enough that the count is only briefly
+	// wrong — the alternative was waiting out the five-minute re-sync.
+	defaultSettleDelay = 750 * time.Millisecond
 )
 
 // eventKey identifies a unique resource for coalescing.
@@ -180,6 +205,25 @@ type eventKey struct {
 // coalesced holds the latest action for a given resource.
 type coalesced struct {
 	action string
+}
+
+// actionSettle marks a task update triggered by its container ending, which
+// needs a second read once Swarm has caught up. It is internal to the watcher
+// and never reaches applyRemove, which only ever tests for "remove".
+const actionSettle = "settle"
+
+// isContainerDeath reports whether a container event means the container has
+// stopped for good. Docker emits "die" for every exit; "kill" and "stop" are
+// the signals that precede one and are treated the same way, since the task
+// behind them is on its way out either way.
+func isContainerDeath(action events.Action) bool {
+	switch action {
+	case "die", "kill", "stop", "destroy", "oom":
+		return true
+
+	default:
+		return false
+	}
 }
 
 func (w *Watcher) watchEvents(ctx context.Context) {
@@ -271,7 +315,15 @@ func (w *Watcher) eventKeyFromMsg(msg events.Message) (eventKey, string) {
 		if taskID == "" {
 			return eventKey{}, ""
 		}
-		// Treat container events as task updates.
+
+		// Treat container events as task updates. A container ending is called
+		// out separately: it is the last event the task will ever produce, and
+		// Swarm has not yet reconciled the task record when it arrives — see
+		// scheduleSettle.
+		if isContainerDeath(msg.Action) {
+			return eventKey{resourceType: "task", id: taskID}, actionSettle
+		}
+
 		return eventKey{resourceType: "task", id: taskID}, "update"
 	case events.NetworkEventType:
 		action := string(msg.Action)
@@ -325,6 +377,51 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 		})
 	}
 	wg.Wait()
+
+	// Scheduled after the batch rather than inside it: the inspect above may
+	// already have read the settled record, and checking once here costs one
+	// map lookup instead of a goroutine per event.
+	for key, ev := range batch {
+		if ev.action == actionSettle {
+			w.scheduleSettle(ctx, key)
+		}
+	}
+}
+
+// scheduleSettle re-reads a task shortly after the container behind it exited.
+//
+// A container dying is the last event a failed task ever produces, and Swarm
+// reconciles the task record a moment after the container it wraps. Inspecting
+// on the event itself therefore reads the task as still running, desired
+// running, and since nothing further arrives the cache keeps that reading
+// until the five-minutely full re-sync corrects it. Everything derived from it
+// overcounts in the meantime: a service crash-looping every eight seconds
+// reported four running replicas against a desired one, `find` and the
+// placement view repeated the figure, and the convergence wait behind every
+// deploy could not settle because the count it waited on never fell.
+//
+// One delayed read closes it. It is skipped when the first inspect already
+// saw a terminal state — a task that lost its container long enough ago, or a
+// daemon that reconciled before we asked — so the common path pays nothing.
+func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey) {
+	if task, ok := w.store.GetTask(key.id); ok && !taskSettled(task) {
+		w.settles.Go(func() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(w.settleDelay):
+			}
+
+			w.inspectAndApply(ctx, key)
+		})
+	}
+}
+
+// taskSettled reports whether Swarm has finished with a task, so there is
+// nothing a second read could learn. DesiredState is the orchestrator's own
+// answer and moves first; Status follows.
+func taskSettled(task swarm.Task) bool {
+	return !cache.TaskIsLive(task) || cache.IsTerminalState(task.Status.State)
 }
 
 func (w *Watcher) applyRemove(key eventKey) {
@@ -355,24 +452,55 @@ func (w *Watcher) handleEvent(ctx context.Context, msg events.Message) {
 	}
 	if action == "remove" {
 		w.applyRemove(key)
-	} else {
-		w.inspectAndApply(ctx, key)
+
+		return
+	}
+
+	w.inspectAndApply(ctx, key)
+
+	if action == actionSettle {
+		w.scheduleSettle(ctx, key)
 	}
 }
 
 func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
 	resource, err := w.inspectWithRetry(ctx, key)
 	if err != nil {
-		// Definitive failure after retries: log loudly so the operator
-		// can correlate cache drift with the underlying Docker error.
-		// The cache stays as-is; the periodic 5min re-sync will eventually
-		// reconcile, but manual Resync via the admin endpoint recovers faster.
+		// A not-found that outlived every retry is the daemon's answer rather
+		// than a race, so the resource is gone and the cached record with it.
+		// Swarm garbage-collects a task's record once it falls out of the
+		// history window and emits no removal event when it does, so this is
+		// the only signal that it went: holding the record left a task Docker
+		// had forgotten in every listing, still carrying the status it was
+		// last inspected with, until the five-minutely re-sync swept it. On a
+		// service restarting in a loop that is dozens of phantom replicas.
+		//
+		// This is decided here rather than inside inspectWithRetry because the
+		// retries are what tell the two cases apart: during a stack deploy a
+		// 404 means "not registered yet", and giving up on the first one would
+		// drop resources that were about to exist.
+		if cerrdefs.IsNotFound(err) {
+			slog.Debug(
+				"resource no longer exists; dropping cached record",
+				"type", string(key.resourceType),
+				"id", key.id,
+			)
+			w.applyRemove(key)
+
+			return
+		}
+
+		// Anything else is transient as far as we can tell, and absence of
+		// evidence is not evidence of absence: the cache stays as-is and the
+		// periodic re-sync reconciles it. Log loudly so the operator can
+		// correlate cache drift with the underlying Docker error.
 		slog.Warn(
 			"inspect failed; cache may drift until next periodic re-sync",
 			"type", string(key.resourceType),
 			"id", key.id,
 			"error", err,
 		)
+
 		return
 	}
 	switch v := resource.(type) {
