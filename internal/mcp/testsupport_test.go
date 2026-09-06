@@ -16,6 +16,43 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
+// callToolExpectingError is callTool's negative twin: it drives a real
+// tools/call, requires the result to be a tool error, and returns the raw
+// envelope so the caller can assert on the message.
+//
+// It exists because callTool fatals on IsError, so every refusal test was
+// open-coding the transport call, the decode and the IsError check — including
+// the load-bearing "not stubbed" assertion, which is how these tests show the
+// refusal happened before the write client was ever touched.
+func callToolExpectingError(t *testing.T, handler http.Handler, params string) string {
+	t.Helper()
+
+	_, envelope := mcpModern(t, handler, 1, "tools/call", params)
+	if envelope.Error != nil {
+		t.Fatalf("tools/call failed at the protocol level: %+v", envelope.Error)
+	}
+
+	var result toolCallResult
+	if err := json.Unmarshal(envelope.Result, &result); err != nil {
+		t.Fatalf("decode tool result: %v (raw %s)", err, envelope.Result)
+	}
+
+	if !result.IsError {
+		t.Fatalf("expected a tool error, got: %s", envelope.Result)
+	}
+
+	raw := string(envelope.Result)
+
+	// A refusal must happen before the Docker write client is reached; the
+	// fakes stub nothing, so their panic message reaching the caller means the
+	// tool wrote first and validated afterwards.
+	if strings.Contains(raw, "not stubbed") {
+		t.Errorf("the tool reached the write client before refusing: %s", raw)
+	}
+
+	return raw
+}
+
 // newTestServer returns a Server backed by an empty cache and the default MCP
 // config, for tests that care about protocol wiring rather than cluster data.
 func newTestServer(t *testing.T) *Server {

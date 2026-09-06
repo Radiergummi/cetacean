@@ -3,8 +3,11 @@ package mcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+
+	cerrdefs "github.com/containerd/errdefs"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -13,11 +16,15 @@ import (
 )
 
 // dockerNotFound is the error shape the daemon returns for a task whose record
-// Swarm has already retired, verbatim from a live cluster.
+// Swarm has already retired: the message verbatim from a live cluster, wrapped
+// in the errdefs sentinel the Docker client attaches to every 404. The wrap is
+// the part that matters — isNotFound classifies on the sentinel, so a fixture
+// carrying only the text would pin the message rather than the rule.
 //
 //nolint:staticcheck // ST1005: quoted verbatim from the daemon, not authored here.
-var dockerNotFound = errors.New(
-	"Error response from daemon: task pgdsuwjhafl2b7699796mm8oo not found",
+var dockerNotFound = fmt.Errorf(
+	"Error response from daemon: task pgdsuwjhafl2b7699796mm8oo not found: %w",
+	cerrdefs.ErrNotFound,
 )
 
 // TestTaskLogsExplainAPrunedRecord pins the fix for what the live evaluation

@@ -89,6 +89,16 @@ type ClusterSnapshot struct {
 	MaxNodeCPU        int            `json:"maxNodeCPU"`
 	MaxNodeMemory     int64          `json:"maxNodeMemory"`
 	LastSync          time.Time      `json:"lastSync"`
+
+	// RunningByService is the per-service running-task count Snapshot has to
+	// build anyway to decide converged versus degraded. It is handed back
+	// rather than discarded so a caller needing both — cluster status names
+	// the degraded services as well as counting them — walks the task table
+	// once instead of calling RunningTaskCounts for a second identical pass
+	// under a second lock. Not serialized: the REST /cluster payload is a
+	// published contract, and this is an aggregate its readers never asked
+	// for.
+	RunningByService map[string]int `json:"-"`
 }
 
 type OnChangeFunc func(Event)
@@ -882,7 +892,8 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		}
 	}
 
-	// Count running tasks per service
+	// Counted once and returned in the snapshot: BuildClusterStatus needs the
+	// same map to name the degraded services.
 	runningByService := make(map[string]int, len(c.services))
 	for _, t := range c.tasks {
 		if t.Status.State == swarm.TaskStateRunning {
@@ -928,6 +939,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		MaxNodeCPU:        int(maxNanoCPUs / 1e9),
 		MaxNodeMemory:     maxMemory,
 		LastSync:          c.lastSync,
+		RunningByService:  runningByService,
 	}
 }
 

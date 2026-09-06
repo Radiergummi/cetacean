@@ -28,18 +28,42 @@ type attachmentRef struct {
 
 	// Target is the file the resource is mounted as. A secret's target is
 	// relative to /run/secrets unless it is an absolute path; a config's is
-	// the path itself. Defaults to the resource's own name, which is what
-	// Swarm and the REST handler both do.
+	// the path itself. Left empty, it defaults to defaultSecretDir or the
+	// container root plus the resource's own name.
 	Target string `json:"target,omitempty"`
 }
 
-// file builds the mount target shared by both reference types.
-func (a attachmentRef) file(resourceName string) string {
+// Where a secret and a config land when the caller names no target. These are
+// the paths REST's PATCH /services/{id}/secrets and /configs already default
+// to, and the ones Docker's own CLI produces — a bare name would be read by
+// Swarm as relative to the container's working directory for a config, so the
+// same attachment made over the two transports mounted at two paths.
+const (
+	defaultSecretDir = "/run/secrets/"
+	defaultConfigDir = "/"
+)
+
+// file builds the mount target, defaulting to dir + the resource's own name.
+func (a attachmentRef) file(dir, resourceName string) string {
 	if a.Target != "" {
 		return a.Target
 	}
 
-	return resourceName
+	return dir + resourceName
+}
+
+// attachmentItemSchema is the JSON Schema for one entry of either array. It is
+// built here, beside decodeAttachments and attachmentRef, so the shape the
+// tools advertise and the shape they decode into cannot drift apart.
+func attachmentItemSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name":   map[string]any{"type": "string"},
+			"target": map[string]any{"type": "string"},
+		},
+		"required": []string{"name"},
+	}
 }
 
 // decodeAttachments reads the array argument both tools take.
@@ -122,7 +146,7 @@ func (s *Server) toolUpdateServiceSecrets(
 			SecretID:   sec.ID,
 			SecretName: sec.Spec.Name,
 			File: &swarm.SecretReferenceFileTarget{
-				Name: ref.file(sec.Spec.Name),
+				Name: ref.file(defaultSecretDir, sec.Spec.Name),
 				UID:  "0",
 				GID:  "0",
 				Mode: defaultAttachmentMode,
@@ -189,7 +213,7 @@ func (s *Server) toolUpdateServiceConfigs(
 			ConfigID:   cfg.ID,
 			ConfigName: cfg.Spec.Name,
 			File: &swarm.ConfigReferenceFileTarget{
-				Name: ref.file(cfg.Spec.Name),
+				Name: ref.file(defaultConfigDir, cfg.Spec.Name),
 				UID:  "0",
 				GID:  "0",
 				Mode: defaultAttachmentMode,

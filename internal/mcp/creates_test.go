@@ -125,21 +125,9 @@ func TestCreateSecretRejectsMalformedBase64(t *testing.T) {
 		config.OpsConfiguration,
 	).Handler()
 
-	_, envelope := mcpModern(t, handler, 1, "tools/call",
+	callToolExpectingError(t, handler,
 		`{"name":"create_secret","arguments":`+
 			`{"name":"x","data":"not!valid!base64","encoding":"base64"}}`)
-
-	var result toolCallResult
-	if err := json.Unmarshal(envelope.Result, &result); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-
-	if !result.IsError {
-		t.Fatal("expected an error for undecodable base64")
-	}
-	if strings.Contains(string(envelope.Result), "not stubbed") {
-		t.Error("the tool reached the write client despite an invalid payload")
-	}
 }
 
 func TestCreateConfigReturnsItsIdentity(t *testing.T) {

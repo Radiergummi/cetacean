@@ -9,6 +9,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/logs"
 )
@@ -30,6 +31,12 @@ const (
 
 // filterLogContains narrows lines to those holding sub, case-insensitively.
 // An empty sub keeps everything.
+//
+// The match is cluster.ContainsFoldNoAlloc rather than a lowered copy of every
+// message: a cluster-wide grep widens the tail tenfold and fans out over 25
+// services, so lowering each message allocates a copy of the whole read.
+// cluster.ContainsFold is deliberately not used — it adds segment-prefix
+// matching, which is what a *name* search means, not what a log grep does.
 func filterLogContains(lines []logs.LogLine, sub string) []logs.LogLine {
 	if sub == "" {
 		return lines
@@ -39,7 +46,7 @@ func filterLogContains(lines []logs.LogLine, sub string) []logs.LogLine {
 	kept := make([]logs.LogLine, 0, len(lines))
 
 	for _, line := range lines {
-		if strings.Contains(strings.ToLower(line.Message), needle) {
+		if cluster.ContainsFoldNoAlloc(line.Message, needle) {
 			kept = append(kept, line)
 		}
 	}
@@ -119,31 +126,20 @@ func (s *Server) readScopedLogs(
 
 	wg.Wait()
 
-	// Newest last, so the tail cut below keeps the newest lines.
-	sort.SliceStable(merged, func(i, j int) bool {
-		return merged[i].Timestamp < merged[j].Timestamp
-	})
-
-	wanted := opts.tail
-	if wanted <= 0 {
-		wanted = defaultLogTail
-	}
-	if len(merged) > wanted {
-		merged = merged[len(merged)-wanted:]
-	}
-
 	sort.Strings(failures)
 
-	if merged == nil {
-		merged = []logs.LogLine{}
-	}
 	if failures == nil {
 		failures = []string{}
 	}
 
-	resp := LogResourceResponse{Lines: merged, Errors: failures}
-	if len(merged) > 0 {
-		resp.Cursor = merged[len(merged)-1].Timestamp
+	// The same ordering, cut and cursor the single-service read applies: a
+	// scoped tail resumes from a cursor internal/logs produced, and honours
+	// the same tail bounds, because it is the same function.
+	resp := finishLogRead(merged, boundLogTail(opts.tail), opts.since)
+	resp.Errors = failures
+
+	if resp.Lines == nil {
+		resp.Lines = []logs.LogLine{}
 	}
 
 	return resp, nil

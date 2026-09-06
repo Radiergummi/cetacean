@@ -62,23 +62,26 @@ func (s *Server) toolGetEvents(
 
 	history := s.cache.History()
 
-	// The whole ring rather than a page of it, because every filter below is
-	// applied after the ring returns. A busy cluster records mostly task
-	// churn, so a page would fill with it and a read for types: ["service"]
-	// would come back empty and truncated: false — which says "that is all
-	// there was" about a window the caller never asked for.
+	// The whole ring rather than a page of it, because the type and `until`
+	// filters below are applied after the ring returns. A busy cluster records
+	// mostly task churn, so a page would fill with it and a read for
+	// types: ["service"] would come back empty and truncated: false — which
+	// says "that is all there was" about a window the caller never asked for.
+	//
+	// The caller's `since` is the one bound that can be pushed down: entries come back
+	// newest-first, so it ends the walk rather than filtering its result, and
+	// a five-minute window no longer copies ten thousand entries to discard
+	// almost all of them.
 	entries := history.List(cache.HistoryQuery{
 		ResourceID: req.GetString("resource", ""),
 		Limit:      history.Size(),
+		After:      since,
 	})
 
 	matched := make([]cache.HistoryEntry, 0, limit)
 
 	for _, e := range entries {
 		if len(wanted) > 0 && !wanted[string(e.Type)] {
-			continue
-		}
-		if !since.IsZero() && !e.Timestamp.After(since) {
 			continue
 		}
 		if !until.IsZero() && e.Timestamp.After(until) {

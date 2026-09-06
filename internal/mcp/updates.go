@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -76,8 +77,19 @@ var serviceSectionKeys = map[string][]string{
 	sectionMounts: {"mountTargets", "bindMounts"},
 }
 
-// updateServiceSections is the set of sections update_service dispatches, and
-// is deliberately narrower than serviceSectionKeys.
+// sectionWriter decodes one section's `value` and applies it, returning the
+// service as Docker left it. Splitting the decode out is not worth it: the
+// shape `value` takes is exactly what decides which writer runs.
+type sectionWriter func(
+	wc DockerWriteClient,
+	ctx context.Context,
+	id string,
+	req mcplib.CallToolRequest,
+	section string,
+) (swarm.Service, error)
+
+// serviceSectionWriters is what update_service can actually perform, and is
+// deliberately narrower than serviceSectionKeys.
 //
 // The two are not the same question. serviceSectionKeys answers "how is this
 // section reported", and the attachment editors need an entry there because
@@ -88,20 +100,141 @@ var serviceSectionKeys = map[string][]string{
 // — so it is a tool of its own.
 //
 // Validating against the projection table conflated the two. update_service
-// accepted section "secrets", reached no case in the switch, and answered with
-// a zero-valued result that reads as a write that landed.
-var updateServiceSections = []string{
-	sectionEnv,
-	sectionLabels,
-	sectionResources,
-	sectionPlacement,
-	sectionPorts,
-	sectionUpdatePolicy,
-	sectionRollbackPolicy,
-	sectionLogDriver,
-	sectionHealthcheck,
-	sectionCommand,
+// accepted section "secrets", reached no case in a switch, and answered with a
+// zero-valued result that reads as a write that landed. The accepted list, the
+// advertised enum and the dispatch are now one table rather than three things
+// that agreed by inspection: a section here is dispatched by construction, and
+// one that is not here is refused before any write client is resolved.
+var serviceSectionWriters = map[string]sectionWriter{
+	sectionEnv: func(
+		wc DockerWriteClient, ctx context.Context, id string,
+		req mcplib.CallToolRequest, _ string,
+	) (swarm.Service, error) {
+		patch, err := requireStringMapPatch(req, "value")
+		if err != nil {
+			return swarm.Service{}, err
+		}
+
+		return wc.UpdateServiceEnv(ctx, id, mergePatchMutator(patch))
+	},
+
+	sectionLabels: func(
+		wc DockerWriteClient, ctx context.Context, id string,
+		req mcplib.CallToolRequest, _ string,
+	) (swarm.Service, error) {
+		patch, err := requireStringMapPatch(req, "value")
+		if err != nil {
+			return swarm.Service{}, err
+		}
+
+		return wc.UpdateServiceLabels(ctx, id, mergePatchMutator(patch))
+	},
+
+	sectionResources: func(
+		wc DockerWriteClient, ctx context.Context, id string,
+		req mcplib.CallToolRequest, section string,
+	) (swarm.Service, error) {
+		resources, err := decodeSection[swarm.ResourceRequirements](req, section)
+		if err != nil {
+			return swarm.Service{}, err
+		}
+
+		return wc.UpdateServiceResources(ctx, id, &resources)
+	},
+
+	sectionPlacement: func(
+		wc DockerWriteClient, ctx context.Context, id string,
+		req mcplib.CallToolRequest, section string,
+	) (swarm.Service, error) {
+		placement, err := decodeSection[swarm.Placement](req, section)
+		if err != nil {
+			return swarm.Service{}, err
+		}
+
+		return wc.UpdateServicePlacement(ctx, id, &placement)
+	},
+
+	sectionPorts: func(
+		wc DockerWriteClient, ctx context.Context, id string,
+		req mcplib.CallToolRequest, section string,
+	) (swarm.Service, error) {
+		ports, err := decodeSection[[]swarm.PortConfig](req, section)
+		if err != nil {
+			return swarm.Service{}, err
+		}
+
+		return wc.UpdateServicePorts(ctx, id, ports)
+	},
+
+	sectionUpdatePolicy: func(
+		wc DockerWriteClient, ctx context.Context, id string,
+		req mcplib.CallToolRequest, section string,
+	) (swarm.Service, error) {
+		policy, err := decodeSection[swarm.UpdateConfig](req, section)
+		if err != nil {
+			return swarm.Service{}, err
+		}
+
+		return wc.UpdateServiceUpdatePolicy(ctx, id, &policy)
+	},
+
+	sectionRollbackPolicy: func(
+		wc DockerWriteClient, ctx context.Context, id string,
+		req mcplib.CallToolRequest, section string,
+	) (swarm.Service, error) {
+		policy, err := decodeSection[swarm.UpdateConfig](req, section)
+		if err != nil {
+			return swarm.Service{}, err
+		}
+
+		return wc.UpdateServiceRollbackPolicy(ctx, id, &policy)
+	},
+
+	sectionLogDriver: func(
+		wc DockerWriteClient, ctx context.Context, id string,
+		req mcplib.CallToolRequest, section string,
+	) (swarm.Service, error) {
+		driver, err := decodeSection[swarm.Driver](req, section)
+		if err != nil {
+			return swarm.Service{}, err
+		}
+
+		return wc.UpdateServiceLogDriver(ctx, id, &driver)
+	},
+
+	sectionHealthcheck: func(
+		wc DockerWriteClient, ctx context.Context, id string,
+		req mcplib.CallToolRequest, section string,
+	) (swarm.Service, error) {
+		value, err := decodeSection[healthcheckValue](req, section)
+		if err != nil {
+			return swarm.Service{}, err
+		}
+
+		hc, err := value.toHealthConfig()
+		if err != nil {
+			return swarm.Service{}, err
+		}
+
+		return wc.UpdateServiceHealthcheck(ctx, id, hc)
+	},
+
+	sectionCommand: func(
+		wc DockerWriteClient, ctx context.Context, id string,
+		req mcplib.CallToolRequest, section string,
+	) (swarm.Service, error) {
+		value, err := decodeSection[commandValue](req, section)
+		if err != nil {
+			return swarm.Service{}, err
+		}
+
+		return wc.UpdateServiceContainerConfig(ctx, id, value.applyTo)
+	},
 }
+
+// updateServiceSections is the advertised enum and the error message's list:
+// the table's own keys, sorted so tools/list is byte-stable across runs.
+var updateServiceSections = slices.Sorted(maps.Keys(serviceSectionWriters))
 
 // nodeSectionKeys is the node counterpart, over NodeDigest's details.
 var nodeSectionKeys = map[string][]string{
@@ -219,7 +352,8 @@ func (s *Server) toolUpdateService(
 		return "", err
 	}
 
-	if !slices.Contains(updateServiceSections, section) {
+	write, dispatched := serviceSectionWriters[section]
+	if !dispatched {
 		// A section this tool does not dispatch but the projection knows
 		// about is reached by a tool of its own, and the error is the only
 		// place a caller who guessed finds out which one.
@@ -249,95 +383,7 @@ func (s *Server) toolUpdateService(
 		return "", err
 	}
 
-	var updated swarm.Service
-
-	switch section {
-	case sectionEnv:
-		patch, patchErr := requireStringMapPatch(req, "value")
-		if patchErr != nil {
-			return "", patchErr
-		}
-
-		updated, err = writeClient.UpdateServiceEnv(ctx, id, mergePatchMutator(patch))
-
-	case sectionLabels:
-		patch, patchErr := requireStringMapPatch(req, "value")
-		if patchErr != nil {
-			return "", patchErr
-		}
-
-		updated, err = writeClient.UpdateServiceLabels(ctx, id, mergePatchMutator(patch))
-
-	case sectionResources:
-		resources, decodeErr := decodeSection[swarm.ResourceRequirements](req, section)
-		if decodeErr != nil {
-			return "", decodeErr
-		}
-
-		updated, err = writeClient.UpdateServiceResources(ctx, id, &resources)
-
-	case sectionPlacement:
-		placement, decodeErr := decodeSection[swarm.Placement](req, section)
-		if decodeErr != nil {
-			return "", decodeErr
-		}
-
-		updated, err = writeClient.UpdateServicePlacement(ctx, id, &placement)
-
-	case sectionPorts:
-		ports, decodeErr := decodeSection[[]swarm.PortConfig](req, section)
-		if decodeErr != nil {
-			return "", decodeErr
-		}
-
-		updated, err = writeClient.UpdateServicePorts(ctx, id, ports)
-
-	case sectionUpdatePolicy:
-		policy, decodeErr := decodeSection[swarm.UpdateConfig](req, section)
-		if decodeErr != nil {
-			return "", decodeErr
-		}
-
-		updated, err = writeClient.UpdateServiceUpdatePolicy(ctx, id, &policy)
-
-	case sectionRollbackPolicy:
-		policy, decodeErr := decodeSection[swarm.UpdateConfig](req, section)
-		if decodeErr != nil {
-			return "", decodeErr
-		}
-
-		updated, err = writeClient.UpdateServiceRollbackPolicy(ctx, id, &policy)
-
-	case sectionLogDriver:
-		driver, decodeErr := decodeSection[swarm.Driver](req, section)
-		if decodeErr != nil {
-			return "", decodeErr
-		}
-
-		updated, err = writeClient.UpdateServiceLogDriver(ctx, id, &driver)
-
-	case sectionHealthcheck:
-		value, decodeErr := decodeSection[healthcheckValue](req, section)
-		if decodeErr != nil {
-			return "", decodeErr
-		}
-
-		hc, convErr := value.toHealthConfig()
-		if convErr != nil {
-			return "", convErr
-		}
-
-		updated, err = writeClient.UpdateServiceHealthcheck(ctx, id, hc)
-
-	case sectionCommand:
-		value, decodeErr := decodeSection[commandValue](req, section)
-		if decodeErr != nil {
-			return "", decodeErr
-		}
-
-		updated, err = writeClient.UpdateServiceContainerConfig(ctx, id, value.applyTo)
-	}
-
+	updated, err := write(writeClient, ctx, id, req, section)
 	if err != nil {
 		return "", err
 	}

@@ -48,6 +48,23 @@ type ClusterCapacity struct {
 // nanoCPUsPerCore is Docker's fixed-point scale: NanoCPUs of 1e9 is one core.
 const nanoCPUsPerCore = 1e9
 
+// CapacityOf puts a snapshot's two CPU figures in the same unit.
+//
+// It is the one place that correction is made. cache.ClusterSnapshot reports
+// TotalCPU in whole cores and ReservedCPU in nanoCPUs under two adjacent names
+// that carry neither unit, so every reader has to know the quirk; stating it
+// twice is how the two readers come to disagree by nine orders of magnitude.
+// Total and per-node CPU the snapshot has already divided down, so they are
+// only widened, not rescaled.
+func CapacityOf(snap cache.ClusterSnapshot) ClusterCapacity {
+	return ClusterCapacity{
+		TotalCPUCores:       float64(snap.TotalCPU),
+		ReservedCPUCores:    float64(snap.ReservedCPU) / nanoCPUsPerCore,
+		TotalMemoryBytes:    snap.TotalMemory,
+		ReservedMemoryBytes: snap.ReservedMemory,
+	}
+}
+
 // BuildClusterStatus assembles the landing view.
 //
 // services and nodes are the caller's already-ACL-filtered slices, and running
@@ -68,12 +85,7 @@ func BuildClusterStatus(
 		UnhealthyServices: []Row{},
 		UnhealthyNodes:    []Row{},
 		Rollouts:          []Row{},
-		Capacity: ClusterCapacity{
-			TotalCPUCores:       float64(snap.TotalCPU),
-			ReservedCPUCores:    float64(snap.ReservedCPU) / nanoCPUsPerCore,
-			TotalMemoryBytes:    snap.TotalMemory,
-			ReservedMemoryBytes: snap.ReservedMemory,
-		},
+		Capacity:          CapacityOf(snap),
 	}
 
 	for _, row := range RowsForServices(services, running) {

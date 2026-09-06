@@ -39,6 +39,10 @@ const (
 // a drain are a moving target, and cluster capacity is already reported by the
 // cluster status read.
 //
+// Only the target's own tasks are read, so a caller holding the node's task
+// index may pass that rather than the cluster's — internal/mcp's drainImpact
+// does, and a wider slice is merely filtered down again here.
+//
 // clusterNodes, tasks and services must already be filtered to what the caller
 // may read; a service whose tasks reference nothing visible simply does not
 // appear, the same rule the other two views follow. That cuts both ways here,

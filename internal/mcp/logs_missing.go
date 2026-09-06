@@ -2,17 +2,22 @@ package mcp
 
 import (
 	"fmt"
-	"strings"
+
+	cerrdefs "github.com/containerd/errdefs"
 )
 
 // isNotFound reports whether the daemon refused a read because the record is
-// gone. Docker's API returns this as plain text on the error rather than a
-// typed sentinel the client package exports for the log endpoints, so this
-// matches on the message the daemon actually sends:
+// gone.
 //
-//	Error response from daemon: task <id> not found
+// The classification is the SDK's own: every non-2xx response the Docker
+// client returns is wrapped by httpErrorFromStatusCode, so a 404 from the log
+// endpoints carries cerrdefs.ErrNotFound exactly as one from any other call
+// does — the same predicate internal/api's writeDockerError already uses.
+// Matching the daemon's message text instead would also claim any unrelated
+// failure whose wording happens to contain the phrase, and the caller would be
+// told, confidently, that Swarm had retired a record it never lost.
 func isNotFound(err error) bool {
-	return strings.Contains(strings.ToLower(err.Error()), "not found")
+	return cerrdefs.IsNotFound(err)
 }
 
 // explainMissingTaskLogs turns the daemon's "task not found" into something a

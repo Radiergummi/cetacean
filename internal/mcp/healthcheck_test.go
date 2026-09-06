@@ -97,29 +97,12 @@ func TestUpdateServiceRejectsANonDurationInterval(t *testing.T) {
 
 	handler := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsConfiguration).Handler()
 
-	// callTool fatals on an error result, which is what this test is here to
-	// inspect, so it goes through the transport directly.
-	_, envelope := mcpModern(t, handler, 1, "tools/call",
+	raw := callToolExpectingError(t, handler,
 		`{"name":"update_service","arguments":{"id":"web",`+
 			`"section":"healthcheck","value":{"test":["CMD","true"],"interval":"ten seconds"}}}`)
 
-	var result toolCallResult
-	if err := json.Unmarshal(envelope.Result, &result); err != nil {
-		t.Fatalf("decode tool result: %v (raw %s)", err, envelope.Result)
-	}
-
-	if !result.IsError {
-		t.Fatal("expected an error for an unparseable duration")
-	}
-
-	if !strings.Contains(string(envelope.Result), "interval") {
-		t.Errorf("the error does not name the offending field: %s", envelope.Result)
-	}
-
-	// The write must not have been attempted: a refusal happens before Docker
-	// is touched, which is why the fake stubs nothing.
-	if strings.Contains(string(envelope.Result), "not stubbed") {
-		t.Error("the tool reached the write client despite an invalid value")
+	if !strings.Contains(raw, "interval") {
+		t.Errorf("the error does not name the offending field: %s", raw)
 	}
 }
 

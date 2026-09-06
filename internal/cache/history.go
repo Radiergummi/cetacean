@@ -22,6 +22,17 @@ type HistoryQuery struct {
 	BeforeID     uint64
 	NameContains string // case-insensitive substring match on Name
 	Limit        int
+
+	// After bounds the walk rather than the result: entries are visited
+	// newest-first, so the first one at or before it ends the scan. A caller
+	// asking for the last five minutes of a full ring would otherwise copy all
+	// ten thousand entries — under the read lock every Append contends with —
+	// and discard almost all of them. The bound is exclusive, matching the
+	// filter it replaced. Zero means unbounded.
+	//
+	// Named for the comparison rather than "since", which on this type already
+	// means the ID-based resume the SSE stream uses (History.Since).
+	After time.Time
 }
 
 type History struct {
@@ -193,10 +204,10 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 	// Fast path: when filtering by resource ID, use the per-resource index
 	// instead of scanning the entire ring buffer.
 	if q.ResourceID != "" {
-		return h.listByResource(q.ResourceID, q.Type, q.BeforeID, q.NameContains, limit)
+		return h.listByResource(q, limit)
 	}
 
-	var result []HistoryEntry
+	result := make([]HistoryEntry, 0, limit)
 
 	// Iterate newest-first from cursor-1 backwards
 	total := h.size
@@ -220,6 +231,11 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 			continue
 		}
 
+		// Newest-first, so everything past this point is older still.
+		if !q.After.IsZero() && !e.Timestamp.After(q.After) {
+			break
+		}
+
 		if q.Type != "" && e.Type != q.Type {
 			continue
 		}
@@ -236,43 +252,46 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 	return result
 }
 
-func (h *History) listByResource(
-	resourceID string,
-	typeFilter EventType,
-	beforeID uint64,
-	nameContains string,
-	limit int,
-) []HistoryEntry {
-	ring := h.byResource[resourceID]
+// listByResource answers a query already known to name a resource, taking the
+// whole query rather than five of its fields so a field added to HistoryQuery
+// is honoured on both paths or on neither — a filter the indexed path silently
+// ignored would make one query mean two things.
+func (h *History) listByResource(q HistoryQuery, limit int) []HistoryEntry {
+	ring := h.byResource[q.ResourceID]
 	if ring == nil {
 		return nil
 	}
 
-	var result []HistoryEntry
-	pastCursor := beforeID == 0
+	result := make([]HistoryEntry, 0, limit)
+	pastCursor := q.BeforeID == 0
 
 	ring.iterNewest(func(idx int) bool {
 		e := h.entries[idx]
 
 		// Skip stale entries: the ring buffer slot may have been overwritten
 		// by a different resource's entry since the index was recorded.
-		if e.ResourceID != resourceID {
+		if e.ResourceID != q.ResourceID {
 			return true
 		}
 
 		if !pastCursor {
-			if e.ID == beforeID {
+			if e.ID == q.BeforeID {
 				pastCursor = true
 			}
 			return true
 		}
 
-		if typeFilter != "" && e.Type != typeFilter {
+		// Newest-first here too, so this ends the walk rather than skipping.
+		if !q.After.IsZero() && !e.Timestamp.After(q.After) {
+			return false
+		}
+
+		if q.Type != "" && e.Type != q.Type {
 			return true
 		}
 
-		if nameContains != "" && !strings.Contains(
-			strings.ToLower(e.Name), strings.ToLower(nameContains),
+		if q.NameContains != "" && !strings.Contains(
+			strings.ToLower(e.Name), strings.ToLower(q.NameContains),
 		) {
 			return true
 		}

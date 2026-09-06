@@ -7,6 +7,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // createResult is what a create answers with: enough to reference the new
@@ -69,125 +71,132 @@ func createLabels(req mcplib.CallToolRequest) (map[string]string, error) {
 	return labels, nil
 }
 
-// toolCreateSecret creates a Swarm secret.
-//
-// Swarm secrets are immutable, so "rotate this password" is three calls in
-// order: create the replacement, repoint every service that uses it, remove the
-// old one. Cetacean could previously only do the third, which made the whole
-// sequence impossible rather than merely awkward — this is the first.
-//
-// The ACL key is the secret's name, matching every other secret write and the
-// REST route: there is no ID yet to key on, which is the one respect in which a
-// create differs from the edits around it.
-func (s *Server) toolCreateSecret(
-	ctx context.Context,
-	req mcplib.CallToolRequest,
-) (string, error) {
-	name, err := req.RequireString("name")
-	if err != nil {
-		return "", err
-	}
+// dataResourceSpec is the half of a create that differs between a secret and a
+// config: what to call the thing, how to write it, and how to seed it. The
+// other half — require a name, check the write grant before anything else,
+// require a write client, decode the payload, read the labels — is identical,
+// and that half includes the ordering the refusal path depends on.
+type dataResourceSpec struct {
+	// kind is both the ACL resource type and the result's Type.
+	kind string
 
-	// Before the payload is even decoded, for the same reason every other
-	// mutation checks first: a refusal must not depend on the value being
-	// well-formed, or on Docker being reachable.
-	if err := s.checkWrite(ctx, "secret", name); err != nil {
-		return "", err
-	}
+	create func(
+		wc DockerWriteClient,
+		ctx context.Context,
+		name string,
+		labels map[string]string,
+		data []byte,
+	) (string, error)
 
-	writeClient, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-
-	data, err := decodePayload(req)
-	if err != nil {
-		return "", err
-	}
-
-	labels, err := createLabels(req)
-	if err != nil {
-		return "", err
-	}
-
-	id, err := writeClient.CreateSecret(ctx, swarm.SecretSpec{
-		Annotations: swarm.Annotations{Name: name, Labels: labels},
-		Data:        data,
-	})
-	if err != nil {
-		return "", fmt.Errorf("create secret: %w", err)
-	}
-
-	// Seeded so the very next call can use it. Both tools tell a caller to
-	// create the replacement and then repoint the service, and resolution
+	// seed writes the created record into the cache. Both tools tell a caller
+	// to create the replacement and then repoint the service, and resolution
 	// reads the cache — which the watcher fills asynchronously, a few hundred
 	// milliseconds later. Against a live cluster that made the documented
-	// sequence fail on its second step with "no such secret", for a secret
+	// sequence fail on its second step with "no such secret", for a resource
 	// whose ID had just been returned.
 	//
-	// Data is deliberately zeroed: the cache backs every listing, and a
-	// secret's value has no business being in it. The watcher's own record
-	// arrives moments later and carries none either.
-	s.cache.SetSecret(swarm.Secret{
-		ID: id,
-		Spec: swarm.SecretSpec{
-			Annotations: swarm.Annotations{Name: name, Labels: labels},
-		},
-	})
-
-	return marshalResult(createResult{ID: id, Name: name, Type: "secret"})
+	// Neither seed carries the payload. For a secret that is the point: the
+	// cache backs every listing and a credential has no business in it, and
+	// the watcher's own record carries none either. For a config it is merely
+	// unnecessary — the watcher brings the content moments later and nothing
+	// in between reads it.
+	seed func(c *cache.Cache, id, name string, labels map[string]string)
 }
 
-// toolCreateConfig creates a Swarm config.
+// Swarm secrets and configs are immutable, so "rotate this password" is three
+// calls in order: create the replacement, repoint every service that uses it,
+// remove the old one. Cetacean could previously only do the third, which made
+// the whole sequence impossible rather than merely awkward.
 //
-// Unlike a secret, a config's content can be read back afterwards. It is still
-// not echoed here: the caller already has it, describe will serve it, and the
-// two creates answering in the same shape is worth more than the convenience.
-func (s *Server) toolCreateConfig(
-	ctx context.Context,
-	req mcplib.CallToolRequest,
-) (string, error) {
-	name, err := req.RequireString("name")
-	if err != nil {
-		return "", err
-	}
-
-	if err := s.checkWrite(ctx, "config", name); err != nil {
-		return "", err
-	}
-
-	writeClient, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-
-	data, err := decodePayload(req)
-	if err != nil {
-		return "", err
-	}
-
-	labels, err := createLabels(req)
-	if err != nil {
-		return "", err
-	}
-
-	id, err := writeClient.CreateConfig(ctx, swarm.ConfigSpec{
-		Annotations: swarm.Annotations{Name: name, Labels: labels},
-		Data:        data,
-	})
-	if err != nil {
-		return "", fmt.Errorf("create config: %w", err)
-	}
-
-	// Seeded for the same reason create_secret seeds: the next call in the
-	// sequence resolves by name against the cache. The content is left out —
-	// the watcher brings it, and nothing between here and then needs it.
-	s.cache.SetConfig(swarm.Config{
-		ID: id,
-		Spec: swarm.ConfigSpec{
-			Annotations: swarm.Annotations{Name: name, Labels: labels},
+// The ACL key is the resource's name, matching every other write of its type
+// and the REST route: there is no ID yet to key on, which is the one respect in
+// which a create differs from the edits around it.
+var (
+	secretResource = dataResourceSpec{
+		kind: "secret",
+		create: func(
+			wc DockerWriteClient,
+			ctx context.Context,
+			name string,
+			labels map[string]string,
+			data []byte,
+		) (string, error) {
+			return wc.CreateSecret(ctx, swarm.SecretSpec{
+				Annotations: swarm.Annotations{Name: name, Labels: labels},
+				Data:        data,
+			})
 		},
-	})
+		seed: func(c *cache.Cache, id, name string, labels map[string]string) {
+			c.SetSecret(swarm.Secret{
+				ID:   id,
+				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name, Labels: labels}},
+			})
+		},
+	}
 
-	return marshalResult(createResult{ID: id, Name: name, Type: "config"})
+	configResource = dataResourceSpec{
+		kind: "config",
+		create: func(
+			wc DockerWriteClient,
+			ctx context.Context,
+			name string,
+			labels map[string]string,
+			data []byte,
+		) (string, error) {
+			return wc.CreateConfig(ctx, swarm.ConfigSpec{
+				Annotations: swarm.Annotations{Name: name, Labels: labels},
+				Data:        data,
+			})
+		},
+		seed: func(c *cache.Cache, id, name string, labels map[string]string) {
+			c.SetConfig(swarm.Config{
+				ID:   id,
+				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name, Labels: labels}},
+			})
+		},
+	}
+)
+
+// createHandler builds the tool handler for one data resource, the way
+// removeHandler does for the five removals.
+func (s *Server) createHandler(
+	spec dataResourceSpec,
+) func(context.Context, mcplib.CallToolRequest) (string, error) {
+	return func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
+		name, err := req.RequireString("name")
+		if err != nil {
+			return "", err
+		}
+
+		// Before the payload is even decoded, for the same reason every other
+		// mutation checks first: a refusal must not depend on the value being
+		// well-formed, or on Docker being reachable.
+		if err := s.checkWrite(ctx, spec.kind, name); err != nil {
+			return "", err
+		}
+
+		writeClient, err := s.requireWriteClient()
+		if err != nil {
+			return "", err
+		}
+
+		data, err := decodePayload(req)
+		if err != nil {
+			return "", err
+		}
+
+		labels, err := createLabels(req)
+		if err != nil {
+			return "", err
+		}
+
+		id, err := spec.create(writeClient, ctx, name, labels, data)
+		if err != nil {
+			return "", fmt.Errorf("create %s: %w", spec.kind, err)
+		}
+
+		spec.seed(s.cache, id, name, labels)
+
+		return marshalResult(createResult{ID: id, Name: name, Type: spec.kind})
+	}
 }

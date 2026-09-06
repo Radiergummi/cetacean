@@ -88,8 +88,8 @@ var rankCatalog = map[string]map[string]rankSpec{
 		metricMemory: {
 			label: "instance",
 			unit:  "percent",
-			query: `topk(%d, (1 - node_memory_MemAvailable_bytes{__scope__} ` +
-				`/ node_memory_MemTotal_bytes{__scope__}) * 100)`,
+			query: `topk(%d, (1 - node_memory_MemAvailable_bytes{instance!=""%[2]s} ` +
+				`/ node_memory_MemTotal_bytes{instance!=""%[2]s}) * 100)`,
 		},
 		metricNetwork: {
 			label: "instance",
@@ -99,23 +99,6 @@ var rankCatalog = map[string]map[string]rankSpec{
 				`rate(node_network_transmit_bytes_total{device!="lo"%[2]s}[5m])))`,
 		},
 	},
-}
-
-// rankQuery renders a spec's PromQL for a top count and a scope selector.
-//
-// The node memory query is the one that cannot take a leading comma, because
-// its selector is the whole label set of two separate metrics rather than an
-// addition to an existing matcher — hence the placeholder rather than a
-// format verb.
-func rankQuery(spec rankSpec, top int, scope string) string {
-	if strings.Contains(spec.query, "__scope__") {
-		return fmt.Sprintf(
-			strings.ReplaceAll(spec.query, "{__scope__}", "{"+strings.TrimPrefix(scope, ",")+"}"),
-			top,
-		)
-	}
-
-	return fmt.Sprintf(spec.query, top, scope)
 }
 
 // rankScope decides what a ranking ranks across, and returns the PromQL
@@ -175,14 +158,33 @@ func instanceHost(node swarm.Node) string {
 	return node.Description.Hostname
 }
 
+// nodeNamesByHost indexes the cluster's nodes by both halves instanceHost
+// chooses between, so naming a ranking's series costs one node listing rather
+// than one per series. Earlier nodes win a contested host, which is the node
+// the linear scan this replaced would have found first.
+func (s *Server) nodeNamesByHost() map[string]string {
+	nodes := s.cache.ListNodes()
+	byHost := make(map[string]string, 2*len(nodes))
+
+	for _, node := range nodes {
+		for _, host := range []string{node.Status.Addr, node.Description.Hostname} {
+			if _, taken := byHost[host]; host != "" && !taken {
+				byHost[host] = nodeACLName(node)
+			}
+		}
+	}
+
+	return byHost
+}
+
 // nameRankedSeries turns a Prometheus label into the name the cluster uses.
 //
 // For services the label is Docker's own service name and already is that. For
 // nodes it is `instance` — host:port, which is neither Docker's nor
-// Cetacean's — so it is resolved back through the cache. An instance no node
+// Cetacean's — so it is resolved back through namesByHost. An instance no node
 // claims keeps its raw label rather than being dropped: dropping it would
 // silently shorten a ranking, which is the one thing a ranking must not do.
-func (s *Server) nameRankedSeries(by, label string) string {
+func nameRankedSeries(by, label string, namesByHost map[string]string) string {
 	if by != rankByNode || label == "" {
 		return label
 	}
@@ -192,10 +194,8 @@ func (s *Server) nameRankedSeries(by, label string) string {
 		host = label
 	}
 
-	for _, node := range s.cache.ListNodes() {
-		if node.Status.Addr == host || node.Description.Hostname == host {
-			return nodeACLName(node)
-		}
+	if name, known := namesByHost[host]; known {
+		return name
 	}
 
 	return label
@@ -252,13 +252,20 @@ func (s *Server) rankMetrics(
 
 	results, err := s.prom.RangeQuery(
 		ctx,
-		rankQuery(spec, top, scope),
+		fmt.Sprintf(spec.query, top, scope),
 		strconv.FormatInt(start.Unix(), 10),
 		strconv.FormatInt(end.Unix(), 10),
 		strconv.Itoa(int(window.step.Seconds()))+"s",
 	)
 	if err != nil {
 		return "", fmt.Errorf("query metrics: %w", err)
+	}
+
+	// Built once rather than per series: naming is a node lookup, and there
+	// are up to maxRankTop series.
+	var namesByHost map[string]string
+	if by == rankByNode {
+		namesByHost = s.nodeNamesByHost()
 	}
 
 	series := make([]metricSeries, 0, len(results))
@@ -274,7 +281,7 @@ func (s *Server) rankMetrics(
 		}
 
 		series = append(series, metricSeries{
-			Name:   s.nameRankedSeries(by, result.Labels[spec.label]),
+			Name:   nameRankedSeries(by, result.Labels[spec.label], namesByHost),
 			Points: points,
 		})
 	}

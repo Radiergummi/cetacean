@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // clusterOverview is the shape cetacean://cluster serves.
@@ -22,7 +23,10 @@ import (
 // that was written against the quirk.
 //
 // Every numeric field names its unit, per the house rule that a quantity is
-// never implied — the same rule the CPU defect in e25089e2 produced.
+// never implied — the same rule the CPU defect in e25089e2 produced. The four
+// shared with get_cluster_status are embedded from cluster.ClusterCapacity
+// rather than restated, so the two reads cannot correct the snapshot
+// differently; embedding is anonymous, so they stay flat in the JSON.
 type clusterOverview struct {
 	NodeCount    int            `json:"nodeCount"`
 	ServiceCount int            `json:"serviceCount"`
@@ -37,24 +41,16 @@ type clusterOverview struct {
 	ServicesConverged int `json:"servicesConverged"`
 	ServicesDegraded  int `json:"servicesDegraded"`
 
-	TotalCPUCores       float64 `json:"totalCPUCores"`
-	ReservedCPUCores    float64 `json:"reservedCPUCores"`
-	MaxNodeCPUCores     float64 `json:"maxNodeCPUCores"`
-	TotalMemoryBytes    int64   `json:"totalMemoryBytes"`
-	ReservedMemoryBytes int64   `json:"reservedMemoryBytes"`
-	MaxNodeMemoryBytes  int64   `json:"maxNodeMemoryBytes"`
+	cluster.ClusterCapacity
+
+	MaxNodeCPUCores    float64 `json:"maxNodeCPUCores"`
+	MaxNodeMemoryBytes int64   `json:"maxNodeMemoryBytes"`
 
 	LastSync time.Time `json:"lastSync"`
 }
 
-// nanoCPUsPerCore is Docker's fixed-point scale for CPU quantities: a
-// swarm.Resources NanoCPUs of 1e9 is one core.
-const nanoCPUsPerCore = 1e9
-
-// newClusterOverview converts a snapshot into the served shape, putting both
-// CPU figures in cores. Reserved CPU is the one the snapshot holds in
-// nanoCPUs; total and per-node CPU it has already divided down, so they are
-// only widened, not rescaled.
+// newClusterOverview converts a snapshot into the served shape. The per-node
+// maxima the snapshot has already divided down, so they are only widened.
 func newClusterOverview(snap cache.ClusterSnapshot) clusterOverview {
 	return clusterOverview{
 		NodeCount:    snap.NodeCount,
@@ -70,12 +66,10 @@ func newClusterOverview(snap cache.ClusterSnapshot) clusterOverview {
 		ServicesConverged: snap.ServicesConverged,
 		ServicesDegraded:  snap.ServicesDegraded,
 
-		TotalCPUCores:       float64(snap.TotalCPU),
-		ReservedCPUCores:    float64(snap.ReservedCPU) / nanoCPUsPerCore,
-		MaxNodeCPUCores:     float64(snap.MaxNodeCPU),
-		TotalMemoryBytes:    snap.TotalMemory,
-		ReservedMemoryBytes: snap.ReservedMemory,
-		MaxNodeMemoryBytes:  snap.MaxNodeMemory,
+		ClusterCapacity: cluster.CapacityOf(snap),
+
+		MaxNodeCPUCores:    float64(snap.MaxNodeCPU),
+		MaxNodeMemoryBytes: snap.MaxNodeMemory,
 
 		LastSync: snap.LastSync,
 	}

@@ -88,7 +88,7 @@ func (s *Server) drainImpact(
 	graph := cluster.DrainImpactGraph(
 		node,
 		visible,
-		s.filterRawTasks(ctx, s.cache.ListTasks()),
+		s.filterRawTasks(ctx, s.cache.ListTasksByNode(node.ID)),
 		s.filterServices(ctx, s.cache.ListServices()),
 	)
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHistory_Append(t *testing.T) {
@@ -333,5 +334,45 @@ func TestHistoryListBeforeIDByResource(t *testing.T) {
 
 	if len(result) != 4 {
 		t.Fatalf("got %d entries, want 4", len(result))
+	}
+}
+
+// TestHistoryListAfterBoundsBothPaths pins HistoryQuery.After on the indexed
+// and the scanning path alike. get_events reads the whole ring so its type and
+// `until` filters are not starved by a page of task churn, which made the time
+// bound the one thing worth pushing into the walk — and a bound honoured on
+// only one of the two paths would make one query mean two things.
+func TestHistoryListAfterBoundsBothPaths(t *testing.T) {
+	h := NewHistory(10)
+
+	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	for i := range 5 {
+		h.Append(HistoryEntry{
+			Type:       "service",
+			Action:     "update",
+			ResourceID: "svc1",
+			Name:       names[i],
+			Timestamp:  base.Add(time.Duration(i) * time.Minute),
+		})
+	}
+
+	cutoff := base.Add(2 * time.Minute)
+
+	// Scanning path: no ResourceID, so List walks the ring itself.
+	scanned := h.List(HistoryQuery{Limit: 10, After: cutoff})
+	if len(scanned) != 2 {
+		t.Fatalf("scanned = %d entries, want the 2 strictly after the cutoff", len(scanned))
+	}
+
+	// Indexed path: the same bound, through listByResource.
+	indexed := h.List(HistoryQuery{ResourceID: "svc1", Limit: 10, After: cutoff})
+	if len(indexed) != 2 {
+		t.Fatalf("indexed = %d entries, want the 2 strictly after the cutoff", len(indexed))
+	}
+
+	for _, e := range append(scanned, indexed...) {
+		if !e.Timestamp.After(cutoff) {
+			t.Errorf("entry %q at %v is not after the cutoff", e.Name, e.Timestamp)
+		}
 	}
 }

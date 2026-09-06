@@ -22,10 +22,16 @@ func (s *Server) toolGetClusterStatus(
 	services := s.filterServices(ctx, s.cache.ListServices())
 	nodes := s.filterNodes(ctx, s.cache.ListNodes())
 
+	// The running counts come off the snapshot rather than from a second
+	// RunningTaskCounts call: Snapshot builds the identical map to decide
+	// converged versus degraded, so asking again walked the whole task table a
+	// third time, under a third lock, for the landing call.
+	snap := s.cache.Snapshot()
+
 	return marshalResult(cluster.BuildClusterStatus(
-		s.cache.Snapshot(),
+		snap,
 		services,
 		nodes,
-		s.cache.RunningTaskCounts(),
+		snap.RunningByService,
 	))
 }

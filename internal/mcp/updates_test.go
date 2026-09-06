@@ -47,9 +47,11 @@ func serviceWithSecrets() swarm.Service {
 // dispatches, driven end to end by TestSpecEditingToolsNeverReturnSecrets.
 //
 // It is package-level so TestEveryAdvertisedSectionIsDispatched can hold it
-// against updateServiceSections in both directions: a section that reaches no
-// case in the switch returns a zero-valued result the identity assertion
-// below catches, but only if something actually calls it.
+// against updateServiceSections in both directions. Dispatch itself is no
+// longer what it guards — the advertised list is serviceSectionWriters' own
+// keys, so a section cannot be advertised without a writer — but coverage
+// still is: a section nobody calls is a section whose result shape, and so
+// whose disclosure, nothing checks.
 var dispatchedServiceSections = map[string]string{
 	sectionResources:      `{"Limits":{"NanoCPUs":1000000000}}`,
 	sectionPlacement:      `{"Constraints":["node.role==worker"]}`,
@@ -326,6 +328,16 @@ func TestEveryAdvertisedSectionIsDispatched(t *testing.T) {
 	for section := range dispatchedServiceSections {
 		if !slices.Contains(updateServiceSections, section) {
 			t.Errorf("section %q is dispatched but not advertised", section)
+		}
+	}
+
+	// The one pairing still made by hand: a writer decides what an edit does,
+	// serviceSectionKeys decides what the result reports about it. A section
+	// missing from the projection answers a successful write with an empty
+	// details map, which reads as "nothing is set here".
+	for _, section := range updateServiceSections {
+		if _, ok := serviceSectionKeys[section]; !ok {
+			t.Errorf("section %q can be written but has no projection to report it", section)
 		}
 	}
 }

@@ -79,10 +79,11 @@ func TestUpdateServiceSecretsRepointsAService(t *testing.T) {
 		t.Errorf("SecretID = %q, want the resolved s2", got[0].SecretID)
 	}
 
-	// File.Name defaults to the secret's own name, matching the REST handler,
-	// so a secret mounted through either transport lands in the same place.
-	if got[0].File == nil || got[0].File.Name != "db_password_v2" {
-		t.Errorf("File = %+v, want Name defaulted to the secret name", got[0].File)
+	// File.Name defaults to /run/secrets/<name>, the path REST's
+	// PATCH /services/{id}/secrets defaults to, so a secret attached through
+	// either transport lands in the same place.
+	if got[0].File == nil || got[0].File.Name != "/run/secrets/db_password_v2" {
+		t.Errorf("File = %+v, want Name defaulted to /run/secrets/<name>", got[0].File)
 	}
 
 	var compact serviceUpdateResult
@@ -130,23 +131,12 @@ func TestUpdateServiceSecretsRejectsAnUnknownSecret(t *testing.T) {
 
 	handler := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsConfiguration).Handler()
 
-	_, envelope := mcpModern(t, handler, 1, "tools/call",
+	raw := callToolExpectingError(t, handler,
 		`{"name":"update_service_secrets","arguments":`+
 			`{"id":"web","secrets":[{"name":"nosuch"}]}}`)
 
-	var result toolCallResult
-	if err := json.Unmarshal(envelope.Result, &result); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-
-	if !result.IsError {
-		t.Fatal("expected an error for a secret that does not exist")
-	}
-	if !strings.Contains(string(envelope.Result), "nosuch") {
-		t.Errorf("the error does not name the missing secret: %s", envelope.Result)
-	}
-	if strings.Contains(string(envelope.Result), "not stubbed") {
-		t.Error("the tool reached the write client despite an unresolvable reference")
+	if !strings.Contains(raw, "nosuch") {
+		t.Errorf("the error does not name the missing secret: %s", raw)
 	}
 }
 
@@ -214,6 +204,40 @@ func TestUpdateServiceConfigsRepointsAService(t *testing.T) {
 	}
 	if got[0].File == nil || got[0].File.Name != "/etc/nginx/nginx.conf" {
 		t.Errorf("File = %+v, want the caller's target path", got[0].File)
+	}
+}
+
+// TestUpdateServiceConfigsDefaultsToTheRESTPath pins the half of the mount
+// rule that was wrong: a config with no target defaulted to the bare name,
+// which Swarm reads as relative to the container's working directory, while
+// REST's PATCH /services/{id}/configs defaults to /<name>. The same config
+// attached over the two transports mounted at two different paths.
+func TestUpdateServiceConfigsDefaultsToTheRESTPath(t *testing.T) {
+	var got []*swarm.ConfigReference
+
+	c := attachmentTestCache(t)
+	writeClient := &fakeWriteClient{
+		updateServiceConfigsFn: func(
+			_ context.Context, _ string, refs []*swarm.ConfigReference,
+		) (swarm.Service, error) {
+			got = refs
+
+			updated, _ := c.GetService("svc1")
+
+			return updated, nil
+		},
+	}
+
+	handler := newToolTestServer(t, c, writeClient, config.OpsConfiguration).Handler()
+
+	callTool(t, handler, `{"name":"update_service_configs","arguments":`+
+		`{"id":"web","configs":[{"name":"nginx_conf"}]}}`)
+
+	if len(got) != 1 || got[0].File == nil {
+		t.Fatalf("refs = %+v, want one with a file target", got)
+	}
+	if got[0].File.Name != "/nginx_conf" {
+		t.Errorf("File.Name = %q, want /<name>", got[0].File.Name)
 	}
 }
 
@@ -368,23 +392,12 @@ func TestUpdateServiceMountsRejectsAnUnknownType(t *testing.T) {
 
 	handler := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsConfiguration).Handler()
 
-	_, envelope := mcpModern(t, handler, 1, "tools/call",
+	raw := callToolExpectingError(t, handler,
 		`{"name":"update_service_mounts","arguments":`+
 			`{"id":"web","mounts":[{"type":"magic","target":"/x"}]}}`)
 
-	var result toolCallResult
-	if err := json.Unmarshal(envelope.Result, &result); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-
-	if !result.IsError {
-		t.Fatal("expected an error for an unknown mount type")
-	}
-	if !strings.Contains(string(envelope.Result), "magic") {
-		t.Errorf("the error does not name the bad type: %s", envelope.Result)
-	}
-	if strings.Contains(string(envelope.Result), "not stubbed") {
-		t.Error("the tool reached the write client despite an invalid mount")
+	if !strings.Contains(raw, "magic") {
+		t.Errorf("the error does not name the bad type: %s", raw)
 	}
 }
 
@@ -395,16 +408,7 @@ func TestUpdateServiceMountsRequiresATarget(t *testing.T) {
 
 	handler := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsConfiguration).Handler()
 
-	_, envelope := mcpModern(t, handler, 1, "tools/call",
+	callToolExpectingError(t, handler,
 		`{"name":"update_service_mounts","arguments":`+
 			`{"id":"web","mounts":[{"type":"volume","source":"data"}]}}`)
-
-	var result toolCallResult
-	if err := json.Unmarshal(envelope.Result, &result); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-
-	if !result.IsError {
-		t.Fatal("expected an error for a mount with no target")
-	}
 }

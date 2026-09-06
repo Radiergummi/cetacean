@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -103,12 +102,6 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 	listed, err := s.lookupResource(ctx, "cetacean://"+resourceType)
 	if err != nil {
 		return "", err
-	}
-
-	// A type test, not a conversion: the raw path projects filtered rows back
-	// onto the concrete slice by ID, so nothing needs it widened to []any.
-	if reflect.ValueOf(listed).Kind() != reflect.Slice {
-		return "", fmt.Errorf("resource type %q does not enumerate", resourceType)
 	}
 
 	rows, err := s.rowsFor(ctx, resourceType, listed)
@@ -227,11 +220,13 @@ func sortFindRows(rows []cluster.Row) {
 	})
 }
 
-// rowsFor converts the slice lookupResource returned for resourceType into
-// the compact Row shape, by calling the one cluster.RowsFor* builder that
-// knows that type. The type assertions mirror exactly what each
-// lookupResource branch returns, so a mismatch here is a bug in this
-// function, not a caller error — hence the error message names both sides.
+// rowsFor converts the slice lookupResource returned into the compact Row
+// shape, by calling the one cluster.RowsFor* builder that knows that type.
+//
+// It dispatches on the concrete slice type rather than on resourceType: the
+// eight element types are mutually distinct, so the value already carries the
+// answer, and asking it directly removes eight unreachable mismatch branches.
+// resourceType survives only to name the type in the default case.
 //
 // It takes the context because a row can name a resource other than the one it
 // describes — a task row names its parent service and the node it runs on — and
@@ -244,73 +239,33 @@ func (s *Server) rowsFor(
 ) ([]cluster.Row, error) {
 	c := s.cache
 
-	switch resourceType {
-	case "services":
-		items, ok := listed.([]swarm.Service)
-		if !ok {
-			return nil, fmt.Errorf("find: services returned %T, not []swarm.Service", listed)
-		}
-
+	switch items := listed.(type) {
+	case []swarm.Service:
 		return cluster.RowsForServices(items, c.RunningTaskCounts()), nil
 
-	case "nodes":
-		items, ok := listed.([]swarm.Node)
-		if !ok {
-			return nil, fmt.Errorf("find: nodes returned %T, not []swarm.Node", listed)
-		}
-
+	case []swarm.Node:
 		return cluster.RowsForNodes(items), nil
 
-	case "tasks":
-		items, ok := listed.([]cluster.EnrichedTask)
-		if !ok {
-			return nil, fmt.Errorf("find: tasks returned %T, not []cluster.EnrichedTask", listed)
-		}
-
+	case []cluster.EnrichedTask:
 		// The services are ACL-filtered before the builder sees them, and the
 		// tasks arrive already enriched from an equally filtered node listing:
 		// a task row that named a service or node the caller may not read
 		// would make find a way around the grants describe honours.
 		return cluster.RowsForTasks(items, s.filterServices(ctx, c.ListServices())), nil
 
-	case "stacks":
-		items, ok := listed.([]cache.Stack)
-		if !ok {
-			return nil, fmt.Errorf("find: stacks returned %T, not []cache.Stack", listed)
-		}
-
+	case []cache.Stack:
 		return cluster.RowsForStacks(items), nil
 
-	case "configs":
-		items, ok := listed.([]swarm.Config)
-		if !ok {
-			return nil, fmt.Errorf("find: configs returned %T, not []swarm.Config", listed)
-		}
-
+	case []swarm.Config:
 		return cluster.RowsForConfigs(items), nil
 
-	case "secrets":
-		items, ok := listed.([]swarm.Secret)
-		if !ok {
-			return nil, fmt.Errorf("find: secrets returned %T, not []swarm.Secret", listed)
-		}
-
+	case []swarm.Secret:
 		return cluster.RowsForSecrets(items), nil
 
-	case "networks":
-		items, ok := listed.([]network.Summary)
-		if !ok {
-			return nil, fmt.Errorf("find: networks returned %T, not []network.Summary", listed)
-		}
-
+	case []network.Summary:
 		return cluster.RowsForNetworks(items), nil
 
-	case "volumes":
-		items, ok := listed.([]volume.Volume)
-		if !ok {
-			return nil, fmt.Errorf("find: volumes returned %T, not []volume.Volume", listed)
-		}
-
+	case []volume.Volume:
 		ptrs := make([]*volume.Volume, len(items))
 		for i := range items {
 			ptrs[i] = &items[i]
@@ -319,9 +274,12 @@ func (s *Server) rowsFor(
 		return cluster.RowsForVolumes(ptrs), nil
 
 	default:
-		// Unreachable given the listableResourceTypes check in toolFind, but
-		// named rather than panicking if the two ever drift.
-		return nil, fmt.Errorf("resource type %q has no row builder", resourceType)
+		// Reached only if listableResourceTypes and the branches above drift,
+		// or if a listing returns something that is not a slice at all — named
+		// rather than panicking either way.
+		return nil, fmt.Errorf(
+			"resource type %q has no row builder for %T", resourceType, listed,
+		)
 	}
 }
 
@@ -525,11 +483,9 @@ func rawItemsByID(listed any) map[string]any {
 	return out
 }
 
-// paginate slices items to the `offset`/`limit` window a caller asked for,
-// clamping both to the slice bounds and to defaultListLimit. Generic so the
-// same bounds logic serves both the raw ([]any) and compact ([]cluster.Row)
-// results.
-func paginate[T any](items []T, req mcplib.CallToolRequest) []T {
+// paginate slices rows to the `offset`/`limit` window a caller asked for,
+// clamping both to the slice bounds and to defaultListLimit.
+func paginate(items []cluster.Row, req mcplib.CallToolRequest) []cluster.Row {
 	total := len(items)
 
 	offset := min(max(req.GetInt("offset", 0), 0), total)

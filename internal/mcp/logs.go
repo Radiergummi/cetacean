@@ -76,13 +76,7 @@ func (s *Server) readLogsImpl(
 		}
 	}
 
-	wanted := opts.tail
-	if wanted <= 0 {
-		wanted = defaultLogTail
-	}
-	if wanted > maxLogTail {
-		wanted = maxLogTail
-	}
+	wanted := boundLogTail(opts.tail)
 
 	// Every narrowing below happens after the fetch — Docker ignores `since`
 	// for service logs, and it knows nothing of `contains` or `level` at all —
@@ -130,12 +124,35 @@ func (s *Server) readLogsImpl(
 	lines = filterLogContains(lines, opts.contains)
 	lines = logs.FilterSince(lines, opts.since)
 
-	// Docker interleaves the output of a service's tasks, so arrival order is
-	// not time order. Sorting first makes the truncation below keep the truly
-	// newest lines and the cursor the truly newest timestamp — without it a
-	// late-arriving older line would push the cursor backwards, silently
-	// dropping everything between the two on the next read. Mirrors the REST
-	// path in api/log_handlers.go.
+	return finishLogRead(lines, wanted, opts.since), nil
+}
+
+// boundLogTail clamps a caller's requested tail to the defaults, so the two
+// log reads cannot disagree about how many lines "unspecified" or "too many"
+// means.
+func boundLogTail(tail int) int {
+	if tail <= 0 {
+		return defaultLogTail
+	}
+
+	return min(tail, maxLogTail)
+}
+
+// finishLogRead is the tail every log read shares: newest-last ordering, the
+// caller's cut, and the cursor.
+//
+// Docker interleaves the output of a service's tasks, so arrival order is not
+// time order. Sorting first makes the truncation keep the truly newest lines
+// and the cursor the truly newest timestamp — without it a late-arriving older
+// line would push the cursor backwards, silently dropping everything between
+// the two on the next read. Mirrors the REST path in api/log_handlers.go.
+//
+// The cursor comes from logs.ParseCursor rather than the raw Docker timestamp,
+// falling back to the caller's own `since` when no line carries a parseable
+// one. internal/logs is where cursor semantics live and logs.FilterSince is
+// what receives this value on the next call, so a cursor minted any other way
+// resumes a tail on something the rest of the codebase never produced.
+func finishLogRead(lines []logs.LogLine, wanted int, since string) LogResourceResponse {
 	slices.SortStableFunc(lines, func(a, b logs.LogLine) int {
 		return strings.Compare(a.Timestamp, b.Timestamp)
 	})
@@ -144,14 +161,17 @@ func (s *Server) readLogsImpl(
 		lines = lines[len(lines)-wanted:]
 	}
 
-	resp := LogResourceResponse{Lines: lines, Cursor: opts.since}
+	resp := LogResourceResponse{Lines: lines, Cursor: since}
+
 	for _, line := range slices.Backward(lines) {
 		if cursor, ok := logs.ParseCursor(line.Timestamp); ok {
 			resp.Cursor = cursor
+
 			break
 		}
 	}
-	return resp, nil
+
+	return resp
 }
 
 // logOptions holds the parsed arguments shared between the log resource read
