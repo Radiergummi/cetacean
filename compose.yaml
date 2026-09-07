@@ -18,6 +18,16 @@ services:
       # restart-failure history with it — so a freshly-replaced Cetacean
       # reports a service that has been crash-looping for days as though the
       # fault began minutes ago.
+      #
+      # This volume is node-local, and the constraint below only pins the task
+      # to *a* manager: on a swarm with more than one, a reschedule lands on a
+      # different node and binds a fresh empty volume, losing exactly what the
+      # volume was added to keep. Pin the task to one node instead —
+      #
+      #   constraints:
+      #     - node.hostname == <your-manager>
+      #
+      # — or point this at a volume driver whose storage every manager shares.
       - type: volume
         source: cetacean_data
         target: /data

@@ -194,6 +194,16 @@ const (
 	// sees the terminal state, short enough that the count is only briefly
 	// wrong — the alternative was waiting out the five-minute re-sync.
 	defaultSettleDelay = 750 * time.Millisecond
+
+	// settleAttempts bounds how many times a task is re-read while it stays
+	// unsettled. One read is right almost always and wrong exactly when it
+	// matters: a loaded manager that has not reconciled within the first
+	// delay leaves the overcount standing until the five-minute re-sync, and
+	// nothing re-arms it. In practice a following container event usually
+	// schedules another attempt, but "usually" is what this fix was meant to
+	// stop relying on. Three attempts with the delay doubling covers about
+	// five seconds of reconcile lag.
+	settleAttempts = 3
 )
 
 // eventKey identifies a unique resource for coalescing.
@@ -400,21 +410,48 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 // placement view repeated the figure, and the convergence wait behind every
 // deploy could not settle because the count it waited on never fell.
 //
-// One delayed read closes it. It is skipped when the first inspect already
-// saw a terminal state — a task that lost its container long enough ago, or a
-// daemon that reconciled before we asked — so the common path pays nothing.
+// A short series of delayed reads closes it, each waiting twice as long as the
+// one before and the series stopping the moment the record settles — so the
+// common case costs exactly one read, and a daemon slow to reconcile still
+// gets corrected in seconds rather than at the next full re-sync. It is
+// skipped entirely when the first inspect already saw a terminal state: a task
+// that lost its container long enough ago, or a daemon that reconciled before
+// we asked.
+//
+// A task the daemon has since forgotten is not a failure of this: the inspect
+// 404s, and inspectAndApply drops the record, which settles it just as well.
 func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey) {
-	if task, ok := w.store.GetTask(key.id); ok && !taskSettled(task) {
-		w.settles.Go(func() {
+	if task, ok := w.store.GetTask(key.id); !ok || taskSettled(task) {
+		return
+	}
+
+	w.settles.Go(func() {
+		delay := w.settleDelay
+
+		for attempt := range settleAttempts {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(w.settleDelay):
+			case <-time.After(delay):
 			}
 
 			w.inspectAndApply(ctx, key)
-		})
-	}
+
+			task, ok := w.store.GetTask(key.id)
+			if !ok || taskSettled(task) {
+				return
+			}
+
+			slog.Debug(
+				"task still unsettled after re-read",
+				"id", key.id,
+				"attempt", attempt+1,
+				"of", settleAttempts,
+			)
+
+			delay *= 2
+		}
+	})
 }
 
 // taskSettled reports whether Swarm has finished with a task, so there is

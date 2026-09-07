@@ -90,6 +90,9 @@ func (s *Server) toolWatch(
 	if waitErr := s.awaitServiceConvergenceFor(
 		ctx,
 		svc.ID,
+		// No version gate: watch follows no write of its own, so whatever the
+		// cache holds is the state it was asked about.
+		0,
 		watchTimeout(req),
 		&result.Observed,
 	); waitErr != nil {

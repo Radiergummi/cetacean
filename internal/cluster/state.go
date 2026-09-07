@@ -36,16 +36,22 @@ func serviceUpdateInFlight(svc swarm.Service) bool {
 // Docker's write APIs return as soon as the swarm accepts a spec change, long
 // before the new state is real. This is what turns "accepted" into "running".
 //
-// The count must *reach* the desired one rather than equal it. Equality was
-// meant to keep a scale-down from being called done while surplus tasks were
-// still being reaped, but cache.countsAsRunningReplica already excludes those
-// — a task Swarm has marked for shutdown is not a replica of the desired
-// state — so equality bought nothing and cost a wait that could never end: a
-// count that overshoots, whether because the watcher has not caught up or
-// because a garbage-collected task is stuck at its last-inspected status,
-// leaves a caller polling a predicate that is never true. Reporting settled a
-// moment early is the better failure; serviceUpdateInFlight above is what
-// actually holds a rollout open.
+// The count must *equal* the desired one. Accepting any count that reaches it
+// was meant to break a wait that could never end — an overshoot that never
+// falls, from a garbage-collected task record frozen at its last-inspected
+// status — but it broke every scale-down instead: the surplus replicas are
+// still running when the wait begins, so 5 >= 2 holds on the first look and a
+// 5-to-2 scale reports "converged: 5/2 replicas running" with five replicas
+// up. The overshoot is what the watcher fixes at the source, by dropping the
+// record of a task the daemon has forgotten and re-reading one whose
+// container has just died; a wait is the wrong place to paper over a cache
+// that is wrong, because it cannot tell that case from a surplus that is
+// genuinely still draining.
+//
+// The caller must also not ask before the cache has caught up with the write
+// — see awaitServiceConvergenceFor — or the count and the desired figure both
+// still describe the state before the mutation, and any predicate at all
+// holds immediately.
 func ServiceConverged(svc swarm.Service, runningCount int) (bool, string) {
 	// An in-flight rolling update means tasks are still being replaced; wait it
 	// out rather than reporting a transient count match as success.
@@ -61,7 +67,7 @@ func ServiceConverged(svc swarm.Service, runningCount int) (bool, string) {
 	}
 
 	desired := int(*svc.Spec.Mode.Replicated.Replicas)
-	if runningCount >= desired {
+	if runningCount == desired {
 		return true, fmt.Sprintf("converged: %d/%d replicas running", runningCount, desired)
 	}
 

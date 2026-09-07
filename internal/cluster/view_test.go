@@ -599,3 +599,99 @@ func TestServiceDigestIgnoresCleanlyReplacedTasks(t *testing.T) {
 		)
 	}
 }
+
+// A service mid-rolling-update must not describe as healthier than it lists.
+// The outgoing task keeps Status.State: running while it drains, and
+// cache.RunningTaskCounts — what find and every row count with — already
+// ignores it. Counting it here made describe answer "running" for a service
+// find called "failed", which is precisely the disagreement the two surfaces
+// are supposed to be free of.
+func TestServiceDigestCountsReplicasTheWayFindDoes(t *testing.T) {
+	svc := replicated("rolling", 1)
+
+	tasks := []swarm.Task{
+		{ID: "t-out", ServiceID: "svc-rolling", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
+		{ID: "t-in", ServiceID: "svc-rolling", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStatePreparing}},
+	}
+
+	got := ServiceDigest(svc, tasks, nil, nil)
+
+	// One desired, none running: the same numbers DeriveServiceState sees on
+	// the list side, and so the same state.
+	if want := DeriveServiceState(svc, 0); got.State != want {
+		t.Errorf(
+			"state = %q, want %q — the draining task was counted as a replica",
+			got.State, want,
+		)
+	}
+}
+
+// Since dates the state that is reported, and a failure cannot date a healthy
+// one. Swarm keeps a terminal record for every replica it has replaced, so a
+// service that crashed once last week and has run clean since still carries
+// one — and answering "how long has this been going on" with a fault that is
+// over is worse than not answering.
+func TestServiceDigestDoesNotDateARunningServiceFromAnOldFailure(t *testing.T) {
+	svc := replicated("recovered", 1)
+	svc.UpdatedAt = time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	lastWeek := time.Date(2026, 8, 30, 3, 0, 0, 0, time.UTC)
+
+	tasks := []swarm.Task{
+		{ID: "t-old", ServiceID: "svc-recovered", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{State: swarm.TaskStateFailed, Timestamp: lastWeek}},
+		{ID: "t-now", ServiceID: "svc-recovered", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
+	}
+
+	got := ServiceDigest(svc, tasks, nil, nil)
+
+	if got.State != "running" {
+		t.Fatalf("state = %q, want running", got.State)
+	}
+
+	if got.Since == lastWeek.UTC().Format(time.RFC3339) {
+		t.Error("since dates a running service from a failure it has recovered from")
+	}
+
+	if want := svc.UpdatedAt.UTC().Format(time.RFC3339); got.Since != want {
+		t.Errorf("since = %q, want %q", got.Since, want)
+	}
+
+	// The failure itself still belongs in the payload — it is history the
+	// caller asked for, and only Since had to stop claiming it as the present.
+	if len(got.RecentFailures) != 1 {
+		t.Errorf("recentFailures = %d, want the old failure kept", len(got.RecentFailures))
+	}
+}
+
+// A failing service must still be dated from its failure: that is the question
+// Since exists to answer, and the fix above must not take it away.
+func TestServiceDigestDatesAFailingServiceFromItsOldestFailure(t *testing.T) {
+	svc := replicated("broken", 1)
+	svc.UpdatedAt = time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	first := time.Date(2026, 9, 5, 8, 0, 0, 0, time.UTC)
+
+	tasks := []swarm.Task{
+		{ID: "t-1", ServiceID: "svc-broken", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{State: swarm.TaskStateFailed, Timestamp: first}},
+		{ID: "t-2", ServiceID: "svc-broken", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{
+				State:     swarm.TaskStateFailed,
+				Timestamp: first.Add(time.Hour),
+			}},
+	}
+
+	got := ServiceDigest(svc, tasks, nil, nil)
+
+	if got.State == "running" {
+		t.Fatalf("state = %q, want a failing state", got.State)
+	}
+
+	if want := first.UTC().Format(time.RFC3339); got.Since != want {
+		t.Errorf("since = %q, want the oldest failure %q", got.Since, want)
+	}
+}

@@ -160,10 +160,16 @@ func (s *Server) readScopedLogs(
 		failures = []string{}
 	}
 
+	// Captured before the cut below discards the evidence, exactly as the
+	// per-service ceiling is: once finishLogRead has kept the newest `tail`
+	// lines, a merge that overflowed and one that fitted look alike.
+	wanted := boundLogTail(opts.tail)
+	mergeCut := len(merged) > wanted
+
 	// The same ordering, cut and cursor the single-service read applies: a
 	// scoped tail resumes from a cursor internal/logs produced, and honours
 	// the same tail bounds, because it is the same function.
-	resp := finishLogRead(merged, boundLogTail(opts.tail), opts.since)
+	resp := finishLogRead(merged, wanted, opts.since)
 	resp.Errors = failures
 	resp.Cursor = nextScopedCursor(services, resumed, resp.Lines)
 
@@ -189,6 +195,21 @@ func (s *Server) readScopedLogs(
 				"requested window on %s, so this answer covers less time than "+
 				"asked for — narrow it with `contains` or `level`",
 			strings.Join(shortened, ", "),
+		))
+	}
+
+	// The merge is cut to `tail` as well, and that cut shortens the window on
+	// its own: sixty services returning fifty lines each, kept to the newest
+	// hundred, covers seconds of whatever was asked for even though no single
+	// service ran out of budget. Disclosed on the same terms as the ceiling,
+	// because to the caller it is the same missing time.
+	if mergeCut {
+		resp.Truncated = true
+		notes = append(notes, fmt.Sprintf(
+			"%d lines were read across %d service(s) and cut to the newest "+
+				"%d, so this answer covers only back to %s — raise `tail`, or "+
+				"narrow the scope with `stack` or `service`",
+			len(merged), len(services), wanted, orNone(resp.Oldest),
 		))
 	}
 

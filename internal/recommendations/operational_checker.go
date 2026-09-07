@@ -115,12 +115,31 @@ func (oc *OperationalChecker) flakyServiceRecs() []Recommendation {
 			Message: fmt.Sprintf(
 				"Service has had %d task failures over the past %s",
 				count,
-				formatPromDuration(counted),
+				formatCountedWindow(counted),
 			),
 		})
 	}
 
 	return recs
+}
+
+// formatCountedWindow renders the window a failure count actually covers.
+//
+// formatPromDuration is a PromQL range formatter and truncates to whole hours,
+// which is right for the query strings it was written for and wrong in prose:
+// the tracker starts at process start, so the whole first hour after a restart
+// — precisely when a crash-looping service earns this recommendation, since it
+// takes minutes to clear the threshold — renders as "over the past 0h".
+func formatCountedWindow(d time.Duration) string {
+	if d < time.Hour {
+		// A restored snapshot dates the tracker from the oldest bucket it
+		// brought back, and buckets are truncated to the hour, so the window
+		// can be seconds old. Report the minute it rounds into rather than a
+		// zero that reads as "no observation at all".
+		return fmt.Sprintf("%dm", max(int(d.Minutes()), 1))
+	}
+
+	return formatPromDuration(d)
 }
 
 func (oc *OperationalChecker) nodeRecs(

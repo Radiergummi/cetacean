@@ -283,3 +283,55 @@ func TestOperationalChecker_AllHealthy(t *testing.T) {
 		t.Errorf("expected 0 recommendations, got %d: %+v", len(recs), recs)
 	}
 }
+
+// The window a count covers is reported so a chronic fault reads differently
+// from a new one — and formatPromDuration, a PromQL range formatter, truncates
+// to whole hours. The tracker starts at process start, so for the whole first
+// hour after a restart, which is exactly when a crash loop clears the
+// threshold, every one of these read "over the past 0h".
+func TestOperationalChecker_FlakyServiceWindowIsNeverZero(t *testing.T) {
+	c := newOperationalCache([]swarm.Service{
+		{ID: "svc1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}}},
+	}, nil)
+	recordRestarts(c, "svc1", 10)
+
+	oc := NewOperationalChecker(mockOperationalQuery(nil, nil), c, 7*24*time.Hour)
+
+	recs := oc.Check(context.Background())
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 recommendation, got %d", len(recs))
+	}
+
+	if strings.Contains(recs[0].Message, "past 0h") {
+		t.Errorf("message reports a zero-length observation window: %q", recs[0].Message)
+	}
+
+	if !strings.Contains(recs[0].Message, "past 1m") {
+		t.Errorf(
+			"message = %q, want the sub-hour window the freshly-built tracker "+
+				"actually covers",
+			recs[0].Message,
+		)
+	}
+}
+
+// formatCountedWindow must still defer to the PromQL formatter above an hour,
+// so the long windows keep reading the way the sizing recommendations do.
+func TestFormatCountedWindow(t *testing.T) {
+	cases := []struct {
+		in   time.Duration
+		want string
+	}{
+		{30 * time.Second, "1m"},
+		{45 * time.Minute, "45m"},
+		{90 * time.Minute, "1h"},
+		{25 * time.Hour, "25h"},
+		{7 * 24 * time.Hour, "7d"},
+	}
+
+	for _, tc := range cases {
+		if got := formatCountedWindow(tc.in); got != tc.want {
+			t.Errorf("formatCountedWindow(%s) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

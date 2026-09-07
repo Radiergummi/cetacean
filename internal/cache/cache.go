@@ -799,7 +799,7 @@ func TaskIsLive(task swarm.Task) bool {
 		task.DesiredState != swarm.TaskStateRemove
 }
 
-// countsAsRunningReplica reports whether a task should be counted towards a
+// CountsAsRunningReplica reports whether a task should be counted towards a
 // service's running replica total.
 //
 // Status.State alone is not enough, for two reasons that both bite hard. A
@@ -811,7 +811,10 @@ func TaskIsLive(task swarm.Task) bool {
 // service restarting in a loop accumulated thirty such records, every one of
 // them reported running, inflating find, describe, the placement view and the
 // convergence wait at once.
-func countsAsRunningReplica(task swarm.Task) bool {
+// It is exported because internal/cluster's digests need the same rule: they
+// counted Status.State alone and so disagreed with every figure below about
+// the same service, which is the drift this predicate exists to prevent.
+func CountsAsRunningReplica(task swarm.Task) bool {
 	return task.Status.State == swarm.TaskStateRunning && TaskIsLive(task)
 }
 
@@ -821,7 +824,7 @@ func (c *Cache) RunningTaskCount(serviceID string) int {
 	defer c.mu.RUnlock()
 	count := 0
 	for id := range c.tasksByService[serviceID] {
-		if t, ok := c.tasks[id]; ok && countsAsRunningReplica(t) {
+		if t, ok := c.tasks[id]; ok && CountsAsRunningReplica(t) {
 			count++
 		}
 	}
@@ -842,7 +845,7 @@ func (c *Cache) RunningTaskCounts() map[string]int {
 
 	counts := make(map[string]int, len(c.services))
 	for _, t := range c.tasks {
-		if countsAsRunningReplica(t) {
+		if CountsAsRunningReplica(t) {
 			counts[t.ServiceID]++
 		}
 	}
@@ -937,7 +940,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 	// same map to name the degraded services.
 	runningByService := make(map[string]int, len(c.services))
 	for _, t := range c.tasks {
-		if countsAsRunningReplica(t) {
+		if CountsAsRunningReplica(t) {
 			runningByService[t.ServiceID]++
 		}
 	}

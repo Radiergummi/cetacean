@@ -113,7 +113,7 @@ func TestServiceConvergedComparesRunningToDesired(t *testing.T) {
 	c := cache.New(nil)
 	seedService(t, c, "svc-1", 3 /* desired */, 1 /* running */)
 
-	done, status := serviceConverged(c, "svc-1")()
+	done, status := serviceConverged(c, "svc-1", 0)()
 	if done {
 		t.Error("reported converged with 1/3 replicas running")
 	}
@@ -124,7 +124,7 @@ func TestServiceConvergedComparesRunningToDesired(t *testing.T) {
 
 	seedService(t, c, "svc-1", 3, 3)
 
-	if done, _ := serviceConverged(c, "svc-1")(); !done {
+	if done, _ := serviceConverged(c, "svc-1", 0)(); !done {
 		t.Error("did not report converged with 3/3 replicas running")
 	}
 }
@@ -140,7 +140,7 @@ func TestServiceConvergedWaitsOutRollingUpdate(t *testing.T) {
 	svc.UpdateStatus = &swarm.UpdateStatus{State: swarm.UpdateStateUpdating}
 	c.SetService(svc)
 
-	if done, status := serviceConverged(c, "svc-1")(); done {
+	if done, status := serviceConverged(c, "svc-1", 0)(); done {
 		t.Errorf("reported converged during a rolling update (status %q)", status)
 	}
 }
@@ -150,7 +150,7 @@ func TestServiceConvergedWaitsOutRollingUpdate(t *testing.T) {
 func TestServiceConvergedHandlesUnknownService(t *testing.T) {
 	c := cache.New(nil)
 
-	done, status := serviceConverged(c, "nope")()
+	done, status := serviceConverged(c, "nope", 0)()
 	if done {
 		t.Error("reported converged for a service the cache has never seen")
 	}
@@ -281,5 +281,81 @@ func TestBoundTaskTTLClampsItsOwnDefault(t *testing.T) {
 
 	if got := ttlOf(t, task); got != time.Hour.Milliseconds() {
 		t.Errorf("TTL = %dms, want the maximum %dms", got, time.Hour.Milliseconds())
+	}
+}
+
+// A scale-down must not report success while the replicas it removed are
+// still running.
+//
+// The cache is filled asynchronously by the event watcher, so at the moment a
+// write returns it still holds the spec *and* the tasks from before it: a
+// 5-to-2 scale looks like two desired against five running, or five against
+// five, depending on which half has landed. Neither is a convergence, and no
+// predicate over those numbers alone could tell — so the wait refuses to judge
+// anything older than the version the write produced.
+func TestServiceConvergedWaitsForTheWriteToReachTheCache(t *testing.T) {
+	c := cache.New(nil)
+	seedService(t, c, "svc-1", 5 /* desired */, 5 /* running */)
+
+	// The version the scale-down returned; the cache has not seen it yet.
+	const wrote = 12
+
+	done, status := serviceConverged(c, "svc-1", wrote)()
+	if done {
+		t.Errorf(
+			"reported converged from the pre-scale cache (status %q) — five "+
+				"replicas are still up",
+			status,
+		)
+	}
+
+	if status == "" {
+		t.Error("status should say the mutation is not visible yet")
+	}
+
+	// The watcher catches up: the new spec, but the surplus tasks are still
+	// draining and still count.
+	svc, _ := c.GetService("svc-1")
+	svc.Version.Index = wrote
+	replicas := uint64(2)
+	svc.Spec.Mode.Replicated.Replicas = &replicas
+	c.SetService(svc)
+
+	if done, status := serviceConverged(c, "svc-1", wrote)(); done {
+		t.Errorf("reported converged with 5 of 2 replicas still running (%q)", status)
+	}
+
+	// The surplus drains.
+	for _, id := range []string{"svc-1-task-c", "svc-1-task-d", "svc-1-task-e"} {
+		task, ok := c.GetTask(id)
+		if !ok {
+			t.Fatalf("task %s missing from the cache", id)
+		}
+
+		task.DesiredState = swarm.TaskStateShutdown
+		c.SetTask(task)
+	}
+
+	if done, status := serviceConverged(c, "svc-1", wrote)(); !done {
+		t.Errorf("did not report converged once the scale-down finished (%q)", status)
+	}
+}
+
+// The gate must not hold a wait open forever: a service already at or past the
+// written version is judged on the spot.
+func TestServiceConvergedJudgesAServiceTheCacheHasCaughtUpTo(t *testing.T) {
+	c := cache.New(nil)
+	seedService(t, c, "svc-1", 2, 2)
+
+	svc, _ := c.GetService("svc-1")
+	svc.Version.Index = 7
+	c.SetService(svc)
+
+	if done, status := serviceConverged(c, "svc-1", 7)(); !done {
+		t.Errorf("did not report converged at exactly the written version (%q)", status)
+	}
+
+	if done, status := serviceConverged(c, "svc-1", 6)(); !done {
+		t.Errorf("did not report converged past the written version (%q)", status)
 	}
 }

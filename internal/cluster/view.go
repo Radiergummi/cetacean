@@ -283,10 +283,11 @@ type Digest struct {
 	// to explain.
 	Reason string `json:"reason,omitempty"`
 
-	// Since is when the current State began: the oldest still-live failing
-	// task's timestamp, captured before RecentFailures is capped to the
-	// newest few, or the resource's own last-updated time when there is no
-	// failure to date it from. Answers "how long has this been going on"
+	// Since is when the current State began: the oldest failing task's
+	// timestamp, captured before RecentFailures is capped to the newest few,
+	// or the resource's own last-updated time when there is no failure to
+	// date it from — or when the State is healthy, which a failure cannot
+	// explain however recent it is. Answers "how long has this been going on"
 	// without a second call into history.
 	Since string `json:"since,omitempty"`
 
@@ -320,10 +321,11 @@ type Digest struct {
 // two windows tells them apart — so the digest carries both rather than a rate
 // the reader would have to trust blindly.
 //
-// This is the only channel through which a restart loop reaches a digest.
-// DeriveServiceState reports "running" whenever a replica is up, and
-// ServiceDigest drops tasks the orchestrator has already replaced, so a
-// service crash-looping every four seconds otherwise describes as healthy.
+// It is also the only channel through which the *rate* of a restart loop
+// reaches a digest. DeriveServiceState reports "running" whenever a replica is
+// up, and RecentFailures is capped at the newest few with no window attached,
+// so a service crash-looping every four seconds and one that failed twice this
+// morning otherwise describe alike.
 type ServiceRestarts struct {
 	LastHour uint64 `json:"lastHour"`
 	LastWeek uint64 `json:"lastWeek"`
@@ -387,7 +389,13 @@ func ServiceDigest(
 			continue
 		}
 
-		if task.Status.State == swarm.TaskStateRunning {
+		// cache.CountsAsRunningReplica, not Status.State alone: a task Swarm
+		// has marked for shutdown keeps Status.State: running while it
+		// drains, and cache.RunningTaskCounts — what find and every list row
+		// count with — already excludes those. Counting them here made a
+		// service mid-rolling-update describe as "running" while find called
+		// the same service "failed".
+		if cache.CountsAsRunningReplica(task) {
 			running++
 
 			continue
@@ -461,7 +469,13 @@ func ServiceDigest(
 		Restarts:       restarts,
 	}
 
-	if haveOldest {
+	// Since dates the state above, so only a state a failure explains may be
+	// dated from one. Swarm keeps a terminal record for every replica it has
+	// replaced, up to the task history limit, and those now reach `failures`
+	// on purpose — but a service that crashed once last week and has run
+	// clean since is "running", and answering "how long has this been going
+	// on" with a fault that is over is worse than not answering at all.
+	if haveOldest && state != "running" {
 		digest.Since = oldestFail.UTC().Format(time.RFC3339)
 	} else {
 		digest.Since = svc.UpdatedAt.UTC().Format(time.RFC3339)

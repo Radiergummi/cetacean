@@ -98,7 +98,16 @@ func (s *Server) awaitServiceConvergence(
 		return nil
 	}
 
-	return s.awaitServiceConvergenceFor(ctx, svc.ID, convergenceTimeout, nil)
+	// svc is Docker's post-mutation view, so its version is the one the cache
+	// has to catch up to before the predicate means anything — see
+	// awaitServiceConvergenceFor.
+	return s.awaitServiceConvergenceFor(
+		ctx,
+		svc.ID,
+		svc.Version.Index,
+		convergenceTimeout,
+		nil,
+	)
 }
 
 // awaitServiceConvergenceFor waits up to timeout for svcID to settle, writing
@@ -106,16 +115,26 @@ func (s *Server) awaitServiceConvergence(
 // wraps; watch needs the same wait with a caller-chosen bound and without the
 // task-augmentation early return, and one wait rather than two is what keeps
 // the two from drifting on the detachment above.
+//
+// minVersion is the service version the mutation produced, and the wait
+// refuses to judge anything older. The cache is filled asynchronously by the
+// event watcher, so at the moment a write returns it still holds the spec and
+// the tasks from *before* it: a scale from two to five asks five running
+// against a desired two and settles instantly, and a scale from five to two
+// asks two against a desired five and does the same. Neither is a convergence,
+// and no predicate over those numbers could tell. Zero disables the gate, for
+// watch, which follows no write of its own.
 func (s *Server) awaitServiceConvergenceFor(
 	ctx context.Context,
 	svcID string,
+	minVersion uint64,
 	timeout time.Duration,
 	observed *string,
 ) error {
 	detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	defer cancel()
 
-	converged := serviceConverged(s.cache, svcID)
+	converged := serviceConverged(s.cache, svcID, minVersion)
 
 	return s.awaitConvergence(detached, func() (bool, string) {
 		done, progress := converged()
@@ -130,11 +149,22 @@ func (s *Server) awaitServiceConvergenceFor(
 // serviceConverged watches one service by ID. The convergence rule itself lives
 // in internal/cluster so the REST and MCP transports cannot drift on what
 // "settled" means; this only supplies the cache reads.
-func serviceConverged(c *cache.Cache, serviceID string) convergenceFunc {
+func serviceConverged(
+	c *cache.Cache,
+	serviceID string,
+	minVersion uint64,
+) convergenceFunc {
 	return func() (bool, string) {
 		svc, ok := c.GetService(serviceID)
 		if !ok {
 			return false, "service not in the cache yet"
+		}
+
+		if svc.Version.Index < minVersion {
+			return false, fmt.Sprintf(
+				"waiting: the mutation is not visible yet (cache at version %d, wrote %d)",
+				svc.Version.Index, minVersion,
+			)
 		}
 
 		return cluster.ServiceConverged(svc, c.RunningTaskCount(svc.ID))

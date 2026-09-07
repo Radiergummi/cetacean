@@ -801,3 +801,89 @@ func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
 		t.Errorf("inspected %d times for a container start; want 1", got)
 	}
 }
+
+// One re-read is not enough when the daemon is slow to reconcile, and nothing
+// else re-arms it: the stale record — and the replica overcount built on it —
+// would then stand until the five-minutely full re-sync. A following container
+// event usually schedules another attempt in practice, but the fix must not
+// rest on "usually".
+func TestContainerDeathKeepsReinspectingWhileSwarmLags(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		// Two reads still see the pre-reconciliation view; only the third
+		// catches up.
+		if calls.Add(1) < 3 {
+			return swarm.Task{
+				ID: id, ServiceID: "svc",
+				DesiredState: swarm.TaskStateRunning,
+				Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+			}, nil
+		}
+
+		return swarm.Task{
+			ID: id, ServiceID: "svc",
+			DesiredState: swarm.TaskStateShutdown,
+			Status:       swarm.TaskStatus{State: swarm.TaskStateFailed},
+		}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	w.settleDelay = 5 * time.Millisecond
+
+	w.handleEvent(context.Background(), events.Message{
+		Type:   events.ContainerEventType,
+		Action: "die",
+		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
+			"com.docker.swarm.task.id": "t1",
+		}},
+	})
+
+	w.waitForSettles()
+
+	if got := c.RunningTaskCount("svc"); got != 0 {
+		t.Errorf(
+			"RunningTaskCount = %d, want 0 — the retry after the first "+
+				"unsettled re-read did not happen",
+			got,
+		)
+	}
+}
+
+// The retries are bounded. A task that never settles must not keep a goroutine
+// re-reading it for the life of the process.
+func TestSettleRetriesAreBounded(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		calls.Add(1)
+
+		return swarm.Task{
+			ID: id, ServiceID: "svc",
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+		}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	w.settleDelay = time.Millisecond
+
+	w.handleEvent(context.Background(), events.Message{
+		Type:   events.ContainerEventType,
+		Action: "die",
+		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
+			"com.docker.swarm.task.id": "t1",
+		}},
+	})
+
+	w.waitForSettles()
+
+	// The event's own inspect, plus the bounded series of re-reads.
+	if want := int32(1 + settleAttempts); calls.Load() != want {
+		t.Errorf("inspects = %d, want %d", calls.Load(), want)
+	}
+}
