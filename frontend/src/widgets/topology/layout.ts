@@ -86,15 +86,13 @@ export function toFlow(graph: TopologyGraphData): { nodes: Node[]; edges: Edge[]
     };
   });
 
-  const edges = graph.edges.map(
-    ({ label, source, target }): Edge => ({
-      id: `${source}--${target}`,
-      source,
-      target,
-      label,
-      animated: false,
-    }),
-  );
+  const edges = graph.edges.map(({ label, source, target }): Edge => ({
+    id: `${source}--${target}`,
+    source,
+    target,
+    label,
+    animated: false,
+  }));
 
   return { nodes, edges };
 }
