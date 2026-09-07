@@ -323,8 +323,7 @@ A prompt expands to a single message with the resource name you supplied. It rea
 not check that the name exists; the text tells the model to resolve it with `find` first. Every read and write
 the prompt describes goes through the normal tool and resource paths, including ACL checks.
 
-The six prompts cover the sequences that recur most and cost the most tool calls unaided. See the
-[MCP evaluation set](mcp_evaluation) for the questions they were chosen against.
+The six prompts cover the sequences that recur most and cost the most tool calls unaided.
 
 ## Widgets
 
