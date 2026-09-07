@@ -197,6 +197,12 @@ Authorization is grant-based RBAC layered on the active authentication mode. Wit
 configured every authenticated user has full access; once a policy is present the default is deny.
 Auth mode `none` bypasses authorization. See [Authorization](authorization) for the grant syntax.
 
+<ConfigParam name="acl.labels" env="CETACEAN_ACL_LABELS" default="false">
+  Read grants from `cetacean.acl.read` and `cetacean.acl.write` labels on the resources themselves, so a team can control access from its own compose file rather than through the central policy. Off by default, because turning it on lets anyone who can deploy a resource decide who may see it.
+
+  Where a label names an identity, that label alone decides what the identity may do with the resource — so it can narrow a broader policy grant, and a `cetacean.acl.read` label leaves an identity that the policy grants write with read only. Where a label names nobody relevant, the policy still applies: a label does not revoke a grant the policy makes explicitly. What it does remove is the implicit access an absent policy would otherwise give, and only on the resources carrying labels. See [Authorization](authorization) for the audience syntax and the full precedence rules.
+</ConfigParam>
+
 <ConfigParam name="acl.policy" env="CETACEAN_ACL_POLICY">
   Inline authorization policy as JSON, YAML, or TOML. Suitable for a short policy passed through the environment. Prefer `acl.policy_file` for anything longer, since only a file is watched for changes.
 </ConfigParam>

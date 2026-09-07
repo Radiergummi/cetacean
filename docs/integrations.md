@@ -7,8 +7,9 @@ tags: [integrations, traefik, shepherd, swarm-cronjob, diun]
 
 # Integrations
 
-Cetacean recognises four Swarm ecosystem tools from a service's own labels and renders each as a structured panel on
-the service detail page, above the labels section. Nothing is rendered when no matching labels are present.
+Cetacean recognises four Swarm ecosystem tools — and its own access-control labels — from a service's own labels,
+and renders each as a structured panel on the service detail page, above the labels section. Nothing is rendered
+when no matching labels are present.
 
 ## Supported tools
 
@@ -20,9 +21,12 @@ A tool is detected when the service carries at least one label with its prefix.
 | [Shepherd](https://github.com/djmaze/shepherd)              | `shepherd.`       | Enable state and `shepherd.auth.config`                                         |
 | [Swarm Cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.`  | Schedule, replicas, skip-running, and the two registry options                  |
 | [Diun](https://github.com/crazy-max/diun)                   | `diun.`           | Watch settings, tag include/exclude/sort filters, platform, and `diun.metadata.*` |
+| [Cetacean ACL](authorization#label-based-access-control)    | `cetacean.acl.`   | The read and write audiences the resource's own labels grant                     |
 
 For each tool, `<prefix>enable` sets the enabled state shown in the panel. When that label is absent Cetacean
-reports the integration as enabled.
+reports the integration as enabled, which is always the case for the ACL panel — it has no enable label, and is
+shown whenever a `cetacean.acl.*` label is present. Whether those labels are *enforced* is a separate question,
+settled by `acl.labels`; the panel shows what the labels say either way.
 
 Only `traefik.http.routers.*`, `traefik.http.services.*`, and `traefik.http.middlewares.*` are parsed into structure.
 `traefik.tcp.*` and `traefik.udp.*` labels are left to the raw label view.
