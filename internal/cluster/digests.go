@@ -184,9 +184,13 @@ var stackStateRank = map[string]int{"failed": 0, "updating": 1, "pending": 2, "r
 // a stack is the one resource whose membership crosses that many types, and
 // Related exists precisely so a caller can traverse without a second search.
 func StackDigest(stack cache.StackDetail, tasks []swarm.Task) Digest {
+	// The same replica rule cache.RunningTaskCounts applies, so a stack's
+	// per-service counts and the service rows inside it cannot disagree: a
+	// task draining out of a rolling update reads Status.State: running for
+	// as long as it takes to stop.
 	running := make(map[string]int, len(stack.Services))
 	for _, task := range tasks {
-		if task.Status.State == swarm.TaskStateRunning {
+		if cache.CountsAsRunningReplica(task) {
 			running[task.ServiceID]++
 		}
 	}

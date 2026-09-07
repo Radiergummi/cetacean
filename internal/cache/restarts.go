@@ -21,6 +21,11 @@ type RestartTracker struct {
 	horizon  time.Duration
 	bucket   time.Duration
 	services map[string]map[int64]uint32 // serviceID -> bucket-start-unix -> count
+
+	// observing is the moment this tracker began counting: process start, or
+	// the oldest bucket a restored snapshot brought back. It is what keeps
+	// "since I started counting" from reading as "in the last seven days".
+	observing time.Time
 }
 
 // NewRestartTracker creates a tracker with the given retention horizon and
@@ -35,10 +40,36 @@ func NewRestartTracker(horizon, bucket time.Duration) *RestartTracker {
 	}
 
 	return &RestartTracker{
-		horizon:  horizon,
-		bucket:   bucket,
-		services: make(map[string]map[int64]uint32),
+		horizon:   horizon,
+		bucket:    bucket,
+		services:  make(map[string]map[int64]uint32),
+		observing: time.Now(),
 	}
+}
+
+// TrackingSince is the earliest moment the tracker can account for, and so the
+// start of the only window its counts honestly describe.
+//
+// A count is labelled by the window asked for, but the tracker is built at
+// startup: a freshly-restarted Cetacean answered "107 failures over the past
+// 7d" for a service that had failed some twenty thousand times over two days,
+// and reported the identical figure for the hour and the week — which is
+// precisely the comparison a reader uses to tell a new fault from a chronic
+// one. Callers report this beside the counts so the two cases separate.
+//
+// It is the later of when this tracker started observing and the retention
+// horizon, because buckets past the horizon are pruned: claiming to account
+// for them would be the same misstatement in the other direction.
+func (rt *RestartTracker) TrackingSince() time.Time {
+	rt.mu.RLock()
+	defer rt.mu.RUnlock()
+
+	cutoff := time.Now().Add(-rt.horizon)
+	if rt.observing.After(cutoff) {
+		return rt.observing
+	}
+
+	return cutoff
 }
 
 // IsFailureState reports whether s is one of the involuntary terminal states.
@@ -159,6 +190,15 @@ func (rt *RestartTracker) Restore(snap RestartTrackerSnapshot) {
 		maps.Copy(clone, buckets)
 		rt.services[id] = clone
 		rt.pruneLocked(clone, now)
+
+		// History that survived the restart really is accounted for, so the
+		// horizon moves back to cover it. Refusing to would understate a
+		// tracker that did persist, which is the opposite error.
+		for bucket := range clone {
+			if start := time.Unix(bucket, 0); start.Before(rt.observing) {
+				rt.observing = start
+			}
+		}
 	}
 }
 

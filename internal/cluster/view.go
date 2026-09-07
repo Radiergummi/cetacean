@@ -283,10 +283,11 @@ type Digest struct {
 	// to explain.
 	Reason string `json:"reason,omitempty"`
 
-	// Since is when the current State began: the oldest still-live failing
-	// task's timestamp, captured before RecentFailures is capped to the
-	// newest few, or the resource's own last-updated time when there is no
-	// failure to date it from. Answers "how long has this been going on"
+	// Since is when the current State began: the oldest failing task's
+	// timestamp, captured before RecentFailures is capped to the newest few,
+	// or the resource's own last-updated time when there is no failure to
+	// date it from — or when the State is healthy, which a failure cannot
+	// explain however recent it is. Answers "how long has this been going on"
 	// without a second call into history.
 	Since string `json:"since,omitempty"`
 
@@ -320,13 +321,23 @@ type Digest struct {
 // two windows tells them apart — so the digest carries both rather than a rate
 // the reader would have to trust blindly.
 //
-// This is the only channel through which a restart loop reaches a digest.
-// DeriveServiceState reports "running" whenever a replica is up, and
-// ServiceDigest drops tasks the orchestrator has already replaced, so a
-// service crash-looping every four seconds otherwise describes as healthy.
+// It is also the only channel through which the *rate* of a restart loop
+// reaches a digest. DeriveServiceState reports "running" whenever a replica is
+// up, and RecentFailures is capped at the newest few with no window attached,
+// so a service crash-looping every four seconds and one that failed twice this
+// morning otherwise describe alike.
 type ServiceRestarts struct {
 	LastHour uint64 `json:"lastHour"`
 	LastWeek uint64 `json:"lastWeek"`
+
+	// TrackingSince is the earliest moment the counts above can account for.
+	// The tracker is built at startup, so on a Cetacean that has not been up
+	// for a week — or one whose snapshot does not persist — both figures are
+	// bounded by it rather than by their labels, and the ratio the two windows
+	// exist to expose collapses: identical counts read as a fault that began
+	// within the hour when it may have run for days. Compare it against the
+	// window before concluding "new".
+	TrackingSince string `json:"trackingSince,omitempty"`
 }
 
 // Related is one cross-reference from a Digest.
@@ -378,16 +389,15 @@ func ServiceDigest(
 			continue
 		}
 
-		if task.Status.State == swarm.TaskStateRunning {
+		// cache.CountsAsRunningReplica, not Status.State alone: a task Swarm
+		// has marked for shutdown keeps Status.State: running while it
+		// drains, and cache.RunningTaskCounts — what find and every list row
+		// count with — already excludes those. Counting them here made a
+		// service mid-rolling-update describe as "running" while find called
+		// the same service "failed".
+		if cache.CountsAsRunningReplica(task) {
 			running++
 
-			continue
-		}
-
-		// A task the orchestrator has already replaced explains history, not
-		// the current state, and including it would attribute an old failure
-		// to a service that has since recovered.
-		if !TaskIsLive(task) {
 			continue
 		}
 
@@ -395,8 +405,27 @@ func ServiceDigest(
 		// assigned, new — are not failures; DeriveServiceState already
 		// reports "pending" for those without help. A task only earns a
 		// place here when Swarm itself calls it an involuntary failure or
-		// gives an explicit cause for not running.
+		// gives an explicit cause for not running. This is also what keeps a
+		// rolling update quiet: it leaves a cleanly shut-down task behind for
+		// every replica it moved, and none of them are failures.
 		if !cache.IsFailureState(task.Status.State) && task.Status.Err == "" {
+			continue
+		}
+
+		// Whether the orchestrator has since replaced the task decides nothing
+		// here, and excluding replaced ones emptied the list precisely when it
+		// mattered: a crash loop is made entirely of replaced tasks, because
+		// Swarm marks one for shutdown the instant it fails and starts
+		// another. The guard only ever looked correct because the cache held
+		// those tasks with a stale DesiredState that let them through; once
+		// the watcher learned to observe the terminal transition it did what
+		// it said, and "why is this restarting in a loop" came back empty.
+		//
+		// It still has to hold for a task that is merely *unplaced* rather
+		// than failed — one carrying an explicit cause but no failure state,
+		// which is how an unschedulable replica reports. A replaced one of
+		// those is genuinely history.
+		if !cache.IsFailureState(task.Status.State) && !TaskIsLive(task) {
 			continue
 		}
 
@@ -440,7 +469,13 @@ func ServiceDigest(
 		Restarts:       restarts,
 	}
 
-	if haveOldest {
+	// Since dates the state above, so only a state a failure explains may be
+	// dated from one. Swarm keeps a terminal record for every replica it has
+	// replaced, up to the task history limit, and those now reach `failures`
+	// on purpose — but a service that crashed once last week and has run
+	// clean since is "running", and answering "how long has this been going
+	// on" with a fault that is over is worse than not answering at all.
+	if haveOldest && state != "running" {
 		digest.Since = oldestFail.UTC().Format(time.RFC3339)
 	} else {
 		digest.Since = svc.UpdatedAt.UTC().Format(time.RFC3339)

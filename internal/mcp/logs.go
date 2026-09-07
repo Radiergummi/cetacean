@@ -44,6 +44,22 @@ type LogResourceResponse struct {
 	// promise broken in the other direction.
 	Errors []string `json:"errors"`
 
+	// Oldest is the timestamp of the earliest line returned, so a caller can
+	// compare the window it asked for against the one it got without parsing
+	// the lines. Empty when nothing matched.
+	Oldest string `json:"oldest,omitempty"`
+
+	// Truncated reports that the read ran out of budget before it ran out of
+	// log, so it covers less time than it was asked to. Docker ignores `since`
+	// for service logs and knows nothing of `contains` or `level`, so all three
+	// are enforced by filtering after a fetch that `tail` bounds — on a chatty
+	// service that bound binds first, and a five-minute request comes back
+	// holding seconds. A search is bounded the same way with no window to fall
+	// short of, and a read across many services is cut again when their lines
+	// are merged; all three set this. Without it the two indistinguishable
+	// answers are "nothing happened" and "I did not look that far".
+	Truncated bool `json:"truncated,omitempty"`
+
 	// Note is a caveat about the read as a whole rather than about any one
 	// line: a scope wider than one fan-out may cover, so far. It exists
 	// because the cap is otherwise invisible in the payload — a cluster-wide
@@ -96,7 +112,8 @@ func (s *Server) readLogsImpl(
 	// lines per service. The widening is an implementation detail: the caller
 	// asked for `tail` lines and gets at most that many.
 	tail := wanted
-	if opts.since != "" || opts.contains != "" || opts.level != "" {
+	widened := opts.since != "" || opts.contains != "" || opts.level != ""
+	if widened {
 		tail = min(tail*10, maxLogTail)
 	}
 
@@ -130,11 +147,120 @@ func (s *Server) readLogsImpl(
 		return LogResourceResponse{}, fmt.Errorf("parse logs: %w", err)
 	}
 
+	// Whether the fetch itself was bounded has to be decided before the
+	// narrowings below discard the evidence: once `since` has filtered the
+	// lines away, a ceiling-bound read and a quiet service look identical.
+	ceilingHit := widened && hitFetchCeiling(lines, tail)
+
+	// How far back the fetch actually reached, which is the limit of what the
+	// answer can be evidence about. It is not resp.Oldest below: that is the
+	// oldest line to *survive* the filters, and on a grep the two are worlds
+	// apart — a search that read back an hour and matched once ten minutes ago
+	// would otherwise claim to have looked only ten minutes.
+	deepest := oldestTimestamp(lines)
+
 	lines = filterLogLines(lines, opts.level)
 	lines = filterLogContains(lines, opts.contains)
 	lines = logs.FilterSince(lines, opts.since)
 
-	return finishLogRead(lines, wanted, opts.since), nil
+	resp := finishLogRead(lines, wanted, opts.since)
+	if ceilingHit {
+		resp.Truncated = true
+		resp.Note = truncationNote(tail, deepest, opts.since)
+	}
+
+	return resp, nil
+}
+
+// hitFetchCeiling reports whether the fetch stopped because it ran out of
+// budget rather than out of log.
+//
+// It counts per task, because that is how Docker spends the budget: `tail` is
+// applied to each of a service's task streams and the results are interleaved,
+// so a three-replica service comes back holding up to three full windows.
+// Comparing the merged total against the bound called every such read
+// truncated — a complete answer reported as a partial one, which is the same
+// lie the field exists to prevent, told in the other direction. Lines carry
+// their task in Attrs because the fetch asks Docker for Details.
+//
+// A stream that ends exactly on the bound is indistinguishable from one that
+// was cut, and is reported as cut: an unnecessary "there may be more" costs a
+// caller one wider read, where the reverse costs it a wrong conclusion.
+func hitFetchCeiling(lines []logs.LogLine, tail int) bool {
+	if tail <= 0 {
+		return false
+	}
+
+	perTask := make(map[string]int, 4)
+	for _, line := range lines {
+		perTask[line.Attrs["taskId"]]++
+	}
+
+	for _, count := range perTask {
+		if count >= tail {
+			return true
+		}
+	}
+
+	return false
+}
+
+// truncationNote says what a filled fetch means for the answer.
+//
+// The two cases really are different questions. With `since` the caller named
+// a window and did not get all of it, so the note compares the two. Without
+// one — a `contains` grep or a `level` filter, which widen the fetch just the
+// same — there is no window to fall short of, and the miss is that lines older
+// than the ceiling were never searched at all. That second case was silent
+// until now, and it is the common shape of a grep, since `since` is optional:
+// a cluster-wide search that filled its budget and matched nothing answered
+// exactly like a clean cluster.
+func truncationNote(tail int, deepest, since string) string {
+	if since != "" {
+		return fmt.Sprintf(
+			"reached the %d-line-per-task fetch ceiling: lines were read back "+
+				"only to %s, not to %s, so this answer covers less time than "+
+				"asked for — narrow it with `contains` or `level`, or read a "+
+				"shorter window",
+			tail, orNone(deepest), since,
+		)
+	}
+
+	return fmt.Sprintf(
+		"reached the %d-line-per-task fetch ceiling: lines were read back only "+
+			"to %s, so anything older was never searched and this is not "+
+			"evidence that nothing older matched — bound the read with `since`, "+
+			"or raise `tail`",
+		tail, orNone(deepest),
+	)
+}
+
+// oldestTimestamp is the earliest timestamp among lines, which is not lines[0]:
+// Docker interleaves a service's task streams, so arrival order is not time
+// order until finishLogRead sorts them.
+func oldestTimestamp(lines []logs.LogLine) string {
+	oldest := ""
+	for _, line := range lines {
+		if line.Timestamp == "" {
+			continue
+		}
+
+		if oldest == "" || line.Timestamp < oldest {
+			oldest = line.Timestamp
+		}
+	}
+
+	return oldest
+}
+
+// orNone renders an empty timestamp as something a sentence can hold, for the
+// case where no line carried a parseable one.
+func orNone(timestamp string) string {
+	if timestamp == "" {
+		return "an unknown point"
+	}
+
+	return timestamp
 }
 
 // boundLogTail clamps a caller's requested tail to the defaults, so the two
@@ -176,6 +302,9 @@ func finishLogRead(lines []logs.LogLine, wanted int, since string) LogResourceRe
 	}
 
 	resp := LogResourceResponse{Lines: lines, Cursor: since, Errors: []string{}}
+	if len(lines) > 0 {
+		resp.Oldest = lines[0].Timestamp
+	}
 
 	for _, line := range slices.Backward(lines) {
 		if cursor, ok := logs.ParseCursor(line.Timestamp); ok {

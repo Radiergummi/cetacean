@@ -538,3 +538,160 @@ func TestServiceDetailsOmitsAbsentPolicyAndPorts(t *testing.T) {
 		t.Errorf("rollbackPolicy present = %v, want omitted", got["rollbackPolicy"])
 	}
 }
+
+// A crash loop is made entirely of tasks the orchestrator has already
+// replaced: Swarm marks a task for shutdown the instant it fails and starts
+// another, so by the time anything reads the digest every failure it has is a
+// replaced one. Excluding them left "why is this restarting in a loop"
+// answered with an empty list — the one question the field exists for.
+//
+// The exclusion was written for a different case, a service that failed once
+// and has since recovered, and it only ever appeared to work because the cache
+// held those tasks with a stale DesiredState that let them through. Once the
+// watcher learned to observe the terminal transition, the guard did what it
+// said and the failures vanished. What separates the two cases is the task's
+// state, not the orchestrator's intent for it: a shutdown that was clean is
+// not a failure and is excluded a few lines down regardless.
+func TestServiceDigestReportsFailuresSwarmHasAlreadyReplaced(t *testing.T) {
+	svc := replicated("flaky", 1)
+
+	tasks := []swarm.Task{
+		{ID: "t-old", ServiceID: "svc-flaky", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{
+				State: swarm.TaskStateFailed,
+				Err:   "task: non-zero exit (1)",
+			}},
+		{ID: "t-new", ServiceID: "svc-flaky", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
+	}
+
+	got := ServiceDigest(svc, tasks, nil, nil)
+
+	if len(got.RecentFailures) != 1 {
+		t.Fatalf(
+			"recentFailures = %d, want the replaced task that failed",
+			len(got.RecentFailures),
+		)
+	}
+
+	if got.RecentFailures[0].TaskID != "t-old" {
+		t.Errorf("recentFailures[0] = %q, want t-old", got.RecentFailures[0].TaskID)
+	}
+}
+
+// A replaced task that stopped cleanly is history and stays out: a rolling
+// update leaves one behind for every replica it moved, and reporting those as
+// failures would make every successful deploy look like an incident.
+func TestServiceDigestIgnoresCleanlyReplacedTasks(t *testing.T) {
+	svc := replicated("rolled", 1)
+
+	tasks := []swarm.Task{
+		{ID: "t-old", ServiceID: "svc-rolled", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{State: swarm.TaskStateShutdown}},
+		{ID: "t-new", ServiceID: "svc-rolled", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
+	}
+
+	if got := ServiceDigest(svc, tasks, nil, nil); len(got.RecentFailures) != 0 {
+		t.Errorf(
+			"recentFailures = %d, want none for a cleanly replaced task",
+			len(got.RecentFailures),
+		)
+	}
+}
+
+// A service mid-rolling-update must not describe as healthier than it lists.
+// The outgoing task keeps Status.State: running while it drains, and
+// cache.RunningTaskCounts — what find and every row count with — already
+// ignores it. Counting it here made describe answer "running" for a service
+// find called "failed", which is precisely the disagreement the two surfaces
+// are supposed to be free of.
+func TestServiceDigestCountsReplicasTheWayFindDoes(t *testing.T) {
+	svc := replicated("rolling", 1)
+
+	tasks := []swarm.Task{
+		{ID: "t-out", ServiceID: "svc-rolling", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
+		{ID: "t-in", ServiceID: "svc-rolling", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStatePreparing}},
+	}
+
+	got := ServiceDigest(svc, tasks, nil, nil)
+
+	// One desired, none running: the same numbers DeriveServiceState sees on
+	// the list side, and so the same state.
+	if want := DeriveServiceState(svc, 0); got.State != want {
+		t.Errorf(
+			"state = %q, want %q — the draining task was counted as a replica",
+			got.State, want,
+		)
+	}
+}
+
+// Since dates the state that is reported, and a failure cannot date a healthy
+// one. Swarm keeps a terminal record for every replica it has replaced, so a
+// service that crashed once last week and has run clean since still carries
+// one — and answering "how long has this been going on" with a fault that is
+// over is worse than not answering.
+func TestServiceDigestDoesNotDateARunningServiceFromAnOldFailure(t *testing.T) {
+	svc := replicated("recovered", 1)
+	svc.UpdatedAt = time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	lastWeek := time.Date(2026, 8, 30, 3, 0, 0, 0, time.UTC)
+
+	tasks := []swarm.Task{
+		{ID: "t-old", ServiceID: "svc-recovered", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{State: swarm.TaskStateFailed, Timestamp: lastWeek}},
+		{ID: "t-now", ServiceID: "svc-recovered", DesiredState: swarm.TaskStateRunning,
+			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
+	}
+
+	got := ServiceDigest(svc, tasks, nil, nil)
+
+	if got.State != "running" {
+		t.Fatalf("state = %q, want running", got.State)
+	}
+
+	if got.Since == lastWeek.UTC().Format(time.RFC3339) {
+		t.Error("since dates a running service from a failure it has recovered from")
+	}
+
+	if want := svc.UpdatedAt.UTC().Format(time.RFC3339); got.Since != want {
+		t.Errorf("since = %q, want %q", got.Since, want)
+	}
+
+	// The failure itself still belongs in the payload — it is history the
+	// caller asked for, and only Since had to stop claiming it as the present.
+	if len(got.RecentFailures) != 1 {
+		t.Errorf("recentFailures = %d, want the old failure kept", len(got.RecentFailures))
+	}
+}
+
+// A failing service must still be dated from its failure: that is the question
+// Since exists to answer, and the fix above must not take it away.
+func TestServiceDigestDatesAFailingServiceFromItsOldestFailure(t *testing.T) {
+	svc := replicated("broken", 1)
+	svc.UpdatedAt = time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	first := time.Date(2026, 9, 5, 8, 0, 0, 0, time.UTC)
+
+	tasks := []swarm.Task{
+		{ID: "t-1", ServiceID: "svc-broken", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{State: swarm.TaskStateFailed, Timestamp: first}},
+		{ID: "t-2", ServiceID: "svc-broken", DesiredState: swarm.TaskStateShutdown,
+			Status: swarm.TaskStatus{
+				State:     swarm.TaskStateFailed,
+				Timestamp: first.Add(time.Hour),
+			}},
+	}
+
+	got := ServiceDigest(svc, tasks, nil, nil)
+
+	if got.State == "running" {
+		t.Fatalf("state = %q, want a failing state", got.State)
+	}
+
+	if want := first.UTC().Format(time.RFC3339); got.Since != want {
+		t.Errorf("since = %q, want the oldest failure %q", got.Since, want)
+	}
+}

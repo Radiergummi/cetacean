@@ -602,3 +602,199 @@ func TestGetLogsToolRequiresAScope(t *testing.T) {
 		}
 	}
 }
+
+// Docker ignores `since` for service logs, so the window is enforced here by
+// filtering after the fetch — and the fetch itself is bounded by `tail`. When
+// a service is chatty enough to fill that bound before reaching the start of
+// the requested window, the answer covers a fraction of what was asked for and
+// says nothing about it: a five-minute request against a service emitting
+// hundreds of lines a second came back holding seven seconds. "Nothing
+// happened in the last hour" and "here are the newest 100 lines" are not the
+// same answer, and only the payload can tell them apart.
+func TestReadLogsReportsAWindowTheTailCeilingCutShort(t *testing.T) {
+	// One line past the ceiling the widened fetch uses, all newer than the
+	// `since` below, so filtering removes nothing and only the ceiling binds.
+	var frames []byte
+	for i := range maxLogTail {
+		frames = append(frames, buildLogFrame(1, fmt.Sprintf(
+			"2026-09-06T14:03:%02d.%06dZ line %d\n", i%60, i, i,
+		))...)
+	}
+
+	streamer := &fakeLogStreamer{frames: frames}
+	srv := newLogTestServer(t, cache.New(nil), streamer)
+
+	resp, err := srv.readLogsImpl(
+		context.Background(), docker.ServiceLog, "svc",
+		logOptions{tail: 10, since: "2026-09-06T13:58:00Z"},
+	)
+	if err != nil {
+		t.Fatalf("readLogsImpl: %v", err)
+	}
+
+	if !resp.Truncated {
+		t.Error("the read hit its line ceiling before the requested window and did not say so")
+	}
+
+	if resp.Oldest == "" {
+		t.Error("Oldest must report how far back the answer actually reaches")
+	}
+
+	if resp.Note == "" {
+		t.Error("a shortened window needs a note; the model reasons over the payload")
+	}
+}
+
+// The common case must stay quiet. A read that reached the start of its window
+// has nothing to caveat, and a note on every call trains the reader to skip it.
+func TestReadLogsDoesNotClaimTruncationWhenTheWindowWasCovered(t *testing.T) {
+	frames := append(
+		buildLogFrame(1, "2026-09-06T14:03:01.000000Z first\n"),
+		buildLogFrame(1, "2026-09-06T14:03:02.000000Z second\n")...,
+	)
+
+	streamer := &fakeLogStreamer{frames: frames}
+	srv := newLogTestServer(t, cache.New(nil), streamer)
+
+	resp, err := srv.readLogsImpl(
+		context.Background(), docker.ServiceLog, "svc",
+		logOptions{tail: 100, since: "2026-09-06T13:58:00Z"},
+	)
+	if err != nil {
+		t.Fatalf("readLogsImpl: %v", err)
+	}
+
+	if resp.Truncated {
+		t.Error("reported truncation on a read that covered its whole window")
+	}
+
+	if resp.Note != "" {
+		t.Errorf("unexpected note on a complete read: %q", resp.Note)
+	}
+
+	if resp.Oldest != "2026-09-06T14:03:01.000000Z" {
+		t.Errorf("Oldest = %q, want the earliest line returned", resp.Oldest)
+	}
+}
+
+// taskLogFrames builds `count` lines attributed to `taskID`, the way Docker
+// does when Details is on — which is how a read can tell one replica's stream
+// from another's.
+func taskLogFrames(taskID string, count int) []byte {
+	var frames []byte
+	for i := range count {
+		frames = append(frames, buildLogFrame(1, fmt.Sprintf(
+			"2026-09-06T14:%02d:%02d.%06dZ com.docker.swarm.task.id=%s line %d\n",
+			i/60%60, i%60, i, taskID, i,
+		))...)
+	}
+
+	return frames
+}
+
+// Docker applies `tail` to each of a service's task streams and interleaves
+// the results, so a three-replica read comes back holding up to three full
+// windows. Comparing the merged total against the bound called every such read
+// truncated — a complete answer reported as a partial one, which is the same
+// lie the field exists to prevent told backwards.
+func TestReadLogsDoesNotCountReplicasAgainstThePerStreamCeiling(t *testing.T) {
+	// Three streams, each well inside the widened ceiling, but well over it
+	// once merged.
+	var frames []byte
+	for _, taskID := range []string{"t-1", "t-2", "t-3"} {
+		frames = append(frames, taskLogFrames(taskID, 60)...)
+	}
+
+	streamer := &fakeLogStreamer{frames: frames}
+	srv := newLogTestServer(t, cache.New(nil), streamer)
+
+	resp, err := srv.readLogsImpl(
+		context.Background(), docker.ServiceLog, "svc",
+		// tail 10 widens the fetch to 100; no stream reached it, the merge did.
+		logOptions{tail: 10, since: "2026-09-06T00:00:00Z"},
+	)
+	if err != nil {
+		t.Fatalf("readLogsImpl: %v", err)
+	}
+
+	if resp.Truncated {
+		t.Errorf(
+			"reported truncation on a read where no stream hit its ceiling "+
+				"(note %q)",
+			resp.Note,
+		)
+	}
+}
+
+// A stream that really did fill its budget is still reported, replicas or not.
+func TestReadLogsReportsAPerStreamCeilingAcrossReplicas(t *testing.T) {
+	frames := append(taskLogFrames("t-quiet", 5), taskLogFrames("t-loud", 100)...)
+
+	streamer := &fakeLogStreamer{frames: frames}
+	srv := newLogTestServer(t, cache.New(nil), streamer)
+
+	resp, err := srv.readLogsImpl(
+		context.Background(), docker.ServiceLog, "svc",
+		logOptions{tail: 10, since: "2026-09-06T00:00:00Z"},
+	)
+	if err != nil {
+		t.Fatalf("readLogsImpl: %v", err)
+	}
+
+	if !resp.Truncated {
+		t.Error("a stream filled the ceiling and the answer did not say so")
+	}
+}
+
+// `tail` is widened for `contains` and `level` exactly as it is for `since`,
+// so a grep can fill the ceiling too — and `since` is optional, which makes
+// this the common shape of one. Reporting truncated: false on a search that
+// matched nothing but never reached the older lines is the confusion the field
+// was added to end, told in its most likely form.
+func TestReadLogsReportsACeilingOnAGrepWithoutSince(t *testing.T) {
+	streamer := &fakeLogStreamer{frames: taskLogFrames("t-1", 100)}
+	srv := newLogTestServer(t, cache.New(nil), streamer)
+
+	resp, err := srv.readLogsImpl(
+		context.Background(), docker.ServiceLog, "svc",
+		logOptions{tail: 10, contains: "no-such-string"},
+	)
+	if err != nil {
+		t.Fatalf("readLogsImpl: %v", err)
+	}
+
+	if len(resp.Lines) != 0 {
+		t.Fatalf("lines = %d, want none to match", len(resp.Lines))
+	}
+
+	if !resp.Truncated {
+		t.Error(
+			"a grep that matched nothing after filling its budget claimed to " +
+				"have looked further",
+		)
+	}
+
+	if resp.Note == "" {
+		t.Error("the note is the half a model reads; an empty one discloses nothing")
+	}
+}
+
+// A plain tail is not a truncation. The caller asked for N lines and got N;
+// there is no window it fell short of, and a caveat on every full read trains
+// the reader to skip the ones that matter.
+func TestReadLogsDoesNotClaimTruncationOnAPlainTail(t *testing.T) {
+	streamer := &fakeLogStreamer{frames: taskLogFrames("t-1", 10)}
+	srv := newLogTestServer(t, cache.New(nil), streamer)
+
+	resp, err := srv.readLogsImpl(
+		context.Background(), docker.ServiceLog, "svc",
+		logOptions{tail: 10},
+	)
+	if err != nil {
+		t.Fatalf("readLogsImpl: %v", err)
+	}
+
+	if resp.Truncated {
+		t.Errorf("reported truncation on an unfiltered tail (note %q)", resp.Note)
+	}
+}

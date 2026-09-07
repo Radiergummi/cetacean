@@ -133,6 +133,36 @@ func (h *History) Size() int {
 	return h.size
 }
 
+// Oldest is the timestamp of the oldest entry the ring still holds, and so the
+// start of the only window any query over it can honestly answer for.
+//
+// The ring is built at startup and is not persisted, so after a restart it
+// begins at the moment the process came up; once it wraps it begins wherever
+// the oldest surviving entry does. Neither is otherwise visible in a result,
+// which is how a query covering twelve hours came back holding half an hour of
+// one service's churn and reported truncated:false — asserting completeness
+// over a window it never had. A caller comparing this against the `since` it
+// asked for sees the horizon immediately.
+//
+// Returns ok=false when nothing has been recorded yet.
+func (h *History) Oldest() (time.Time, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	if h.count == 0 {
+		return time.Time{}, false
+	}
+
+	// Before the ring wraps the oldest entry is at index 0; after it wraps the
+	// cursor points at the slot about to be overwritten, which is the oldest.
+	oldest := 0
+	if h.full {
+		oldest = h.cursor
+	}
+
+	return h.entries[oldest].Timestamp, true
+}
+
 func (h *History) Count() uint64 {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

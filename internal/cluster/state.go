@@ -34,10 +34,24 @@ func serviceUpdateInFlight(svc swarm.Service) bool {
 // state, and a human-readable line describing what is still outstanding.
 //
 // Docker's write APIs return as soon as the swarm accepts a spec change, long
-// before the new state is real. This is what turns "accepted" into "running",
-// and it is deliberately stricter than DeriveServiceState: it requires the
-// running count to *equal* the desired one, so a scale-down is not called done
-// while surplus tasks are still being reaped.
+// before the new state is real. This is what turns "accepted" into "running".
+//
+// The count must *equal* the desired one. Accepting any count that reaches it
+// was meant to break a wait that could never end — an overshoot that never
+// falls, from a garbage-collected task record frozen at its last-inspected
+// status — but it broke every scale-down instead: the surplus replicas are
+// still running when the wait begins, so 5 >= 2 holds on the first look and a
+// 5-to-2 scale reports "converged: 5/2 replicas running" with five replicas
+// up. The overshoot is what the watcher fixes at the source, by dropping the
+// record of a task the daemon has forgotten and re-reading one whose
+// container has just died; a wait is the wrong place to paper over a cache
+// that is wrong, because it cannot tell that case from a surplus that is
+// genuinely still draining.
+//
+// The caller must also not ask before the cache has caught up with the write
+// — see awaitServiceConvergenceFor — or the count and the desired figure both
+// still describe the state before the mutation, and any predicate at all
+// holds immediately.
 func ServiceConverged(svc swarm.Service, runningCount int) (bool, string) {
 	// An in-flight rolling update means tasks are still being replaced; wait it
 	// out rather than reporting a transient count match as success.

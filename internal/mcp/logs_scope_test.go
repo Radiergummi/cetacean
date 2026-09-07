@@ -443,3 +443,61 @@ func TestScopedCursorRoundTripsAndIgnoresPlainTimestamps(t *testing.T) {
 		}
 	}
 }
+
+// The merge is cut to `tail` as well, and that cut shortens the window on its
+// own: sixty services returning fifty lines each, kept to the newest hundred,
+// covers seconds of whatever was asked for even though no single service ran
+// out of budget. It was invisible in the payload, which is the same silence
+// the per-service ceiling note exists to break.
+func TestScopedReadDisclosesTheMergedTailCut(t *testing.T) {
+	c := cache.New(nil)
+	for _, name := range []string{"api", "web", "worker"} {
+		c.SetService(swarm.Service{
+			ID:   name,
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name}},
+		})
+	}
+
+	// Each service returns well under its own per-service ceiling, so nothing
+	// but the merged cut can be responsible for the shortened window.
+	streamer := &fakeLogStreamer{frames: taskLogFrames("t-1", 20)}
+	srv := newLogTestServer(t, c, streamer)
+
+	got, err := srv.readScopedLogs(context.Background(), "cluster", "", logOptions{tail: 10})
+	if err != nil {
+		t.Fatalf("readScopedLogs: %v", err)
+	}
+
+	if len(got.Lines) != 10 {
+		t.Fatalf("lines = %d, want the requested 10", len(got.Lines))
+	}
+
+	if !got.Truncated {
+		t.Error("60 lines were cut to 10 and the answer did not say the window shrank")
+	}
+
+	if !strings.Contains(got.Note, "cut to the newest") {
+		t.Errorf("note = %q, want it to name the merged cut", got.Note)
+	}
+}
+
+// A merge that fitted has nothing to disclose.
+func TestScopedReadStaysQuietWhenTheMergeFits(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "api",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "api"}},
+	})
+
+	streamer := &fakeLogStreamer{frames: taskLogFrames("t-1", 3)}
+	srv := newLogTestServer(t, c, streamer)
+
+	got, err := srv.readScopedLogs(context.Background(), "cluster", "", logOptions{tail: 50})
+	if err != nil {
+		t.Fatalf("readScopedLogs: %v", err)
+	}
+
+	if got.Truncated {
+		t.Errorf("reported truncation on a merge that fitted (note %q)", got.Note)
+	}
+}
