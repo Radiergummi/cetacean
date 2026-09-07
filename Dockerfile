@@ -18,6 +18,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 COPY --link . .
 COPY --from=frontend /app/frontend/dist ./frontend/dist
+COPY --from=frontend /app/frontend/dist-widgets ./frontend/dist-widgets
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags "-s -w \

@@ -703,7 +703,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 				os.Exit(1)
 			}
 			slog.Warn(
-				"MCP signing key auto-generated; tokens won't survive restarts. Set CETACEAN_MCP_SIGNING_KEY for stable tokens.",
+				"MCP signing key auto-generated; tokens won't survive restarts. Set CETACEAN_MCP_SIGNING_KEY, or CETACEAN_MCP_SIGNING_KEY_FILE to read it from a file, for stable tokens.",
 			)
 		}
 		// Refresh tokens outlive the process only if the data directory is
