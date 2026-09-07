@@ -41,12 +41,14 @@ export const sidebarGroups: NavGroup[] = [
       { slug: "integrations", title: "Integrations" },
       { slug: "recommendations", title: "Recommendations" },
       { slug: "api", title: "API" },
+      { slug: "mcp", title: "MCP Server" },
     ],
   },
   {
     label: "Reference",
     items: [
       { slug: "configuration", title: "Configuration" },
+      { slug: "mcp-tools", title: "MCP Tools" },
       { slug: "api/explorer", title: "API Reference", reload: true },
       { slug: "api/schema", title: "Schema Reference" },
     ],

@@ -10,7 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - The MCP signing key can now be read from a file, via `CETACEAN_MCP_SIGNING_KEY_FILE`, so it can be supplied as a Docker secret instead of through the environment — the same `_FILE` suffix every other secret already accepted. Setting a key at all is what keeps issued tokens valid across a restart, so a deployment that persists refresh tokens wants one
 
+### Changed
+- The documentation has been rewritten end to end. The MCP page has been split into a setup guide and a separate tool and resource reference, and both are now reachable from the site navigation and the documentation index, where the MCP server was missing entirely. Pages that were too thin to be useful have been filled in: the dashboard guide, getting started, monitoring, recommendations and authorization all now cover what they name. The API page gains a complete endpoint reference with the operations level each write requires
+
 ### Fixed
+- The API documentation no longer describes tools that do not exist. Its list of MCP tools predated the current set, naming a search tool that was removed and nine editing tools that are now two
+- Documented task states, media types and feed formats now match what the server accepts. Four of the listed task states were not Docker states at all, and JSON Feed was undocumented despite being served everywhere Atom is
 - The configuration reference now documents every setting. The MCP server, authorization and recommendation sizing settings were absent from it, findable only by reading their own topic guides, so anyone configuring Cetacean from that page could not see roughly a third of what it accepts
 - The documentation site publishes again. A page added alongside the MCP tools was missing the metadata the site requires of every page, and the content loader fails the whole build rather than skipping one entry — so every deploy since had failed and the published docs had stopped updating altogether
 - Replica counts are correct again for services that restart frequently. A task Swarm has replaced, or one Docker has already removed, was still counted as running until the next five-minutely re-sync, so a service crash-looping every few seconds was reported as having as many as thirteen running replicas against a desired one. The same wrong figure reached the resource listings, a service's own description, a stack's summary, the placement graph and the cluster's task total

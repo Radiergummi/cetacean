@@ -1,21 +1,25 @@
 ---
 title: Authorization
-description: Grant-based RBAC with per-resource access control, policy configuration, and provider grant sources.
+description: Grant-based access control with resource patterns, audiences, policy files, and provider grant sources.
 category: guide
 tags: [authorization, rbac, acl, grants, security]
 ---
 
 # Authorization
 
-Cetacean supports grant-based RBAC authorization that controls which resources each user can view and modify.
-Authorization is independent of authentication — any auth provider can be combined with an ACL policy.
+Cetacean decides which resources an identity may view and change with grant-based access control. It combines with
+any [authentication](authentication) provider.
 
-With no policy configured, all authenticated users have full access. With a policy, access is default-deny: only
-explicitly granted resources are visible. Auth mode `none` bypasses authorization entirely.
+Three rules decide how much access an identity has:
 
-## Grant Model
+- `auth.mode` is `none`: authorization is bypassed. A policy configured in this mode has no effect.
+- No policy configured: every authenticated identity has full access.
+- A policy configured: access is default-deny. An identity sees only what a grant covers.
 
-A grant is a tuple of **(resources, audience, permissions)**. All matching grants are unioned, there are no Deny rules.
+## Grants
+
+A grant is a tuple of resources, audience and permissions. Every grant whose audience matches the identity applies,
+and their permissions are unioned. There are no deny rules, so adding a grant can only widen access.
 
 ```yaml
 grants:
@@ -32,43 +36,109 @@ grants:
     permissions: ["read"]
 ```
 
-**Resources** use `type:pattern` with glob wildcards (`*`, `?`). Supported types: `service`, `stack`, `node`, `task`,
-`config`, `secret`, `network`, `volume`, `plugin`, `swarm`. Bare `*` matches all types. A `stack:X` grant covers the
-stack and all its member resources. Tasks inherit from their parent service. Node grants use hostnames, not Docker IDs.
+### Resources
 
-**Audience** uses `user:pattern` (matches subject and email) or `group:pattern` (matches group memberships). Bare `*`
-matches everyone.
+A resource expression is `type:pattern`. Valid types are `service`, `stack`, `node`, `task`, `config`, `secret`,
+`network`, `volume`, `plugin` and `swarm`. A bare `*` matches every resource of every type; every other expression
+must name a type. Patterns are globs (`*`, `?`, `[...]`) matched against the identifier the resource is keyed by:
 
-**Permissions** are `read` (view in lists, detail pages, SSE, search) and `write` (mutate; implies `read`).
+| Type                                                                  | Pattern matches                            |
+| --------------------------------------------------------------------- | ------------------------------------------ |
+| `service`, `stack`, `config`, `secret`, `network`, `volume`, `plugin` | Resource name                              |
+| `node`                                                                | Hostname, or the node ID if it has none    |
+| `task`                                                                | Task ID                                    |
+| `swarm`                                                               | The single resource `swarm:cluster`        |
 
-## Policy Configuration
+Two inheritance rules widen a grant beyond a literal match:
 
-Policies can be provided as a file or inline. Inline takes precedence. Format is auto-detected (JSON, YAML, or TOML).
+- A `stack:X` grant covers the stack and every service, task, config, secret, network and volume in it.
+- A `service:X` grant covers that service's tasks. A task also inherits the stack of its parent service.
 
-| Setting       | Env var                    | Config file key   | Description                                  |
-| ------------- | -------------------------- | ----------------- | -------------------------------------------- |
-| Inline policy | `CETACEAN_ACL_POLICY`      | `acl.policy`      | Policy string (requires restart to change)   |
-| Policy file   | `CETACEAN_ACL_POLICY_FILE` | `acl.policy_file` | Path to policy file (hot-reloaded on change) |
+Task patterns match task IDs, which change every time a replica is replaced. Grant the parent service or the stack
+instead of naming tasks.
 
-File policies are watched for changes and swapped atomically. Invalid updates are logged and rejected, keeping the
-previous policy in effect.
+### Audience
 
-## Provider Grant Sources
+`user:pattern` matches the identity's subject or email. `group:pattern` matches any of its groups. Patterns are globs
+again, a bare `*` matches everyone, and a grant with no `audience` field also matches everyone.
 
-Auth providers can also supply per-user grants directly, unioned with file policy. Provider grants are scoped to the
-authenticated user (no `audience` field).
+### Permissions
 
-| Provider  | Source                       | Config                                   |
-| --------- | ---------------------------- | ---------------------------------------- |
-| Tailscale | CapMap peer capability       | `CETACEAN_AUTH_TAILSCALE_ACL_CAPABILITY` |
-| OIDC      | Custom token claim           | `CETACEAN_AUTH_OIDC_ACL_CLAIM`           |
-| Headers   | Proxy-injected header (JSON) | `CETACEAN_AUTH_HEADERS_ACL`              |
-| Cert      | File policy only             | —                                        |
-| None      | N/A (no authorization)       | —                                        |
+`read` and `write`. `write` implies `read`, so a write grant needs no separate read grant.
+
+`read` governs list and detail endpoints, search, history, Atom and JSON feeds, topology, recommendations and SSE
+streams. `write` governs every mutation. Lists never fail on a missing grant: unreadable items are filtered out of
+the response, and `total` counts only what the identity may see.
+
+## Policy configuration
+
+Provide the policy inline or as a file. Neither setting has a CLI flag; set them through the environment or the
+config file. Inline takes precedence when both are set.
+
+| Setting          | Env var                    | Description                                              |
+| ---------------- | -------------------------- | -------------------------------------------------------- |
+| `acl.policy`     | `CETACEAN_ACL_POLICY`      | Inline policy string. Changing it requires a restart     |
+| `acl.policy_file` | `CETACEAN_ACL_POLICY_FILE` | Path to a policy file, hot-reloaded when the file changes |
+
+An inline policy is parsed as JSON, TOML or YAML by auto-detection. A policy file is parsed by its extension
+(`.json`, `.toml`, `.yaml`, `.yml`), falling back to auto-detection for any other extension.
+
+A malformed or invalid policy at startup stops the server. A policy file is watched and swapped atomically on change;
+an invalid update is logged and rejected, leaving the previous policy in force. Cetacean logs a warning if the policy
+file is world-readable.
+
+An empty grant list (`grants: []`) is valid and denies everything.
+
+## Provider grant sources
+
+An auth provider can carry per-user grants on the identity itself. These complement the policy rather than replacing
+it: the identity's own grants are added to whatever the policy already grants it. Only the active auth mode's source
+is read.
+
+| Provider    | Source                       | Setting                    | Env var                                  |
+| ----------- | ---------------------------- | -------------------------- | ---------------------------------------- |
+| `tailscale` | Peer capability in the CapMap | `acl.tailscale_capability` | `CETACEAN_AUTH_TAILSCALE_ACL_CAPABILITY` |
+| `oidc`      | Custom token claim           | `acl.oidc_claim`           | `CETACEAN_AUTH_OIDC_ACL_CLAIM`           |
+| `headers`   | Proxy-injected header (JSON) | `acl.headers_acl`          | `CETACEAN_AUTH_HEADERS_ACL`              |
+| `cert`      | Policy only                  | —                          | —                                        |
+| `none`      | Not applicable               | —                          | —                                        |
+
+Each source expects a JSON array of grant objects carrying `resources` and `permissions`. `audience` is ignored:
+provider grants are always scoped to the identity that carried them. A grant that fails validation is dropped
+silently, so check the policy path first when a grant appears to have no effect.
+
+> **Note:** OIDC browser sessions do not carry raw token claims, so `acl.oidc_claim` grants apply to Bearer-token
+> requests only. Grant browser users through the policy, matching on `group:` audiences.
+
+## Interaction with operations level
+
+[Operations level](configuration#operations-level) and grants are independent checks, and a write needs both to
+pass. Operations level is a global ceiling on which categories of write the server exposes at all; grants decide
+which resources a given identity may write. A common pairing is `server.operations_level = 1` with per-team grants.
+
+| Operations level | Grant           | Result                |
+| ---------------- | --------------- | --------------------- |
+| Allows           | Grants `write`  | Allowed               |
+| Allows           | No `write`      | Denied (`403 ACL002`) |
+| Blocks           | Grants `write`  | Denied (`403 OPS001`) |
+
+Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem document:
+
+| Code     | Status | Meaning                                                                  |
+| -------- | ------ | ------------------------------------------------------------------------ |
+| `ACL001` | 403    | Read denied on a detail endpoint, or the identity holds no grants at all |
+| `ACL002` | 403    | Write denied on this resource                                            |
+| `OPS001` | 403    | The operation needs a higher operations level than the server runs at    |
+
+`GET` and `HEAD` responses carry an `Allow` header listing the write methods available for that resource, combining
+the operations level with the identity's grants. The dashboard uses it to decide which action buttons to show.
+
+Prometheus query endpoints (`GET /metrics`, `GET /metrics/labels`) are not per-resource filtered. They require the
+identity to hold at least one grant.
 
 ## Examples
 
-**Read-only observers:** everyone browses, only Ops writes:
+Everyone browses, only ops writes:
 
 ```yaml
 grants:
@@ -80,7 +150,7 @@ grants:
     permissions: ["write"]
 ```
 
-**Team-scoped stacks:** each team manages their own stacks, shared infra is read-only:
+Team-scoped stacks, with shared infrastructure readable by all:
 
 ```yaml
 grants:
@@ -95,7 +165,8 @@ grants:
     permissions: ["read"]
 ```
 
-**On-call with limited blast radius:** write services and tasks, read-only infra. Combine with `operations_level=1`:
+On-call with a limited blast radius: writes services and tasks, reads everything else. Pair it with
+`server.operations_level = 1`.
 
 ```yaml
 grants:
@@ -108,7 +179,7 @@ grants:
     permissions: ["read"]
 ```
 
-**Multi-tenant isolation:** tenants see only their own stacks, no cross-visibility:
+Multi-tenant isolation, with no cross-tenant visibility:
 
 ```yaml
 grants:
@@ -120,17 +191,16 @@ grants:
     permissions: ["read", "write"]
 ```
 
-After applying a policy, verify effective permissions with `curl -s localhost:9000/auth/whoami | jq .permissions`.
+## Verifying a policy
 
-## Interaction with Operations Level
+`GET /profile` returns the current identity together with the grant patterns in effect for it:
 
-ACL and [operations level](configuration.md#operations-level) are independent checks; both must pass for a write
-operation to succeed. Operations level is a global ceiling (which _categories_ of writes are enabled), while ACL
-controls which _resources_ each user can modify. A common pattern is `operations_level=1` (safe ops only) combined with
-ACL grants for per-team scoping.
+```bash
+curl -s -H "Accept: application/json" http://localhost:9000/profile | jq .permissions
+```
 
-| Scenario                                    | Result                |
-| ------------------------------------------- | --------------------- |
-| Operations level allows, ACL grants `write` | Allowed               |
-| Operations level allows, ACL denies `write` | Denied (`403 ACL002`) |
-| Operations level blocks, ACL grants `write` | Denied (`403 OPS001`) |
+The response projects the raw grant patterns, not the resources they resolve to. To check a specific resource, read
+its detail endpoint and inspect the `Allow` header.
+
+The [MCP server](mcp) applies the same grants. Its tools and resources are filtered per caller, and a tool the
+caller can never use is left out of `tools/list`.

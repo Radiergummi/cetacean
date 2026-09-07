@@ -1,45 +1,46 @@
 ---
-title: API Guide
-description: REST endpoints, SSE streaming, query parameters, write operations, and error codes.
-category: reference
+title: API
+description: REST endpoints, SSE streams, query parameters, write operations, and error codes.
+category: guide
 tags: [ api, rest, sse, json-ld, openapi ]
 ---
 
-# Cetacean API Guide
+# API
 
-Observability and management API for Docker Swarm Mode clusters.
+Cetacean serves its cached view of the swarm over HTTP. Reads use `GET`; writes use `PUT`, `POST`, `PATCH`, and
+`DELETE`, gated by [operations level](configuration#operations-level). Authentication is
+[pluggable](authentication) via `auth.mode` and defaults to anonymous access.
 
-Cetacean runs as a single binary that connects to the Docker socket, caches swarm state in memory, and serves it over
-HTTP. Read endpoints use GET; write operations use PUT, POST, PATCH, and DELETE gated
-by [operations level](configuration.md#operations-level). Authentication is [pluggable](authentication.md) via
-`auth.mode` (default: anonymous access).
+The OpenAPI spec is served as JSON at `GET /api`. Browsers get an interactive playground at the same path; the hosted
+copy is the [API explorer](api/explorer).
 
-The machine-readable OpenAPI spec is available at `/api` (JSON). For an interactive endpoint browser, see the [API Reference](api/explorer).
+## Content negotiation
 
-## Content Negotiation
-
-Every resource URL serves JSON, HTML (the embedded SPA), or SSE depending on what the client asks for. No `/api/v1/`
-prefix -- versioning lives in the media type.
+Every resource URL serves JSON, HTML (the embedded dashboard), SSE, or a feed format depending on what the client asks
+for. There is no `/api/v1/` prefix; versioning lives in the media type.
 
 ### Resolution order
 
-1. **File extension:** `.json`, `.html`, or `.atom` appended to any path (the highest priority)
-2. **`Accept` header:** standard content negotiation
-3. **Default:** `application/json` when `*/*` or no preference
+1. File extension appended to the path, which wins over everything else
+2. `Accept` header, parsed per RFC 7231 with `q` values and wildcards
+3. `application/json` when the client sends `*/*` or no `Accept` header
 
 ### Supported types
 
-| Accept value                       | Result                                     |
-|------------------------------------|--------------------------------------------|
-| `application/json`                 | JSON (latest version)                      |
-| `application/vnd.cetacean.v1+json` | JSON pinned to v1                          |
-| `text/html`                        | SPA                                        |
-| `text/event-stream`                | SSE (only on endpoints that support it)    |
-| `application/atom+xml`             | Atom feed (resource and history endpoints) |
+| `Accept` value                     | Extension   | Result                                       |
+|------------------------------------|-------------|----------------------------------------------|
+| `application/json`                 | `.json`     | JSON                                         |
+| `application/vnd.cetacean.v1+json` |             | JSON, versioned alias of `application/json`  |
+| `text/html`, `application/xhtml+xml` | `.html`   | The dashboard                                |
+| `text/event-stream`                |             | SSE, on endpoints that support it            |
+| `application/atom+xml`             | `.atom`     | Atom feed                                    |
+| `application/feed+json`            | `.feed`     | JSON Feed 1.1                                |
+| `application/vnd.jgf+json`         | `.jgf`      | JSON Graph Format, `/topology` only          |
+| `application/graphml+xml`          | `.graphml`  | GraphML, `/topology` only                    |
+| `text/vnd.graphviz`                | `.dot`      | Graphviz DOT, `/topology` only               |
 
-All negotiated responses include `Vary: Accept`.
-
-Requesting an unsupported type returns `406 Not Acceptable`.
+All negotiated responses include `Vary: Accept`. Requesting a type an endpoint cannot produce returns
+`406 Not Acceptable` with code `API003`; asking for SSE on an endpoint without a stream returns `406` with `API001`.
 
 ```http tab
 GET /services HTTP/1.1
@@ -50,24 +51,13 @@ Accept: application/json
 curl -H "Accept: application/json" http://localhost:9000/services
 ```
 
-Extensions also work — append `.json` or `.atom` to any resource path:
+## Feeds
 
-```http tab
-GET /services.json HTTP/1.1
-```
-
-```bash tab
-curl http://localhost:9000/services.json
-```
-
-## Atom Feeds
-
-Resource list endpoints, resource detail endpoints, and the history, search, and recommendations endpoints all support
-[Atom](https://www.rfc-editor.org/rfc/rfc4287) feeds. Request via `Accept: application/atom+xml` or append `.atom` to any supported path.
+Resource list and detail endpoints, plus `/events`, `/history`, `/search`, and `/recommendations`, serve
+[Atom 1.0](https://www.rfc-editor.org/rfc/rfc4287) and [JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/). A feed
+carries the resource's change history, not its current state.
 
 ### Supported endpoints
-
-All resource list and detail endpoints support Atom:
 
 - `/nodes`, `/nodes/{id}`
 - `/services`, `/services/{id}`
@@ -79,108 +69,78 @@ All resource list and detail endpoints support Atom:
 - `/volumes`, `/volumes/{name}`
 - `/events`, `/history`, `/search`, `/recommendations`
 
-Endpoints that do not produce resource change data (write sub-resources, log streams, metrics, topology) return
-`406 Not Acceptable`.
+Endpoints that produce no resource change data (write sub-resources, log streams, metrics, topology) return `406`.
 
-### Pagination
+### Feed pagination
 
-Atom feeds use cursor-based pagination. The feed includes a `next` link when more entries are available:
+Feeds page by cursor. The feed carries a `next` link while more entries exist, per
+[RFC 5005](https://www.rfc-editor.org/rfc/rfc5005).
 
 | Parameter | Description                                      |
 |-----------|--------------------------------------------------|
 | `before`  | Return entries older than this cursor ID         |
-| `limit`   | Number of entries per page (default 50, max 200) |
+| `limit`   | Entries per page (default 50, max 200)           |
 
 ```http tab
-# Request an Atom feed
-GET /services HTTP/1.1
-Accept: application/atom+xml
-###
-
-# Request via extension
 GET /services.atom HTTP/1.1
-###
 
-# Page through history feed
 GET /history.atom?limit=50 HTTP/1.1
 
 GET /history.atom?before=<cursor-id>&limit=50 HTTP/1.1
 ```
 
 ```bash tab
-# Request an Atom feed
 curl -H "Accept: application/atom+xml" http://localhost:9000/services
-
-# Request via extension
 curl http://localhost:9000/services.atom
-
-# Page through history feed
 curl "http://localhost:9000/history.atom?limit=50"
 curl "http://localhost:9000/history.atom?before=<cursor-id>&limit=50"
 ```
 
-### Caching
+### Feed caching
 
-Atom feeds support ETags and conditional requests. Pass `If-None-Match` with a previous ETag to receive `304 Not
-Modified` when the feed has not changed. Responses include `Vary: Accept, Authorization, Cookie` so caches
-differentiate by format and user.
+Feeds carry an `ETag`. Pass `If-None-Match` with a previous value to get `304 Not Modified` when nothing changed.
+Responses add `Vary: Authorization, Cookie` alongside `Vary: Accept` so caches separate formats and users.
 
 ### Feed autodiscovery
 
-JSON responses on feed-capable endpoints include a `Link: <...>; rel="alternate"; type="application/atom+xml"` header.
-The SPA injects `<link rel="alternate" type="application/atom+xml">` in the HTML `<head>`, so feed readers that
-support browser-based autodiscovery can find feeds automatically.
+JSON responses on feed-capable endpoints carry a `Link` header with `rel="alternate"` for each feed type. The dashboard
+injects an Atom `<link rel="alternate">` into the HTML `<head>` on resource, history, search, and recommendations
+pages, so feed readers can find the feed from the page.
 
 ## Pagination
 
-List endpoints support two pagination mechanisms: query parameters and HTTP Range headers.
+List endpoints page by query parameter or by HTTP `Range` header.
 
 ### Query parameters
 
 | Parameter | Type   | Default | Description                                                    |
 |-----------|--------|---------|----------------------------------------------------------------|
-| `limit`   | int    | 50      | Items per page (1-200)                                         |
+| `limit`   | int    | 50      | Items per page, capped at 200                                  |
 | `offset`  | int    | 0       | Starting position                                              |
-| `sort`    | string | --      | Sort field (varies by resource)                                |
+| `sort`    | string | none    | Sort field, varies by resource                                 |
 | `dir`     | string | `asc`   | Sort direction: `asc` or `desc`                                |
-| `search`  | string | --      | Case-insensitive substring match on name                       |
-| `filter`  | string | --      | [expr-lang](https://expr-lang.org/) expression (max 512 chars) |
+| `search`  | string | none    | Case-insensitive substring match on name                       |
+| `filter`  | string | none    | [expr-lang](https://expr-lang.org/) expression, max 512 chars  |
 
 ```http tab
-# Paginate results
 GET /services?limit=10&offset=20 HTTP/1.1
-###
 
-# Sort by field
 GET /nodes?sort=hostname&dir=desc HTTP/1.1
-###
 
-# Search by name
 GET /configs?search=nginx HTTP/1.1
-###
-
-# Filter with expression
-GET /services?filter=name+contains+'web' HTTP/1.1
 ```
 
 ```bash tab
-# Paginate results
 curl "http://localhost:9000/services?limit=10&offset=20"
-
-# Sort by field
 curl "http://localhost:9000/nodes?sort=hostname&dir=desc"
-
-# Search by name
 curl "http://localhost:9000/configs?search=nginx"
-
-# Filter with expression
-curl "http://localhost:9000/services?filter=name+contains+'web'"
 ```
 
 ### Range header pagination
 
-List endpoints also accept `Range: items 0-24` for HTTP range-based pagination. Returns `206 Partial Content` with
-`Content-Range: items 0-24/142`. When both query parameters and Range are present, query parameters take precedence.
+List endpoints accept `Range: items 0-24` and answer `206 Partial Content` with `Content-Range: items 0-24/142`. Every
+list response sets `Accept-Ranges: items`. An offset past the end returns `416` with `Content-Range: items */142`. Query
+parameters take precedence when both are present.
 
 ### Sort fields by resource
 
@@ -197,61 +157,49 @@ List endpoints also accept `Range: items 0-24` for HTTP range-based pagination. 
 
 ### Filter fields by resource
 
-Filter expressions use [expr-lang](https://expr-lang.org/) syntax. The result must be boolean. Operators: `==`, `!=`,
-`<`, `>`, `<=`, `>=`, `contains`, `startsWith`, `endsWith`, `in`, `not in`, `&&`, `||`, `!`.
+Filter expressions use [expr-lang](https://expr-lang.org/) syntax and must evaluate to a boolean. Operators: `==`,
+`!=`, `<`, `>`, `<=`, `>=`, `contains`, `startsWith`, `endsWith`, `in`, `not in`, `&&`, `||`, `!`.
 
-**Nodes**: `id`, `name` (hostname), `state` (`ready`/`down`/`unknown`), `role` (`manager`/`worker`), `availability` (
-`active`/`pause`/`drain`)
+| Resource | Fields                                                                                                                                                                            |
+|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Nodes    | `id`, `name` (hostname), `state` (`ready`/`down`/`unknown`), `role` (`manager`/`worker`), `availability` (`active`/`pause`/`drain`)                                                |
+| Services | `id`, `name`, `image`, `mode` (`replicated`/`global`), `stack`                                                                                                                     |
+| Tasks    | `id`, `state`, `desired_state`, `image`, `exit_code`, `error`, `service` (ID), `node` (ID), `slot` (int)                                                                            |
+| Stacks   | `name`, `services`, `configs`, `secrets`, `networks`, `volumes` (all counts)                                                                                                       |
+| Configs  | `id`, `name`                                                                                                                                                                       |
+| Secrets  | `id`, `name`                                                                                                                                                                       |
+| Networks | `id`, `name`, `driver`, `scope` (`swarm`/`local`)                                                                                                                                  |
+| Volumes  | `name`, `driver`, `scope`                                                                                                                                                          |
 
-**Services**: `id`, `name`, `image`, `mode` (`replicated`/`global`), `stack`
-
-**Tasks**: `id`, `state` (`new`/`allocated`/`pending`/`activating`/`running`/`deactivating`/`stopping`/`completed`/
-`failed`/`rejected`), `desired_state`, `image`, `exit_code`, `error`, `service` (ID), `node` (ID), `slot` (int)
-
-**Configs**: `id`, `name`
-
-**Secrets**: `id`, `name`
-
-**Networks**: `id`, `name`, `driver`, `scope` (`swarm`/`local`)
-
-**Volumes**: `name`, `driver`, `scope`
-
-**Stacks**: `name`, `services` (count), `configs` (count), `secrets` (count), `networks` (count), `volumes` (count)
+Task `state` takes the Docker task states: `new`, `allocated`, `pending`, `assigned`, `accepted`, `preparing`,
+`ready`, `starting`, `running`, `complete`, `shutdown`, `failed`, `rejected`, `remove`, `orphaned`. `exit_code` is
+empty until the task reaches a terminal state.
 
 ```http tab
-# Filter ready managers
 GET /nodes?filter=role+%3D%3D+%22manager%22+%26%26+state+%3D%3D+%22ready%22 HTTP/1.1
-###
 
-# Filter failed tasks
 GET /tasks?filter=state+%3D%3D+%22failed%22+%7C%7C+error+!%3D+%22%22 HTTP/1.1
-###
 
-# Filter stacks by service count
 GET /stacks?filter=services+>+5 HTTP/1.1
 ```
 
 ```bash tab
-# Filter ready managers
 curl "http://localhost:9000/nodes?filter=role+%3D%3D+%22manager%22+%26%26+state+%3D%3D+%22ready%22"
-
-# Filter failed tasks
 curl "http://localhost:9000/tasks?filter=state+%3D%3D+%22failed%22+%7C%7C+error+!%3D+%22%22"
-
-# Filter stacks by service count
 curl "http://localhost:9000/stacks?filter=services+>+5"
 ```
 
-## Response Format
+## Response format
 
-All responses include [JSON-LD](https://json-ld.org/) annotations (`@context`, `@id`, `@type`) for self-description. Collection responses
-wrap items in `{ items, total, limit, offset }` with [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288) `Link` headers for pagination. Detail responses wrap
-the resource with cross-references (e.g., services using a config, or the service and node for a task).
+All JSON responses carry [JSON-LD](https://json-ld.org/) annotations (`@context`, `@id`, `@type`). Collection responses
+wrap items as `{ items, total, limit, offset }` with [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288) `Link` headers
+for pagination. Detail responses wrap the resource with its cross-references, such as the services using a config, or
+the service and node for a task.
 
 ## Errors
 
-Error responses follow [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (Problem Details) with Content-Type
-`application/problem+json`.
+Errors follow [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details, with Content-Type
+`application/problem+json` and `Cache-Control: no-store`.
 
 ```json
 {
@@ -267,7 +215,7 @@ Error responses follow [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (Probl
 
 ### Error codes
 
-Every domain-specific error includes a stable error code in its `type` URI:
+Domain-specific errors carry a stable code as the last path segment of `type`:
 
 ```json
 {
@@ -281,19 +229,18 @@ Every domain-specific error includes a stable error code in its `type` URI:
 }
 ```
 
-The code is the last path segment of `type` (e.g. `SVC001`). Codes use a three-letter domain prefix followed by a
-three-digit number:
+Codes are a three-letter domain prefix plus a three-digit number.
 
 | Prefix | Domain                           |
 |--------|----------------------------------|
 | `API`  | Protocol and content negotiation |
 | `AUT`  | Authentication                   |
+| `ACL`  | Authorization                    |
 | `OPS`  | Operations level                 |
 | `FLT`  | Filter expressions               |
 | `SEA`  | Search                           |
-| `MTR`  | Metrics / Prometheus             |
+| `MTR`  | Metrics and Prometheus           |
 | `LOG`  | Log streaming                    |
-| `ACL`  | Authorization (RBAC)             |
 | `SSE`  | SSE connections                  |
 | `ENG`  | Docker Engine                    |
 | `SWM`  | Swarm operations                 |
@@ -307,109 +254,86 @@ three-digit number:
 | `CFG`  | Config operations                |
 | `SEC`  | Secret operations                |
 
-Generic HTTP errors (no domain-specific code) use `"type": "about:blank"`.
+Generic HTTP errors use `"type": "about:blank"`. `GET /api/errors` lists every code with its description and
+suggestion; `GET /api/errors/{code}` returns one.
 
-Browse the error reference interactively at [`GET /api/errors`](#api-documentation) or look up a single code at
-`GET /api/errors/{code}`.
+### Common errors
 
-### Common error scenarios
-
-**Version conflicts (409):** All Write endpoints use Docker's optimistic concurrency. If the resource was modified by
-another client between your read and write, the server returns `409 Conflict` with a `SVC001`, `NOD002`, or similar
-code.
-Re-read the resource and retry.
-
-**Operations level (403):** Requests to endpoints above the
-configured [operations level](configuration.md#operations-level)
-return `403` with code `OPS001`.
-
-**Authorization denied (403):** When [ACL](authorization.md) is active, read access denied returns `ACL001` and write
-access denied returns `ACL002`. The response includes the resource and permission that was checked.
-
-**Unsupported patch type (415):** PATCH endpoints validate `Content-Type`. Sending `application/json` instead of
-`application/json-patch+json` or `application/merge-patch+json` returns `415 Unsupported Media Type`.
+| Situation | Status | Codes | What to do |
+|---|---|---|---|
+| Resource changed between your read and your write | 409 | `SVC001`, `NOD002`, `CFG005`, `SEC005` | Re-read the resource and retry |
+| Endpoint above the configured [operations level](configuration#operations-level) | 403 | `OPS001` | Raise the operations level |
+| [ACL](authorization) denies read or write | 403 | `ACL001`, `ACL002` | The response names the resource and permission checked |
+| `PATCH` sent with the wrong `Content-Type` | 415 | `API004` | Use `application/json-patch+json` or `application/merge-patch+json` |
+| Docker daemon unreachable | 503 | `ENG001` | Check the socket and the daemon |
 
 ## Caching
 
-JSON responses include an `ETag` header (SHA-256 of the response body). Use `If-None-Match` for conditional requests:
+JSON responses carry an `ETag` (the first 16 bytes of the response body's SHA-256, hex-encoded) and
+`Cache-Control: no-cache`. Use `If-None-Match` for conditional requests:
 
 ```bash
-# First request -- note the ETag
 curl -v http://localhost:9000/services
 # < ETag: "3a7f..."
 
-# Conditional request
 curl -H 'If-None-Match: "3a7f..."' http://localhost:9000/services
 # < HTTP/1.1 304 Not Modified
 ```
 
-Static resources (`/api`, `/api/context.jsonld`) return `Cache-Control: public, max-age=3600`.
+Detail endpoints also set `Last-Modified` from the resource's update timestamp and honour `If-Modified-Since`. When
+both conditional headers are present, `If-None-Match` wins.
 
-SSE and streaming endpoints do not set caching headers.
+`/api` and `/api/context.jsonld` return `Cache-Control: public, max-age=3600`; `/api/scalar.js` returns `max-age=86400`.
+SSE and streaming endpoints set no caching headers.
 
-Detail endpoints also return `Last-Modified` based on the resource's update timestamp. Use `If-Modified-Since` for
-conditional requests alongside or instead of ETags.
+## Response headers
 
-## Response Headers
+`Allow` on `GET` and `HEAD` responses lists the methods available for that resource under the current
+[operations level](configuration#operations-level) and [ACL](authorization) grants. Inspect it before attempting a
+write.
 
-Beyond standard caching headers, Cetacean sets several headers to help clients discover capabilities:
+`Accept-Patch` lists the patch formats a resource accepts, either `application/json-patch+json, application/merge-patch+json`
+or `application/merge-patch+json` alone. It appears only when the operations level and ACL permit writes.
 
-**`Allow`:** GET and HEAD responses include an `Allow` header listing the HTTP methods available for that resource,
-based on the current [operations level](configuration.md#operations-level) and [ACL](authorization.md) permissions. A
-client can inspect this before attempting a write operation.
+Write endpoints honour [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: return=minimal`, answering
+`204 No Content` (or `201 Created` for a create) with `Preference-Applied: return=minimal` instead of the updated
+resource.
 
-**`Accept-Patch`:** Resources that support PATCH include `Accept-Patch` listing the accepted content types
-(`application/json-patch+json`, `application/merge-patch+json`, or both). Present only when the operations level and
-ACL permit write operations.
+Every response sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Content-Security-Policy`. HSTS
+is added when TLS is enabled.
 
-**`Prefer: return=minimal`:** Write endpoints honor [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: return=minimal`. When set, successful writes
-return `204 No Content` instead of the updated resource. The response includes `Preference-Applied: return=minimal`.
+## Real-time events
 
-Standard security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Content-Security-Policy`)
-are set on all responses. HSTS is added when TLS is enabled.
-
-## Real-Time Events (SSE)
-
-Every resource endpoint supports SSE in addition to JSON. Send `Accept: text/event-stream` to any list or detail URL to
-open a per-resource event stream.
+Send `Accept: text/event-stream` to any resource list or detail URL to open a stream scoped to that path.
 
 ### Per-resource streams
 
-List Endpoints stream events filtered by resource type. Detail Endpoints stream events for a single resource. Stack
-streams include events for all member resources (services, tasks, configs, secrets, networks, volumes).
+A list stream carries events for one resource type. A detail stream carries events for one resource plus the resources
+that belong to it: a node stream includes that node's tasks, a service stream includes that service's tasks, and a stack
+stream includes its member services, tasks, configs, secrets, networks, and volumes.
 
 ```http tab
-# Stream all node events
 GET /nodes HTTP/1.1
 Accept: text/event-stream
-###
 
-# Stream events for a single service
 GET /services/abc123 HTTP/1.1
 Accept: text/event-stream
-###
 
-# Stream events for a stack and all its resources
 GET /stacks/myapp HTTP/1.1
 Accept: text/event-stream
 ```
 
 ```bash tab
-# Stream all node events
 curl -H "Accept: text/event-stream" http://localhost:9000/nodes
-
-# Stream events for a single service
 curl -H "Accept: text/event-stream" http://localhost:9000/services/abc123
-
-# Stream events for a stack and all its resources
 curl -H "Accept: text/event-stream" http://localhost:9000/stacks/myapp
 ```
 
-This is the primary SSE mechanism -- the frontend uses per-resource streams for real-time updates on every page.
+The dashboard uses per-resource streams for live updates on every page.
 
 ### Global event stream
 
-`/events` provides a single stream of all resource changes:
+`/events` carries every resource change in one stream:
 
 ```http tab
 GET /events HTTP/1.1
@@ -422,7 +346,7 @@ curl -H "Accept: text/event-stream" http://localhost:9000/events
 
 ### Event format
 
-Single events are sent with the resource type as the event name:
+A single event uses the resource type as the event name:
 
 ```sse
 id: 1
@@ -440,7 +364,8 @@ The `action` field says what happened:
 | `ref_changed` | A resource this one cross-references changed. |
 | `full_sync` | Sent as a `sync` event when the stream could not be replayed from the client's cursor. Refetch. |
 
-When multiple events arrive within the batch interval (default 100ms), they are sent as a `batch` event:
+Events arriving within the batch interval (`server.sse.batch_interval`, default 100ms) are sent together as a `batch`
+event:
 
 ```sse
 id: 2
@@ -450,7 +375,7 @@ data: [{"@id":"/services/abc","@type":"Service","type":"service","action":"updat
 
 ### Filtering
 
-Use `?types=` to subscribe to specific resource types:
+`?types=` on `/events` narrows the stream:
 
 ```http tab
 GET /events?types=service,node HTTP/1.1
@@ -461,23 +386,23 @@ Accept: text/event-stream
 curl -H "Accept: text/event-stream" "http://localhost:9000/events?types=service,node"
 ```
 
-Valid types: `node`, `service`, `task`, `config`, `secret`, `network`, `volume`, `stack`.
+Valid types: `node`, `service`, `task`, `config`, `secret`, `network`, `volume`, `stack`. `sync` events always pass the
+filter.
 
 ### Keepalive
 
-The server sends SSE comment lines (`:keepalive`) on idle connections to prevent proxies and load balancers from closing
-them. This is transparent to EventSource clients.
+The server writes an SSE comment line every 15 idle seconds so proxies and load balancers keep the connection open.
+EventSource clients ignore it.
 
-### Reconnection and Replay
+### Reconnection and replay
 
-The server assigns incrementing `id:` values to each event. EventSource clients automatically send `Last-Event-ID` on
-reconnect, and the server replays missed events. If the requested ID is too old, the server sends a `sync` event to
-tell the client to do a full reload.
+Each event carries an incrementing `id:`. EventSource clients send `Last-Event-ID` on reconnect and the server replays
+what they missed from the change history. Detail and stack streams cannot be replayed, and a cursor older than the
+history buffer cannot either; both cases send a `sync` event telling the client to refetch.
 
-### Metrics SSE
+### Metrics streams
 
-The `/metrics` endpoint supports SSE for live-updating charts. Request `text/event-stream` to receive periodic metric
-updates instead of a one-shot JSON proxy response.
+`GET /metrics` with `Accept: text/event-stream` pushes periodic updates instead of proxying one query to Prometheus.
 
 ```http tab
 GET /metrics?query=up&step=15&range=3600 HTTP/1.1
@@ -490,103 +415,129 @@ curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step
 
 | Event     | Description                                                                  |
 |-----------|------------------------------------------------------------------------------|
-| `initial` | Full range query result on connect (same shape as Prometheus `query_range`). |
+| `initial` | Full range query result on connect, same shape as Prometheus `query_range`. |
 | `point`   | Single instant query result appended at each tick.                           |
 
-The stream runs instant queries on each tick interval and pushes new data points. Clients append `point` events to their
-existing data to build a rolling window.
+Append `point` events to the data you already hold to build a rolling window.
 
-### Connection Limits
+## Connection limits
 
-SSE, log stream, and metrics stream connections are capped. When a limit is reached, the server returns
-`429 Too Many Requests` with a `Retry-After` header.
+There is no general rate limiting. Concurrent streams are capped, and a request over the cap returns
+`429 Too Many Requests` with `Retry-After: 5`.
+
+| Stream                                                 | Limit | Code     |
+|--------------------------------------------------------|-------|----------|
+| SSE event clients (`/events` and per-resource streams) | 256   | `SSE001` |
+| Log streams (`/services/{id}/logs`, `/tasks/{id}/logs`) | 128   | `LOG001` |
+| Metrics streams (`/metrics` as SSE)                    | 64    | `MTR005` |
 
 ## Endpoints
 
-For the complete endpoint reference with request/response schemas and try-it-out, see the interactive [API Reference](api/explorer).
+`GET /api` serves the full OpenAPI spec with request and response schemas, and the
+[API explorer](api/explorer) renders it interactively. The tables below are the shape of the surface.
 
-## MCP Server
+### Reads
 
-Cetacean optionally exposes a Model Context Protocol server for AI agents. Enable with `CETACEAN_MCP=true` (or `[mcp].enabled = true` in TOML). The protocol is mounted at `{base_path}/mcp` over streamable HTTP — a single endpoint accepting JSON-RPC requests with optional SSE upgrades for server notifications.
-
-### Authorization
-
-When auth mode is anything other than `none`, the MCP endpoint is bearer-protected and Cetacean exposes an OAuth 2.1 authorization server alongside it. The protocol implements the MCP 2026-07-28 authorization profile (RFC 8414 AS metadata, RFC 9728 protected-resource metadata, RFC 8707 resource indicators, PKCE-only with S256).
-
-| Endpoint | Purpose |
+| Area | Endpoints |
 |---|---|
-| `GET {base_path}/.well-known/oauth-authorization-server` | AS metadata (RFC 8414) |
-| `GET {base_path}/.well-known/oauth-protected-resource` | Protected Resource Metadata (RFC 9728) |
-| `GET\|POST {base_path}/oauth/authorize` | Authorization endpoint + consent page |
-| `POST {base_path}/oauth/token` | Token endpoint (`authorization_code`, `refresh_token`) |
-| `POST {base_path}/oauth/revoke` | Token revocation (RFC 7009) |
-| `POST {base_path}/oauth/register` | Dynamic Client Registration (RFC 7591) |
+| Nodes | `/nodes`, `/nodes/{id}`, `/nodes/{id}/tasks`, `/nodes/{id}/labels`, `/nodes/{id}/role` |
+| Services | `/services`, `/services/{id}`, `/services/{id}/tasks`, `/services/{id}/logs` |
+| Service spec sections | `/services/{id}/` + `env`, `labels`, `resources`, `healthcheck`, `placement`, `ports`, `update-policy`, `rollback-policy`, `log-driver`, `configs`, `secrets`, `networks`, `mounts`, `container-config`, `mode`, `endpoint-mode` |
+| Tasks | `/tasks`, `/tasks/{id}`, `/tasks/{id}/logs` |
+| Stacks | `/stacks`, `/stacks/summary`, `/stacks/{name}` |
+| Configs and secrets | `/configs`, `/configs/{id}`, `/configs/{id}/labels`, `/secrets`, `/secrets/{id}`, `/secrets/{id}/labels` |
+| Networks and volumes | `/networks`, `/networks/{id}`, `/volumes`, `/volumes/{name}` |
+| Plugins | `/plugins`, `/plugins/{name}`, `/swarm/plugins` |
+| Cluster | `/cluster`, `/cluster/metrics`, `/cluster/capacity`, `/swarm`, `/disk-usage` |
+| Cross-resource | `/search?q=`, `/history`, `/events`, `/recommendations`, `/topology`, `/profile` |
+| Metrics | `/metrics`, `/metrics/status`, `/metrics/labels`, `/metrics/labels/{name}` |
+| Documentation | `/api`, `/api/context.jsonld`, `/api/errors`, `/api/errors/{code}` |
+| Identity | `/auth/whoami` |
+| Meta | `/-/health`, `/-/ready`, `/-/metrics`, `/-/licenses`, `/-/licenses/texts/{id}`, `/-/notices`, `/-/sbom.cdx`, `/-/docker-latest-version` |
 
-Unauthenticated MCP requests get `401 Unauthorized` with a `WWW-Authenticate: Bearer realm="mcp", resource_metadata="..."` header pointing the client at the PRM document — modern MCP clients chase this chain to discover the AS automatically.
+`GET /search` takes `q` (required, max 200 characters) and `limit` (per type, default 3; `0` or a value above 1000
+returns up to 1000). `POST /-/resync` forces a full re-fetch from the Docker socket.
 
-Two client identification paths are supported in parallel:
+### Writes
 
-- **DCR (Dynamic Client Registration):** anyone can POST to `/oauth/register` and receive a generated `client_id`. The consent screen shows a "Self-reported identity" badge so users know to scrutinize the redirect URI. Per-IP rate limit (default 10/hour) and global cap (default 1000, LRU-evicted) gate abuse.
-- **CIMD (Client ID Metadata Documents):** clients publish their metadata at an `https://` URL and pass that URL as `client_id`. Cetacean fetches and validates the document (5KB cap, 5s timeout, SSRF blocklist for private/loopback/CGNAT ranges) and renders a "Verified via published metadata" badge.
+Each row gives the minimum [operations level](configuration#operations-level) the endpoint needs. Every write also
+passes the per-resource [ACL](authorization) write check.
 
-Tokens are HS256 JWTs (signed with the configured `CETACEAN_MCP_SIGNING_KEY` or an auto-generated key) with `aud` = canonical MCP endpoint URL. Refresh tokens rotate single-use; presenting a previously-consumed refresh token revokes the entire grant family.
-
-### Resources
-
-Resources are addressed by `cetacean://` URIs. Reading a resource returns `application/json` text content matching the corresponding REST shape (with the same secret redaction and task enrichment).
-
-| URI | Description |
+| Endpoint | Level |
 |---|---|
-| `cetacean://cluster` | Cluster snapshot |
-| `cetacean://recommendations` | Current recommendation findings |
-| `cetacean://history` | Last 100 cache change history entries |
-| `cetacean://nodes/{id}` | Node detail |
-| `cetacean://services/{id}` | Service detail |
-| `cetacean://services/{id}/logs` | Service log stream (subscribable) |
-| `cetacean://tasks/{id}` | Enriched task (adds ServiceName, NodeHostname) |
-| `cetacean://stacks/{name}` | Stack detail with member resources |
-| `cetacean://configs/{id}` | Config metadata + base64 data |
-| `cetacean://secrets/{id}` | Secret metadata (data nilled) |
-| `cetacean://networks/{id}` | Network detail |
-| `cetacean://volumes/{name}` | Volume detail |
+| `PUT /services/{id}/scale` | 1 |
+| `PUT /services/{id}/image` | 1 |
+| `POST /services/{id}/rollback` | 1 |
+| `POST /services/{id}/restart` | 1 |
+| `PATCH /services/{id}/env` | 2 |
+| `PATCH /services/{id}/labels` | 2 |
+| `PATCH /services/{id}/resources` | 2 |
+| `PUT`, `PATCH /services/{id}/healthcheck` | 2 |
+| `PUT /services/{id}/placement` | 2 |
+| `PATCH /services/{id}/ports` | 2 |
+| `PATCH /services/{id}/update-policy` | 2 |
+| `PATCH /services/{id}/rollback-policy` | 2 |
+| `PATCH /services/{id}/log-driver` | 2 |
+| `PATCH /services/{id}/configs` | 2 |
+| `PATCH /services/{id}/secrets` | 2 |
+| `PATCH /services/{id}/networks` | 2 |
+| `PATCH /services/{id}/mounts` | 2 |
+| `PATCH /services/{id}/container-config` | 2 |
+| `PUT /services/{id}/mode` | 3 |
+| `PUT /services/{id}/endpoint-mode` | 3 |
+| `DELETE /services/{id}` | 3 |
+| `PUT /nodes/{id}/availability` | 3 |
+| `PUT /nodes/{id}/role` | 3 |
+| `PATCH /nodes/{id}/labels` | 3 |
+| `DELETE /nodes/{id}` | 3 |
+| `DELETE /tasks/{id}` | 3 |
+| `DELETE /stacks/{name}` | 3 |
+| `POST /configs` | 2 |
+| `PATCH /configs/{id}/labels` | 2 |
+| `DELETE /configs/{id}` | 3 |
+| `POST /secrets` | 2 |
+| `PATCH /secrets/{id}/labels` | 2 |
+| `DELETE /secrets/{id}` | 3 |
+| `DELETE /networks/{id}` | 3 |
+| `DELETE /volumes/{name}` | 3 |
+| `PATCH /swarm/orchestration` | 2 |
+| `PATCH /swarm/raft` | 2 |
+| `PATCH /swarm/dispatcher` | 2 |
+| `PATCH /swarm/ca` | 3 |
+| `PATCH /swarm/encryption` | 3 |
+| `POST /swarm/rotate-token` | 3 |
+| `POST /swarm/rotate-unlock-key` | 3 |
+| `POST /swarm/force-rotate-ca` | 3 |
+| `GET /swarm/unlock-key` | 3 |
+| `POST /swarm/unlock` | 3 |
+| `POST /plugins/{name}/enable` | 2 |
+| `POST /plugins/{name}/disable` | 2 |
+| `PATCH /plugins/{name}/settings` | 2 |
+| `POST /plugins` | 3 |
+| `POST /plugins/privileges` | 3 |
+| `POST /plugins/{name}/upgrade` | 3 |
+| `DELETE /plugins/{name}` | 3 |
 
-Clients subscribe with `resources/subscribe`. Detail subscriptions receive `notifications/resources/updated` whenever the underlying cache entry changes; create/remove events additionally broadcast `notifications/resources/list_changed` to all sessions.
+> **Note:** `GET /swarm/unlock-key` returns a credential, so it is gated at level 3 like the writes beside it.
 
-### Tools
+## MCP server
 
-Tools are gated by the MCP operations level (`CETACEAN_MCP_OPERATIONS_LEVEL`, falls back to `CETACEAN_OPERATIONS_LEVEL`). Each call additionally runs through the ACL evaluator (`Can("write", "<type>:<name>")`).
+Cetacean can also serve its cluster view over the Model Context Protocol. Set `mcp.enabled` to `true` and the server
+mounts at `/mcp`. See [MCP Server](mcp) for transport, authorization, and prompts, and
+[MCP tools and resources](mcp-tools) for the catalog.
 
-| Tier | Tools |
-|---|---|
-| 0 — Read | `get_logs`, `search` |
-| 1 — Operational | `scale_service`, `update_service_image`, `rollback_service`, `restart_service`, `remove_task` |
-| 2 — Configuration | `update_service_env`, `update_service_labels`, `update_node_labels`, `update_service_resources`, `update_service_placement`, `update_service_ports`, `update_service_update_policy`, `update_service_rollback_policy`, `update_service_log_driver` |
-| 3 — Impactful | `update_node_availability`, `update_node_role`, `remove_service`, `remove_config`, `remove_secret`, `remove_network`, `remove_volume` |
+## Self-discovery
 
-`get_logs` returns `{lines: LogLine[], cursor: string}`. Pass `cursor` back as `since` on the next call to receive only newer lines. The cursor is the RFC3339Nano timestamp of the last line, advanced by one nanosecond.
+Every response outside the `/-/` meta endpoints carries [RFC 8631](https://www.rfc-editor.org/rfc/rfc8631) `Link`
+headers:
 
-## Rate Limits
-
-There is no general rate limiting. The only limits are on concurrent streaming connections:
-
-| Resource                                               | Limit | Exceeded response        |
-|--------------------------------------------------------|-------|--------------------------|
-| SSE event clients (`/events` and per-resource streams) | 256   | `429` + `Retry-After: 5` |
-| Log stream connections                                 | 128   | `429` + `Retry-After: 5` |
-| Metrics stream connections (`/metrics` SSE)            | 64    | `429` + `Retry-After: 5` |
-
-## Self-Discovery
-
-Every response (except `/-/` meta endpoints) includes RFC 8631 `Link` headers:
-
-```
+```http
 Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby"
 ```
 
-- `rel="service-desc"` points to the OpenAPI spec
-- `rel="describedby"` points to the JSON-LD context document
+`service-desc` points at the OpenAPI spec, `describedby` at the JSON-LD context document.
 
 ## Request ID
 
-Every response includes a `Request-Id` header. Send your own via the `Request-Id` request header (max 64 chars, ASCII
-printable); otherwise one is generated. The ID appears in error responses as `requestId` and in server logs.
+Every response carries a `Request-Id` header. Send your own in the `Request-Id` request header (max 64 printable ASCII
+characters) or the server generates one. The value appears in error responses as `requestId` and in the server logs.

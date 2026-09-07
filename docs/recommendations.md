@@ -7,41 +7,68 @@ tags: [recommendations, sizing, health-checks, cluster-topology]
 
 # Recommendations
 
-The recommendation engine is an optional feature (enabled by default) that periodically evaluates cluster health and
-surfaces actionable suggestions.
+The recommendation engine evaluates cluster health on a timer and lists what it finds at `/recommendations` in the
+dashboard. It is enabled by default; disable it with `server.recommendations = false`.
 
-> **Note:** You can disable recommendations entirely with `server.recommendations = false`.
+## Checkers
 
-## Categories
+Four checkers run independently. The engine runs all of them once at startup, then ticks every 60 seconds and runs
+each checker whose own interval has elapsed. A single check is cancelled after 30 seconds.
 
-Cetacean checks four domains. Checks that only need Docker state run every 60 seconds; checks that query Prometheus run
-every 5 minutes.
+| Checker         | Interval | Detects                                                                                              | Needs Prometheus                 |
+| --------------- | -------- | ---------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `config`        | 60s      | Services with no health check and services with restart policy `none`                                | No                               |
+| `cluster`       | 60s      | Single-replica services, manager nodes with `active` availability, uneven task distribution           | No                               |
+| `operational`   | 5m       | Flaky services; node disk and memory usage above 90%                                                  | Flaky services no, the rest yes  |
+| `sizing`        | 5m       | CPU and memory usage against configured limits and reservations, and missing limits and reservations   | Yes                              |
 
-| Category               | What it checks                                                                                                          | Requires                              |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| **Resource Sizing**    | CPU/memory usage vs. configured limits and reservations (over-provisioned, approaching limit, at limit, missing limits) | Prometheus + cAdvisor                 |
-| **Operational Health** | Flaky services (frequent task restarts), node disk/memory pressure                                                      | Prometheus + node-exporter + cAdvisor |
-| **Config Hygiene**     | Missing health checks, missing restart policies                                                                         | —                                     |
-| **Cluster Topology**   | Single-replica services, managers running workloads, uneven task distribution                                           | —                                     |
+Findings carry a category, a severity (`info`, `warning`, `critical`), and a scope (`service`, `node`, `cluster`):
 
-Where a safe fix is available (e.g., scaling a single-replica service to two, or adjusting resource limits to match
-actual usage), the recommendation includes an **Apply** button that patches the service directly.
+| Checker       | Categories                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------- |
+| `config`      | `no-healthcheck`, `no-restart-policy`                                                       |
+| `cluster`     | `single-replica`, `manager-has-workloads`, `uneven-distribution`                            |
+| `operational` | `flaky-service`, `node-disk-full`, `node-memory-pressure`                                   |
+| `sizing`      | `over-provisioned`, `approaching-limit`, `at-limit`, `no-limits`, `no-reservations`          |
 
-Without Prometheus, only config hygiene and cluster topology checks run. The rest degrade gracefully: no errors, just
-fewer recommendations.
+Fixed thresholds worth knowing: a service is flaky after more than 5 involuntary task failures inside the sizing
+lookback window, a node is flagged above 90% disk or memory usage, and task distribution counts as uneven when the
+busiest node runs more than three times the tasks of the least busy one.
 
-## Configuration
+## Without Prometheus
 
-Sizing thresholds are configurable. Other checkers use fixed thresholds.
+The `config` and `cluster` checkers read only Docker state and always run. The `operational` checker also always
+runs, but reports flaky services alone and skips the node disk and memory queries. The `sizing` checker is not
+registered at all, so no sizing category appears. Nothing errors; you get fewer findings.
 
-| Setting             | Config file key                       | Default | Description                                                 |
-| ------------------- | ------------------------------------- | ------- | ----------------------------------------------------------- |
-| Headroom multiplier | `sizing.headroom_multiplier`          | `2.0`   | Multiplier for suggested values                             |
-| Over-provisioned    | `sizing.thresholds.over_provisioned`  | `0.20`  | Usage below this fraction of reservation → over-provisioned |
-| Approaching limit   | `sizing.thresholds.approaching_limit` | `0.80`  | Usage above this fraction of limit → warning                |
-| At limit            | `sizing.thresholds.at_limit`          | `0.95`  | Usage above this fraction of limit → critical               |
-| Lookback            | `sizing.thresholds.lookback`          | `168h`  | Time window for p95 usage queries                           |
+Sizing needs cAdvisor for container metrics and the operational node checks need node-exporter. See
+[Monitoring](monitoring) for the scrape requirements.
+
+## Applying a fix
+
+A finding that carries both a suggested value and a write endpoint gets an **Apply suggested value** button that
+patches the service directly. That covers `over-provisioned` (which raises or lowers the reservation),
+`approaching-limit` and `at-limit` (which adjust the limit) through `PATCH /services/{id}/resources`, and
+`single-replica` through `PUT /services/{id}/scale` with 2 replicas. The other categories report only.
+
+The button is shown whenever a suggestion exists; the request behind it is gated like any other write. Patching
+resources needs [operations level](configuration#operations-level) 2, scaling needs level 1, and both need ACL write
+permission on the service. Without them the request fails with 403 and the error appears above the list.
+
+## Sizing thresholds
+
+The sizing checker is the only one with configurable thresholds. Full descriptions and accepted ranges are in
+[Configuration](configuration).
+
+| Setting                               | Env var                                      | Default | Effect                                                        |
+| ------------------------------------- | -------------------------------------------- | ------- | ------------------------------------------------------------- |
+| `sizing.headroom_multiplier`          | `CETACEAN_SIZING_HEADROOM_MULTIPLIER`        | `2.0`   | Multiplier applied to observed usage when suggesting a value   |
+| `sizing.thresholds.over_provisioned`  | `CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED` | `0.20`  | Usage below this fraction of the reservation is over-provisioned |
+| `sizing.thresholds.approaching_limit` | `CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT`| `0.80`  | Usage above this fraction of the limit is a warning            |
+| `sizing.thresholds.at_limit`          | `CETACEAN_SIZING_THRESHOLD_AT_LIMIT`         | `0.95`  | Usage above this fraction of the limit is critical             |
+| `sizing.thresholds.lookback`          | `CETACEAN_SIZING_LOOKBACK`                   | `168h`  | p95 usage window, and the window the flaky-service count covers |
 
 ## API
 
-`GET /recommendations`. See the [API reference](./api.md) for response schema.
+`GET /recommendations` returns the current findings and a severity summary. The MCP `get_recommendations` tool serves
+the same data. See the [API reference](api) for the response schema.
