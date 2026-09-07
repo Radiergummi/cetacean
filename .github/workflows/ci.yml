@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # For the chore/sbom-sync branch: a pull request opened with GITHUB_TOKEN
+  # raises no pull_request event, so its required checks would never run.
+  # workflow_dispatch is the documented exception, and scripts/open-sbom-pr.sh
+  # asks for the run.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -120,14 +125,21 @@ jobs:
     # Keeps the committed SBOM current instead of asking the author to.
     #
     # On a pull request from this repository the regenerated artifacts are
-    # committed back to the branch. That covers the three ways drift actually
-    # happens: Dependabot cannot run `make sbom` at all, cyclonedx-gomod cannot
-    # run in a linked worktree (so the pre-commit hook skips there), and people
-    # forget. A fork PR gets a read-only token and so cannot be written to; it
-    # reports drift without failing, and the push-to-main run below is the
-    # backstop that keeps the default branch honest.
+    # committed back to the branch. That covers the ways drift actually happens:
+    # cyclonedx-gomod cannot run in a linked worktree (so the pre-commit hook
+    # skips there), and people forget.
+    #
+    # Dependabot's own pull requests are the exception, and deliberately so.
+    # Dependabot stops updating a branch that carries a commit it did not
+    # author, so committing here would cost `@dependabot rebase` for the life
+    # of every dependency PR — and a rebase is exactly what two groups sharing
+    # one lockfile need every week. Those PRs are reported on but not written
+    # to; they merge with the SBOM stale, and the push-to-main run below opens
+    # a pull request that repairs it. A fork PR is reported on for a different
+    # reason: its token is read-only, so nothing can be written either way.
     permissions:
       contents: write
+      pull-requests: write
     # One sync per branch: two concurrent runs would race the same commit.
     concurrency:
       group: sbom-sync-${{ github.event.pull_request.number || github.ref }}
@@ -164,7 +176,8 @@ jobs:
       - name: Commit regenerated SBOM
         if: >-
           github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]'
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -174,19 +187,33 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: ./scripts/commit-sbom.sh "$HEAD_REF" "$HEAD_SHA"
 
-      # Fork pull request: nothing can be written, so report and pass.
+      # Fork or Dependabot pull request: the branch is not written to, so
+      # report and pass. Neither case is a fault the author can fix.
       - name: Report SBOM drift
         if: >-
           github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name != github.repository
+          (github.event.pull_request.head.repo.full_name != github.repository ||
+           github.event.pull_request.user.login == 'dependabot[bot]')
         run: |
           if ! make sbom-verify; then
-            echo "::warning::SBOM is stale. A maintainer will regenerate it; fork PRs cannot be written to."
+            echo "::warning::SBOM is stale. It is not committed here — a fork PR cannot be written to, and writing to a Dependabot branch would stop it rebasing. The push-to-main run opens a pull request that repairs it."
           fi
 
-      # Push to main: the backstop. Nothing should be stale here, and CI must
-      # never commit to the default branch, so this only fails.
+      # Push to main: the backstop. CI must never commit to the default branch,
+      # so drift here becomes a pull request of its own rather than a red run —
+      # merging a Dependabot PR is the expected way to get here.
+      - name: Open SBOM sync pull request
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ github.sha }}
+        run: ./scripts/open-sbom-pr.sh "$BASE_SHA"
+
+      # Anything else — notably the dispatched run for chore/sbom-sync itself,
+      # which exists to put the required checks on that branch. Nothing to
+      # commit; the branch either fixed the drift or it did not.
       - name: Verify SBOM is current
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'workflow_dispatch'
         run: |
           make sbom-verify
