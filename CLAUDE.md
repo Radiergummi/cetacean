@@ -45,8 +45,22 @@ make sbom-verify                          # check the committed SBOM against the
 The SBOM (`internal/api/sbom/*`, `THIRD_PARTY_LICENSES`) is committed and embedded in the binary. You rarely need to
 regenerate it by hand: the `pre-commit` hook does it when a dependency manifest is staged (skipping when it cannot —
 a linked worktree, or a missing toolchain), and CI's `sbom-sync` job regenerates it on every pull request and
-**commits the result back to the branch**, signed, via `createCommitOnBranch`. Fork PRs only get a warning, since
-their token cannot write; pushes to `main` verify and fail.
+**commits the result back to the branch**, signed, via `createCommitOnBranch`.
+
+Two kinds of pull request are reported on rather than written to. A fork PR cannot be written to at all — its token is
+read-only. A **Dependabot** PR could be, but must not: Dependabot stops updating any branch carrying a commit it did
+not author, so a commit here would cost `@dependabot rebase` for the life of the PR — and since the `frontend` and
+`frontend-lint` groups share one lockfile, a rebase is what they need in any week both have updates. `createCommitOnBranch`
+cannot forge the author, and the "Require signed commits" ruleset covers all refs, so the `git push` that could is not
+available without a signing key in CI. Those PRs therefore merge with the SBOM stale, and the push-to-`main` run calls
+`scripts/open-sbom-pr.sh`, which repairs the drift on a `chore/sbom-sync` branch, opens a PR and sets it to auto-merge.
+That script dispatches `ci.yml` explicitly because a PR opened with `GITHUB_TOKEN` raises no `pull_request` event, so
+its required checks would otherwise never run — `workflow_dispatch` is the documented exception to that suppression.
+
+So `main` may carry a stale SBOM for a run or two, which is why `release.yml`'s `sbom-gate` job blocks a tag whose
+committed SBOM does not match its manifests. If Dependabot ever does refuse to update a PR (`@dependabot rebase`
+answers "edited by someone other than Dependabot"), `@dependabot recreate` still works and rebuilds against current
+`main`, resolving the conflict — at the cost of a new PR number.
 
 ### Full build from source
 ```bash

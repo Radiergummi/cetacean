@@ -11,7 +11,34 @@ permissions:
   id-token: write
 
 jobs:
+  # The committed SBOM is embedded in the binary, and main is allowed to carry
+  # it stale for a run or two: a Dependabot PR merges without one and
+  # chore/sbom-sync repairs it afterwards. A release must not go out in that
+  # window, so check before anything is built.
+  sbom-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: cd frontend && npm ci
+      # cyclonedx-gomod compiles the package, so main.go's //go:embed needs the
+      # built frontend present.
+      - run: cd frontend && npm run build && npm run build:widgets
+      - run: make sbom
+      - name: Verify the tagged SBOM matches the tagged dependencies
+        run: |
+          make sbom-verify \
+            || { echo "::error::The SBOM committed at this tag is stale. Merge chore/sbom-sync, then re-tag."; exit 1; }
+
   build:
+    needs: [sbom-gate]
     strategy:
       matrix:
         include:
