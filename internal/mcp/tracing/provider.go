@@ -8,7 +8,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
@@ -37,6 +37,10 @@ func NewProvider(ctx context.Context, endpoint, serviceVersion string) (*Provide
 		return nil, fmt.Errorf("tracing: build OTLP exporter: %w", err)
 	}
 
+	// The semconv import above must track the schema version resource.Default()
+	// carries, or Merge rejects the pair as conflicting and tracing fails to
+	// start. Bump it alongside go.opentelemetry.io/otel/sdk; the tests below
+	// fail on the mismatch.
 	attributes, err := resource.Merge(resource.Default(), resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceName("cetacean"),
