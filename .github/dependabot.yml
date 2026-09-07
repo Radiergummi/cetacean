@@ -15,7 +15,10 @@ updates:
     labels:
       - dependencies
       - github-actions
-    # One PR for every action bump, including majors. Dependabot reads the
+    # One PR for every action bump, including majors — deliberately unlike
+    # the other ecosystems below, which leave majors out of their group. For
+    # a SHA-pinned action a major is usually just a runner bump, and holding
+    # one back would leave the pin stale for a week. Dependabot reads the
     # trailing `# v…` comment on each pinned SHA to figure out the current
     # version, so the SHA-pinning convention in ci.yml/pages.yml/release.yml
     # still works here.
@@ -38,11 +41,16 @@ updates:
     labels:
       - dependencies
       - go
-    # One PR for every Go module bump, including majors.
+    # One PR for every minor and patch Go module bump. Majors are left out
+    # of the group so each arrives as its own PR: a Go major is an import-path
+    # change (/v2 -> /v3) and never merges on sight.
     groups:
       go-deps:
         patterns:
           - "*"
+        update-types:
+          - minor
+          - patch
     ignore:
       # docker/docker periodically ships advisories (docker cp races, etc.)
       # that target the daemon, not SDK consumers. Cetacean uses the SDK
@@ -78,13 +86,22 @@ updates:
         patterns:
           - "oxlint"
           - "oxfmt"
-      # One PR for every other frontend dependency bump, including majors.
+        update-types:
+          - minor
+          - patch
+      # One PR for every other minor and patch frontend bump. Majors are
+      # excluded from the group so a grouped PR stays mergeable on sight;
+      # each major then arrives on its own and can be reviewed and tested
+      # without holding up the safe bumps beside it.
       frontend:
         patterns:
           - "*"
         exclude-patterns:
           - "oxlint"
           - "oxfmt"
+        update-types:
+          - minor
+          - patch
 
   # Marketing/docs site (Astro).
   - package-ecosystem: npm
@@ -105,3 +122,6 @@ updates:
       website-all:
         patterns:
           - "*"
+        update-types:
+          - minor
+          - patch
