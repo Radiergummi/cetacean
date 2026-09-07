@@ -140,6 +140,69 @@
     border-left: 2px solid var(--active);
     font-style: normal;
   }
+  /* Callouts (GitHub-style alerts, see remarkCallouts in astro.config.ts) */
+  .prose .callout {
+    @apply my-6 rounded-lg border px-4 py-3 text-sm leading-relaxed;
+    border-color: var(--callout-border);
+    background: var(--callout-background);
+  }
+  .prose .callout-note {
+    --callout-accent: oklch(0.5 0.16 254);
+    --callout-border: oklch(0.5 0.16 254 / 25%);
+    --callout-background: oklch(0.5 0.16 254 / 5%);
+  }
+  .prose .callout-tip {
+    --callout-accent: oklch(0.5 0.13 155);
+    --callout-border: oklch(0.5 0.13 155 / 25%);
+    --callout-background: oklch(0.5 0.13 155 / 5%);
+  }
+  .prose .callout-warning {
+    --callout-accent: oklch(0.52 0.13 75);
+    --callout-border: oklch(0.52 0.13 75 / 30%);
+    --callout-background: oklch(0.52 0.13 75 / 6%);
+  }
+  .prose .callout-caution {
+    --callout-accent: oklch(0.55 0.15 25);
+    --callout-border: oklch(0.55 0.15 25 / 25%);
+    --callout-background: oklch(0.55 0.15 25 / 5%);
+  }
+  .dark .prose .callout-note {
+    --callout-accent: oklch(0.75 0.13 254);
+    --callout-border: oklch(0.75 0.13 254 / 25%);
+    --callout-background: oklch(0.75 0.13 254 / 8%);
+  }
+  .dark .prose .callout-tip {
+    --callout-accent: oklch(0.78 0.14 155);
+    --callout-border: oklch(0.78 0.14 155 / 25%);
+    --callout-background: oklch(0.78 0.14 155 / 8%);
+  }
+  .dark .prose .callout-warning {
+    --callout-accent: oklch(0.8 0.13 80);
+    --callout-border: oklch(0.8 0.13 80 / 25%);
+    --callout-background: oklch(0.8 0.13 80 / 8%);
+  }
+  .dark .prose .callout-caution {
+    --callout-accent: oklch(0.72 0.15 25);
+    --callout-border: oklch(0.72 0.15 25 / 25%);
+    --callout-background: oklch(0.72 0.15 25 / 8%);
+  }
+  .prose .callout-header {
+    @apply flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider;
+    color: var(--callout-accent);
+  }
+  .prose .callout-icon {
+    @apply size-4 shrink-0;
+  }
+  .prose .callout > * {
+    @apply my-2;
+  }
+  .prose .callout > .callout-header {
+    @apply mt-0 mb-2;
+  }
+  .prose .callout > :last-child {
+    @apply mb-0;
+  }
+
   .prose hr {
     @apply my-10 border-border;
   }
