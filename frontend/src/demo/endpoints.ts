@@ -87,8 +87,7 @@ export function buildDemoEndpoints(dataset: Dataset): string[] {
     "/recommendations",
     "/disk-usage",
     "/plugins",
-    "/topology/networks",
-    "/topology/placement",
+    "/topology",
   ];
 }
 

@@ -387,20 +387,13 @@ func BenchmarkHandleMonitoringStatus_NoPrometheus(b *testing.B) {
 // Topology endpoints
 // =============================================================================
 
-func BenchmarkHandleNetworkTopology(b *testing.B) {
-	benchHandler(b, "NetworkTopology", func(b *testing.B, h *Handlers) {
+// One benchmark where there were two: /topology builds the network and
+// placement graphs in a single response.
+func BenchmarkHandleTopology(b *testing.B) {
+	benchHandler(b, "Topology", func(b *testing.B, h *Handlers) {
 		for b.Loop() {
-			req := httptest.NewRequestWithContext(b.Context(), "GET", "/topology/networks", nil)
-			h.HandleNetworkTopology(httptest.NewRecorder(), req)
-		}
-	})
-}
-
-func BenchmarkHandlePlacementTopology(b *testing.B) {
-	benchHandler(b, "PlacementTopology", func(b *testing.B, h *Handlers) {
-		for b.Loop() {
-			req := httptest.NewRequestWithContext(b.Context(), "GET", "/topology/placement", nil)
-			h.HandlePlacementTopology(httptest.NewRecorder(), req)
+			req := httptest.NewRequestWithContext(b.Context(), "GET", "/topology", nil)
+			h.HandleTopology(httptest.NewRecorder(), req)
 		}
 	})
 }
@@ -1091,7 +1084,7 @@ func BenchmarkHandleGetNodeParallel(b *testing.B) {
 	}
 }
 
-func BenchmarkHandleNetworkTopologyParallel(b *testing.B) {
+func BenchmarkHandleTopologyParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
@@ -1102,10 +1095,10 @@ func BenchmarkHandleNetworkTopologyParallel(b *testing.B) {
 					req := httptest.NewRequestWithContext(
 						b.Context(),
 						"GET",
-						"/topology/networks",
+						"/topology",
 						nil,
 					)
-					h.HandleNetworkTopology(httptest.NewRecorder(), req)
+					h.HandleTopology(httptest.NewRecorder(), req)
 				}
 			})
 		})
@@ -1157,10 +1150,10 @@ func BenchmarkMixedWorkloadParallel(b *testing.B) {
 						req := httptest.NewRequestWithContext(
 							b.Context(),
 							"GET",
-							"/topology/networks",
+							"/topology",
 							nil,
 						)
-						h.HandleNetworkTopology(httptest.NewRecorder(), req)
+						h.HandleTopology(httptest.NewRecorder(), req)
 					}
 					i++
 				}

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -12,11 +13,17 @@ import (
 	"github.com/radiergummi/cetacean/internal/prom"
 )
 
-// TestCuratedToolsAdvertiseOutputSchema asserts that the tools whose result
-// shape Cetacean owns advertise an outputSchema, so 2025-06-18+ clients know
-// the structured shape to expect. Docker-passthrough mutations intentionally
-// carry no schema (their result is a raw swarm.Service).
-func TestCuratedToolsAdvertiseOutputSchema(t *testing.T) {
+// TestEveryToolAdvertisesOutputSchema asserts that every registered tool
+// declares an outputSchema, so a 2025-06-18+ client knows the structured shape
+// to expect before it calls.
+//
+// There is no exempt set any more. The eleven spec-editing mutations used to
+// be one, on the reasoning that their result was the raw Docker object and so
+// not a shape Cetacean owned; they now answer with the same compact projection
+// describe builds, scoped to the section they edited, and declare it. Driving
+// the whole registry rather than a list means a new tool has to decide its
+// result shape to pass, instead of quietly shipping without one.
+func TestEveryToolAdvertisesOutputSchema(t *testing.T) {
 	c := cache.New(nil)
 	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful)
 	handler := srv.Handler()
@@ -36,51 +43,13 @@ func TestCuratedToolsAdvertiseOutputSchema(t *testing.T) {
 		t.Fatalf("decode tools/list: %v", err)
 	}
 
-	schemas := map[string]json.RawMessage{}
-	for _, tl := range result.Tools {
-		schemas[tl.Name] = tl.OutputSchema
+	if len(result.Tools) == 0 {
+		t.Fatal("no tools registered")
 	}
 
-	curated := map[string]bool{
-		"find": true, "describe": true, "get_logs": true, "get_topology": true,
-		"get_metrics": true, "get_recommendations": true,
-		"remove_task": true, "remove_service": true, "remove_config": true,
-		"remove_secret": true, "remove_network": true, "remove_volume": true,
-		// The four lifecycle mutations return serviceMutationResult, a shape
-		// Cetacean owns, rather than a raw swarm.Service.
-		"scale_service": true, "update_service_image": true,
-		"rollback_service": true, "restart_service": true,
-	}
-
-	hasSchema := func(s json.RawMessage) bool {
-		return len(s) > 0 && string(s) != "null"
-	}
-
-	for name := range curated {
-		schema, ok := schemas[name]
-		if !ok {
-			t.Errorf("%s not registered", name)
-			continue
-		}
-		if !hasSchema(schema) {
-			t.Errorf("%s: expected an advertised outputSchema, got %q", name, string(schema))
-		}
-	}
-
-	// Enforce the whole contract, not a sample: every *other* registered tool is
-	// a Docker-passthrough mutation and must NOT advertise a schema (validation
-	// skips schemaless tools). Iterating the full registry means adding a tool
-	// without deciding its schema status fails this test rather than silently
-	// drifting.
-	for name, schema := range schemas {
-		if curated[name] {
-			continue
-		}
-		if hasSchema(schema) {
-			t.Errorf(
-				"%s: non-curated tool must not advertise an outputSchema, got %q",
-				name, string(schema),
-			)
+	for _, tool := range result.Tools {
+		if len(tool.OutputSchema) == 0 || string(tool.OutputSchema) == "null" {
+			t.Errorf("%s: no advertised outputSchema", tool.Name)
 		}
 	}
 }
@@ -161,6 +130,172 @@ func TestCuratedToolOutputsValidate(t *testing.T) {
 			}
 			if len(result.StructuredContent) == 0 || string(result.StructuredContent) == "null" {
 				t.Errorf("%s: missing structuredContent: %s", call.name, string(env.Result))
+			}
+		})
+	}
+}
+
+// TestEveryToolResultConformsToItsOutputSchema drives every tool through the
+// real transport and holds the rule a strict client enforces: a tool that
+// advertises an outputSchema MUST answer with structuredContent conforming to
+// it — on every call, whatever the arguments, since one tool has one schema.
+//
+// Both halves need the transport. Conformance is checked by the server's own
+// WithOutputSchemaValidation, which turns a breach into an isError result; the
+// presence of structuredContent is decided in registerTools, where the
+// CallToolResult is assembled. A test calling td.handler directly sees
+// neither, which is how find's and describe's raw modes came to answer with
+// text content and no structuredContent at all: the server's validator skips
+// a result that has none, so nothing here failed, while the reference client
+// rejects it outright ("has an output schema but did not return structured
+// content").
+func TestEveryToolResultConformsToItsOutputSchema(t *testing.T) {
+	c := seededDescribeCache()
+
+	svc := swarm.Service{
+		ID:   "svc1",
+		Meta: swarm.Meta{Version: swarm.Version{Index: 7}},
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{Image: "nginx:alpine"},
+			},
+		},
+	}
+	node := swarm.Node{ID: "node1", Description: swarm.NodeDescription{Hostname: "manager-1"}}
+
+	writeClient := &fakeWriteClient{
+		simulatedEnv:         map[string]string{"A": "1"},
+		simulatedLabels:      map[string]string{"a": "1"},
+		simulatedNodeLabels:  map[string]string{"a": "1"},
+		scaleServiceFn:       func(context.Context, string, uint64) (swarm.Service, error) { return svc, nil },
+		updateServiceImageFn: func(context.Context, string, string) (swarm.Service, error) { return svc, nil },
+		rollbackServiceFn:    func(context.Context, string) (swarm.Service, error) { return svc, nil },
+		restartServiceFn:     func(context.Context, string) (swarm.Service, error) { return svc, nil },
+		removeServiceFn:      func(context.Context, string) error { return nil },
+		removeTaskFn:         func(context.Context, string) error { return nil },
+		removeConfigFn:       func(context.Context, string) error { return nil },
+		removeSecretFn:       func(context.Context, string) error { return nil },
+		removeNetworkFn:      func(context.Context, string) error { return nil },
+		removeVolumeFn:       func(context.Context, string, bool) error { return nil },
+		updateServiceEnvFn: func(context.Context, string, map[string]string) (swarm.Service, error) {
+			return svc, nil
+		},
+		updateServiceLabelsFn: func(context.Context, string, map[string]string) (swarm.Service, error) {
+			return svc, nil
+		},
+		updateNodeLabelsFn: func(context.Context, string, map[string]string) (swarm.Node, error) {
+			return node, nil
+		},
+		updateNodeAvailFn: func(context.Context, string, swarm.NodeAvailability) (swarm.Node, error) {
+			return node, nil
+		},
+		updateNodeRoleFn: func(context.Context, string, swarm.NodeRole) (swarm.Node, error) {
+			return node, nil
+		},
+		updateServiceResFn: func(
+			context.Context, string, *swarm.ResourceRequirements,
+		) (swarm.Service, error) {
+			return svc, nil
+		},
+		updateServicePortsFn: func(context.Context, string, []swarm.PortConfig) (swarm.Service, error) {
+			return svc, nil
+		},
+	}
+
+	handler := newToolTestServer(t, c, writeClient, config.OpsImpactful).Handler()
+
+	_, listed := mcpModern(t, handler, 1, "tools/list", `{}`)
+	if listed.Error != nil {
+		t.Fatalf("tools/list: %+v", listed.Error)
+	}
+
+	var catalog struct {
+		Tools []struct {
+			Name         string          `json:"name"`
+			OutputSchema json.RawMessage `json:"outputSchema"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(listed.Result, &catalog); err != nil {
+		t.Fatalf("decode tools/list: %v", err)
+	}
+
+	declaresSchema := map[string]bool{}
+	for _, tool := range catalog.Tools {
+		declaresSchema[tool.Name] = len(tool.OutputSchema) > 0 &&
+			string(tool.OutputSchema) != "null"
+	}
+
+	// One call per tool, plus the argument combinations that change the shape
+	// of the answer: find's three modes and describe's two, which is where a
+	// per-tool schema and a per-call result can part company.
+	calls := []struct {
+		label, tool, args string
+	}{
+		{"find/typed", "find", `{"type":"services"}`},
+		{"find/cross-type", "find", `{"query":"web"}`},
+		{"find/raw", "find", `{"type":"services","raw":true}`},
+		{"describe", "describe", `{"type":"service","id":"web"}`},
+		{"describe/raw", "describe", `{"type":"service","id":"web","raw":true}`},
+		{"get_topology/network", "get_topology", `{"view":"network"}`},
+		{"get_topology/placement", "get_topology", `{"view":"placement"}`},
+		{"get_recommendations", "get_recommendations", `{}`},
+		{"scale_service", "scale_service", `{"id":"web","replicas":2}`},
+		{"update_service_image", "update_service_image", `{"id":"web","image":"nginx:1.27"}`},
+		{"rollback_service", "rollback_service", `{"id":"web"}`},
+		{"restart_service", "restart_service", `{"id":"web"}`},
+		{"remove_task", "remove_task", `{"id":"task1"}`},
+		{"remove_service", "remove_service", `{"id":"web"}`},
+		{"remove_config", "remove_config", `{"id":"cfg1"}`},
+		{"remove_secret", "remove_secret", `{"id":"sec1"}`},
+		{"remove_network", "remove_network", `{"id":"net1"}`},
+		{"remove_volume", "remove_volume", `{"name":"data"}`},
+		{"update_service/env", "update_service",
+			`{"id":"web","section":"env","value":{"A":"2"}}`},
+		{"update_service/labels", "update_service",
+			`{"id":"web","section":"labels","value":{"a":"2"}}`},
+		{"update_service/resources", "update_service",
+			`{"id":"web","section":"resources","value":{"Limits":{"NanoCPUs":1000000000}}}`},
+		{"update_service/ports", "update_service",
+			`{"id":"web","section":"ports","value":[{"TargetPort":80}]}`},
+		{"update_node_labels", "update_node_labels", `{"id":"node1","labels":{"a":"2"}}`},
+		{"update_node/availability", "update_node",
+			`{"id":"node1","section":"availability","value":"drain"}`},
+		{"update_node/role", "update_node",
+			`{"id":"node1","section":"role","value":"worker"}`},
+	}
+
+	for _, call := range calls {
+		t.Run(call.label, func(t *testing.T) {
+			params := fmt.Sprintf(`{"name":%q,"arguments":%s}`, call.tool, call.args)
+
+			_, env := mcpModern(t, handler, 2, "tools/call", params)
+			if env.Error != nil {
+				t.Fatalf("transport error: %+v", env.Error)
+			}
+
+			var result struct {
+				IsError           bool            `json:"isError"`
+				StructuredContent json.RawMessage `json:"structuredContent"`
+			}
+			if err := json.Unmarshal(env.Result, &result); err != nil {
+				t.Fatalf("decode result: %v (%s)", err, env.Result)
+			}
+
+			// A schema breach arrives here, since mcp-go answers one with an
+			// error result rather than a protocol error.
+			if result.IsError {
+				t.Fatalf("tool call failed: %s", env.Result)
+			}
+
+			structured := len(result.StructuredContent) > 0 &&
+				string(result.StructuredContent) != "null"
+
+			if declaresSchema[call.tool] && !structured {
+				t.Errorf(
+					"%s declares an outputSchema but returned no structuredContent; "+
+						"a strict client rejects that", call.tool,
+				)
 			}
 		})
 	}

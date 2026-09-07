@@ -203,25 +203,50 @@ describe("computed endpoint shapes", () => {
 });
 
 describe("topology endpoint shapes", () => {
-  it("GET /topology/networks has nodes, edges, networks", async () => {
-    const data = await fetchJSON("/topology/networks");
-    expect(data["@context"]).toBeTruthy();
-    expect(data["@id"]).toBeTruthy();
-    expect(data["@type"]).toBe("NetworkTopology");
-    expect(Array.isArray(data.nodes)).toBe(true);
-    expect(Array.isArray(data.edges)).toBe(true);
-    expect(Array.isArray(data.networks)).toBe(true);
+  it("GET /topology returns the network and placement graphs", async () => {
+    const data = await fetchJSON("/topology");
+    const graphs = data.graphs as { id: string }[];
+
+    expect(graphs.map(({ id }) => id).sort()).toEqual(["network", "placement"]);
   });
 
-  it("GET /topology/placement has nodes with tasks", async () => {
-    const data = await fetchJSON("/topology/placement");
-    expect(data["@context"]).toBeTruthy();
-    expect(data["@id"]).toBeTruthy();
-    expect(data["@type"]).toBe("PlacementTopology");
-    expect(Array.isArray(data.nodes)).toBe(true);
+  it("the network graph joins services through the overlays they share", async () => {
+    const data = await fetchJSON("/topology");
+    const network = (data.graphs as Record<string, unknown>[]).find(({ id }) => id === "network")!;
 
-    for (const node of data.nodes) {
-      expect(Array.isArray(node.tasks)).toBe(true);
+    expect(Object.keys(network.nodes as object).length).toBeGreaterThan(0);
+
+    for (const urn of Object.keys(network.nodes as object)) {
+      expect(urn).toMatch(/^urn:cetacean:service:/);
+    }
+
+    for (const edge of network.edges as { source: string; target: string }[]) {
+      expect(network.nodes).toHaveProperty(edge.source);
+      expect(network.nodes).toHaveProperty(edge.target);
+    }
+  });
+
+  it("the placement graph carries a task list per service", async () => {
+    const data = await fetchJSON("/topology");
+    const placement = (data.graphs as Record<string, unknown>[]).find(
+      ({ id }) => id === "placement",
+    )!;
+
+    const hyperedges = placement.hyperedges as {
+      nodes: string[];
+      metadata: { kind: string; tasks: { node: string }[] };
+    }[];
+
+    expect(hyperedges.length).toBeGreaterThan(0);
+
+    for (const hyperedge of hyperedges) {
+      expect(hyperedge.metadata.kind).toBe("placement");
+      expect(hyperedge.nodes[0]).toMatch(/^urn:cetacean:service:/);
+
+      // Every task names a node the hyperedge actually lists.
+      for (const task of hyperedge.metadata.tasks) {
+        expect(hyperedge.nodes).toContain(task.node);
+      }
     }
   });
 });

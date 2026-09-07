@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -51,27 +50,31 @@ var pluralToSingularRowType = map[string]string{
 // findResult is the envelope for a list of resources.
 //
 // Total is the count before paging and after filtering, so a caller can say
-// "showing 200 of 1,432" without a second call.
+// "showing 200 of 1,432" without a second call. In a typed listing that is a
+// promise the caller can act on: `offset` pages through to the rest.
+//
+// Counts is populated only by the cross-type search, where it has to be. There
+// `limit` caps the hits *per type* and there is no paging at all, so Total —
+// the number of matches across the cluster — is a number the caller cannot
+// reach the tail of, and one figure over eight types says nothing about where
+// the matches are. Counts is the per-type breakdown cluster.Search already
+// computes for exactly this, and the same field the HTTP search response
+// carries, so one search reads the same over both transports. It stays absent
+// on a typed listing, where Total already means one type and paging works.
+//
+// Raw carries the untouched resource records behind Items when the caller
+// asked for them, one per row and in the same order. It rides *beside* the
+// compact rows rather than replacing them because a tool that advertises an
+// output schema must return content conforming to it — the reference client
+// rejects a result that omits structuredContent when a schema was declared —
+// and one tool has one schema, whatever its arguments. Absent otherwise, so
+// the ordinary listing is unchanged.
 type findResult struct {
-	Type  string        `json:"type"`
-	Items []cluster.Row `json:"items"`
-	Total int           `json:"total"`
-}
-
-// findRawResult is find's `raw: true` envelope: the untouched resource records
-// (the same shape lookupResource already returns for widgets and resources)
-// rather than the compact Row. It exists for a caller that needs a field Row
-// does not carry, and is never advertised as an output schema — the tool
-// always advertises findResult, because the compact shape is what a
-// well-behaved caller gets by default. That leaves this result deliberately
-// non-conforming to the schema the client was told to expect, so toolFind
-// calls markTextOnlyResult before returning it, and registerTools skips the
-// structuredContent wrapper rather than shipping a payload that would fail
-// the server's own output-schema validation.
-type findRawResult struct {
-	Type  string `json:"type"`
-	Items []any  `json:"items"`
-	Total int    `json:"total"`
+	Type   string         `json:"type"`
+	Items  []cluster.Row  `json:"items"`
+	Total  int            `json:"total"`
+	Counts map[string]int `json:"counts,omitempty"`
+	Raw    []any          `json:"raw,omitempty"`
 }
 
 // toolFind locates cluster resources: enumerate one type (optionally narrowed
@@ -101,13 +104,7 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		return "", err
 	}
 
-	// A type test, not a conversion: the raw path projects filtered rows back
-	// onto the concrete slice by ID, so nothing needs it widened to []any.
-	if reflect.ValueOf(listed).Kind() != reflect.Slice {
-		return "", fmt.Errorf("resource type %q does not enumerate", resourceType)
-	}
-
-	rows, err := rowsFor(s.cache, resourceType, listed)
+	rows, err := s.rowsFor(ctx, resourceType, listed)
 	if err != nil {
 		return "", err
 	}
@@ -131,39 +128,31 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 
 	rows = filterRows(rows, filters, labels)
 
-	if req.GetBool("raw", false) {
-		// raw changes the shape of what comes back, never the scope: a
-		// caller who asked for one stack's worth of services must not
-		// silently get every service back because raw skipped the filters
-		// that shape would have applied. Project the *filtered* rows' IDs
-		// back onto the untouched records — never pair the two slices by
-		// index, since rowsFor's builders each sort their own output and
-		// positional correspondence with `listed` does not hold.
-		byID := rawItemsByID(listed)
-
-		items := make([]any, 0, len(rows))
-		for _, row := range rows {
-			if item, ok := byID[row.ID]; ok {
-				items = append(items, item)
-			}
-		}
-
-		total := len(items)
-		items = paginate(items, req)
-
-		// findRawResult is not the shape find's outputSchema describes (that
-		// is findResult, the compact Row list) — presenting it as
-		// structuredContent would fail the server's output-schema
-		// validation on the very call that asked for the untouched record.
-		markTextOnlyResult(ctx)
-
-		return marshalResult(findRawResult{Type: resourceType, Items: items, Total: total})
-	}
-
 	total := len(rows)
 	rows = paginate(rows, req)
 
-	return marshalResult(findResult{Type: resourceType, Items: rows, Total: total})
+	attachResourceLinks(ctx, resourceLinksForRows(rows))
+
+	result := findResult{Type: resourceType, Items: rows, Total: total}
+
+	// raw changes what the answer carries, never its scope: a caller who asked
+	// for one stack's worth of services must not silently get every service
+	// back because raw skipped the filters and paging that shape applied.
+	// Project the returned rows' IDs back onto the untouched records — never
+	// pair the two slices by index, since rowsFor's builders each sort their
+	// own output and positional correspondence with `listed` does not hold.
+	if req.GetBool("raw", false) {
+		byID := rawItemsByID(listed)
+
+		result.Raw = make([]any, 0, len(rows))
+		for _, row := range rows {
+			if item, ok := byID[row.ID]; ok {
+				result.Raw = append(result.Raw, item)
+			}
+		}
+	}
+
+	return marshalResult(result)
 }
 
 // findAcrossTypes searches every listable resource type by name, label or
@@ -184,7 +173,16 @@ func (s *Server) findAcrossTypes(
 
 	results := s.filterSearchResults(ctx, cluster.Search(ctx, s.cache, query, limit))
 
-	rows := make([]cluster.Row, 0, results.Total)
+	// Sized by the hits actually held, not by results.Total: Total is the
+	// pre-cap count across the whole cluster, so on a broad query it would
+	// reserve thousands of rows to hold the handful `limit` let through.
+	capacity := 0
+	for _, hits := range results.Hits {
+		capacity += len(hits)
+	}
+
+	rows := make([]cluster.Row, 0, capacity)
+
 	for pluralType, hits := range results.Hits {
 		for _, hit := range hits {
 			rows = append(rows, cluster.Row{
@@ -199,7 +197,13 @@ func (s *Server) findAcrossTypes(
 
 	sortFindRows(rows)
 
-	return marshalResult(findResult{Items: rows, Total: results.Total})
+	attachResourceLinks(ctx, resourceLinksForRows(rows))
+
+	return marshalResult(findResult{
+		Items:  rows,
+		Total:  results.Total,
+		Counts: results.Counts,
+	})
 }
 
 // sortFindRows puts a cross-type row list into a stable order. Rows are built
@@ -216,80 +220,52 @@ func sortFindRows(rows []cluster.Row) {
 	})
 }
 
-// rowsFor converts the slice lookupResource returned for resourceType into
-// the compact Row shape, by calling the one cluster.RowsFor* builder that
-// knows that type. The type assertions mirror exactly what each
-// lookupResource branch returns, so a mismatch here is a bug in this
-// function, not a caller error — hence the error message names both sides.
-func rowsFor(c *cache.Cache, resourceType string, listed any) ([]cluster.Row, error) {
-	switch resourceType {
-	case "services":
-		items, ok := listed.([]swarm.Service)
-		if !ok {
-			return nil, fmt.Errorf("find: services returned %T, not []swarm.Service", listed)
-		}
+// rowsFor converts the slice lookupResource returned into the compact Row
+// shape, by calling the one cluster.RowsFor* builder that knows that type.
+//
+// It dispatches on the concrete slice type rather than on resourceType: the
+// eight element types are mutually distinct, so the value already carries the
+// answer, and asking it directly removes eight unreachable mismatch branches.
+// resourceType survives only to name the type in the default case.
+//
+// It takes the context because a row can name a resource other than the one it
+// describes — a task row names its parent service and the node it runs on — and
+// those names have to pass the caller's read grants first, exactly as
+// digestOf's do.
+func (s *Server) rowsFor(
+	ctx context.Context,
+	resourceType string,
+	listed any,
+) ([]cluster.Row, error) {
+	c := s.cache
 
-		return cluster.RowsForServices(items, c.ListTasks()), nil
+	switch items := listed.(type) {
+	case []swarm.Service:
+		return cluster.RowsForServices(items, c.RunningTaskCounts()), nil
 
-	case "nodes":
-		items, ok := listed.([]swarm.Node)
-		if !ok {
-			return nil, fmt.Errorf("find: nodes returned %T, not []swarm.Node", listed)
-		}
-
+	case []swarm.Node:
 		return cluster.RowsForNodes(items), nil
 
-	case "tasks":
-		items, ok := listed.([]cluster.EnrichedTask)
-		if !ok {
-			return nil, fmt.Errorf("find: tasks returned %T, not []cluster.EnrichedTask", listed)
-		}
+	case []cluster.EnrichedTask:
+		// The services are ACL-filtered before the builder sees them, and the
+		// tasks arrive already enriched from an equally filtered node listing:
+		// a task row that named a service or node the caller may not read
+		// would make find a way around the grants describe honours.
+		return cluster.RowsForTasks(items, s.filterServices(ctx, c.ListServices())), nil
 
-		tasks := make([]swarm.Task, len(items))
-		for i, t := range items {
-			tasks[i] = t.Task
-		}
-
-		return cluster.RowsForTasks(tasks, c.ListServices(), c.ListNodes()), nil
-
-	case "stacks":
-		items, ok := listed.([]cache.Stack)
-		if !ok {
-			return nil, fmt.Errorf("find: stacks returned %T, not []cache.Stack", listed)
-		}
-
+	case []cache.Stack:
 		return cluster.RowsForStacks(items), nil
 
-	case "configs":
-		items, ok := listed.([]swarm.Config)
-		if !ok {
-			return nil, fmt.Errorf("find: configs returned %T, not []swarm.Config", listed)
-		}
-
+	case []swarm.Config:
 		return cluster.RowsForConfigs(items), nil
 
-	case "secrets":
-		items, ok := listed.([]swarm.Secret)
-		if !ok {
-			return nil, fmt.Errorf("find: secrets returned %T, not []swarm.Secret", listed)
-		}
-
+	case []swarm.Secret:
 		return cluster.RowsForSecrets(items), nil
 
-	case "networks":
-		items, ok := listed.([]network.Summary)
-		if !ok {
-			return nil, fmt.Errorf("find: networks returned %T, not []network.Summary", listed)
-		}
-
+	case []network.Summary:
 		return cluster.RowsForNetworks(items), nil
 
-	case "volumes":
-		items, ok := listed.([]volume.Volume)
-		if !ok {
-			return nil, fmt.Errorf("find: volumes returned %T, not []volume.Volume", listed)
-		}
-
+	case []volume.Volume:
 		ptrs := make([]*volume.Volume, len(items))
 		for i := range items {
 			ptrs[i] = &items[i]
@@ -298,9 +274,12 @@ func rowsFor(c *cache.Cache, resourceType string, listed any) ([]cluster.Row, er
 		return cluster.RowsForVolumes(ptrs), nil
 
 	default:
-		// Unreachable given the listableResourceTypes check in toolFind, but
-		// named rather than panicking if the two ever drift.
-		return nil, fmt.Errorf("resource type %q has no row builder", resourceType)
+		// Reached only if listableResourceTypes and the branches above drift,
+		// or if a listing returns something that is not a slice at all — named
+		// rather than panicking either way.
+		return nil, fmt.Errorf(
+			"resource type %q has no row builder for %T", resourceType, listed,
+		)
 	}
 }
 
@@ -504,11 +483,9 @@ func rawItemsByID(listed any) map[string]any {
 	return out
 }
 
-// paginate slices items to the `offset`/`limit` window a caller asked for,
-// clamping both to the slice bounds and to defaultListLimit. Generic so the
-// same bounds logic serves both the raw ([]any) and compact ([]cluster.Row)
-// results.
-func paginate[T any](items []T, req mcplib.CallToolRequest) []T {
+// paginate slices rows to the `offset`/`limit` window a caller asked for,
+// clamping both to the slice bounds and to defaultListLimit.
+func paginate(items []cluster.Row, req mcplib.CallToolRequest) []cluster.Row {
 	total := len(items)
 
 	offset := min(max(req.GetInt("offset", 0), 0), total)

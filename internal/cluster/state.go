@@ -6,13 +6,13 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 )
 
-// ServiceUpdateInFlight reports whether a service's desired spec is still in
+// serviceUpdateInFlight reports whether a service's desired spec is still in
 // flux — a rolling update, or a rollback that has started but not finished.
 //
 // This is the single definition of "not settled yet". Both DeriveServiceState
 // and ServiceConverged read it, so the state a caller is shown and the moment a
 // mutation is called done cannot disagree about which Swarm update states count.
-func ServiceUpdateInFlight(svc swarm.Service) bool {
+func serviceUpdateInFlight(svc swarm.Service) bool {
 	if svc.UpdateStatus == nil {
 		return false
 	}
@@ -41,7 +41,7 @@ func ServiceUpdateInFlight(svc swarm.Service) bool {
 func ServiceConverged(svc swarm.Service, runningCount int) (bool, string) {
 	// An in-flight rolling update means tasks are still being replaced; wait it
 	// out rather than reporting a transient count match as success.
-	if ServiceUpdateInFlight(svc) {
+	if serviceUpdateInFlight(svc) {
 		return false, fmt.Sprintf("update in progress (%d running)", runningCount)
 	}
 
@@ -69,7 +69,7 @@ func ServiceConverged(svc swarm.Service, runningCount int) (bool, string) {
 // also covers in-progress rollbacks — paused rollbacks and freshly-started
 // rollbacks both still represent a service whose desired spec is in flux.
 func DeriveServiceState(svc swarm.Service, runningCount int) string {
-	if ServiceUpdateInFlight(svc) {
+	if serviceUpdateInFlight(svc) {
 		return "updating"
 	}
 
@@ -95,7 +95,7 @@ func DeriveServiceState(svc swarm.Service, runningCount int) string {
 	return "running"
 }
 
-// DeriveNodeState reports a node's practical condition, and is the single
+// deriveNodeState reports a node's practical condition, and is the single
 // definition both RowsForNodes and NodeDigest call — a list and a detail view
 // of the same node must never disagree about it.
 //
@@ -107,7 +107,7 @@ func DeriveServiceState(svc swarm.Service, runningCount int) string {
 // drained node's Availability become the more useful answer, because "ready"
 // alone would mislead a caller into thinking the scheduler could still use
 // it.
-func DeriveNodeState(node swarm.Node) string {
+func deriveNodeState(node swarm.Node) string {
 	if node.Status.State != swarm.NodeStateReady {
 		return string(node.Status.State)
 	}

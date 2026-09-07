@@ -167,7 +167,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Type:   "nodes",
 				ID:     n.ID,
 				Name:   n.Description.Hostname,
-				State:  DeriveNodeState(n),
+				State:  deriveNodeState(n),
 				Detail: string(n.Spec.Role),
 			})
 		}
@@ -373,7 +373,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 // comparison, or whether the query matches segment prefixes of s.
 // substr must already be lowercased.
 func ContainsFold(s, substrLower string) bool {
-	if containsFoldNoAlloc(s, substrLower) {
+	if ContainsFoldNoAlloc(s, substrLower) {
 		return true
 	}
 
@@ -387,10 +387,14 @@ func ContainsFold(s, substrLower string) bool {
 	return SegmentPrefixMatch(strings.ToLower(s), substrLower)
 }
 
-// containsFoldNoAlloc reports whether s contains substr (which must be
+// ContainsFoldNoAlloc reports whether s contains substr (which must be
 // lowercased) using case-insensitive comparison without allocating.
 // Only handles ASCII case folding; non-ASCII letters are compared as-is.
-func containsFoldNoAlloc(s, substrLower string) bool {
+//
+// Exported for internal/mcp's log grep, which needs plain case-insensitive
+// containment over a large body of text and specifically not ContainsFold's
+// segment-prefix matching — that rule is about names, not messages.
+func ContainsFoldNoAlloc(s, substrLower string) bool {
 	if len(substrLower) == 0 {
 		return true
 	}

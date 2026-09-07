@@ -96,16 +96,11 @@ test.describe("Topology Export Formats (API)", () => {
     expect(body).toMatch(/^graph /);
   });
 
-  test("deprecated /topology/networks includes deprecation headers", async ({
-    request,
-    baseURL,
-  }) => {
+  test("the removed /topology/networks no longer serves a graph", async ({ request, baseURL }) => {
     const response = await request.get(`${baseURL}/topology/networks`, {
       headers: { Accept: "application/json" },
     });
 
-    expect(response.ok()).toBe(true);
-    expect(response.headers()["deprecation"]).toBe("true");
-    expect(response.headers()["link"]).toContain("successor-version");
+    expect(response.ok()).toBe(false);
   });
 });

@@ -15,9 +15,9 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
-	promapi "github.com/radiergummi/cetacean/internal/api/prometheus"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
 
 func noopErrorWriter(w http.ResponseWriter, _ *http.Request, _, detail string) {

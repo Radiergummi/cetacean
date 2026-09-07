@@ -1276,32 +1276,6 @@ func TestHandleHistory_ACL001_NoGrants(t *testing.T) {
 	assertACLErrorCode(t, w, "ACL001")
 }
 
-func TestHandleNetworkTopology_ACL001_NoGrants(t *testing.T) {
-	h := newTestHandlers(t, withACL(aclPolicyForAlice()))
-	req := httptest.NewRequest("GET", "/topology/networks", nil)
-	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "bob"}))
-	w := httptest.NewRecorder()
-	h.HandleNetworkTopology(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("status=%d, want 403", w.Code)
-	}
-	assertACLErrorCode(t, w, "ACL001")
-}
-
-func TestHandlePlacementTopology_ACL001_NoGrants(t *testing.T) {
-	h := newTestHandlers(t, withACL(aclPolicyForAlice()))
-	req := httptest.NewRequest("GET", "/topology/placement", nil)
-	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "bob"}))
-	w := httptest.NewRecorder()
-	h.HandlePlacementTopology(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("status=%d, want 403", w.Code)
-	}
-	assertACLErrorCode(t, w, "ACL001")
-}
-
 func TestHandleSwarm_ACL001_NoGrants(t *testing.T) {
 	h := newTestHandlers(t, withACL(aclPolicyForAlice()), withSystemClient(&mockSystemClient{
 		swarmInspectFn: func(_ context.Context) (swarm.Swarm, error) {

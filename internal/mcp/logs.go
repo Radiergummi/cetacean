@@ -36,6 +36,21 @@ type LogStreamer interface {
 type LogResourceResponse struct {
 	Lines  []logs.LogLine `json:"lines"`
 	Cursor string         `json:"cursor,omitempty"`
+
+	// Errors names the services a scoped read could not reach, so a partial
+	// answer says which part is missing rather than pretending to be whole.
+	// Always an array, never null — `omitempty` is deliberately absent, since
+	// dropping the field on the common path is exactly the "never null"
+	// promise broken in the other direction.
+	Errors []string `json:"errors"`
+
+	// Note is a caveat about the read as a whole rather than about any one
+	// line: a scope wider than one fan-out may cover, so far. It exists
+	// because the cap is otherwise invisible in the payload — a cluster-wide
+	// grep that read a quarter of the services and matched nothing is
+	// indistinguishable from a clean cluster, and the model reasons over the
+	// result, not over the tool description.
+	Note string `json:"note,omitempty"`
 }
 
 const (
@@ -62,7 +77,7 @@ func (s *Server) readLogsImpl(
 	opts logOptions,
 ) (LogResourceResponse, error) {
 	if s.logs == nil {
-		return LogResourceResponse{Lines: []logs.LogLine{}}, nil
+		return LogResourceResponse{Lines: []logs.LogLine{}, Errors: []string{}}, nil
 	}
 
 	if opts.since != "" {
@@ -71,19 +86,17 @@ func (s *Server) readLogsImpl(
 		}
 	}
 
-	wanted := opts.tail
-	if wanted <= 0 {
-		wanted = defaultLogTail
-	}
-	if wanted > maxLogTail {
-		wanted = maxLogTail
-	}
+	wanted := boundLogTail(opts.tail)
 
-	// Docker ignores `since` for service logs, so a cursored read has to pull
-	// a wider window and narrow it here. The widening is an implementation
-	// detail: the caller asked for `tail` lines and gets at most that many.
+	// Every narrowing below happens after the fetch — Docker ignores `since`
+	// for service logs, and it knows nothing of `contains` or `level` at all —
+	// so any of them has to pull a wider window than the caller asked for.
+	// Without it a grep returns the matches among the newest `tail` lines
+	// rather than the newest `tail` matches, which on a scoped read is 50
+	// lines per service. The widening is an implementation detail: the caller
+	// asked for `tail` lines and gets at most that many.
 	tail := wanted
-	if opts.since != "" {
+	if opts.since != "" || opts.contains != "" || opts.level != "" {
 		tail = min(tail*10, maxLogTail)
 	}
 
@@ -100,6 +113,10 @@ func (s *Server) readLogsImpl(
 		"",
 	)
 	if err != nil {
+		if kind == docker.TaskLog && isNotFound(err) {
+			return LogResourceResponse{}, s.explainMissingTaskLogs(targetID, err)
+		}
+
 		return LogResourceResponse{}, fmt.Errorf("fetch logs: %w", err)
 	}
 	defer reader.Close()
@@ -114,14 +131,38 @@ func (s *Server) readLogsImpl(
 	}
 
 	lines = filterLogLines(lines, opts.level)
+	lines = filterLogContains(lines, opts.contains)
 	lines = logs.FilterSince(lines, opts.since)
 
-	// Docker interleaves the output of a service's tasks, so arrival order is
-	// not time order. Sorting first makes the truncation below keep the truly
-	// newest lines and the cursor the truly newest timestamp — without it a
-	// late-arriving older line would push the cursor backwards, silently
-	// dropping everything between the two on the next read. Mirrors the REST
-	// path in api/log_handlers.go.
+	return finishLogRead(lines, wanted, opts.since), nil
+}
+
+// boundLogTail clamps a caller's requested tail to the defaults, so the two
+// log reads cannot disagree about how many lines "unspecified" or "too many"
+// means.
+func boundLogTail(tail int) int {
+	if tail <= 0 {
+		return defaultLogTail
+	}
+
+	return min(tail, maxLogTail)
+}
+
+// finishLogRead is the tail every log read shares: newest-last ordering, the
+// caller's cut, and the cursor.
+//
+// Docker interleaves the output of a service's tasks, so arrival order is not
+// time order. Sorting first makes the truncation keep the truly newest lines
+// and the cursor the truly newest timestamp — without it a late-arriving older
+// line would push the cursor backwards, silently dropping everything between
+// the two on the next read. Mirrors the REST path in api/log_handlers.go.
+//
+// The cursor comes from logs.ParseCursor rather than the raw Docker timestamp,
+// falling back to the caller's own `since` when no line carries a parseable
+// one. internal/logs is where cursor semantics live and logs.FilterSince is
+// what receives this value on the next call, so a cursor minted any other way
+// resumes a tail on something the rest of the codebase never produced.
+func finishLogRead(lines []logs.LogLine, wanted int, since string) LogResourceResponse {
 	slices.SortStableFunc(lines, func(a, b logs.LogLine) int {
 		return strings.Compare(a.Timestamp, b.Timestamp)
 	})
@@ -130,14 +171,21 @@ func (s *Server) readLogsImpl(
 		lines = lines[len(lines)-wanted:]
 	}
 
-	resp := LogResourceResponse{Lines: lines, Cursor: opts.since}
+	if lines == nil {
+		lines = []logs.LogLine{}
+	}
+
+	resp := LogResourceResponse{Lines: lines, Cursor: since, Errors: []string{}}
+
 	for _, line := range slices.Backward(lines) {
 		if cursor, ok := logs.ParseCursor(line.Timestamp); ok {
 			resp.Cursor = cursor
+
 			break
 		}
 	}
-	return resp, nil
+
+	return resp
 }
 
 // logOptions holds the parsed arguments shared between the log resource read
@@ -146,6 +194,11 @@ type logOptions struct {
 	tail  int
 	since string
 	level string
+
+	// contains narrows to lines holding this substring, case-insensitively.
+	// Applied server-side because the point of a cluster-wide read is that the
+	// caller pays for matches rather than for every line of every service.
+	contains string
 }
 
 // filterLogLines drops lines below the given minimum log level. Empty level
@@ -201,8 +254,9 @@ func lineLevelRank(msg string) int {
 // CallToolRequest.
 func optsFromToolRequest(req mcplib.CallToolRequest) logOptions {
 	return logOptions{
-		tail:  req.GetInt("tail", defaultLogTail),
-		since: req.GetString("since", ""),
-		level: req.GetString("level", ""),
+		tail:     req.GetInt("tail", defaultLogTail),
+		since:    req.GetString("since", ""),
+		level:    req.GetString("level", ""),
+		contains: req.GetString("contains", ""),
 	}
 }

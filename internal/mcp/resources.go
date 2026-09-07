@@ -212,24 +212,34 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 
 	switch resourceType {
 	case "cluster":
-		return s.cache.Snapshot(), nil
+		return newClusterOverview(s.cache.Snapshot()), nil
 
 	case "recommendations":
 		if s.recEngine == nil {
 			return []any{}, nil
 		}
-		return s.filterRecommendations(ctx, s.recEngine.Results()), nil
+		// Projected after filtering so the ACL check still sees the engine's
+		// own type, and so both this read and get_recommendations — which
+		// delegates here — state a remedy as a tool rather than a REST route.
+		return projectRecommendations(
+			s.filterRecommendations(ctx, s.recEngine.Results()),
+		), nil
 
 	case "history":
-		return s.filterHistory(ctx, s.cache.History().List(cache.HistoryQuery{Limit: 100})), nil
+		// Named after filtering, never before: filterHistory keys a task's ACL
+		// check on its ID, which is what the resolver resolves parentage from.
+		return nameHistoryTasks(
+			s.cache,
+			s.filterHistory(ctx, s.cache.History().List(cache.HistoryQuery{Limit: 100})),
+		), nil
 
 	case "nodes":
 		if resourceID == "" {
 			return s.filterNodes(ctx, s.cache.ListNodes()), nil
 		}
-		node, ok := s.cache.GetNode(resourceID)
-		if !ok {
-			return nil, notFound(uri)
+		node, err := resolved(s.cache.ResolveNode(resourceID))(uri)
+		if err != nil {
+			return nil, err
 		}
 		if err := s.checkRead(ctx, "node", nodeACLName(node)); err != nil {
 			return nil, err
@@ -240,30 +250,30 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterServices(ctx, s.cache.ListServices()), nil
 		}
-		svc, ok := s.cache.GetService(resourceID)
-		if !ok {
-			return nil, notFound(uri)
+		svc, err := resolved(s.cache.ResolveService(resourceID))(uri)
+		if err != nil {
+			return nil, err
 		}
 		if err := s.checkRead(ctx, "service", svc.Spec.Name); err != nil {
 			return nil, err
 		}
 		if subResource == "logs" {
-			return s.readServiceLogs(ctx, resourceID)
+			return s.readServiceLogs(ctx, svc.ID)
 		}
 		return svc, nil
 
 	case "tasks":
 		if resourceID == "" {
-			return s.filterTasks(ctx, cluster.EnrichTasks(s.cache, s.cache.ListTasks())), nil
+			return s.readableEnrichedTasks(ctx, s.cache.ListTasks()), nil
 		}
-		task, ok := s.cache.GetTask(resourceID)
-		if !ok {
-			return nil, notFound(uri)
+		task, err := resolved(s.resolveTask(resourceID))(uri)
+		if err != nil {
+			return nil, err
 		}
 		if err := s.checkRead(ctx, "task", task.ID); err != nil {
 			return nil, err
 		}
-		return cluster.EnrichTask(s.cache, task), nil
+		return s.readableEnrichedTask(ctx, task), nil
 
 	case "stacks":
 		if resourceID == "" {
@@ -285,9 +295,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterConfigs(ctx, s.cache.ListConfigs()), nil
 		}
-		cfg, ok := s.cache.GetConfig(resourceID)
-		if !ok {
-			return nil, notFound(uri)
+		cfg, err := resolved(s.cache.ResolveConfig(resourceID))(uri)
+		if err != nil {
+			return nil, err
 		}
 		if err := s.checkRead(ctx, "config", cfg.Spec.Name); err != nil {
 			return nil, err
@@ -298,9 +308,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return cluster.RedactSecrets(s.filterSecrets(ctx, s.cache.ListSecrets())), nil
 		}
-		sec, ok := s.cache.GetSecret(resourceID)
-		if !ok {
-			return nil, notFound(uri)
+		sec, err := resolved(s.cache.ResolveSecret(resourceID))(uri)
+		if err != nil {
+			return nil, err
 		}
 		if err := s.checkRead(ctx, "secret", sec.Spec.Name); err != nil {
 			return nil, err
@@ -311,9 +321,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterNetworks(ctx, s.cache.ListNetworks()), nil
 		}
-		net, ok := s.cache.GetNetwork(resourceID)
-		if !ok {
-			return nil, notFound(uri)
+		net, err := resolved(s.cache.ResolveNetwork(resourceID))(uri)
+		if err != nil {
+			return nil, err
 		}
 		if err := s.checkRead(ctx, "network", net.Name); err != nil {
 			return nil, err

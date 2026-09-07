@@ -60,7 +60,7 @@ func TestNodeDigestDownBeatsDrain(t *testing.T) {
 }
 
 // RowsForNodes and NodeDigest must never disagree about the same node's
-// state: this is the exact divergence DeriveNodeState was extracted to
+// state: this is the exact divergence deriveNodeState was extracted to
 // prevent.
 // A task's name was being derived three different ways in this package before
 // TaskName: a list row named a task after its service alone, so every replica
@@ -108,9 +108,8 @@ func TestRowsForTasksAgreesWithTaskDigest(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			row := RowsForTasks(
-				[]swarm.Task{tc.task},
+				[]EnrichedTask{{Task: tc.task}},
 				[]swarm.Service{tc.service},
-				nil,
 			)[0]
 			digest := TaskDigest(tc.task, &tc.service, nil)
 
@@ -130,12 +129,11 @@ func TestRowsForTasksAgreesWithTaskDigest(t *testing.T) {
 func TestRowsForTasksDistinguishesReplicas(t *testing.T) {
 	svc := replicated("api", 2)
 	rows := RowsForTasks(
-		[]swarm.Task{
-			{ID: "t1", ServiceID: "svc-api", Slot: 1},
-			{ID: "t2", ServiceID: "svc-api", Slot: 2},
+		[]EnrichedTask{
+			{Task: swarm.Task{ID: "t1", ServiceID: "svc-api", Slot: 1}},
+			{Task: swarm.Task{ID: "t2", ServiceID: "svc-api", Slot: 2}},
 		},
 		[]swarm.Service{svc},
-		nil,
 	)
 
 	if rows[0].Name == rows[1].Name {

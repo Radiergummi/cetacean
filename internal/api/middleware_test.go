@@ -8,10 +8,10 @@ import (
 	"testing"
 	"testing/fstest"
 
-	promapi "github.com/radiergummi/cetacean/internal/api/prometheus"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
 
 func TestRequestLogger(t *testing.T) {

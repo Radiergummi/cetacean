@@ -40,6 +40,9 @@ import type {
   UpdateConfig,
   Volume,
   VolumeDetail,
+  JGFNode,
+  JGFEdge,
+  JGFHyperedge,
 } from "@/api/types";
 import { http, HttpResponse, type JsonBodyType } from "msw";
 
@@ -546,94 +549,206 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Topology (must be before */networks and */nodes to avoid glob conflicts) ----
-    http.get("*/topology/networks", () => {
-      const nodes = dataset.services.map((service) => ({
-        id: service.ID,
-        name: service.Spec.Name,
-        stack: service.Spec.Labels?.[stackLabel],
-        replicas:
-          service.Spec.Mode.Replicated?.Replicas ??
-          (service.Spec.Mode.Global ? dataset.nodes.length : 1),
-        image: (service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "").split("@")[0],
-        ports: (service.Spec.EndpointSpec?.Ports ?? []).map(
-          ({ PublishedPort, TargetPort, Protocol }) => `${PublishedPort}:${TargetPort}/${Protocol}`,
-        ),
-        mode: service.Spec.Mode.Replicated ? "replicated" : "global",
-        updateStatus: service.UpdateStatus?.State,
-        networkAliases: {},
-      }));
+    http.get("*/topology", () => {
+      const context = "/api/context.jsonld";
+      const urn = (type: string, id: string) => `urn:cetacean:${type}:${id}`;
 
-      const edges: { source: string; target: string; networks: string[] }[] = [];
+      // Overlays only, matching cluster.OverlayNetworks — the bridge and host
+      // networks carry no service-to-service connectivity.
+      const overlays = new Map(
+        dataset.networks
+          .filter(({ Driver }) => Driver === "overlay")
+          .map((network) => [network.Id, network]),
+      );
+
+      // ---- network graph ----
+      const networkNodes: Record<string, JGFNode> = {};
       const serviceNetworks = new Map<string, string[]>();
+      const stacks = new Map<string, string[]>();
 
       for (const service of dataset.services) {
-        const targets = (service.Spec.TaskTemplate!.Networks ?? []).flatMap(({ Target }) =>
-          Target ? [Target] : [],
+        const serviceUrn = urn("service", service.ID);
+        const ports = (service.Spec.EndpointSpec?.Ports ?? []).map(
+          ({ PublishedPort, TargetPort, Protocol }) => `${PublishedPort}:${TargetPort}/${Protocol}`,
         );
-        serviceNetworks.set(service.ID, targets);
-      }
 
-      const seen = new Set<string>();
+        networkNodes[serviceUrn] = {
+          label: service.Spec.Name,
+          metadata: {
+            "@context": context,
+            kind: "service",
+            replicas:
+              service.Spec.Mode.Replicated?.Replicas ??
+              (service.Spec.Mode.Global ? dataset.nodes.length : 1),
+            image: (service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "").split("@")[0],
+            mode: service.Spec.Mode.Replicated ? "replicated" : "global",
+            ...(ports.length > 0 ? { ports } : {}),
+            ...(service.UpdateStatus ? { updateStatus: service.UpdateStatus.State } : {}),
+          },
+        };
 
-      for (const [serviceA, networksA] of serviceNetworks) {
-        for (const [serviceB, networksB] of serviceNetworks) {
-          if (serviceA >= serviceB) continue;
+        // The union cluster.ServiceAttachments takes: a dnsrr service has no
+        // virtual IP, so the task template is the only record of its networks.
+        const attached = new Set<string>();
 
-          const shared = networksA.filter((id) => networksB.includes(id));
-          const key = `${serviceA}-${serviceB}`;
-
-          if (shared.length > 0 && !seen.has(key)) {
-            seen.add(key);
-            edges.push({ source: serviceA, target: serviceB, networks: shared });
+        for (const { NetworkID } of service.Endpoint?.VirtualIPs ?? []) {
+          if (NetworkID && overlays.has(NetworkID)) {
+            attached.add(NetworkID);
           }
+        }
+
+        for (const { Target } of service.Spec.TaskTemplate!.Networks ?? []) {
+          if (Target && overlays.has(Target)) {
+            attached.add(Target);
+          }
+        }
+
+        serviceNetworks.set(service.ID, [...attached]);
+
+        const stack = service.Spec.Labels?.[stackLabel];
+
+        if (stack) {
+          stacks.set(stack, [...(stacks.get(stack) ?? []), serviceUrn]);
         }
       }
 
-      const networks = dataset.networks.map((network) => ({
-        id: network.Id,
-        name: network.Name,
-        driver: network.Driver,
-        scope: network.Scope,
-        stack: network.Labels?.[stackLabel],
-      }));
+      const networkEdges: JGFEdge[] = [];
+      const serviceIds = [...serviceNetworks.keys()].sort();
 
-      return jsonResponse(
-        detailEnvelope("/topology/networks", "NetworkTopology", {
-          nodes,
-          edges,
-          networks,
-        }),
-      );
-    }),
+      for (let i = 0; i < serviceIds.length; i++) {
+        for (let j = i + 1; j < serviceIds.length; j++) {
+          const a = serviceIds[i]!;
+          const b = serviceIds[j]!;
+          const shared = (serviceNetworks.get(a) ?? []).filter((id) =>
+            (serviceNetworks.get(b) ?? []).includes(id),
+          );
 
-    http.get("*/topology/placement", () => {
-      const placementNodes = dataset.nodes.map((node) => ({
-        id: node.ID,
-        hostname: node.Description.Hostname,
-        role: node.Spec.Role,
-        state: node.Status.State,
-        availability: node.Spec.Availability,
-        tasks: dataset.tasks
-          .filter((task) => task.NodeID === node.ID && task.Status.State === "running")
-          .map((task) => {
-            const service = dataset.servicesByID.get(task.ServiceID);
+          if (shared.length === 0) {
+            continue;
+          }
 
-            return {
-              id: task.ID,
-              serviceId: task.ServiceID,
-              serviceName: service?.Spec.Name ?? "",
-              state: task.Status.State,
-              slot: task.Slot ?? 0,
-              image: (task.Spec.ContainerSpec?.Image ?? "").split("@")[0],
-            };
-          }),
-      }));
+          networkEdges.push({
+            source: urn("service", a),
+            target: urn("service", b),
+            metadata: {
+              "@context": context,
+              networks: shared.map((id) => {
+                const network = overlays.get(id)!;
 
-      return jsonResponse(
-        detailEnvelope("/topology/placement", "PlacementTopology", {
-          nodes: placementNodes,
-        }),
-      );
+                return {
+                  id: urn("network", id),
+                  name: network.Name,
+                  driver: network.Driver,
+                  scope: network.Scope,
+                };
+              }),
+            },
+          });
+        }
+      }
+
+      const networkHyperedges: JGFHyperedge[] = [...stacks.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([name, members]) => ({
+          nodes: [...members].sort(),
+          metadata: { "@context": context, kind: "stack", name },
+        }));
+
+      // ---- placement graph ----
+      const placementNodes: Record<string, JGFNode> = {};
+      const placements = new Map<
+        string,
+        { nodeUrns: Set<string>; tasks: Record<string, unknown>[] }
+      >();
+
+      for (const node of dataset.nodes) {
+        const nodeUrn = urn("node", node.ID);
+        placementNodes[nodeUrn] = {
+          label: node.Description.Hostname ?? node.ID,
+          metadata: {
+            "@context": context,
+            kind: "node",
+            role: node.Spec.Role,
+            state: node.Status.State,
+            availability: node.Spec.Availability,
+          },
+        };
+
+        for (const task of dataset.tasks) {
+          // cluster.TaskIsLive: a replaced task still sits on its node, and
+          // counting it reports the same replica twice.
+          if (
+            task.NodeID !== node.ID ||
+            task.DesiredState === "shutdown" ||
+            task.DesiredState === "remove"
+          ) {
+            continue;
+          }
+
+          let placement = placements.get(task.ServiceID);
+
+          if (!placement) {
+            placement = { nodeUrns: new Set(), tasks: [] };
+            placements.set(task.ServiceID, placement);
+          }
+
+          placement.nodeUrns.add(nodeUrn);
+          placement.tasks.push({
+            id: urn("task", task.ID),
+            node: nodeUrn,
+            state: task.Status.State,
+            slot: task.Slot ?? 0,
+            image: (task.Spec.ContainerSpec?.Image ?? "").split("@")[0],
+          });
+        }
+      }
+
+      const placementHyperedges: JGFHyperedge[] = [];
+
+      for (const [serviceId, { nodeUrns, tasks }] of placements) {
+        const service = dataset.servicesByID.get(serviceId);
+        const serviceUrn = urn("service", serviceId);
+
+        placementNodes[serviceUrn] = {
+          label: service?.Spec.Name ?? serviceId,
+          metadata: {
+            "@context": context,
+            kind: "service",
+            image: (service?.Spec.TaskTemplate?.ContainerSpec?.Image ?? "").split("@")[0],
+          },
+        };
+
+        placementHyperedges.push({
+          nodes: [serviceUrn, ...[...nodeUrns].sort()],
+          metadata: { "@context": context, kind: "placement", tasks },
+        });
+      }
+
+      placementHyperedges.sort((a, b) => (a.nodes[0]! < b.nodes[0]! ? -1 : 1));
+
+      return jsonResponse({
+        graphs: [
+          {
+            id: "network",
+            type: "network-topology",
+            label: "Network Topology",
+            directed: false,
+            metadata: { "@context": context },
+            nodes: networkNodes,
+            edges: networkEdges,
+            hyperedges: networkHyperedges,
+          },
+          {
+            id: "placement",
+            type: "placement-topology",
+            label: "Placement Topology",
+            directed: false,
+            metadata: { "@context": context },
+            nodes: placementNodes,
+            hyperedges: placementHyperedges,
+          },
+        ],
+      });
     }),
 
     // ---- Nodes ----

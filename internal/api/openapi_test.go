@@ -107,20 +107,6 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 			wantStatus: 200,
 		},
 		{
-			name:       "topology networks",
-			method:     "GET",
-			path:       "/topology/networks",
-			accept:     "application/json",
-			wantStatus: 200,
-		},
-		{
-			name:       "topology placement",
-			method:     "GET",
-			path:       "/topology/placement",
-			accept:     "application/json",
-			wantStatus: 200,
-		},
-		{
 			name:               "content negotiation: HTML does not return JSON",
 			method:             "GET",
 			path:               "/nodes",

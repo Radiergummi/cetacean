@@ -122,7 +122,7 @@ func TestDeriveServiceState(t *testing.T) {
 }
 
 // TestServiceConvergedWaitsOutRollback is the reason ServiceConverged and
-// DeriveServiceState share ServiceUpdateInFlight. Swarm reports a rollback as
+// DeriveServiceState share serviceUpdateInFlight. Swarm reports a rollback as
 // "rollback_started", and during one the replica count still matches, because
 // the old tasks are the ones being restored. A convergence check that only
 // looked for "updating" would call a rollback done the instant it began —

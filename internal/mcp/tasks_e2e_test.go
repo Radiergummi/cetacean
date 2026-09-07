@@ -604,3 +604,43 @@ func taskTestServerWithTTL(
 		},
 	)
 }
+
+// A panic inside a task-augmented mutation must fail that one task, not the
+// process.
+//
+// mcp-go recovers panics in executeTaskTool — the AddTaskTool path — but not
+// in executeRegularToolAsTask, which is the branch Cetacean's four converging
+// tools take: they are ordinary AddTool registrations, because AddTaskTool
+// would make mcp-go refuse every synchronous call (see
+// TestScaleServiceStillWorksSynchronously). That goroutine runs after the HTTP
+// response is written, so api's recovery middleware is long out of the picture
+// and an unrecovered panic there takes the dashboard, the SSE streams and the
+// watcher down with it.
+//
+// What stands in the way is mcpserver.WithRecovery: executeRegularToolAsTask
+// applies the tool middleware chain, and that option is a middleware. Without
+// it this test does not fail — it kills the test binary, which is the same
+// thing this guards against in production.
+func TestPanickingMutationFailsTheTaskNotTheProcess(t *testing.T) {
+	c := cache.New(nil)
+	seedService(t, c, "web", 1, 1)
+
+	writeClient := &fakeWriteClient{
+		scaleServiceFn: func(_ context.Context, _ string, _ uint64) (swarm.Service, error) {
+			panic("docker client exploded")
+		},
+	}
+
+	handler := newToolTestServer(t, c, writeClient, config.OpsOperational).Handler()
+
+	handle := callAsTask(t, handler, "scale_service", map[string]any{
+		"id":       "web",
+		"replicas": float64(2),
+	})
+
+	final := awaitTerminal(t, handler, handle.Task.TaskId, 5*time.Second)
+	if final.Task.Status != string(mcplib.TaskStatusFailed) {
+		t.Fatalf("task ended %q (%s), want %q",
+			final.Task.Status, final.Task.StatusMessage, mcplib.TaskStatusFailed)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -216,19 +217,26 @@ func (s *Server) toolGetMetrics(
 		return "", err
 	}
 
+	metric := req.GetString("metric", metricCPU)
+	rangeKey := req.GetString("range", defaultMetricRange)
+
+	// A ranking and a single-resource chart differ in what they aggregate by,
+	// not just in what they select, so they are separate query catalogues and
+	// the branch happens before either is consulted.
+	if top := req.GetInt("top", 0); top > 0 || target == metricTargetCluster {
+		return s.rankMetrics(ctx, req, target, metric, rangeKey, top)
+	}
+
 	id, err := req.RequireString("id")
 	if err != nil {
 		return "", err
 	}
 
-	metric := req.GetString("metric", metricCPU)
-	rangeKey := req.GetString("range", defaultMetricRange)
-
 	metrics, ok := metricCatalog[target]
 	if !ok {
 		return "", fmt.Errorf(
-			"unknown target %q; expected %q or %q",
-			target, metricTargetService, metricTargetNode,
+			"unknown target %q; expected %q, %q or %q",
+			target, metricTargetService, metricTargetNode, metricTargetCluster,
 		)
 	}
 
@@ -359,14 +367,8 @@ func (s *Server) queryMetricSeries(
 
 	for _, result := range results {
 		for _, point := range result.Points {
-			seconds, fraction := int64(
-				point.Timestamp,
-			), point.Timestamp-float64(
-				int64(point.Timestamp),
-			)
-
 			points = append(points, metricPoint{
-				Time:  time.Unix(seconds, int64(fraction*1e9)).UTC().Format(time.RFC3339),
+				Time:  promTime(point.Timestamp),
 				Value: point.Value,
 			})
 		}
@@ -382,16 +384,13 @@ func (s *Server) queryMetricSeries(
 // serviceMetricSelector resolves a service by ID or name and returns the label
 // selector matching its containers.
 func (s *Server) serviceMetricSelector(ctx context.Context, id string) (string, string, error) {
-	service, ok := s.cache.GetService(id)
-	if !ok {
-		index := slices.IndexFunc(s.cache.ListServices(), func(candidate swarm.Service) bool {
-			return candidate.Spec.Name == id
-		})
-		if index < 0 {
-			return "", "", fmt.Errorf("service %q not found", id)
-		}
+	service, ok, err := s.cache.ResolveService(id)
+	if err != nil {
+		return "", "", err
+	}
 
-		service = s.cache.ListServices()[index]
+	if !ok {
+		return "", "", fmt.Errorf("service %q not found", id)
 	}
 
 	if err := s.checkRead(ctx, "service", service.Spec.Name); err != nil {
@@ -406,16 +405,13 @@ func (s *Server) serviceMetricSelector(ctx context.Context, id string) (string, 
 // nodeMetricSelector resolves a node by ID or hostname and returns the
 // selector matching its node-exporter instance.
 func (s *Server) nodeMetricSelector(ctx context.Context, id string) (string, string, error) {
-	node, ok := s.cache.GetNode(id)
-	if !ok {
-		index := slices.IndexFunc(s.cache.ListNodes(), func(candidate swarm.Node) bool {
-			return candidate.Description.Hostname == id
-		})
-		if index < 0 {
-			return "", "", fmt.Errorf("node %q not found", id)
-		}
+	node, ok, err := s.cache.ResolveNode(id)
+	if err != nil {
+		return "", "", err
+	}
 
-		node = s.cache.ListNodes()[index]
+	if !ok {
+		return "", "", fmt.Errorf("node %q not found", id)
 	}
 
 	if err := s.checkRead(ctx, "node", nodeACLName(node)); err != nil {
@@ -440,11 +436,11 @@ func (s *Server) nodeMetricSelector(ctx context.Context, id string) (string, str
 // exporter may report fully qualified — is the fallback.
 func instanceSelector(node swarm.Node) string {
 	if address := node.Status.Addr; address != "" {
-		return fmt.Sprintf(`instance=~"%s:.*"`, escapePromQLValue(address))
+		return fmt.Sprintf(`instance=~"%s:.*"`, promQLRegexValue(address))
 	}
 
 	if hostname := node.Description.Hostname; hostname != "" {
-		return fmt.Sprintf(`instance=~"%s(\\..+)?:.*"`, escapePromQLValue(hostname))
+		return fmt.Sprintf(`instance=~"%s(\\..+)?:.*"`, promQLRegexValue(hostname))
 	}
 
 	return ""
@@ -456,6 +452,17 @@ func instanceSelector(node swarm.Node) string {
 // a quote would otherwise produce a query that does not parse.
 func escapePromQLValue(value string) string {
 	return strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`).Replace(value)
+}
+
+// promQLRegexValue quotes a value for use inside a PromQL regex matcher.
+//
+// Escaping for the string literal is not enough there, because `=~` compiles
+// what it is given: a service legitimately named "api.v2" would also match
+// "apixv2", and an alternation built from the names a caller may read would
+// silently reach past their grants. Regex-quote first and escape after — the
+// backslashes QuoteMeta adds are themselves string escapes.
+func promQLRegexValue(value string) string {
+	return escapePromQLValue(regexp.QuoteMeta(value))
 }
 
 func metricNames(metrics map[string]metricSpec) []string {
@@ -478,4 +485,17 @@ func rangeNames() []string {
 	slices.Sort(names)
 
 	return names
+}
+
+// promTime renders a Prometheus timestamp — a float of Unix seconds — as the
+// RFC 3339 string a metric point carries.
+//
+// Shared by the single-resource read and the ranking so the two cannot format
+// the same instant differently; a caller correlating a chart against
+// get_events reads both as text.
+func promTime(timestamp float64) string {
+	seconds := int64(timestamp)
+	fraction := timestamp - float64(seconds)
+
+	return time.Unix(seconds, int64(fraction*1e9)).UTC().Format(time.RFC3339)
 }

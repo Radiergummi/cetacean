@@ -11,6 +11,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -35,6 +36,11 @@ func buildLogFrame(stream byte, payload string) []byte {
 type fakeLogStreamer struct {
 	frames []byte
 	err    error
+
+	// mu guards the captured args below. A scoped read fans out over several
+	// services at once, so one streamer is written from several goroutines;
+	// the reads all happen after the fan-out has been waited on.
+	mu sync.Mutex
 	// captured call args
 	calledKind  docker.LogKind
 	calledID    string
@@ -49,12 +55,16 @@ func (f *fakeLogStreamer) Logs(
 	_ bool,
 	since, _ string,
 ) (io.ReadCloser, error) {
+	f.mu.Lock()
 	f.calledKind = kind
 	f.calledID = id
 	f.calledTail = tail
 	f.calledSince = since
-	if f.err != nil {
-		return nil, f.err
+	err := f.err
+	f.mu.Unlock()
+
+	if err != nil {
+		return nil, err
 	}
 	return io.NopCloser(bytes.NewReader(f.frames)), nil
 }
@@ -507,5 +517,88 @@ func TestGetLogsToolRejectsBothTargets(t *testing.T) {
 	}))
 	if err == nil {
 		t.Fatal("expected an error when both service and task are given")
+	}
+}
+
+// `contains` narrows after the fetch, because Docker knows nothing about it.
+// Fetching only `tail` lines and grepping those returns the matches among the
+// newest N lines rather than the newest N matches — so on a scoped read, where
+// the per-service tail is 50, an error sixty lines back is simply invisible.
+func TestGetLogsWidensTheFetchForAServerSideFilter(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opts logOptions
+		want string
+	}{
+		{"plain", logOptions{tail: 50}, "50"},
+		{"contains", logOptions{tail: 50, contains: "OutOfMemory"}, "500"},
+		{"level", logOptions{tail: 50, level: "error"}, "500"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			streamer := &fakeLogStreamer{
+				frames: buildLogFrame(1, "2024-01-01T00:00:00.000000000Z OutOfMemory error\n"),
+			}
+			srv := newLogTestServer(t, cache.New(nil), streamer)
+
+			if _, err := srv.readLogsImpl(
+				context.Background(), docker.ServiceLog, "svc1", tc.opts,
+			); err != nil {
+				t.Fatalf("readLogsImpl: %v", err)
+			}
+
+			if streamer.calledTail != tc.want {
+				t.Errorf("streamer tail = %q, want %q", streamer.calledTail, tc.want)
+			}
+		})
+	}
+}
+
+// The wide scopes must be rejected against the narrow ones exactly as service
+// and task are against each other. Checking them in order and returning from
+// the first match resolves a conflict by the order the checks happen to be
+// written in: a call naming `service` and `cluster` would read the whole
+// cluster and never mention that `service` was ignored.
+func TestGetLogsToolRejectsConflictingScopes(t *testing.T) {
+	c := cache.New(nil)
+	srv := newLogTestServer(t, c, &fakeLogStreamer{})
+	td, _ := srv.findTool("get_logs")
+
+	conflicts := []map[string]any{
+		{"service": "svc1", "cluster": true},
+		{"service": "svc1", "stack": "demo"},
+		{"task": "task1", "cluster": true},
+		{"stack": "demo", "cluster": true},
+	}
+
+	for _, args := range conflicts {
+		_, err := td.handler(context.Background(), newCallToolRequest("get_logs", args))
+		if err == nil {
+			t.Errorf("%v: expected an error; a call may name exactly one scope", args)
+
+			continue
+		}
+
+		if !strings.Contains(err.Error(), "mutually exclusive") {
+			t.Errorf("%v: error = %q, want it to say the scopes are mutually exclusive", args, err)
+		}
+	}
+}
+
+// Naming no scope at all is still an error, and the message must name every
+// scope rather than only the two it used to offer.
+func TestGetLogsToolRequiresAScope(t *testing.T) {
+	c := cache.New(nil)
+	srv := newLogTestServer(t, c, &fakeLogStreamer{})
+	td, _ := srv.findTool("get_logs")
+
+	_, err := td.handler(context.Background(), newCallToolRequest("get_logs", map[string]any{}))
+	if err == nil {
+		t.Fatal("expected an error when no scope is given")
+	}
+
+	for _, scope := range []string{"service", "task", "stack", "cluster"} {
+		if !strings.Contains(err.Error(), scope) {
+			t.Errorf("error = %q, want it to name %q", err, scope)
+		}
 	}
 }

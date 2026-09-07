@@ -36,6 +36,45 @@ func EnrichTasks(c *cache.Cache, tasks []swarm.Task) []EnrichedTask {
 	return out
 }
 
+// EnrichTasksWithin names each task's parents from the slices given rather than
+// from the cache, leaving a name empty when the parent is not among them.
+//
+// It exists so a caller that must not disclose every parent name can pass only
+// the subset it may: internal/mcp hands it the ACL-filtered services and nodes,
+// so an enriched task never carries a name from behind the caller's grants —
+// the rule TaskDigest and RowsForTasks already follow. The task's own record
+// still carries the parent IDs, so nothing the caller could otherwise reach is
+// withheld.
+//
+// It is also the cheaper shape at cluster scale: EnrichTasks takes two cache
+// read locks per task, this one builds two maps and takes none.
+func EnrichTasksWithin(
+	tasks []swarm.Task,
+	services []swarm.Service,
+	nodes []swarm.Node,
+) []EnrichedTask {
+	serviceNames := make(map[string]string, len(services))
+	for _, svc := range services {
+		serviceNames[svc.ID] = svc.Spec.Name
+	}
+
+	nodeNames := make(map[string]string, len(nodes))
+	for _, node := range nodes {
+		nodeNames[node.ID] = node.Description.Hostname
+	}
+
+	out := make([]EnrichedTask, len(tasks))
+	for i, t := range tasks {
+		out[i] = EnrichedTask{
+			Task:         t,
+			ServiceName:  serviceNames[t.ServiceID],
+			NodeHostname: nodeNames[t.NodeID],
+		}
+	}
+
+	return out
+}
+
 // TaskName is what to call a task, following Docker's own convention: a
 // replicated task is "<service>.<slot>", a global one "<service>.<node>" since
 // a global service has no slot to distinguish its replicas by.

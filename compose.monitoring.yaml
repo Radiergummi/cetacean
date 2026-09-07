@@ -57,6 +57,19 @@ services:
         source: /var/run/docker.sock
         target: /var/run/docker.sock
         read_only: true
+      # cAdvisor's docker factory talks to containerd, not to dockerd, and
+      # dials /run/containerd/containerd.sock. Docker Engine runs its own
+      # containerd under /run/docker/containerd, so without this the factory
+      # fails to register — and with --docker_only that leaves cAdvisor
+      # reporting the root cgroup and nothing else: no per-container series,
+      # so no per-service charts and no sizing recommendations. A host whose
+      # Docker uses a system containerd wants /run/containerd as the source
+      # instead. The directory is mounted rather than the socket so that a
+      # host with neither still starts, degraded, rather than failing.
+      - type: bind
+        source: /run/docker/containerd
+        target: /run/containerd
+        read_only: true
       - type: bind
         source: /sys
         target: /sys

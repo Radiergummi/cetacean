@@ -7,7 +7,10 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
+	mcplib "github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -234,15 +237,15 @@ func TestFindCompactItemsMatchTheirElementSchema(t *testing.T) {
 	}
 }
 
-// TestFindRawModeDoesNotClaimStructuredContent guards the bug this whole
-// check exists for: raw hands back the untouched resource record, which is
-// not the compact Row shape find's outputSchema describes, and the server
-// validates structuredContent against that schema
-// (mcpserver.WithOutputSchemaValidation, server.go). Before markTextOnlyResult
-// was wired into the raw branch, every raw call failed here with "output
-// schema validation failed" over the real transport — invisible to a test
-// that calls td.handler directly, since that bypasses validation entirely.
-func TestFindRawModeDoesNotClaimStructuredContent(t *testing.T) {
+// TestFindRawModeReturnsConformingStructuredContent guards the contract raw
+// mode used to break: a tool that advertises an outputSchema must return
+// structuredContent conforming to it, whatever its arguments. raw once
+// answered with text content and no structuredContent at all, which the
+// server's own validator was happy with — it skips a result that has none —
+// and which the reference client rejects outright ("has an output schema but
+// did not return structured content"). The untouched records ride under `raw`
+// beside the compact rows instead, which the schema declares.
+func TestFindRawModeReturnsConformingStructuredContent(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
 		ID:   "svc1",
@@ -260,9 +263,6 @@ func TestFindRawModeDoesNotClaimStructuredContent(t *testing.T) {
 	var result struct {
 		IsError           bool            `json:"isError"`
 		StructuredContent json.RawMessage `json:"structuredContent"`
-		Content           []struct {
-			Text string `json:"text"`
-		} `json:"content"`
 	}
 	if err := json.Unmarshal(env.Result, &result); err != nil {
 		t.Fatalf("decode result: %v", err)
@@ -272,15 +272,24 @@ func TestFindRawModeDoesNotClaimStructuredContent(t *testing.T) {
 		t.Fatalf("raw find must not fail output-schema validation: %s", env.Result)
 	}
 
-	if len(result.StructuredContent) != 0 && string(result.StructuredContent) != "null" {
-		t.Errorf(
-			"raw find must not present structuredContent — it does not conform to find's schema, got %s",
-			result.StructuredContent,
+	if len(result.StructuredContent) == 0 || string(result.StructuredContent) == "null" {
+		t.Fatalf(
+			"raw find returned no structuredContent, but find declares an output schema: %s",
+			env.Result,
 		)
 	}
 
-	if len(result.Content) == 0 || !strings.Contains(result.Content[0].Text, "web") {
-		t.Errorf("raw find's untouched record missing from its text content: %s", env.Result)
+	var found findResult
+	if err := json.Unmarshal(result.StructuredContent, &found); err != nil {
+		t.Fatalf("decode structuredContent as findResult: %v", err)
+	}
+
+	if len(found.Items) != 1 || found.Items[0].Name != "web" {
+		t.Errorf("compact rows missing from a raw result: %s", result.StructuredContent)
+	}
+
+	if len(found.Raw) != 1 {
+		t.Fatalf("raw records = %d, want 1: %s", len(found.Raw), result.StructuredContent)
 	}
 }
 
@@ -499,23 +508,23 @@ func TestFindRawModeHonoursFilters(t *testing.T) {
 		t.Fatalf("handler: %v", err)
 	}
 
-	var raw findRawResult
-	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+	var found findResult
+	if err := json.Unmarshal([]byte(out), &found); err != nil {
 		t.Fatalf("unmarshal: %v: %s", err, out)
 	}
 
-	if raw.Total != 1 || len(raw.Items) != 1 {
+	if found.Total != 1 || len(found.Raw) != 1 {
 		t.Fatalf(
-			"stack=demo raw total/items = %d/%d, want 1/1 — the filter was not applied",
-			raw.Total,
-			len(raw.Items),
+			"stack=demo raw total/records = %d/%d, want 1/1 — the filter was not applied",
+			found.Total,
+			len(found.Raw),
 		)
 	}
 
 	// The surviving item must be the *untouched* svc-web record: its digest
 	// is still on the image (RowsForServices strips it; raw must not), and
 	// its worker sibling's fields must not leak in.
-	item, err := json.Marshal(raw.Items[0])
+	item, err := json.Marshal(found.Raw[0])
 	if err != nil {
 		t.Fatalf("marshal item: %v", err)
 	}
@@ -742,5 +751,139 @@ func TestToolFindRejectsEmptyQueryWithoutType(t *testing.T) {
 		if err == nil {
 			t.Errorf("query %q: expected error, got nil", q)
 		}
+	}
+}
+
+// find and describe must disclose the same thing about the same task. A task
+// row names its parent service and the node it runs on, and describe routes
+// both through the caller's read grants (readableService/readableNode) so a
+// digest cannot become a side channel for a resource the caller may not list.
+// find passed the unfiltered cache listings into RowsForTasks, so it named a
+// service describe withheld — one tool answering around the other's grants.
+func TestFindNamesATasksParentsOnlyWhenDescribeWould(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc-secret",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "classified-payroll"}},
+	})
+	c.SetNode(swarm.Node{
+		ID:          "node-1",
+		Description: swarm.NodeDescription{Hostname: "vault-host"},
+	})
+	c.SetTask(swarm.Task{ID: "task-1", ServiceID: "svc-secret", NodeID: "node-1", Slot: 1})
+
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"task:*"},
+		Audience:    []string{"user:agent@example.com"},
+		Permissions: []string{"read"},
+	}}})
+
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = evaluator })
+	ctx := auth.ContextWithIdentity(
+		context.Background(),
+		&auth.Identity{Subject: "agent@example.com"},
+	)
+
+	found, err := srv.toolFind(ctx, mcplib.CallToolRequest{
+		Params: mcplib.CallToolParams{Arguments: map[string]any{"type": "tasks"}},
+	})
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+
+	for _, name := range []string{"classified-payroll", "vault-host"} {
+		if strings.Contains(found, name) {
+			t.Errorf("find disclosed %q, which the caller has no grant to read: %s", name, found)
+		}
+	}
+
+	// The IDs stay: the task record the caller may read carries them itself,
+	// so withholding them would cost the caller a reference without hiding
+	// anything.
+	if !strings.Contains(found, "node-1") {
+		t.Errorf("find dropped the node ID the task record already carries: %s", found)
+	}
+}
+
+// A cross-type search reports a total the caller cannot reach the tail of:
+// `limit` caps the hits per type, there is no offset, and one figure over
+// eight types says nothing about where the matches are. Counts — the per-type
+// breakdown cluster.Search already computes, and the field the HTTP search
+// response carries — is what makes "137 matches, showing 6" legible instead of
+// looking like a listing that lost most of itself.
+func TestFindAcrossTypesReportsPerTypeCounts(t *testing.T) {
+	c := cache.New(nil)
+
+	// Two services and two nodes match, but limit lets one of each through.
+	for _, name := range []string{"web-frontend", "web-backend"} {
+		c.SetService(swarm.Service{
+			ID:   "svc-" + name,
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name}},
+		})
+	}
+
+	for _, host := range []string{"web-node-a", "web-node-b"} {
+		c.SetNode(swarm.Node{
+			ID:          "node-" + host,
+			Description: swarm.NodeDescription{Hostname: host},
+		})
+	}
+
+	srv := newToolTestServer(t, c, nil, config.OpsReadOnly)
+	td, _ := srv.findTool("find")
+
+	out, err := td.handler(context.Background(), newCallToolRequest("find", map[string]any{
+		"query": "web",
+		"limit": float64(1),
+	}))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+
+	var result findResult
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("unmarshal: %v: %s", err, out)
+	}
+
+	if len(result.Items) != 2 {
+		t.Fatalf("items = %d, want one per matching type (limit is per type)", len(result.Items))
+	}
+
+	if result.Total != 4 {
+		t.Errorf("total = %d, want 4 — every match, not just the shown ones", result.Total)
+	}
+
+	if got := result.Counts["services"]; got != 2 {
+		t.Errorf("counts[services] = %d, want 2", got)
+	}
+
+	if got := result.Counts["nodes"]; got != 2 {
+		t.Errorf("counts[nodes] = %d, want 2", got)
+	}
+}
+
+// Counts answers a question a typed listing does not have: there, total means
+// one type and `offset` reaches the rest, so a breakdown would be a map with
+// one key restating the number beside it.
+func TestFindTypedListingCarriesNoCounts(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	srv := newToolTestServer(t, c, nil, config.OpsReadOnly)
+	td, _ := srv.findTool("find")
+
+	out, err := td.handler(context.Background(), newCallToolRequest("find", map[string]any{
+		"type": "services",
+	}))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+
+	if strings.Contains(out, `"counts"`) {
+		t.Errorf("typed listing carried counts: %s", out)
 	}
 }

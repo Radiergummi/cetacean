@@ -199,7 +199,7 @@ func TestGetMetricsMatchesANodeByItsAddressThenItsHostname(t *testing.T) {
 		t.Fatalf("get_metrics: %v", err)
 	}
 
-	if !strings.Contains(querier.queries[0], `instance=~"10.0.0.7:.*"`) {
+	if !strings.Contains(querier.queries[0], `instance=~"10\\.0\\.0\\.7:.*"`) {
 		t.Errorf("node with an address should match on it: %s", querier.queries[0])
 	}
 

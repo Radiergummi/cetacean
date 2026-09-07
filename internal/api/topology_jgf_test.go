@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/api/jgf"
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -685,5 +687,237 @@ func TestHandleTopologyDOT_ETag304(t *testing.T) {
 
 	if w2.Code != http.StatusNotModified {
 		t.Errorf("expected 304, got %d", w2.Code)
+	}
+}
+
+// A service published with endpoint mode dnsrr has no virtual IP, so deriving
+// network membership from Endpoint.VirtualIPs alone drops it from the graph.
+// cluster.NetworkGraph unions the VIPs with the task template's networks; the
+// JGF projection must join on the same rule or the two topologies disagree.
+func TestBuildNetworkJGFSeesDNSRRAttachments(t *testing.T) {
+	services := []swarm.Service{
+		{
+			ID: "svc1",
+			Spec: swarm.ServiceSpec{
+				Annotations: swarm.Annotations{Name: "web"},
+				TaskTemplate: swarm.TaskSpec{
+					Networks: []swarm.NetworkAttachmentConfig{{Target: "net1"}},
+				},
+			},
+			Endpoint: swarm.Endpoint{
+				VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
+			},
+		},
+		{
+			// dnsrr: attached in the spec, but never given a virtual IP.
+			ID: "svc2",
+			Spec: swarm.ServiceSpec{
+				Annotations: swarm.Annotations{Name: "api"},
+				TaskTemplate: swarm.TaskSpec{
+					Networks: []swarm.NetworkAttachmentConfig{
+						{Target: "net1", Aliases: []string{"api"}},
+					},
+				},
+				EndpointSpec: &swarm.EndpointSpec{Mode: swarm.ResolutionModeDNSRR},
+			},
+		},
+	}
+	networks := []network.Summary{{ID: "net1", Name: "app_default", Driver: "overlay"}}
+
+	g := buildNetworkJGF(services, networks, "/api/context.jsonld")
+
+	if len(g.Edges) != 1 {
+		t.Fatalf("edges=%d, want 1 — the dnsrr service must still share net1", len(g.Edges))
+	}
+
+	source, target := g.Edges[0].Source, g.Edges[0].Target
+	if source != jgf.URN("service", "svc1") || target != jgf.URN("service", "svc2") {
+		t.Errorf("edge %s→%s, want svc1→svc2", source, target)
+	}
+}
+
+// After a rolling update the node still holds the shutdown task alongside its
+// replacement. cluster.PlacementGraph drops it — the orchestrator no longer
+// intends it to run — and the JGF projection must too, or the dashboard counts
+// the same replica twice and a node holding only a replaced task is reported
+// as running the service.
+func TestBuildPlacementJGFIgnoresReplacedTasks(t *testing.T) {
+	c := cache.New(nil)
+	c.SetTask(swarm.Task{
+		ID:           "task-old",
+		ServiceID:    "svc1",
+		NodeID:       "node1",
+		Slot:         1,
+		DesiredState: swarm.TaskStateShutdown,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateShutdown},
+	})
+	c.SetTask(swarm.Task{
+		ID:           "task-new",
+		ServiceID:    "svc1",
+		NodeID:       "node1",
+		Slot:         1,
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+
+	clusterNodes := []swarm.Node{
+		{ID: "node1", Description: swarm.NodeDescription{Hostname: "worker-1"}},
+	}
+
+	g := buildPlacementJGF(
+		clusterNodes,
+		c,
+		map[string]string{"svc1": "web"},
+		map[string]string{"svc1": "nginx"},
+		map[string]bool{"svc1": true},
+		"/api/context.jsonld",
+	)
+
+	if len(g.Hyperedges) != 1 {
+		t.Fatalf("hyperedges=%d, want 1", len(g.Hyperedges))
+	}
+
+	tasks, _ := g.Hyperedges[0].Metadata["tasks"].([]map[string]any)
+	if len(tasks) != 1 {
+		t.Fatalf("tasks=%d, want 1 — the replaced task must not be counted", len(tasks))
+	}
+
+	if id, _ := tasks[0]["id"].(string); id != jgf.URN("task", "task-new") {
+		t.Errorf("task=%v, want the live replacement", id)
+	}
+}
+
+// Two services sharing several overlays produce one edge carrying all of them,
+// and that array was filled by ranging a map — so two calls over identical
+// state serialised differently and flipped the response's ETag, turning every
+// conditional request into a 200. The edges themselves are sorted for exactly
+// this reason; the networks inside them must be too.
+func TestBuildNetworkJGFOrdersSharedNetworksDeterministically(t *testing.T) {
+	attach := func(id, name string, targets ...string) swarm.Service {
+		configs := make([]swarm.NetworkAttachmentConfig, 0, len(targets))
+		vips := make([]swarm.EndpointVirtualIP, 0, len(targets))
+
+		for _, target := range targets {
+			configs = append(configs, swarm.NetworkAttachmentConfig{Target: target})
+			vips = append(vips, swarm.EndpointVirtualIP{NetworkID: target})
+		}
+
+		return swarm.Service{
+			ID: id,
+			Spec: swarm.ServiceSpec{
+				Annotations:  swarm.Annotations{Name: name},
+				TaskTemplate: swarm.TaskSpec{Networks: configs},
+			},
+			Endpoint: swarm.Endpoint{VirtualIPs: vips},
+		}
+	}
+
+	shared := []string{"net-d", "net-a", "net-c", "net-b"}
+	services := []swarm.Service{
+		attach("svc1", "web", shared...),
+		attach("svc2", "api", shared...),
+	}
+
+	networks := make([]network.Summary, 0, len(shared))
+	for _, id := range shared {
+		networks = append(networks, network.Summary{ID: id, Name: id, Driver: "overlay"})
+	}
+
+	names := func() []string {
+		g := buildNetworkJGF(services, networks, "/api/context.jsonld")
+		if len(g.Edges) != 1 {
+			t.Fatalf("edges=%d, want 1", len(g.Edges))
+		}
+
+		entries, ok := g.Edges[0].Metadata["networks"].([]any)
+		if !ok {
+			t.Fatalf("networks metadata = %T, want a slice", g.Edges[0].Metadata["networks"])
+		}
+
+		got := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			got = append(got, entry.(map[string]any)["id"].(string))
+		}
+
+		return got
+	}
+
+	first := names()
+
+	want := make([]string, 0, len(shared))
+	for _, id := range slices.Sorted(slices.Values(shared)) {
+		want = append(want, jgf.URN("network", id))
+	}
+
+	if !slices.Equal(first, want) {
+		t.Errorf("networks = %v, want them sorted: %v", first, want)
+	}
+
+	// Ranging a map is not reliably out of order on any single call, so repeat:
+	// what matters is that every call agrees.
+	for range 20 {
+		if got := names(); !slices.Equal(got, first) {
+			t.Fatalf("networks = %v on a later call, %v on the first", got, first)
+		}
+	}
+}
+
+// The removed projections need routes of their own. Without them the SPA
+// catch-all answers both paths with 200 and an HTML page, so a JSON client of
+// the old endpoint receives a rendered dashboard rather than an error — and
+// the e2e test asserting the endpoint no longer serves a graph passes only
+// because it never ran against a real server.
+func TestRemovedTopologyProjectionsAreGone(t *testing.T) {
+	c := cache.New(nil)
+	h := newTestHandlers(t, withCache(c))
+	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	defer b.Close()
+
+	srv := httptest.NewServer(newTestRouter(t, h, b, nil))
+	defer srv.Close()
+
+	for _, path := range []string{"/topology/networks", "/topology/placement"} {
+		t.Run(path, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, srv.URL+path, nil)
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			req.Header.Set("Accept", "application/json")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("get %s: %v", path, err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusGone {
+				t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusGone)
+			}
+
+			if ct := resp.Header.Get(
+				"Content-Type",
+			); !strings.HasPrefix(
+				ct,
+				"application/problem+json",
+			) {
+				t.Errorf("content-type = %q, want a problem document", ct)
+			}
+
+			var problem struct {
+				Status int    `json:"status"`
+				Title  string `json:"title"`
+				Detail string `json:"detail"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&problem); err != nil {
+				t.Fatalf("decode problem: %v", err)
+			}
+
+			if problem.Status != http.StatusGone {
+				t.Errorf("problem status = %d, want %d", problem.Status, http.StatusGone)
+			}
+			if !strings.Contains(problem.Detail, "/topology") {
+				t.Errorf("detail = %q, want it to point at the replacement", problem.Detail)
+			}
+		})
 	}
 }

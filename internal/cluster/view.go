@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -49,17 +50,15 @@ type Row struct {
 	Running int `json:"running,omitempty"`
 }
 
-// RowsForServices builds the list view of services. Tasks are needed because a
-// service's state and running count are derived from them, not from its spec.
-func RowsForServices(services []swarm.Service, tasks []swarm.Task) []Row {
-	running := make(map[string]int, len(services))
-
-	for _, task := range tasks {
-		if task.Status.State == swarm.TaskStateRunning {
-			running[task.ServiceID]++
-		}
-	}
-
+// RowsForServices builds the list view of services. The running counts are
+// needed because a service's state and running count are derived from its
+// tasks, not from its spec.
+//
+// It takes the counts rather than the tasks themselves so the caller can
+// aggregate them wherever they already live — cache.RunningTaskCounts does it
+// under one read lock — instead of cloning the whole task table to reduce it
+// to one integer per service here.
+func RowsForServices(services []swarm.Service, running map[string]int) []Row {
 	rows := make([]Row, 0, len(services))
 
 	for _, svc := range services {
@@ -108,7 +107,7 @@ func RowsForNodes(nodes []swarm.Node) []Row {
 			ID:     n.ID,
 			Name:   n.Description.Hostname,
 			Type:   "node",
-			State:  DeriveNodeState(n),
+			State:  deriveNodeState(n),
 			Detail: string(n.Spec.Role),
 		})
 	}
@@ -118,29 +117,45 @@ func RowsForNodes(nodes []swarm.Node) []Row {
 	return rows
 }
 
-// RowsForTasks builds the list view of tasks. Services and nodes are needed to
-// name the task's parents: a task's own record holds only their IDs, and a
-// caller reading a task list is asking which service is broken and where.
-func RowsForTasks(tasks []swarm.Task, services []swarm.Service, nodes []swarm.Node) []Row {
+// RowsForTasks builds the list view of tasks. Services are needed to name each
+// task's parent: a task's own record holds only its ID, and a caller reading a
+// task list is asking which service is broken and where.
+//
+// The node half of that answer comes off the enriched task rather than a second
+// slice, because EnrichTasksWithin has already resolved it — against the same
+// ACL-filtered node listing this would have taken — and re-deriving it made
+// every find and every completion keystroke clone, sort and filter the whole
+// node table a second time to recover a string it was handed.
+//
+// The services slice must already be filtered to what the caller may read, the
+// way TaskDigest's is, and the tasks must have been enriched from an equally
+// filtered node listing: a parent absent from either falls back to the ID the
+// task record carries anyway, so a row never names a resource from behind the
+// caller's grants. Passing the unfiltered cache listings made find disclose a
+// service name that describe withheld for the very same task.
+func RowsForTasks(tasks []EnrichedTask, services []swarm.Service) []Row {
 	serviceByID := make(map[string]*swarm.Service, len(services))
 	for i := range services {
 		serviceByID[services[i].ID] = &services[i]
 	}
 
-	nodeNames := make(map[string]string, len(nodes))
-	for _, n := range nodes {
-		nodeNames[n.ID] = n.Description.Hostname
-	}
-
 	rows := make([]Row, 0, len(tasks))
 
 	for _, task := range tasks {
+		// The hostname when it is readable, the node ID otherwise — the same
+		// fallback TaskDigest makes, and no disclosure either way, since the
+		// task record the caller can already read carries the ID itself.
+		where := task.NodeHostname
+		if where == "" {
+			where = task.NodeID
+		}
+
 		rows = append(rows, Row{
 			ID:     task.ID,
-			Name:   TaskName(task, serviceByID[task.ServiceID]),
+			Name:   TaskName(task.Task, serviceByID[task.ServiceID]),
 			Type:   "task",
 			State:  string(task.Status.State),
-			Detail: nodeNames[task.NodeID],
+			Detail: where,
 		})
 	}
 
@@ -288,6 +303,30 @@ type Digest struct {
 	// RecentFailures are the task failures behind the current State, newest
 	// first, capped at maxRecentFailures.
 	RecentFailures []TaskFailure `json:"recentFailures"`
+
+	// Restarts counts involuntary task terminations behind a State that looks
+	// fine. Nil when no tracker was consulted — a service that has never
+	// restarted and one that was never measured are different answers, and a
+	// confident zero would conflate them. Services only.
+	Restarts *ServiceRestarts `json:"restarts,omitempty"`
+}
+
+// ServiceRestarts counts a service's involuntary task terminations over a
+// short window and a long one.
+//
+// One number cannot answer the question an operator is actually asking. A
+// service failing twenty times in the last hour is either a fault that started
+// during this deploy or one that has run for a week, and only the ratio of the
+// two windows tells them apart — so the digest carries both rather than a rate
+// the reader would have to trust blindly.
+//
+// This is the only channel through which a restart loop reaches a digest.
+// DeriveServiceState reports "running" whenever a replica is up, and
+// ServiceDigest drops tasks the orchestrator has already replaced, so a
+// service crash-looping every four seconds otherwise describes as healthy.
+type ServiceRestarts struct {
+	LastHour uint64 `json:"lastHour"`
+	LastWeek uint64 `json:"lastWeek"`
 }
 
 // Related is one cross-reference from a Digest.
@@ -316,7 +355,16 @@ const maxRecentFailures = 5
 // names of its network attachments, which carry only an ID; the caller may
 // have already filtered the slice by ACL, so a Target with no match falls
 // back to the ID rather than leaving Related.Name empty.
-func ServiceDigest(svc swarm.Service, tasks []swarm.Task, networks []network.Summary) Digest {
+//
+// restarts is the caller's reading of the restart tracker, or nil when it has
+// none to give; it is passed in rather than looked up so this stays a pure
+// function of the records handed to it, as every other builder here is.
+func ServiceDigest(
+	svc swarm.Service,
+	tasks []swarm.Task,
+	networks []network.Summary,
+	restarts *ServiceRestarts,
+) Digest {
 	var (
 		running    int
 		oldestFail time.Time
@@ -339,7 +387,7 @@ func ServiceDigest(svc swarm.Service, tasks []swarm.Task, networks []network.Sum
 		// A task the orchestrator has already replaced explains history, not
 		// the current state, and including it would attribute an old failure
 		// to a service that has since recovered.
-		if !taskIsLive(task) {
+		if !TaskIsLive(task) {
 			continue
 		}
 
@@ -389,6 +437,7 @@ func ServiceDigest(svc swarm.Service, tasks []swarm.Task, networks []network.Sum
 		Details:        ServiceDetails(svc),
 		Related:        serviceRelated(svc, networks),
 		RecentFailures: failures,
+		Restarts:       restarts,
 	}
 
 	if haveOldest {
@@ -508,8 +557,17 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 	if spec != nil {
 		details["image"] = StripImageDigest(spec.Image)
 
+		// Docker's split, kept: Command is the entrypoint, Args is what
+		// follows it. This used to report Args under the name "command" and
+		// never reported Command at all, which hid an entrypoint override —
+		// and once a caller can write this section, writing Command and
+		// reading Args back under the same name is a trap.
+		if len(spec.Command) > 0 {
+			details["command"] = spec.Command
+		}
+
 		if len(spec.Args) > 0 {
-			details["command"] = spec.Args
+			details["args"] = spec.Args
 		}
 
 		names := make([]string, 0, len(spec.Env))
@@ -521,14 +579,74 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 		slices.Sort(names)
 		details["envNames"] = names
 
+		// Durations as strings, never the nanosecond integers Docker's own
+		// type carries: "10s" is a value a caller can read and write back,
+		// 10000000000 is one they have to decode. Each key is omitted when
+		// unset, so "not configured" reads as absence rather than as a zero
+		// a caller might mistake for a configured value.
 		if hc := spec.Healthcheck; hc != nil {
 			details["healthcheck"] = true
+
+			if len(hc.Test) > 0 {
+				details["healthcheckTest"] = hc.Test
+			}
 
 			if hc.Interval > 0 {
 				details["healthcheckInterval"] = hc.Interval.String()
 			}
+
+			if hc.Timeout > 0 {
+				details["healthcheckTimeout"] = hc.Timeout.String()
+			}
+
+			if hc.StartPeriod > 0 {
+				details["healthcheckStartPeriod"] = hc.StartPeriod.String()
+			}
+
+			if hc.Retries > 0 {
+				details["healthcheckRetries"] = hc.Retries
+			}
 		} else {
 			details["healthcheck"] = false
+		}
+
+		// Names only, the rule envNames and the log driver's optionNames
+		// already follow. Which secrets a container receives is exactly what
+		// makes a rotation verifiable — "did the repoint land?" — while the
+		// values behind them stay unreachable through every read.
+		if refs := spec.Secrets; len(refs) > 0 {
+			names := make([]string, 0, len(refs))
+			for _, ref := range refs {
+				names = append(names, ref.SecretName)
+			}
+
+			slices.Sort(names)
+			details["secretNames"] = names
+		}
+
+		if refs := spec.Configs; len(refs) > 0 {
+			names := make([]string, 0, len(refs))
+			for _, ref := range refs {
+				names = append(names, ref.ConfigName)
+			}
+
+			slices.Sort(names)
+			details["configNames"] = names
+		}
+
+		// Targets first, over every mount: bindMounts below reports the
+		// security-relevant ones in full but skips volumes, so it cannot on
+		// its own answer whether a data volume survived a wholesale
+		// replacement. A target is a mount's identity — two things cannot be
+		// mounted at one path.
+		if len(spec.Mounts) > 0 {
+			targets := make([]string, 0, len(spec.Mounts))
+			for _, m := range spec.Mounts {
+				targets = append(targets, m.Target)
+			}
+
+			slices.Sort(targets)
+			details["mountTargets"] = targets
 		}
 
 		var bindMounts []map[string]any
@@ -575,6 +693,26 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 
 	if p := svc.Spec.TaskTemplate.Placement; p != nil && len(p.Constraints) > 0 {
 		details["placementConstraints"] = p.Constraints
+	}
+
+	if len(svc.Spec.Labels) > 0 {
+		details["labels"] = svc.Spec.Labels
+	}
+
+	// Option *names* only, the same rule envNames follows: a log driver's
+	// options routinely carry a credential (`splunk-token`, an authenticated
+	// syslog address), and a digest that named the driver honestly while
+	// handing over its token would be a worse leak than the one envNames
+	// exists to prevent.
+	if driver := svc.Spec.TaskTemplate.LogDriver; driver != nil && driver.Name != "" {
+		logDriver := map[string]any{"name": driver.Name}
+
+		if len(driver.Options) > 0 {
+			names := slices.Sorted(maps.Keys(driver.Options))
+			logDriver["optionNames"] = names
+		}
+
+		details["logDriver"] = logDriver
 	}
 
 	if endpoint := svc.Spec.EndpointSpec; endpoint != nil && len(endpoint.Ports) > 0 {

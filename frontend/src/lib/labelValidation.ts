@@ -10,7 +10,11 @@ export function isReservedLabelKey(key: string): boolean {
   return reservedPrefixes.some((prefix) => key.startsWith(prefix));
 }
 
-const labelKeyPattern = /^[a-z0-9]([a-z0-9.-/]*[a-z0-9])?$/;
+// The hyphen is last in the class so it is a literal: written `.-/` it was
+// a range from "." to "/", which silently excluded the hyphen the format
+// allows — so "my-label" was rejected, and the consecutive-hyphen check
+// below could never be reached.
+const labelKeyPattern = /^[a-z0-9]([a-z0-9./-]*[a-z0-9])?$/;
 const consecutiveSeparators = /[.-]{2}/;
 
 /**
