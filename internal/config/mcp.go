@@ -26,8 +26,10 @@ type MCPConfig struct {
 	Issuer string
 
 	// SigningKey is the HMAC key used to sign MCP tokens. If empty, main.go
-	// auto-generates an ephemeral key on startup.
-	// TODO: _FILE secret support via resolveSecret
+	// auto-generates an ephemeral key on startup — which invalidates every
+	// issued token on restart, so a deployment that persists refresh tokens
+	// wants this set. CETACEAN_MCP_SIGNING_KEY_FILE reads it from a file, so
+	// it can arrive as a Docker secret rather than through the environment.
 	SigningKey string
 
 	// AccessTokenTTL is how long MCP access tokens remain valid.
@@ -275,16 +277,21 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		return MCPConfig{}, err
 	}
 
+	signingKey, err := resolveSecret(
+		nil,
+		"CETACEAN_MCP_SIGNING_KEY",
+		fSigningKey,
+		def.SigningKey,
+	)
+	if err != nil {
+		return MCPConfig{}, err
+	}
+
 	return MCPConfig{
-		Enabled:         resolveBool(nil, "CETACEAN_MCP", fEnabled, def.Enabled),
-		OperationsLevel: opsLevel,
-		Issuer:          issuer,
-		SigningKey: resolve(
-			nil,
-			"CETACEAN_MCP_SIGNING_KEY",
-			fSigningKey,
-			def.SigningKey,
-		),
+		Enabled:            resolveBool(nil, "CETACEAN_MCP", fEnabled, def.Enabled),
+		OperationsLevel:    opsLevel,
+		Issuer:             issuer,
+		SigningKey:         signingKey,
 		AccessTokenTTL:     accessTTL,
 		RefreshTokenTTL:    refreshTTL,
 		ConsentTTL:         consentTTL,

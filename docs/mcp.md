@@ -530,7 +530,7 @@ enough calls unaided — to be worth a prompt of their own.
 | `CETACEAN_MCP` | `false` | Enable the MCP server |
 | `CETACEAN_MCP_OPERATIONS_LEVEL` | inherits `CETACEAN_OPERATIONS_LEVEL` | Tier ceiling for MCP tools (0–3) |
 | `CETACEAN_MCP_ISSUER` | derived from listen addr + TLS | Canonical external base URL for the OAuth issuer and MCP audience; set this behind a reverse proxy |
-| `CETACEAN_MCP_SIGNING_KEY` | auto-generated | HMAC-SHA256 JWT signing key |
+| `CETACEAN_MCP_SIGNING_KEY` | auto-generated | HMAC-SHA256 JWT signing key. `CETACEAN_MCP_SIGNING_KEY_FILE` reads it from a file instead, so it can arrive as a Docker secret |
 | `CETACEAN_MCP_ACCESS_TOKEN_TTL` | `1h` | Access token lifetime |
 | `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | Refresh token lifetime (30 days) |
 | `CETACEAN_MCP_CONSENT_TTL` | `2160h` | How long a remembered approval lasts (90 days); `0` disables remembering |

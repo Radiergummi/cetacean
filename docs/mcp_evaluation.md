@@ -1,3 +1,10 @@
+---
+title: MCP Evaluation Set
+description: The questions people actually ask an agent about a Swarm cluster, grouped by the moment they are in, and which tools answer each.
+category: reference
+tags: [mcp, evaluation, tools, agents]
+---
+
 # MCP Evaluation Set
 
 What people actually ask their agent about a Swarm cluster, grouped by the **moment they are in**

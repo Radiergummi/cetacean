@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The MCP signing key can now be read from a file, via `CETACEAN_MCP_SIGNING_KEY_FILE`, so it can be supplied as a Docker secret instead of through the environment — the same `_FILE` suffix every other secret already accepted. Setting a key at all is what keeps issued tokens valid across a restart, so a deployment that persists refresh tokens wants one
+
 ### Fixed
+- The configuration reference now documents every setting. The MCP server, authorization and recommendation sizing settings were absent from it, findable only by reading their own topic guides, so anyone configuring Cetacean from that page could not see roughly a third of what it accepts
+- The documentation site builds again. A page added alongside the MCP tools was missing the metadata the site requires of every page, which failed the build outright rather than skipping that one page
 - Replica counts are correct again for services that restart frequently. A task Swarm has replaced, or one Docker has already removed, was still counted as running until the next five-minutely re-sync, so a service crash-looping every few seconds was reported as having as many as thirteen running replicas against a desired one. The same wrong figure reached the resource listings, a service's own description, a stack's summary, the placement graph and the cluster's task total
 - Waiting for a deploy no longer reports failure on a rollout that succeeded. Because the running count could exceed the desired one, the wait timed out with "waiting: 3/2 replicas running" on services Docker had already finished updating — the answer an agent acts on by rolling back work that was fine. Waiting also no longer reports success the instant it starts: it now waits for the change itself to become visible, so scaling a service down is reported as done when the surplus replicas have actually stopped rather than while they are all still running
 - A service restarting in a loop is now reported as failing. It was described as healthy whenever it happened to be sampled between restarts, was missing from the cluster's list of what is wrong, and its recent failures were listed as none — so the one question the failure list exists to answer came back empty. A service that has since recovered still lists the failures behind it, but is no longer dated from one: "how long has this been going on" is answered about the state actually reported, not about a fault that is over

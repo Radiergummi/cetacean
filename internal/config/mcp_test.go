@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -512,5 +514,50 @@ func TestLoadMCP_ConsentTTL_RejectsNegative(t *testing.T) {
 
 	if _, err := loadMCP(nil); err == nil {
 		t.Error("loadMCP accepted a negative consent TTL, want an error")
+	}
+}
+
+func TestLoadMCP_SigningKeyFromFile(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "mcp_signing_key")
+	if err := os.WriteFile(keyPath, []byte("key-from-file\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("CETACEAN_MCP_SIGNING_KEY_FILE", keyPath)
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SigningKey != "key-from-file" {
+		t.Errorf("signing key = %q, want key-from-file", cfg.SigningKey)
+	}
+}
+
+func TestLoadMCP_SigningKeyEnvBeatsFile(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "mcp_signing_key")
+	if err := os.WriteFile(keyPath, []byte("key-from-file"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("CETACEAN_MCP_SIGNING_KEY", "key-from-env")
+	t.Setenv("CETACEAN_MCP_SIGNING_KEY_FILE", keyPath)
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SigningKey != "key-from-env" {
+		t.Errorf("signing key = %q, want key-from-env", cfg.SigningKey)
+	}
+}
+
+func TestLoadMCP_SigningKeyFileMissing(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_SIGNING_KEY_FILE", filepath.Join(t.TempDir(), "absent"))
+
+	if _, err := loadMCP(nil); err == nil {
+		t.Fatal("expected an error for an unreadable _FILE path, got nil")
 	}
 }

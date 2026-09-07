@@ -191,7 +191,142 @@ startup. The `_FILE` variant has lower precedence than the direct env var.
 
 > **Note:** `trusted_proxies` is always required. The shared secret is optional, additional protection.
 
+### Authorization
+
+Authorization is grant-based RBAC layered on top of whichever authentication mode is active. With no policy configured
+every authenticated user has full access; as soon as a policy is present the default flips to deny. Auth mode `none`
+bypasses authorization entirely. See [Authorization](authorization) for the grant syntax.
+
+<ConfigParam name="acl.policy" env="CETACEAN_ACL_POLICY">
+  Inline authorization policy as JSON, YAML, or TOML. Convenient for a short policy passed straight through the environment; prefer `acl.policy_file` for anything longer, since only a file is watched for changes.
+</ConfigParam>
+
+<ConfigParam name="acl.policy_file" env="CETACEAN_ACL_POLICY_FILE">
+  Path to a policy file (JSON, YAML, or TOML). The file is watched and reloaded when it changes, so grants can be edited without restarting Cetacean.
+</ConfigParam>
+
+The three settings below read grants carried by the identity itself. They *complement* the policy rather than replacing
+it: whatever the identity brings is added to what the policy already grants it. Each applies only to its own
+authentication mode.
+
+<ConfigParam name="acl.tailscale_capability" env="CETACEAN_AUTH_TAILSCALE_ACL_CAPABILITY">
+  Tailscale CapMap key holding per-user grants, e.g. `example.com/cap/cetacean-acl`. Only read in `tailscale` mode.
+</ConfigParam>
+
+<ConfigParam name="acl.oidc_claim" env="CETACEAN_AUTH_OIDC_ACL_CLAIM">
+  Name of the OIDC token claim holding grants, e.g. `cetacean_grants`. Only read in `oidc` mode.
+</ConfigParam>
+
+<ConfigParam name="acl.headers_acl" env="CETACEAN_AUTH_HEADERS_ACL">
+  Name of the HTTP header holding grants as JSON, e.g. `X-Remote-Grants`. Only read in `headers` mode, and only from a request that passed the `server.trusted_proxies` check.
+</ConfigParam>
+
 See [Authentication](authentication.md) for detailed usage guides, flow diagrams, and deployment examples.
+
+## MCP Server Settings
+
+Cetacean can expose its cluster data to AI agents over the [Model Context Protocol](mcp). The server is disabled by
+default; when enabled it mounts at `/mcp` and, unless the active auth mode is listed in `mcp.oauth.auth_bypass`,
+requires an OAuth 2.1 bearer token it issues itself. Every tool call is additionally checked against the
+[authorization](authorization) grants, so enabling MCP grants an agent no more than the calling identity already has.
+
+<ConfigParam name="mcp.enabled" env="CETACEAN_MCP" default="false">
+  Enable the embedded MCP server at `/mcp`.
+</ConfigParam>
+
+<ConfigParam name="mcp.operations_level" env="CETACEAN_MCP_OPERATIONS_LEVEL">
+  Which tier of tools MCP clients may call: `0` reads only, `1` operational, `2` configuration, `3` impactful. Defaults to inheriting [`server.operations_level`](#operations-level). Set it lower than the dashboard's own level to let people perform writes that agents cannot.
+</ConfigParam>
+
+<ConfigParam name="mcp.issuer" env="CETACEAN_MCP_ISSUER">
+  Canonical external base URL, e.g. `https://cetacean.example.com`. It becomes the OAuth issuer identifier and the base of the MCP resource audience, so it must be the URL clients actually reach. Defaults to deriving one from the listen address and TLS settings, which is only correct when no reverse proxy sits in front.
+</ConfigParam>
+
+<ConfigParam name="mcp.signing_key" env="CETACEAN_MCP_SIGNING_KEY">
+  HMAC-SHA256 key used to sign the JWTs Cetacean issues. Unset means a fresh key is generated at startup, which invalidates every previously issued token on restart — so set it for any deployment that should survive one. Use the `_FILE` suffix to read it from a Docker secret rather than the environment.
+</ConfigParam>
+
+<ConfigParam name="mcp.access_token_ttl" env="CETACEAN_MCP_ACCESS_TOKEN_TTL" default="1h">
+  How long an access token stays valid.
+</ConfigParam>
+
+<ConfigParam name="mcp.refresh_token_ttl" env="CETACEAN_MCP_REFRESH_TOKEN_TTL" default="720h">
+  How long a refresh token stays valid (30 days). Refresh tokens rotate single-use and are persisted under `storage.data_dir`, so clients keep working across restarts.
+</ConfigParam>
+
+<ConfigParam name="mcp.consent_ttl" env="CETACEAN_MCP_CONSENT_TTL" default="2160h">
+  How long a remembered approval lets a client skip the consent screen (90 days). To be useful it must outlive `mcp.refresh_token_ttl`. Set `0s` to prompt on every authorization.
+</ConfigParam>
+
+<ConfigParam name="mcp.max_concurrent_tasks" env="CETACEAN_MCP_MAX_CONCURRENT_TASKS" default="32">
+  Cap on in-flight task-augmented tool calls. Mutations that wait for a service to converge run as tasks, so this bounds how many such waits can be outstanding at once.
+</ConfigParam>
+
+<ConfigParam name="mcp.task_ttl" env="CETACEAN_MCP_TASK_TTL" default="15m">
+  How long a task's result is retained when the call itself omits a TTL. Without this fill-in such a result would be kept for the lifetime of the process. Set `0s` to disable the fill-in.
+</ConfigParam>
+
+<ConfigParam name="mcp.max_task_ttl" env="CETACEAN_MCP_MAX_TASK_TTL" default="1h">
+  Ceiling on the retention a call may ask for; longer requests are clamped to it. Set `0s` to accept whatever a client asks for.
+</ConfigParam>
+
+### MCP OAuth
+
+<ConfigParam name="mcp.oauth.require_resource_indicator" env="CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR" default="true">
+  Require the RFC 8707 `resource` parameter on authorize and token requests. Keeping this on stops a token issued for Cetacean from being replayed against another MCP server. Turn it off only for a client that cannot send the parameter.
+</ConfigParam>
+
+<ConfigParam name="mcp.oauth.dcr_enabled" env="CETACEAN_MCP_DCR_ENABLED" default="true">
+  Accept RFC 7591 Dynamic Client Registration at `/oauth/register`. Registrations are held in memory only, so they are lost on restart. The 2026-07-28 MCP revision deprecates DCR in favour of Client ID Metadata Documents; it stays on by default for clients that do not yet support those.
+</ConfigParam>
+
+<ConfigParam name="mcp.oauth.dcr_rate_limit" env="CETACEAN_MCP_DCR_RATE_LIMIT" default="10">
+  Maximum dynamic client registrations accepted per IP address per hour.
+</ConfigParam>
+
+<ConfigParam name="mcp.oauth.dcr_max_clients" env="CETACEAN_MCP_DCR_MAX_CLIENTS" default="1000">
+  Global cap on registered clients. Once reached, the least recently used registration is evicted.
+</ConfigParam>
+
+<ConfigParam name="mcp.oauth.cimd_enabled" env="CETACEAN_MCP_CIMD_ENABLED" default="true">
+  Accept Client ID Metadata Documents, where the client identifies itself by an `https://` URL Cetacean fetches. Fetches go through an SSRF blocklist and are cached for an hour.
+</ConfigParam>
+
+<ConfigParam name="mcp.oauth.auth_bypass" env="CETACEAN_MCP_AUTH_BYPASS">
+  Comma-separated authentication modes that skip OAuth entirely, e.g. `cert`. Use it where the transport already carries a verified identity and a second token would add nothing. Authorization still applies — only the OAuth handshake is skipped.
+</ConfigParam>
+
+> **Note:** These settings have no CLI flags; configure MCP through the environment or the TOML file.
+
+See [MCP](mcp) for the tools, resources, prompts and widgets the server exposes.
+
+## Recommendation Sizing Settings
+
+These tune the resource right-sizing checker, the only [recommendation](recommendations) category with configurable
+thresholds. They require Prometheus, since the checker compares reservations and limits against measured usage. The
+other checkers use fixed thresholds.
+
+<ConfigParam name="sizing.headroom_multiplier" env="CETACEAN_SIZING_HEADROOM_MULTIPLIER" default="2.0">
+  Multiplier applied to observed usage when suggesting a new reservation or limit. Accepts `1.0` to `10.0`.
+</ConfigParam>
+
+<ConfigParam name="sizing.thresholds.over_provisioned" env="CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED" default="0.20">
+  Usage below this fraction of the reservation marks a service over-provisioned. Accepts `0.0` to `1.0`.
+</ConfigParam>
+
+<ConfigParam name="sizing.thresholds.approaching_limit" env="CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT" default="0.80">
+  Usage above this fraction of the limit raises a warning. Accepts `0.0` to `1.0`.
+</ConfigParam>
+
+<ConfigParam name="sizing.thresholds.at_limit" env="CETACEAN_SIZING_THRESHOLD_AT_LIMIT" default="0.95">
+  Usage above this fraction of the limit raises a critical finding. Accepts `0.0` to `1.0`.
+</ConfigParam>
+
+<ConfigParam name="sizing.thresholds.lookback" env="CETACEAN_SIZING_LOOKBACK" default="168h">
+  Window over which p95 usage is queried when deciding whether a service is over-provisioned (7 days). A short window makes the check react to a quiet weekend; a long one needs that much history in Prometheus to say anything.
+</ConfigParam>
+
+> **Note:** These settings have no CLI flags; configure sizing through the environment or the TOML file.
 
 ## Config File
 
