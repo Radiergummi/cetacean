@@ -4,11 +4,10 @@ on:
   push:
     tags: ["v*"]
 
-permissions:
-  contents: write
-  packages: write
-  attestations: write
-  id-token: write
+# Granted per job rather than here: sbom-gate and build run `npm ci` and the
+# frontend build, so a compromised transitive dependency would otherwise read a
+# token that can push to main, move tags and publish images.
+permissions: {}
 
 jobs:
   # The committed SBOM is embedded in the binary, and main is allowed to carry
@@ -17,6 +16,8 @@ jobs:
   # window, so check before anything is built.
   sbom-gate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -39,6 +40,8 @@ jobs:
 
   build:
     needs: [sbom-gate]
+    permissions:
+      contents: read
     strategy:
       matrix:
         include:
@@ -86,6 +89,11 @@ jobs:
   docker:
     needs: [build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -132,7 +140,10 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest
+            # A pre-release tag (v1.0.0-rc1) must not move :latest for
+            # everyone running the plain image. The semver patterns above
+            # already handle pre-releases correctly; this one would not.
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
       - id: push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -156,6 +167,8 @@ jobs:
   release:
     needs: [build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -176,7 +189,9 @@ jobs:
         run: |
           VERSION="${TAG#v}"
           # Extract the section for this version from CHANGELOG.md
-          awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found" CHANGELOG.md > release-notes.md
+          awk -v version="$VERSION" \
+            '$0 ~ "^## \\[" version "\\]" {found=1; next} /^## \[/{if(found) exit} found' \
+            CHANGELOG.md > release-notes.md
           # Fall back to auto-generated notes if no section found
           if [ ! -s release-notes.md ]; then
             echo "fallback=true" >> "$GITHUB_OUTPUT"

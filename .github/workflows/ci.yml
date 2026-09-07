@@ -140,6 +140,11 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # open-sbom-pr.sh dispatches ci.yml on the branch it opens, because a
+      # pull request created with GITHUB_TOKEN raises no pull_request event and
+      # its required checks would never report. Dispatching needs actions:write,
+      # and a job-level block replaces the default rather than adding to it.
+      actions: write
     # One sync per branch: two concurrent runs would race the same commit.
     concurrency:
       group: sbom-sync-${{ github.event.pull_request.number || github.ref }}
