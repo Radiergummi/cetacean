@@ -134,6 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The Tailscale tsnet deployment example now sets the state directory it mounts a volume for. Without it tsnet chose its own location, the volume went unused, and the node re-authenticated on every restart
 - Corrected several documentation claims: the log viewer does not tail live until the tail is turned on, the logical topology draws one edge per pair of services rather than one per shared network, Swarm ignores Compose's `depends_on`, and the default operations level permits operational writes rather than everything
 - The keyboard shortcut overlay lists every shortcut again. The chords for the metrics console and the recommendations page were missing from it, so `?` claimed to show the full list while omitting two, and it described `/` as focusing a search field rather than opening the command palette
+- The SBOM no longer loses the integrity hash of every npm dependency depending on when it was generated. The frontend build mutates `node_modules` enough that npm stops reporting `integrity` for the installed tree, so regenerating the SBOM after a build dropped all 157 hashes and looked like ordinary dependency drift. Generation now refuses to write a hash-less SBOM rather than quietly shipping one
 
 ## [0.12.0] - 2026-08-28
 

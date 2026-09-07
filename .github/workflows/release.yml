@@ -32,6 +32,12 @@ jobs:
       # cyclonedx-gomod compiles the package, so main.go's //go:embed needs the
       # built frontend present.
       - run: cd frontend && npm run build && npm run build:widgets
+      # The build mutates node_modules enough that npm stops reporting
+      # `integrity` for the installed tree, and cyclonedx-npm reads that tree —
+      # so generating the SBOM straight after a build silently drops every
+      # npm SHA-512 hash and this gate then fails against the committed file.
+      # dist/ and dist-widgets/ survive npm ci, so reinstalling is enough.
+      - run: cd frontend && npm ci
       - run: make sbom
       - name: Verify the tagged SBOM matches the tagged dependencies
         run: |

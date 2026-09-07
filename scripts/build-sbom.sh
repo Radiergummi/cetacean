@@ -43,6 +43,19 @@ toolbin="$tmp/cyclonedx-gomod"
 echo "==> npm packages (production only)"
 ( cd "$repo_root/frontend" && npx --no-install cyclonedx-npm --omit dev --output-file "$tmp/npm.cdx.json" )
 
+# cyclonedx-npm reads the *installed* tree, and npm stops reporting `integrity`
+# for a tree the frontend build has touched — so running this right after a
+# build yields an SBOM with no npm hashes at all. That is a silent loss of
+# supply-chain data, and it looks like ordinary dependency drift to the release
+# gate, so fail loudly and say how to fix it.
+if grep -q '"integrity"' "$repo_root/frontend/package-lock.json" \
+   && ! grep -q 'SHA-512' "$tmp/npm.cdx.json"; then
+  echo "error: npm components came out with no integrity hashes." >&2
+  echo "  node_modules has been mutated since it was installed (usually by the" >&2
+  echo "  frontend build). Run 'cd frontend && npm ci' and try again." >&2
+  exit 1
+fi
+
 echo "==> merge + strip volatile fields (deterministic output)"
 # Version is intentionally omitted from the envelope so the committed file
 # only diffs when dependencies change, not when a release tag is cut.
