@@ -128,7 +128,7 @@ held in the URL as `?q=` and `?range=`.
 
 ## Log viewer
 
-Service and task detail pages carry a log viewer. It tails live by default and follows the bottom of the output
+Service and task detail pages carry a log viewer. It can tail live once you turn the tail on and follows the bottom of the output
 until you scroll up, which pauses following; the live toggle in the toolbar stops and starts the stream.
 
 - Time range: presets from the last 5 minutes upwards, or a custom since/until pair
@@ -141,7 +141,7 @@ until you scroll up, which pauses following; the live toggle in the toolbar stop
 
 The topology page has two views.
 
-- Logical: one card per service, grouped into its stack, with an edge for every overlay network two services share.
+- Logical: one card per service, grouped into its stack, with an edge between any two services sharing an overlay network, listing the shared networks.
   Hovering a card dims everything it is not connected to, and the legend maps colours to stacks.
 - Physical: one card per cluster node, listing the tasks placed on it.
 

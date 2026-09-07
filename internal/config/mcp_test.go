@@ -51,7 +51,7 @@ func TestMCPConfigDefaults(t *testing.T) {
 
 func TestMCPConfigFromEnv(t *testing.T) {
 	t.Setenv("CETACEAN_MCP", "true")
-	t.Setenv("CETACEAN_MCP_SIGNING_KEY", "test-secret")
+	t.Setenv("CETACEAN_MCP_SIGNING_KEY", envSigningKey)
 	t.Setenv("CETACEAN_MCP_ACCESS_TOKEN_TTL", "2h")
 	t.Setenv("CETACEAN_MCP_REFRESH_TOKEN_TTL", "48h")
 	t.Setenv("CETACEAN_MCP_CONSENT_TTL", "96h")
@@ -71,8 +71,8 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	if !cfg.MCP.Enabled {
 		t.Error("MCP should be enabled")
 	}
-	if cfg.MCP.SigningKey != "test-secret" {
-		t.Errorf("signing key = %q, want %q", cfg.MCP.SigningKey, "test-secret")
+	if cfg.MCP.SigningKey != envSigningKey {
+		t.Errorf("signing key = %q, want %q", cfg.MCP.SigningKey, envSigningKey)
 	}
 	if cfg.MCP.AccessTokenTTL != 2*time.Hour {
 		t.Errorf("access token TTL = %v, want 2h", cfg.MCP.AccessTokenTTL)
@@ -179,7 +179,7 @@ func TestMCPConfigFromFile(t *testing.T) {
 	t.Setenv("CETACEAN_MCP_AUTH_BYPASS", "")
 
 	enabled := true
-	signingKey := "file-secret"
+	signingKey := "file-secret---------------------"
 	accessTTL := "2h"
 	refreshTTL := "48h"
 	opsLevel := 2
@@ -214,8 +214,8 @@ func TestMCPConfigFromFile(t *testing.T) {
 	if !cfg.MCP.Enabled {
 		t.Error("MCP.Enabled should be true from file")
 	}
-	if cfg.MCP.SigningKey != "file-secret" {
-		t.Errorf("SigningKey = %q, want file-secret", cfg.MCP.SigningKey)
+	if cfg.MCP.SigningKey != "file-secret---------------------" {
+		t.Errorf("SigningKey = %q, want %q", cfg.MCP.SigningKey, "file-secret---------------------")
 	}
 	if cfg.MCP.AccessTokenTTL != 2*time.Hour {
 		t.Errorf("AccessTokenTTL = %v, want 2h", cfg.MCP.AccessTokenTTL)
@@ -520,7 +520,7 @@ func TestLoadMCP_ConsentTTL_RejectsNegative(t *testing.T) {
 func TestLoadMCP_SigningKeyFromFile(t *testing.T) {
 	dir := t.TempDir()
 	keyPath := filepath.Join(dir, "mcp_signing_key")
-	if err := os.WriteFile(keyPath, []byte("key-from-file\n"), 0600); err != nil {
+	if err := os.WriteFile(keyPath, append([]byte(fileSigningKey), '\n'), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -530,27 +530,27 @@ func TestLoadMCP_SigningKeyFromFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.SigningKey != "key-from-file" {
-		t.Errorf("signing key = %q, want key-from-file", cfg.SigningKey)
+	if cfg.SigningKey != fileSigningKey {
+		t.Errorf("signing key = %q, want %q", cfg.SigningKey, fileSigningKey)
 	}
 }
 
 func TestLoadMCP_SigningKeyEnvBeatsFile(t *testing.T) {
 	dir := t.TempDir()
 	keyPath := filepath.Join(dir, "mcp_signing_key")
-	if err := os.WriteFile(keyPath, []byte("key-from-file"), 0600); err != nil {
+	if err := os.WriteFile(keyPath, []byte(fileSigningKey), 0600); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Setenv("CETACEAN_MCP_SIGNING_KEY", "key-from-env")
+	t.Setenv("CETACEAN_MCP_SIGNING_KEY", envBeatsFile)
 	t.Setenv("CETACEAN_MCP_SIGNING_KEY_FILE", keyPath)
 
 	cfg, err := loadMCP(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.SigningKey != "key-from-env" {
-		t.Errorf("signing key = %q, want key-from-env", cfg.SigningKey)
+	if cfg.SigningKey != envBeatsFile {
+		t.Errorf("signing key = %q, want %q", cfg.SigningKey, envBeatsFile)
 	}
 }
 
@@ -559,5 +559,59 @@ func TestLoadMCP_SigningKeyFileMissing(t *testing.T) {
 
 	if _, err := loadMCP(nil); err == nil {
 		t.Fatal("expected an error for an unreadable _FILE path, got nil")
+	}
+}
+
+// A 32-byte key is the HS256 minimum RFC 7518 section 3.2 requires; anything
+// shorter weakens every token the MCP server signs.
+const (
+	testSigningKey = "0123456789abcdef0123456789abcdef"
+	envSigningKey  = "env-secret----------------------"
+	fileSigningKey = "key-from-file-------------------"
+	envBeatsFile   = "key-from-env--------------------"
+)
+
+func TestLoadMCP_SigningKeyTooShortIsRejected(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_SIGNING_KEY", "short")
+
+	if _, err := loadMCP(nil); err == nil {
+		t.Fatal("expected an error for a signing key under 32 bytes, got nil")
+	}
+}
+
+func TestLoadMCP_ShortSigningKeyFromFileIsRejected(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "mcp_signing_key")
+	if err := os.WriteFile(keyPath, []byte("too-short"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("CETACEAN_MCP_SIGNING_KEY_FILE", keyPath)
+
+	if _, err := loadMCP(nil); err == nil {
+		t.Fatal("expected an error for a short signing key read from a file, got nil")
+	}
+}
+
+func TestLoadMCP_SigningKeyAtMinimumIsAccepted(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_SIGNING_KEY", testSigningKey)
+
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SigningKey != testSigningKey {
+		t.Errorf("signing key = %q, want the 32-byte test key", cfg.SigningKey)
+	}
+}
+
+// An unset key is not a short key: main.go generates a random one.
+func TestLoadMCP_UnsetSigningKeyIsStillAllowed(t *testing.T) {
+	cfg, err := loadMCP(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SigningKey != "" {
+		t.Errorf("signing key = %q, want empty", cfg.SigningKey)
 	}
 }
