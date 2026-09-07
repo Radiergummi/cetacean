@@ -45,7 +45,7 @@ export function IntegrationSection({
   defaultOpen: boolean;
   enabled: boolean;
   rawLabels: [string, string][];
-  docsUrl: string;
+  docsUrl?: string;
   children: ReactNode;
   editable?: boolean | undefined;
   editContent?: ReactNode | undefined;
@@ -111,16 +111,18 @@ export function IntegrationSection({
       defaultOpen={defaultOpen}
       controls={
         <>
-          <a
-            href={docsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            onClick={(event) => event.stopPropagation()}
-          >
-            Docs
-            <ExternalLink className="size-3" />
-          </a>
+          {docsUrl && (
+            <a
+              href={docsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onClick={(event) => event.stopPropagation()}
+            >
+              Docs
+              <ExternalLink className="size-3" />
+            </a>
+          )}
 
           {visualContent ? (
             <SegmentedControl

@@ -1,5 +1,6 @@
 import type { Integration } from "../../api/types";
 import { rawLabelsForIntegration } from "../../lib/integrationLabels";
+import { AclPanel } from "./AclPanel";
 import { CronjobPanel } from "./CronjobPanel";
 import { DiunPanel } from "./DiunPanel";
 import { ShepherdPanel } from "./ShepherdPanel";
@@ -64,6 +65,14 @@ export function IntegrationPanels({
           case "diun":
             return (
               <DiunPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "cetacean-acl":
+            return (
+              <AclPanel
                 key={integration.name}
                 integration={integration}
                 {...panelProps}

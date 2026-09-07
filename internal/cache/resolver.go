@@ -59,3 +59,89 @@ func (c *Cache) ServiceOfTask(taskID string) string {
 	}
 	return ""
 }
+
+// LabelsOf returns the labels for a resource, or nil if unknown.
+func (c *Cache) LabelsOf(resourceType, name string) map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	switch resourceType {
+	case "service":
+		for _, s := range c.services {
+			if s.Spec.Name == name {
+				return s.Spec.Labels
+			}
+		}
+	case "config":
+		for _, cfg := range c.configs.items {
+			if cfg.Spec.Name == name {
+				return cfg.Spec.Labels
+			}
+		}
+	case "secret":
+		for _, s := range c.secrets.items {
+			if s.Spec.Name == name {
+				return s.Spec.Labels
+			}
+		}
+	case "network":
+		for _, n := range c.networks.items {
+			if n.Name == name {
+				return n.Labels
+			}
+		}
+	case "volume":
+		for _, v := range c.volumes.items {
+			if v.Name == name {
+				return v.Labels
+			}
+		}
+	case "node":
+		for _, n := range c.nodes.items {
+			if n.Description.Hostname == name || n.ID == name {
+				return n.Spec.Labels
+			}
+		}
+	}
+	return nil
+}
+
+// LabelsByType returns the labels of every resource of a type, keyed by the
+// name an ACL resource expression uses for it. One pass under one read lock,
+// which is what keeps ACL filtering off a per-item scan — see
+// acl.ResourceResolver for why that matters.
+func (c *Cache) LabelsByType(resourceType string) map[string]map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	labels := map[string]map[string]string{}
+	switch resourceType {
+	case "service":
+		for _, s := range c.services {
+			labels[s.Spec.Name] = s.Spec.Labels
+		}
+	case "config":
+		for _, cfg := range c.configs.items {
+			labels[cfg.Spec.Name] = cfg.Spec.Labels
+		}
+	case "secret":
+		for _, s := range c.secrets.items {
+			labels[s.Spec.Name] = s.Spec.Labels
+		}
+	case "network":
+		for _, n := range c.networks.items {
+			labels[n.Name] = n.Labels
+		}
+	case "volume":
+		for _, v := range c.volumes.items {
+			labels[v.Name] = v.Labels
+		}
+	case "node":
+		// Addressable by either, matching LabelsOf.
+		for _, n := range c.nodes.items {
+			labels[n.Description.Hostname] = n.Spec.Labels
+			labels[n.ID] = n.Spec.Labels
+		}
+	}
+	return labels
+}
