@@ -1,78 +1,161 @@
 ---
-title: Dashboard Guide
-description: Keyboard shortcuts, command palette, chart interactions, log viewer, and topology views.
+title: Dashboard
+description: Navigation, keyboard shortcuts, the command palette, list and detail pages, charts, logs, and topology.
 category: guide
 tags: [dashboard, ui, keyboard-shortcuts, search, charts, logs]
 ---
 
-# Dashboard Guide
+# Dashboard
 
-Cetacean's UI updates in real time via SSE—when a service scales or a node goes down, the dashboard reflects it
-without refreshing. The connection indicator in the nav bar shows stream health; if it drops, Cetacean reconnects
-automatically.
+The dashboard updates itself. Each page opens an SSE stream scoped to what it shows, so a scaled service or a
+downed node appears without a refresh. The connection indicator in the nav bar shows stream health and when the
+last event arrived; if the stream drops, it reconnects with backoff. The indicator also carries a resync button
+that asks the server to re-read the whole cluster from Docker.
 
-## Keyboard Shortcuts
+## Navigation
 
-Press `?` to see all shortcuts. The highlights:
+The nav bar links every resource type: nodes, stacks, services, tasks, configs, secrets, networks, volumes, plus
+the swarm info, topology and metrics pages. On narrow screens they collapse behind a menu button.
 
-| Shortcut                 | Action                                    |
-|--------------------------|-------------------------------------------|
-| `⌘ K` / `Ctrl K`         | Command palette (search + actions)        |
-| `g` then `s`/`n`/`k`/... | Navigate to services, nodes, stacks, etc. |
-| `j`/`k` or `↓`/`↑`       | Move through table rows                   |
-| `Enter`                  | Open selected resource                    |
+To the right of the search box sit the shortcut help button, a recommendations indicator badged with the current
+finding count, the theme toggle (light, dark, system), and, in every authentication mode except `none`, the
+identity badge linking to your profile. The footer carries the running version and commit, the licenses page, and
+a link to the API playground at `/api`.
 
-The `g` shortcuts are chords: Press `g`, release, then the second key.
+## Keyboard shortcuts
 
-## Command Palette
+Press `?` for the full list. Shortcuts are ignored while focus is in a text input.
 
-`⌘ K` opens the command palette. Type to search across all resource types, or type an action name (`scale`,
-`restart`, `drain`, `rollback`) to trigger write operations with guided steps and confirmation. Actions respect
-[operations level](configuration.md#operations-level) and [authorization](authorization.md) permissions.
+| Shortcut         | Action                                       |
+|------------------|----------------------------------------------|
+| `⌘ K` / `Ctrl K` | Toggle the command palette                   |
+| `/`              | Open the command palette                     |
+| `?`              | Toggle the shortcut list                     |
+| `Esc`            | Close the overlay, or go back                |
+| `g` `h`          | Cluster overview                             |
+| `g` `n`          | Nodes                                        |
+| `g` `k`          | Stacks                                       |
+| `g` `s`          | Services                                     |
+| `g` `a`          | Tasks                                        |
+| `g` `c`          | Configs                                      |
+| `g` `x`          | Secrets                                      |
+| `g` `w`          | Networks                                     |
+| `g` `v`          | Volumes                                      |
+| `g` `i`          | Swarm info                                   |
+| `g` `t`          | Topology                                     |
+| `g` `m`          | Metrics console                              |
+| `g` `r`          | Recommendations                              |
+| `j` / `↓`        | Next row in a table                          |
+| `k` / `↑`        | Previous row                                 |
+| `Enter`          | Open the selected row                        |
 
-## Filtering
+The `g` shortcuts are chords: press `g`, release, then the second key within one second. Hovering a nav link shows
+its chord.
 
-List pages support search and [expr-lang](https://expr-lang.org/) filter expressions via the API's `?filter=` parameter:
+## Command palette
 
-```js
-role == "manager" && state == "ready"       # nodes
-name contains "web" && mode == "replicated" # services
-state == "failed" || error != ""            # tasks
-```
+`⌘ K` (`Ctrl K` on Linux and Windows) opens the palette. Type to search names, images and labels across every
+resource type. Results are grouped by type in a fixed order, with a state indicator per row, and refresh every two
+seconds while the palette is open so a converging service updates in place. Move with the arrow keys and open with
+`Enter`.
 
-See the [API reference](api.md) for available filter fields per resource type.
+Typing an action name instead runs that action as a guided sequence, one prompt per argument, with a breadcrumb of
+what you have chosen so far:
+
+| Action              | Type                                                    |
+|---------------------|---------------------------------------------------------|
+| Scale Service       | Pick a service, then a replica count                    |
+| Update Image        | Pick a service, then an image reference                 |
+| Rollback Service    | Pick a service                                          |
+| Restart Service     | Pick a service                                          |
+| Drain Node          | Pick a node                                             |
+| Pause Node          | Pick a node                                             |
+| Activate Node       | Pick a node                                             |
+| Promote Node        | Pick a node                                             |
+| Demote Node         | Pick a node                                             |
+| Force Remove Task   | Pick a task                                             |
+| Remove …            | Pick a service, node, stack, config, secret, network or volume |
+
+Destructive actions ask for confirmation before they run. Before executing, the palette checks the `Allow` header
+on the target resource, so an action barred by the [operations level](configuration#operations-level) or by an
+[authorization](authorization) grant fails with a permission message rather than a server error.
+
+## List pages
+
+Every resource type has a list page with a search box, sortable columns, and a table or grid toggle. Search and
+sort are held in the URL (`?q=`, `?sort=`, `?dir=`), so a filtered list is a shareable link. The view toggle is
+saved per resource type in local storage, and below the medium breakpoint the grid view is used regardless.
+
+Lists page themselves in as you scroll, and tables of more than 100 rows are virtualized. Rows arrive and leave
+over SSE without refetching the page.
+
+The API accepts expression filters through `?filter=` that the dashboard's search box does not build. See the
+[API guide](api#filter-fields-by-resource) for the fields available per resource type.
+
+## Detail pages
+
+A detail page shows the resource, its cross-references (the services using a config, the tasks of a service, the
+stack a resource belongs to), and its recent change history. Cross-references are links, so you can walk from a
+secret to the services mounting it to the nodes their tasks run on.
+
+Where the operations level and your grants allow it, detail pages carry actions: scale, update image, rollback and
+restart on a service, plus inline editors for environment variables, resource reservations and limits, placement,
+ports, update and rollback policy, and the log driver; availability and labels on a node; force removal on a task.
+Actions hidden by permissions are not rendered.
 
 ## Charts
 
-Charts appear on the cluster overview, node, service, task, and stack detail pages. They 
-require [monitoring](monitoring.md).
+Charts appear on the cluster overview and on node, service and task detail pages, and require
+[monitoring](monitoring). Node and service list pages carry sparklines and gauges from the same data.
 
-- **Click to isolate** a series by clicking its name or line, and everything else dims. Click again to restore.
-- **Brush to zoom** by dragging horizontally. The URL updates so you can share the time window.
-- **Linked crosshairs** synchronize across all charts in the same panel: hover on one to see values on all siblings.
-- **Stacked area toggle** switches between line and stacked area views in the chart header.
-- **Stack drill-down** on the cluster overview: double-click a stack to see its individual services.
+The panel header holds a `1H` / `6H` / `24H` / `7D` selector, a custom date-time range picker, a refresh button, a
+pause control for the live stream, and a line/area toggle. The selected range is stored as `?range=`, and a custom
+one as `?from=` and `?to=`.
 
-## Log Viewer
+- Click a series name or line to isolate it. Everything else dims; click again to restore.
+- Drag horizontally to zoom into a time window. The URL updates, so the window is shareable.
+- Hover one chart to get a crosshair and matching values on every other chart in the same panel.
+- Double-click a stack in the per-stack charts on the cluster overview or a node page to drill into its services.
 
-The log viewer on service and task detail pages supports live tailing, time range selection (presets or custom), stream
-and level filtering, substring/regex search with match navigation, JSON pretty-printing, and log download.
+Charts on the 1H, 6H, 24H and 7D ranges stream new points over SSE. A custom range is fetched once, and the
+refresh button re-fetches it.
 
-## Atom Feeds
+## Metrics console
 
-Every resource list and detail page shows a feed icon in the page header. Click it to open the Atom feed for that page
-in a new tab, or copy the URL to subscribe in a feed reader. Feeds include history, search results, and
-recommendations pages. See the [API reference](api.md#atom-feeds) for the full list of supported endpoints and
-pagination details.
+The metrics page runs PromQL directly against the configured Prometheus, with completion for metric names. A query
+returns a result table and a range chart over the same `1H` / `6H` / `24H` / `7D` selector. The query and range are
+held in the URL as `?q=` and `?range=`.
 
-## Licenses
+## Log viewer
 
-The licenses page (linked from the footer) lists every open-source dependency bundled into Cetacean, both Go
-modules and frontend packages. Search by name, or filter by ecosystem and by license. Clicking a license badge
-opens the full license text for that dependency, along with its NOTICE file if it ships one. The page header
-also links to the complete attribution document for download.
+Service and task detail pages carry a log viewer. It tails live by default and follows the bottom of the output
+until you scroll up, which pauses following; the live toggle in the toolbar stops and starts the stream.
+
+- Time range: presets from the last 5 minutes upwards, or a custom since/until pair
+- Filters: by level (parsed from the line, including JSON and `log/slog` numeric levels) and by stream
+- Search: substring or regular expression, with match navigation and highlighting
+- Rendering: JSON payloads pretty-printed, levels colour-barred, long output virtualized
+- Download: saves the lines currently loaded as a `.log` file
 
 ## Topology
 
-The topology page offers two views: **logical** (services grouped by stack, connected by networks) and **physical**
-(tasks grouped by node). Both are interactive—click to navigate to detail pages.
+The topology page has two views.
+
+- Logical: one card per service, grouped into its stack, with an edge for every overlay network two services share.
+  Hovering a card dims everything it is not connected to, and the legend maps colours to stacks.
+- Physical: one card per cluster node, listing the tasks placed on it.
+
+Both views pan, zoom and let you drag cards, and clicking a service opens its detail page.
+
+## Atom feeds
+
+Every resource list and detail page shows a feed icon in the page header. Click it to open that page's Atom feed,
+or copy the URL into a feed reader. The history, search and recommendations pages have feeds too. See the
+[API guide](api#feeds) for the supported endpoints and pagination.
+
+## Licenses
+
+The licenses page, linked from the footer, lists every open-source dependency bundled into Cetacean, both Go
+modules and frontend packages. Search by name, or filter by ecosystem and license. Clicking a license badge opens
+the full text for that dependency, with its NOTICE file if it ships one. The header links to the complete
+attribution document.

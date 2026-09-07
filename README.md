@@ -20,91 +20,77 @@
 
 ## Why Cetacean?
 
-Docker Swarm doesn't come with a dashboard. You get `docker service ls` and that's about it. Cetacean fills that gap:
-deploy one container on a manager node and instantly see your entire cluster with live updates as things change.
+Docker Swarm doesn't come with a dashboard. You get `docker service ls` and that's about it. Cetacean fills the gap:
+run one container on a manager node and see the whole cluster, with live updates as things change.
+
+It connects to the Docker socket, caches swarm state in memory, and pushes changes to the browser over SSE. No
+database, no agents on worker nodes, no configuration required.
+
+## Quick start
+
+Run it on a manager node:
 
 ```bash
-docker stack deploy -c compose.yaml cetacean
-# Open http://<manager>:9000 — done.
+docker run -d --name cetacean \
+  -p 9000:9000 \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  ghcr.io/radiergummi/cetacean:latest
 ```
 
-No database, no agents on worker nodes, no configuration required. It connects to the Docker socket, caches everything
-in memory, and pushes changes to your browser over SSE.
+Open `http://<manager>:9000`. Or deploy the bundled stack, which adds a volume for persisted state:
 
-## Features
+```bash
+docker network create --driver overlay monitoring
+docker stack deploy -c compose.yaml cetacean
+```
 
-- **Cluster overview** with live health cards, capacity bars, and activity feed
-- **Browse everything**: nodes, services, tasks, stacks, configs, secrets, networks, volumes — all cross-referenced
-- **Log viewer** with live-streaming, regex search, JSON formatting, and time range filtering
-- **Topology views**: logical (service-to-service via overlay networks) and physical (task-to-node placement)
-- **Metrics** via optional Prometheus integration: per-node, per-service, and per-stack CPU/memory charts
-- **Real-time updates** via per-resource SSE: no polling, no refresh
-- **Pluggable authentication**: anonymous, OIDC, Tailscale, mTLS, or trusted proxy headers
-- **Full API**: REST with search, filtering, pagination, JSON-LD, OpenAPI spec, and SSE streaming
+See [Getting started](docs/getting-started.md) for the monitoring and authentication setup.
 
-## Documentation
+## What you get
 
-- **[Getting Started](docs/getting-started.md):** Installation, quick start, first run
-- **[Configuration](docs/configuration.md):** CLI flags, env vars, config file, health checks
-- **[Monitoring](docs/monitoring.md):** Prometheus, node-exporter, cAdvisor setup
-- **[Authentication](docs/authentication.md):** OIDC, Tailscale, mTLS, proxy headers
-- **[Dashboard Guide](docs/dashboard.md):** Navigation, keyboard shortcuts, search, charts, logs
-- **[API Reference](docs/api.md):** Endpoints, query parameters, filters, SSE, response formats
+- Cluster overview with live health cards, capacity bars, and an activity feed
+- Nodes, services, tasks, stacks, configs, secrets, networks, volumes and plugins, all cross-referenced
+- Log viewer with live tailing, regex search, JSON formatting, and time range filtering
+- Topology views: logical (services grouped by stack, linked by shared overlay networks) and physical (tasks by node)
+- Metrics via optional Prometheus integration, plus a PromQL console and sizing recommendations
+- Write operations (scale, restart, rollback, image and spec edits, node drain) gated by an operations level
+- Pluggable authentication: anonymous, OIDC, Tailscale, mTLS, or trusted proxy headers, with per-resource RBAC
+- REST API with search, filtering, pagination, JSON-LD, OpenAPI, SSE, and Atom feeds
+- Embedded MCP server, so an AI agent reads and operates the cluster through the same permissions
 
 ## Comparison
 
-|                        | Portainer          | Swarmpit        | Cetacean         |
-|------------------------|--------------------|-----------------|------------------|
-| **Deploy complexity**  | DB + agents + auth | CouchDB + agent | Single container |
-| **Time to first page** | Minutes            | Minutes         | Seconds          |
-| **Real-time updates**  | Polling            | Polling         | SSE push         |
-| **Metrics**            | Built-in           | Built-in        | Prometheus       |
+|                    | Portainer          | Swarmpit        | Cetacean         |
+|--------------------|--------------------|-----------------|------------------|
+| Deploy complexity  | DB + agents + auth | CouchDB + agent | Single container |
+| Time to first page | Minutes            | Minutes         | Seconds          |
+| Real-time updates  | Polling            | Polling         | SSE push         |
+| Metrics            | Built-in           | Built-in        | Prometheus       |
 
----
+## Documentation
 
-## Development
+Full documentation is at [cetacean.mazetti.me](https://cetacean.mazetti.me), and in [`docs/`](docs) in this
+repository:
 
-Requires Go 1.26+ and Node.js 24+. Cetacean needs a Docker Swarm to connect to:
+- [Getting started](docs/getting-started.md)
+- [Configuration](docs/configuration.mdx)
+- [Monitoring](docs/monitoring.md)
+- [Authentication](docs/authentication.md) and [Authorization](docs/authorization.md)
+- [Dashboard](docs/dashboard.md)
+- [API guide](docs/api.md)
+- [MCP server](docs/mcp.md) and [MCP tools and resources](docs/mcp-tools.md)
 
-```bash
-docker swarm init  # single-node swarm for local dev
-```
+## Build from source
 
-Run the backend and frontend dev server side by side:
-
-```bash
-# Terminal 1: Go backend
-go run .
-
-# Terminal 2: Frontend (hot reload, proxies to :9000)
-cd frontend && npm install && npm run dev
-```
-
-Open `http://localhost:5173`. The Vite dev server proxies resource paths to the Go backend, so you get hot-reload with
-live data.
-
-### Make Targets
+Requires Go 1.26+ and Node.js 24+. The frontend has to be built first, because the binary embeds it:
 
 ```bash
-make check    # lint + format check + test (the full CI check)
-make test     # go test ./...
-make lint     # golangci-lint + oxlint
-make fmt      # gofmt + oxfmt
-make build    # frontend build + go build
+cd frontend && npm install && npm run build && npm run build:widgets && cd ..
+go build -o cetacean .
 ```
 
-### Tech Stack
-
-**Backend**: Go, stdlib `net/http`, Docker Engine API, `log/slog`,
-[expr](https://github.com/expr-lang/expr), [goccy/go-json](https://github.com/goccy/go-json)
-
-**Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui, Chart.js,
-[React Flow](https://reactflow.dev/) + [ELK.js](https://github.com/kieler/elkjs),
-[@tanstack/react-virtual](https://tanstack.com/virtual)
-
-**Monitoring**: [Prometheus](https://prometheus.io/),
-[cAdvisor](https://github.com/google/cadvisor),
-[Node Exporter](https://github.com/prometheus/node_exporter)
+Cetacean needs a swarm to connect to; `docker swarm init` gives you a single-node one for local work. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, the dev server, and the `make` targets.
 
 ## License
 

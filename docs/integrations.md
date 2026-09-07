@@ -1,31 +1,40 @@
 ---
 title: Integrations
-description: Structured panels for Traefik, Shepherd, Swarm Cronjob, and Diun on service detail pages.
+description: Structured panels for Traefik, Shepherd, Swarm Cronjob, and Diun on the service detail page.
 category: guide
 tags: [integrations, traefik, shepherd, swarm-cronjob, diun]
 ---
 
 # Integrations
 
-Cetacean detects well-known Docker Swarm ecosystem tools from service labels and renders them as structured panels on
-the service detail page. Panels appear above the labels section; if no recognized labels are present, nothing is shown.
+Cetacean recognises four Swarm ecosystem tools from a service's own labels and renders each as a structured panel on
+the service detail page, above the labels section. Nothing is rendered when no matching labels are present.
 
-## Supported Tools
+## Supported tools
 
-| Tool                                                        | Labels            | Description                                                                                                                   |
-| ----------------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| [Traefik](https://traefik.io/)                              | `traefik.*`       | HTTP routers, services, and middlewares parsed from `traefik.http.*` labels. TCP/UDP labels are preserved but not structured. |
-| [Shepherd](https://github.com/djmaze/shepherd)              | `shepherd.*`      | Service auto-updater. Shows enable status and auth config.                                                                    |
-| [Swarm Cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.*` | Cron-scheduled jobs. Shows schedule, replica count, and skip/registry options.                                                |
-| [Diun](https://github.com/crazy-max/diun)                   | `diun.*`          | Image update notifications. Shows watch settings, tag filters, and notification config.                                       |
+A tool is detected when the service carries at least one label with its prefix.
+
+| Tool                                                        | Label prefix      | Panel shows                                                                     |
+| ----------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------- |
+| [Traefik](https://traefik.io/)                              | `traefik.`        | HTTP routers, services, and middlewares parsed from `traefik.http.*`            |
+| [Shepherd](https://github.com/djmaze/shepherd)              | `shepherd.`       | Enable state and `shepherd.auth.config`                                         |
+| [Swarm Cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.`  | Schedule, replicas, skip-running, and the two registry options                  |
+| [Diun](https://github.com/crazy-max/diun)                   | `diun.`           | Watch settings, tag include/exclude/sort filters, platform, and `diun.metadata.*` |
+
+For each tool, `<prefix>enable` sets the enabled state shown in the panel. When that label is absent Cetacean
+reports the integration as enabled.
+
+Only `traefik.http.routers.*`, `traefik.http.services.*`, and `traefik.http.middlewares.*` are parsed into structure.
+`traefik.tcp.*` and `traefik.udp.*` labels are left to the raw label view.
 
 ## Editing
 
-Integration panels support inline editing at [operations level](configuration.md#operations-level) 2 or higher. Each
-field maps to its underlying Docker service label. A structured/raw toggle lets you switch between the form editor and
-raw label key-value pairs.
+Each panel has a structured/raw toggle and a link to the tool's own documentation. Both views are editable when the
+service allows `PATCH`, which requires [operations level](configuration#operations-level) 2 and ACL write permission
+on the service. Saving writes the labels back through `PATCH /services/{id}/labels`; every field maps to one Docker
+service label.
 
 ## API
 
-Integration data is included in the service detail response (`GET /services/{id}`) as an `integrations` array. See the
-[API reference](/api) for the full schema.
+Detected integrations appear as an `integrations` array on `GET /services/{id}`, omitted when nothing was detected.
+See the [API reference](api) for the full schema.
