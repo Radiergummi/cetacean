@@ -9,13 +9,18 @@ interface Props {
 }
 
 const { name, flag, env, default: defaultValue, required, deprecated } = Astro.props;
+
+const lastDot = name.lastIndexOf(".");
+const prefix = lastDot === -1 ? "" : name.slice(0, lastDot + 1);
+const leaf = lastDot === -1 ? name : name.slice(lastDot + 1);
 ---
 
-<div class:list={["config-param", { deprecated }]}>
+<div id={name} class:list={["config-param", { deprecated }]}>
   <div class="config-param-heading">
-    <code>{name}</code>
+    <code>{prefix && <span class="config-param-prefix">{prefix}</span>}{leaf}</code>
     {required && <span class="config-param-badge required">required</span>}
     {deprecated && <span class="config-param-badge deprecated">deprecated</span>}
+    <a class="config-param-anchor" href={`#${name}`} aria-label={`Link to ${name}`}>#</a>
   </div>
   {Astro.slots.has("default") && (
     <div class="config-param-description">
@@ -23,24 +28,24 @@ const { name, flag, env, default: defaultValue, required, deprecated } = Astro.p
     </div>
   )}
   {(flag || env || defaultValue !== undefined) && (
-    <div class="config-param-meta">
+    <div class="config-param-footer">
       {flag && (
-        <>
-          <span class="config-param-label">Flag</span>
+        <span class="config-param-fact">
+          <span class="config-param-label">flag</span>
           <code>{flag}</code>
-        </>
+        </span>
       )}
       {env && (
-        <>
-          <span class="config-param-label">Env var</span>
+        <span class="config-param-fact">
+          <span class="config-param-label">env</span>
           <code>{env}</code>
-        </>
+        </span>
       )}
       {defaultValue !== undefined && (
-        <>
-          <span class="config-param-label">Default</span>
+        <span class="config-param-fact">
+          <span class="config-param-label">default</span>
           <code>{defaultValue}</code>
-        </>
+        </span>
       )}
     </div>
   )}

@@ -175,10 +175,14 @@
     @apply py-3.5 px-4 border border-border rounded-lg;
   }
   .prose .config-param + .config-param {
-    @apply mt-1;
+    @apply mt-2;
   }
   .prose .config-param.deprecated {
     @apply opacity-60;
+  }
+  .prose .config-param:target {
+    border-color: var(--active);
+    box-shadow: 0 0 0 1px var(--active);
   }
   .prose .config-param-heading {
     @apply flex items-baseline gap-2 mb-1.5;
@@ -187,6 +191,18 @@
     @apply text-[0.9375rem] font-semibold rounded-none px-0 py-0;
     background: none;
     color: var(--foreground);
+  }
+  .prose .config-param-prefix {
+    @apply font-normal;
+    color: var(--muted-foreground);
+  }
+  .prose .config-param-anchor {
+    @apply ml-auto text-sm leading-none no-underline opacity-0 transition-opacity;
+    color: var(--muted-foreground);
+  }
+  .prose .config-param:hover .config-param-anchor,
+  .prose .config-param-anchor:focus-visible {
+    @apply opacity-100;
   }
   .prose .config-param-badge {
     @apply text-[0.625rem] font-semibold uppercase tracking-wider leading-tight rounded px-1.5 py-0.5;
@@ -204,13 +220,29 @@
     border: 1px solid var(--border);
   }
   .prose .config-param-description {
-    @apply text-sm leading-relaxed mb-2.5;
+    @apply text-sm leading-relaxed mb-3;
   }
   .prose .config-param-description > :first-child {
     @apply mt-0;
   }
   .prose .config-param-description > :last-child {
     @apply mb-0;
+  }
+  .prose .config-param-footer {
+    @apply flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[0.8rem] text-muted-foreground;
+    margin: 0 -1rem -0.875rem;
+    padding: 0.5rem 1rem;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
+    background: var(--muted);
+  }
+  .prose .config-param-fact {
+    @apply inline-flex items-baseline gap-1.5;
+  }
+  .prose .config-param-footer code {
+    @apply text-[0.8rem] rounded-none px-0 py-0;
+    background: none;
+    color: var(--code-foreground);
   }
   .prose .config-param-meta {
     @apply text-[0.8rem] text-muted-foreground;
