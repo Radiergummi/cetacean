@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Access to a resource can now be granted from the resource's own labels, so a team controls who sees its services from its own compose file rather than by asking for a change to the central policy. `cetacean.acl.read` and `cetacean.acl.write` take the same audiences a policy grant does, a task inherits its service's labels, and the service detail page shows and edits them like any other integration. Off by default — enabling it lets anyone who can deploy a stack decide who may see what it deploys. Where a label names someone, the label alone decides what they may do with that resource, so it can pull a broader policy grant back; where it names nobody relevant, an explicit grant still applies. A resource with no labels is unaffected, so turning this on restricts the resources carrying labels and nothing else
+
 ## [0.13.0] - 2026-09-07
 
 ### Added
