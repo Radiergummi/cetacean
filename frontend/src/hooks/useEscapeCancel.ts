@@ -31,5 +31,5 @@ export function useEscapeCancel(active: boolean, onCancel: () => void) {
     document.addEventListener("keydown", handler, true);
 
     return () => document.removeEventListener("keydown", handler, true);
-  }, [active]);
+  }, [active, callbackRef]);
 }
