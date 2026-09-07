@@ -15,7 +15,7 @@ Authentication establishes identity only. To control which resources an identity
 
 ## Quick start
 
-Every setting below is available as a CLI flag, an environment variable, or a config file key. The examples use
+Every setting below is available as an environment variable and a config file key, and most also as a CLI flag. The examples use
 flags; see [Configuration](configuration) for the full list and the precedence rules.
 
 ```bash
@@ -370,6 +370,9 @@ services:
       CETACEAN_AUTH_TAILSCALE_MODE: tsnet
       CETACEAN_AUTH_TAILSCALE_AUTHKEY_FILE: /run/secrets/ts_authkey
       CETACEAN_AUTH_TAILSCALE_HOSTNAME: cetacean
+      # Without this tsnet picks its own directory and the volume below
+      # goes unused, so the node re-authenticates on every restart.
+      CETACEAN_AUTH_TAILSCALE_STATE_DIR: /var/lib/cetacean/tsnet
     secrets:
       - ts_authkey
     volumes:

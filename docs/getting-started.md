@@ -65,10 +65,10 @@ The binary defaults to `unix:///var/run/docker.sock` and listens on `:9000`.
 
 ## First load
 
-Cetacean syncs the full swarm state on startup, typically in under a second, then follows the Docker event stream.
-The built-in `HEALTHCHECK` runs `cetacean healthcheck`, which polls `/-/ready` and only passes once that first sync
-has completed. Other services can therefore gate on it with
-`depends_on: { cetacean: { condition: service_healthy } }`.
+Cetacean syncs the full swarm state on startup, then follows the Docker event stream. The built-in `HEALTHCHECK`
+runs `cetacean healthcheck`, which polls `/-/ready` and only passes once that first sync has completed, so the task
+shows as healthy only when the dashboard has data to serve. Swarm ignores Compose's `depends_on`, so ordering
+between services is not something a stack file can express.
 
 The dashboard opens on the cluster overview: health cards for nodes, services and failed tasks, a capacity section,
 and a feed of recent resource changes. Charts are absent until you configure Prometheus, and a banner at the top of
@@ -99,7 +99,7 @@ setup, including scrape configuration and the detection banner.
 
 ## Add authentication
 
-By default anyone who can reach Cetacean has full access, so do this before exposing it beyond a trusted network.
+By default anyone who can reach Cetacean can read everything and perform operational writes (scale, update image, roll back, restart), so do this before exposing it beyond a trusted network.
 Set `auth.mode` to `oidc`, `tailscale`, `cert`, or `headers`; see [Authentication](authentication) for the settings
 each mode needs. TLS termination is available in any mode via `tls.cert` and `tls.key`.
 

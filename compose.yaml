@@ -2,7 +2,9 @@ version: "3.8"
 
 services:
   cetacean:
-    image: cetacean:latest
+    # Published on every release. Pin a version (…:0.13.0) rather than
+    # tracking latest if you want deploys to be deliberate.
+    image: ghcr.io/radiergummi/cetacean:latest
     ports:
       - published: 9000
         target: 9000

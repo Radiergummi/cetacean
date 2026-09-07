@@ -286,6 +286,9 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 	if err != nil {
 		return MCPConfig{}, err
 	}
+	if err := checkSigningKeyLength(signingKey); err != nil {
+		return MCPConfig{}, err
+	}
 
 	return MCPConfig{
 		Enabled:            resolveBool(nil, "CETACEAN_MCP", fEnabled, def.Enabled),
@@ -320,6 +323,30 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		),
 		AuthBypass: resolveStringSlice(nil, "CETACEAN_MCP_AUTH_BYPASS", fAuthBypass),
 	}, nil
+}
+
+// minSigningKeyBytes is the HS256 key length RFC 7518 section 3.2 requires: "A
+// key of the same size as the hash output or larger MUST be used", which for
+// SHA-256 is 32 bytes. Shorter keys are accepted by the HMAC itself, so nothing
+// downstream would complain — a one-character key would sign every MCP token
+// and be trivially forgeable.
+const minSigningKeyBytes = 32
+
+// checkSigningKeyLength rejects a configured key that is too short to sign
+// with. An empty key is not too short: it means "none configured", and main.go
+// generates a random one.
+func checkSigningKeyLength(key string) error {
+	if key == "" || len(key) >= minSigningKeyBytes {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"MCP signing key is %d bytes; it must be at least %d "+
+			"(set CETACEAN_MCP_SIGNING_KEY, CETACEAN_MCP_SIGNING_KEY_FILE or "+
+			"mcp.signing_key to a longer value, or leave it unset to have one "+
+			"generated)",
+		len(key), minSigningKeyBytes,
+	)
 }
 
 // resolveMCPIssuer reads CETACEAN_MCP_ISSUER and the file value, validates
