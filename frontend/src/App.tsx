@@ -4,7 +4,6 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Footer from "./components/Footer";
 import { LoadingDetail } from "./components/LoadingSkeleton";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
-import { navigationShortcuts } from "./lib/shortcuts";
 import ShortcutsHelp from "./components/ShortcutsHelp";
 import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
@@ -17,6 +16,7 @@ import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
 import { apiPath, basePath } from "./lib/basePath";
 import { openEventStream } from "./lib/eventStream";
 import { queryClient } from "./lib/queryClient";
+import { navigationShortcuts } from "./lib/shortcuts";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Keyboard, Lightbulb, Menu, X } from "lucide-react";
@@ -81,10 +81,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     // overlay listing it. useHotkeys reads its map through a ref, so these
     // need no stable identity.
     ...Object.fromEntries(
-      navigationShortcuts.map(({ keys, path }) => [
-        keys.join(" "),
-        () => navigate(path),
-      ]),
+      navigationShortcuts.map(({ keys, path }) => [keys.join(" "), () => navigate(path)]),
     ),
   });
 

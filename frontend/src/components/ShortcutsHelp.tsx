@@ -1,7 +1,6 @@
+import { navigationShortcuts } from "../lib/shortcuts";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-
-import { navigationShortcuts } from "../lib/shortcuts";
 
 interface ShortcutGroup {
   title: string;

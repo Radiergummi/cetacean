@@ -1,12 +1,11 @@
+import { navigationShortcuts } from "../lib/shortcuts";
+import ShortcutsHelp from "./ShortcutsHelp";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { navigationShortcuts } from "../lib/shortcuts";
-import ShortcutsHelp from "./ShortcutsHelp";
-
 describe("ShortcutsHelp", () => {
   it("lists every navigation chord that is registered", () => {
-    render(<ShortcutsHelp onClose={vi.fn()} />);
+    render(<ShortcutsHelp onClose={vi.fn<() => void>()} />);
 
     for (const { description } of navigationShortcuts) {
       expect(
@@ -17,7 +16,7 @@ describe("ShortcutsHelp", () => {
   });
 
   it("shows the metrics and recommendations chords", () => {
-    render(<ShortcutsHelp onClose={vi.fn()} />);
+    render(<ShortcutsHelp onClose={vi.fn<() => void>()} />);
 
     expect(screen.getByText("Go to metrics")).toBeInTheDocument();
     expect(screen.getByText("Go to recommendations")).toBeInTheDocument();
