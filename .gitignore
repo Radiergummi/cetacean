@@ -36,8 +36,11 @@ go.work.sum
 # Runtime data
 /data/
 
-# Design docs (local-only)
+# Design docs (local-only). Plans are ephemeral working documents: they are
+# written into docs/plans/, and the second rule catches one written beside the
+# design it implements, which is where they used to land.
 docs/plans/
+docs/specs/*-plan.md
 docs/superpowers/
 docs/frontend-overhaul.md
 docs/task-state-timeline-design.md
