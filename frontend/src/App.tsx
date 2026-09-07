@@ -4,6 +4,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Footer from "./components/Footer";
 import { LoadingDetail } from "./components/LoadingSkeleton";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
+import { navigationShortcuts } from "./lib/shortcuts";
 import ShortcutsHelp from "./components/ShortcutsHelp";
 import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
@@ -76,19 +77,15 @@ function Layout({ children }: { children: React.ReactNode }) {
         navigate(-1);
       }
     }, [shortcutsOpen, navigate]),
-    "g h": useCallback(() => navigate("/"), [navigate]),
-    "g n": useCallback(() => navigate("/nodes"), [navigate]),
-    "g s": useCallback(() => navigate("/services"), [navigate]),
-    "g k": useCallback(() => navigate("/stacks"), [navigate]),
-    "g c": useCallback(() => navigate("/configs"), [navigate]),
-    "g x": useCallback(() => navigate("/secrets"), [navigate]),
-    "g w": useCallback(() => navigate("/networks"), [navigate]),
-    "g v": useCallback(() => navigate("/volumes"), [navigate]),
-    "g a": useCallback(() => navigate("/tasks"), [navigate]),
-    "g i": useCallback(() => navigate("/swarm"), [navigate]),
-    "g t": useCallback(() => navigate("/topology"), [navigate]),
-    "g r": useCallback(() => navigate("/recommendations"), [navigate]),
-    "g m": useCallback(() => navigate("/metrics"), [navigate]),
+    // Built from the shared list so a chord cannot exist without the `?`
+    // overlay listing it. useHotkeys reads its map through a ref, so these
+    // need no stable identity.
+    ...Object.fromEntries(
+      navigationShortcuts.map(({ keys, path }) => [
+        keys.join(" "),
+        () => navigate(path),
+      ]),
+    ),
   });
 
   return (

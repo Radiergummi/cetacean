@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
+import { navigationShortcuts } from "../lib/shortcuts";
+
 interface ShortcutGroup {
   title: string;
   shortcuts: { keys: string[]; description: string }[];
@@ -11,26 +13,17 @@ const groups: ShortcutGroup[] = [
     title: "Global",
     shortcuts: [
       { keys: ["?"], description: "Show keyboard shortcuts" },
-      { keys: ["/"], description: "Focus search" },
-      { keys: ["⌘", "K"], description: "Open search palette" },
+      { keys: ["/"], description: "Open search palette" },
+      { keys: ["⌘", "K"], description: "Toggle search palette" },
       { keys: ["Esc"], description: "Close overlay / go back" },
     ],
   },
   {
     title: "Navigation",
-    shortcuts: [
-      { keys: ["g", "h"], description: "Go to cluster overview" },
-      { keys: ["g", "n"], description: "Go to nodes" },
-      { keys: ["g", "s"], description: "Go to services" },
-      { keys: ["g", "a"], description: "Go to tasks" },
-      { keys: ["g", "k"], description: "Go to stacks" },
-      { keys: ["g", "c"], description: "Go to configs" },
-      { keys: ["g", "x"], description: "Go to secrets" },
-      { keys: ["g", "w"], description: "Go to networks" },
-      { keys: ["g", "v"], description: "Go to volumes" },
-      { keys: ["g", "i"], description: "Go to swarm info" },
-      { keys: ["g", "t"], description: "Go to topology" },
-    ],
+    shortcuts: navigationShortcuts.map(({ keys, description }) => ({
+      keys,
+      description,
+    })),
   },
   {
     title: "Lists",
