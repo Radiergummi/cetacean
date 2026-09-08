@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `server.public_url` sets the canonical external URL once, supplying the OAuth issuer for the MCP server and the OIDC redirect URL instead of configuring each separately
 
 ### Fixed
-- The MCP server no longer advertises an unreachable OAuth issuer when the listen address has no host. Startup now stops when authentication is enabled and says what to set.
+- The MCP server no longer advertises an unreachable OAuth issuer when the listen address has no host. Startup now stops when MCP sign-in is actually in use and says what to set, rather than for every deployment with authentication enabled.
 - Atom and JSON Feed links are built from `server.public_url` when it is set, rather than from request headers a client can control.
 
 ## [0.13.0] - 2026-09-07
