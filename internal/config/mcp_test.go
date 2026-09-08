@@ -615,3 +615,68 @@ func TestLoadMCP_UnsetSigningKeyIsStillAllowed(t *testing.T) {
 		t.Errorf("signing key = %q, want empty", cfg.SigningKey)
 	}
 }
+
+func TestMCPIssuer(t *testing.T) {
+	tests := []struct {
+		name       string
+		issuer     string
+		listenAddr string
+		tlsEnabled bool
+		want       string
+		wantOK     bool
+	}{
+		{
+			name:       "explicit issuer wins",
+			issuer:     "https://cetacean.example.com",
+			listenAddr: ":9000",
+			want:       "https://cetacean.example.com",
+			wantOK:     true,
+		},
+		{
+			name:       "default listen address has no host",
+			listenAddr: ":9000",
+			want:       "http://:9000",
+			wantOK:     false,
+		},
+		{
+			name:       "wildcard bind is not reachable",
+			listenAddr: "0.0.0.0:9000",
+			want:       "http://0.0.0.0:9000",
+			wantOK:     false,
+		},
+		{
+			name:       "unspecified IPv6 bind is not reachable",
+			listenAddr: "[::]:9000",
+			want:       "http://[::]:9000",
+			wantOK:     false,
+		},
+		{
+			name:       "explicit host derives",
+			listenAddr: "cetacean.internal:9000",
+			want:       "http://cetacean.internal:9000",
+			wantOK:     true,
+		},
+		{
+			name:       "TLS derives https",
+			listenAddr: "cetacean.internal:9000",
+			tlsEnabled: true,
+			want:       "https://cetacean.internal:9000",
+			wantOK:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{ListenAddr: tt.listenAddr, MCP: MCPConfig{Issuer: tt.issuer}}
+
+			got, ok := cfg.MCPIssuer(tt.tlsEnabled)
+
+			if got != tt.want {
+				t.Errorf("issuer = %q, want %q", got, tt.want)
+			}
+			if ok != tt.wantOK {
+				t.Errorf("ok = %v, want %v", ok, tt.wantOK)
+			}
+		})
+	}
+}
