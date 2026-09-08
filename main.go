@@ -665,10 +665,8 @@ type mcpDeps struct {
 // a cleanup function the caller must invoke at shutdown so the MCP server's
 // cache change listener detaches before the cache itself is torn down.
 //
-// The issuer defaults to the listen address + TLS scheme, which only works
-// when the listen address carries a real host and no reverse proxy is in
-// front. Startup fails when OAuth is genuinely in play and no reachable
-// issuer could be derived; see Config.MCPIssuer and Config.MCPIssuerRequired.
+// Startup fails when MCP OAuth is in play and no reachable issuer could be
+// derived; see Config.MCPIssuer and Config.MCPIssuerRequired.
 func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string), func()) {
 	if !d.cfg.MCP.Enabled {
 		return nil, nil, func() {}

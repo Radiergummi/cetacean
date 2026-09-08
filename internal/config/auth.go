@@ -375,12 +375,9 @@ func parseScopes(s string) []string {
 }
 
 // defaultRedirectURL builds the OIDC callback URL from server.public_url. The
-// callback route is fixed at GET /auth/callback (internal/auth/oidc.go), so
-// the value is mechanically derivable and only has to be typed when the
-// callback lives somewhere else.
-//
-// Returns "" when public_url is unset, which leaves the existing "oidc mode
-// requires ..." rejection in place rather than inventing a URL.
+// callback route is fixed at GET /auth/callback, so it only has to be typed
+// when the callback lives elsewhere. Returns "" when public_url is unset,
+// which leaves auth.oidc.redirect_url required.
 func defaultRedirectURL(publicURL, basePath string) string {
 	if publicURL == "" {
 		return ""

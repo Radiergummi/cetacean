@@ -418,20 +418,13 @@ func resolveMCPOpsLevel(file *int) (OperationsLevel, error) {
 }
 
 // MCPIssuer returns the canonical external base URL clients reach this
-// deployment at: mcp.issuer when set, then server.public_url, otherwise
-// derived from server.listen_addr and whether TLS terminates here.
+// deployment at: mcp.issuer, then server.public_url, then a derivation from
+// server.listen_addr and whether TLS terminates here.
 //
-// The second return is false when the derivation produced a URL nothing can
-// reach. server.listen_addr defaults to ":9000", so the derived issuer is
-// "http://:9000" — a URL with an empty host, which resolveMCPIssuer rejects
-// when an operator types it. A wildcard bind ("0.0.0.0", "::") parses to a
-// host but is equally unreachable.
-//
-// The string is returned either way, because how bad an unreachable issuer is
-// depends on the caller: an OAuth client fetches .well-known documents from
-// it and cannot work at all, while auth mode "none" — or an auth mode fully
-// covered by mcp.oauth.auth_bypass, see MCPIssuerRequired — never depends on
-// that flow and ends up only with unreachable icon URLs.
+// The second return is false when that derivation reaches nothing: the
+// default ":9000" has an empty host, and a wildcard bind ("0.0.0.0", "::")
+// parses but resolves nowhere. The string is returned either way, since only
+// OAuth truly breaks on it — see MCPIssuerRequired.
 func (c *Config) MCPIssuer(tlsEnabled bool) (string, bool) {
 	if c.MCP.Issuer != "" {
 		return c.MCP.Issuer, true
@@ -461,16 +454,11 @@ func (c *Config) MCPIssuer(tlsEnabled bool) (string, bool) {
 	return issuer, true
 }
 
-// MCPIssuerRequired reports whether a working /mcp needs a reachable issuer,
-// as opposed to one that only feeds cosmetic tool-icon URLs (main.go's
-// IconBaseURL). OAuth is genuinely in play whenever the upstream auth mode is
-// not "none" and that mode is not fully covered by mcp.oauth.auth_bypass:
-// a bypassed mode (cert, headers, tailscale) authenticates every /mcp request
-// from the upstream provider's own identity instead of a JWT, which is
-// exactly the deployment docs/mcp.md recommends for mTLS clients — one that
-// never drives the OAuth authorize/token flow an unreachable issuer would
-// break. setupMCP downgrades an unreachable issuer to a warning rather than
-// exiting when this returns false.
+// MCPIssuerRequired reports whether /mcp needs a reachable issuer, rather than
+// one that only feeds cosmetic tool-icon URLs. OAuth is in play unless the
+// auth mode is "none" or is listed in mcp.oauth.auth_bypass: a bypassed mode
+// authenticates each request from the upstream identity and never drives the
+// authorize/token flow.
 func (c *Config) MCPIssuerRequired(authMode string) bool {
 	return authMode != "none" && !slices.Contains(c.MCP.AuthBypass, authMode)
 }

@@ -69,9 +69,8 @@ func absURL(r *http.Request, path string) string {
 }
 
 // publicURLMiddleware stores server.public_url in the request context so
-// absURL can build links from configuration rather than from X-Forwarded-*,
-// which nothing validates against server.trusted_proxies — any client can set
-// those headers. A no-op when public_url is unset.
+// absURL builds links from configuration rather than from X-Forwarded-*,
+// which any client can set. A no-op when public_url is unset.
 func publicURLMiddleware(publicURL string, next http.Handler) http.Handler {
 	if publicURL == "" {
 		return next

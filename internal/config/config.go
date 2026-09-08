@@ -36,15 +36,11 @@ const (
 )
 
 type Config struct {
-	DockerHost    string
-	PrometheusURL string
-	ListenAddr    string
-	BasePath      string // CETACEAN_BASE_PATH, default ""
-	// PublicURL is the canonical external origin clients reach this
-	// deployment at, e.g. "https://cetacean.example.com". Origin only: the
-	// external path prefix is BasePath, which absPath already prepends to
-	// outbound links. Empty means every consumer keeps its own fallback.
-	PublicURL        string          // CETACEAN_PUBLIC_URL, default ""
+	DockerHost       string
+	PrometheusURL    string
+	ListenAddr       string
+	BasePath         string          // CETACEAN_BASE_PATH, default ""
+	PublicURL        string          // CETACEAN_PUBLIC_URL, external origin, default ""
 	LogLevel         string          // "debug", "info", "warn", "error"
 	LogFormat        string          // "json", "text"
 	DataDir          string          // CETACEAN_DATA_DIR, default "./data"
