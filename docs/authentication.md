@@ -7,57 +7,68 @@ tags: [authentication, oidc, tailscale, mtls, headers, security]
 
 # Authentication
 
-Cetacean authenticates requests with one of five providers, selected by `auth.mode`: `none`, `oidc`, `tailscale`,
-`cert` or `headers`. One provider is active at a time. The default is `none`, which allows anonymous access.
+Cetacean authenticates requests with one of five providers, selected by [`auth.mode`][auth.mode]: `none`, `oidc`,
+`tailscale`, `cert` or `headers`. One provider is active at a time. The default is `none`, which allows anonymous
+access.
 
 Authentication establishes identity only. To control which resources an identity may view or change, see
-[Authorization](authorization).
+[Authorization][authorization].
 
 ## Quick start
 
-Every setting below is available as an environment variable and a config file key, and most also as a CLI flag. The examples use
-flags; see [Configuration](configuration) for the full list and the precedence rules.
+Every setting below is available as an environment variable, a [config file][config-file] key, and most also as a
+CLI flag. The examples show the environment of the Cetacean service in your `compose.yaml`; see
+[Configuration][configuration] for the flags and the precedence rules. Secret settings accept a `_FILE` variant
+that reads the value from a file at startup, which is how a Docker secret reaches the process.
 
-```bash
-# No auth (default)
-./cetacean
+```yaml tab="None"
+# The default. Nothing to configure.
+environment:
+  CETACEAN_AUTH_MODE: none
+```
 
-# OIDC (Keycloak, Auth0, Okta, Dex, ...)
-./cetacean \
-  -auth-mode oidc \
-  -auth-oidc-issuer https://idp.example.com \
-  -auth-oidc-client-id cetacean \
-  -auth-oidc-client-secret secret \
-  -auth-oidc-redirect-url https://cetacean.example.com/auth/callback
+```yaml tab="OIDC"
+environment:
+  CETACEAN_AUTH_MODE: oidc
+  CETACEAN_AUTH_OIDC_ISSUER: https://idp.example.com
+  CETACEAN_AUTH_OIDC_CLIENT_ID: cetacean
+  CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_secret
+  CETACEAN_AUTH_OIDC_REDIRECT_URL: https://cetacean.example.com/auth/callback
+```
 
-# Tailscale (local daemon)
-./cetacean -auth-mode tailscale
+```yaml tab="Tailscale"
+environment:
+  CETACEAN_AUTH_MODE: tailscale
+volumes:
+  - /run/tailscale/tailscaled.sock:/run/tailscale/tailscaled.sock:ro
+```
 
-# mTLS client certificates
-./cetacean \
-  -auth-mode cert \
-  -auth-cert-ca /path/to/ca.pem \
-  -tls-cert /path/to/server.pem \
-  -tls-key /path/to/server-key.pem
+```yaml tab="mTLS"
+environment:
+  CETACEAN_AUTH_MODE: cert
+  CETACEAN_AUTH_CERT_CA: /run/secrets/ca.pem
+  CETACEAN_TLS_CERT: /run/secrets/server.pem
+  CETACEAN_TLS_KEY: /run/secrets/server-key.pem
+```
 
-# Trusted proxy headers
-./cetacean \
-  -auth-mode headers \
-  -auth-headers-subject X-Remote-User \
-  -trusted-proxies 10.0.0.0/8
+```yaml tab="Headers"
+environment:
+  CETACEAN_AUTH_MODE: headers
+  CETACEAN_AUTH_HEADERS_SUBJECT: X-Remote-User
+  CETACEAN_TRUSTED_PROXIES: "10.0.0.0/8"
 ```
 
 ## Identity
 
 Every provider fills the same identity record. Read it with `GET /auth/whoami`. `subject` is the unique
-identifier; `groups` feeds [authorization](authorization) audience matching.
+identifier; `groups` feeds [authorization][authorization] audience matching.
 
 | Field         | `none`      | `oidc`                             | `tailscale`             | `cert`                                | `headers`                      |
 | ------------- | ----------- | ---------------------------------- | ----------------------- | ------------------------------------- | ------------------------------ |
 | `subject`     | `anonymous` | `sub` claim                        | numeric user ID         | SPIFFE URI SAN, else CN, else email   | subject header                 |
 | `displayName` | `Anonymous` | `name`, else `preferred_username`  | Tailscale display name  | CN, else the SPIFFE ID path           | name header, else subject      |
-| `email`       | —           | `email` claim                      | Tailscale login name    | first email SAN                       | email header                   |
-| `groups`      | —           | `groups` claim                     | app capability (below)  | Organizational Unit (OU) values       | groups header, comma-separated |
+| `email`       |—          | `email` claim                      | Tailscale login name    | first email SAN                       | email header                   |
+| `groups`      |—          | `groups` claim                     | app capability (below)  | Organizational Unit (OU) values       | groups header, comma-separated |
 
 ## Exempt paths
 
@@ -69,7 +80,7 @@ These paths skip authentication in every mode:
 | `/api`, `/api/*`                                  | API documentation and the JSON-LD context                |
 | `/assets/*`                                       | Dashboard static assets                                  |
 | `/auth`, `/auth/*`                                | Login, callback, logout and `whoami`                     |
-| `/mcp`                                            | The MCP server runs its own bearer-token check           |
+| `/mcp`                                            | The [MCP server][mcp] runs its own bearer-token check    |
 | `/.well-known/*`                                  | OAuth discovery documents, unauthenticated by spec       |
 | `/oauth/token`, `/oauth/revoke`, `/oauth/register` | Carry their own credentials in the request body          |
 
@@ -79,22 +90,25 @@ These paths skip authentication in every mode:
 
 Anonymous access. Every request receives a static identity with `subject: anonymous`.
 
-This mode also bypasses [authorization](authorization): a configured ACL policy has no effect while `auth.mode` is
+This mode also bypasses [authorization][authorization]: a configured ACL policy has no effect while `auth.mode` is
 `none`. Use it when Cetacean sits behind a VPN, a firewall, or a proxy that authenticates for you.
 
 ## OIDC
 
-[OpenID Connect](https://openid.net/developers/how-connect-works/) with the authorization code flow for browsers and
-ID token validation for scripts. Requires `auth.oidc.issuer`, `auth.oidc.client_id`, `auth.oidc.client_secret` and
-`auth.oidc.redirect_url`; the redirect URL must use HTTPS unless it points at a loopback address. See
-[OIDC configuration](configuration#oidc) for all parameters.
+[OpenID Connect](https://openid.net/developers/how-connect-works/) with the authorization code flow for browsers
+and ID token validation for scripts. Requires [`auth.oidc.issuer`][auth.oidc.issuer],
+[`auth.oidc.client_id`][auth.oidc.client_id], [`auth.oidc.client_secret`][auth.oidc.client_secret] and
+[`auth.oidc.redirect_url`][auth.oidc.redirect_url]; the redirect URL must use HTTPS unless it points at a loopback
+address. See [OIDC configuration][oidc] for all parameters.
+
+> [!NOTE]
+> With [`server.public_url`][server.public_url] set, `auth.oidc.redirect_url` is derived as
+> `{public_url}{base_path}/auth/callback` and only needs setting if your callback lives elsewhere.
 
 ### Browser flow
 
-An unauthenticated request that accepts HTML is redirected to the IdP's authorization endpoint, with state, nonce and
-PKCE verifier held in short-lived cookies. `GET /auth/callback` validates state and nonce, exchanges the code,
-verifies the ID token, sets a session cookie, and redirects to the originally requested URL. `GET /auth/login` starts
-the same flow explicitly and honours a relative `?redirect=` path.
+Opening the dashboard unauthenticated sends you to your IdP to sign in, then back to the page you asked for.
+`GET /auth/login` starts the same flow explicitly and honours a relative `?redirect=` path.
 
 ### Machine flow
 
@@ -114,20 +128,27 @@ curl -H "Authorization: Bearer eyJhbGci..." \
 
 ### Sessions
 
-The session cookie is `__Host-cetacean_session`: HMAC-signed, `HttpOnly`, `Secure`, `SameSite=Lax`. It expires with
-the ID token, capped at 8 hours. Browser sessions therefore require HTTPS.
+Browser sessions require HTTPS, and expire with the ID token or after 8 hours, whichever comes first.
 
-The signing key is generated randomly at startup, so restarting the server invalidates every browser session. Set
-`auth.oidc.session_key` to a hex-encoded 32-byte value to keep sessions across restarts:
+Restarting the server signs everyone out unless you set a fixed signing key. Set
+[`auth.oidc.session_key`][auth.oidc.session_key] to a hex-encoded 32-byte value to keep sessions across restarts:
 
 ```bash
 openssl rand -hex 32   # generate a 32-byte key
-./cetacean -auth-oidc-session-key a1b2c3...
+```
+
+Pass it as a Docker secret rather than an inline value:
+
+```yaml
+environment:
+  CETACEAN_AUTH_OIDC_SESSION_KEY_FILE: /run/secrets/session_key
+secrets:
+  - session_key
 ```
 
 The cookie stores subject, display name, email and groups, but no raw token claims. Grants read from an OIDC claim
-(`acl.oidc_claim`) therefore reach Bearer-token requests only; for browser users, match on `group:` audiences in the
-policy instead.
+([`acl.oidc_claim`][acl.oidc_claim]) therefore reach Bearer-token requests only; for browser users, match on
+`group:` audiences in the policy instead.
 
 ### Logout
 
@@ -164,7 +185,7 @@ staticClients:
 ## Tailscale
 
 Identifies users through the [Tailscale](https://tailscale.com/) WhoIs API. Requests from tailnet peers are
-authenticated without a login flow. See [Tailscale configuration](configuration#tailscale) for all parameters.
+authenticated without a login flow. See [Tailscale configuration][tailscale] for all parameters.
 
 ### Choosing a mode
 
@@ -172,24 +193,26 @@ authenticated without a login flow. See [Tailscale configuration](configuration#
 | ---------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | How it works                 | Queries the host's Tailscale daemon to identify peers                            | Embeds a Tailscale node inside the Cetacean process                       |
 | Tailscale installed on host? | Yes, the daemon must be running                                                  | No                                                                        |
-| Network binding              | Listens on `server.listen_addr`; only Tailscale addresses are authenticated      | Serves the app on port 443 of the tailnet node                            |
+| Network binding              | Listens on [`server.listen_addr`][server.listen_addr]; only Tailscale addresses are authenticated      | Serves the app on port 443 of the tailnet node                            |
 | Docker health checks         | Work normally, the health endpoint is auth-exempt                                | Work normally, `/-/health` and `/-/ready` stay on the regular listener    |
 | Config complexity            | Minimal: `-auth-mode tailscale`                                                  | Needs an auth key, a hostname and a persistent state directory            |
 | Best for                     | Hosts already running Tailscale (bare metal, VMs)                                | Containers, Swarm services, or hosts without Tailscale installed          |
 
-> **Note:** In local mode Cetacean binds to `server.listen_addr` (default `:9000`, all interfaces). Requests from
-> outside Tailscale's [CGNAT](https://www.rfc-editor.org/rfc/rfc6598) (`100.64.0.0/10`) and
-> [ULA](https://www.rfc-editor.org/rfc/rfc4193) (`fd7a:115c:a1e0::/48`) ranges are rejected, but that is an
-> application-layer check, not a socket restriction. For tighter isolation, bind to the node's Tailscale address
-> (`-listen 100.x.x.x:9000`) or use tsnet mode.
+> [!WARNING]
+> In local mode Cetacean still listens on all interfaces by default. Requests from outside the tailnet are
+> rejected, but the port is open to anything that can reach it. For real isolation, bind to the node's Tailscale
+> address (`-listen 100.x.x.x:9000`) or use tsnet mode.
 
 ### Local mode
 
 Uses the local Tailscale daemon to identify peers, so Cetacean must run on a node inside the tailnet with access to
 `/run/tailscale/tailscaled.sock`.
 
-```bash
-./cetacean -auth-mode tailscale
+```yaml
+environment:
+  CETACEAN_AUTH_MODE: tailscale
+volumes:
+  - /run/tailscale/tailscaled.sock:/run/tailscale/tailscaled.sock:ro
 ```
 
 ### tsnet mode
@@ -197,21 +220,25 @@ Uses the local Tailscale daemon to identify peers, so Cetacean must run on a nod
 Embeds a Tailscale node in the Cetacean process. No local Tailscale installation is needed. The full app is served on
 port 443 of the tailnet node; `/-/health` and `/-/ready` stay on `server.listen_addr` for Docker health checks.
 
-```bash
-./cetacean \
-  -auth-mode tailscale \
-  -auth-tailscale-mode tsnet \
-  -auth-tailscale-authkey tskey-auth-... \
-  -auth-tailscale-hostname cetacean \
-  -auth-tailscale-state-dir /var/lib/cetacean/tsnet
+```yaml
+environment:
+  CETACEAN_AUTH_MODE: tailscale
+  CETACEAN_AUTH_TAILSCALE_MODE: tsnet
+  CETACEAN_AUTH_TAILSCALE_AUTHKEY_FILE: /run/secrets/ts_authkey
+  CETACEAN_AUTH_TAILSCALE_HOSTNAME: cetacean
+  CETACEAN_AUTH_TAILSCALE_STATE_DIR: /var/lib/cetacean/tsnet
+secrets:
+  - ts_authkey
 ```
 
 ### Groups from capabilities
 
-Set `auth.tailscale.capability` to map Tailscale app capabilities to identity groups:
+Set [`auth.tailscale.capability`][auth.tailscale.capability] to map Tailscale app capabilities to identity groups:
 
-```bash
-./cetacean -auth-mode tailscale -auth-tailscale-capability example.com/cap/cetacean
+```yaml
+environment:
+  CETACEAN_AUTH_MODE: tailscale
+  CETACEAN_AUTH_TAILSCALE_CAPABILITY: example.com/cap/cetacean
 ```
 
 Then grant that capability in your Tailscale ACL policy:
@@ -239,47 +266,54 @@ Groups from multiple matching grants are merged and deduplicated. Malformed capa
 ## Client certificates (mTLS)
 
 Authenticates with [mTLS](https://en.wikipedia.org/wiki/Mutual_authentication#mTLS) client certificates. Standard
-[X.509](https://www.rfc-editor.org/rfc/rfc5280) certificates and [SPIFFE](https://spiffe.io/) X.509-SVIDs both work.
-Requires TLS termination at Cetacean, so this mode cannot sit behind a TLS-terminating proxy. See
-[client certificate configuration](configuration#client-certificates) for the CA setting.
+[X.509](https://www.rfc-editor.org/rfc/rfc5280) certificates and [SPIFFE](https://spiffe.io/) X.509-SVIDs both
+work. Requires TLS termination at Cetacean, so this mode cannot sit behind a TLS-terminating proxy. See [client
+certificate configuration][client-certificates] for the CA setting.
 
-```bash
-./cetacean \
-  -auth-mode cert \
-  -auth-cert-ca /etc/cetacean/ca.pem \
-  -tls-cert /etc/cetacean/server.pem \
-  -tls-key /etc/cetacean/server-key.pem
+```yaml
+environment:
+  CETACEAN_AUTH_MODE: cert
+  CETACEAN_AUTH_CERT_CA: /run/secrets/ca.pem
+  CETACEAN_TLS_CERT: /run/secrets/server.pem
+  CETACEAN_TLS_KEY: /run/secrets/server-key.pem
+secrets:
+  - ca.pem
+  - server.pem
+  - server-key.pem
 ```
 
-Clients without a certificate signed by that CA cannot connect. The subject is taken from the SPIFFE URI SAN if the
-certificate has one, otherwise the Common Name, otherwise the first email SAN; a certificate with none of the three is
-rejected. Groups come from Organizational Unit (OU) fields. A certificate carrying more than one SPIFFE URI SAN is
-rejected, since X.509-SVID allows exactly one.
+Clients without a certificate signed by that CA cannot connect. Identity comes from the SPIFFE URI SAN, else the
+Common Name, else the first email SAN—a certificate carrying none of the three is rejected, as is one carrying
+more than one SPIFFE SAN. Groups come from Organizational Unit (OU) fields.
 
 ## Trusted proxy headers
 
-Reads identity from HTTP headers set by a reverse proxy (nginx, Traefik, Envoy). `auth.headers.subject` names the
-header holding the subject and is required; the value must be non-empty, free of control characters, and at most 256
-bytes. See [trusted proxy header configuration](configuration#trusted-proxy-headers) for the optional name, email and
-groups headers.
+Reads identity from HTTP headers set by a reverse proxy (nginx, Traefik, Envoy).
+[`auth.headers.subject`][auth.headers.subject] names the header holding the subject and is required; the value must
+be non-empty, free of control characters, and at most 256 bytes. See [trusted proxy header
+configuration][trusted-proxy-headers] for the optional name, email and groups headers.
 
-> **Important:** This mode trusts the proxy to set headers correctly. `server.trusted_proxies` is required and
-> restricts which source addresses may set identity headers, accepting individual IPs and CIDRs. Without it Cetacean
-> refuses to start.
+> [!WARNING]
+> This mode trusts the proxy to set headers correctly. [`server.trusted_proxies`][server.trusted_proxies] is
+> required and restricts which source addresses may set identity headers, accepting individual IPs and CIDRs.
+> Without it Cetacean refuses to start.
 
 For defence in depth, require a shared secret on every proxied request:
 
-```bash
-./cetacean \
-  -auth-mode headers \
-  -auth-headers-subject X-Remote-User \
-  -auth-headers-secret-header X-Proxy-Secret \
-  -auth-headers-secret-value my-secret-value \
-  -trusted-proxies 10.0.0.0/8
+```yaml
+environment:
+  CETACEAN_AUTH_MODE: headers
+  CETACEAN_AUTH_HEADERS_SUBJECT: X-Remote-User
+  CETACEAN_AUTH_HEADERS_SECRET_HEADER: X-Proxy-Secret
+  CETACEAN_AUTH_HEADERS_SECRET_VALUE_FILE: /run/secrets/proxy_secret
+  CETACEAN_TRUSTED_PROXIES: "10.0.0.0/8"
+secrets:
+  - proxy_secret
 ```
 
-> **Note:** `auth.headers.trusted_proxies` is deprecated. Use `server.trusted_proxies`, which takes precedence when
-> both are set.
+> [!NOTE]
+> [`auth.headers.trusted_proxies`][auth.headers.trusted_proxies] is deprecated. Use `server.trusted_proxies`,
+> which takes precedence when both are set.
 
 ### Proxy examples
 
@@ -327,12 +361,13 @@ http:
 
 ## TLS
 
-TLS termination works in any auth mode and is required for `cert` mode. Set `tls.cert` and `tls.key` to enable HTTPS.
+TLS termination works in any auth mode and is required for `cert` mode. Set [`tls.cert`][tls.cert] and
+[`tls.key`][tls.key] to enable HTTPS.
 
 ## Deployment examples
 
-Secret settings also accept a `_FILE` env var variant, which reads the value from a file. That is how the Swarm
-examples below pass secrets.
+The fragments above show only the settings each mode needs. These are complete services, secrets and placement
+included.
 
 ### OIDC with Keycloak
 
@@ -421,5 +456,30 @@ GET /auth/whoami HTTP/1.1
 curl -s http://localhost:9000/auth/whoami | jq .
 ```
 
-`GET /profile` returns the same identity plus the effective ACL grants. See the [API reference](/api) for the
+`GET /profile` returns the same identity plus the effective ACL grants. See the [API reference][api] for the
 response schemas.
+
+[acl.oidc_claim]: configuration#acl.oidc_claim
+[api]: api
+[auth.headers.subject]: configuration#auth.headers.subject
+[auth.headers.trusted_proxies]: configuration#auth.headers.trusted_proxies
+[auth.mode]: configuration#auth.mode
+[auth.oidc.client_id]: configuration#auth.oidc.client_id
+[auth.oidc.client_secret]: configuration#auth.oidc.client_secret
+[auth.oidc.issuer]: configuration#auth.oidc.issuer
+[auth.oidc.redirect_url]: configuration#auth.oidc.redirect_url
+[auth.oidc.session_key]: configuration#auth.oidc.session_key
+[auth.tailscale.capability]: configuration#auth.tailscale.capability
+[authorization]: authorization
+[client-certificates]: configuration#client-certificates
+[config-file]: configuration#config-file
+[configuration]: configuration
+[mcp]: mcp
+[oidc]: configuration#oidc
+[server.listen_addr]: configuration#server.listen_addr
+[server.public_url]: configuration#server.public_url
+[server.trusted_proxies]: configuration#server.trusted_proxies
+[tailscale]: configuration#tailscale
+[tls.cert]: configuration#tls.cert
+[tls.key]: configuration#tls.key
+[trusted-proxy-headers]: configuration#trusted-proxy-headers

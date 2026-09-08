@@ -2,6 +2,7 @@
 import ThemeToggle from "./ThemeToggle.astro";
 import Search from "./Search.astro";
 import { repoUrl } from "../lib/navigation";
+import { latestVersion as resolveLatestVersion } from "../lib/docs";
 
 interface Props {
   currentPath: string;
@@ -15,7 +16,7 @@ const navLinks = [
   { href: "/demo/", label: "Demo" },
 ];
 
-const latestVersion = "v0.11.0";
+const latestVersion = resolveLatestVersion();
 const releaseUrl = `${repoUrl}/releases/tag/${latestVersion}`;
 ---
 <a href="#main-content" class="skip-to-content">Skip to content</a>

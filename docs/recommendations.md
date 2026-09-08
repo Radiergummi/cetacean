@@ -1,74 +1,83 @@
 ---
 title: Recommendations
-description: Automated cluster health checks for resource sizing, config hygiene, operational health, and topology.
+description: What Cetacean flags about your cluster, how to act on it, and how to tune or turn it off.
 category: guide
 tags: [recommendations, sizing, health-checks, cluster-topology]
 ---
 
 # Recommendations
 
-The recommendation engine evaluates cluster health on a timer and lists what it finds at `/recommendations` in the
-dashboard. It is enabled by default; disable it with `server.recommendations = false`.
+Cetacean watches your cluster and lists what looks wrong at `/recommendations` in the [dashboard][dashboard] —
+services with no health check, replicas that keep dying, containers sized far above what they use. Findings
+refresh on their own; you never trigger a scan.
 
-## Checkers
+It is on by default. Turn it off with [`server.recommendations`][server.recommendations].
 
-Four checkers run independently. The engine runs all of them once at startup, then ticks every 60 seconds and runs
-each checker whose own interval has elapsed. A single check is cancelled after 30 seconds.
+## What gets flagged
 
-| Checker         | Interval | Detects                                                                                              | Needs Prometheus                 |
-| --------------- | -------- | ---------------------------------------------------------------------------------------------------- | -------------------------------- |
-| `config`        | 60s      | Services with no health check and services with restart policy `none`                                | No                               |
-| `cluster`       | 60s      | Single-replica services, manager nodes with `active` availability, uneven task distribution           | No                               |
-| `operational`   | 5m       | Flaky services; node disk and memory usage above 90%                                                  | Flaky services no, the rest yes  |
-| `sizing`        | 5m       | CPU and memory usage against configured limits and reservations, and missing limits and reservations   | Yes                              |
+Each finding names a service, a node or the cluster, and carries a severity of `info`, `warning` or
+`critical`.
 
-Findings carry a category, a severity (`info`, `warning`, `critical`), and a scope (`service`, `node`, `cluster`):
+| Finding | Meaning |
+|---|---|
+| `no-healthcheck` | The service defines no health check, so Swarm cannot tell a hung container from a working one |
+| `no-restart-policy` | Restart policy is `none`, so a failed task is never replaced |
+| `single-replica` | One replica, so any node problem is an outage |
+| `manager-has-workloads` | A manager node is `active` and running ordinary tasks alongside cluster management |
+| `uneven-distribution` | The busiest node runs more than three times the tasks of the quietest |
+| `flaky-service` | More than 5 involuntary task failures within the lookback window |
+| `node-disk-full` | Node disk above 90% |
+| `node-memory-pressure` | Node memory above 90% |
+| `over-provisioned` | Reserved far more CPU or memory than it uses |
+| `approaching-limit` | Usage climbing towards its limit |
+| `at-limit` | Usage at its limit, so it is being throttled or is at risk of being killed |
+| `no-limits`, `no-reservations` | No limit or reservation set, so Swarm cannot schedule it well |
 
-| Checker       | Categories                                                                                  |
-| ------------- | ------------------------------------------------------------------------------------------- |
-| `config`      | `no-healthcheck`, `no-restart-policy`                                                       |
-| `cluster`     | `single-replica`, `manager-has-workloads`, `uneven-distribution`                            |
-| `operational` | `flaky-service`, `node-disk-full`, `node-memory-pressure`                                   |
-| `sizing`      | `over-provisioned`, `approaching-limit`, `at-limit`, `no-limits`, `no-reservations`          |
+## Act on a finding
 
-Fixed thresholds worth knowing: a service is flaky after more than 5 involuntary task failures inside the sizing
-lookback window, a node is flagged above 90% disk or memory usage, and task distribution counts as uneven when the
-busiest node runs more than three times the tasks of the least busy one.
+Findings that have an obvious fix get an **Apply suggested value** button:
+
+| Finding | What the button does | Needs |
+|---|---|---|
+| `over-provisioned` | Raises or lowers the reservation to match real usage | [Operations level][operations-level] 2 |
+| `approaching-limit`, `at-limit` | Adjusts the limit | [Operations level][operations-level] 2 |
+| `single-replica` | Scales the service to 2 replicas | [Operations level][operations-level] 1 |
+
+Both also need [write permission][authorization] on the service. Without it the request fails and the error
+appears above the list. Everything else is reported for you to act on yourself.
 
 ## Without Prometheus
 
-The `config` and `cluster` checkers read only Docker state and always run. The `operational` checker also always
-runs, but reports flaky services alone and skips the node disk and memory queries. The `sizing` checker is not
-registered at all, so no sizing category appears. Nothing errors; you get fewer findings.
+Cetacean still flags configuration and topology problems, and still catches flaky services, using Docker state
+alone. What disappears is everything measured: the whole sizing group, plus `node-disk-full` and
+`node-memory-pressure`. Nothing errors—you simply see fewer findings.
 
-Sizing needs cAdvisor for container metrics and the operational node checks need node-exporter. See
-[Monitoring](monitoring) for the scrape requirements.
+Sizing needs cAdvisor and the node checks need node-exporter. See [Monitoring][monitoring] for the setup.
 
-## Applying a fix
+## Tune the sizing thresholds
 
-A finding that carries both a suggested value and a write endpoint gets an **Apply suggested value** button that
-patches the service directly. That covers `over-provisioned` (which raises or lowers the reservation),
-`approaching-limit` and `at-limit` (which adjust the limit) through `PATCH /services/{id}/resources`, and
-`single-replica` through `PUT /services/{id}/scale` with 2 replicas. The other categories report only.
-
-The button is shown whenever a suggestion exists; the request behind it is gated like any other write. Patching
-resources needs [operations level](configuration#operations-level) 2, scaling needs level 1, and both need ACL write
-permission on the service. Without them the request fails with 403 and the error appears above the list.
-
-## Sizing thresholds
-
-The sizing checker is the only one with configurable thresholds. Full descriptions and accepted ranges are in
-[Configuration](configuration).
-
-| Setting                               | Env var                                      | Default | Effect                                                        |
-| ------------------------------------- | -------------------------------------------- | ------- | ------------------------------------------------------------- |
-| `sizing.headroom_multiplier`          | `CETACEAN_SIZING_HEADROOM_MULTIPLIER`        | `2.0`   | Multiplier applied to observed usage when suggesting a value   |
-| `sizing.thresholds.over_provisioned`  | `CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED` | `0.20`  | Usage below this fraction of the reservation is over-provisioned |
-| `sizing.thresholds.approaching_limit` | `CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT`| `0.80`  | Usage above this fraction of the limit is a warning            |
-| `sizing.thresholds.at_limit`          | `CETACEAN_SIZING_THRESHOLD_AT_LIMIT`         | `0.95`  | Usage above this fraction of the limit is critical             |
-| `sizing.thresholds.lookback`          | `CETACEAN_SIZING_LOOKBACK`                   | `168h`  | p95 usage window, and the window the flaky-service count covers |
+Sizing is the only group you can tune, through
+[`sizing.thresholds.over_provisioned`][sizing.thresholds.over_provisioned],
+[`sizing.thresholds.approaching_limit`][sizing.thresholds.approaching_limit] and
+[`sizing.thresholds.at_limit`][sizing.thresholds.at_limit]—the fractions of the reservation or limit at
+which each finding appears. [`sizing.headroom_multiplier`][sizing.headroom_multiplier] sets how much room the
+suggested value leaves above observed usage, and [`sizing.thresholds.lookback`][sizing.thresholds.lookback]
+how far back Cetacean looks, which is also the window `flaky-service` counts failures in.
 
 ## API
 
-`GET /recommendations` returns the current findings and a severity summary. The MCP `get_recommendations` tool serves
-the same data. See the [API reference](api) for the response schema.
+`GET /recommendations` returns the current findings and a severity summary; the [MCP][mcp-tools]
+`get_recommendations` tool serves the same data. See the [API reference][api] for the response schema.
+
+[api]: api
+[authorization]: authorization
+[dashboard]: dashboard
+[mcp-tools]: mcp-tools
+[monitoring]: monitoring
+[operations-level]: configuration#operations-level
+[server.recommendations]: configuration#server.recommendations
+[sizing.headroom_multiplier]: configuration#sizing.headroom_multiplier
+[sizing.thresholds.approaching_limit]: configuration#sizing.thresholds.approaching_limit
+[sizing.thresholds.at_limit]: configuration#sizing.thresholds.at_limit
+[sizing.thresholds.lookback]: configuration#sizing.thresholds.lookback
+[sizing.thresholds.over_provisioned]: configuration#sizing.thresholds.over_provisioned

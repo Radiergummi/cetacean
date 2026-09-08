@@ -12,22 +12,22 @@ Prerequisites: a running Swarm cluster with at least 2 nodes, several stacks dep
 - [ ] Logo links to `/`
 - [ ] All nav links (Nodes, Stacks, Services, Tasks, Configs, Secrets, Networks, Volumes, Swarm, Topology, Metrics) navigate correctly and show active indicator
 - [ ] Connection status indicator shows green when SSE is connected
-- [ ] Disconnect the backend — indicator turns to disconnected state; reconnect — recovers
+- [ ] Disconnect the backend—indicator turns to disconnected state; reconnect—recovers
 - [ ] Theme toggle switches between light and dark mode
 - [ ] Recommendations indicator shows badge count; click navigates to `/recommendations`
 - [ ] Mobile: hamburger menu expands/collapses nav links
 
 ### Keyboard Shortcuts
-- [ ] Press `?` — shortcuts overlay opens
-- [ ] Press `?` or `Esc` while overlay is open — overlay closes
+- [ ] Press `?`—shortcuts overlay opens
+- [ ] Press `?` or `Esc` while overlay is open—overlay closes
 - [ ] Navigation chords listed in overlay work: `g h` (home), `g n` (nodes), `g s` (services), `g a` (tasks), `g k` (stacks), `g c` (configs), `g x` (secrets), `g w` (networks), `g v` (volumes), `g i` (swarm), `g t` (topology)
 - [ ] Navigation chords NOT listed in overlay still work: `g r` (recommendations), `g m` (metrics)
 - [ ] List keyboard nav: `j`/`↓` selects next row, `k`/`↑` selects previous, `Enter` opens selected
 
 ### Search
-- [ ] Press `/` — search input in nav bar focuses
-- [ ] Press `Cmd+K` — search palette opens
-- [ ] Type a query — results appear grouped by type (services, stacks, nodes, tasks, configs, secrets, networks, volumes)
+- [ ] Press `/`—search input in nav bar focuses
+- [ ] Press `Cmd+K`—search palette opens
+- [ ] Type a query—results appear grouped by type (services, stacks, nodes, tasks, configs, secrets, networks, volumes)
 - [ ] Arrow keys navigate results; `Enter` navigates to selected result
 - [ ] `Esc` closes palette (or goes back one step when in action mode)
 - [ ] Results show state indicators (color orbs for services/tasks)
@@ -35,25 +35,25 @@ Prerequisites: a running Swarm cluster with at least 2 nodes, several stacks dep
 - [ ] Results poll every 2s for state updates without reordering
 
 ### Search Palette Actions
-- [ ] Type "scale" — action suggestion row appears; select it → pick a service → enter replica count → executes
-- [ ] Type "image" — pick a service → enter new image tag → executes
-- [ ] Type "rollback" — pick a service → confirmation → executes
-- [ ] Type "restart" — pick a service → confirmation → executes
-- [ ] Type "drain" — pick a node → confirmation → executes
-- [ ] Type "activate" — pick a node → executes (no confirmation)
-- [ ] Type "pause" — pick a node → confirmation → executes
-- [ ] Type "promote" — pick a node → executes
-- [ ] Type "demote" — pick a node → confirmation → executes
-- [ ] Type "kill task" — pick a task → confirmation → executes
-- [ ] Type "remove service" — pick a service → confirmation → executes
-- [ ] Type "remove node" — pick a node → confirmation → executes
-- [ ] Type "remove stack" — pick a stack → confirmation → executes
-- [ ] Type "remove config" — pick a config → confirmation → executes
-- [ ] Type "remove secret" — pick a secret → confirmation → executes
-- [ ] Type "remove network" — pick a network → confirmation → executes
-- [ ] Type "remove volume" — pick a volume → confirmation → executes
-- [ ] Type "shortcuts" — immediately opens shortcuts overlay
-- [ ] `Backspace` on empty input in action mode — goes back one step
+- [ ] Type "scale"—action suggestion row appears; select it → pick a service → enter replica count → executes
+- [ ] Type "image"—pick a service → enter new image tag → executes
+- [ ] Type "rollback"—pick a service → confirmation → executes
+- [ ] Type "restart"—pick a service → confirmation → executes
+- [ ] Type "drain"—pick a node → confirmation → executes
+- [ ] Type "activate"—pick a node → executes (no confirmation)
+- [ ] Type "pause"—pick a node → confirmation → executes
+- [ ] Type "promote"—pick a node → executes
+- [ ] Type "demote"—pick a node → confirmation → executes
+- [ ] Type "kill task"—pick a task → confirmation → executes
+- [ ] Type "remove service"—pick a service → confirmation → executes
+- [ ] Type "remove node"—pick a node → confirmation → executes
+- [ ] Type "remove stack"—pick a stack → confirmation → executes
+- [ ] Type "remove config"—pick a config → confirmation → executes
+- [ ] Type "remove secret"—pick a secret → confirmation → executes
+- [ ] Type "remove network"—pick a network → confirmation → executes
+- [ ] Type "remove volume"—pick a volume → confirmation → executes
+- [ ] Type "shortcuts"—immediately opens shortcuts overlay
+- [ ] `Backspace` on empty input in action mode—goes back one step
 - [ ] Destructive actions show confirmation bar with Cancel/Confirm
 
 ---
@@ -67,7 +67,7 @@ Prerequisites: a running Swarm cluster with at least 2 nodes, several stacks dep
 - [ ] Capacity section is collapsible; shows cluster utilization bars
 - [ ] Recommendation summary appears in capacity section (if recommendations exist)
 - [ ] Recent Activity section is collapsible; shows last 25 change events
-- [ ] SSE updates: deploy a new service — health cards and activity feed update in real time
+- [ ] SSE updates: deploy a new service—health cards and activity feed update in real time
 - [ ] **With Prometheus**: MonitoringStatus banner shows healthy state; dismiss button hides it (persisted in localStorage)
 - [ ] **With Prometheus**: Resource Usage by Stack charts render; double-click a stack to drill down to per-service view; `Esc` exits drill-down; toggleable legend with show/hide button and click-to-isolate per series; "Show all / Top 10 only" toggle when many series
 - [ ] **Without Prometheus**: MonitoringStatus banner shows setup guidance
@@ -82,11 +82,11 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 - [ ] API responses include `Accept-Ranges: items` header
 - [ ] For partial responses: status is `206 Partial Content` with `Content-Range: items 0-49/N` header
 - [ ] For full responses (< 50 items): status is `200 OK`
-- [ ] **Infinite scroll**: scroll to the bottom of a list with more than 50 items — "Loading..." sentinel appears; new items load automatically
+- [ ] **Infinite scroll**: scroll to the bottom of a list with more than 50 items—"Loading..." sentinel appears; new items load automatically
 - [ ] Infinite scroll works across multiple pages (scroll through 100+ items without gaps or duplicates)
 - [ ] Changing search query or sort resets to first page (no stale data from previous query)
-- [ ] SSE updates: add a resource externally — total count increments; existing items update in-place
-- [ ] SSE removes: remove a resource externally — item disappears from list; total count decrements
+- [ ] SSE updates: add a resource externally—total count increments; existing items update in-place
+- [ ] SSE removes: remove a resource externally—item disappears from list; total count decrements
 
 ---
 
@@ -114,7 +114,7 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 - [ ] ActivitySection shows recent change events
 - [ ] **Remove button**: only enabled when node state is `down`; confirmation dialog requires typing hostname; removes node and navigates back
 - [ ] **Force remove**: if normal remove fails with a specific error, a "Force remove" button appears inline; click force-removes the node
-- [ ] SSE: change node availability externally — page updates in real time
+- [ ] SSE: change node availability externally—page updates in real time
 
 ---
 
@@ -189,14 +189,14 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 - [ ] See [Log Viewer](#log-viewer) section below
 
 ### Real-Time Updates
-- [ ] SSE: scale the service externally — replica count and tasks table update
-- [ ] SSE: deploy a new image — status card updates; Last Deployment section appears
+- [ ] SSE: scale the service externally—replica count and tasks table update
+- [ ] SSE: deploy a new image—status card updates; Last Deployment section appears
 
 ---
 
 ## Service Sub-Resource (`/services/:id/:subResource`)
 
-- [ ] Navigate to e.g. `/services/:id/env` — shows key-value table of env vars
+- [ ] Navigate to e.g. `/services/:id/env`—shows key-value table of env vars
 - [ ] Breadcrumb links back to service detail
 - [ ] Invalid sub-resource redirects to service detail
 - [ ] Error state shows retry button
@@ -239,7 +239,7 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 - [ ] Networks section: Name (link) and Driver columns
 - [ ] Volumes section: list of links to volume detail pages
 - [ ] All sections are collapsible
-- [ ] SSE: scale a service in the stack — task counts update (debounced)
+- [ ] SSE: scale a service in the stack—task counts update (debounced)
 
 ---
 
@@ -336,28 +336,28 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 ### Logical View
 - [ ] Services grouped by stack render as nodes on a canvas
 - [ ] Network edges connect services; colored by network
-- [ ] Hover a network edge — edge highlights; network name labels appear
-- [ ] Click a network label on a hovered edge — navigates to network detail
+- [ ] Hover a network edge—edge highlights; network name labels appear
+- [ ] Click a network label on a hovered edge—navigates to network detail
 - [ ] Nodes are draggable
-- [ ] Click a service node — navigates to service detail
+- [ ] Click a service node—navigates to service detail
 - [ ] Stack legend shows stack-to-color mapping; collapsible on mobile
 - [ ] Canvas fits to view on load
 - [ ] Canvas supports panning and zooming
-- [ ] SSE: add/remove a service — layout updates (2s debounce)
+- [ ] SSE: add/remove a service—layout updates (2s debounce)
 - [ ] Error state shows Retry button
 
 ### Physical View
 - [ ] Switch to Physical tab via segmented control
 - [ ] Nodes show tasks grouped by Docker node
-- [ ] Click a service card within a node — navigates to service detail
-- [ ] Hover a task card — highlights the parent service
+- [ ] Click a service card within a node—navigates to service detail
+- [ ] Hover a task card—highlights the parent service
 - [ ] Nodes are draggable
 - [ ] Canvas fits to view
 
 ### Export Formats (API)
-- [ ] `curl -H "Accept: application/vnd.jgf+json" /topology` — returns JGF document with two graphs (`network` and `placement`); Content-Type is `application/vnd.jgf+json`
-- [ ] `curl -H "Accept: application/graphml+xml" /topology` — returns valid GraphML XML (network graph only); Content-Type is `application/graphml+xml`
-- [ ] `curl -H "Accept: text/vnd.graphviz" /topology` — returns valid DOT format (network graph only); Content-Type is `text/vnd.graphviz`
+- [ ] `curl -H "Accept: application/vnd.jgf+json" /topology`—returns JGF document with two graphs (`network` and `placement`); Content-Type is `application/vnd.jgf+json`
+- [ ] `curl -H "Accept: application/graphml+xml" /topology`—returns valid GraphML XML (network graph only); Content-Type is `application/graphml+xml`
+- [ ] `curl -H "Accept: text/vnd.graphviz" /topology`—returns valid DOT format (network graph only); Content-Type is `text/vnd.graphviz`
 - [ ] Extension suffixes work: `/topology.jgf`, `/topology.graphml`, `/topology.dot`
 - [ ] GraphML contains service nodes with metadata (label, replicas, image, mode), edges with network names, and stack subgraphs
 - [ ] DOT contains service nodes with attributes, `subgraph cluster_<stack>` grouping, and `--` edges with network labels
@@ -399,10 +399,10 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 
 - [ ] MonitoringStatus banner shows Prometheus status
 - [ ] Query input with PromQL autocomplete (label names and values)
-- [ ] Type a query and press Enter or click Run — chart and result table render
+- [ ] Type a query and press Enter or click Run—chart and result table render
 - [ ] Query persisted in URL (`?q=`); auto-runs on page load if present
 - [ ] Range segmented control (1H/6H/24H/7D) changes chart time range; persisted as `?range=` URL param
-- [ ] Chart supports click-to-isolate, linked crosshairs, and brush-to-zoom (no pause/resume or stacked area toggle on this page — those are MetricsPanel-only)
+- [ ] Chart supports click-to-isolate, linked crosshairs, and brush-to-zoom (no pause/resume or stacked area toggle on this page—those are MetricsPanel-only)
 - [ ] QueryResultTable shows instant query results below the chart
 
 ---
@@ -437,15 +437,15 @@ Embedded in Service Detail and Task Detail pages.
 - [ ] Fullscreen button enters/exits browser fullscreen
 
 ### Search
-- [ ] Type in search input — matching text highlighted in log lines
+- [ ] Type in search input—matching text highlighted in log lines
 - [ ] Case-sensitive toggle changes matching behavior
 - [ ] Regex toggle enables regex patterns
 - [ ] Match count displayed; prev/next arrows navigate between matches; current match scrolls into view
 
 ### Table Interactions
-- [ ] Click a JSON log line — expands/collapses pretty-printed view
-- [ ] Hover a row — pin button appears; click pins line to top (up to 3); pinned lines show unpin button
-- [ ] Task ID cell (service logs only) — click filters to that task's logs; filter chip appears with X to clear
+- [ ] Click a JSON log line—expands/collapses pretty-printed view
+- [ ] Hover a row—pin button appears; click pins line to top (up to 3); pinned lines show unpin button
+- [ ] Task ID cell (service logs only)—click filters to that task's logs; filter chip appears with X to clear
 - [ ] Log level color bar on left border matches detected level
 
 ### Pagination and Following
@@ -465,9 +465,9 @@ Shared by Cluster Overview, Node List, Service List, Node Detail, Service Detail
 - [ ] Refresh button triggers manual refetch
 - [ ] Pause/Resume live streaming toggle
 - [ ] Stacked area toggle (where available): switches between line and area chart modes
-- [ ] **Click-to-isolate**: single click a series — other series dim to 30%; click again restores
+- [ ] **Click-to-isolate**: single click a series—other series dim to 30%; click again restores
 - [ ] **Brush-to-zoom**: horizontal drag selects a time range (5px threshold); releases zooms in
-- [ ] **Linked crosshairs**: hover on one chart — vertical dashed line + dots appear on sibling charts
+- [ ] **Linked crosshairs**: hover on one chart—vertical dashed line + dots appear on sibling charts
 - [ ] **Tab visibility**: switching to another browser tab pauses SSE streaming; switching back resumes it
 
 ---
@@ -484,12 +484,12 @@ Shared by Cluster Overview, Node List, Service List, Node Detail, Service Detail
 
 ## Error Handling
 
-- [ ] Navigate to a non-existent route — NotFound page renders with link back to dashboard
-- [ ] Navigate to a non-existent resource detail (e.g. `/nodes/invalid`) — FetchError with retry button
+- [ ] Navigate to a non-existent route—NotFound page renders with link back to dashboard
+- [ ] Navigate to a non-existent resource detail (e.g. `/nodes/invalid`)—FetchError with retry button
 - [ ] ErrorBoundary: if a component crashes, inline error state renders with "Try again" button
 - [ ] Chart error: if a metrics chart fails to load, retry button appears on the chart
-- [ ] `/api/errors` — error index page lists all known error codes with section anchor links
-- [ ] `/api/errors/:code` — detail page for a specific error code
+- [ ] `/api/errors`—error index page lists all known error codes with section anchor links
+- [ ] `/api/errors/:code`—detail page for a specific error code
 
 ---
 

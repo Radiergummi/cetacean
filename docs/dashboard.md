@@ -7,20 +7,19 @@ tags: [dashboard, ui, keyboard-shortcuts, search, charts, logs]
 
 # Dashboard
 
-The dashboard updates itself. Each page opens an SSE stream scoped to what it shows, so a scaled service or a
-downed node appears without a refresh. The connection indicator in the nav bar shows stream health and when the
-last event arrived; if the stream drops, it reconnects with backoff. The indicator also carries a resync button
-that asks the server to re-read the whole cluster from Docker.
+The dashboard updates itself: a scaled service or a downed node appears without a refresh. The connection
+indicator in the nav bar shows when the last update arrived, and reconnects on its own if the connection drops.
+It also carries a resync button that makes Cetacean re-read the whole cluster from Docker.
 
 ## Navigation
 
 The nav bar links every resource type: nodes, stacks, services, tasks, configs, secrets, networks, volumes, plus
 the swarm info, topology and metrics pages. On narrow screens they collapse behind a menu button.
 
-To the right of the search box sit the shortcut help button, a recommendations indicator badged with the current
-finding count, the theme toggle (light, dark, system), and, in every authentication mode except `none`, the
-identity badge linking to your profile. The footer carries the running version and commit, the licenses page, and
-a link to the API playground at `/api`.
+To the right of the search box sit the shortcut help button, a [recommendations][recommendations] indicator badged
+with the current finding count, the theme toggle (light, dark, system), and, in every
+[authentication][authentication] mode except `none`, the identity badge linking to your profile. The footer carries
+the running version and commit, the licenses page, and a link to the API playground at `/api`.
 
 ## Keyboard shortcuts
 
@@ -76,21 +75,19 @@ what you have chosen so far:
 | Force Remove Task   | Pick a task                                             |
 | Remove …            | Pick a service, node, stack, config, secret, network or volume |
 
-Destructive actions ask for confirmation before they run. Before executing, the palette checks the `Allow` header
-on the target resource, so an action barred by the [operations level](configuration#operations-level) or by an
-[authorization](authorization) grant fails with a permission message rather than a server error.
+Destructive actions ask for confirmation before they run. An action your [operations level][operations-level]
+or your [grants][authorization] do not allow is refused with a permission message, not a server error.
 
 ## List pages
 
 Every resource type has a list page with a search box, sortable columns, and a table or grid toggle. Search and
-sort are held in the URL (`?q=`, `?sort=`, `?dir=`), so a filtered list is a shareable link. The view toggle is
-saved per resource type in local storage, and below the medium breakpoint the grid view is used regardless.
+sort are held in the URL (`?q=`, `?sort=`, `?dir=`), so a filtered list is a shareable link. Your choice of table
+or grid is remembered per resource type; narrow screens always use the grid.
 
-Lists page themselves in as you scroll, and tables of more than 100 rows are virtualized. Rows arrive and leave
-over SSE without refetching the page.
+Lists load more as you scroll, and stay current as resources come and go.
 
 The API accepts expression filters through `?filter=` that the dashboard's search box does not build. See the
-[API guide](api#filter-fields-by-resource) for the fields available per resource type.
+[API guide][filter-fields-by-resource] for the fields available per resource type.
 
 ## Detail pages
 
@@ -106,7 +103,7 @@ Actions hidden by permissions are not rendered.
 ## Charts
 
 Charts appear on the cluster overview and on node, service and task detail pages, and require
-[monitoring](monitoring). Node and service list pages carry sparklines and gauges from the same data.
+[monitoring][monitoring]. Node and service list pages carry sparklines and gauges from the same data.
 
 The panel header holds a `1H` / `6H` / `24H` / `7D` selector, a custom date-time range picker, a refresh button, a
 pause control for the live stream, and a line/area toggle. The selected range is stored as `?range=`, and a custom
@@ -117,8 +114,8 @@ one as `?from=` and `?to=`.
 - Hover one chart to get a crosshair and matching values on every other chart in the same panel.
 - Double-click a stack in the per-stack charts on the cluster overview or a node page to drill into its services.
 
-Charts on the 1H, 6H, 24H and 7D ranges stream new points over SSE. A custom range is fetched once, and the
-refresh button re-fetches it.
+The preset ranges update live as new points arrive. A custom range is a snapshot; use the refresh button to
+bring it up to date.
 
 ## Metrics console
 
@@ -134,7 +131,7 @@ until you scroll up, which pauses following; the live toggle in the toolbar stop
 - Time range: presets from the last 5 minutes upwards, or a custom since/until pair
 - Filters: by level (parsed from the line, including JSON and `log/slog` numeric levels) and by stream
 - Search: substring or regular expression, with match navigation and highlighting
-- Rendering: JSON payloads pretty-printed, levels colour-barred, long output virtualized
+- Rendering: JSON payloads pretty-printed, levels colour-barred
 - Download: saves the lines currently loaded as a `.log` file
 
 ## Topology
@@ -151,7 +148,7 @@ Both views pan, zoom and let you drag cards, and clicking a service opens its de
 
 Every resource list and detail page shows a feed icon in the page header. Click it to open that page's Atom feed,
 or copy the URL into a feed reader. The history, search and recommendations pages have feeds too. See the
-[API guide](api#feeds) for the supported endpoints and pagination.
+[API guide][feeds] for the supported endpoints and pagination.
 
 ## Licenses
 
@@ -159,3 +156,11 @@ The licenses page, linked from the footer, lists every open-source dependency bu
 modules and frontend packages. Search by name, or filter by ecosystem and license. Clicking a license badge opens
 the full text for that dependency, with its NOTICE file if it ships one. The header links to the complete
 attribution document.
+
+[authentication]: authentication
+[authorization]: authorization
+[feeds]: api#feeds
+[filter-fields-by-resource]: api#filter-fields-by-resource
+[monitoring]: monitoring
+[operations-level]: configuration#operations-level
+[recommendations]: recommendations

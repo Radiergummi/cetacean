@@ -31,15 +31,16 @@ docker run -d --name cetacean \
   ghcr.io/radiergummi/cetacean:latest
 ```
 
-Cetacean talks to the cluster over the Docker socket. The `:ro` flag applies to the socket file rather than to the
-API, so write operations still work. The `cetacean_data` volume holds the state snapshot and the task restart
-history behind the flaky-service recommendation; without it, both are lost whenever the container is replaced.
+Mounting the socket `:ro` protects the file, not the API—Cetacean can still scale and restart services.
+
+Keep the `cetacean_data` volume. It holds the cached cluster state and the failure history behind the
+flaky-service [recommendation][recommendations], both of which are lost with the container otherwise.
 
 ### Stack deployment
 
 `compose.yaml` in the repository deploys the same container as a stack service, pinned to a manager, with resource
 limits and a volume for its state. It joins the shared `monitoring` overlay network as an external network, so that
-network has to exist first. Either create it, or deploy the [monitoring stack](#add-monitoring) first, which creates
+network has to exist first. Either create it, or deploy the [monitoring stack][add-monitoring] first, which creates
 it for you.
 
 ```bash
@@ -47,9 +48,9 @@ docker network create --driver overlay monitoring
 docker stack deploy -c compose.yaml cetacean
 ```
 
-The snapshot volume is node-local, and `node.role == manager` pins the task to any manager rather than a specific
-one. On a swarm with several managers, a reschedule lands on a different node and binds a fresh empty volume. Pin
-the task with `node.hostname == <your-manager>` instead, or use a volume driver whose storage every manager shares.
+On a swarm with several managers, pin the task to one of them with `node.hostname == <your-manager>`, or give it
+a volume driver every manager shares. The default `node.role == manager` constraint lets a reschedule land on a
+different node, where it finds an empty volume and loses the cached state.
 
 ### From source
 
@@ -63,16 +64,13 @@ go build -o cetacean .
 
 The binary defaults to `unix:///var/run/docker.sock` and listens on `:9000`.
 
-## First load
+## What you'll see
 
-Cetacean syncs the full swarm state on startup, then follows the Docker event stream. The built-in `HEALTHCHECK`
-runs `cetacean healthcheck`, which polls `/-/ready` and only passes once that first sync has completed, so the task
-shows as healthy only when the dashboard has data to serve. Swarm ignores Compose's `depends_on`, so ordering
-between services is not something a stack file can express.
+The dashboard opens on the cluster overview: health cards for nodes, services and failed tasks, a capacity
+section, and a feed of recent resource changes. It reports healthy only once it has read the whole cluster, so
+give it a moment on a large swarm.
 
-The dashboard opens on the cluster overview: health cards for nodes, services and failed tasks, a capacity section,
-and a feed of recent resource changes. Charts are absent until you configure Prometheus, and a banner at the top of
-the page says what is missing.
+Charts are missing until you configure Prometheus, and a banner at the top of the page says so.
 
 ## Add monitoring
 
@@ -94,24 +92,43 @@ environment:
   CETACEAN_PROMETHEUS_URL: http://prometheus:9090
 ```
 
-Both stacks have to share an overlay network for that URL to resolve. See [Monitoring](monitoring) for the full
+Both stacks have to share an overlay network for that URL to resolve. See [Monitoring][monitoring] for the full
 setup, including scrape configuration and the detection banner.
 
 ## Add authentication
 
-By default anyone who can reach Cetacean can read everything and perform operational writes (scale, update image, roll back, restart), so do this before exposing it beyond a trusted network.
-Set `auth.mode` to `oidc`, `tailscale`, `cert`, or `headers`; see [Authentication](authentication) for the settings
-each mode needs. TLS termination is available in any mode via `tls.cert` and `tls.key`.
+By default anyone who can reach Cetacean can read everything and perform operational writes (scale, update image,
+roll back, restart), so do this before exposing it beyond a trusted network. Set [`auth.mode`][auth.mode] to
+`oidc`, `tailscale`, `cert`, or `headers`; see [Authentication][authentication] for the settings each mode needs.
+TLS termination is available in any mode via [`tls.cert`][tls.cert] and [`tls.key`][tls.key].
 
-Once callers are identified, [Authorization](authorization) adds per-resource read and write grants.
+Once callers are identified, [Authorization][authorization] adds per-resource read and write grants.
 
 ## Where to go next
 
-- [Dashboard](dashboard) for navigation, the command palette, and the chart and log viewer controls
-- [Configuration](configuration) for every setting. Start with `server.operations_level`, which selects how much
-  Cetacean may change (default `1`, safe operations like scale and restart; `0` for read-only),
-  `server.base_path` for deployments behind a reverse proxy on a sub-path, and `storage.snapshot` for state
-  persistence across restarts
-- [MCP Server](mcp) to give an AI agent the same read and write access, gated by the same operations level and grants
-- [API guide](api) for the REST endpoints, SSE streams, and Atom feeds. Every resource list and detail page also
+- [Dashboard][dashboard] for navigation, the command palette, and the chart and log viewer controls
+- [Configuration][configuration] for every setting. Start with
+  [`server.operations_level`][server.operations_level], which selects how much Cetacean may
+  change (default `1`, safe operations like scale and restart; `0` for read-only),
+  [`server.base_path`][server.base_path] for deployments behind a reverse proxy on a sub-path,
+  and [`storage.snapshot`][storage.snapshot] for state persistence across restarts
+- [MCP Server][mcp] to give an AI agent the same read and write access, gated by the same [operations level][operations-level] and [grants][authorization]
+- [API guide][api] for the REST endpoints, SSE streams, and Atom feeds. Every resource list and detail page also
   serves an Atom feed: click the feed icon in the page header, or append `.atom` to any resource URL
+
+[add-monitoring]: #add-monitoring
+[api]: api
+[auth.mode]: configuration#auth.mode
+[authentication]: authentication
+[authorization]: authorization
+[configuration]: configuration
+[dashboard]: dashboard
+[mcp]: mcp
+[monitoring]: monitoring
+[operations-level]: configuration#operations-level
+[recommendations]: recommendations
+[server.base_path]: configuration#server.base_path
+[server.operations_level]: configuration#server.operations_level
+[storage.snapshot]: configuration#storage.snapshot
+[tls.cert]: configuration#tls.cert
+[tls.key]: configuration#tls.key
