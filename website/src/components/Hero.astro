@@ -1,38 +1,68 @@
 ---
-import { repoUrl } from "../lib/navigation";
+import FeatureCard from "./FeatureCard.astro";
+import {repoUrl} from "../lib/navigation";
 
 interface Props {
-  title: string;
-  description: string;
+    title: string;
+    description: string;
 }
 
-const { title, description } = Astro.props;
+const {title, description} = Astro.props;
 ---
-<div class="flex flex-col items-center justify-center py-24 px-8 text-center" data-pagefind-ignore>
-  <span class="text-6xl mb-6">🐋</span>
-  <h1 class="text-3xl font-semibold tracking-tight mb-3">{title}</h1>
-  <p class="text-base text-muted-foreground max-w-sm mb-10 leading-relaxed">{description}</p>
-  <div class="flex gap-3">
-    <a
-      href="/demo"
-      class="inline-flex items-center rounded-lg bg-foreground px-5 py-2.5 text-sm font-medium text-background hover:opacity-90 transition-opacity"
-    >
-      Try Demo
-    </a>
-    <a
-      href="/getting-started"
-      class="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
-    >
-      Get Started
-    </a>
-    <a
-      href={repoUrl}
-      target="_blank"
-      rel="noopener"
-      class="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
-      aria-label="GitHub (opens in new tab)"
-    >
-      GitHub
-    </a>
-  </div>
-</div>
+<section class="flex flex-col items-center justify-center py-24 px-8 gap-12 text-center" data-pagefind-ignore>
+    <header>
+        <span class="text-6xl">🐋</span>
+        <h1 class="text-3xl font-semibold tracking-tight mb-3">{title}</h1>
+        <p class="text-base text-muted-foreground max-w-sm leading-relaxed">{description}</p>
+    </header>
+
+    <ul class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <FeatureCard href="/dashboard" icon="🔭" title="Swarm Observability">
+            Nodes, services, tasks, stacks, configs, secrets, networks and volumes — browsable,
+            cross-referenced, and updated as the cluster changes.
+        </FeatureCard>
+        <FeatureCard href="/monitoring" icon="📈" title="Metrics And Capacity">
+            Add Prometheus and every page gains CPU and memory charts, resource gauges, capacity bars and
+            per-task sparklines.
+        </FeatureCard>
+        <FeatureCard href="/recommendations" icon="💡" title="Knows What Looks Wrong">
+            Cetacean flags oversized containers, missing health checks and replicas that keep dying — on its own,
+            with no scan to trigger.
+        </FeatureCard>
+        <FeatureCard href="/configuration#operations-level" icon="🎛️" title="Change Things Safely">
+            Scale, roll out an image, roll back, restart, or edit env, labels and limits in place — every write
+            gated by an operations level you choose.
+        </FeatureCard>
+        <FeatureCard href="/mcp" icon="🤖" title="MCP Server">
+            Enable the MCP server to let AI agents discover resources and interact with your swarm cluster.
+        </FeatureCard>
+        <FeatureCard href="/authentication" icon="🫆" title="Flexible Auth Model">
+            Use OIDC, Tailscale, mTLS, or custom headers to gate access to the Cetacean dashboard, API, and
+            MCP&nbsp;server.
+        </FeatureCard>
+    </ul>
+
+    <footer class="flex gap-3">
+        <a
+            href="/demo"
+            class="inline-flex items-center rounded-lg bg-foreground px-5 py-2.5 text-sm font-medium text-background hover:opacity-90 transition-opacity"
+        >
+            Try Demo
+        </a>
+        <a
+            href="/getting-started"
+            class="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+        >
+            Get Started
+        </a>
+        <a
+            href={repoUrl}
+            target="_blank"
+            rel="noopener"
+            class="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+            aria-label="GitHub (opens in new tab)"
+        >
+            GitHub
+        </a>
+    </footer>
+</section>

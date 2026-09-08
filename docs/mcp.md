@@ -1,27 +1,38 @@
 ---
 title: MCP Server
-description: Run Cetacean's embedded Model Context Protocol server, with OAuth 2.1 authorization, ACL enforcement, and long-running task support.
+description: Let AI agents read your cluster and make changes through Cetacean, under the same permissions as everyone else.
 category: guide
-tags: [mcp, ai, agents, oauth, automation]
+tags: [ mcp, ai, agents, oauth, automation ]
 ---
 
 # MCP Server
 
-Cetacean embeds a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server so AI agents can
-read the same live cluster state the dashboard shows and make the same ACL-gated changes. It is a second
-transport over the existing authentication, authorization, and operations level model. For the catalog of
-tools, resources, prompts, and widgets an agent sees, see [MCP tools and resources](mcp-tools).
+Cetacean can expose your cluster to AI agents over the [Model Context Protocol](https://modelcontextprotocol.io/).
+An agent reads the same live state the [dashboard][dashboard] shows and makes the same changes, under the same sign-in
+and the same permissions as the people using the dashboard. For what an agent can actually see and do,
+see [MCP tools and resources][mcp-tools].
 
-## Quick start
+## Turn it on
 
-The server is disabled by default. Enable it with `CETACEAN_MCP=true`:
+The server is off by default. Enable it with [`mcp.enabled`][mcp.enabled] on the Cetacean service in your
+`compose.yaml`, then redeploy the stack:
 
-```bash
-CETACEAN_MCP=true \
-CETACEAN_AUTH_MODE=oidc \
-CETACEAN_MCP_ISSUER=https://cetacean.example.com \
-  ./cetacean
+```yaml
+environment:
+  CETACEAN_MCP: "true"
+  CETACEAN_AUTH_MODE: oidc
+  CETACEAN_PUBLIC_URL: https://cetacean.example.com
 ```
+
+> [!WARNING]
+> [`server.public_url`][server.public_url] is the URL clients reach from outside the cluster, not a service name
+> on the overlay network. Getting it wrong breaks sign-in, and leaving it unset behind a proxy stops startup
+> whenever MCP OAuth is in use.
+
+Also set [`mcp.signing_key`][mcp.signing_key]. Without it Cetacean generates a new key on every restart, and every agent
+has to sign in again after a redeployment.
+
+## Connect a client
 
 The endpoint is served at `{base_path}/mcp`. Point an MCP-capable client at it:
 
@@ -37,220 +48,120 @@ The endpoint is served at `{base_path}/mcp`. Point an MCP-capable client at it:
 }
 ```
 
-On first connect the client is challenged for authorization, walks the OAuth discovery chain, and prompts
-you to sign in and consent. No client secret or manual registration is required.
+On first connect the client asks you to sign in through whichever auth provider you configured, then shows a
+consent screen naming the client. Approve it and the agent is connected. There is no client secret to
+generate and nothing to register by hand.
 
-## Protocol version and compatibility
+You are asked to approve a client once, not every session. Approval lasts [`mcp.consent_ttl`][mcp.consent_ttl] (90 days
+by default) and renews each time you approve. Set it to `0s` to be asked every time. You are always asked again if the
+client changes its name or redirect URLs.
 
-The server speaks MCP streamable HTTP at revision `2026-07-28`, and only that revision. Older revisions are
-refused with an `unsupported protocol version` JSON-RPC error naming the version to use, so upgrade an older
-client. The deprecated HTTP+SSE and stdio transports are not supported.
+## Decide what an agent may change
 
-There are no sessions: `2026-07-28` removed the `initialize` handshake and `Mcp-Session-Id`. Every request
-carries its own protocol version, client identity, and capabilities in `_meta`, so there is nothing to
-reconnect to. A client receives server-initiated notifications by opening a `subscriptions/listen` stream,
-which replaces both `resources/subscribe` and the standalone `GET` stream; notification types are opt-in.
+An agent is never more privileged than the identity that signed in. Two controls narrow it further.
 
-## Authentication and authorization
+[`mcp.operations_level`][mcp.operations_level] caps what agents may do, independently of the dashboard:
 
-### Auth mode `none`
+| Level | An agent may                                                           |
+|-------|------------------------------------------------------------------------|
+| `0`   | Read only                                                              |
+| `1`   | Scale, restart, update images, roll back                               |
+| `2`   | Also edit configuration: env vars, resources, placement, ports, labels |
+| `3`   | Also remove services, tasks, configs, secrets, networks and volumes    |
 
-The OAuth endpoints are not registered and `/mcp` is unauthenticated. Anyone who can reach the endpoint has
-whatever access the operations level allows. Use this only on trusted networks.
+It inherits [`server.operations_level`][server.operations_level] when unset. Setting it lower is how you let your team
+scale services from the dashboard while agents stay read-only.
 
-### OAuth 2.1 (auth modes `oidc`, `tailscale`, `headers`)
+[Authorization][authorization] grants then apply per resource, exactly as they do for the dashboard. An agent holding
+read-only grants is offered only the read tools; resources it may not read are reported as not found rather than as
+forbidden, so the tool list never reveals what exists.
 
-When MCP is enabled and the auth mode supports a browser flow, Cetacean acts as an OAuth 2.1 authorization
-server and as a protected resource for `/mcp`, implementing the MCP `2026-07-28` authorization profile.
+## Wait for changes to take effect
 
-| Endpoint | Purpose |
-|---|---|
-| `GET {base}/.well-known/oauth-protected-resource` | Protected Resource Metadata (RFC 9728); advertises the authorization server |
-| `GET {base}/.well-known/oauth-authorization-server` | Authorization Server Metadata (RFC 8414) |
-| `GET {base}/.well-known/openid-configuration` | The same metadata at the OpenID Connect Discovery 1.0 location |
-| `GET {base}/oauth/authorize` | Authorization endpoint; renders the consent screen |
-| `POST {base}/oauth/token` | Token endpoint |
-| `POST {base}/oauth/revoke` | Token revocation (RFC 7009) |
-| `POST {base}/oauth/register` | Dynamic Client Registration (RFC 7591) |
+Docker accepts a change the moment you ask for it, which tells you nothing about whether it worked—the image may still
+be pulling, or a placement constraint may be unsatisfiable. Scaling, restarting, image updates and rollbacks can
+therefore wait for the cluster to settle before reporting back, so an agent says "done" when the replicas are actually
+running.
 
-The flow:
+Clients that support this opt in per call; the agent handles it, there is nothing to configure. A change that has not
+settled within five minutes is reported as failed, and [`mcp.max_concurrent_tasks`][mcp.max_concurrent_tasks] (default
+is 32) caps how many such waits run at once.
 
-1. The client hits `/mcp` without a valid token and receives `401` with a `WWW-Authenticate` header pointing
-   at the Protected Resource Metadata document.
-2. The client discovers the authorization server, then identifies itself by CIMD or DCR (below).
-3. The configured auth provider authenticates you, you see a consent screen, and you approve.
-4. The client exchanges the authorization code (PKCE-S256, single-use, 60s) for an access token and a refresh
-   token.
-5. Subsequent MCP requests carry `Authorization: Bearer <token>`.
+## Trace agent activity
 
-Two client identification paths are supported. Prefer CIMD for anything new.
+Point [`tracing.endpoint`][tracing.endpoint] at an OpenTelemetry collector that accepts OTLP over HTTP:
 
-- **Client ID Metadata Documents (CIMD)**, preferred by `2026-07-28`. The `client_id` is an `https://` URL
-  pointing at a published metadata document, which Cetacean fetches and verifies; the consent screen shows a
-  "verified via published metadata" badge. Advertised as `client_id_metadata_document_supported` and disabled
-  with `mcp.oauth.cimd_enabled`, which refuses every `https://` client ID and makes no outbound fetch.
-- **Dynamic Client Registration (RFC 7591)**, deprecated in `2026-07-28` and kept for compatibility. `POST`
-  to `/oauth/register`. Every DCR client is public and PKCE-only; symmetric (`client_secret`) auth methods
-  are rejected. A DCR client names itself, so the consent screen shows a "self-reported identity" badge, and
-  registrations are held in memory and lost on restart.
-
-Access tokens are HS256 JWTs with an `aud` claim equal to the canonical `/mcp` URL, so a token minted for one
-deployment cannot be replayed against another. Resource indicators (RFC 8707) are required by default.
-Refresh tokens are opaque, rotate single-use, and carry an absolute grant-family lifetime; presenting a
-rotated token revokes the whole family.
-
-### Remembered approvals
-
-Approving a client is remembered, so you are asked once rather than every time its refresh token expires. A
-record ties your identity to that client, the MCP endpoint it asked for, and a fingerprint of the client's
-name and redirect URIs as you were shown them. You are asked again when any of those change, including when
-a client updates its own metadata document, and when the grant is revoked or Cetacean detects a stolen
-refresh token. Clients that registered dynamically are never remembered, because their metadata is
-self-reported.
-
-An approval lasts `mcp.consent_ttl` (default 90 days) from the moment you approved, and approving again
-renews it. Set it to `0s` to turn remembering off: nothing is recorded, existing records stop being honoured,
-and every authorization reaches a human.
-
-Approvals live in `mcp-tokens.json` beside the refresh tokens, at mode `0600`. Refresh tokens are stored as
-SHA-256 hashes, but an approval is a capability: anyone able to write that file can pre-approve a client.
-
-### `cert` mode and auth bypass
-
-mTLS client-certificate auth cannot drive a browser consent flow, so OAuth is not used in `cert` mode. Set
-`mcp.oauth.auth_bypass` to `cert` to let mTLS-authenticated clients reach `/mcp` with their client
-certificate, deriving identity from the certificate and skipping the bearer token.
-
-### ACL enforcement
-
-Every resource read, tool call, and notification is checked against the ACL policy for the request's
-identity. Nothing is cached per session, so policy hot reloads take effect immediately. `tools/list` is
-filtered per identity, so an operator with read-only grants sees only the read tools. Resource reads return
-identical `not found` errors whether a resource is absent or denied, so the policy does not leak existence.
-See [Authorization](authorization) for the grant model.
-
-Catalog filtering projects grants onto resource types, expanding them the way a call does: a `stack:X` grant
-reaches the services, tasks, configs, secrets, networks, and volumes in that stack, a `service:X` grant
-reaches that service's tasks, and `write` implies `read`. The projection over-approximates, so
-`service:web-*` reports the service type whether or not a matching service exists, but every listed tool is
-still checked against the named resource when invoked.
-
-## Configuration
-
-These four settings are what you need to get running:
-
-| Setting | Env var | Default | Description |
-|---|---|---|---|
-| `mcp.enabled` | `CETACEAN_MCP` | `false` | Enable the MCP server |
-| `mcp.issuer` | `CETACEAN_MCP_ISSUER` | derived from listen address and TLS | Canonical external base URL for the OAuth issuer, token audience, and icon URLs |
-| `mcp.signing_key` | `CETACEAN_MCP_SIGNING_KEY` | auto-generated | HMAC-SHA256 JWT signing key; `CETACEAN_MCP_SIGNING_KEY_FILE` reads it from a file, so it can arrive as a Docker secret |
-| `mcp.operations_level` | `CETACEAN_MCP_OPERATIONS_LEVEL` | inherits `operations_level` | Ceiling for MCP tools (0 read-only, 1 operational, 2 configuration, 3 impactful) |
-
-Behind a reverse proxy, always set `mcp.issuer` to the externally reachable base URL. Token audiences,
-discovery URLs, and icon URLs are derived from it, and a wrong value breaks the OAuth flow.
-
-The remaining settings, including token and consent lifetimes, task retention, and the DCR and CIMD controls,
-are documented in [Configuration](configuration).
-
-## Tasks
-
-Docker's write APIs return the moment Swarm accepts a spec change, which says nothing about whether the
-change took effect: the image may still be pulling, a placement constraint may be unsatisfiable, or the
-rollout may be halfway through. The `2026-07-28` Tasks extension lets a call wait for the cluster instead.
-Four tools accept task augmentation:
-
-| Tool | Converged when |
-|---|---|
-| `scale_service` | Running replicas match the desired count and no rolling update is in flight |
-| `update_service_image` | As above, after the rollout finishes |
-| `rollback_service` | As above |
-| `restart_service` | As above |
-
-Send `params.task` on the `tools/call` and the server answers immediately with a task handle instead of the
-tool's result. Include a `ttl`:
-
-```json
-{"method":"tools/call","params":{"name":"scale_service","arguments":{"id":"web","replicas":5},"task":{"ttl":600000}}}
+```yaml
+environment:
+  CETACEAN_OTEL_ENDPOINT: http://collector:4318
 ```
 
-Poll `tasks/get` with the returned `taskId`. The task stays `working` until Cetacean's cache shows the cluster
-has converged, then flips to `completed`. A mutation Docker refuses, or one the ACL denies, ends `failed`
-with the reason in `statusMessage`. `tasks/cancel` is supported; this revision removed `tasks/list`.
+You get a span per agent request and a nested span per tool call, tagged with the tool name and an error status when it
+fails—so you can see which agent scaled what, and when. If the calling agent is already tracing, its trace context is
+picked up and Cetacean's spans join the same trace, putting the agent's turn and the Docker call it produced on
+one timeline.
 
-Task augmentation is optional on all four: a plain `tools/call` with no `params.task` returns as soon as
-Docker accepts the change.
+Tracing stays off until the endpoint is set. A malformed endpoint stops startup rather than silently exporting nowhere.
 
-A task gives up after five minutes and fails. `tasks/cancel` marks the task cancelled for the client without
-stopping the convergence watcher, which polls an in-memory cache until convergence or timeout.
-`mcp.max_concurrent_tasks` (default 32) caps how many run at once.
+## Before you expose it
 
-### Task retention
+- **Run it behind TLS.** Cetacean warns at startup if MCP is enabled without TLS outside auth mode `none`.
+- **Auth mode `none` leaves `/mcp` open.** Anyone who can reach it gets whatever the operations level allows.
+  Use it only on a trusted network.
+- **Set [`server.cors.origins`][server.cors.origins] if the consent screen crosses origins.** It also guards
+  `/mcp` itself against DNS rebinding. Non-browser clients are unaffected.
+- **Run a single replica.** Sign-in state lives in one process; see [How it works](#how-it-works).
 
-`ttl` is milliseconds from task creation, after which the server discards the task and its result. Pick one
-long enough that you will have polled `tasks/get` before it elapses; ten minutes covers the five-minute
-convergence bound with room to read the result.
+## Troubleshooting
 
-The protocol says an omitted `ttl` means no expiration, which would retain the result for the lifetime of the
-process. Cetacean does not honour that literally, since `mcp.max_concurrent_tasks` caps concurrency rather
-than retention. Two settings bound retention instead:
+| Symptom                                          | Cause                                                                                                       |
+|--------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
+| Client reports `unsupported protocol version`    | The client is older than MCP revision `2026-07-28`. Upgrade it; older revisions are refused.                |
+| Every agent must sign in again after a redeploy  | [`mcp.signing_key`][mcp.signing_key] is unset, so a new key was generated at startup.                       |
+| Sign-in fails or redirects somewhere unreachable | [`server.public_url`][server.public_url] is not the URL clients reach from outside.                         |
+| A revoked agent still works for a while          | Access tokens stay valid until they expire. Lower [`mcp.access_token_ttl`][mcp.access_token_ttl].           |
+| An agent reports a change it made as gone        | Its result was discarded after [`mcp.task_ttl`][mcp.task_ttl]. The change itself still happened.            |
+| `cert` auth mode: client cannot connect          | mTLS cannot drive a browser consent screen. Set [`mcp.oauth.auth_bypass`][mcp.oauth.auth_bypass] to `cert`. |
 
-| Setting | Default | Effect |
-|---|---|---|
-| `mcp.task_ttl` | `15m` | Applied when a call omits `ttl`, or sends `0` or `null` |
-| `mcp.max_task_ttl` | `1h` | Ceiling on what a call may ask for |
+## Behind a reverse proxy
 
-A request above the ceiling is served with the ceiling rather than refused, and the clamp appears in the
-debug log, not in the response. Set either setting to `0s` to disable that half. Because the clock starts at
-creation, the `15m` default leaves at least ten minutes to collect a result even for a task that ran the full
-convergence timeout.
+Clients discover how to sign in by fetching well-known documents from Cetacean, so the proxy has to pass these
+through to `/mcp`'s host alongside the endpoint itself:
 
-## Distributed tracing
-
-Point `CETACEAN_OTEL_ENDPOINT` (or `tracing.endpoint`) at an OpenTelemetry collector that accepts OTLP over
-HTTP:
-
-```bash
-CETACEAN_OTEL_ENDPOINT=http://collector:4318
+```
+/.well-known/oauth-protected-resource
+/.well-known/oauth-authorization-server
+/.well-known/openid-configuration
+/oauth/authorize   /oauth/token   /oauth/revoke   /oauth/register
 ```
 
-Cetacean records a span for every MCP method it dispatches (`mcp.tools/call`, `mcp.resources/read`, and so
-on) and a nested span for every tool handler (`tool.scale_service`), tagged with the method, the tool name,
-the negotiated protocol version, and an error status when the call fails.
+## How it works
 
-A caller that is already tracing can put W3C trace context in the request, either in the `_meta` property bag
-as `traceparent`, `tracestate`, and `baggage` (the transport-agnostic convention MCP `2026-07-28` specifies)
-or in the usual HTTP headers. Cetacean's spans then become children of the caller's span, so an agent's turn
-and the Docker call it produced appear in one trace.
+Cetacean is its own OAuth 2.1 authorization server for `/mcp`, implementing the MCP `2026-07-28` authorization profile.
+A client discovers it, sends you through your configured auth provider, and exchanges the result for an access token and
+a refresh token. Access tokens are scoped to this deployment, so one cannot be replayed against another Cetacean.
 
-Tracing is off unless the endpoint is set. A malformed endpoint stops startup with an error, since the OTLP
-exporter would otherwise fall back to `localhost:4318` and export nowhere while looking configured.
+The consent screen labels how the client identified itself. **Verified via published metadata** means the client is
+named by a URL Cetacean fetched and checked. **Self-reported identity** means the client named itself; those are never
+remembered, so you approve them every time.
 
-## Security notes
+Refresh tokens and approvals are stored in `mcp-tokens.json` under [`storage.data_dir`][storage.data_dir], at mode
+`0600`—anyone who can write that file can pre-approve a client. Nothing else survives a restart, which is why a single
+replica is required: the file is node-local, and an unset signing key would leave each replica signing differently.
 
-- Run MCP behind TLS in production. Cetacean logs a warning at startup if MCP is enabled without TLS and the
-  auth mode is not `none`.
-- `CETACEAN_CORS_ORIGINS` applies to the OAuth browser redirects; set it when the consent flow crosses
-  origins. It is also the allowlist for the `/mcp` endpoint's `Origin` check: a request carrying an `Origin`
-  that is not listed (and is not `*`) is rejected with `403`, the DNS-rebinding defense the Streamable HTTP
-  transport requires. Non-browser clients send no `Origin` and are unaffected.
-- CIMD fetches are SSRF-guarded: `https` only, private, reserved, and CGNAT IP ranges blocked, DNS pinned to
-  the validated address through connect, and 5 KB / 5 s limits.
-
-## Known limitations
-
-- Refresh tokens and consent approvals survive a restart; nothing else does. They are written to
-  `mcp-tokens.json` in the data directory (see [`storage.data_dir`](configuration)) on every issue, rotation,
-  revocation, and approval, so an authorized client stays authorized. DCR registrations and authorization
-  codes are in memory: a client whose registration is lost re-registers via the discovery chain on the next
-  `401`, and a code lost mid-flow is indistinguishable from one expired at its 60-second TTL. Access-token
-  JWTs stay valid until they expire, unless `mcp.signing_key` is unset, since an auto-generated key changes on
-  every restart and invalidates them. Set it to keep access tokens valid too.
-- Multi-replica deployments are not supported. The token file is local, authorization codes live in one
-  replica's memory for their 60-second lifetime, and an unset `mcp.signing_key` leaves each replica signing
-  with a different key. A client that reconnects to a different replica catches up by re-reading resources
-  rather than replaying missed notifications.
-- Token revocation is not immediate. Per RFC 7009 the revoke endpoint always returns `200`, but a revoked
-  access-token JWT keeps validating until `exp` (default 1h). Lower `mcp.access_token_ttl` for a tighter
-  window.
-- A task's result is discarded when its retention elapses, so a client that polls `tasks/get` too late finds
-  the task gone. See [Task retention](#task-retention).
+[authorization]: authorization
+[dashboard]: dashboard
+[mcp-tools]: mcp-tools
+[mcp.access_token_ttl]: configuration#mcp.access_token_ttl
+[mcp.consent_ttl]: configuration#mcp.consent_ttl
+[mcp.enabled]: configuration#mcp.enabled
+[mcp.max_concurrent_tasks]: configuration#mcp.max_concurrent_tasks
+[mcp.oauth.auth_bypass]: configuration#mcp.oauth.auth_bypass
+[mcp.operations_level]: configuration#mcp.operations_level
+[mcp.signing_key]: configuration#mcp.signing_key
+[mcp.task_ttl]: configuration#mcp.task_ttl
+[server.cors.origins]: configuration#server.cors.origins
+[server.operations_level]: configuration#server.operations_level
+[server.public_url]: configuration#server.public_url
+[storage.data_dir]: configuration#storage.data_dir
+[tracing.endpoint]: configuration#tracing.endpoint

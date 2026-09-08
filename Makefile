@@ -26,10 +26,16 @@ LDFLAGS := -X github.com/radiergummi/cetacean/internal/version.Version=$(VERSION
            -X github.com/radiergummi/cetacean/internal/version.Commit=$(COMMIT) \
            -X github.com/radiergummi/cetacean/internal/version.Date=$(DATE)
 
-build:
+build: frontend/node_modules
 	cd frontend && npm run build
 	cd frontend && npm run build:widgets
 	go build -ldflags "$(LDFLAGS)" -o cetacean .
+
+## Install the frontend dependencies the build embeds. Not phony: the stamp is
+## the directory itself, so a second `make build` skips the install.
+frontend/node_modules: frontend/package-lock.json
+	cd frontend && npm ci
+	@touch $@
 
 ## Run all tests
 test:
