@@ -17,10 +17,20 @@
 </div>
 
 
-<div id="search-overlay" class="search-overlay" hidden transition:persist>
-  <div class="search-backdrop" aria-hidden="true"></div>
-  <div class="search-dialog" role="dialog" aria-modal="true" aria-label="Search documentation">
-    <div class="search-input-row">
+<div id="search-overlay" class="fixed inset-0 z-[100] flex justify-center pt-[15vh]" hidden transition:persist>
+  <div
+    class="fixed inset-0 animate-[search-fade-in_150ms_ease-out] bg-background opacity-60 dark:opacity-70"
+    data-backdrop
+    aria-hidden="true"
+  ></div>
+  <div
+    class="relative mx-4 flex max-h-[min(24rem,60vh)] w-full max-w-lg animate-[search-slide-down_150ms_ease-out] flex-col overflow-hidden rounded-lg border border-border bg-background shadow-[0_16px_48px_oklch(0_0_0/16%)] dark:shadow-[0_16px_48px_oklch(0_0_0/50%)]"
+    data-dialog
+    role="dialog"
+    aria-modal="true"
+    aria-label="Search documentation"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-3 py-2.5">
       <svg class="size-4 shrink-0 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
       </svg>
@@ -34,7 +44,7 @@
       />
       <kbd class="text-[0.625rem] font-medium text-muted-foreground/60 border border-border rounded px-1 py-0.5 leading-none">ESC</kbd>
     </div>
-    <div id="search-results" class="search-results"></div>
+    <div id="search-results" class="flex-1 overflow-y-auto"></div>
     <div id="search-status" class="sr-only" aria-live="polite" role="status"></div>
   </div>
 </div>
@@ -42,6 +52,13 @@
 <script is:inline>
   if (!window.__searchInitialized) {
     window.__searchInitialized = true;
+
+    const rowClass = "data-active:bg-accent";
+    const linkClass = "flex flex-col gap-0.5 px-3 py-2 text-foreground no-underline";
+    const titleClass = "text-[0.8125rem] font-medium";
+    const excerptClass =
+      "line-clamp-2 text-xs leading-normal text-muted-foreground [&_mark]:bg-transparent [&_mark]:font-semibold [&_mark]:text-(--active)";
+    const emptyClass = "px-3 py-8 text-center text-[0.8125rem] text-muted-foreground";
 
     let activeIndex = -1;
     let debounceTimer = null;
@@ -91,7 +108,7 @@
       if (e.target.closest("#search-trigger") || e.target.closest("#search-trigger-mobile")) {
         open();
       }
-      if (e.target.closest(".search-backdrop")) {
+      if (e.target.closest("[data-backdrop]")) {
         close();
       }
     });
@@ -119,7 +136,7 @@
       if (e.key === "Escape") {
         close();
       } else if (e.key === "Tab") {
-        const dialog = overlay.querySelector(".search-dialog");
+        const dialog = overlay.querySelector("[data-dialog]");
         const focusable = dialog.querySelectorAll('input, button, a[href], [tabindex]:not([tabindex="-1"])');
         if (focusable.length) {
           const first = focusable[0];
@@ -164,7 +181,7 @@
       const pagefind = await loadPagefind();
       const resultsContainer = getResults();
       if (!pagefind) {
-        resultsContainer.innerHTML = '<div class="search-empty">Search unavailable — run <code>npm run build</code> to generate the index.</div>';
+        resultsContainer.innerHTML = `<div class="${emptyClass}">Search unavailable — run <code>npm run build</code> to generate the index.</div>`;
         return;
       }
       const search = await pagefind.search(query);
@@ -173,7 +190,7 @@
       if (pendingQuery !== query) return;
 
       if (!loaded.length) {
-        resultsContainer.innerHTML = '<div class="search-empty">No results found.</div>';
+        resultsContainer.innerHTML = `<div class="${emptyClass}">No results found.</div>`;
         getStatus().textContent = "No results found.";
         activeIndex = -1;
         return;
@@ -183,18 +200,18 @@
       for (const item of loaded) {
         const row = document.createElement("div");
         row.setAttribute("data-search-item", "");
-        row.className = "search-item";
+        row.className = rowClass;
 
         const link = document.createElement("a");
         link.href = item.url;
-        link.className = "search-item-link";
+        link.className = linkClass;
 
         const title = document.createElement("span");
-        title.className = "search-item-title";
+        title.className = titleClass;
         title.textContent = item.meta.title || "";
 
         const excerpt = document.createElement("span");
-        excerpt.className = "search-item-excerpt";
+        excerpt.className = excerptClass;
         excerpt.innerHTML = item.excerpt || "";
 
         link.append(title, excerpt);

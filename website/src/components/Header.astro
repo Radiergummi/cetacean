@@ -1,6 +1,7 @@
 ---
 import ThemeToggle from "./ThemeToggle.astro";
 import Search from "./Search.astro";
+import SkipLink from "./SkipLink.astro";
 import { repoUrl } from "../lib/navigation";
 import { latestVersion as resolveLatestVersion } from "../lib/docs";
 
@@ -19,7 +20,7 @@ const navLinks = [
 const latestVersion = resolveLatestVersion();
 const releaseUrl = `${repoUrl}/releases/tag/${latestVersion}`;
 ---
-<a href="#main-content" class="skip-to-content">Skip to content</a>
+<SkipLink />
 <header class="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg" data-pagefind-ignore>
   <div class="mx-auto flex h-16 max-w-[90rem] items-center px-6 lg:px-8">
     <a href="/" class="flex items-center gap-2.5 text-foreground font-semibold mr-8">

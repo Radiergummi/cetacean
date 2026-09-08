@@ -24,10 +24,16 @@ const controls = [
 ---
 
 <template id="mermaid-controls-template">
-    <div class="mermaid-controls">
+    <div class="flex justify-end gap-1 border-t border-border p-1.5">
         {
             controls.map(({ action, label, path }) => (
-                <button type="button" data-action={action} aria-label={label} title={label}>
+                <button
+                    type="button"
+                    class="flex size-7 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+                    data-action={action}
+                    aria-label={label}
+                    title={label}
+                >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         class="size-4"

@@ -20,6 +20,8 @@
   --code-background: oklch(0.965 0 0);
   --code-foreground: oklch(0.35 0 0);
   --sidebar-background: oklch(0.98 0 0);
+  --badge-accent: oklch(0.55 0.15 25);
+  --badge-accent-border: oklch(0.55 0.15 25 / 40%);
 }
 
 .dark {
@@ -38,6 +40,8 @@
   --code-background: oklch(0.18 0 0);
   --code-foreground: oklch(0.8 0 0);
   --sidebar-background: oklch(0.155 0 0);
+  --badge-accent: oklch(0.7 0.15 25);
+  --badge-accent-border: oklch(0.7 0.15 25 / 40%);
 }
 
 @theme inline {
@@ -79,14 +83,6 @@
     outline: 2px solid var(--active);
     outline-offset: 2px;
   }
-  .skip-to-content {
-    @apply sr-only;
-  }
-  .skip-to-content:focus-visible {
-    @apply not-sr-only fixed top-2 left-2 z-[200] rounded-md px-4 py-2 text-sm font-medium;
-    background: var(--active);
-    color: var(--active-foreground);
-  }
 }
 
 /* ── Prose typography ──────────────────────────────────────────────── */
@@ -97,470 +93,298 @@
     max-width: 720px;
     font-size: 0.9375rem;
     line-height: 1.75;
-  }
-  .prose > :first-child {
-    @apply mt-0;
-  }
-  .prose h1 {
-    @apply text-2xl font-semibold tracking-tight mt-0 mb-6;
-  }
-  .prose h2 {
-    @apply text-lg font-semibold tracking-tight mt-12 mb-4;
-  }
-  .prose h3 {
-    @apply text-base font-semibold mt-8 mb-3;
-  }
-  .prose h4 {
-    @apply text-sm font-semibold mt-6 mb-2;
-  }
-  .prose p {
-    @apply my-4;
-  }
-  .prose a {
-    @apply text-link underline decoration-link/30 underline-offset-2 hover:decoration-link/60 transition-colors;
-  }
-  .prose strong {
-    @apply font-semibold;
-  }
-  .prose ul {
-    @apply my-4 ml-6 list-disc;
-  }
-  .prose ol {
-    @apply my-4 ml-6 list-decimal;
-  }
-  .prose li {
-    @apply my-1.5;
-  }
-  .prose li > ul,
-  .prose li > ol {
-    @apply my-1;
-  }
-  .prose blockquote {
-    @apply pl-4 my-6 text-muted-foreground;
-    border-left: 2px solid var(--active);
-    font-style: normal;
-  }
-  /* Callouts (GitHub-style alerts, see remarkCallouts in astro.config.ts) */
-  .prose .callout {
-    @apply my-6 rounded-lg border px-4 py-3 text-sm leading-relaxed;
-    border-color: var(--callout-border);
-    background: var(--callout-background);
-  }
-  .prose .callout-note {
-    --callout-accent: oklch(0.5 0.16 254);
-    --callout-border: oklch(0.5 0.16 254 / 25%);
-    --callout-background: oklch(0.5 0.16 254 / 5%);
-  }
-  .prose .callout-tip {
-    --callout-accent: oklch(0.5 0.13 155);
-    --callout-border: oklch(0.5 0.13 155 / 25%);
-    --callout-background: oklch(0.5 0.13 155 / 5%);
-  }
-  .prose .callout-warning {
-    --callout-accent: oklch(0.52 0.13 75);
-    --callout-border: oklch(0.52 0.13 75 / 30%);
-    --callout-background: oklch(0.52 0.13 75 / 6%);
-  }
-  .prose .callout-caution {
-    --callout-accent: oklch(0.55 0.15 25);
-    --callout-border: oklch(0.55 0.15 25 / 25%);
-    --callout-background: oklch(0.55 0.15 25 / 5%);
-  }
-  .dark .prose .callout-note {
-    --callout-accent: oklch(0.75 0.13 254);
-    --callout-border: oklch(0.75 0.13 254 / 25%);
-    --callout-background: oklch(0.75 0.13 254 / 8%);
-  }
-  .dark .prose .callout-tip {
-    --callout-accent: oklch(0.78 0.14 155);
-    --callout-border: oklch(0.78 0.14 155 / 25%);
-    --callout-background: oklch(0.78 0.14 155 / 8%);
-  }
-  .dark .prose .callout-warning {
-    --callout-accent: oklch(0.8 0.13 80);
-    --callout-border: oklch(0.8 0.13 80 / 25%);
-    --callout-background: oklch(0.8 0.13 80 / 8%);
-  }
-  .dark .prose .callout-caution {
-    --callout-accent: oklch(0.72 0.15 25);
-    --callout-border: oklch(0.72 0.15 25 / 25%);
-    --callout-background: oklch(0.72 0.15 25 / 8%);
-  }
-  .prose .callout-header {
-    @apply flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider;
-    color: var(--callout-accent);
-  }
-  .prose .callout-icon {
-    @apply size-4 shrink-0;
-  }
-  .prose .callout > * {
-    @apply my-2;
-  }
-  .prose .callout > .callout-header {
-    @apply mt-0 mb-2;
-  }
-  .prose .callout > :last-child {
-    @apply mb-0;
-  }
 
-  .prose hr {
-    @apply my-10 border-border;
-  }
-
-  /* Tables — wrapped in a scrollable container to prevent overflow */
-  .prose .table-wrapper {
-    @apply my-6 overflow-x-auto -mx-1 px-1;
-  }
-  .prose table {
-    @apply w-full text-sm;
-    border-collapse: separate;
-    border-spacing: 0;
-  }
-  .prose thead th {
-    @apply text-left font-medium text-muted-foreground px-3 py-2 border-b border-border text-xs uppercase tracking-wider whitespace-nowrap;
-  }
-  .prose tbody td {
-    @apply px-3 py-2.5 border-b border-border;
-  }
-  .prose tbody tr:last-child td {
-    @apply border-b-0;
-  }
-  /* Short cells sit level with the first line of a tall neighbour, not centred
-     against it, and a cell that is nothing but an identifier never wraps. */
-  .prose tbody td {
-    vertical-align: top;
-  }
-  .prose tbody td > code:only-child {
-    @apply whitespace-nowrap;
-  }
-  .prose tbody tr:hover td {
-    background: var(--muted);
-  }
-
-  /* ── Description lists (from two-column prose tables) ────────────── */
-
-  .prose .definition-caption {
-    @apply flex items-baseline mt-6 pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground border-b border-border;
-  }
-  .prose .definition-caption span + span::before {
-    @apply mx-2 opacity-60;
-    content: "·";
-  }
-  .prose .definition-list {
-    @apply my-0 mb-6 text-sm;
-  }
-  .prose .definition-row {
-    @apply py-3 border-b border-border;
-  }
-  .prose .definition-row:last-child {
-    @apply border-b-0;
-  }
-  .prose .definition-list dt {
-    @apply mb-1 font-medium;
-  }
-  .prose .definition-list dd {
-    @apply m-0 leading-relaxed;
-  }
-
-  /* Short values sit beside their term rather than under it, and the caption
-     lines its labels up with the columns they head. */
-  .prose .definition-caption.is-compact,
-  .prose .definition-list.is-compact .definition-row {
-    @apply grid gap-x-8;
-    grid-template-columns: fit-content(40%) minmax(0, 1fr);
-  }
-  .prose .definition-list.is-compact .definition-row {
-    @apply py-2;
-  }
-  .prose .definition-list.is-compact dt {
-    @apply mb-0;
-  }
-  .prose .definition-caption.is-compact span + span::before {
-    content: none;
-  }
-
-  @media (max-width: 40rem) {
-    .prose .definition-caption.is-compact,
-    .prose .definition-list.is-compact .definition-row {
-      @apply block;
+    > :first-child {
+      @apply mt-0;
     }
-    .prose .definition-list.is-compact dt {
-      @apply mb-1;
+
+    h1 {
+      @apply text-2xl font-semibold tracking-tight mt-0 mb-6;
     }
-    .prose .definition-caption.is-compact span + span::before {
-      @apply mx-2 opacity-60;
-      content: "·";
+    h2 {
+      @apply text-lg font-semibold tracking-tight mt-12 mb-4;
+    }
+    h3 {
+      @apply text-base font-semibold mt-8 mb-3;
+    }
+    h4 {
+      @apply text-sm font-semibold mt-6 mb-2;
+    }
+    p {
+      @apply my-4;
+    }
+    a {
+      @apply text-link underline decoration-link/30 underline-offset-2 hover:decoration-link/60 transition-colors;
+    }
+    strong {
+      @apply font-semibold;
+    }
+    ul {
+      @apply my-4 ml-6 list-disc;
+    }
+    ol {
+      @apply my-4 ml-6 list-decimal;
+    }
+    li {
+      @apply my-1.5;
+
+      > ul,
+      > ol {
+        @apply my-1;
+      }
+      /* Tighten nested list spacing */
+      p {
+        @apply my-1;
+      }
+    }
+    blockquote {
+      @apply pl-4 my-6 text-muted-foreground;
+      border-left: 2px solid var(--active);
+      font-style: normal;
+    }
+    hr {
+      @apply my-10 border-border;
+    }
+    img {
+      @apply rounded-lg my-6;
+    }
+
+    /* Inline code */
+    code:not(pre code) {
+      @apply rounded-md px-1.5 py-0.5 text-[0.8125rem] font-mono font-medium;
+      background: var(--code-background);
+      color: var(--code-foreground);
+    }
+
+    /* Code blocks */
+    pre {
+      @apply rounded-lg my-6 p-4 overflow-x-auto text-[0.8125rem] leading-relaxed border border-border;
+      background-color: var(--code-background) !important;
+      color: var(--code-foreground);
+
+      .dark & {
+        --shiki-foreground: var(--shiki-dark) !important;
+        --shiki-background: var(--code-background) !important;
+      }
+      .dark & code span {
+        color: var(--shiki-dark) !important;
+      }
+    }
+
+    /* Callouts (GitHub-style alerts, see remarkCallouts in astro.config.ts) */
+    .callout {
+      @apply my-6 rounded-lg border px-4 py-3 text-sm leading-relaxed;
+      border-color: var(--callout-border);
+      background: var(--callout-background);
+
+      > * {
+        @apply my-2;
+      }
+      > .callout-header {
+        @apply mt-0 mb-2;
+      }
+      > :last-child {
+        @apply mb-0;
+      }
+    }
+    .callout-note {
+      --callout-accent: oklch(0.5 0.16 254);
+      --callout-border: oklch(0.5 0.16 254 / 25%);
+      --callout-background: oklch(0.5 0.16 254 / 5%);
+
+      .dark & {
+        --callout-accent: oklch(0.75 0.13 254);
+        --callout-border: oklch(0.75 0.13 254 / 25%);
+        --callout-background: oklch(0.75 0.13 254 / 8%);
+      }
+    }
+    .callout-tip {
+      --callout-accent: oklch(0.5 0.13 155);
+      --callout-border: oklch(0.5 0.13 155 / 25%);
+      --callout-background: oklch(0.5 0.13 155 / 5%);
+
+      .dark & {
+        --callout-accent: oklch(0.78 0.14 155);
+        --callout-border: oklch(0.78 0.14 155 / 25%);
+        --callout-background: oklch(0.78 0.14 155 / 8%);
+      }
+    }
+    .callout-warning {
+      --callout-accent: oklch(0.52 0.13 75);
+      --callout-border: oklch(0.52 0.13 75 / 30%);
+      --callout-background: oklch(0.52 0.13 75 / 6%);
+
+      .dark & {
+        --callout-accent: oklch(0.8 0.13 80);
+        --callout-border: oklch(0.8 0.13 80 / 25%);
+        --callout-background: oklch(0.8 0.13 80 / 8%);
+      }
+    }
+    .callout-caution {
+      --callout-accent: oklch(0.55 0.15 25);
+      --callout-border: oklch(0.55 0.15 25 / 25%);
+      --callout-background: oklch(0.55 0.15 25 / 5%);
+
+      .dark & {
+        --callout-accent: oklch(0.72 0.15 25);
+        --callout-border: oklch(0.72 0.15 25 / 25%);
+        --callout-background: oklch(0.72 0.15 25 / 8%);
+      }
+    }
+    .callout-header {
+      @apply flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider;
+      color: var(--callout-accent);
+    }
+    .callout-icon {
+      @apply size-4 shrink-0;
+    }
+
+    table {
+      @apply w-full text-sm;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    thead th {
+      @apply text-left font-medium text-muted-foreground px-3 py-2 border-b border-border text-xs uppercase tracking-wider whitespace-nowrap;
+    }
+    /* Short cells sit level with the first line of a tall neighbour, not centred
+       against it, and a cell that is nothing but an identifier never wraps. */
+    tbody td {
+      @apply px-3 py-2.5 border-b border-border;
+      vertical-align: top;
+
+      > code:only-child {
+        @apply whitespace-nowrap;
+      }
+    }
+    tbody tr:last-child td {
+      @apply border-b-0;
+    }
+    tbody tr:hover td {
+      background: var(--muted);
+    }
+
+    /* ── Description lists (from two-column prose tables) ────────────── */
+
+    .definition-caption {
+      @apply flex items-baseline mt-6 pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground border-b border-border;
+
+      span + span::before {
+        @apply mx-2 opacity-60;
+        content: "·";
+      }
+    }
+    .definition-list {
+      @apply my-0 mb-6 text-sm;
+
+      dt {
+        @apply mb-1 font-medium;
+      }
+      dd {
+        @apply m-0 leading-relaxed;
+      }
+    }
+    .definition-row {
+      @apply py-3 border-b border-border;
+
+      &:last-child {
+        @apply border-b-0;
+      }
+    }
+
+    /* Short values sit beside their term rather than under it, and the caption
+       lines its labels up with the columns they head. */
+    .definition-caption.is-compact,
+    .definition-list.is-compact .definition-row {
+      @apply grid gap-x-8;
+      grid-template-columns: fit-content(40%) minmax(0, 1fr);
+    }
+    .definition-caption.is-compact {
+      span + span::before {
+        content: none;
+      }
+    }
+    .definition-list.is-compact {
+      .definition-row {
+        @apply py-2;
+      }
+      dt {
+        @apply mb-0;
+      }
+    }
+
+    @media (max-width: 40rem) {
+      .definition-caption.is-compact,
+      .definition-list.is-compact .definition-row {
+        @apply block;
+      }
+      .definition-caption.is-compact span + span::before {
+        @apply mx-2 opacity-60;
+        content: "·";
+      }
+      .definition-list.is-compact dt {
+        @apply mb-1;
+      }
+    }
+
+    /* ── Cards (from tables marked <!-- cards -->) ───────────────────── */
+
+    .card-list {
+      @apply my-6 flex flex-col gap-2;
+    }
+    .card {
+      @apply py-3.5 px-4 text-sm border border-border rounded-lg;
+
+      &:target {
+        border-color: var(--active);
+        box-shadow: 0 0 0 1px var(--active);
+      }
+    }
+    .card-title {
+      @apply mb-1.5 text-[0.9375rem] font-semibold;
+
+      code {
+        @apply rounded-none px-0 py-0 text-[0.9375rem] font-semibold;
+        background: none;
+        color: var(--foreground);
+      }
+    }
+    .card-description {
+      @apply leading-relaxed;
+    }
+    .card-facts {
+      @apply mt-3 grid gap-x-3 gap-y-1 items-baseline text-[0.8rem] text-muted-foreground;
+      grid-template-columns: fit-content(8rem) minmax(0, 1fr);
+      margin-inline: -1rem;
+      margin-bottom: -0.875rem;
+      padding: 0.5rem 1rem;
+      border-top: 1px solid var(--border);
+      border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
+      background: var(--muted);
+
+      code {
+        @apply rounded-none px-0 py-0 text-[0.8rem];
+        background: none;
+        color: var(--code-foreground);
+      }
+    }
+    .card-label {
+      @apply font-medium;
     }
   }
-
-  /* ── Cards (from tables marked <!-- cards -->) ───────────────────── */
-
-  .prose .card-list {
-    @apply my-6 flex flex-col gap-2;
-  }
-  .prose .card {
-    @apply py-3.5 px-4 text-sm border border-border rounded-lg;
-  }
-  .prose .card:target {
-    border-color: var(--active);
-    box-shadow: 0 0 0 1px var(--active);
-  }
-  .prose .card-title {
-    @apply mb-1.5 text-[0.9375rem] font-semibold;
-  }
-  .prose .card-title code {
-    @apply rounded-none px-0 py-0 text-[0.9375rem] font-semibold;
-    background: none;
-    color: var(--foreground);
-  }
-  .prose .card-description {
-    @apply leading-relaxed;
-  }
-  .prose .card-facts {
-    @apply mt-3 grid gap-x-3 gap-y-1 items-baseline text-[0.8rem] text-muted-foreground;
-    grid-template-columns: fit-content(8rem) minmax(0, 1fr);
-    margin-inline: -1rem;
-    margin-bottom: -0.875rem;
-    padding: 0.5rem 1rem;
-    border-top: 1px solid var(--border);
-    border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
-    background: var(--muted);
-  }
-  .prose .card-label {
-    @apply font-medium;
-  }
-  .prose .card-facts code {
-    @apply rounded-none px-0 py-0 text-[0.8rem];
-    background: none;
-    color: var(--code-foreground);
-  }
-
-  /* ── Schema entries (borderless) ─────────────────────────────────── */
-
-  .prose .schema-entry {
-    @apply my-6;
-  }
-
-  /* ── Config parameter cards ──────────────────────────────────────── */
-
-  .prose .config-param {
-    @apply py-3.5 px-4 border border-border rounded-lg;
-  }
-  .prose .config-param + .config-param {
-    @apply mt-2;
-  }
-  .prose .config-param.deprecated {
-    @apply opacity-60;
-  }
-  .prose .config-param:target {
-    border-color: var(--active);
-    box-shadow: 0 0 0 1px var(--active);
-  }
-  .prose .config-param-heading {
-    @apply flex items-baseline gap-2 mb-1.5;
-  }
-  .prose .config-param-heading > code {
-    @apply text-[0.9375rem] font-semibold rounded-none px-0 py-0;
-    background: none;
-    color: var(--foreground);
-  }
-  .prose .config-param-prefix {
-    @apply font-normal;
-    color: var(--muted-foreground);
-  }
-  .prose .config-param-anchor {
-    @apply ml-auto text-sm leading-none no-underline opacity-0 transition-opacity;
-    color: var(--muted-foreground);
-  }
-  .prose .config-param:hover .config-param-anchor,
-  .prose .config-param-anchor:focus-visible {
-    @apply opacity-100;
-  }
-  .prose .config-param-badge {
-    @apply text-[0.625rem] font-semibold uppercase tracking-wider leading-tight rounded px-1.5 py-0.5;
-  }
-  .prose .config-param-badge.required {
-    color: oklch(0.55 0.15 25);
-    border: 1px solid oklch(0.55 0.15 25 / 40%);
-  }
-  .dark .prose .config-param-badge.required {
-    color: oklch(0.7 0.15 25);
-    border: 1px solid oklch(0.7 0.15 25 / 40%);
-  }
-  .prose .config-param-badge.deprecated {
-    @apply text-muted-foreground;
-    border: 1px solid var(--border);
-  }
-  .prose .config-param-description {
-    @apply text-sm leading-relaxed mb-3;
-  }
-  .prose .config-param-description > :first-child {
-    @apply mt-0;
-  }
-  .prose .config-param-description > :last-child {
-    @apply mb-0;
-  }
-  .prose .config-param-footer {
-    @apply flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[0.8rem] text-muted-foreground;
-    margin: 0 -1rem -0.875rem;
-    padding: 0.5rem 1rem;
-    border-top: 1px solid var(--border);
-    border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
-    background: var(--muted);
-  }
-  .prose .config-param-fact {
-    @apply inline-flex items-baseline gap-1.5;
-  }
-  .prose .config-param-footer code {
-    @apply text-[0.8rem] rounded-none px-0 py-0;
-    background: none;
-    color: var(--code-foreground);
-  }
-  .prose .config-param-meta {
-    @apply text-[0.8rem] text-muted-foreground;
-    display: grid;
-    grid-template-columns: 4.5rem 1fr;
-    gap: 0.15rem 0.75rem;
-  }
-  .prose .config-param-label {
-    @apply font-medium;
-  }
-  .prose .config-param-meta code {
-    @apply text-[0.8rem] rounded-none px-0 py-0;
-    background: none;
-    color: var(--muted-foreground);
-  }
-
-  /* Inline code */
-  .prose code:not(pre code) {
-    @apply rounded-md px-1.5 py-0.5 text-[0.8125rem] font-mono font-medium;
-    background: var(--code-background);
-    color: var(--code-foreground);
-  }
-
-  /* Code blocks */
-  .prose pre {
-    @apply rounded-lg my-6 p-4 overflow-x-auto text-[0.8125rem] leading-relaxed border border-border;
-    background-color: var(--code-background) !important;
-    color: var(--code-foreground);
-  }
-  .dark .prose pre {
-    --shiki-foreground: var(--shiki-dark) !important;
-    --shiki-background: var(--code-background) !important;
-  }
-  .dark .prose pre code span {
-    color: var(--shiki-dark) !important;
-  }
-
-  .prose img {
-    @apply rounded-lg my-6;
-  }
-
-  /* Tighten nested list spacing */
-  .prose li p {
-    @apply my-1;
-  }
-}
-
-/* ── Mobile sidebar ──────────────────────────────────────────────── */
-
-.mobile-sidebar-backdrop {
-  background: oklch(0 0 0 / 0%);
-  backdrop-filter: blur(0px);
-  transition:
-    background 0.2s ease,
-    backdrop-filter 0.2s ease;
-}
-.mobile-sidebar-overlay.open {
-  pointer-events: auto;
-}
-.mobile-sidebar-overlay.open .mobile-sidebar-backdrop {
-  background: oklch(0 0 0 / 40%);
-  backdrop-filter: blur(4px);
-}
-
-.mobile-sidebar-panel {
-  transform: translateX(100%);
-  transition: transform 0.25s ease;
-}
-.mobile-sidebar-overlay.open .mobile-sidebar-panel {
-  transform: translateX(0);
-}
-
-/* ── Edit link ────────────────────────────────────────────────────── */
-
-.edit-link {
-  margin-top: 3rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.375rem;
-  font-size: 0.8125rem;
-  color: var(--muted-foreground);
-}
-.edit-link a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  color: inherit;
-  text-decoration: none;
-  transition: color 0.15s;
-}
-.edit-link a:hover {
-  color: var(--foreground);
-}
-
-/* ── Prev/next navigation ─────────────────────────────────────────── */
-
-.prev-next {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border);
-}
-
-.prev-next-link {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  text-decoration: none;
-  color: var(--foreground);
-  transition: color 0.15s;
-}
-.prev-next-link:hover {
-  color: var(--active);
-}
-
-.prev-next-right {
-  text-align: right;
-  margin-left: auto;
-}
-
-.prev-next-label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--muted-foreground);
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-}
-
-.prev-next-title {
-  font-size: 0.875rem;
-  font-weight: 500;
 }
 
 /* ── Code tabs ────────────────────────────────────────────────────── */
 
 .prose .code-tabs {
   @apply my-6;
-}
-.prose .code-tabs pre {
-  @apply my-0 rounded-none border-t-0;
-}
-.prose .code-tabs .code-tab-panel.active pre {
-  @apply rounded-b-lg;
+
+  pre {
+    @apply my-0 rounded-none border-t-0;
+  }
+  .code-tab-panel.active pre {
+    @apply rounded-b-lg;
+  }
 }
 
 .code-tabs-bar {
@@ -586,262 +410,29 @@
   transition:
     color 0.15s,
     border-color 0.15s;
-}
-.code-tabs-button:hover {
-  color: var(--foreground);
-}
-.code-tabs-button.active {
-  color: var(--foreground);
-  border-bottom-color: var(--active);
-}
 
-.code-tabs-copy {
-  margin-left: auto;
-  padding: 0.25rem 0.625rem;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  letter-spacing: 0.025em;
-  text-transform: uppercase;
-  color: var(--muted-foreground);
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: color 0.15s;
-}
-.code-tabs-copy:hover {
-  color: var(--foreground);
+  &:hover {
+    color: var(--foreground);
+  }
+  &.active {
+    color: var(--foreground);
+    border-bottom-color: var(--active);
+  }
 }
 
 .code-tab-panel {
   display: none;
-}
-.code-tab-panel.active {
-  display: block;
+
+  &.active {
+    display: block;
+  }
 }
 
-/* ── Code copy button ──────────────────────────────────────────────── */
-
-.code-block-wrapper {
-  position: relative;
-}
-
-.copy-button {
-  position: absolute;
-  right: 0.375rem;
-  top: 0.375rem;
-  z-index: 1;
-  padding: 0.25rem 0.625rem;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  letter-spacing: 0.025em;
-  text-transform: uppercase;
-  color: var(--muted-foreground);
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: color 0.15s;
-}
-.copy-button:hover {
-  color: var(--foreground);
-}
-
-/* ── Copy page dropdown ──────────────────────────────────────────── */
-
-.copy-page-dropdown {
-  position: relative;
-  display: inline-flex;
-}
-
-.copy-page-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--foreground);
-  background: var(--background);
-  border: 1px solid var(--border);
-  border-radius: var(--radius) 0 0 var(--radius);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.copy-page-action:hover {
-  background: var(--accent);
-}
-
-.copy-page-toggle {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.375rem 0.5rem;
-  color: var(--muted-foreground);
-  background: var(--background);
-  border: 1px solid var(--border);
-  border-left: 0;
-  border-radius: 0 var(--radius) var(--radius) 0;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.copy-page-toggle:hover {
-  background: var(--accent);
-}
-.copy-page-toggle svg {
-  transition: transform 0.15s;
-}
-
-.copy-page-menu {
-  position: absolute;
-  top: calc(100% + 0.375rem);
-  right: 0;
-  width: 17rem;
-  background: var(--background);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 4px 16px oklch(0 0 0 / 12%);
-  z-index: 50;
-  padding: 0.25rem;
-}
-.dark .copy-page-menu {
-  box-shadow: 0 4px 16px oklch(0 0 0 / 40%);
-}
-
-.copy-page-menu-separator {
-  height: 1px;
-  margin: 0.25rem 0.375rem;
-  background: var(--border);
-}
-
-.copy-page-menu-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.625rem;
-  width: 100%;
-  padding: 0.5rem 0.625rem;
-  font-size: 0.8125rem;
-  color: var(--foreground);
-  background: none;
-  border: none;
-  border-radius: calc(var(--radius) * 0.6);
-  cursor: pointer;
-  text-decoration: none;
-  text-align: left;
-  transition: background 0.15s;
-}
-.copy-page-menu-item:hover {
-  background: var(--accent);
-}
-.copy-page-menu-item svg {
-  flex-shrink: 0;
-  margin-top: 0.125rem;
-  color: var(--muted-foreground);
-}
-.copy-page-menu-item span {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.4;
-}
-.copy-page-menu-item strong {
-  font-weight: 600;
-}
-.copy-page-menu-item small {
-  color: var(--muted-foreground);
-  font-size: 0.75rem;
-}
-
-/* ── Search palette ──────────────────────────────────────────────── */
-
-.search-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  justify-content: center;
-  padding-top: 15vh;
-}
-
-.search-backdrop {
-  position: fixed;
-  inset: 0;
-  background: var(--background);
-  opacity: 0.6;
-  animation: search-fade-in 150ms ease-out;
-}
-.dark .search-backdrop {
-  opacity: 0.7;
-}
-
-.search-dialog {
-  position: relative;
-  width: 100%;
-  max-width: 32rem;
-  margin-inline: 1rem;
-  max-height: min(24rem, 60vh);
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--background);
-  box-shadow: 0 16px 48px oklch(0 0 0 / 16%);
-  animation: search-slide-down 150ms ease-out;
-  overflow: hidden;
-}
-.dark .search-dialog {
-  box-shadow: 0 16px 48px oklch(0 0 0 / 50%);
-}
-
-.search-input-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.search-results {
-  overflow-y: auto;
-  flex: 1;
-}
-
-.search-empty {
-  padding: 2rem 0.75rem;
-  text-align: center;
-  font-size: 0.8125rem;
-  color: var(--muted-foreground);
-}
-
-.search-item[data-active] {
-  background: var(--accent);
-}
-
-.search-item-link {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  padding: 0.5rem 0.75rem;
-  text-decoration: none;
-  color: var(--foreground);
-}
-
-.search-item-title {
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-
-.search-item-excerpt {
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-  line-height: 1.5;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.search-item-excerpt mark {
-  background: none;
-  color: var(--active);
-  font-weight: 600;
-}
-
+/**
+ * Keyframes for the search palette's entrance. The animation is declared on the
+ * elements in `components/Search.astro`; only the frames have to be global,
+ * because CSS has no scope for a keyframe name.
+ */
 @keyframes search-fade-in {
   from {
     opacity: 0;
@@ -879,12 +470,42 @@
   border-radius: var(--radius-md);
   background: var(--sidebar-background);
   overflow: hidden;
+
+  /* Diagrams run wider than the measure prose is set at, so they reclaim the gutter. */
+  @media (min-width: 1024px) {
+    margin-inline: -3rem;
+  }
+
+  /* Only ever added by the enhancement script, so it never traps a JS-less reader. */
+  &[data-interactive] .mermaid-viewport {
+    overflow: hidden;
+    cursor: grab;
+  }
+
+  &:fullscreen {
+    display: flex;
+    flex-direction: column;
+    background: var(--background);
+
+    .mermaid-viewport {
+      flex: 1;
+    }
+    .mermaid-canvas {
+      width: 100%;
+    }
+  }
 }
 
 .prose .mermaid-viewport {
   padding: 1.5rem;
   overflow: auto;
   touch-action: pan-x pan-y;
+
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
 }
 
 /**
@@ -904,68 +525,16 @@
   margin: 0 auto;
 }
 
-.prose .mermaid-viewport svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-/* Diagrams run wider than the measure prose is set at, so they reclaim the gutter. */
-@media (min-width: 1024px) {
-  .prose .mermaid-figure {
-    margin-inline: -3rem;
-  }
-}
-
-.prose .mermaid-dark,
-.dark .prose .mermaid-light {
+/* One theme's diagram is shown, the other is left in the page for the toggle. */
+.prose .mermaid-dark {
   display: none;
 }
 
-.dark .prose .mermaid-dark {
-  display: block;
-}
-
-/* Only ever added by the enhancement script, so it never traps a JS-less reader. */
-.prose .mermaid-figure[data-interactive] .mermaid-viewport {
-  overflow: hidden;
-  cursor: grab;
-}
-
-.prose .mermaid-controls {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.25rem;
-  padding: 0.375rem;
-  border-top: 1px solid var(--border);
-}
-
-.prose .mermaid-controls button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--radius-sm);
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-
-.prose .mermaid-controls button:hover {
-  background: var(--accent);
-  color: var(--foreground);
-}
-
-.prose .mermaid-figure:fullscreen {
-  display: flex;
-  flex-direction: column;
-  background: var(--background);
-}
-
-.prose .mermaid-figure:fullscreen .mermaid-viewport {
-  flex: 1;
-}
-
-.prose .mermaid-figure:fullscreen .mermaid-canvas {
-  width: 100%;
+.dark .prose {
+  .mermaid-light {
+    display: none;
+  }
+  .mermaid-dark {
+    display: block;
+  }
 }

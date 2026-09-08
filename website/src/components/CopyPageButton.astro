@@ -10,51 +10,72 @@ const markdownAbsoluteUrl = new URL(markdownUrl, Astro.site).href;
 const prompt = `Read ${markdownAbsoluteUrl} so I can ask questions about it.`;
 const chatGptUrl = `https://chatgpt.com/?hints=search&q=${encodeURIComponent(prompt)}`;
 const claudeUrl = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
+
+const menuItemClass =
+  "flex w-full cursor-pointer items-start gap-2.5 rounded-sm px-2.5 py-2 text-left text-[0.8125rem] text-foreground no-underline transition-colors hover:bg-accent";
+const menuItemIconClass = "mt-0.5 shrink-0 text-muted-foreground";
+const menuItemTextClass = "flex flex-col leading-[1.4]";
+const menuItemTitleClass = "font-semibold";
+const menuItemHintClass = "text-[0.75rem] text-muted-foreground";
 ---
-<div class="copy-page-dropdown" data-markdown-url={markdownUrl}>
-  <button type="button" class="copy-page-action" data-action="copy">
+<div class="relative inline-flex" data-copy-page data-markdown-url={markdownUrl}>
+  <button
+    type="button"
+    class="inline-flex cursor-pointer items-center gap-1.5 rounded-l-lg border border-border bg-background px-3 py-1.5 text-[0.8125rem] font-medium text-foreground transition-colors hover:bg-accent"
+    data-action="copy"
+  >
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-    <span class="copy-page-label">Copy page</span>
+    <span data-label>Copy page</span>
   </button>
-  <button type="button" class="copy-page-toggle" aria-label="More options" aria-expanded="false">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+  <button
+    type="button"
+    class="group inline-flex cursor-pointer items-center rounded-r-lg border border-l-0 border-border bg-background px-2 py-1.5 text-muted-foreground transition-colors hover:bg-accent"
+    data-toggle
+    aria-label="More options"
+    aria-expanded="false"
+  >
+    <svg class="transition-transform group-aria-expanded:rotate-180" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
   </button>
-  <div class="copy-page-menu" hidden>
-    <button type="button" class="copy-page-menu-item" data-action="copy">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-      <span>
-        <strong>Copy page</strong>
-        <small>Copy page as Markdown for LLMs</small>
+  <div
+    class="absolute top-[calc(100%+0.375rem)] right-0 z-50 w-68 rounded-lg border border-border bg-background p-1 shadow-[0_4px_16px_oklch(0_0_0/12%)] dark:shadow-[0_4px_16px_oklch(0_0_0/40%)]"
+    data-menu
+    hidden
+  >
+    <button type="button" class={menuItemClass} data-action="copy">
+      <svg class={menuItemIconClass} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span class={menuItemTextClass}>
+        <strong class={menuItemTitleClass}>Copy page</strong>
+        <small class={menuItemHintClass}>Copy page as Markdown for LLMs</small>
       </span>
     </button>
-    <a href={markdownUrl} class="copy-page-menu-item" target="_blank" rel="noopener" aria-label="View as Markdown (opens in new tab)">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 17h6"/><path d="M9 13h6"/></svg>
-      <span>
-        <strong>View as Markdown</strong>
-        <small>View this page as plain text</small>
+    <a href={markdownUrl} class={menuItemClass} target="_blank" rel="noopener" aria-label="View as Markdown (opens in new tab)">
+      <svg class={menuItemIconClass} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 17h6"/><path d="M9 13h6"/></svg>
+      <span class={menuItemTextClass}>
+        <strong class={menuItemTitleClass}>View as Markdown</strong>
+        <small class={menuItemHintClass}>View this page as plain text</small>
       </span>
     </a>
-    <div class="copy-page-menu-separator" role="separator"></div>
-    <a href={chatGptUrl} class="copy-page-menu-item" target="_blank" rel="noopener" aria-label="Open in ChatGPT (opens in new tab)">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>
-      <span>
-        <strong>Open in ChatGPT</strong>
-        <small>Ask ChatGPT about this page</small>
+    <div class="mx-1.5 my-1 h-px bg-border" role="separator"></div>
+    <a href={chatGptUrl} class={menuItemClass} target="_blank" rel="noopener" aria-label="Open in ChatGPT (opens in new tab)">
+      <svg class={menuItemIconClass} width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>
+      <span class={menuItemTextClass}>
+        <strong class={menuItemTitleClass}>Open in ChatGPT</strong>
+        <small class={menuItemHintClass}>Ask ChatGPT about this page</small>
       </span>
     </a>
-    <a href={claudeUrl} class="copy-page-menu-item" target="_blank" rel="noopener" aria-label="Open in Claude (opens in new tab)">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z"/></svg>
-      <span>
-        <strong>Open in Claude</strong>
-        <small>Ask Claude about this page</small>
+    <a href={claudeUrl} class={menuItemClass} target="_blank" rel="noopener" aria-label="Open in Claude (opens in new tab)">
+      <svg class={menuItemIconClass} width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z"/></svg>
+      <span class={menuItemTextClass}>
+        <strong class={menuItemTitleClass}>Open in Claude</strong>
+        <small class={menuItemHintClass}>Ask Claude about this page</small>
       </span>
     </a>
-    <div class="copy-page-menu-separator" role="separator"></div>
-    <a href={editUrl} class="copy-page-menu-item" target="_blank" rel="noopener noreferrer" aria-label="Edit this page on GitHub (opens in new tab)">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Z"/><path d="M16.862 4.487 19.5 7.125"/></svg>
-      <span>
-        <strong>Edit this page</strong>
-        <small>Suggest a change on GitHub</small>
+    <div class="mx-1.5 my-1 h-px bg-border" role="separator"></div>
+    <a href={editUrl} class={menuItemClass} target="_blank" rel="noopener noreferrer" aria-label="Edit this page on GitHub (opens in new tab)">
+      <svg class={menuItemIconClass} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Z"/><path d="M16.862 4.487 19.5 7.125"/></svg>
+      <span class={menuItemTextClass}>
+        <strong class={menuItemTitleClass}>Edit this page</strong>
+        <small class={menuItemHintClass}>Suggest a change on GitHub</small>
       </span>
     </a>
   </div>
@@ -65,29 +86,25 @@ const claudeUrl = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
     window.__copyPageInitialized = true;
 
     const closeMenu = (dropdown) => {
-      const menu = dropdown.querySelector(".copy-page-menu");
+      const menu = dropdown.querySelector("[data-menu]");
       if (!menu || menu.hidden) {
         return;
       }
 
       menu.hidden = true;
 
-      const toggle = dropdown.querySelector(".copy-page-toggle");
-      toggle.querySelector("svg").style.transform = "";
-      toggle.setAttribute("aria-expanded", "false");
+      dropdown.querySelector("[data-toggle]").setAttribute("aria-expanded", "false");
     };
 
     const openMenu = (dropdown) => {
-      const menu = dropdown.querySelector(".copy-page-menu");
+      const menu = dropdown.querySelector("[data-menu]");
       menu.hidden = false;
 
-      const toggle = dropdown.querySelector(".copy-page-toggle");
-      toggle.querySelector("svg").style.transform = "rotate(180deg)";
-      toggle.setAttribute("aria-expanded", "true");
+      dropdown.querySelector("[data-toggle]").setAttribute("aria-expanded", "true");
     };
 
     const copyMarkdown = (dropdown) => {
-      const label = dropdown.querySelector(".copy-page-label");
+      const label = dropdown.querySelector("[data-label]");
 
       fetch(dropdown.dataset.markdownUrl)
         .then((response) => response.text())
@@ -101,9 +118,9 @@ const claudeUrl = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
     };
 
     document.addEventListener("click", (e) => {
-      const dropdown = e.target.closest(".copy-page-dropdown");
+      const dropdown = e.target.closest("[data-copy-page]");
 
-      document.querySelectorAll(".copy-page-dropdown").forEach((other) => {
+      document.querySelectorAll("[data-copy-page]").forEach((other) => {
         if (other !== dropdown) {
           closeMenu(other);
         }
@@ -113,8 +130,8 @@ const claudeUrl = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
         return;
       }
 
-      if (e.target.closest(".copy-page-toggle")) {
-        if (dropdown.querySelector(".copy-page-menu").hidden) {
+      if (e.target.closest("[data-toggle]")) {
+        if (dropdown.querySelector("[data-menu]").hidden) {
           openMenu(dropdown);
         } else {
           closeMenu(dropdown);
@@ -135,10 +152,10 @@ const claudeUrl = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
         return;
       }
 
-      document.querySelectorAll(".copy-page-dropdown").forEach((dropdown) => {
-        if (!dropdown.querySelector(".copy-page-menu").hidden) {
+      document.querySelectorAll("[data-copy-page]").forEach((dropdown) => {
+        if (!dropdown.querySelector("[data-menu]").hidden) {
           closeMenu(dropdown);
-          dropdown.querySelector(".copy-page-toggle").focus();
+          dropdown.querySelector("[data-toggle]").focus();
         }
       });
     });

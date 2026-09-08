@@ -1,0 +1,25 @@
+---
+/**
+ * The small uppercase marker that sits beside a reference entry's name. The
+ * tones are named for their weight rather than for any one caller's meaning:
+ * `accent` marks a required setting and a schema property's container alike.
+ */
+interface Props {
+  tone: "accent" | "muted";
+}
+
+const { tone } = Astro.props;
+
+const tones = {
+  accent: "text-(--badge-accent) border-(--badge-accent-border)",
+  muted: "text-muted-foreground border-border",
+};
+---
+<span
+  class:list={[
+    "rounded border px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-tight tracking-wider",
+    tones[tone],
+  ]}
+>
+  <slot />
+</span>

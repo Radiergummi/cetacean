@@ -7,19 +7,23 @@ interface Props {
 
 const { slug } = Astro.props;
 const { prev, next } = getPrevNext(slug);
+
+const linkClass = "flex flex-col gap-1 text-foreground no-underline transition-colors hover:text-(--active)";
+const labelClass = "text-[0.75rem] font-medium uppercase tracking-wide text-muted-foreground";
+const titleClass = "text-[0.875rem] font-medium";
 ---
 {(prev || next) && (
-  <nav class="prev-next" aria-label="Page navigation">
+  <nav class="mt-4 flex justify-between gap-4 border-t border-border pt-6" aria-label="Page navigation">
     {prev ? (
-      <a href={`/${prev.slug}`} class="prev-next-link">
-        <span class="prev-next-label">Previous</span>
-        <span class="prev-next-title">&larr; {prev.title}</span>
+      <a href={`/${prev.slug}`} class={linkClass}>
+        <span class={labelClass}>Previous</span>
+        <span class={titleClass}>&larr; {prev.title}</span>
       </a>
     ) : <span />}
     {next && (
-      <a href={`/${next.slug}`} class="prev-next-link prev-next-right">
-        <span class="prev-next-label">Next</span>
-        <span class="prev-next-title">{next.title} &rarr;</span>
+      <a href={`/${next.slug}`} class:list={[linkClass, "ml-auto text-right"]}>
+        <span class={labelClass}>Next</span>
+        <span class={titleClass}>{next.title} &rarr;</span>
       </a>
     )}
   </nav>

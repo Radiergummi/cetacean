@@ -71,12 +71,16 @@ const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
                         }
                     </div>
                     <slot />
-                    <div class="edit-link not-prose" data-pagefind-ignore>
+                    <div
+                        class="not-prose mt-12 flex items-center justify-between gap-1.5 text-[0.8125rem] text-muted-foreground"
+                        data-pagefind-ignore
+                    >
                         <a
                             href={editUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             aria-label="Edit this page on GitHub (opens in new tab)"
+                            class="inline-flex items-center gap-1.5 text-inherit no-underline transition-colors hover:text-foreground"
                         >
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
@@ -120,6 +124,15 @@ const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
         <MermaidViewport />
         <div id="copy-status" class="sr-only" aria-live="polite" role="status"></div>
         <script is:inline>
+            // These wrappers and buttons exist only once this script runs, so
+            // their styling belongs here rather than in the global stylesheet.
+            const tableWrapperClass = "my-6 overflow-x-auto -mx-1 px-1";
+            const codeBlockWrapperClass = "relative";
+            const copyClass =
+                "cursor-pointer px-2.5 py-1 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground";
+            const copyButtonClass = `absolute right-1.5 top-1.5 z-[1] ${copyClass}`;
+            const codeTabsCopyClass = `ml-auto ${copyClass}`;
+
             function copyWithFeedback(button, text) {
                 navigator.clipboard.writeText(text).then(() => {
                     button.textContent = "Copied!";
@@ -146,7 +159,7 @@ const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
                     .forEach((table) => {
                         table.setAttribute("data-initialized", "");
                         const wrapper = document.createElement("div");
-                        wrapper.className = "table-wrapper";
+                        wrapper.className = tableWrapperClass;
                         table.parentNode.insertBefore(wrapper, table);
                         wrapper.appendChild(table);
                     });
@@ -157,12 +170,12 @@ const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
                         pre.setAttribute("data-initialized", "");
                         if (pre.closest(".code-tabs")) return;
                         const wrapper = document.createElement("div");
-                        wrapper.className = "code-block-wrapper";
+                        wrapper.className = codeBlockWrapperClass;
                         pre.parentNode.insertBefore(wrapper, pre);
                         wrapper.appendChild(pre);
 
                         const button = document.createElement("button");
-                        button.className = "copy-button";
+                        button.className = copyButtonClass;
                         button.textContent = "Copy";
                         button.addEventListener("click", () => {
                             const code = pre.querySelector("code");
@@ -188,7 +201,7 @@ const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
                             bar.querySelectorAll(".code-tabs-button");
 
                         const copyButton = document.createElement("button");
-                        copyButton.className = "code-tabs-copy";
+                        copyButton.className = codeTabsCopyClass;
                         copyButton.textContent = "Copy";
                         copyButton.addEventListener("click", () => {
                             const activeCode = tabs.querySelector(
