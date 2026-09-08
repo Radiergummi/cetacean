@@ -246,23 +246,25 @@ function remarkStripTitle() {
   };
 }
 
+/**
+ * Shared by `.md` and `.mdx`: MDX inherits the plugins from `markdown.processor`
+ * rather than taking its own copy, so the two routes cannot render a doc
+ * differently.
+ */
+const remarkPlugins = [remarkCodeTabs, remarkCallouts, remarkDocsLinks, remarkStripTitle];
+
 export default defineConfig({
   site: "https://cetacean.mazetti.me",
   srcDir: "./src",
   trailingSlash: "never",
   build: { format: "file" },
   prefetch: true,
-  integrations: [
-    sitemap(),
-    mdx({ remarkPlugins: [remarkCodeTabs, remarkCallouts, remarkDocsLinks, remarkStripTitle] }),
-  ],
+  integrations: [sitemap(), mdx()],
   vite: {
     plugins: [tailwindcss(), pagefindDevPlugin()],
   },
   markdown: {
-    processor: unified({
-      remarkPlugins: [remarkCodeTabs, remarkCallouts, remarkDocsLinks, remarkStripTitle],
-    }),
+    processor: unified({ remarkPlugins }),
     shikiConfig: {
       themes: {
         light: "github-light",
