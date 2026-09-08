@@ -54,7 +54,9 @@ var validModes = map[string]bool{
 	"headers":   true,
 }
 
-func LoadAuth(flags *Flags, fc *fileConfig) (*AuthConfig, error) {
+// publicURL and basePath come from Config and supply the default OIDC
+// redirect URL; pass "" for both to keep auth.oidc.redirect_url required.
+func LoadAuth(flags *Flags, fc *fileConfig, publicURL, basePath string) (*AuthConfig, error) {
 	if flags == nil {
 		flags = &Flags{}
 	}
@@ -118,7 +120,7 @@ func LoadAuth(flags *Flags, fc *fileConfig) (*AuthConfig, error) {
 				flags.OIDCRedirectURL,
 				"CETACEAN_AUTH_OIDC_REDIRECT_URL",
 				fileField(fo, func(o *fileAuthOIDC) *string { return o.RedirectURL }),
-				"",
+				defaultRedirectURL(publicURL, basePath),
 			),
 			Scopes: parseScopes(
 				resolve(
@@ -370,4 +372,19 @@ func parseScopes(s string) []string {
 		}
 	}
 	return scopes
+}
+
+// defaultRedirectURL builds the OIDC callback URL from server.public_url. The
+// callback route is fixed at GET /auth/callback (internal/auth/oidc.go), so
+// the value is mechanically derivable and only has to be typed when the
+// callback lives somewhere else.
+//
+// Returns "" when public_url is unset, which leaves the existing "oidc mode
+// requires ..." rejection in place rather than inventing a URL.
+func defaultRedirectURL(publicURL, basePath string) string {
+	if publicURL == "" {
+		return ""
+	}
+
+	return publicURL + basePath + "/auth/callback"
 }
