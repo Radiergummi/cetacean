@@ -106,7 +106,7 @@ func main() {
 		slog.Info("loaded config file", "path", configPath)
 	}
 
-	authCfg, err := config.LoadAuth(flags, fc)
+	authCfg, err := config.LoadAuth(flags, fc, cfg.PublicURL, cfg.BasePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "auth configuration error: %v\n", err)
 		os.Exit(1)
