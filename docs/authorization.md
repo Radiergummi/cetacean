@@ -139,9 +139,9 @@ Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457
 
 | Code     | Status | Meaning                                                                  |
 | -------- | ------ | ------------------------------------------------------------------------ |
-| `ACL001` | 403    | Read denied on a detail endpoint, or the identity holds no grants at all |
-| `ACL002` | 403    | Write denied on this resource                                            |
-| `OPS001` | 403    | The operation needs a higher operations level than the server runs at    |
+| [`ACL001`](api/errors#ACL001) | 403    | Read denied on a detail endpoint, or the identity holds no grants at all |
+| [`ACL002`](api/errors#ACL002) | 403    | Write denied on this resource                                            |
+| [`OPS001`](api/errors#OPS001) | 403    | The operation needs a higher operations level than the server runs at    |
 
 Read responses carry an `Allow` header naming the write methods available on that resource, which is how the
 dashboard knows which action buttons to show you.
