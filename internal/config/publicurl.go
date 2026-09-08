@@ -36,6 +36,10 @@ func ValidatePublicURL(raw string) error {
 		return fmt.Errorf("server.public_url must include a host, got %q", raw)
 	}
 
+	if u.User != nil {
+		return fmt.Errorf("server.public_url must not include userinfo, got %q", raw)
+	}
+
 	if u.Path != "" && u.Path != "/" {
 		return fmt.Errorf(
 			"server.public_url must not include a path, got %q; set server.base_path to %q instead",

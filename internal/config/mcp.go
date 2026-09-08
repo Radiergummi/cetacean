@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -427,9 +428,10 @@ func resolveMCPOpsLevel(file *int) (OperationsLevel, error) {
 // host but is equally unreachable.
 //
 // The string is returned either way, because how bad an unreachable issuer is
-// depends on the caller: OAuth clients fetch .well-known documents from it and
-// cannot work at all, while auth mode "none" builds no OAuth server and ends
-// up only with unreachable icon URLs.
+// depends on the caller: an OAuth client fetches .well-known documents from
+// it and cannot work at all, while auth mode "none" — or an auth mode fully
+// covered by mcp.oauth.auth_bypass, see MCPIssuerRequired — never depends on
+// that flow and ends up only with unreachable icon URLs.
 func (c *Config) MCPIssuer(tlsEnabled bool) (string, bool) {
 	if c.MCP.Issuer != "" {
 		return c.MCP.Issuer, true
@@ -457,4 +459,18 @@ func (c *Config) MCPIssuer(tlsEnabled bool) (string, bool) {
 	}
 
 	return issuer, true
+}
+
+// MCPIssuerRequired reports whether a working /mcp needs a reachable issuer,
+// as opposed to one that only feeds cosmetic tool-icon URLs (main.go's
+// IconBaseURL). OAuth is genuinely in play whenever the upstream auth mode is
+// not "none" and that mode is not fully covered by mcp.oauth.auth_bypass:
+// a bypassed mode (cert, headers, tailscale) authenticates every /mcp request
+// from the upstream provider's own identity instead of a JWT, which is
+// exactly the deployment docs/mcp.md recommends for mTLS clients — one that
+// never drives the OAuth authorize/token flow an unreachable issuer would
+// break. setupMCP downgrades an unreachable issuer to a warning rather than
+// exiting when this returns false.
+func (c *Config) MCPIssuerRequired(authMode string) bool {
+	return authMode != "none" && !slices.Contains(c.MCP.AuthBypass, authMode)
 }

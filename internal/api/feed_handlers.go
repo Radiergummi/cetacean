@@ -386,6 +386,7 @@ func (h *Handlers) filterHistoryACL(
 }
 
 // feedID builds a tag URI (RFC 4151) for the feed: tag:{host},{year}:{path}.
+// {host} is server.public_url's host when configured, otherwise r.Host.
 // The year 2026 is the date the tag namespace was minted and must remain constant.
 func feedID(r *http.Request) string {
 	// RFC 4151 tag URIs are permanent identifiers, so prefer the configured
