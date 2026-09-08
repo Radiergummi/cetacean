@@ -297,10 +297,9 @@ Two batches, reviewable independently, in this order:
 - **Registration and reachability.** `prompts/list` is non-empty and
   `prompts/get` succeeds, driven through the real transport. A unit test on
   `promptCatalog()` alone would pass with `registerPrompts()` never called — the
-  same altitude mistake as [E-2], where Phase 2's tests passed against a
+  same altitude mistake as E-2, where Phase 2's tests passed against a
   synthetic session while the real transport dropped every subscription.
 
-[E-2]: 2026-08-30-mcp-2026-07-28-upgrade-plan.md#issues-encountered-running-log
 
 ## Out of scope
 

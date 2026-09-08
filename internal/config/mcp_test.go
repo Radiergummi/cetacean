@@ -615,3 +615,130 @@ func TestLoadMCP_UnsetSigningKeyIsStillAllowed(t *testing.T) {
 		t.Errorf("signing key = %q, want empty", cfg.SigningKey)
 	}
 }
+
+func TestMCPIssuer(t *testing.T) {
+	tests := []struct {
+		name       string
+		issuer     string
+		publicURL  string
+		listenAddr string
+		tlsEnabled bool
+		want       string
+		wantOK     bool
+	}{
+		{
+			name:       "explicit issuer wins",
+			issuer:     "https://cetacean.example.com",
+			listenAddr: ":9000",
+			want:       "https://cetacean.example.com",
+			wantOK:     true,
+		},
+		{
+			name:       "public_url is used when mcp.issuer is unset",
+			publicURL:  "https://cetacean.example.com",
+			listenAddr: ":9000",
+			want:       "https://cetacean.example.com",
+			wantOK:     true,
+		},
+		{
+			name:       "mcp.issuer overrides public_url",
+			issuer:     "https://mcp.example.com",
+			publicURL:  "https://cetacean.example.com",
+			listenAddr: ":9000",
+			want:       "https://mcp.example.com",
+			wantOK:     true,
+		},
+		{
+			name:       "default listen address has no host",
+			listenAddr: ":9000",
+			want:       "http://:9000",
+			wantOK:     false,
+		},
+		{
+			name:       "wildcard bind is not reachable",
+			listenAddr: "0.0.0.0:9000",
+			want:       "http://0.0.0.0:9000",
+			wantOK:     false,
+		},
+		{
+			name:       "unspecified IPv6 bind is not reachable",
+			listenAddr: "[::]:9000",
+			want:       "http://[::]:9000",
+			wantOK:     false,
+		},
+		{
+			name:       "explicit host derives",
+			listenAddr: "cetacean.internal:9000",
+			want:       "http://cetacean.internal:9000",
+			wantOK:     true,
+		},
+		{
+			name:       "TLS derives https",
+			listenAddr: "cetacean.internal:9000",
+			tlsEnabled: true,
+			want:       "https://cetacean.internal:9000",
+			wantOK:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				ListenAddr: tt.listenAddr,
+				PublicURL:  tt.publicURL,
+				MCP:        MCPConfig{Issuer: tt.issuer},
+			}
+
+			got, ok := cfg.MCPIssuer(tt.tlsEnabled)
+
+			if got != tt.want {
+				t.Errorf("issuer = %q, want %q", got, tt.want)
+			}
+			if ok != tt.wantOK {
+				t.Errorf("ok = %v, want %v", ok, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestMCPIssuerRequired(t *testing.T) {
+	tests := []struct {
+		name       string
+		authMode   string
+		authBypass []string
+		want       bool
+	}{
+		{
+			name:     "auth mode none never needs OAuth",
+			authMode: "none",
+			want:     false,
+		},
+		{
+			name:     "auth mode with no bypass configured needs OAuth",
+			authMode: "cert",
+			want:     true,
+		},
+		{
+			name:       "auth mode listed in AuthBypass is fully bypassed",
+			authMode:   "cert",
+			authBypass: []string{"cert"},
+			want:       false,
+		},
+		{
+			name:       "auth mode not listed while another mode is bypassed still needs OAuth",
+			authMode:   "oidc",
+			authBypass: []string{"cert"},
+			want:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{MCP: MCPConfig{AuthBypass: tt.authBypass}}
+
+			if got := cfg.MCPIssuerRequired(tt.authMode); got != tt.want {
+				t.Errorf("MCPIssuerRequired(%q) = %v, want %v", tt.authMode, got, tt.want)
+			}
+		})
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -414,4 +415,50 @@ func resolveMCPOpsLevel(file *int) (OperationsLevel, error) {
 	}
 
 	return OpsInherit, nil
+}
+
+// MCPIssuer returns the canonical external base URL clients reach this
+// deployment at: mcp.issuer, then server.public_url, then a derivation from
+// server.listen_addr and whether TLS terminates here.
+//
+// The second return is false when that derivation reaches nothing: the
+// default ":9000" has an empty host, and a wildcard bind ("0.0.0.0", "::")
+// parses but resolves nowhere. The string is returned either way, since only
+// OAuth truly breaks on it — see MCPIssuerRequired.
+func (c *Config) MCPIssuer(tlsEnabled bool) (string, bool) {
+	if c.MCP.Issuer != "" {
+		return c.MCP.Issuer, true
+	}
+
+	if c.PublicURL != "" {
+		return c.PublicURL, true
+	}
+
+	scheme := "http"
+	if tlsEnabled {
+		scheme = "https"
+	}
+
+	issuer := scheme + "://" + c.ListenAddr
+
+	u, err := url.Parse(issuer)
+	if err != nil {
+		return issuer, false
+	}
+
+	switch u.Hostname() {
+	case "", "0.0.0.0", "::":
+		return issuer, false
+	}
+
+	return issuer, true
+}
+
+// MCPIssuerRequired reports whether /mcp needs a reachable issuer, rather than
+// one that only feeds cosmetic tool-icon URLs. OAuth is in play unless the
+// auth mode is "none" or is listed in mcp.oauth.auth_bypass: a bypassed mode
+// authenticates each request from the upstream identity and never drives the
+// authorize/token flow.
+func (c *Config) MCPIssuerRequired(authMode string) bool {
+	return authMode != "none" && !slices.Contains(c.MCP.AuthBypass, authMode)
 }
