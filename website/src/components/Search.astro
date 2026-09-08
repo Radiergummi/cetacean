@@ -12,7 +12,7 @@
       </svg>
       Search...
     </span>
-    <kbd class="pointer-events-none text-[0.6875rem] font-medium text-muted-foreground/70" id="search-shortcut-label"></kbd>
+    <kbd class="pointer-events-none text-2xs font-medium text-muted-foreground/70" id="search-shortcut-label"></kbd>
   </button>
 </div>
 
@@ -42,7 +42,7 @@
         aria-label="Search"
         class="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
       />
-      <kbd class="text-[0.625rem] font-medium text-muted-foreground/60 border border-border rounded px-1 py-0.5 leading-none">ESC</kbd>
+      <kbd class="text-2xs font-medium text-muted-foreground/60 border border-border rounded px-1 py-0.5 leading-none">ESC</kbd>
     </div>
     <div id="search-results" class="flex-1 overflow-y-auto"></div>
     <div id="search-status" class="sr-only" aria-live="polite" role="status"></div>
@@ -55,10 +55,10 @@
 
     const rowClass = "data-active:bg-accent";
     const linkClass = "flex flex-col gap-0.5 px-3 py-2 text-foreground no-underline";
-    const titleClass = "text-[0.8125rem] font-medium";
+    const titleClass = "text-sm font-medium";
     const excerptClass =
       "line-clamp-2 text-xs leading-normal text-muted-foreground [&_mark]:bg-transparent [&_mark]:font-semibold [&_mark]:text-(--active)";
-    const emptyClass = "px-3 py-8 text-center text-[0.8125rem] text-muted-foreground";
+    const emptyClass = "px-3 py-8 text-center text-sm text-muted-foreground";
 
     let activeIndex = -1;
     let debounceTimer = null;

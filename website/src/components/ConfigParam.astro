@@ -37,10 +37,10 @@ if (defaultValue !== undefined) {
  * while the first one still sits at the paragraph gap above it.
  */
 const cardClass =
-  "group mt-2 rounded-lg border border-border px-4 py-3.5 target:border-(--active) target:shadow-[0_0_0_1px_var(--active)]";
+  "group mt-2 rounded-lg border border-border px-4 py-3.5 target:border-(--active) target:ring-1 target:ring-(--active)";
 
 const footerClass =
-  "-mx-4 -mb-3.5 flex flex-wrap items-baseline gap-x-4 gap-y-1 rounded-b-[calc(var(--radius-lg)-1px)] border-t border-border bg-muted px-4 py-2 text-[0.8rem] text-muted-foreground [&_code]:rounded-none [&_code]:bg-transparent [&_code]:px-0 [&_code]:py-0 [&_code]:text-[0.8rem] [&_code]:text-(--code-foreground)";
+  "-mx-4 -mb-3.5 flex flex-wrap items-baseline gap-x-4 gap-y-1 rounded-b-inner border-t border-border bg-muted px-4 py-2 text-sm text-muted-foreground [&_code]:rounded-none [&_code]:bg-transparent [&_code]:px-0 [&_code]:py-0 [&_code]:text-sm [&_code]:text-(--code-foreground)";
 ---
 
 <ReferenceEntry id={name} class:list={[cardClass, deprecated && "opacity-60"]} anchor>

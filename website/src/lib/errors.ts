@@ -35,5 +35,5 @@ export const errorDefs: ErrorDef[] = catalog.errors;
  * which is by code, so a domain's entries are alphabetical within it.
  */
 export function errorsInDomain(prefix: string): ErrorDef[] {
-  return errorDefs.filter((def) => def.code.startsWith(prefix));
+  return errorDefs.filter(({ code }) => code.startsWith(prefix));
 }

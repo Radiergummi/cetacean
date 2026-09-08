@@ -12,16 +12,16 @@ const chatGptUrl = `https://chatgpt.com/?hints=search&q=${encodeURIComponent(pro
 const claudeUrl = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
 
 const menuItemClass =
-  "flex w-full cursor-pointer items-start gap-2.5 rounded-sm px-2.5 py-2 text-left text-[0.8125rem] text-foreground no-underline transition-colors hover:bg-accent";
+  "flex w-full cursor-pointer items-start gap-2.5 rounded-sm px-2.5 py-2 text-left text-sm text-foreground no-underline transition-colors hover:bg-accent";
 const menuItemIconClass = "mt-0.5 shrink-0 text-muted-foreground";
 const menuItemTextClass = "flex flex-col leading-[1.4]";
 const menuItemTitleClass = "font-semibold";
-const menuItemHintClass = "text-[0.75rem] text-muted-foreground";
+const menuItemHintClass = "text-xs text-muted-foreground";
 ---
 <div class="relative inline-flex" data-copy-page data-markdown-url={markdownUrl}>
   <button
     type="button"
-    class="inline-flex cursor-pointer items-center gap-1.5 rounded-l-lg border border-border bg-background px-3 py-1.5 text-[0.8125rem] font-medium text-foreground transition-colors hover:bg-accent"
+    class="inline-flex cursor-pointer items-center gap-1.5 rounded-l-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
     data-action="copy"
   >
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>

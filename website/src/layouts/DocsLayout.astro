@@ -72,7 +72,7 @@ const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
                     </div>
                     <slot />
                     <div
-                        class="not-prose mt-12 flex items-center justify-between gap-1.5 text-[0.8125rem] text-muted-foreground"
+                        class="not-prose mt-12 flex items-center justify-between gap-1.5 text-sm text-muted-foreground"
                         data-pagefind-ignore
                     >
                         <a
@@ -129,7 +129,7 @@ const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
             const tableWrapperClass = "my-6 overflow-x-auto -mx-1 px-1";
             const codeBlockWrapperClass = "relative";
             const copyClass =
-                "cursor-pointer px-2.5 py-1 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground";
+                "cursor-pointer px-2.5 py-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground";
             const copyButtonClass = `absolute right-1.5 top-1.5 z-[1] ${copyClass}`;
             const codeTabsCopyClass = `ml-auto ${copyClass}`;
 

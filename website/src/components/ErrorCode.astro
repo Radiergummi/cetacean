@@ -27,15 +27,15 @@ const { code, title, status, suggestion } = Astro.props;
  * while the first one still sits at the paragraph gap below its heading.
  */
 const cardClass =
-  "group mt-2 rounded-lg border border-border px-4 py-3.5 target:border-(--active) target:shadow-[0_0_0_1px_var(--active)]";
+  "group mt-2 rounded-lg border border-border px-4 py-3.5 target:border-(--active) target:ring-1 target:ring-(--active)";
 
 const footerClass =
-  "-mx-4 -mb-3.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-b-[calc(var(--radius-lg)-1px)] border-t border-border bg-muted px-4 py-2 text-[0.8rem] text-muted-foreground";
+  "-mx-4 -mb-3.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-b-inner border-t border-border bg-muted px-4 py-2 text-sm text-muted-foreground";
 ---
 <ReferenceEntry id={code} class={cardClass} anchor>
   <Fragment slot="heading">
     <code>{code}</code>
-    <span class="text-[0.8125rem] font-medium text-muted-foreground">{title}</span>
+    <span class="text-sm font-medium text-muted-foreground">{title}</span>
     <Badge tone="muted">{status}</Badge>
   </Fragment>
   <slot />

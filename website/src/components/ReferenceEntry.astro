@@ -23,7 +23,7 @@ const description = (await Astro.slots.render("default")).trim();
 
 // Inline code carries a tinted pill from the prose layer; the name is a heading.
 const headingClass =
-  "mb-1.5 flex items-baseline gap-2 [&>code]:rounded-none [&>code]:bg-transparent [&>code]:px-0 [&>code]:py-0 [&>code]:text-[0.9375rem] [&>code]:font-semibold [&>code]:text-foreground";
+  "mb-1.5 flex items-baseline gap-2 [&>code]:rounded-none [&>code]:bg-transparent [&>code]:px-0 [&>code]:py-0 [&>code]:text-base [&>code]:font-semibold [&>code]:text-foreground";
 ---
 <div id={id} class={className}>
   <div class={headingClass}>

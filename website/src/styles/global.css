@@ -99,6 +99,22 @@
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
+  /* Sits under a 1px border, so a card's footer meets its corner cleanly. */
+  --radius-inner: calc(var(--radius) - 1px);
+
+  /**
+   * The type scale. Tailwind's own names, pointed at the sizes this site
+   * actually uses: the docs read at 15px, not 16px, and every step below that
+   * shifts down with it. Before these existed each component picked its own
+   * value, which is how the site ended up with 0.8rem and 0.8125rem — a fifth
+   * of a pixel apart — both meaning "meta text".
+   */
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  /* One step above body, which is what an h3 in the docs is. */
+  --text-md: 1rem;
 }
 
 @layer base {
@@ -131,7 +147,7 @@
   .prose {
     @apply text-foreground;
     max-width: 720px;
-    font-size: 0.9375rem;
+    font-size: var(--text-base);
     line-height: 1.75;
 
     > :first-child {
@@ -145,7 +161,7 @@
       @apply text-lg font-semibold tracking-tight mt-12 mb-4;
     }
     h3 {
-      @apply text-base font-semibold mt-8 mb-3;
+      @apply text-md font-semibold mt-8 mb-3;
     }
     h4 {
       @apply text-sm font-semibold mt-6 mb-2;
@@ -191,14 +207,14 @@
 
     /* Inline code */
     code:not(pre code) {
-      @apply rounded-md px-1.5 py-0.5 text-[0.8125rem] font-mono font-medium;
+      @apply rounded-md px-1.5 py-0.5 text-sm font-mono font-medium;
       background: var(--code-background);
       color: var(--code-foreground);
     }
 
     /* Code blocks */
     pre {
-      @apply rounded-lg my-6 p-4 overflow-x-auto text-[0.8125rem] leading-relaxed border border-border;
+      @apply rounded-lg my-6 p-4 overflow-x-auto text-sm leading-relaxed border border-border;
       background-color: var(--code-background) !important;
       color: var(--code-foreground);
 
@@ -272,7 +288,7 @@
       }
     }
     .callout-header {
-      @apply flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider;
+      @apply flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider;
       color: var(--callout-accent);
     }
     .callout-icon {
@@ -381,10 +397,10 @@
       }
     }
     .card-title {
-      @apply mb-1.5 text-[0.9375rem] font-semibold;
+      @apply mb-1.5 text-base font-semibold;
 
       code {
-        @apply rounded-none px-0 py-0 text-[0.9375rem] font-semibold;
+        @apply rounded-none px-0 py-0 text-base font-semibold;
         background: none;
         color: var(--foreground);
       }
@@ -393,17 +409,17 @@
       @apply leading-relaxed;
     }
     .card-facts {
-      @apply mt-3 grid gap-x-3 gap-y-1 items-baseline text-[0.8rem] text-muted-foreground;
+      @apply mt-3 grid gap-x-3 gap-y-1 items-baseline text-sm text-muted-foreground;
       grid-template-columns: fit-content(8rem) minmax(0, 1fr);
       margin-inline: -1rem;
       margin-bottom: -0.875rem;
       padding: 0.5rem 1rem;
       border-top: 1px solid var(--border);
-      border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
+      border-radius: 0 0 var(--radius-inner) var(--radius-inner);
       background: var(--muted);
 
       code {
-        @apply rounded-none px-0 py-0 text-[0.8rem];
+        @apply rounded-none px-0 py-0 text-sm;
         background: none;
         color: var(--code-foreground);
       }
