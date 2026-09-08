@@ -12,3 +12,16 @@
   src: url("../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2")
     format("woff2-variations");
 }
+
+/**
+ * The same weight `global.css` draws labels at. It has to be applied here too:
+ * mermaid measures each label and bakes the box it fits into the SVG, so a
+ * weight raised afterwards pushes the text back out of the box it was measured
+ * for. Keep the two rules in step.
+ */
+.nodeLabel,
+.edgeLabel,
+.cluster-label,
+.actor {
+  font-weight: 500;
+}

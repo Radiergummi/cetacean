@@ -22,6 +22,43 @@
   --sidebar-background: oklch(0.98 0 0);
   --badge-accent: oklch(0.55 0.15 25);
   --badge-accent-border: oklch(0.55 0.15 25 / 40%);
+
+  /**
+   * The palette `src/lib/mermaid-diagrams.ts` renders diagrams in. Mermaid bakes
+   * colours into the SVG at build time, so the plugin renders with a sentinel per
+   * role and swaps each for the property named here — which is the only reason
+   * these can be the site's own tokens rather than a second set of greys.
+   */
+  --mermaid-primary: var(--muted);
+  --mermaid-primary-text: var(--foreground);
+  --mermaid-primary-border: var(--border);
+  --mermaid-secondary: var(--accent);
+  --mermaid-secondary-border: var(--border);
+  --mermaid-text: var(--foreground);
+  --mermaid-line: var(--muted-foreground);
+  --mermaid-cluster: var(--sidebar-background);
+  --mermaid-cluster-border: var(--border);
+  --mermaid-tertiary: var(--sidebar-background);
+  --mermaid-tertiary-border: var(--border);
+  --mermaid-tertiary-text: var(--foreground);
+  --mermaid-edge-label: var(--background);
+  --mermaid-actor: var(--muted);
+  --mermaid-actor-border: var(--border);
+  --mermaid-actor-text: var(--foreground);
+  --mermaid-actor-line: var(--border);
+  --mermaid-signal: var(--muted-foreground);
+  --mermaid-signal-text: var(--foreground);
+  --mermaid-note: var(--sidebar-background);
+  --mermaid-note-border: var(--border);
+  --mermaid-note-text: var(--foreground);
+  --mermaid-label-box: var(--muted);
+  --mermaid-label-box-border: var(--border);
+  --mermaid-label-text: var(--foreground);
+  --mermaid-activation: var(--accent);
+  --mermaid-activation-border: var(--border);
+  /* Sits inside a circle filled with `--mermaid-line`, so it reads as the ground. */
+  --mermaid-sequence-number: var(--background);
+  --mermaid-dot: oklch(0.86 0 0);
 }
 
 .dark {
@@ -42,6 +79,9 @@
   --sidebar-background: oklch(0.155 0 0);
   --badge-accent: oklch(0.7 0.15 25);
   --badge-accent-border: oklch(0.7 0.15 25 / 40%);
+
+  /* Only the dot grid needs a dark value; the rest follow the tokens they name. */
+  --mermaid-dot: oklch(0.3 0 0);
 }
 
 @theme inline {
@@ -501,6 +541,10 @@
   overflow: auto;
   touch-action: pan-x pan-y;
 
+  /* The dot grid the topology view draws behind React Flow, at its 20px gap. */
+  background-image: radial-gradient(circle, var(--mermaid-dot) 1px, transparent 1px);
+  background-size: 20px 20px;
+
   svg {
     display: block;
     width: 100%;
@@ -525,16 +569,22 @@
   margin: 0 auto;
 }
 
-/* One theme's diagram is shown, the other is left in the page for the toggle. */
-.prose .mermaid-dark {
-  display: none;
-}
-
-.dark .prose {
-  .mermaid-light {
-    display: none;
+/**
+ * Mermaid sets neither a corner radius nor a label weight, so these reach it
+ * without having to outrank its own rules, which are scoped by the diagram's ID.
+ */
+.prose .mermaid-figure {
+  .node rect,
+  .cluster rect,
+  .label-container {
+    rx: 8px;
+    ry: 8px;
   }
-  .mermaid-dark {
-    display: block;
+
+  .nodeLabel,
+  .edgeLabel,
+  .cluster-label,
+  .actor {
+    font-weight: 500;
   }
 }
