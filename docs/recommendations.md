@@ -37,6 +37,7 @@ Each finding names a service, a node or the cluster, and carries a severity of `
 
 Findings that have an obvious fix get an **Apply suggested value** button:
 
+<!-- cards -->
 | Finding | What the button does | Needs |
 |---|---|---|
 | `over-provisioned` | Raises or lowers the reservation to match real usage | [Operations level][operations-level] 2 |

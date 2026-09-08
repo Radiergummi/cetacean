@@ -116,6 +116,7 @@ changed the resource first.
 
 Always available.
 
+<!-- cards -->
 | Tool | What it does | Key arguments |
 |---|---|---|
 | `get_cluster_status` | Answers whether the cluster is healthy and, when it is not, names the services not in their desired state, the nodes down or draining, the rollouts in flight, and reserved against total CPU and memory. Start here | none |
@@ -170,6 +171,7 @@ seconds and is capped at 300; the wait cannot be cancelled once started.
 
 ### Level 1: operational
 
+<!-- cards -->
 | Tool | What it does | Key arguments |
 |---|---|---|
 | `scale_service` | Sets the desired replica count. `0` stops every task without removing the service | `id`, `replicas` |
@@ -191,6 +193,7 @@ global service.
 
 ### Level 2: configuration
 
+<!-- cards -->
 | Tool | What it does | Key arguments |
 |---|---|---|
 | `update_service` | Changes one section of a service's spec | `id`, `section`, `value` |
@@ -203,6 +206,7 @@ global service.
 
 `update_service` takes one of ten sections in `section` and that section's new value in `value`:
 
+<!-- cards -->
 | Section | Value | Semantics |
 |---|---|---|
 | `env` | Merge-patch object | A string sets a key, `null` deletes it, an omitted key is preserved |
@@ -247,6 +251,7 @@ without their values—so raising a CPU limit never hands back the service's cre
 
 ### Level 3: impactful
 
+<!-- cards -->
 | Tool | What it does | Key arguments |
 |---|---|---|
 | `update_node` | Changes a node's `availability` (`active`, `pause`, `drain`) or `role` (`worker`, `manager`) | `id`, `section`, `value` |
@@ -272,6 +277,7 @@ separate MCP level table to keep in step.
 Prompts are named sequences a client offers from a menu. Picking one seeds the conversation with an
 investigation or a runbook.
 
+<!-- cards -->
 | Prompt | Level | Argument | Reads | What it does |
 |---|---|---|---|---|
 | `diagnose_service` | 0 | `service` | service | Walks tasks, the failing task's logs, metrics, and recent changes to find why a service is unhealthy |
@@ -296,6 +302,7 @@ ACL checks included.
 A host that supports the MCP Apps extension can render Cetacean's data as an interactive view instead of JSON.
 Cetacean advertises `io.modelcontextprotocol/ui` and serves each widget as a resource.
 
+<!-- cards -->
 | Resource | Renders | Behaviour |
 |---|---|---|
 | `ui://cetacean/table` | A `find` result | Searchable, sortable table of one resource type, showing how many records it holds when the page is a subset |

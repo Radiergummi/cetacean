@@ -225,6 +225,115 @@
   .prose tbody tr:last-child td {
     @apply border-b-0;
   }
+  /* Short cells sit level with the first line of a tall neighbour, not centred
+     against it, and a cell that is nothing but an identifier never wraps. */
+  .prose tbody td {
+    vertical-align: top;
+  }
+  .prose tbody td > code:only-child {
+    @apply whitespace-nowrap;
+  }
+  .prose tbody tr:hover td {
+    background: var(--muted);
+  }
+
+  /* ── Description lists (from two-column prose tables) ────────────── */
+
+  .prose .definition-caption {
+    @apply flex items-baseline mt-6 pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground border-b border-border;
+  }
+  .prose .definition-caption span + span::before {
+    @apply mx-2 opacity-60;
+    content: "·";
+  }
+  .prose .definition-list {
+    @apply my-0 mb-6 text-sm;
+  }
+  .prose .definition-row {
+    @apply py-3 border-b border-border;
+  }
+  .prose .definition-row:last-child {
+    @apply border-b-0;
+  }
+  .prose .definition-list dt {
+    @apply mb-1 font-medium;
+  }
+  .prose .definition-list dd {
+    @apply m-0 leading-relaxed;
+  }
+
+  /* Short values sit beside their term rather than under it, and the caption
+     lines its labels up with the columns they head. */
+  .prose .definition-caption.is-compact,
+  .prose .definition-list.is-compact .definition-row {
+    @apply grid gap-x-8;
+    grid-template-columns: fit-content(40%) minmax(0, 1fr);
+  }
+  .prose .definition-list.is-compact .definition-row {
+    @apply py-2;
+  }
+  .prose .definition-list.is-compact dt {
+    @apply mb-0;
+  }
+  .prose .definition-caption.is-compact span + span::before {
+    content: none;
+  }
+
+  @media (max-width: 40rem) {
+    .prose .definition-caption.is-compact,
+    .prose .definition-list.is-compact .definition-row {
+      @apply block;
+    }
+    .prose .definition-list.is-compact dt {
+      @apply mb-1;
+    }
+    .prose .definition-caption.is-compact span + span::before {
+      @apply mx-2 opacity-60;
+      content: "·";
+    }
+  }
+
+  /* ── Cards (from tables marked <!-- cards -->) ───────────────────── */
+
+  .prose .card-list {
+    @apply my-6 flex flex-col gap-2;
+  }
+  .prose .card {
+    @apply py-3.5 px-4 text-sm border border-border rounded-lg;
+  }
+  .prose .card:target {
+    border-color: var(--active);
+    box-shadow: 0 0 0 1px var(--active);
+  }
+  .prose .card-title {
+    @apply mb-1.5 text-[0.9375rem] font-semibold;
+  }
+  .prose .card-title code {
+    @apply rounded-none px-0 py-0 text-[0.9375rem] font-semibold;
+    background: none;
+    color: var(--foreground);
+  }
+  .prose .card-description {
+    @apply leading-relaxed;
+  }
+  .prose .card-facts {
+    @apply mt-3 grid gap-x-3 gap-y-1 items-baseline text-[0.8rem] text-muted-foreground;
+    grid-template-columns: fit-content(8rem) minmax(0, 1fr);
+    margin-inline: -1rem;
+    margin-bottom: -0.875rem;
+    padding: 0.5rem 1rem;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
+    background: var(--muted);
+  }
+  .prose .card-label {
+    @apply font-medium;
+  }
+  .prose .card-facts code {
+    @apply rounded-none px-0 py-0 text-[0.8rem];
+    background: none;
+    color: var(--code-foreground);
+  }
 
   /* ── Schema entries (borderless) ─────────────────────────────────── */
 

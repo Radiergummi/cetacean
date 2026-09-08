@@ -236,6 +236,227 @@ function element(tagName, properties, children = []) {
   return { type: "element", tagName, properties, children };
 }
 
+/**
+ * A two-column table is a description list in a table costume: the term column
+ * is squeezed to a few characters while the second wraps at half measure, and
+ * no reader ever compares one row against another. Comparison is what a table
+ * is for, and it needs a third column. So every two-column table renders as a
+ * description list, and three or more columns are left alone.
+ *
+ * Length picks the density, not the container. Sorting the docs' two-column
+ * tables by mean cell length gives a continuum, not two groups — `Resource |
+ * Sortable fields` and `Resource | Fields` sit next to each other in the API
+ * reference and differ only in how long the values run — so any cutoff between
+ * "table" and "list" renders neighbours in two different shapes and reads as a
+ * bug. A cutoff between two densities of the same list does not.
+ *
+ * The source stays an ordinary GFM table, so GitHub and the raw `.md` route are
+ * unaffected, and the plugin runs over both `.md` and `.mdx`, so no doc needs
+ * an import.
+ */
+const compactCellLength = 40;
+
+function remarkDefinitionTables() {
+  return (tree) => {
+    visit(tree, "table", (node, index, parent) => {
+      if (!parent || node.children.length < 2) {
+        return;
+      }
+
+      const [header, ...rows] = node.children;
+
+      if (header.children.length !== 2) {
+        return;
+      }
+      if (rows.some((row) => row.children.length !== 2)) {
+        return;
+      }
+
+      const total = rows.reduce((sum, row) => sum + nodeText(row.children[1]).length, 0);
+      const compact = total / rows.length < compactCellLength;
+
+      parent.children.splice(
+        index,
+        1,
+        definitionCaption(header, compact),
+        definitionList(rows, compact),
+      );
+
+      return index + 2;
+    });
+  };
+}
+
+function nodeText(node) {
+  if (typeof node.value === "string") {
+    return node.value;
+  }
+
+  return (node.children ?? []).map(nodeText).join("");
+}
+
+/** The column headings, kept as an eyebrow so the transform loses no wording. */
+function definitionCaption(header, compact) {
+  return {
+    type: "paragraph",
+    data: {
+      hName: "div",
+      hProperties: { className: ["definition-caption", ...(compact ? ["is-compact"] : [])] },
+    },
+    children: header.children.map((cell) => ({
+      type: "paragraph",
+      data: { hName: "span" },
+      children: cell.children,
+    })),
+  };
+}
+
+function definitionList(rows, compact) {
+  return {
+    type: "paragraph",
+    data: {
+      hName: "dl",
+      hProperties: { className: ["definition-list", ...(compact ? ["is-compact"] : [])] },
+    },
+    children: rows.map((row) => ({
+      type: "paragraph",
+      data: { hName: "div", hProperties: { className: ["definition-row"] } },
+      children: [
+        { type: "paragraph", data: { hName: "dt" }, children: row.children[0].children },
+        { type: "paragraph", data: { hName: "dd" }, children: row.children[1].children },
+      ],
+    })),
+  };
+}
+
+/**
+ * A table marked `<!-- cards -->` renders as a card per row: the first cell
+ * becomes the title, the second the description, and any further cells become
+ * labelled facts under it, headed by their column name.
+ *
+ * This one is opted into rather than detected. Three-column tables split into
+ * cards and genuine matrices with nothing to tell them apart mechanically —
+ * the authentication guide compares two Tailscale modes in the same shape the
+ * MCP reference uses to list tools, and every rule that catches the one
+ * catches the other. The marker is an HTML comment, so the source stays a
+ * plain GFM table that GitHub and the raw `.md` route render as they always
+ * did, and the author decides.
+ *
+ * Rows gain an id from their title, which a table row cannot have, so a tool
+ * or a finding can be linked to directly.
+ */
+function remarkCardTables() {
+  return (tree) => {
+    visit(tree, "html", (node, index, parent) => {
+      if (!parent || node.value.trim() !== "<!-- cards -->") {
+        return;
+      }
+
+      const table = parent.children[index + 1];
+
+      if (table?.type !== "table" || table.children.length < 2) {
+        return;
+      }
+
+      const [header, ...rows] = table.children;
+
+      parent.children.splice(index, 2, cardList(header, rows));
+
+      return index + 1;
+    });
+  };
+}
+
+function cardList(header, rows) {
+  const labels = header.children.map((cell) => nodeText(cell));
+
+  return {
+    type: "paragraph",
+    data: { hName: "div", hProperties: { className: ["card-list"] } },
+    children: rows.map((row) => card(labels, row.children, descriptionColumn(rows))),
+  };
+}
+
+/**
+ * The description is the column that reads longest, not the one that comes
+ * second: the MCP reference heads its prompts with four short columns before
+ * the prose. Length is measured over rendered text, so a column of links is
+ * judged by what a reader sees rather than by the URLs behind it.
+ */
+function descriptionColumn(rows) {
+  let column = 1;
+  let longest = 0;
+
+  for (let candidate = 1; candidate < rows[0].children.length; candidate++) {
+    const total = rows.reduce((sum, row) => sum + nodeText(row.children[candidate]).length, 0);
+
+    if (total > longest) {
+      longest = total;
+      column = candidate;
+    }
+  }
+
+  return column;
+}
+
+function card(labels, cells, description) {
+  const [title] = cells;
+  const children = [
+    {
+      type: "paragraph",
+      data: { hName: "div", hProperties: { className: ["card-title"] } },
+      children: title.children,
+    },
+  ];
+
+  if (nodeText(cells[description]).trim()) {
+    children.push({
+      type: "paragraph",
+      data: { hName: "div", hProperties: { className: ["card-description"] } },
+      children: cells[description].children,
+    });
+  }
+
+  const facts = cells
+    .map((cell, column) => ({ cell, column }))
+    .filter(({ cell, column }) => column !== 0 && column !== description && nodeText(cell).trim());
+
+  if (facts.length) {
+    children.push({
+      type: "paragraph",
+      data: { hName: "div", hProperties: { className: ["card-facts"] } },
+      children: facts.flatMap(({ cell, column }) => [
+        {
+          type: "paragraph",
+          data: { hName: "span", hProperties: { className: ["card-label"] } },
+          children: [{ type: "text", value: labels[column] }],
+        },
+        {
+          type: "paragraph",
+          data: { hName: "span", hProperties: { className: ["card-value"] } },
+          children: cell.children,
+        },
+      ]),
+    });
+  }
+
+  return {
+    type: "paragraph",
+    data: {
+      hName: "div",
+      hProperties: { className: ["card"], id: slug(nodeText(title)) },
+    },
+    children,
+  };
+}
+
+function slug(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^\w]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 function remarkStripTitle() {
   return (tree) => {
     const index = tree.children.findIndex((node) => node.type === "heading" && node.depth === 1);
@@ -251,7 +472,14 @@ function remarkStripTitle() {
  * rather than taking its own copy, so the two routes cannot render a doc
  * differently.
  */
-const remarkPlugins = [remarkCodeTabs, remarkCallouts, remarkDocsLinks, remarkStripTitle];
+const remarkPlugins = [
+  remarkCodeTabs,
+  remarkCallouts,
+  remarkCardTables,
+  remarkDefinitionTables,
+  remarkDocsLinks,
+  remarkStripTitle,
+];
 
 export default defineConfig({
   site: "https://cetacean.mazetti.me",

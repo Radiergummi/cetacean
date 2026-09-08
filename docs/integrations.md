@@ -15,6 +15,7 @@ labels are present.
 
 A tool is detected when the service carries at least one label with its prefix.
 
+<!-- cards -->
 | Tool                                                        | Label prefix      | Panel shows                                                                     |
 | ----------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------- |
 | [Traefik](https://traefik.io/)                              | `traefik.`        | HTTP routers, services, and middlewares parsed from `traefik.http.*`            |
