@@ -620,6 +620,7 @@ func TestMCPIssuer(t *testing.T) {
 	tests := []struct {
 		name       string
 		issuer     string
+		publicURL  string
 		listenAddr string
 		tlsEnabled bool
 		want       string
@@ -630,6 +631,21 @@ func TestMCPIssuer(t *testing.T) {
 			issuer:     "https://cetacean.example.com",
 			listenAddr: ":9000",
 			want:       "https://cetacean.example.com",
+			wantOK:     true,
+		},
+		{
+			name:       "public_url is used when mcp.issuer is unset",
+			publicURL:  "https://cetacean.example.com",
+			listenAddr: ":9000",
+			want:       "https://cetacean.example.com",
+			wantOK:     true,
+		},
+		{
+			name:       "mcp.issuer overrides public_url",
+			issuer:     "https://mcp.example.com",
+			publicURL:  "https://cetacean.example.com",
+			listenAddr: ":9000",
+			want:       "https://mcp.example.com",
 			wantOK:     true,
 		},
 		{
@@ -667,7 +683,11 @@ func TestMCPIssuer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{ListenAddr: tt.listenAddr, MCP: MCPConfig{Issuer: tt.issuer}}
+			cfg := &Config{
+				ListenAddr: tt.listenAddr,
+				PublicURL:  tt.publicURL,
+				MCP:        MCPConfig{Issuer: tt.issuer},
+			}
 
 			got, ok := cfg.MCPIssuer(tt.tlsEnabled)
 

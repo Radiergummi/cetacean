@@ -417,8 +417,8 @@ func resolveMCPOpsLevel(file *int) (OperationsLevel, error) {
 }
 
 // MCPIssuer returns the canonical external base URL clients reach this
-// deployment at: mcp.issuer when set, otherwise derived from
-// server.listen_addr and whether TLS terminates here.
+// deployment at: mcp.issuer when set, then server.public_url, otherwise
+// derived from server.listen_addr and whether TLS terminates here.
 //
 // The second return is false when the derivation produced a URL nothing can
 // reach. server.listen_addr defaults to ":9000", so the derived issuer is
@@ -433,6 +433,10 @@ func resolveMCPOpsLevel(file *int) (OperationsLevel, error) {
 func (c *Config) MCPIssuer(tlsEnabled bool) (string, bool) {
 	if c.MCP.Issuer != "" {
 		return c.MCP.Issuer, true
+	}
+
+	if c.PublicURL != "" {
+		return c.PublicURL, true
 	}
 
 	scheme := "http"
