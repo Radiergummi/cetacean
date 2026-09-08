@@ -31,6 +31,7 @@ func TestValidatePublicURL(t *testing.T) {
 		{"https://cetacean.example.com/cetacean", "server.base_path"},
 		{"https://cetacean.example.com?a=b", "query or fragment"},
 		{"https://cetacean.example.com#frag", "query or fragment"},
+		{"https://user:pass@cetacean.example.com", "userinfo"},
 	}
 
 	for _, tt := range invalid {

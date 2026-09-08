@@ -700,3 +700,45 @@ func TestMCPIssuer(t *testing.T) {
 		})
 	}
 }
+
+func TestMCPIssuerRequired(t *testing.T) {
+	tests := []struct {
+		name       string
+		authMode   string
+		authBypass []string
+		want       bool
+	}{
+		{
+			name:     "auth mode none never needs OAuth",
+			authMode: "none",
+			want:     false,
+		},
+		{
+			name:     "auth mode with no bypass configured needs OAuth",
+			authMode: "cert",
+			want:     true,
+		},
+		{
+			name:       "auth mode listed in AuthBypass is fully bypassed",
+			authMode:   "cert",
+			authBypass: []string{"cert"},
+			want:       false,
+		},
+		{
+			name:       "auth mode not listed while another mode is bypassed still needs OAuth",
+			authMode:   "oidc",
+			authBypass: []string{"cert"},
+			want:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{MCP: MCPConfig{AuthBypass: tt.authBypass}}
+
+			if got := cfg.MCPIssuerRequired(tt.authMode); got != tt.want {
+				t.Errorf("MCPIssuerRequired(%q) = %v, want %v", tt.authMode, got, tt.want)
+			}
+		})
+	}
+}

@@ -193,6 +193,31 @@ func TestAbsURLPrefersPublicURL(t *testing.T) {
 	}
 }
 
+func TestAbsURLPrefersPublicURLWithBasePath(t *testing.T) {
+	called := false
+	handler := publicURLMiddleware(
+		"https://cetacean.example.com",
+		basePathMiddleware(
+			"/cetacean",
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				want := "https://cetacean.example.com/cetacean/services"
+				if got := absURL(r, "/services"); got != want {
+					t.Errorf("absURL = %q, want %q", got, want)
+				}
+			}),
+		),
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/cetacean/services", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if !called {
+		t.Fatal("handler was never invoked")
+	}
+}
+
 func TestAbsURLFallsBackToForwardedHeaders(t *testing.T) {
 	called := false
 	handler := publicURLMiddleware(
