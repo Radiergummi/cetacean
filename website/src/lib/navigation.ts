@@ -51,6 +51,7 @@ export const sidebarGroups: NavGroup[] = [
       { slug: "mcp-tools", title: "MCP Tools" },
       { slug: "api/explorer", title: "API Reference", reload: true },
       { slug: "api/schema", title: "Schema Reference" },
+      { slug: "api/errors", title: "Error Reference" },
     ],
   },
 ];
