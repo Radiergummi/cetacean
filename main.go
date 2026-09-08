@@ -694,15 +694,19 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		if d.authMode != "none" {
 			slog.Error(
 				"MCP OAuth needs an issuer clients can reach, and none could be derived from server.listen_addr. Set server.public_url to the URL clients reach from outside, or mcp.issuer to override it for MCP alone.",
-				"derived_issuer", issuer,
-				"listen_addr", d.cfg.ListenAddr,
+				"derived_issuer",
+				issuer,
+				"listen_addr",
+				d.cfg.ListenAddr,
 			)
 			os.Exit(1)
 		}
 		slog.Warn(
 			"no reachable MCP issuer could be derived from server.listen_addr; MCP tool icons will point at an unreachable URL. Set server.public_url to the URL clients reach from outside.",
-			"derived_issuer", issuer,
-			"listen_addr", d.cfg.ListenAddr,
+			"derived_issuer",
+			issuer,
+			"listen_addr",
+			d.cfg.ListenAddr,
 		)
 	}
 	mcpResource := issuer + d.cfg.BasePath + "/mcp"
