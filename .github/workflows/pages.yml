@@ -9,6 +9,9 @@ on:
       - "frontend/**"
       - "CHANGELOG.md"
       - "api/openapi.yaml"
+      # The error reference is generated from these; see website/package.json.
+      - "internal/api/errors.go"
+      - "scripts/dump-errors/**"
       # Served at /dist/ by the website; see website/package.json sync-assets.
       - "compose*.yaml"
       - "prometheus.yml"
@@ -33,6 +36,12 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 25
+
+      # The website build generates its error reference from internal/api; see
+      # website/package.json's sync-assets script.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
 
       - name: Build demo SPA
         working-directory: frontend
