@@ -4,7 +4,7 @@ import sitemap from "@astrojs/sitemap";
 import mdx from "@astrojs/mdx";
 import tailwindcss from "@tailwindcss/vite";
 import { visit } from "unist-util-visit";
-import { rehypeMermaid } from "./src/lib/mermaid-diagrams.js";
+import { rehypeMermaid } from "@/lib/mermaid-diagrams.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sirv from "sirv";

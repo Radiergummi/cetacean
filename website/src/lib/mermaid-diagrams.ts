@@ -1,14 +1,16 @@
-import { createMermaidRenderer } from "mermaid-isomorphic";
-import { visit } from "unist-util-visit";
-import { pathToFileURL } from "node:url";
+import { createMermaidRenderer, type RenderResult } from "mermaid-isomorphic";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import type { Element } from "hast";
+import type { Plugin } from "unified";
+import { visit } from "unist-util-visit";
 
 /**
  * Mermaid diagrams, rendered to SVG at build time.
  *
  * The site's dark mode is a class on the root element, toggled at runtime, so a
  * single build-time SVG cannot follow it — mermaid bakes its palette into a
- * `<style>` block scoped to the diagram's own id. Rendering the diagram twice
+ * `<style>` block scoped to the diagram's own ID. Rendering the diagram twice
  * and letting CSS pick one costs a few KB of markup per diagram and keeps the
  * page correct in both themes with no JavaScript at all, which shipping mermaid
  * to the browser would not: the client bundle is over half a megabyte, and a
@@ -109,13 +111,13 @@ const fontCss = pathToFileURL(resolve("src/lib/mermaid-fonts.css"));
  * Mermaid sizes the root `<svg>` with an inline `max-width`, which would win
  * over any stylesheet. Dropping it lets the viewport own the sizing.
  */
-function unpinWidth(svg) {
+function unpinWidth(svg: string): string {
   return svg.replace(/^(<svg[^>]*?)\s+style="[^"]*"/, "$1");
 }
 
 /**
  * Mermaid puts label text in an HTML `<p>` inside a `<foreignObject>`, and
- * writes a `<br/>` for every line break. rehype-raw re-parses what this plugin
+ * writes a `<br/>` for every line break. rehype-raw reparses what this plugin
  * emits, and it never leaves SVG space on the way into a foreignObject, so `br`
  * is not treated as void: `<br/>` comes back as `<br></br>`, which HTML parses
  * as *two* breaks, pushing the last line out of the box mermaid measured.
@@ -124,31 +126,37 @@ function unpinWidth(svg) {
  * element. Mermaid's own stylesheet carries `p { margin: 0 }`, so the two
  * render exactly alike.
  */
-function splitLineBreaks(svg) {
+function splitLineBreaks(svg: string): string {
   return svg.replace(/<br\s*\/?>/g, "</p><p>");
 }
 
-function isMermaidBlock(node) {
+function isMermaidBlock(node: Element): boolean {
   if (node.tagName !== "pre") {
     return false;
   }
 
-  const code = node.children.find((child) => child.tagName === "code");
+  const code = node.children.find(
+    (child): child is Element => "tagName" in child && child.tagName === "code",
+  );
 
   return Boolean(code?.properties?.className?.includes("language-mermaid"));
 }
 
-function sourceOf(node) {
-  const code = node.children.find((child) => child.tagName === "code");
+function sourceOf(node: Element) {
+  const code = node.children.find(
+    (child): child is Element => "tagName" in child && child.tagName === "code",
+  );
 
-  return code.children.map((child) => child.value ?? "").join("");
+  return code!.children
+    .map((child) => ("value" in child && child.value ? child.value : ""))
+    .join("");
 }
 
-export function rehypeMermaid() {
+export const rehypeMermaid = function rehypeMermaid() {
   const render = createMermaidRenderer();
 
   return async (tree, file) => {
-    const blocks = [];
+    const blocks: { parent: Element; index: number; source: string }[] = [];
 
     visit(tree, "element", (node, index, parent) => {
       if (parent && index !== undefined && isMermaidBlock(node)) {
@@ -171,21 +179,30 @@ export function rehypeMermaid() {
       ),
     );
 
-    blocks.forEach((block, i) => {
-      if (light[i].status === "rejected") {
-        file.fail(`Could not render mermaid diagram: ${light[i].reason}`);
-      }
+    blocks.forEach((block, index) => {
+      const lightResult = light[index];
+      const darkResult = dark[index];
 
-      block.parent.children[block.index] = figure(light[i].value, dark[i].value);
+      if (lightResult.status === "rejected" || darkResult.status === "rejected") {
+        const reason =
+          lightResult.status === "rejected"
+            ? lightResult.reason
+            : darkResult.status === "rejected"
+              ? darkResult.reason
+              : "unknown error";
+        file.fail(`Could not render mermaid diagram: ${reason}`);
+      } else {
+        block.parent.children[block.index] = figure(lightResult.value, darkResult.value);
+      }
     });
   };
-}
+} satisfies Plugin<[], Element, Element>;
 
 /**
  * The dark copy is hidden from Pagefind: both carry the same label text, and
  * indexing each diagram twice would surface duplicate hits for one page.
  */
-function figure(light, dark) {
+function figure(light: RenderResult, dark: RenderResult): Element {
   const label = light.title ?? light.description ?? "Diagram";
 
   return {
@@ -217,7 +234,12 @@ function figure(light, dark) {
                 type: "element",
                 tagName: "div",
                 properties: { className: ["mermaid-svg", "mermaid-light"] },
-                children: [{ type: "raw", value: splitLineBreaks(unpinWidth(light.svg)) }],
+                children: [
+                  {
+                    type: "raw",
+                    value: splitLineBreaks(unpinWidth(light.svg)),
+                  } as unknown as Element,
+                ],
               },
               {
                 type: "element",
@@ -226,7 +248,12 @@ function figure(light, dark) {
                   className: ["mermaid-svg", "mermaid-dark"],
                   "data-pagefind-ignore": true,
                 },
-                children: [{ type: "raw", value: splitLineBreaks(unpinWidth(dark.svg)) }],
+                children: [
+                  {
+                    type: "raw",
+                    value: splitLineBreaks(unpinWidth(dark.svg)),
+                  } as unknown as Element,
+                ],
               },
             ],
           },
