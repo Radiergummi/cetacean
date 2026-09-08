@@ -72,9 +72,7 @@ flowchart TB
     class cetacean accent
 ```
 
-Each numbered edge is one of the three requirements below.
-
-### The instance label must identify the node
+### ① The instance label must identify the node
 
 Cetacean matches metrics to nodes by the `instance` label. Scraping over an overlay network leaves it set to the
 task's overlay IP, which matches no node: Prometheus looks healthy and every node chart is empty.
@@ -93,7 +91,7 @@ Relabeling `instance` is required, not optional, whenever the scrape goes over a
 The [dashboard][dashboard] also maps a node to its instance through `node_uname_info`. Run node-exporter with
 `hostname: "{{.Node.Hostname}}"` so its `nodename` label reports the Swarm node hostname.
 
-### cAdvisor must emit the Swarm service label
+### ② cAdvisor must emit the Swarm service label
 
 Container metrics are attributed to services through `container_label_com_docker_swarm_service_name`. cAdvisor emits
 it when started with `--store_container_labels=true`.
@@ -119,7 +117,7 @@ count(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service
 One or zero means the factory did not register. `docker service logs monitoring_cadvisor` names the socket it could
 not reach.
 
-### The cAdvisor scrape job must be named `cadvisor`
+### ③ The cAdvisor scrape job must be named `cadvisor`
 
 Cetacean detects cAdvisor with `up{job="cadvisor"}`. Under any other job name the dashboard treats container metrics
 as unavailable and skips them on the service, task, and node pages. node-exporter is detected by the presence of
