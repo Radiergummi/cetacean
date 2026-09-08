@@ -13,7 +13,7 @@ const home = await getEntry("docs", "index");
   </head>
   <body class="min-h-screen">
     <Header currentPath="/" />
-    <div class="mx-auto max-w-[90rem]">
+    <div class="mx-auto max-w-360">
       <main id="main-content" class="min-w-0">
         <Hero title="Cetacean" description={home.data.description} />
       </main>
