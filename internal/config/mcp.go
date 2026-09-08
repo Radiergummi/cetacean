@@ -415,3 +415,42 @@ func resolveMCPOpsLevel(file *int) (OperationsLevel, error) {
 
 	return OpsInherit, nil
 }
+
+// MCPIssuer returns the canonical external base URL clients reach this
+// deployment at: mcp.issuer when set, otherwise derived from
+// server.listen_addr and whether TLS terminates here.
+//
+// The second return is false when the derivation produced a URL nothing can
+// reach. server.listen_addr defaults to ":9000", so the derived issuer is
+// "http://:9000" — a URL with an empty host, which resolveMCPIssuer rejects
+// when an operator types it. A wildcard bind ("0.0.0.0", "::") parses to a
+// host but is equally unreachable.
+//
+// The string is returned either way, because how bad an unreachable issuer is
+// depends on the caller: OAuth clients fetch .well-known documents from it and
+// cannot work at all, while auth mode "none" builds no OAuth server and ends
+// up only with unreachable icon URLs.
+func (c *Config) MCPIssuer(tlsEnabled bool) (string, bool) {
+	if c.MCP.Issuer != "" {
+		return c.MCP.Issuer, true
+	}
+
+	scheme := "http"
+	if tlsEnabled {
+		scheme = "https"
+	}
+
+	issuer := scheme + "://" + c.ListenAddr
+
+	u, err := url.Parse(issuer)
+	if err != nil {
+		return issuer, false
+	}
+
+	switch u.Hostname() {
+	case "", "0.0.0.0", "::":
+		return issuer, false
+	}
+
+	return issuer, true
+}

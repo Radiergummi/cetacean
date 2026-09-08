@@ -665,8 +665,9 @@ type mcpDeps struct {
 // cache change listener detaches before the cache itself is torn down.
 //
 // The issuer defaults to the listen address + TLS scheme, which only works
-// when no reverse proxy is in front. Behind a proxy, set CETACEAN_MCP_ISSUER
-// (or [mcp].issuer) to the canonical external URL.
+// when the listen address carries a real host and no reverse proxy is in
+// front. Startup fails when OAuth is in play and no reachable issuer could be
+// derived; see Config.MCPIssuer.
 func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string), func()) {
 	if !d.cfg.MCP.Enabled {
 		return nil, nil, func() {}
@@ -683,13 +684,21 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		mcp.SetWidgetFS(widgets)
 	}
 
-	issuer := d.cfg.MCP.Issuer
-	if issuer == "" {
-		scheme := "http"
-		if d.tlsEnabled {
-			scheme = "https"
+	issuer, reachable := d.cfg.MCPIssuer(d.tlsEnabled)
+	if !reachable {
+		if d.authMode != "none" {
+			slog.Error(
+				"MCP OAuth needs an issuer clients can reach, and none could be derived from server.listen_addr. Set mcp.issuer to the URL clients reach from outside.",
+				"derived_issuer", issuer,
+				"listen_addr", d.cfg.ListenAddr,
+			)
+			os.Exit(1)
 		}
-		issuer = scheme + "://" + d.cfg.ListenAddr
+		slog.Warn(
+			"no reachable MCP issuer could be derived from server.listen_addr; MCP tool icons will point at an unreachable URL. Set mcp.issuer to the URL clients reach from outside.",
+			"derived_issuer", issuer,
+			"listen_addr", d.cfg.ListenAddr,
+		)
 	}
 	mcpResource := issuer + d.cfg.BasePath + "/mcp"
 
