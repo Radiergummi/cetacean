@@ -168,3 +168,51 @@ func TestBasePathMiddleware_Empty(t *testing.T) {
 		t.Errorf("path = %q, want %q", capturedPath, "/nodes")
 	}
 }
+
+func TestAbsURLPrefersPublicURL(t *testing.T) {
+	called := false
+	handler := publicURLMiddleware(
+		"https://cetacean.example.com",
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			if got := absURL(r, "/services"); got != "https://cetacean.example.com/services" {
+				t.Errorf("absURL = %q, want %q", got, "https://cetacean.example.com/services")
+			}
+		}),
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/services", nil)
+	req.Host = "internal:9000"
+	req.Header.Set("X-Forwarded-Host", "attacker.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	if !called {
+		t.Fatal("handler was never invoked")
+	}
+}
+
+func TestAbsURLFallsBackToForwardedHeaders(t *testing.T) {
+	called := false
+	handler := publicURLMiddleware(
+		"",
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			if got := absURL(r, "/services"); got != "https://proxy.example.com/services" {
+				t.Errorf("absURL = %q, want %q", got, "https://proxy.example.com/services")
+			}
+		}),
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/services", nil)
+	req.Host = "internal:9000"
+	req.Header.Set("X-Forwarded-Host", "proxy.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	if !called {
+		t.Fatal("handler was never invoked")
+	}
+}
