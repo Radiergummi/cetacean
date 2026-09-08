@@ -1,0 +1,14 @@
+/**
+ * Loaded into the headless browser that renders the diagrams, so build-time
+ * text measurement uses the same font the site does. Without it the box sizes
+ * depend on whichever sans-serif the build machine happens to have, and a
+ * diagram rendered in CI would not match one rendered locally.
+ */
+@font-face {
+  font-family: "Geist Variable";
+  font-style: normal;
+  font-display: block;
+  font-weight: 100 900;
+  src: url("../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2")
+    format("woff2-variations");
+}

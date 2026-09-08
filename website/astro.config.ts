@@ -4,6 +4,7 @@ import sitemap from "@astrojs/sitemap";
 import mdx from "@astrojs/mdx";
 import tailwindcss from "@tailwindcss/vite";
 import { visit } from "unist-util-visit";
+import { rehypeMermaid } from "./src/lib/mermaid-diagrams.js";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sirv from "sirv";
@@ -481,6 +482,8 @@ const remarkPlugins = [
   remarkStripTitle,
 ];
 
+const rehypePlugins = [rehypeMermaid];
+
 export default defineConfig({
   site: "https://cetacean.mazetti.me",
   srcDir: "./src",
@@ -492,7 +495,10 @@ export default defineConfig({
     plugins: [tailwindcss(), pagefindDevPlugin()],
   },
   markdown: {
-    processor: unified({ remarkPlugins }),
+    processor: unified({ remarkPlugins, rehypePlugins }),
+    // Shiki runs ahead of every user rehype plugin, so `mermaid` has to be kept
+    // out of its hands for `rehypeMermaid` to see an untouched code block.
+    syntaxHighlight: { type: "shiki", excludeLangs: ["mermaid"] },
     shikiConfig: {
       themes: {
         light: "github-light",

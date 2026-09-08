@@ -50,6 +50,30 @@ The stack runs Prometheus on a manager node, with node-exporter and cAdvisor on 
 If you already run Prometheus, set `prometheus.url` and check the scrape against the three requirements below. The
 bundled `prometheus.yml` and `compose.monitoring.yaml` already satisfy all three.
 
+```mermaid
+flowchart TB
+    accTitle: How metrics reach Cetacean
+    accDescr: node-exporter and cAdvisor run on every swarm node and are scraped by Prometheus, which Cetacean queries with PromQL.
+
+    subgraph swarm ["Every swarm node"]
+        direction TB
+        exporter["node-exporter"]
+        cadvisor["cAdvisor<br/>② emits the service name label"]
+    end
+
+    prometheus["Prometheus"]
+    cetacean["Cetacean"]
+
+    exporter -->|"① instance = node address"| prometheus
+    cadvisor -->|"③ job = cadvisor"| prometheus
+    prometheus -->|"PromQL"| cetacean
+
+    classDef accent fill:#2563eb,stroke:#2563eb,color:#ffffff
+    class cetacean accent
+```
+
+Each numbered edge is one of the three requirements below.
+
 ### The instance label must identify the node
 
 Cetacean matches metrics to nodes by the `instance` label. Scraping over an overlay network leaves it set to the

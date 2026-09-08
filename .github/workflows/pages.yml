@@ -45,6 +45,9 @@ jobs:
         working-directory: website
         run: |
           npm ci
+          # Diagrams in docs/ are rendered to SVG at build time by a headless
+          # browser; without it every mermaid block fails the build.
+          npx playwright install --with-deps chromium
           npm run build
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

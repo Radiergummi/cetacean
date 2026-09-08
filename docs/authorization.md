@@ -114,6 +114,21 @@ check there first when a grant seems to have no effect.
 pass. Operations level is a global ceiling on which categories of write the server exposes at all; grants decide
 which resources a given identity may write. A common pairing is `server.operations_level = 1` with per-team grants.
 
+```mermaid
+flowchart LR
+    accTitle: How a write request is authorized
+    accDescr: A write passes the operations level check first, then the per-resource grant check. Failing the first answers 403 OPS001, failing the second answers 403 ACL002.
+
+    request["Write request"] --> level{"Operations level allows<br/>this category of write?"}
+    level -->|no| ops["403 OPS001"]
+    level -->|yes| grant{"A grant gives write<br/>on this resource?"}
+    grant -->|no| acl["403 ACL002"]
+    grant -->|yes| handler["Handler runs"]
+
+    classDef accent fill:#2563eb,stroke:#2563eb,color:#ffffff
+    class handler accent
+```
+
 | Operations level | Grant           | Result                |
 | ---------------- | --------------- | --------------------- |
 | Allows           | Grants `write`  | Allowed               |

@@ -1,0 +1,132 @@
+---
+/**
+ * Turns the build-time diagram SVGs into pannable, zoomable figures.
+ *
+ * Everything here is an enhancement: the SVG is already in the page and already
+ * matches the active theme, so a reader without JavaScript loses the controls
+ * and nothing else. Panzoom is behind a dynamic import guarded on a diagram
+ * actually being present, so the pages without one pay nothing for it.
+ */
+const controls = [
+    { action: "zoom-in", label: "Zoom in", path: "M12 4.5v15m7.5-7.5h-15" },
+    { action: "zoom-out", label: "Zoom out", path: "M19.5 12h-15" },
+    {
+        action: "reset",
+        label: "Reset view",
+        path: "M16.023 9.348h4.992V4.356m0 4.992-3.181-3.183a8.25 8.25 0 0 0-13.803 3.7M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7",
+    },
+    {
+        action: "fullscreen",
+        label: "Toggle fullscreen",
+        path: "M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15",
+    },
+];
+---
+
+<template id="mermaid-controls-template">
+    <div class="mermaid-controls">
+        {
+            controls.map(({ action, label, path }) => (
+                <button type="button" data-action={action} aria-label={label} title={label}>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="size-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="1.5"
+                        stroke="currentColor"
+                        aria-hidden="true"
+                    >
+                        <path stroke-linecap="round" stroke-linejoin="round" d={path} />
+                    </svg>
+                </button>
+            ))
+        }
+    </div>
+</template>
+
+<script>
+    document.addEventListener("astro:page-load", async () => {
+        const figures = document.querySelectorAll<HTMLElement>(
+            ".mermaid-figure:not([data-interactive])",
+        );
+
+        if (figures.length === 0) {
+            return;
+        }
+
+        const template = document.getElementById(
+            "mermaid-controls-template",
+        ) as HTMLTemplateElement | null;
+
+        if (!template) {
+            return;
+        }
+
+        const { default: Panzoom } = await import("@panzoom/panzoom");
+
+        figures.forEach((figure) => {
+            const canvas = figure.querySelector<HTMLElement>(".mermaid-canvas");
+            const viewport = figure.querySelector<HTMLElement>(".mermaid-viewport");
+
+            if (!canvas || !viewport) {
+                return;
+            }
+
+            figure.setAttribute("data-interactive", "");
+
+            const panzoom = Panzoom(canvas, {
+                maxScale: 8,
+                minScale: 1,
+                pinchAndPan: true,
+                cursor: "grab",
+            });
+            // Panzoom writes `cursor` as an inline style on the canvas, so no
+            // stylesheet rule can swap it while dragging. `handleDown`/`handleUp`
+            // take a PointerEvent rather than a callback — they exist for wiring
+            // your own events under `noBind` — so the swap hangs off real ones.
+            canvas.addEventListener("pointerdown", () => {
+                panzoom.setOptions({ cursor: "grabbing" });
+            });
+
+            document.addEventListener("pointerup", () => {
+                panzoom.setOptions({ cursor: "grab" });
+            });
+
+            // Plain scrolling stays page scrolling; zooming asks for a modifier,
+            // the way a map embedded in an article does.
+            viewport.addEventListener(
+                "wheel",
+                (event) => {
+                    if (event.ctrlKey || event.metaKey) {
+                        panzoom.zoomWithWheel(event);
+                    }
+                },
+                { passive: false },
+            );
+
+            const controls = template.content.cloneNode(true) as DocumentFragment;
+
+            controls.querySelector('[data-action="zoom-in"]')?.addEventListener("click", () =>
+                panzoom.zoomIn()
+            );
+            controls.querySelector('[data-action="zoom-out"]')?.addEventListener("click", () =>
+                panzoom.zoomOut()
+            );
+            controls.querySelector('[data-action="reset"]')?.addEventListener("click", () =>
+                panzoom.reset()
+            );
+            controls
+                .querySelector('[data-action="fullscreen"]')
+                ?.addEventListener("click", () => {
+                    if (document.fullscreenElement === figure) {
+                        document.exitFullscreen();
+                    } else {
+                        figure.requestFullscreen();
+                    }
+                });
+
+            figure.appendChild(controls);
+        });
+    });
+</script>

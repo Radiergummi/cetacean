@@ -141,6 +141,30 @@ Cetacean is its own OAuth 2.1 authorization server for `/mcp`, implementing the 
 A client discovers it, sends you through your configured auth provider, and exchanges the result for an access token and
 a refresh token. Access tokens are scoped to this deployment, so one cannot be replayed against another Cetacean.
 
+```mermaid
+sequenceDiagram
+    accTitle: How an MCP client gets an access token
+    accDescr: The client discovers the authorization server from a 401, identifies itself, sends you through your auth provider and a consent screen, then exchanges the code for an access token scoped to this deployment.
+
+    participant client as MCP client
+    participant cetacean as Cetacean
+    actor you as You
+
+    client->>cetacean: POST /mcp, no token
+    cetacean-->>client: 401, WWW-Authenticate names the metadata URL
+    client->>cetacean: GET /.well-known/oauth-protected-resource
+    client->>cetacean: GET /.well-known/oauth-authorization-server
+    Note over client,cetacean: The client identifies itself by a published<br/>metadata URL, or registers dynamically
+    client->>cetacean: GET /oauth/authorize, S256 challenge and resource
+    cetacean->>you: sign in through the configured auth provider
+    cetacean->>you: consent screen naming the client
+    you-->>cetacean: approve
+    cetacean-->>client: 302 with the code and iss
+    client->>cetacean: POST /oauth/token, code and PKCE verifier
+    cetacean-->>client: access token and refresh token
+    client->>cetacean: POST /mcp, Bearer token
+```
+
 The consent screen labels how the client identified itself. **Verified via published metadata** means the client is
 named by a URL Cetacean fetched and checked. **Self-reported identity** means the client named itself; those are never
 remembered, so you approve them every time.
