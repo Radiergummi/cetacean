@@ -1,7 +1,6 @@
 ---
 import DocsLayout from "../../layouts/DocsLayout.astro";
-import Badge from "../../components/Badge.astro";
-import ReferenceEntry from "../../components/ReferenceEntry.astro";
+import ErrorCode from "../../components/ErrorCode.astro";
 import { errorDomains, errorsInDomain } from "../../lib/errors";
 
 const domains = errorDomains.map((domain) => ({
@@ -19,9 +18,6 @@ const headings = domains.map((domain) => ({
   slug: domain.prefix,
   text: `${domain.prefix} — ${domain.label}`,
 }));
-
-const metaClass =
-  "grid grid-cols-[4.5rem_1fr] gap-x-3 gap-y-[0.15rem] text-[0.8rem] text-muted-foreground";
 ---
 <DocsLayout
   title="Error Reference"
@@ -47,18 +43,14 @@ const metaClass =
       <h2 id={domain.prefix}>{domain.prefix} — {domain.label}</h2>
 
       {domain.errors.map((def) => (
-        <ReferenceEntry id={def.code} class="group my-6" anchor>
-          <Fragment slot="heading">
-            <code>{def.code}</code>
-            <span class="text-sm font-medium text-muted-foreground">{def.title}</span>
-            <Badge tone="muted">{def.status}</Badge>
-          </Fragment>
-          <p>{def.description}</p>
-          <div slot="facts" class={metaClass}>
-            <span class="font-medium">Resolve</span>
-            <span>{def.suggestion}</span>
-          </div>
-        </ReferenceEntry>
+        <ErrorCode
+          code={def.code}
+          title={def.title}
+          status={def.status}
+          suggestion={def.suggestion}
+        >
+          {def.description}
+        </ErrorCode>
       ))}
     </>
   ))}
