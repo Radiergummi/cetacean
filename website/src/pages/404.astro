@@ -1,4 +1,5 @@
 ---
+import { ArrowLeft } from "@lucide/astro";
 import Head from "../components/Head.astro";
 import Header from "../components/Header.astro";
 import "../styles/global.css";
@@ -14,9 +15,7 @@ import "../styles/global.css";
       <h1 class="mt-4 text-2xl font-semibold tracking-tight">Page not found</h1>
       <p class="mt-2 text-muted-foreground">The page you're looking for doesn't exist or has been moved.</p>
       <a href="/" class="mt-8 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-        <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
-        </svg>
+        <ArrowLeft class="size-4" aria-hidden="true" />
         Back to docs
       </a>
     </main>

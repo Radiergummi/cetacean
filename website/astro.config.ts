@@ -157,26 +157,54 @@ function html(value: string): Html {
  * an ordinary blockquote on GitHub and in the raw `.md` route, and the plugin
  * runs over both `.md` and `.mdx`, so no doc needs an import.
  *
- * Icon paths are Heroicons (MIT), matching the inline SVGs in the components.
+ * Icons are Lucide (ISC), the set the components render through `@lucide/astro`.
+ * A Lucide icon is more than one path, so each entry carries the whole node
+ * list rather than a single `d`.
  */
 const calloutKinds = {
   note: {
     label: "Note",
-    icon: "m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z",
+    icon: [
+      ["circle", { cx: "12", cy: "12", r: "10" }],
+      ["path", { d: "M12 16v-4" }],
+      ["path", { d: "M12 8h.01" }],
+    ],
   },
   tip: {
     label: "Tip",
-    icon: "M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18",
+    icon: [
+      [
+        "path",
+        {
+          d: "M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5",
+        },
+      ],
+      ["path", { d: "M9 18h6" }],
+      ["path", { d: "M10 22h4" }],
+    ],
   },
   warning: {
     label: "Warning",
-    icon: "M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z",
+    icon: [
+      ["path", { d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" }],
+      ["path", { d: "M12 9v4" }],
+      ["path", { d: "M12 17h.01" }],
+    ],
   },
   caution: {
     label: "Caution",
-    icon: "M12 9v3.75m0-10.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.75h-.152c-3.196 0-6.1-1.249-8.25-3.286Zm0 13.036h.008v.008H12v-.008Z",
+    icon: [
+      [
+        "path",
+        {
+          d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+        },
+      ],
+      ["path", { d: "M12 8v4" }],
+      ["path", { d: "M12 16h.01" }],
+    ],
   },
-};
+} satisfies Record<string, { label: string; icon: [string, Properties][] }>;
 
 type CalloutKind = keyof typeof calloutKinds;
 
@@ -242,11 +270,13 @@ function calloutHeader(kind: CalloutKind): Paragraph {
             xmlns: "http://www.w3.org/2000/svg",
             fill: "none",
             viewBox: "0 0 24 24",
-            strokeWidth: "1.5",
+            strokeWidth: "2",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
             stroke: "currentColor",
             ariaHidden: "true",
           },
-          [element("path", { strokeLinecap: "round", strokeLinejoin: "round", d: icon })],
+          icon.map(([tagName, properties]) => element(tagName, properties)),
         ),
         element("span", { className: ["callout-label"] }, [{ type: "text", value: label }]),
       ],

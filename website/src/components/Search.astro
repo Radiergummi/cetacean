@@ -1,4 +1,5 @@
 ---
+import { Search } from "@lucide/astro";
 ---
 <div class="flex-1 hidden md:flex justify-center px-4">
   <button
@@ -7,9 +8,7 @@
     class="inline-flex items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 py-1 text-sm text-muted-foreground hover:bg-muted transition-colors cursor-pointer w-full max-w-2xs lg:max-w-xs justify-between"
   >
     <span class="flex items-center gap-2">
-      <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-      </svg>
+      <Search class="size-4" aria-hidden="true" />
       Search...
     </span>
     <kbd class="pointer-events-none text-2xs font-medium text-muted-foreground/70" id="search-shortcut-label"></kbd>
@@ -31,9 +30,7 @@
     aria-label="Search documentation"
   >
     <div class="flex items-center gap-2 border-b border-border px-3 py-2.5">
-      <svg class="size-4 shrink-0 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-      </svg>
+      <Search class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <input
         id="search-input"
         type="text"
