@@ -8,16 +8,16 @@ tags: [ api, rest, sse, json-ld, openapi ]
 # API
 
 Cetacean serves its cached view of the swarm over HTTP. Reads use `GET`; writes use `PUT`, `POST`, `PATCH`, and
-`DELETE`, gated by [operations level](configuration#operations-level). Authentication is
-[pluggable](authentication) via `auth.mode` and defaults to anonymous access.
+`DELETE`, gated by [operations level][operations-level]. Authentication is
+[pluggable][authentication] via [`auth.mode`][auth.mode] and defaults to anonymous access.
 
-The OpenAPI spec is served as JSON at `GET /api`. Browsers get an interactive playground at the same path; the hosted
-copy is the [API explorer](api/explorer).
+The OpenAPI spec is served as JSON at `GET /api`. Browsers get an interactive playground at the same path; the
+hosted copy is the [API explorer][api-explorer].
 
 ## Content negotiation
 
-Every resource URL serves JSON, HTML (the embedded dashboard), SSE, or a feed format depending on what the client asks
-for. There is no `/api/v1/` prefix; versioning lives in the media type.
+Every resource URL serves JSON, HTML (the embedded [dashboard][dashboard]), SSE, or a feed format depending on what
+the client asks for. There is no `/api/v1/` prefix; versioning lives in the media type.
 
 ### Resolution order
 
@@ -53,9 +53,9 @@ curl -H "Accept: application/json" http://localhost:9000/services
 
 ## Feeds
 
-Resource list and detail endpoints, plus `/events`, `/history`, `/search`, and `/recommendations`, serve
-[Atom 1.0](https://www.rfc-editor.org/rfc/rfc4287) and [JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/). A feed
-carries the resource's change history, not its current state.
+Resource list and detail endpoints, plus `/events`, `/history`, `/search`, and
+[`/recommendations`][recommendations], serve [Atom 1.0](https://www.rfc-editor.org/rfc/rfc4287) and [JSON Feed
+1.1](https://www.jsonfeed.org/version/1.1/). A feed carries the resource's change history, not its current state.
 
 ### Supported endpoints
 
@@ -138,9 +138,9 @@ curl "http://localhost:9000/configs?search=nginx"
 
 ### Range header pagination
 
-List endpoints accept `Range: items 0-24` and answer `206 Partial Content` with `Content-Range: items 0-24/142`. Every
-list response sets `Accept-Ranges: items`. An offset past the end returns `416` with `Content-Range: items */142`. Query
-parameters take precedence when both are present.
+List endpoints accept `Range: items 0-24` and answer `206 Partial Content` with `Content-Range: items 0-24/142`.
+Every list response sets `Accept-Ranges: items`. An offset past the end returns `416` with `Content-Range: items
+*/142`. Query parameters take precedence when both are present.
 
 ### Sort fields by resource
 
@@ -262,15 +262,14 @@ suggestion; `GET /api/errors/{code}` returns one.
 | Situation | Status | Codes | What to do |
 |---|---|---|---|
 | Resource changed between your read and your write | 409 | `SVC001`, `NOD002`, `CFG005`, `SEC005` | Re-read the resource and retry |
-| Endpoint above the configured [operations level](configuration#operations-level) | 403 | `OPS001` | Raise the operations level |
-| [ACL](authorization) denies read or write | 403 | `ACL001`, `ACL002` | The response names the resource and permission checked |
+| Endpoint above the configured [operations level][operations-level] | 403 | `OPS001` | Raise the operations level |
+| [ACL][authorization] denies read or write | 403 | `ACL001`, `ACL002` | The response names the resource and permission checked |
 | `PATCH` sent with the wrong `Content-Type` | 415 | `API004` | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | `ENG001` | Check the socket and the daemon |
 
 ## Caching
 
-JSON responses carry an `ETag` (the first 16 bytes of the response body's SHA-256, hex-encoded) and
-`Cache-Control: no-cache`. Use `If-None-Match` for conditional requests:
+JSON responses carry an `ETag` and `Cache-Control: no-cache`. Use `If-None-Match` for conditional requests:
 
 ```bash
 curl -v http://localhost:9000/services
@@ -289,7 +288,7 @@ SSE and streaming endpoints set no caching headers.
 ## Response headers
 
 `Allow` on `GET` and `HEAD` responses lists the methods available for that resource under the current
-[operations level](configuration#operations-level) and [ACL](authorization) grants. Inspect it before attempting a
+[operations level][operations-level] and [ACL][authorization] grants. Inspect it before attempting a
 write.
 
 `Accept-Patch` lists the patch formats a resource accepts, either `application/json-patch+json, application/merge-patch+json`
@@ -364,8 +363,8 @@ The `action` field says what happened:
 | `ref_changed` | A resource this one cross-references changed. |
 | `full_sync` | Sent as a `sync` event when the stream could not be replayed from the client's cursor. Refetch. |
 
-Events arriving within the batch interval (`server.sse.batch_interval`, default 100ms) are sent together as a `batch`
-event:
+Events arriving within the batch interval ([`server.sse.batch_interval`][server.sse.batch_interval], default 100ms)
+are sent together as a `batch` event:
 
 ```sse
 id: 2
@@ -434,7 +433,7 @@ There is no general rate limiting. Concurrent streams are capped, and a request 
 ## Endpoints
 
 `GET /api` serves the full OpenAPI spec with request and response schemas, and the
-[API explorer](api/explorer) renders it interactively. The tables below are the shape of the surface.
+[API explorer][api-explorer] renders it interactively. The tables below are the shape of the surface.
 
 ### Reads
 
@@ -460,8 +459,8 @@ returns up to 1000). `POST /-/resync` forces a full re-fetch from the Docker soc
 
 ### Writes
 
-Each row gives the minimum [operations level](configuration#operations-level) the endpoint needs. Every write also
-passes the per-resource [ACL](authorization) write check.
+Each row gives the minimum [operations level][operations-level] the endpoint needs. Every write also
+passes the per-resource [ACL][authorization] write check.
 
 | Endpoint | Level |
 |---|---|
@@ -518,13 +517,14 @@ passes the per-resource [ACL](authorization) write check.
 | `POST /plugins/{name}/upgrade` | 3 |
 | `DELETE /plugins/{name}` | 3 |
 
-> **Note:** `GET /swarm/unlock-key` returns a credential, so it is gated at level 3 like the writes beside it.
+> [!NOTE]
+> `GET /swarm/unlock-key` returns a credential, so it is gated at level 3 like the writes beside it.
 
 ## MCP server
 
-Cetacean can also serve its cluster view over the Model Context Protocol. Set `mcp.enabled` to `true` and the server
-mounts at `/mcp`. See [MCP Server](mcp) for transport, authorization, and prompts, and
-[MCP tools and resources](mcp-tools) for the catalog.
+Cetacean can also serve its cluster view over the Model Context Protocol. Set [`mcp.enabled`][mcp.enabled] to
+`true` and the server mounts at `/mcp`. See [MCP Server][mcp] for transport, authorization, and prompts, and [MCP
+tools and resources][mcp-tools] for the catalog.
 
 ## Self-discovery
 
@@ -541,3 +541,15 @@ Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby"
 
 Every response carries a `Request-Id` header. Send your own in the `Request-Id` request header (max 64 printable ASCII
 characters) or the server generates one. The value appears in error responses as `requestId` and in the server logs.
+
+[api-explorer]: api/explorer
+[auth.mode]: configuration#auth.mode
+[authentication]: authentication
+[authorization]: authorization
+[dashboard]: dashboard
+[mcp-tools]: mcp-tools
+[mcp.enabled]: configuration#mcp.enabled
+[mcp]: mcp
+[operations-level]: configuration#operations-level
+[recommendations]: recommendations
+[server.sse.batch_interval]: configuration#server.sse.batch_interval

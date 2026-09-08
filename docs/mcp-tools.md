@@ -8,10 +8,11 @@ tags: [mcp, ai, agents, tools, reference]
 # MCP tools and resources
 
 This page is the catalog an agent sees over Cetacean's MCP server: 12 resources, 27 tools, 6 prompts, and 5
-widgets. For enabling the server, authorization, and configuration, see [MCP Server](mcp).
+widgets. For enabling the server, authorization, and configuration, see [MCP Server][mcp].
 
-Everything here is filtered per identity. A tool above the configured operations level is not registered at
-all; a tool or resource the identity holds no grant for is hidden from the listing and refused at call time.
+Everything here is filtered per identity. A tool above the configured [operations level][operations-level] is not
+registered at all; a tool or resource the identity holds no grant for is hidden from the listing and refused at
+call time.
 
 ## Resources
 
@@ -20,7 +21,7 @@ Resources are read-only views returned as `application/json`. Three are static, 
 | URI | Contents |
 |---|---|
 | `cetacean://cluster` | Node, service, task, and stack counts, node readiness, task counts by state, total and reserved CPU and memory, the largest node's capacity, converged and degraded service counts, last sync time |
-| `cetacean://recommendations` | Current recommendation engine findings, each with severity, category, target resource, and rationale |
+| `cetacean://recommendations` | Current [recommendation][recommendations] engine findings, each with severity, category, target resource, and rationale |
 | `cetacean://history` | The most recent create, update, and delete events across every resource type, newest first, up to 100 |
 
 Every numeric field in `cetacean://cluster` names its unit: `totalCPUCores`, `reservedCPUCores`,
@@ -28,9 +29,8 @@ Every numeric field in `cetacean://cluster` names its unit: `totalCPUCores`, `re
 cores. `cetacean://history` names a task event after its service (`demo_flaky.3`) rather than repeating the
 task ID; `resourceId` still carries the ID.
 
-Templated resources return the same compact `Digest` the `describe` tool builds, so a subscription payload and
-a tool result cannot describe one resource differently. `services/{id}/logs` is the exception: it is a raw log
-stream.
+Templated resources return the same compact digest the `describe` tool builds. `services/{id}/logs` is the
+exception: it is a raw log stream.
 
 | URI template | Contents |
 |---|---|
@@ -53,21 +53,14 @@ notification: a client is only notified about resources its identity can read.
 
 ### Argument completion
 
-Templated resource URIs and prompt arguments complete. A client editing `cetacean://services/{id}`, or a
-prompt's `service` argument, calls `completion/complete` and receives the **names** of matching resources
-rather than IDs, since a name is what a read resolves.
-
-Matching is a case-insensitive substring, the same rule `find`'s `query` uses. Docker names carry their stack
-as a prefix, so typing `prometheus` offers `monitoring_prometheus`. Completions are capped at 100 values, with
-`total` and `hasMore` reporting what was left out. Completion reads the same ACL-filtered listing every other
-read goes through, and a secret's payload is redacted on that path before a name is taken from it.
+Templated resource URIs and prompt arguments complete, offering resource **names** rather than IDs. Matching is
+a case-insensitive substring, so typing `prometheus` offers `monitoring_prometheus`. Completions are capped at
+100 values and are filtered by the caller's grants like every other read.
 
 ## Compact resource shapes
 
-Tools and resource reads never return a raw Docker Engine object. Eight services as raw `swarm.Service` run to
-roughly fourteen thousand tokens, mostly `Platforms` entries and a duplicated `PreviousSpec`, and the field a
-caller wants (is this healthy?) is not in there, because state is derived from tasks. Every list and detail
-read returns one of two shapes instead.
+Tools and resource reads never return raw Docker objects—they are enormous, and they do not carry the field a
+caller actually wants, since a service's health is derived from its tasks. Every read returns one of two shapes.
 
 **Row** is one entry in a list, returned by `find`. Every row carries `id`, `name`, and `type` (singular:
 `service`, `node`, `task`, and so on). `stack`, `state`, and `detail` (the most identifying secondary fact,
@@ -106,28 +99,18 @@ Both `find` (when `type` is given) and `describe` accept `raw: true`, adding the
 the result under `raw`. Use it only when a specific field a row or digest omits is needed; the compact shapes
 exist to avoid handing an agent a several-hundred-line object.
 
-Raw records ride beside the compact shape rather than replacing it. `find` fills a `raw` array holding one
-record per row it returned, and `describe` adds a `raw` object next to the digest's fields. A tool that
-advertises an output schema must return structured content conforming to it whatever its arguments, so raw is
-an addition to the declared shape. The compact half of a raw result is the same one a plain call returns,
-filters and paging included.
+Raw records ride beside the compact shape rather than replacing it: `find` adds a `raw` array with one record
+per row, `describe` a `raw` object beside the digest.
 
 ## Tools
 
-Tools are gated by operations level (`mcp.operations_level`, inheriting `operations_level`) and by
-per-resource ACL write permission. Each tool advertises the behavioural hints (`readOnlyHint`,
-`destructiveHint`, `idempotentHint`, `openWorldHint`) clients use to gate confirmation prompts, an output
-schema the server validates results against, and an [icon](#icons). Results carry machine-readable
-`structuredContent` alongside the text form. An input-validation failure comes back as a tool result with
-`isError: true` so the model can self-correct, not as a protocol error. Mutating tools return `409` on a
-Docker version conflict.
+Tools are gated by operations level ([`mcp.operations_level`][mcp.operations_level], inheriting `operations_level`)
+and by per-resource ACL write permission. Each tool advertises the behavioural hints (`readOnlyHint`,
+`destructiveHint`, `idempotentHint`, `openWorldHint`) clients use to gate confirmation prompts, an output schema
+the server validates results against, and an [icon][icons]. Mutating tools return `409` when someone else
+changed the resource first.
 
-On connect the server sends top-level usage `instructions`: read-mostly model, resolve IDs with `find` first,
-writes gated by operations level and ACL.
-
-`find` and `describe` also attach `resource_link` content items for the resources their result is about, so a
-host can offer somewhere to go next and a client can `resources/read` one without spelling a `cetacean://`
-URI. Links describe the page returned, filters and paging included, and are capped at 25.
+`find` and `describe` attach links to the resources they returned, so a host can offer somewhere to go next.
 
 ### Level 0: reads
 
@@ -174,10 +157,8 @@ cache, and checks the caller's read grant before querying. `metric` is `cpu` (de
 `network`; `range` is `1h` (default), `6h`, `24h`, or `7d`. Asking for `top` turns it into a ranking:
 `target: "cluster"` ranks the busiest services (or nodes, with `by: "node"`) and `target: "node"` with an `id`
 ranks the services on that host, which answers why a node is hot. `top` defaults to 5 and is capped at 10.
-With an ACL policy active, the caller's grants are compiled into the query rather than applied to its result.
-Metrics need Prometheus, plus cAdvisor for service metrics and node-exporter for node metrics; without them
-the tool reports that metrics are unavailable rather than returning empty series. The node scope matches on
-Prometheus's standard `instance` label.
+Metrics need Prometheus, plus cAdvisor for service metrics and node-exporter for node metrics; without them the
+tool says metrics are unavailable rather than returning empty series.
 
 `get_recommendations` returns the same findings as `cetacean://recommendations`, with totals counting what the
 caller may read. A finding with a remedy carries it as `fix`, naming the tool to call, for example
@@ -197,16 +178,16 @@ seconds and is capped at 300; the wait cannot be cancelled once started.
 | `restart_service` | Forces a rolling restart by bumping `ForceUpdate`. No other spec field changes | `id` |
 | `remove_task` | Deletes a task; Swarm reschedules a replacement, so this is a forced reschedule | `id` |
 
-The first four accept [task augmentation](mcp#tasks) and return a summary of where the service ended up
+The first four accept [task augmentation][tasks] and return a summary of where the service ended up
 rather than its full spec:
 
 ```json
 {"id":"web","name":"web","image":"nginx:1.27","mode":"replicated","replicas":5,"running":5,"state":"running","version":42}
 ```
 
-`running` is the live count, `state` is the same derivation the dashboard and the API report, and `version` is
-the Swarm version index for a caller doing its own concurrency checks. `replicas` is omitted for a global
-service.
+`running` is the live count, `state` is the same derivation the [dashboard][dashboard] and the [API][api] report,
+and `version` is the Swarm version index for a caller doing its own concurrency checks. `replicas` is omitted for a
+global service.
 
 ### Level 2: configuration
 
@@ -236,8 +217,6 @@ service.
 | `command` | `command` plus `args` | The entrypoint and what follows it, the split Docker makes. Omitting one clears it |
 
 Every section other than `env` and `labels` replaces its section wholesale: a field you omit is cleared.
-Because `value` is whatever the section takes, the input schema cannot describe it, and the section's decoder
-validates it instead, naming the section and the shape it wanted.
 
 Secrets, configs, and mounts are not sections of `update_service`. Each takes a list rather than a spec
 fragment, and attaching a secret checks a read grant on the secret as well as a write grant on the service,
@@ -246,9 +225,10 @@ so each is a tool of its own. Passing one as a `section` is refused with the nam
 All three replace their set wholesale: pass every entry the service should end up with, because one left out
 is detached, and a container may lose data it was writing to a dropped mount.
 
-> **Note:** a bind mount hands the container the host's filesystem at that path, and binding
-> `/var/run/docker.sock` gives it control of the whole cluster. `update_service_mounts` will do it if asked;
-> the operations level is not what stops it.
+> [!CAUTION]
+> A bind mount hands the container the host's filesystem at that path, and binding `/var/run/docker.sock` gives
+> it control of the whole cluster. `update_service_mounts` will do it if asked; the operations level is not what
+> stops it.
 
 Swarm secrets and configs are immutable, so rotating one is three calls in order: `create_secret` for the
 replacement, `update_service_secrets` to repoint each service that uses it (`describe` the secret first, its
@@ -262,11 +242,8 @@ The spec-editing tools return the section they changed rather than the whole ser
  "details":{"cpuLimitCores":2,"memoryLimitBytes":1073741824}}
 ```
 
-`details` is the same projection `describe` builds, narrowed to the edited section, so confirming an edit and
-describing the resource afterwards cannot disagree. It reports `envNames` and a log driver's `optionNames`,
-never their values, so a call that raises a CPU limit does not return the service's credentials. The node
-tools answer with `id`, `hostname`, `version`, `section`, and `details`, plus `role` and `availability` on
-every one of them.
+`details` reports the edited section as `describe` would, naming environment variables and log driver options
+without their values—so raising a CPU limit never hands back the service's credentials.
 
 ### Level 3: impactful
 
@@ -307,23 +284,12 @@ investigation or a runbook.
 A prompt's level is the highest level of the tools it walks, so it is never offered where one of its steps
 would be refused. At the default level 1 you get the three diagnostic prompts plus `roll_back_service`.
 
-Prompts are also filtered by ACL, all or nothing: a prompt is offered only when every tool it walks is
-available to you and you hold read on every resource type in its Reads column. The read-type check matters
-because the cross-type reads (`find`, `describe`, `get_events`, `get_cluster_status`, `get_topology`,
-`get_metrics`, `get_recommendations`) are ungated, each ACL-filtering its own results, so a sequence built
-only from those would otherwise be offered to someone who gets an empty list from every step. A caller whose
-grants match nothing is offered no prompts. A prompt you cannot see reports `not found` from `prompts/get`.
+Prompts are filtered by ACL too, all or nothing: you are offered a prompt only if you can use every tool it
+walks and can read every resource type in its Reads column. A caller whose grants match nothing is offered
+none.
 
-Where a composite read exists, the sequence calls it rather than describing the join: `drain_node` uses
-`get_topology`'s drain-impact view, `review_capacity` opens on `get_cluster_status` and ranks nodes with one
-`get_metrics` call, the two prompts that need a change history call `get_events` narrowed to their service,
-and every step that waits calls `watch`.
-
-A prompt expands to a single message with the resource name you supplied. It reads no cluster data and does
-not check that the name exists; the text tells the model to resolve it with `find` first. Every read and write
-the prompt describes goes through the normal tool and resource paths, including ACL checks.
-
-The six prompts cover the sequences that recur most and cost the most tool calls unaided.
+A prompt only seeds the conversation; every read and write it then describes goes through the normal tools,
+ACL checks included.
 
 ## Widgets
 
@@ -341,17 +307,9 @@ Cetacean advertises `io.modelcontextprotocol/ui` and serves each widget as a res
 Each tool names its widget in `_meta`, so a host knows which view fits the result. The same tool called from a
 client without app support returns JSON.
 
-Each widget is a single self-contained HTML document with MIME type `text/html;profile=mcp-app`, all CSS and
-JavaScript inlined, because an app resource has no base URL and cannot fetch anything relative to itself.
-Widgets read data by calling Cetacean's MCP tools through the host, never Cetacean's HTTP API directly, so
-every read stays on the audited path and a widget sees exactly what the calling identity's grants allow.
-
-Each widget declares an empty `_meta.ui.csp`, stating that it needs no external origin: no network, no
-third-party assets, no nested frames.
-
-Widgets are optional in both directions. A host without app support ignores the extension and receives
-ordinary results, and a binary built without `npm run build:widgets` serves no widget resources and does not
-advertise the extension.
+Widgets are self-contained: they load nothing from the network and read data only through Cetacean's MCP tools,
+so a widget shows exactly what the calling identity's grants allow. A host without app support simply receives
+ordinary results.
 
 ## Icons
 
@@ -360,8 +318,18 @@ verb category (read, search, scale, edit, node, remove); resource icons reflect 
 itself carries a display `title`, a `description`, a `websiteUrl`, and an icon, so a host listing several MCP
 servers shows Cetacean by name rather than by its programmatic ID.
 
-The icons are plain SVGs served under the unauthenticated `/assets/mcp-icons/` prefix, so a client loads them
-without a bearer token in every auth mode. Their URLs are absolute and derived from the canonical external
-base URL, so set `mcp.issuer` when Cetacean runs behind a reverse proxy or the icon URLs will point at the
-wrong host. If no external base URL can be resolved, icons are omitted rather than advertised as broken
-relative links.
+Icon URLs are absolute, so set [`server.public_url`][server.public_url] when Cetacean runs behind a reverse proxy
+or they will point at the wrong host — [`mcp.issuer`][mcp.issuer] overrides it for MCP alone. They are served
+unauthenticated, so a client loads them in any [auth mode][authentication].
+
+[api]: api
+[authentication]: authentication
+[dashboard]: dashboard
+[icons]: #icons
+[mcp]: mcp
+[mcp.issuer]: configuration#mcp.issuer
+[mcp.operations_level]: configuration#mcp.operations_level
+[operations-level]: configuration#operations-level
+[recommendations]: recommendations
+[server.public_url]: configuration#server.public_url
+[tasks]: mcp#wait-for-changes-to-take-effect

@@ -1,4 +1,12 @@
-version: "3.8"
+# Cetacean on its own. Deploys with no prerequisites:
+#
+#   docker stack deploy -c compose.yaml cetacean
+#
+# To chart metrics, deploy compose.monitoring.yaml (which creates the
+# `monitoring` overlay network) and add compose.prometheus.yaml on top:
+#
+#   docker stack deploy -c compose.monitoring.yaml monitoring
+#   docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean
 
 services:
   cetacean:
@@ -34,10 +42,7 @@ services:
         source: cetacean_data
         target: /data
     environment:
-      CETACEAN_PROMETHEUS_URL: "${CETACEAN_PROMETHEUS_URL:-}"
       CETACEAN_DATA_DIR: /data
-    networks:
-      - monitoring
     deploy:
       placement:
         constraints:
@@ -52,8 +57,3 @@ services:
 
 volumes:
   cetacean_data:
-
-networks:
-  monitoring:
-    external: true
-    name: monitoring

@@ -4,13 +4,15 @@ Thanks for your interest in contributing! This guide covers everything you need 
 
 ## Development Setup
 
-**Prerequisites**: Go 1.26+, Node.js 22+, Docker with Swarm mode
+**Prerequisites**: Go 1.26+, Node.js 24+, Docker with Swarm mode
 
 ```bash
-# Clone and install frontend dependencies
 git clone https://github.com/radiergummi/cetacean.git
 cd cetacean
-cd frontend && npm install && cd ..
+
+# Build once. The binary embeds frontend/dist and frontend/dist-widgets, so
+# `go run .` does not compile until they exist.
+make build
 
 # Init a local single-node swarm (if you don't have one)
 docker swarm init
@@ -29,6 +31,7 @@ make check       # Full suite: lint + format check + tests
 make test        # Go tests only
 make lint        # golangci-lint + oxlint
 make fmt         # Auto-format Go + frontend code
+make build       # Frontend, MCP widgets, and the binary that embeds them
 ```
 
 All checks must pass before submitting a PR. The CI pipeline runs the same checks.

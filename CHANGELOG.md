@@ -10,9 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - `server.public_url` sets the canonical external URL once, supplying the OAuth issuer for the MCP server and the OIDC redirect URL instead of configuring each separately
 
+### Changed
+- Deploying Cetacean as a stack no longer requires creating an overlay network first. `compose.yaml` now stands on its own — `docker stack deploy -c compose.yaml cetacean` and nothing else. Connecting it to the bundled Prometheus is a second file, `compose.prometheus.yaml`, layered on top: `docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean`. That replaces passing `CETACEAN_PROMETHEUS_URL` through the shell on every deploy, where forgetting it once silently disconnected the charts
+
 ### Fixed
-- The MCP server no longer advertises an unreachable OAuth issuer when the listen address has no host. Startup now stops when MCP sign-in is actually in use and says what to set, rather than for every deployment with authentication enabled.
-- Atom and JSON Feed links are built from `server.public_url` when it is set, rather than from request headers a client can control.
+- The MCP server no longer advertises an unreachable OAuth issuer when the listen address has no host. Startup now stops when MCP sign-in is actually in use and says what to set, rather than for every deployment with authentication enabled
+- Atom and JSON Feed links are built from `server.public_url` when it is set, rather than from request headers a client can control
+- Building from source now works from a fresh clone: `make build` installs the frontend dependencies before building, where it previously failed because the binary embeds a frontend that had never been built
+- The example config file offered `acl_claim`, `acl_capability` and `acl` keys under the `[auth.*]` sections. No such keys exist — the parser ignores what it does not recognise, so anyone who uncommented one got no grants and no warning. The working keys are `oidc_claim`, `tailscale_capability` and `headers_acl` under `[acl]`, which the same file already listed
 
 ## [0.13.0] - 2026-09-07
 

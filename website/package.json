@@ -6,8 +6,9 @@
   "repository": "https://github.com/Radiergummi/cetacean",
   "type": "module",
   "scripts": {
-    "prebuild": "cp ../api/openapi.yaml public/openapi.yaml && cp node_modules/@scalar/api-reference/dist/browser/standalone.js public/scalar.js",
-    "predev": "cp ../api/openapi.yaml public/openapi.yaml && cp node_modules/@scalar/api-reference/dist/browser/standalone.js public/scalar.js",
+    "sync-assets": "mkdir -p public/dist && cp ../api/openapi.yaml public/openapi.yaml && cp node_modules/@scalar/api-reference/dist/browser/standalone.js public/scalar.js && cp ../compose.yaml ../compose.monitoring.yaml ../compose.prometheus.yaml ../prometheus.yml public/dist/",
+    "prebuild": "npm run sync-assets",
+    "predev": "npm run sync-assets",
     "dev": "astro dev",
     "build": "astro build",
     "postbuild": "pagefind --site dist",
@@ -18,26 +19,26 @@
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.0",
-    "@astrojs/mdx": "^7.0.1",
+    "@astrojs/mdx": "^8.0.0",
     "@astrojs/sitemap": "^3.7.4",
-    "@fontsource-variable/geist": "^5.2.9",
-    "@scalar/api-reference": "^1.67.0",
-    "@tailwindcss/vite": "^4.3.2",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@scalar/api-reference": "^1.68.0",
+    "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.3.1",
-    "marked": "^18.0.5",
+    "marked": "^18.0.11",
     "pagefind": "^1.5.2",
     "sirv": "^3.0.2",
-    "tailwindcss": "^4.3.2",
+    "tailwindcss": "^4.3.3",
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "oxfmt": "^0.66.0",
-    "oxlint": "^1.81.0"
+    "oxfmt": "^0.67.0",
+    "oxlint": "^1.82.0"
   },
   "overrides": {
     "vite": "^8.0.0"
   },
   "allowScripts": {
-    "esbuild@0.27.7": true
+    "esbuild@0.28.1": true
   }
 }

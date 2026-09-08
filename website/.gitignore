@@ -5,6 +5,7 @@ public/demo/demo.html
 public/demo/index.html
 public/demo/404.html
 
-# Copied at build time (prebuild/predev scripts)
+# Copied at build time (the sync-assets script)
 public/openapi.yaml
 public/scalar.js
+public/dist/

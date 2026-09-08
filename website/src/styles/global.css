@@ -140,6 +140,69 @@
     border-left: 2px solid var(--active);
     font-style: normal;
   }
+  /* Callouts (GitHub-style alerts, see remarkCallouts in astro.config.ts) */
+  .prose .callout {
+    @apply my-6 rounded-lg border px-4 py-3 text-sm leading-relaxed;
+    border-color: var(--callout-border);
+    background: var(--callout-background);
+  }
+  .prose .callout-note {
+    --callout-accent: oklch(0.5 0.16 254);
+    --callout-border: oklch(0.5 0.16 254 / 25%);
+    --callout-background: oklch(0.5 0.16 254 / 5%);
+  }
+  .prose .callout-tip {
+    --callout-accent: oklch(0.5 0.13 155);
+    --callout-border: oklch(0.5 0.13 155 / 25%);
+    --callout-background: oklch(0.5 0.13 155 / 5%);
+  }
+  .prose .callout-warning {
+    --callout-accent: oklch(0.52 0.13 75);
+    --callout-border: oklch(0.52 0.13 75 / 30%);
+    --callout-background: oklch(0.52 0.13 75 / 6%);
+  }
+  .prose .callout-caution {
+    --callout-accent: oklch(0.55 0.15 25);
+    --callout-border: oklch(0.55 0.15 25 / 25%);
+    --callout-background: oklch(0.55 0.15 25 / 5%);
+  }
+  .dark .prose .callout-note {
+    --callout-accent: oklch(0.75 0.13 254);
+    --callout-border: oklch(0.75 0.13 254 / 25%);
+    --callout-background: oklch(0.75 0.13 254 / 8%);
+  }
+  .dark .prose .callout-tip {
+    --callout-accent: oklch(0.78 0.14 155);
+    --callout-border: oklch(0.78 0.14 155 / 25%);
+    --callout-background: oklch(0.78 0.14 155 / 8%);
+  }
+  .dark .prose .callout-warning {
+    --callout-accent: oklch(0.8 0.13 80);
+    --callout-border: oklch(0.8 0.13 80 / 25%);
+    --callout-background: oklch(0.8 0.13 80 / 8%);
+  }
+  .dark .prose .callout-caution {
+    --callout-accent: oklch(0.72 0.15 25);
+    --callout-border: oklch(0.72 0.15 25 / 25%);
+    --callout-background: oklch(0.72 0.15 25 / 8%);
+  }
+  .prose .callout-header {
+    @apply flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider;
+    color: var(--callout-accent);
+  }
+  .prose .callout-icon {
+    @apply size-4 shrink-0;
+  }
+  .prose .callout > * {
+    @apply my-2;
+  }
+  .prose .callout > .callout-header {
+    @apply mt-0 mb-2;
+  }
+  .prose .callout > :last-child {
+    @apply mb-0;
+  }
+
   .prose hr {
     @apply my-10 border-border;
   }
@@ -175,10 +238,14 @@
     @apply py-3.5 px-4 border border-border rounded-lg;
   }
   .prose .config-param + .config-param {
-    @apply mt-1;
+    @apply mt-2;
   }
   .prose .config-param.deprecated {
     @apply opacity-60;
+  }
+  .prose .config-param:target {
+    border-color: var(--active);
+    box-shadow: 0 0 0 1px var(--active);
   }
   .prose .config-param-heading {
     @apply flex items-baseline gap-2 mb-1.5;
@@ -187,6 +254,18 @@
     @apply text-[0.9375rem] font-semibold rounded-none px-0 py-0;
     background: none;
     color: var(--foreground);
+  }
+  .prose .config-param-prefix {
+    @apply font-normal;
+    color: var(--muted-foreground);
+  }
+  .prose .config-param-anchor {
+    @apply ml-auto text-sm leading-none no-underline opacity-0 transition-opacity;
+    color: var(--muted-foreground);
+  }
+  .prose .config-param:hover .config-param-anchor,
+  .prose .config-param-anchor:focus-visible {
+    @apply opacity-100;
   }
   .prose .config-param-badge {
     @apply text-[0.625rem] font-semibold uppercase tracking-wider leading-tight rounded px-1.5 py-0.5;
@@ -204,13 +283,29 @@
     border: 1px solid var(--border);
   }
   .prose .config-param-description {
-    @apply text-sm leading-relaxed mb-2.5;
+    @apply text-sm leading-relaxed mb-3;
   }
   .prose .config-param-description > :first-child {
     @apply mt-0;
   }
   .prose .config-param-description > :last-child {
     @apply mb-0;
+  }
+  .prose .config-param-footer {
+    @apply flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[0.8rem] text-muted-foreground;
+    margin: 0 -1rem -0.875rem;
+    padding: 0.5rem 1rem;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
+    background: var(--muted);
+  }
+  .prose .config-param-fact {
+    @apply inline-flex items-baseline gap-1.5;
+  }
+  .prose .config-param-footer code {
+    @apply text-[0.8rem] rounded-none px-0 py-0;
+    background: none;
+    color: var(--code-foreground);
   }
   .prose .config-param-meta {
     @apply text-[0.8rem] text-muted-foreground;

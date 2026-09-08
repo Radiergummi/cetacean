@@ -30,16 +30,20 @@ the config file.
   URL prefix for serving Cetacean under a sub-path behind a reverse proxy, e.g. `/cetacean`. Leave unset when Cetacean owns the root path.
 </ConfigParam>
 
+<ConfigParam name="server.public_url" flag="-public-url" env="CETACEAN_PUBLIC_URL">
+  Canonical external URL clients reach Cetacean at, e.g. `https://cetacean.example.com`. Origin only — set the path prefix with [`server.base_path`][server.base_path], which is used for both inbound and outbound paths. Supplies the default for [`mcp.issuer`][mcp.issuer] and [`auth.oidc.redirect_url`][auth.oidc.redirect_url], and makes Atom and JSON Feed links independent of the `X-Forwarded-*` headers a client can set. Set it behind a reverse proxy.
+</ConfigParam>
+
 <ConfigParam name="docker.host" flag="-docker-host" env="CETACEAN_DOCKER_HOST" default="unix:///var/run/docker.sock">
   Docker Engine API endpoint. Supports Unix sockets (`unix:///path`), TCP (`tcp://host:port`), and SSH (`ssh://user@host`).
 </ConfigParam>
 
 <ConfigParam name="prometheus.url" flag="-prometheus-url" env="CETACEAN_PROMETHEUS_URL">
-  Base URL of a Prometheus server, e.g. `http://prometheus:9090`. When set, Cetacean proxies metric queries and enables usage charts, sizing recommendations, and the metrics stream. When unset, every metric-dependent feature is disabled.
+  Base URL of a [Prometheus][monitoring] server, e.g. `http://prometheus:9090`. When set, Cetacean proxies metric queries and enables usage charts, sizing recommendations, and the metrics stream. When unset, every metric-dependent feature is disabled.
 </ConfigParam>
 
 <ConfigParam name="tracing.endpoint" env="CETACEAN_OTEL_ENDPOINT">
-  Base URL of an OpenTelemetry collector accepting OTLP over HTTP, e.g. `http://collector:4318`. Only MCP requests and tool calls emit spans, so this needs `mcp.enabled` to have any effect; set without it, Cetacean warns and exports nothing. With MCP enabled, a malformed endpoint stops startup.
+  Base URL of an OpenTelemetry collector accepting OTLP over HTTP, e.g. `http://collector:4318`. Only MCP requests and tool calls emit spans, so this needs [`mcp.enabled`][mcp.enabled] to have any effect; set without it, Cetacean warns and exports nothing. With MCP enabled, a malformed endpoint stops startup.
 </ConfigParam>
 
 <ConfigParam name="logging.level" flag="-log-level" env="CETACEAN_LOG_LEVEL" default="info">
@@ -59,11 +63,11 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="server.recommendations" flag="-recommendations" env="CETACEAN_RECOMMENDATIONS" default="true">
-  Enable the recommendation engine, which periodically analyses swarm state and Prometheus metrics to surface findings. See [Recommendations](recommendations).
+  Enable the recommendation engine, which periodically analyses swarm state and Prometheus metrics to surface findings. See [Recommendations][recommendations].
 </ConfigParam>
 
 <ConfigParam name="server.operations_level" flag="-operations-level" env="CETACEAN_OPERATIONS_LEVEL" default="1">
-  Which write operations the dashboard and the API expose. `0` is read-only, `1` allows operational actions, `2` adds configuration edits, `3` allows destructive operations. See [Operations level](#operations-level) for the breakdown.
+  Which write operations the [dashboard][dashboard] and the [API][api] expose. `0` is read-only, `1` allows operational actions, `2` adds configuration edits, `3` allows destructive operations. See [Operations level][operations-level] for the breakdown.
 </ConfigParam>
 
 <ConfigParam name="server.sse.batch_interval" flag="-sse-batch-interval" env="CETACEAN_SSE_BATCH_INTERVAL" default="100ms">
@@ -75,7 +79,7 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">
-  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose `X-Forwarded-For` header is trusted for the real client IP, e.g. `10.0.0.0/8,172.16.0.0/12`. Required for [header-based authentication](#trusted-proxy-headers). When unset, every request counts as a direct connection.
+  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose `X-Forwarded-For` header is trusted for the real client IP, e.g. `10.0.0.0/8,172.16.0.0/12`. Required for [header-based authentication][trusted-proxy-headers]. When unset, every request counts as a direct connection.
 </ConfigParam>
 
 <ConfigParam name="storage.snapshot" flag="-snapshot" env="CETACEAN_SNAPSHOT" default="true">
@@ -83,25 +87,25 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="storage.data_dir" flag="-data-dir" env="CETACEAN_DATA_DIR" default="./data">
-  Directory holding `snapshot.json` and, when the [MCP server](mcp) runs with authentication, `mcp-tokens.json`. The token file is written regardless of `storage.snapshot`. Must be writable by the Cetacean process; mount it as a volume in Docker.
+  Directory holding `snapshot.json` and, when the [MCP server][mcp] runs with authentication, `mcp-tokens.json`. The token file is written regardless of [`storage.snapshot`][storage.snapshot]. Must be writable by the Cetacean process; mount it as a volume in Docker.
 </ConfigParam>
 
 <ConfigParam name="tls.cert" flag="-tls-cert" env="CETACEAN_TLS_CERT">
-  Path to the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail)-encoded server certificate for TLS termination. Set it together with `tls.key` or not at all. Required for [client certificate authentication](#client-certificates), optional otherwise.
+  Path to the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail)-encoded server certificate for TLS termination. Set it together with [`tls.key`][tls.key] or not at all. Required for [client certificate authentication][client-certificates], optional otherwise.
 </ConfigParam>
 
 <ConfigParam name="tls.key" flag="-tls-key" env="CETACEAN_TLS_KEY">
-  Path to the PEM-encoded private key matching `tls.cert`.
+  Path to the PEM-encoded private key matching [`tls.cert`][tls.cert].
 </ConfigParam>
 
 <ConfigParam name="config" flag="-config" env="CETACEAN_CONFIG">
-  Path to a TOML configuration file. See [Config file](#config-file) for the format.
+  Path to a TOML configuration file. See [Config file][config-file] for the format.
 </ConfigParam>
 
 ## Authentication and authorization
 
 <ConfigParam name="auth.mode" flag="-auth-mode" env="CETACEAN_AUTH_MODE" default="none">
-  Authentication provider. One of `none` (anonymous access), [`oidc`](#oidc), [`tailscale`](#tailscale), [`cert`](#client-certificates) (mTLS client certificates), or [`headers`](#trusted-proxy-headers). Only one mode is active at a time. See [Authentication](authentication) for setup guides.
+  Authentication provider. One of `none` (anonymous access), [`oidc`][oidc], [`tailscale`][tailscale], [`cert`][client-certificates] (mTLS client certificates), or [`headers`][trusted-proxy-headers]. Only one mode is active at a time. See [Authentication][authentication] for setup guides.
 </ConfigParam>
 
 ### OIDC
@@ -118,8 +122,8 @@ the config file.
   OAuth 2.0 client secret for the registered client. Accepts the `_FILE` suffix.
 </ConfigParam>
 
-<ConfigParam name="auth.oidc.redirect_url" flag="-auth-oidc-redirect-url" env="CETACEAN_AUTH_OIDC_REDIRECT_URL" required>
-  URL the identity provider redirects to after authentication, e.g. `https://cetacean.example.com/auth/callback`. Must use HTTPS; `http://localhost` and `http://127.0.0.1` are allowed for local development.
+<ConfigParam name="auth.oidc.redirect_url" flag="-auth-oidc-redirect-url" env="CETACEAN_AUTH_OIDC_REDIRECT_URL">
+  URL the identity provider redirects to after authentication, e.g. `https://cetacean.example.com/auth/callback`. Must use HTTPS; `http://localhost` and `http://127.0.0.1` are allowed for local development. Defaults to `{server.public_url}{server.base_path}/auth/callback`; required only when [`server.public_url`][server.public_url] is unset, or when the callback lives elsewhere.
 </ConfigParam>
 
 <ConfigParam name="auth.oidc.scopes" flag="-auth-oidc-scopes" env="CETACEAN_AUTH_OIDC_SCOPES" default="openid,profile,email">
@@ -127,13 +131,13 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="auth.oidc.session_key" flag="-auth-oidc-session-key" env="CETACEAN_AUTH_OIDC_SESSION_KEY">
-  Hex-encoded 32-byte [HMAC](https://en.wikipedia.org/wiki/HMAC) key signing browser session cookies. When unset, a random key is generated at startup and restarting invalidates all sessions. Generate a fixed one with `openssl rand -hex 32`.
+  Hex-encoded 32-byte [HMAC](https://en.wikipedia.org/wiki/HMAC) key signing browser session cookies. When unset, a random key is generated at startup and restarting invalidates all sessions. Generate a fixed one with `openssl rand -hex 32`. Accepts the `_FILE` suffix.
 </ConfigParam>
 
 ### Tailscale
 
 <ConfigParam name="auth.tailscale.mode" flag="-auth-tailscale-mode" env="CETACEAN_AUTH_TAILSCALE_MODE" default="local">
-  How Cetacean reaches Tailscale. `local` queries the host's Tailscale daemon. `tsnet` embeds a Tailscale node in the process, which suits containers. See [Authentication](authentication#choosing-a-mode) for a comparison.
+  How Cetacean reaches Tailscale. `local` queries the host's Tailscale daemon. `tsnet` embeds a Tailscale node in the process, which suits containers. See [Authentication][choosing-a-mode] for a comparison.
 </ConfigParam>
 
 <ConfigParam name="auth.tailscale.authkey" flag="-auth-tailscale-authkey" env="CETACEAN_AUTH_TAILSCALE_AUTHKEY">
@@ -149,7 +153,7 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="auth.tailscale.capability" flag="-auth-tailscale-capability" env="CETACEAN_AUTH_TAILSCALE_CAPABILITY">
-  Tailscale ACL capability key mapping tailnet users to application groups, e.g. `example.com/cap/cetacean`. Cetacean reads group grants from Tailscale's CapMap into the identity's `groups` array for [authorization](authorization).
+  Tailscale ACL capability key mapping tailnet users to application groups, e.g. `example.com/cap/cetacean`. Cetacean reads group grants from Tailscale's CapMap into the identity's `groups` array for [authorization][authorization].
 </ConfigParam>
 
 ### Client certificates
@@ -160,11 +164,12 @@ the config file.
 
 ### Trusted proxy headers
 
-> **Note:** In `headers` mode Cetacean trusts whatever the proxy sends, so `server.trusted_proxies`
+> [!CAUTION]
+> In `headers` mode Cetacean trusts whatever the proxy sends, so [`server.trusted_proxies`][server.trusted_proxies]
 > must be set. Without it any client that can reach Cetacean directly can claim any identity.
 
 <ConfigParam name="auth.headers.subject" flag="-auth-headers-subject" env="CETACEAN_AUTH_HEADERS_SUBJECT" required>
-  Name of the HTTP header carrying the user's unique identifier, e.g. `X-Remote-User`. Becomes the identity's `subject` and is used for [authorization](authorization) audience matching.
+  Name of the HTTP header carrying the user's unique identifier, e.g. `X-Remote-User`. Becomes the identity's `subject` and is used for [authorization][authorization] audience matching.
 </ConfigParam>
 
 <ConfigParam name="auth.headers.name" flag="-auth-headers-name" env="CETACEAN_AUTH_HEADERS_NAME">
@@ -172,11 +177,11 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="auth.headers.email" flag="-auth-headers-email" env="CETACEAN_AUTH_HEADERS_EMAIL">
-  Name of the HTTP header carrying the user's email address, e.g. `X-Remote-Email`. Used for [authorization](authorization) audience matching alongside the subject.
+  Name of the HTTP header carrying the user's email address, e.g. `X-Remote-Email`. Used for [authorization][authorization] audience matching alongside the subject.
 </ConfigParam>
 
 <ConfigParam name="auth.headers.groups" flag="-auth-headers-groups" env="CETACEAN_AUTH_HEADERS_GROUPS">
-  Name of the HTTP header carrying group memberships as a comma-separated list, e.g. `X-Remote-Groups`. Used for [authorization](authorization) audience matching.
+  Name of the HTTP header carrying group memberships as a comma-separated list, e.g. `X-Remote-Groups`. Used for [authorization][authorization] audience matching.
 </ConfigParam>
 
 <ConfigParam name="auth.headers.secret_header" flag="-auth-headers-secret-header" env="CETACEAN_AUTH_HEADERS_SECRET_HEADER">
@@ -184,7 +189,7 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="auth.headers.secret_value" flag="-auth-headers-secret-value" env="CETACEAN_AUTH_HEADERS_SECRET_VALUE">
-  Expected value of the shared secret header. Required when `auth.headers.secret_header` is set. Accepts the `_FILE` suffix.
+  Expected value of the shared secret header. Required when [`auth.headers.secret_header`][auth.headers.secret_header] is set. Accepts the `_FILE` suffix.
 </ConfigParam>
 
 <ConfigParam name="auth.headers.trusted_proxies" flag="-auth-headers-trusted-proxies" env="CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES" deprecated>
@@ -195,10 +200,10 @@ the config file.
 
 Authorization is grant-based RBAC layered on the active authentication mode. With no policy
 configured every authenticated user has full access; once a policy is present the default is deny.
-Auth mode `none` bypasses authorization. See [Authorization](authorization) for the grant syntax.
+Auth mode `none` bypasses authorization. See [Authorization][authorization] for the grant syntax.
 
 <ConfigParam name="acl.policy" env="CETACEAN_ACL_POLICY">
-  Inline authorization policy as JSON, YAML, or TOML. Suitable for a short policy passed through the environment. Prefer `acl.policy_file` for anything longer, since only a file is watched for changes.
+  Inline authorization policy as JSON, YAML, or TOML. Suitable for a short policy passed through the environment. Prefer [`acl.policy_file`][acl.policy_file] for anything longer, since only a file is watched for changes.
 </ConfigParam>
 
 <ConfigParam name="acl.policy_file" env="CETACEAN_ACL_POLICY_FILE">
@@ -222,22 +227,22 @@ already grants, and each applies only to its own authentication mode.
 
 ## MCP server
 
-Cetacean can expose cluster data to AI agents over the [Model Context Protocol](mcp). The server is
-disabled by default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token it
-issues itself, unless the active auth mode is listed in `mcp.oauth.auth_bypass`. Every tool call is
-also checked against the [authorization](authorization) grants, so an agent gets no more access than
-the calling identity already has.
+Cetacean can expose cluster data to AI agents over the [Model Context Protocol][mcp]. The server is disabled by
+default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token it issues itself, unless the
+active auth mode is listed in [`mcp.oauth.auth_bypass`][mcp.oauth.auth_bypass]. Every tool call is also checked
+against the [authorization][authorization] grants, so an agent gets no more access than the calling identity
+already has.
 
 <ConfigParam name="mcp.enabled" env="CETACEAN_MCP" default="false">
   Enable the embedded MCP server at `/mcp`.
 </ConfigParam>
 
 <ConfigParam name="mcp.operations_level" env="CETACEAN_MCP_OPERATIONS_LEVEL">
-  Which tools MCP clients may call: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`](#operations-level) when unset. Set it lower to allow writes from the dashboard that agents cannot make.
+  Which tools MCP clients may call: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset. Set it lower to allow writes from the dashboard that agents cannot make.
 </ConfigParam>
 
 <ConfigParam name="mcp.issuer" env="CETACEAN_MCP_ISSUER">
-  Canonical external base URL, e.g. `https://cetacean.example.com`. Becomes the OAuth issuer identifier and the base of the MCP resource audience, so it must be the URL clients reach. Derived from the listen address and TLS settings when unset, so set it behind a reverse proxy.
+  Canonical external base URL, e.g. `https://cetacean.example.com`. Becomes the OAuth issuer identifier and the base of the MCP resource audience, so it must be the URL clients reach. Defaults to [`server.public_url`][server.public_url]; set this only to give MCP a different URL from the rest of Cetacean. With neither set, it is derived from the listen address, and startup fails if that yields no reachable host while MCP OAuth is in use.
 </ConfigParam>
 
 <ConfigParam name="mcp.signing_key" env="CETACEAN_MCP_SIGNING_KEY">
@@ -249,11 +254,11 @@ the calling identity already has.
 </ConfigParam>
 
 <ConfigParam name="mcp.refresh_token_ttl" env="CETACEAN_MCP_REFRESH_TOKEN_TTL" default="720h">
-  How long a refresh token stays valid (30 days). Refresh tokens rotate single-use and persist under `storage.data_dir`, so clients keep working across restarts.
+  How long a refresh token stays valid (30 days). Refresh tokens rotate single-use and persist under [`storage.data_dir`][storage.data_dir], so clients keep working across restarts.
 </ConfigParam>
 
 <ConfigParam name="mcp.consent_ttl" env="CETACEAN_MCP_CONSENT_TTL" default="2160h">
-  How long a remembered approval lets a client skip the consent screen (90 days). Keep it above `mcp.refresh_token_ttl`, or an expiring refresh token costs a second prompt. Set `0s` to prompt on every authorization.
+  How long a remembered approval lets a client skip the consent screen (90 days). Keep it above [`mcp.refresh_token_ttl`][mcp.refresh_token_ttl], or an expiring refresh token costs a second prompt. Set `0s` to prompt on every authorization.
 </ConfigParam>
 
 <ConfigParam name="mcp.max_concurrent_tasks" env="CETACEAN_MCP_MAX_CONCURRENT_TASKS" default="32">
@@ -294,11 +299,11 @@ the calling identity already has.
   Comma-separated authentication modes that skip OAuth, e.g. `cert`. Use it where the transport already carries a verified identity. Authorization still applies; only the OAuth handshake is skipped.
 </ConfigParam>
 
-See [MCP](mcp) for the tools, resources, prompts and widgets the server exposes.
+See [MCP][mcp] for the tools, resources, prompts and widgets the server exposes.
 
 ## Recommendation sizing
 
-These tune the resource right-sizing checker, the only [recommendation](recommendations) category
+These tune the resource right-sizing checker, the only [recommendation][recommendations] category
 with configurable thresholds. It requires Prometheus, since it compares reservations and limits
 against measured usage. The other checkers use fixed thresholds.
 
@@ -379,16 +384,49 @@ expose. Each level includes everything below it. A request above the configured 
 | Install, upgrade, or remove plugins                                           |      —      |       —       |        —        |      ✔      |
 | Manage CA and encryption, rotate tokens, unlock the swarm                     |      —      |       —       |        —        |      ✔      |
 
-Operations level and [ACL](authorization#interaction-with-operations-level) are independent checks
+Operations level and [ACL][interaction-with-operations-level] are independent checks
 and both must pass. Operations level is the global ceiling, ACL controls per-user scope. Set
-`mcp.operations_level` to give MCP clients a lower ceiling than the dashboard.
+[`mcp.operations_level`][mcp.operations_level] to give MCP clients a lower ceiling than the dashboard.
 
 ## Profiling
 
-When `server.pprof` is enabled, the standard Go profiling endpoints are available at
+When [`server.pprof`][server.pprof] is enabled, the standard Go profiling endpoints are available at
 `/debug/pprof/`:
 
 ```bash
 go tool pprof http://localhost:9000/debug/pprof/profile   # 30s CPU profile
 go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 ```
+
+[acl.policy_file]: #acl.policy_file
+[api]: api
+[auth.headers.secret_header]: #auth.headers.secret_header
+[auth.oidc.redirect_url]: #auth.oidc.redirect_url
+[authentication]: authentication
+[authorization]: authorization
+[choosing-a-mode]: authentication#choosing-a-mode
+[client-certificates]: #client-certificates
+[config-file]: #config-file
+[dashboard]: dashboard
+[interaction-with-operations-level]: authorization#interaction-with-operations-level
+[mcp]: mcp
+[mcp.enabled]: #mcp.enabled
+[mcp.issuer]: #mcp.issuer
+[mcp.oauth.auth_bypass]: #mcp.oauth.auth_bypass
+[mcp.operations_level]: #mcp.operations_level
+[mcp.refresh_token_ttl]: #mcp.refresh_token_ttl
+[monitoring]: monitoring
+[oidc]: #oidc
+[operations-level]: #operations-level
+[recommendations]: recommendations
+[server.base_path]: #server.base_path
+[server.operations_level]: #server.operations_level
+[server.pprof]: #server.pprof
+[server.public_url]: #server.public_url
+[server.trusted_proxies]: #server.trusted_proxies
+[storage.data_dir]: #storage.data_dir
+[storage.snapshot]: #storage.snapshot
+[tailscale]: #tailscale
+[tls.cert]: #tls.cert
+[tls.key]: #tls.key
+[trusted-proxy-headers]: #trusted-proxy-headers
