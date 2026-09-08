@@ -11,10 +11,23 @@ type basePathCtxKey struct{}
 
 var basePathKey = basePathCtxKey{}
 
+type publicURLCtxKey struct{}
+
+var publicURLKey = publicURLCtxKey{}
+
 // BasePathFromContext extracts the base path from the context.
 // Returns "" if not set.
 func BasePathFromContext(ctx context.Context) string {
 	if v, ok := ctx.Value(basePathKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// PublicURLFromContext extracts the configured external origin.
+// Returns "" when server.public_url is unset.
+func PublicURLFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(publicURLKey).(string); ok {
 		return v
 	}
 	return ""
@@ -30,10 +43,15 @@ func absPath(ctx context.Context, path string) string {
 	return base + path
 }
 
-// absURL builds a full absolute URL (scheme://host/base/path) from the request.
-// Uses X-Forwarded-Proto/Host when present (reverse proxy), falling back to
-// r.TLS and r.Host. Intended for Atom feeds where RFC 4287 requires IRIs.
+// absURL builds a full absolute URL (scheme://host/base/path) from the
+// request. Uses server.public_url when configured; otherwise
+// X-Forwarded-Proto/Host, falling back to r.TLS and r.Host. Intended for Atom
+// feeds where RFC 4287 requires IRIs.
 func absURL(r *http.Request, path string) string {
+	if base := PublicURLFromContext(r.Context()); base != "" {
+		return base + absPath(r.Context(), path)
+	}
+
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
@@ -48,6 +66,21 @@ func absURL(r *http.Request, path string) string {
 	}
 
 	return scheme + "://" + host + absPath(r.Context(), path)
+}
+
+// publicURLMiddleware stores server.public_url in the request context so
+// absURL can build links from configuration rather than from X-Forwarded-*,
+// which nothing validates against server.trusted_proxies — any client can set
+// those headers. A no-op when public_url is unset.
+func publicURLMiddleware(publicURL string, next http.Handler) http.Handler {
+	if publicURL == "" {
+		return next
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), publicURLKey, publicURL)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // basePathMiddleware strips the base path prefix from incoming requests,

@@ -461,6 +461,7 @@ func main() {
 		EnableSelfMetrics: cfg.SelfMetrics,
 		AuthProvider:      authProvider,
 		BasePath:          cfg.BasePath,
+		PublicURL:         cfg.PublicURL,
 		CORS:              corsConfig,
 		TLSEnabled:        tlsCfg.Enabled(),
 		TrustedProxies:    cfg.TrustedProxies,
