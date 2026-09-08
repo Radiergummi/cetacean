@@ -8,7 +8,7 @@ import (
 )
 
 func TestLoadAuth_DefaultsToNone(t *testing.T) {
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestLoadAuth_DefaultScopes(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://app.example.com/auth/callback")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestLoadAuth_DefaultScopes(t *testing.T) {
 
 func TestLoadAuth_InvalidMode(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "bogus")
-	_, err := LoadAuth(nil, nil)
+	_, err := LoadAuth(nil, nil, "", "")
 	if err == nil {
 		t.Fatal("expected error for invalid mode")
 	}
@@ -49,7 +49,7 @@ func TestLoadAuth_InvalidMode(t *testing.T) {
 
 func TestLoadAuth_OIDCRequiresFields(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
-	_, err := LoadAuth(nil, nil)
+	_, err := LoadAuth(nil, nil, "", "")
 	if err == nil {
 		t.Fatal("expected error for missing OIDC fields")
 	}
@@ -63,7 +63,7 @@ func TestLoadAuth_OIDCHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://app.example.com/auth/callback")
 	t.Setenv("CETACEAN_AUTH_OIDC_SCOPES", "openid, custom")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestLoadAuth_OIDCRejectsHTTPRedirectURL(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "http://app.example.com/auth/callback")
 
-	_, err := LoadAuth(nil, nil)
+	_, err := LoadAuth(nil, nil, "", "")
 	if err == nil {
 		t.Fatal("expected error for HTTP redirect URL")
 	}
@@ -96,7 +96,7 @@ func TestLoadAuth_OIDCAllowsLocalhostHTTP(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "http://localhost/auth/callback")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestLoadAuth_OIDCAllows127001HTTP(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "http://127.0.0.1:8080/auth/callback")
 
-	_, err := LoadAuth(nil, nil)
+	_, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error for loopback HTTP: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestLoadAuth_OIDCSessionKey(t *testing.T) {
 		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	)
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestLoadAuth_OIDCSessionKey(t *testing.T) {
 func TestLoadAuth_TailscaleLocalDefault(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "tailscale")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestLoadAuth_TailscaleInvalidMode(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "tailscale")
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_MODE", "invalid")
 
-	_, err := LoadAuth(nil, nil)
+	_, err := LoadAuth(nil, nil, "", "")
 	if err == nil {
 		t.Fatal("expected error for invalid tailscale mode")
 	}
@@ -167,7 +167,7 @@ func TestLoadAuth_TailscaleTsnetRequiresAuthKey(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "tailscale")
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_MODE", "tsnet")
 
-	_, err := LoadAuth(nil, nil)
+	_, err := LoadAuth(nil, nil, "", "")
 	if err == nil {
 		t.Fatal("expected error for tsnet without auth key")
 	}
@@ -178,7 +178,7 @@ func TestLoadAuth_TailscaleTsnetHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_MODE", "tsnet")
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_AUTHKEY", "tskey-abc123")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestLoadAuth_TailscaleTsnetHappyPath(t *testing.T) {
 
 func TestLoadAuth_CertRequiresCA(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "cert")
-	_, err := LoadAuth(nil, nil)
+	_, err := LoadAuth(nil, nil, "", "")
 	if err == nil {
 		t.Fatal("expected error for missing CA")
 	}
@@ -199,7 +199,7 @@ func TestLoadAuth_CertHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "cert")
 	t.Setenv("CETACEAN_AUTH_CERT_CA", "/path/to/ca.pem")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestLoadAuth_CertHappyPath(t *testing.T) {
 
 func TestLoadAuth_HeadersRequiresSubject(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "headers")
-	_, err := LoadAuth(nil, nil)
+	_, err := LoadAuth(nil, nil, "", "")
 	if err == nil {
 		t.Fatal("expected error for missing subject header")
 	}
@@ -221,7 +221,7 @@ func TestLoadAuth_HeadersSecretRequiresValue(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Secret")
 
-	_, err := LoadAuth(nil, nil)
+	_, err := LoadAuth(nil, nil, "", "")
 	if err == nil {
 		t.Fatal("expected error for secret header without value")
 	}
@@ -237,7 +237,7 @@ func TestLoadAuth_HeadersHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestLoadAuth_HeadersNoTrustedProxies(t *testing.T) {
 	// LoadAuth no longer rejects missing trusted proxies — that check
 	// moved to main.go where the general CETACEAN_TRUSTED_PROXIES is
 	// resolved and can provide the value.
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestLoadAuth_HeadersTrustedProxiesOnly(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8, 192.168.1.1")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestLoadAuth_HeadersTrustedProxiesIPv6(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "fd00::/8, ::1")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestLoadAuth_HeadersTrustedProxiesInvalid(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "not-an-ip")
 
-	_, err := LoadAuth(nil, nil)
+	_, err := LoadAuth(nil, nil, "", "")
 	if err == nil {
 		t.Fatal("expected error for invalid trusted proxy")
 	}
@@ -323,7 +323,7 @@ func TestLoadAuth_HeadersBothSecretAndTrustedProxies(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -349,7 +349,7 @@ func TestLoadAuth_FromConfigFile(t *testing.T) {
 		},
 	}
 
-	cfg, err := LoadAuth(nil, fc)
+	cfg, err := LoadAuth(nil, fc, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -382,7 +382,7 @@ func TestLoadAuth_EnvOverridesFile(t *testing.T) {
 		},
 	}
 
-	cfg, err := LoadAuth(nil, fc)
+	cfg, err := LoadAuth(nil, fc, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -405,7 +405,7 @@ func TestLoadAuth_FlagOverridesEnvAndFile(t *testing.T) {
 	}
 	flags := &Flags{AuthMode: new("none")}
 
-	cfg, err := LoadAuth(flags, fc)
+	cfg, err := LoadAuth(flags, fc, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -427,7 +427,7 @@ func TestLoadAuth_HeadersFromFile(t *testing.T) {
 		},
 	}
 
-	cfg, err := LoadAuth(nil, fc)
+	cfg, err := LoadAuth(nil, fc, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -453,7 +453,7 @@ func TestLoadAuth_TailscaleFromFile(t *testing.T) {
 		},
 	}
 
-	cfg, err := LoadAuth(nil, fc)
+	cfg, err := LoadAuth(nil, fc, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -478,7 +478,7 @@ func TestLoadAuth_OIDCSecretFromFile(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE", secretPath)
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://app.example.com/auth/callback")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -498,7 +498,7 @@ func TestLoadAuth_TailscaleAuthKeyFromFile(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_MODE", "tsnet")
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_AUTHKEY_FILE", keyPath)
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -520,7 +520,7 @@ func TestLoadAuth_HeadersSecretFromFile(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE_FILE", secretPath)
 	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8")
 
-	cfg, err := LoadAuth(nil, nil)
+	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -586,5 +586,68 @@ func TestParseScopes(t *testing.T) {
 				t.Errorf("parseScopes(%q)[%d]: got %q, want %q", tt.input, i, got[i], tt.want[i])
 			}
 		}
+	}
+}
+
+func TestOIDCRedirectURLDefaultsFromPublicURL(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
+	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://idp.example.com")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "cetacean")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
+
+	cfg, err := LoadAuth(nil, nil, "https://cetacean.example.com", "")
+	if err != nil {
+		t.Fatalf("LoadAuth: %v", err)
+	}
+
+	want := "https://cetacean.example.com/auth/callback"
+	if cfg.OIDC.RedirectURL != want {
+		t.Errorf("RedirectURL = %q, want %q", cfg.OIDC.RedirectURL, want)
+	}
+}
+
+func TestOIDCRedirectURLIncludesBasePath(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
+	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://idp.example.com")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "cetacean")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
+
+	cfg, err := LoadAuth(nil, nil, "https://cetacean.example.com", "/cetacean")
+	if err != nil {
+		t.Fatalf("LoadAuth: %v", err)
+	}
+
+	want := "https://cetacean.example.com/cetacean/auth/callback"
+	if cfg.OIDC.RedirectURL != want {
+		t.Errorf("RedirectURL = %q, want %q", cfg.OIDC.RedirectURL, want)
+	}
+}
+
+func TestOIDCRedirectURLExplicitWins(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
+	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://idp.example.com")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "cetacean")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
+	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://other.example.com/auth/callback")
+
+	cfg, err := LoadAuth(nil, nil, "https://cetacean.example.com", "")
+	if err != nil {
+		t.Fatalf("LoadAuth: %v", err)
+	}
+
+	want := "https://other.example.com/auth/callback"
+	if cfg.OIDC.RedirectURL != want {
+		t.Errorf("RedirectURL = %q, want %q", cfg.OIDC.RedirectURL, want)
+	}
+}
+
+func TestOIDCStillRequiresRedirectURLWithoutPublicURL(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
+	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://idp.example.com")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "cetacean")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
+
+	if _, err := LoadAuth(nil, nil, "", ""); err == nil {
+		t.Fatal("LoadAuth = nil error, want the existing 'oidc mode requires' rejection")
 	}
 }

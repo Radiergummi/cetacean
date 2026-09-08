@@ -37,6 +37,7 @@ type RouterConfig struct {
 	EnableSelfMetrics bool
 	AuthProvider      auth.Provider
 	BasePath          string
+	PublicURL         string
 	CORS              *CORSConfig
 	TLSEnabled        bool
 	TrustedProxies    []netip.Prefix
@@ -676,7 +677,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	handler = recovery(handler)
 	handler = realIP(cfg.TrustedProxies)(handler)
 	handler = requestID(handler)
-	return basePathMiddleware(cfg.BasePath, handler)
+	return publicURLMiddleware(cfg.PublicURL, basePathMiddleware(cfg.BasePath, handler))
 }
 
 func requireReady(h *Handlers) func(http.Handler) http.Handler {

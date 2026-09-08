@@ -40,6 +40,7 @@ type Config struct {
 	PrometheusURL    string
 	ListenAddr       string
 	BasePath         string          // CETACEAN_BASE_PATH, default ""
+	PublicURL        string          // CETACEAN_PUBLIC_URL, external origin, default ""
 	LogLevel         string          // "debug", "info", "warn", "error"
 	LogFormat        string          // "json", "text"
 	DataDir          string          // CETACEAN_DATA_DIR, default "./data"
@@ -81,6 +82,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		fSnapshot        *bool
 		fOpsLevel        *int
 		fBasePath        *string
+		fPublicURL       *string
 		fCORSOrigins     []string
 		fTrustedProxies  *string
 		fOTelEndpoint    *string
@@ -93,6 +95,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			fRecommendations = fc.Server.Recommendations
 			fOpsLevel = fc.Server.OperationsLevel
 			fBasePath = fc.Server.BasePath
+			fPublicURL = fc.Server.PublicURL
 			fTrustedProxies = fc.Server.TrustedProxies
 			if fc.Server.SSE != nil {
 				fSSEBatch = fc.Server.SSE.BatchInterval
@@ -155,6 +158,10 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		BasePath: NormalizeBasePath(
 			resolve(flags.BasePath, "CETACEAN_BASE_PATH", fBasePath, ""),
 		),
+		PublicURL: strings.TrimRight(
+			resolve(flags.PublicURL, "CETACEAN_PUBLIC_URL", fPublicURL, ""),
+			"/",
+		),
 		LogLevel:         resolve(flags.LogLevel, "CETACEAN_LOG_LEVEL", fLogLevel, "info"),
 		LogFormat:        resolve(flags.LogFormat, "CETACEAN_LOG_FORMAT", fLogFormat, "json"),
 		DataDir:          resolve(flags.DataDir, "CETACEAN_DATA_DIR", fDataDir, "./data"),
@@ -182,6 +189,10 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 	}
 
 	if err := ValidateBasePath(cfg.BasePath); err != nil {
+		return nil, err
+	}
+
+	if err := ValidatePublicURL(cfg.PublicURL); err != nil {
 		return nil, err
 	}
 

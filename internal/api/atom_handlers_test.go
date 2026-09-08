@@ -95,6 +95,20 @@ func TestFeedID(t *testing.T) {
 			t.Errorf("feedID = %q, want %q", got, want)
 		}
 	})
+
+	t.Run("prefers server.public_url host over r.Host", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/history", nil)
+		req.Host = "internal:9000"
+		ctx := context.WithValue(req.Context(), publicURLKey, "https://cetacean.example.com")
+		req = req.WithContext(ctx)
+
+		got := feedID(req)
+		want := "tag:cetacean.example.com,2026:/history"
+
+		if got != want {
+			t.Errorf("feedID = %q, want %q", got, want)
+		}
+	})
 }
 
 func TestHistoryToEntries(t *testing.T) {

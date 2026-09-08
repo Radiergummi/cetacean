@@ -82,6 +82,7 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_DOCKER_HOST` | `unix:///var/run/docker.sock` | No |
 | `CETACEAN_LISTEN_ADDR` | `:9000` | No |
 | `CETACEAN_BASE_PATH` | — | No (serve at root by default) |
+| `CETACEAN_PUBLIC_URL` | — | No (canonical external URL; defaults `mcp.issuer` and `auth.oidc.redirect_url`) |
 | `CETACEAN_LOG_FORMAT` | `json` | No |
 | `CETACEAN_LOG_LEVEL` | `info` | No |
 | `CETACEAN_SSE_BATCH_INTERVAL` | `100ms` | No |
