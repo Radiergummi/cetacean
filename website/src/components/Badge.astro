@@ -9,17 +9,10 @@ interface Props {
 }
 
 const { tone } = Astro.props;
-
-const tones = {
-  accent: "text-(--badge-accent) border-(--badge-accent-border)",
-  muted: "text-muted-foreground border-border",
-};
 ---
 <span
-  class:list={[
-    "rounded border px-1.5 py-0.5 text-2xs font-semibold uppercase leading-tight tracking-wider",
-    tones[tone],
-  ]}
+  class="rounded border px-1.5 py-0.5 text-2xs font-semibold uppercase leading-tight tracking-wider tone-accent:border-badge-accent/40 tone-accent:text-badge-accent tone-muted:border-border tone-muted:text-muted-foreground"
+  data-tone={tone}
 >
   <slot />
 </span>

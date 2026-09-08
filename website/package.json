@@ -10,7 +10,7 @@
     "prebuild": "npm run sync-assets",
     "predev": "npm run sync-assets",
     "dev": "astro dev",
-    "dev:clean": "astro dev stop; pkill -f \"$PWD/node_modules/astro/bin/astro.mjs dev\" || true; rm -rf .astro node_modules/.vite && npm run dev",
+    "dev:clean": "astro dev stop; pkill -f \"$PWD/node_modules/astro/bin/astro.mjs (dev|preview)\" || true; rm -rf .astro node_modules/.vite && npm run dev",
     "build": "astro build",
     "postbuild": "pagefind --site dist",
     "preview": "astro preview",

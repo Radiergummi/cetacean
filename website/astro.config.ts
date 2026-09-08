@@ -11,6 +11,7 @@ import sirv from "sirv";
 import type { Element, ElementContent, Properties } from "hast";
 import type {
   Code,
+  Heading,
   Html,
   Paragraph,
   PhrasingContent,
@@ -501,6 +502,135 @@ function slug(text: string): string {
     .replace(/^-|-$/g, "");
 }
 
+/**
+ * A run of `####` headings marked `<!-- entries -->` renders as one reference
+ * card apiece: the heading titles the card, everything under it is the body,
+ * and a paragraph opening `**Label** —` drops out of the prose into a labelled
+ * fact along the bottom.
+ *
+ * This is the shape `ConfigParam` gives a setting, reached from plain markdown.
+ * The MCP catalog needs it and cannot use that component: it is 27 tools
+ * carrying a paragraph of prose each, which is more than a card table's cell
+ * can hold, and the page is a `.md` that GitHub and the raw route serve as
+ * source. So the marker buys the card and the source stays headings and
+ * paragraphs.
+ *
+ * The heading node is kept as the title rather than rebuilt as a div, so the
+ * entries are still headings to a screen reader and still carry the id a link
+ * to one resolves against — which is why the card takes no id of its own.
+ */
+function remarkReferenceEntries() {
+  return (tree: Root) => {
+    visit(tree, "html", (node, index, parent) => {
+      if (!parent || index === undefined || node.value.trim() !== "<!-- entries -->") {
+        return;
+      }
+
+      const siblings = parent.children as RootContent[];
+      let end = index + 1;
+
+      while (end < siblings.length && !endsRun(siblings[end])) {
+        end++;
+      }
+
+      const entries: Entry[] = [];
+      const lead: RootContent[] = [];
+
+      for (const child of siblings.slice(index + 1, end)) {
+        if (child.type === "heading" && child.depth === 4) {
+          entries.push({ heading: child, body: [] });
+        } else if (entries.length) {
+          entries[entries.length - 1].body.push(child);
+        } else {
+          lead.push(child);
+        }
+      }
+
+      if (!entries.length) {
+        return;
+      }
+
+      siblings.splice(
+        index,
+        end - index,
+        ...lead,
+        container("div", entries.map(entryCard), { className: ["card-list", "is-entries"] }),
+      );
+
+      return index + lead.length + 1;
+    });
+  };
+}
+
+interface Entry {
+  heading: Heading;
+  body: RootContent[];
+}
+
+/** A run of entries ends where the section does, at the next `##` or `###`. */
+function endsRun(node: RootContent): boolean {
+  return node.type === "heading" && node.depth <= 3;
+}
+
+function entryCard({ heading, body }: Entry): Paragraph {
+  heading.data = { ...heading.data, hProperties: { className: ["card-title"] } };
+
+  const prose: RootContent[] = [];
+  const facts: RootContent[] = [];
+
+  for (const node of body) {
+    const fact = labelledFact(node);
+
+    if (fact) {
+      facts.push(...fact);
+    } else {
+      prose.push(node);
+    }
+  }
+
+  const children: RootContent[] = [heading];
+
+  if (prose.length) {
+    children.push(container("div", prose, { className: ["card-description"] }));
+  }
+
+  if (facts.length) {
+    children.push(container("div", facts, { className: ["card-facts"] }));
+  }
+
+  return container("div", children, { className: ["card"] });
+}
+
+/**
+ * `**Arguments** — the rest of the line` becomes a label and its value. The em
+ * dash is required as well as the bold opening, so a paragraph that merely
+ * starts with a bold phrase stays prose.
+ */
+function labelledFact(node: RootContent): RootContent[] | null {
+  if (node.type !== "paragraph") {
+    return null;
+  }
+
+  const [label, ...rest] = node.children;
+  const [separator] = rest;
+
+  if (label?.type !== "strong" || separator?.type !== "text" || !/^\s*—/.test(separator.value)) {
+    return null;
+  }
+
+  const value: PhrasingContent[] = [
+    { ...separator, value: separator.value.replace(/^\s*—\s*/, "") },
+    ...rest.slice(1),
+  ];
+
+  return [
+    container("span", [{ type: "text", value: nodeText(label).toLowerCase() }], {
+      className: ["card-label"],
+    }),
+    container("span", value as RootContent[], { className: ["card-value"] }),
+  ];
+}
+
 function remarkStripTitle() {
   return (tree: Root) => {
     const index = tree.children.findIndex((node) => node.type === "heading" && node.depth === 1);
@@ -521,6 +651,7 @@ const remarkPlugins: RemarkPlugins = [
   remarkCallouts,
   remarkCardTables,
   remarkDefinitionTables,
+  remarkReferenceEntries,
   remarkDocsLinks,
   remarkStripTitle,
 ];
@@ -536,6 +667,13 @@ export default defineConfig({
   integrations: [sitemap(), mdx()],
   vite: {
     plugins: [tailwindcss(), pagefindDevPlugin()],
+    // Fail on a taken port rather than quietly moving to the next one. A stray
+    // `astro preview` holding 4321 otherwise pushes the dev server to 4322
+    // while the browser stays on 4321, reading a static `dist/` build that no
+    // edit ever reaches. `strictPort` is Vite's, not Astro's: Astro forwards
+    // only host, port, headers and open from its own `server` block.
+    server: { strictPort: true },
+    preview: { strictPort: true },
   },
   markdown: {
     processor: unified({ remarkPlugins, rehypePlugins }),

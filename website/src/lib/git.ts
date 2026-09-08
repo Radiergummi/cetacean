@@ -6,12 +6,17 @@ const execFileAsync = promisify(execFile);
 let repoRoot: string | null = null;
 
 async function getRepoRoot(): Promise<string> {
-  if (repoRoot) return repoRoot;
+  if (repoRoot) {
+    return repoRoot;
+  }
+
   const { stdout } = await execFileAsync("git", ["rev-parse", "--show-toplevel"], {
     encoding: "utf-8",
     timeout: 5000,
   });
+
   repoRoot = stdout.trim();
+
   return repoRoot;
 }
 
@@ -30,6 +35,7 @@ export async function getLastModified(relativePath: string): Promise<Date | null
     );
 
     const trimmed = stdout.trim();
+
     return trimmed ? new Date(trimmed) : null;
   } catch {
     return null;

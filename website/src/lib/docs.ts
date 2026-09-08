@@ -1,6 +1,6 @@
-import { getCollection } from "astro:content";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import {getCollection} from "astro:content";
+import {readFileSync} from "node:fs";
+import {resolve} from "node:path";
 
 export const docsDir = resolve("../docs");
 export const changelogPath = resolve("../CHANGELOG.md");
@@ -11,7 +11,7 @@ export const changelogPath = resolve("../CHANGELOG.md");
  */
 export function latestVersion(): string {
   const raw = readFileSync(changelogPath, "utf-8");
-  const match = raw.match(/^## \[(?!Unreleased)([^\]]+)\]\s*-\s*\d{4}-\d{2}-\d{2}/m);
+  const match = raw.match(/^## \[(?!Unreleased)([^\]]+)]\s*-\s*\d{4}-\d{2}-\d{2}/m);
 
   if (!match) {
     throw new Error("no released version found in CHANGELOG.md");
@@ -23,11 +23,12 @@ export function latestVersion(): string {
 export function slugify(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[^\w]+/g, "-")
+    .replace(/\W+/g, "-")
     .replace(/^-|-$/g, "");
 }
 
 export async function getDocPaths() {
   const docs = await getCollection("docs");
-  return docs.filter((doc) => doc.data.category !== "overview");
+
+  return docs.filter(({data: {category}}) => category !== "overview");
 }

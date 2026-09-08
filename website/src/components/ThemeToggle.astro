@@ -1,18 +1,19 @@
 ---
 import { Monitor, Moon, Sun } from "@lucide/astro";
+import IconButton from "./IconButton.astro";
 ---
 
-<button
-  id="theme-toggle"
-  type="button"
-  class="rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-  aria-label="Toggle theme"
->
-  <Sun id="icon-sun" class="size-5 hidden" aria-hidden="true" />
-  <Moon id="icon-moon" class="size-5 hidden" aria-hidden="true" />
-  <Monitor id="icon-system" class="size-5 hidden" aria-hidden="true" />
+<!--
+  The icons are all hidden until the script names the active theme in
+  `data-theme`, which is the one thing it has to say: which of the three is
+  shown follows from the attribute, so no icon is reached for individually.
+-->
+<IconButton id="theme-toggle" class="group rounded-md p-1.5" aria-label="Toggle theme">
+  <Sun class="size-5 hidden group-theme-light:block" aria-hidden="true" />
+  <Moon class="size-5 hidden group-theme-dark:block" aria-hidden="true" />
+  <Monitor class="size-5 hidden group-theme-system:block" aria-hidden="true" />
   <span id="theme-status" class="sr-only" aria-live="polite" role="status"></span>
-</button>
+</IconButton>
 
 <script is:inline>
   if (!window.__themeInitialized) {
@@ -33,10 +34,9 @@ import { Monitor, Moon, Sun } from "@lucide/astro";
     const themeLabels = { light: "Light theme", dark: "Dark theme", system: "System theme" };
 
     window.__updateThemeUI = function(theme) {
-      document.getElementById("icon-sun").classList.toggle("hidden", theme !== "light");
-      document.getElementById("icon-moon").classList.toggle("hidden", theme !== "dark");
-      document.getElementById("icon-system").classList.toggle("hidden", theme !== "system");
-      document.getElementById("theme-toggle").setAttribute("aria-label", "Toggle theme, current: " + themeLabels[theme]);
+      const toggle = document.getElementById("theme-toggle");
+      toggle.dataset.theme = theme;
+      toggle.setAttribute("aria-label", "Toggle theme, current: " + themeLabels[theme]);
     };
 
     window.matchMedia("(prefers-color-scheme: dark)")

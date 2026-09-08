@@ -15,12 +15,14 @@ const {href, icon, title} = Astro.props;
             <span class="me-2">{icon}</span>
             {title}
         </h2>
+
         <p class="text-base text-muted-foreground">
             <slot />
         </p>
-        <span class="mt-auto self-end text-accent-foreground font-medium text-sm flex items-center gap-1 group-hover:translate-x-1 transition-all duration-300">
-            <span class="opacity-0 group-hover:opacity-100 transition-opacity duration-500">Read more</span>
-            <ChevronRight class="size-4 opacity-50 group-hover:opacity-100 transition-opacity duration-300" />
+
+        <span class="mt-auto self-end text-accent-foreground font-medium text-sm flex items-center gap-1 transition-transform duration-300 group-hover:translate-x-1 group-focus-visible:translate-x-1">
+            <span class="opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100">Read more</span>
+            <ChevronRight class="size-4 opacity-50 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100" />
         </span>
     </a>
 </li>

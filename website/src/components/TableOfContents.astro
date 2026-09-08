@@ -10,23 +10,21 @@ interface Props {
 }
 
 const { headings } = Astro.props;
-const filtered = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
+const filtered = headings.filter(({depth}) => depth >= 2 && depth <= 3);
 ---
 {filtered.length > 0 && (
-  <aside class="hidden xl:block w-48 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto py-8 pr-6 lg:pr-8 pl-4" aria-label="On this page">
+  <aside class="hidden xl:block w-48 shrink-0 rail py-8 pr-6 lg:pr-8 pl-4" aria-label="On this page">
     <h3 class="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-4">
       On this page
     </h3>
-    <ul id="toc-list" class="space-y-1.5 text-sm border-l border-border pl-3">
+    <ul id="toc-list" class="flex flex-col gap-1.5 text-sm border-l pl-3">
       {filtered.map((heading) => (
         <li>
           <a
             href={`#${heading.slug}`}
-            class:list={[
-              "block py-0.5 text-muted-foreground hover:text-foreground transition-colors leading-snug",
-              heading.depth === 3 && "pl-3",
-            ]}
+            class="block py-0.5 leading-snug text-muted-foreground transition-colors hover:text-foreground data-nested:pl-3 data-active:font-medium data-active:text-active"
             data-heading={heading.slug}
+            data-nested={heading.depth === 3 || undefined}
           >
             {heading.text}
           </a>
@@ -47,11 +45,10 @@ const filtered = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
     const observer = new IntersectionObserver(function(entries) {
       entries.forEach(function(entry) {
         if (entry.isIntersecting) {
-          if (current) { current.classList.remove("font-medium"); current.style.color = ""; }
+          if (current) { current.removeAttribute("data-active"); }
           const match = headings.find(function(h) { return h.target === entry.target; });
           if (match) {
-            match.link.classList.add("font-medium");
-            match.link.style.color = "var(--active)";
+            match.link.setAttribute("data-active", "");
             current = match.link;
           }
         }

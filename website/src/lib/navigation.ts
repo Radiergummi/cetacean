@@ -1,11 +1,14 @@
-import pkg from "../../package.json" with { type: "json" };
+import packageJson from "../../package.json" with { type: "json" };
 
-export const repoUrl: string = pkg.repository;
+export const repoUrl: string = packageJson.repository;
 
 export interface NavItem {
   slug: string;
   title: string;
-  /** Force full page reload when navigating to this page (skips View Transitions). */
+
+  /**
+   * Force full page reload when navigating to this page (skips View Transitions).
+   */
   reload?: boolean;
 }
 
@@ -18,11 +21,13 @@ const allPages: NavItem[] = [];
 
 export function getPrevNext(slug: string): { prev: NavItem | null; next: NavItem | null } {
   if (!allPages.length) {
-    for (const group of sidebarGroups) {
-      allPages.push(...group.items);
+    for (const { items } of sidebarGroups) {
+      allPages.push(...items);
     }
   }
+
   const index = allPages.findIndex((item) => item.slug === slug);
+
   return {
     prev: index > 0 ? allPages[index - 1] : null,
     next: index >= 0 && index < allPages.length - 1 ? allPages[index + 1] : null,

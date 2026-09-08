@@ -8,13 +8,13 @@ interface Props {
 const { currentSlug } = Astro.props;
 ---
 
-<aside class="hidden md:block w-60 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto py-8 pl-6 lg:pl-8 pr-6" aria-label="Documentation sidebar">
+<aside class="hidden md:block w-60 shrink-0 rail py-8 pl-6 lg:pl-8 pr-6" aria-label="Documentation sidebar">
   <SidebarNav currentSlug={currentSlug} />
 </aside>
 
 <div
   id="mobile-sidebar"
-  class="group fixed inset-0 z-40 pointer-events-none aria-[hidden=false]:pointer-events-auto md:hidden"
+  class="group fixed inset-0 z-40 pointer-events-none drawer-open:pointer-events-auto md:hidden"
   role="dialog"
   aria-modal="true"
   aria-label="Navigation menu"
@@ -22,11 +22,11 @@ const { currentSlug } = Astro.props;
 >
   <div
     id="mobile-sidebar-backdrop"
-    class="absolute inset-0 bg-black/0 backdrop-blur-none transition-[background-color,backdrop-filter] duration-200 ease-[ease] group-aria-[hidden=false]:bg-black/40 group-aria-[hidden=false]:backdrop-blur-xs"
+    class="absolute inset-0 bg-black/0 backdrop-blur-none transition-backdrop duration-200 ease-out group-drawer-open:bg-black/40 group-drawer-open:backdrop-blur-xs"
     aria-hidden="true"
   ></div>
   <aside
-    class="absolute right-0 top-0 h-full w-72 translate-x-full overflow-y-auto border-l border-border bg-background px-6 pt-20 pb-8 shadow-xl transition-transform duration-250 ease-[ease] group-aria-[hidden=false]:translate-x-0"
+    class="absolute right-0 top-0 h-full w-72 translate-x-full overflow-y-auto border-l bg-background px-6 pt-20 pb-8 shadow-xl transition-transform duration-250 ease-out group-drawer-open:translate-x-0"
     data-panel
   >
     <SidebarNav currentSlug={currentSlug} />

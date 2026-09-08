@@ -1,10 +1,10 @@
+import type { Element, ElementContent, Parents, Root } from "hast";
 import { createMermaidRenderer, type RenderResult } from "mermaid-isomorphic";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { Element, ElementContent, Parents, Root } from "hast";
 import type { Plugin } from "unified";
-import type { VFile } from "vfile";
 import { visit } from "unist-util-visit";
+import type { VFile } from "vfile";
 
 /**
  * Mermaid diagrams, rendered to SVG at build time.
@@ -167,7 +167,7 @@ function fromSentinel(channels: string): boolean {
 function assertThemed(svg: string, source: string, file: VFile): void {
   const authored = new Set([...source.matchAll(colorPattern)].map((match) => canonical(match[0])));
 
-  const strays = [...new Set([...svg.matchAll(colorPattern)].map((match) => match[0]))].filter(
+  const strays = [...new Set([...svg.matchAll(colorPattern)].map(([match]) => match))].filter(
     (color) => {
       const key = canonical(color);
 
