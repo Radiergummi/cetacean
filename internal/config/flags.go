@@ -18,6 +18,7 @@ type Flags struct {
 	SelfMetrics     *bool
 	Recommendations *bool
 	BasePath        *string
+	PublicURL       *string
 	Version         bool
 
 	// Auth
@@ -186,6 +187,11 @@ func ParseFlags(args []string) (*Flags, error) {
 		"SSE batch interval (env: CETACEAN_SSE_BATCH_INTERVAL, default \"100ms\")",
 	)
 	corsOrigins := fs.String("cors-origins", "", "CORS origins (env: CETACEAN_CORS_ORIGINS)")
+	publicURL := fs.String(
+		"public-url",
+		"",
+		"Canonical external URL, e.g. https://cetacean.example.com (env: CETACEAN_PUBLIC_URL)",
+	)
 	trustedProxies := fs.String(
 		"trusted-proxies",
 		"",
@@ -271,6 +277,8 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.SSEBatchInterval = sseBatch
 		case "cors-origins":
 			f.CORSOrigins = corsOrigins
+		case "public-url":
+			f.PublicURL = publicURL
 		case "trusted-proxies":
 			f.TrustedProxies = trustedProxies
 		}
