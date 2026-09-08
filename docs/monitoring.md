@@ -18,16 +18,26 @@ per-task sparklines, stack drill-downs, and every sizing [recommendation][recomm
 
 ## Setup
 
-Deploy the bundled monitoring stack first. It creates the shared `monitoring` overlay network that `compose.yaml`
-joins as an external network.
+Deploy the bundled monitoring stack first. It reads `prometheus.yml` from the directory you deploy it from, and
+creates the `monitoring` overlay network Cetacean joins:
 
 ```bash
+curl -O https://raw.githubusercontent.com/Radiergummi/cetacean/main/compose.monitoring.yaml
+curl -O https://raw.githubusercontent.com/Radiergummi/cetacean/main/prometheus.yml
 docker stack deploy -c compose.monitoring.yaml monitoring
-CETACEAN_PROMETHEUS_URL=http://prometheus:9090 docker stack deploy -c compose.yaml cetacean
 ```
 
-`compose.yaml` passes that value through from your shell. You can set
-[`prometheus.url`][prometheus.url] in a [config file][config-file] instead.
+`compose.prometheus.yaml` is a small overlay for `compose.yaml` that joins that network and sets
+[`prometheus.url`][prometheus.url]. Pass both files, on this deploy and every later one:
+
+```bash
+curl -O https://raw.githubusercontent.com/Radiergummi/cetacean/main/compose.prometheus.yaml
+docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean
+```
+
+Pointing at a Prometheus you already run is the same setting by another route — set
+[`prometheus.url`][prometheus.url] through the environment or a [config file][config-file], and make sure
+Cetacean shares a network with it.
 
 The stack runs Prometheus on a manager node, with node-exporter and cAdvisor on every node.
 

@@ -34,13 +34,15 @@ Run it on a manager node:
 docker run -d --name cetacean \
   -p 9000:9000 \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v cetacean_data:/data \
+  -e CETACEAN_DATA_DIR=/data \
   ghcr.io/radiergummi/cetacean:latest
 ```
 
-Open `http://<manager>:9000`. Or deploy the bundled stack, which adds a volume for persisted state:
+Open `http://<manager>:9000`. Or deploy the bundled stack, which adds resource limits and pins the task to a
+manager:
 
 ```bash
-docker network create --driver overlay monitoring
 docker stack deploy -c compose.yaml cetacean
 ```
 
@@ -82,11 +84,12 @@ repository:
 
 ## Build from source
 
-Requires Go 1.26+ and Node.js 24+. The frontend has to be built first, because the binary embeds it:
+Requires Go 1.26+ and Node.js 24+. `make build` installs the frontend dependencies, builds the dashboard and the
+MCP widgets, and compiles the binary, which embeds both:
 
 ```bash
-cd frontend && npm install && npm run build && npm run build:widgets && cd ..
-go build -o cetacean .
+make build
+./cetacean
 ```
 
 Cetacean needs a swarm to connect to; `docker swarm init` gives you a single-node one for local work. See

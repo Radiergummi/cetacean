@@ -125,8 +125,8 @@ held in the URL as `?q=` and `?range=`.
 
 ## Log viewer
 
-Service and task detail pages carry a log viewer. It can tail live once you turn the tail on and follows the bottom of the output
-until you scroll up, which pauses following; the live toggle in the toolbar stops and starts the stream.
+Service and task detail pages carry a log viewer. The live toggle in the toolbar starts and stops the stream; while
+it runs the view follows the bottom of the output, and scrolling up pauses that until you scroll back down.
 
 - Time range: presets from the last 5 minutes upwards, or a custom since/until pair
 - Filters: by level (parsed from the line, including JSON and `log/slog` numeric levels) and by stream

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Deploying Cetacean as a stack no longer requires creating an overlay network first. `compose.yaml` now stands on its own — `docker stack deploy -c compose.yaml cetacean` and nothing else. Connecting it to the bundled Prometheus is a second file, `compose.prometheus.yaml`, layered on top: `docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean`. That replaces passing `CETACEAN_PROMETHEUS_URL` through the shell on every deploy, where forgetting it once silently disconnected the charts
+
+### Fixed
+- Building from source now works from a fresh clone: `make build` installs the frontend dependencies before building, where it previously failed because the binary embeds a frontend that had never been built
+- The example config file offered `acl_claim`, `acl_capability` and `acl` keys under the `[auth.*]` sections. No such keys exist — the parser ignores what it does not recognise, so anyone who uncommented one got no grants and no warning. The working keys are `oidc_claim`, `tailscale_capability` and `headers_acl` under `[acl]`, which the same file already listed
+
 ## [0.13.0] - 2026-09-07
 
 ### Added

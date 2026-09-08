@@ -366,25 +366,29 @@ TLS termination works in any auth mode and is required for `cert` mode. Set [`tl
 
 ## Deployment examples
 
-The fragments above show only the settings each mode needs. These are complete services, secrets and placement
-included.
+The fragments above show only the settings each mode needs. These add the secrets, placement and state volume
+from [Getting started][getting-started]. None publishes a port: reach Cetacean over the overlay network from a
+reverse proxy, or add a `ports:` mapping as `compose.yaml` does. The tsnet example needs neither, since it serves
+the app on the tailnet node itself.
 
 ### OIDC with Keycloak
 
 ```yaml
 services:
   cetacean:
-    image: cetacean:latest
+    image: ghcr.io/radiergummi/cetacean:latest
     environment:
       CETACEAN_AUTH_MODE: oidc
       CETACEAN_AUTH_OIDC_ISSUER: https://keycloak.example.com/realms/myorg
       CETACEAN_AUTH_OIDC_CLIENT_ID: cetacean
       CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_secret
       CETACEAN_AUTH_OIDC_REDIRECT_URL: https://cetacean.example.com/auth/callback
+      CETACEAN_DATA_DIR: /data
     secrets:
       - oidc_secret
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - cetacean_data:/data
     deploy:
       placement:
         constraints: [node.role == manager]
@@ -392,6 +396,9 @@ services:
 secrets:
   oidc_secret:
     external: true
+
+volumes:
+  cetacean_data:
 ```
 
 ### Tailscale (tsnet)
@@ -399,7 +406,7 @@ secrets:
 ```yaml
 services:
   cetacean:
-    image: cetacean:latest
+    image: ghcr.io/radiergummi/cetacean:latest
     environment:
       CETACEAN_AUTH_MODE: tailscale
       CETACEAN_AUTH_TAILSCALE_MODE: tsnet
@@ -408,11 +415,13 @@ services:
       # Without this tsnet picks its own directory and the volume below
       # goes unused, so the node re-authenticates on every restart.
       CETACEAN_AUTH_TAILSCALE_STATE_DIR: /var/lib/cetacean/tsnet
+      CETACEAN_DATA_DIR: /data
     secrets:
       - ts_authkey
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - tsnet-state:/var/lib/cetacean/tsnet
+      - cetacean_data:/data
     deploy:
       placement:
         constraints: [node.role == manager]
@@ -423,6 +432,7 @@ secrets:
 
 volumes:
   tsnet-state:
+  cetacean_data:
 ```
 
 ### Behind a proxy with header auth
@@ -430,18 +440,23 @@ volumes:
 ```yaml
 services:
   cetacean:
-    image: cetacean:latest
+    image: ghcr.io/radiergummi/cetacean:latest
     environment:
       CETACEAN_AUTH_MODE: headers
       CETACEAN_AUTH_HEADERS_SUBJECT: X-Remote-User
       CETACEAN_AUTH_HEADERS_EMAIL: X-Remote-Email
       CETACEAN_AUTH_HEADERS_GROUPS: X-Remote-Groups
       CETACEAN_TRUSTED_PROXIES: "10.0.0.0/8"
+      CETACEAN_DATA_DIR: /data
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - cetacean_data:/data
     deploy:
       placement:
         constraints: [node.role == manager]
+
+volumes:
+  cetacean_data:
 ```
 
 ## Verifying your setup
@@ -474,6 +489,7 @@ response schemas.
 [client-certificates]: configuration#client-certificates
 [config-file]: configuration#config-file
 [configuration]: configuration
+[getting-started]: getting-started
 [mcp]: mcp
 [oidc]: configuration#oidc
 [server.listen_addr]: configuration#server.listen_addr

@@ -64,15 +64,15 @@ answers "edited by someone other than Dependabot"), `@dependabot recreate` still
 
 ### Full build from source
 ```bash
-cd frontend && npm install && npm run build && cd ..
-go build -o cetacean .
+make build                                # npm ci (if stale) + frontend + widgets + go build
 ```
 
 ### Docker
 ```bash
-docker build -t cetacean:latest .                           # Multi-stage build
-docker stack deploy -c compose.yaml cetacean          # Deploy full stack (requires swarm)
-docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone monitoring stack (Prometheus + cAdvisor + node-exporter)
+docker build -t cetacean:latest .                          # Multi-stage build
+docker stack deploy -c compose.yaml cetacean               # Cetacean alone; no prerequisites
+docker stack deploy -c compose.monitoring.yaml monitoring  # Prometheus + cAdvisor + node-exporter; creates the `monitoring` overlay network
+docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean  # Cetacean joined to that network, with prometheus.url set
 ```
 
 ### Environment variables
@@ -100,6 +100,7 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_AUTH_OIDC_CLIENT_SECRET` | — | Yes (if OIDC mode) |
 | `CETACEAN_AUTH_OIDC_REDIRECT_URL` | — | Yes (if OIDC mode) |
 | `CETACEAN_AUTH_OIDC_SCOPES` | `openid,profile,email` | No |
+| `CETACEAN_AUTH_OIDC_SESSION_KEY` | random per start | No (hex 32 bytes; unset means restarts sign everyone out) |
 | `CETACEAN_AUTH_TAILSCALE_MODE` | `local` | No (`local` or `tsnet`) |
 | `CETACEAN_AUTH_TAILSCALE_AUTHKEY` | — | Yes (if tsnet mode) |
 | `CETACEAN_AUTH_TAILSCALE_HOSTNAME` | `cetacean` | No |
@@ -112,7 +113,8 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_AUTH_HEADERS_GROUPS` | — | No |
 | `CETACEAN_AUTH_HEADERS_SECRET_HEADER` | — | No |
 | `CETACEAN_AUTH_HEADERS_SECRET_VALUE` | — | Yes (if secret header set) |
-| `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | — | No (comma-separated CIDR/IP allowlist) |
+| `CETACEAN_TRUSTED_PROXIES` | — | No (comma-separated CIDR/IP allowlist; required for `headers` mode) |
+| `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | — | No (**deprecated**, use `CETACEAN_TRUSTED_PROXIES`) |
 | `CETACEAN_TLS_CERT` | — | No (Yes for cert mode) |
 | `CETACEAN_TLS_KEY` | — | No (Yes for cert mode) |
 | `CETACEAN_SIZING_HEADROOM_MULTIPLIER` | `2.0` | No |
@@ -141,6 +143,11 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_MCP_DCR_MAX_CLIENTS` | `1000` | No (global cap, LRU-evicted) |
 | `CETACEAN_MCP_CIMD_ENABLED` | `true` | No (Client ID Metadata Documents) |
 | `CETACEAN_MCP_AUTH_BYPASS` | — | No (comma-separated auth modes that skip OAuth, e.g. `cert`) |
+
+Secret settings also accept a `_FILE` suffix on their env var (`CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE`,
+`CETACEAN_AUTH_TAILSCALE_AUTHKEY_FILE`, `CETACEAN_AUTH_HEADERS_SECRET_VALUE_FILE`,
+`CETACEAN_AUTH_OIDC_SESSION_KEY_FILE`, `CETACEAN_MCP_SIGNING_KEY_FILE`), which reads the value from a file at
+startup and ranks below the direct env var.
 
 ## Architecture
 

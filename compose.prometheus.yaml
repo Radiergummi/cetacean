@@ -1,0 +1,21 @@
+# Overlay for compose.yaml that points Cetacean at the Prometheus in
+# compose.monitoring.yaml. Deploy that stack first — it creates the
+# `monitoring` overlay network this joins as external:
+#
+#   docker stack deploy -c compose.monitoring.yaml monitoring
+#   docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean
+#
+# Keep passing both files on every redeploy. Deploying compose.yaml alone
+# afterwards drops the network and the URL, and the charts go empty.
+
+services:
+  cetacean:
+    environment:
+      CETACEAN_PROMETHEUS_URL: http://prometheus:9090
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    external: true
+    name: monitoring

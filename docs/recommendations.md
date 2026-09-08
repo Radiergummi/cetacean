@@ -43,7 +43,7 @@ Findings that have an obvious fix get an **Apply suggested value** button:
 | `approaching-limit`, `at-limit` | Adjusts the limit | [Operations level][operations-level] 2 |
 | `single-replica` | Scales the service to 2 replicas | [Operations level][operations-level] 1 |
 
-Both also need [write permission][authorization] on the service. Without it the request fails and the error
+All three also need [write permission][authorization] on the service. Without it the request fails and the error
 appears above the list. Everything else is reported for you to act on yourself.
 
 ## Without Prometheus
