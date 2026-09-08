@@ -1,5 +1,5 @@
 import { defineConfig } from "astro/config";
-import { unified } from "@astrojs/markdown-remark";
+import { type RehypePlugins, type RemarkPlugins, unified } from "@astrojs/markdown-remark";
 import sitemap from "@astrojs/sitemap";
 import mdx from "@astrojs/mdx";
 import tailwindcss from "@tailwindcss/vite";
@@ -8,11 +8,23 @@ import { rehypeMermaid } from "@/lib/mermaid-diagrams.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sirv from "sirv";
+import type { Element, ElementContent, Properties } from "hast";
+import type {
+  Code,
+  Html,
+  Paragraph,
+  PhrasingContent,
+  Root,
+  RootContent,
+  TableCell,
+  TableRow,
+} from "mdast";
+import type { Plugin as VitePlugin } from "vite";
 
 const sseGrammar = JSON.parse(readFileSync(resolve("src/lib/sse.tmLanguage.json"), "utf-8"));
 
 /** Serve dist/pagefind/ during dev so search works after a build. */
-function pagefindDevPlugin() {
+function pagefindDevPlugin(): VitePlugin {
   const pagefindDir = resolve("dist/pagefind");
   return {
     name: "pagefind-dev",
@@ -25,7 +37,7 @@ function pagefindDevPlugin() {
 }
 
 function remarkDocsLinks() {
-  return (tree) => {
+  return (tree: Root) => {
     visit(tree, "link", (node) => {
       if (
         typeof node.url === "string" &&
@@ -38,7 +50,7 @@ function remarkDocsLinks() {
   };
 }
 
-const defaultTabLabels = {
+const defaultTabLabels: Record<string, string> = {
   http: "HTTP",
   bash: "cURL",
   sh: "cURL",
@@ -54,7 +66,7 @@ const defaultTabLabels = {
 };
 
 function remarkCodeTabs() {
-  return (tree) => {
+  return (tree: Root) => {
     const { children } = tree;
     let i = 0;
     let tabGroupCount = 0;
@@ -65,9 +77,16 @@ function remarkCodeTabs() {
         continue;
       }
 
-      const group = [];
-      while (i < children.length && isTabCode(children[i])) {
-        group.push(children[i]);
+      const group: Code[] = [];
+
+      while (i < children.length) {
+        const node = children[i];
+
+        if (!isTabCode(node)) {
+          break;
+        }
+
+        group.push(node);
         i++;
       }
 
@@ -77,14 +96,14 @@ function remarkCodeTabs() {
       }
 
       const labels = group.map((node) => {
-        const label =
-          parseTabLabel(node.meta) || defaultTabLabels[node.lang] || node.lang || "Code";
+        const language = node.lang ?? "";
+        const label = parseTabLabel(node.meta) || defaultTabLabels[language] || language || "Code";
         stripTabMeta(node);
         return label;
       });
 
       const tabGroupId = `tabs-${tabGroupCount++}`;
-      const replacement = [];
+      const replacement: RootContent[] = [];
       const buttons = labels
         .map(
           (label, idx) =>
@@ -115,20 +134,20 @@ function remarkCodeTabs() {
   };
 }
 
-function isTabCode(node) {
+function isTabCode(node: RootContent | undefined): node is Code {
   return node?.type === "code" && typeof node.meta === "string" && /\btab\b/.test(node.meta);
 }
 
-function parseTabLabel(meta) {
+function parseTabLabel(meta: string | null | undefined) {
   const match = meta?.match(/tab="([^"]+)"/);
   return match?.[1] ?? null;
 }
 
-function stripTabMeta(node) {
-  node.meta = node.meta.replace(/\s*\btab(?:="[^"]*")?/g, "").trim() || null;
+function stripTabMeta(node: Code) {
+  node.meta = node.meta?.replace(/\s*\btab(?:="[^"]*")?/g, "").trim() || null;
 }
 
-function html(value) {
+function html(value: string): Html {
   return { type: "html", value };
 }
 
@@ -159,13 +178,15 @@ const calloutKinds = {
   },
 };
 
+type CalloutKind = keyof typeof calloutKinds;
+
 const calloutPattern = new RegExp(
   `^\\[!(${Object.keys(calloutKinds).join("|")})\\][ \\t]*\\n?`,
   "i",
 );
 
 function remarkCallouts() {
-  return (tree) => {
+  return (tree: Root) => {
     visit(tree, "blockquote", (node) => {
       const paragraph = node.children[0];
 
@@ -185,7 +206,7 @@ function remarkCallouts() {
         return;
       }
 
-      const kind = match[1].toLowerCase();
+      const kind = match[1].toLowerCase() as CalloutKind;
       text.value = text.value.slice(match[0].length);
 
       if (!text.value) {
@@ -204,7 +225,7 @@ function remarkCallouts() {
   };
 }
 
-function calloutHeader(kind) {
+function calloutHeader(kind: CalloutKind): Paragraph {
   const { label, icon } = calloutKinds[kind];
 
   return {
@@ -233,8 +254,27 @@ function calloutHeader(kind) {
   };
 }
 
-function element(tagName, properties, children = []) {
+function element(
+  tagName: string,
+  properties: Properties,
+  children: ElementContent[] = [],
+): Element {
   return { type: "element", tagName, properties, children };
+}
+
+/**
+ * A `paragraph` carrying `hName` is a container for whatever hast element it
+ * names, and so holds whatever that element holds — which is not the phrasing
+ * content mdast's own type for a paragraph demands. `mdast-util-to-hast` reads
+ * `data` and never measures the tree against that type, so the widening is the
+ * whole of the difference, and it lives here rather than at every call site.
+ */
+function container(hName: string, children: RootContent[], properties?: Properties): Paragraph {
+  return {
+    type: "paragraph",
+    data: properties ? { hName, hProperties: properties } : { hName },
+    children: children as unknown as PhrasingContent[],
+  };
 }
 
 /**
@@ -258,9 +298,9 @@ function element(tagName, properties, children = []) {
 const compactCellLength = 40;
 
 function remarkDefinitionTables() {
-  return (tree) => {
+  return (tree: Root) => {
     visit(tree, "table", (node, index, parent) => {
-      if (!parent || node.children.length < 2) {
+      if (!parent || index === undefined || node.children.length < 2) {
         return;
       }
 
@@ -276,7 +316,10 @@ function remarkDefinitionTables() {
       const total = rows.reduce((sum, row) => sum + nodeText(row.children[1]).length, 0);
       const compact = total / rows.length < compactCellLength;
 
-      parent.children.splice(
+      // `visit` types the parent as every node that could hold this one, and
+      // TypeScript will not splice into the union of their children arrays as
+      // one, though each of them holds the content this writes.
+      (parent.children as RootContent[]).splice(
         index,
         1,
         definitionCaption(header, compact),
@@ -288,46 +331,35 @@ function remarkDefinitionTables() {
   };
 }
 
-function nodeText(node) {
-  if (typeof node.value === "string") {
+function nodeText(node: RootContent): string {
+  if ("value" in node) {
     return node.value;
   }
 
-  return (node.children ?? []).map(nodeText).join("");
+  return ("children" in node ? node.children : []).map(nodeText).join("");
 }
 
 /** The column headings, kept as an eyebrow so the transform loses no wording. */
-function definitionCaption(header, compact) {
-  return {
-    type: "paragraph",
-    data: {
-      hName: "div",
-      hProperties: { className: ["definition-caption", ...(compact ? ["is-compact"] : [])] },
-    },
-    children: header.children.map((cell) => ({
-      type: "paragraph",
-      data: { hName: "span" },
-      children: cell.children,
-    })),
-  };
+function definitionCaption(header: TableRow, compact: boolean): Paragraph {
+  return container(
+    "div",
+    header.children.map((cell) => container("span", cell.children)),
+    { className: ["definition-caption", ...(compact ? ["is-compact"] : [])] },
+  );
 }
 
-function definitionList(rows, compact) {
-  return {
-    type: "paragraph",
-    data: {
-      hName: "dl",
-      hProperties: { className: ["definition-list", ...(compact ? ["is-compact"] : [])] },
-    },
-    children: rows.map((row) => ({
-      type: "paragraph",
-      data: { hName: "div", hProperties: { className: ["definition-row"] } },
-      children: [
-        { type: "paragraph", data: { hName: "dt" }, children: row.children[0].children },
-        { type: "paragraph", data: { hName: "dd" }, children: row.children[1].children },
-      ],
-    })),
-  };
+function definitionList(rows: TableRow[], compact: boolean): Paragraph {
+  return container(
+    "dl",
+    rows.map((row) =>
+      container(
+        "div",
+        [container("dt", row.children[0].children), container("dd", row.children[1].children)],
+        { className: ["definition-row"] },
+      ),
+    ),
+    { className: ["definition-list", ...(compact ? ["is-compact"] : [])] },
+  );
 }
 
 /**
@@ -347,9 +379,9 @@ function definitionList(rows, compact) {
  * or a finding can be linked to directly.
  */
 function remarkCardTables() {
-  return (tree) => {
+  return (tree: Root) => {
     visit(tree, "html", (node, index, parent) => {
-      if (!parent || node.value.trim() !== "<!-- cards -->") {
+      if (!parent || index === undefined || node.value.trim() !== "<!-- cards -->") {
         return;
       }
 
@@ -361,21 +393,21 @@ function remarkCardTables() {
 
       const [header, ...rows] = table.children;
 
-      parent.children.splice(index, 2, cardList(header, rows));
+      (parent.children as RootContent[]).splice(index, 2, cardList(header, rows));
 
       return index + 1;
     });
   };
 }
 
-function cardList(header, rows) {
+function cardList(header: TableRow, rows: TableRow[]): Paragraph {
   const labels = header.children.map((cell) => nodeText(cell));
 
-  return {
-    type: "paragraph",
-    data: { hName: "div", hProperties: { className: ["card-list"] } },
-    children: rows.map((row) => card(labels, row.children, descriptionColumn(rows))),
-  };
+  return container(
+    "div",
+    rows.map((row) => card(labels, row.children, descriptionColumn(rows))),
+    { className: ["card-list"] },
+  );
 }
 
 /**
@@ -384,7 +416,7 @@ function cardList(header, rows) {
  * the prose. Length is measured over rendered text, so a column of links is
  * judged by what a reader sees rather than by the URLs behind it.
  */
-function descriptionColumn(rows) {
+function descriptionColumn(rows: TableRow[]): number {
   let column = 1;
   let longest = 0;
 
@@ -400,22 +432,14 @@ function descriptionColumn(rows) {
   return column;
 }
 
-function card(labels, cells, description) {
+function card(labels: string[], cells: TableCell[], description: number): Paragraph {
   const [title] = cells;
-  const children = [
-    {
-      type: "paragraph",
-      data: { hName: "div", hProperties: { className: ["card-title"] } },
-      children: title.children,
-    },
-  ];
+  const children: Paragraph[] = [container("div", title.children, { className: ["card-title"] })];
 
   if (nodeText(cells[description]).trim()) {
-    children.push({
-      type: "paragraph",
-      data: { hName: "div", hProperties: { className: ["card-description"] } },
-      children: cells[description].children,
-    });
+    children.push(
+      container("div", cells[description].children, { className: ["card-description"] }),
+    );
   }
 
   const facts = cells
@@ -423,35 +447,24 @@ function card(labels, cells, description) {
     .filter(({ cell, column }) => column !== 0 && column !== description && nodeText(cell).trim());
 
   if (facts.length) {
-    children.push({
-      type: "paragraph",
-      data: { hName: "div", hProperties: { className: ["card-facts"] } },
-      children: facts.flatMap(({ cell, column }) => [
-        {
-          type: "paragraph",
-          data: { hName: "span", hProperties: { className: ["card-label"] } },
-          children: [{ type: "text", value: labels[column] }],
-        },
-        {
-          type: "paragraph",
-          data: { hName: "span", hProperties: { className: ["card-value"] } },
-          children: cell.children,
-        },
-      ]),
-    });
+    children.push(
+      container(
+        "div",
+        facts.flatMap(({ cell, column }) => [
+          container("span", [{ type: "text", value: labels[column] }], {
+            className: ["card-label"],
+          }),
+          container("span", cell.children, { className: ["card-value"] }),
+        ]),
+        { className: ["card-facts"] },
+      ),
+    );
   }
 
-  return {
-    type: "paragraph",
-    data: {
-      hName: "div",
-      hProperties: { className: ["card"], id: slug(nodeText(title)) },
-    },
-    children,
-  };
+  return container("div", children, { className: ["card"], id: slug(nodeText(title)) });
 }
 
-function slug(text) {
+function slug(text: string): string {
   return text
     .toLowerCase()
     .replace(/[^\w]+/g, "-")
@@ -459,7 +472,7 @@ function slug(text) {
 }
 
 function remarkStripTitle() {
-  return (tree) => {
+  return (tree: Root) => {
     const index = tree.children.findIndex((node) => node.type === "heading" && node.depth === 1);
 
     if (index !== -1) {
@@ -473,7 +486,7 @@ function remarkStripTitle() {
  * rather than taking its own copy, so the two routes cannot render a doc
  * differently.
  */
-const remarkPlugins = [
+const remarkPlugins: RemarkPlugins = [
   remarkCodeTabs,
   remarkCallouts,
   remarkCardTables,
@@ -482,7 +495,7 @@ const remarkPlugins = [
   remarkStripTitle,
 ];
 
-const rehypePlugins = [rehypeMermaid];
+const rehypePlugins: RehypePlugins = [rehypeMermaid];
 
 export default defineConfig({
   site: "https://cetacean.mazetti.me",

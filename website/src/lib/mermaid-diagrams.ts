@@ -1,7 +1,7 @@
 import { createMermaidRenderer, type RenderResult } from "mermaid-isomorphic";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { Element } from "hast";
+import type { Element, ElementContent, Parents, Root } from "hast";
 import type { Plugin } from "unified";
 import type { VFile } from "vfile";
 import { visit } from "unist-util-visit";
@@ -244,7 +244,7 @@ export const rehypeMermaid = function rehypeMermaid() {
   const render = createMermaidRenderer();
 
   return async (tree, file) => {
-    const blocks: { parent: Element; index: number; source: string }[] = [];
+    const blocks: { parent: Parents; index: number; source: string }[] = [];
 
     visit(tree, "element", (node, index, parent) => {
       if (parent && index !== undefined && isMermaidBlock(node)) {
@@ -274,11 +274,14 @@ export const rehypeMermaid = function rehypeMermaid() {
         const svg = applyTheme(splitLineBreaks(unpinWidth(result.value.svg)));
 
         assertThemed(svg, block.source, file);
-        block.parent.children[block.index] = figure(result.value, svg);
+        // A parent is the root or an element, and TypeScript will not write to
+        // the union of their two children arrays as one, though a figure is
+        // content both of them hold.
+        (block.parent.children as ElementContent[])[block.index] = figure(result.value, svg);
       }
     });
   };
-} satisfies Plugin<[], Element, Element>;
+} satisfies Plugin<[], Root, Root>;
 
 function figure(diagram: RenderResult, svg: string): Element {
   const label = diagram.title ?? diagram.description ?? "Diagram";
