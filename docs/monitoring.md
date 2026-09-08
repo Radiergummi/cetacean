@@ -22,8 +22,8 @@ Deploy the bundled monitoring stack first. It reads `prometheus.yml` from the di
 creates the `monitoring` overlay network Cetacean joins:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Radiergummi/cetacean/main/compose.monitoring.yaml
-curl -O https://raw.githubusercontent.com/Radiergummi/cetacean/main/prometheus.yml
+curl -O https://cetacean.mazetti.me/dist/compose.monitoring.yaml
+curl -O https://cetacean.mazetti.me/dist/prometheus.yml
 docker stack deploy -c compose.monitoring.yaml monitoring
 ```
 
@@ -31,7 +31,7 @@ docker stack deploy -c compose.monitoring.yaml monitoring
 [`prometheus.url`][prometheus.url]. Pass both files, on this deploy and every later one:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Radiergummi/cetacean/main/compose.prometheus.yaml
+curl -O https://cetacean.mazetti.me/dist/compose.prometheus.yaml
 docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean
 ```
 

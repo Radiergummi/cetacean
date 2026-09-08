@@ -40,7 +40,7 @@ flaky-service [recommendation][recommendations], both of which are lost with the
 volume for its state. It has no prerequisites:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Radiergummi/cetacean/main/compose.yaml
+curl -O https://cetacean.mazetti.me/dist/compose.yaml
 docker stack deploy -c compose.yaml cetacean
 ```
 
@@ -80,8 +80,8 @@ The bundled stack runs [Prometheus](https://prometheus.io/),
 It reads `prometheus.yml` from the directory you deploy it from, so download both:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Radiergummi/cetacean/main/compose.monitoring.yaml
-curl -O https://raw.githubusercontent.com/Radiergummi/cetacean/main/prometheus.yml
+curl -O https://cetacean.mazetti.me/dist/compose.monitoring.yaml
+curl -O https://cetacean.mazetti.me/dist/prometheus.yml
 docker stack deploy -c compose.monitoring.yaml monitoring
 ```
 
@@ -89,7 +89,7 @@ That creates a `monitoring` overlay network. `compose.prometheus.yaml` is a smal
 it and sets the Prometheus URL; deploy it on top of `compose.yaml`:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Radiergummi/cetacean/main/compose.prometheus.yaml
+curl -O https://cetacean.mazetti.me/dist/compose.prometheus.yaml
 docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean
 ```
 

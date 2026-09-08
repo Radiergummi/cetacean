@@ -8,6 +8,10 @@ on:
       - "website/**"
       - "frontend/**"
       - "CHANGELOG.md"
+      - "api/openapi.yaml"
+      # Served at /dist/ by the website; see website/package.json sync-assets.
+      - "compose*.yaml"
+      - "prometheus.yml"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
