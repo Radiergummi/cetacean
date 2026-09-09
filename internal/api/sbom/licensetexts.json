@@ -419,7 +419,7 @@
   "go:google.golang.org/genproto/googleapis/rpc@v0.0.0-20260819154853-08b0e4226688": {
    "license": "cfc7749b96f63bd31c3c42b5c471bf75"
   },
-  "go:google.golang.org/grpc@v1.83.1": {
+  "go:google.golang.org/grpc@v1.83.2": {
    "license": "cfc7749b96f63bd31c3c42b5c471bf75",
    "notice": "693ff28ec216d5112ac1bbfe64ef5390"
   },
