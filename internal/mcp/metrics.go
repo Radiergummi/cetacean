@@ -1,9 +1,11 @@
 package mcp
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -57,6 +59,15 @@ var metricRanges = map[string]metricRange{
 }
 
 const defaultMetricRange = "1h"
+
+// metricRangeNames lists the presets `range` accepts, shortest window first —
+// the order a reader expects, where sorting the keys as strings would put 24h
+// before 6h. Derived from the table, so a new preset advertises itself.
+func metricRangeNames() []string {
+	return slices.SortedFunc(maps.Keys(metricRanges), func(a, b string) int {
+		return cmp.Compare(metricRanges[a].window, metricRanges[b].window)
+	})
+}
 
 // metricQuery is one series of a metric: the name it is reported under and the
 // PromQL that produces it, with `%s` where the resolved selector goes.

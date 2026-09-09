@@ -65,8 +65,9 @@ func (s *Server) readTools() []toolDef {
 				),
 				mcplib.WithString(
 					"level",
+					mcplib.Enum(logLevelNames()...),
 					mcplib.Description(
-						"Minimum log level (debug, info, warn, error). Best-effort — depends on the service emitting structured levels.",
+						"Minimum log level (debug, info, warn, error, fatal). Best-effort — depends on the service emitting structured levels.",
 					),
 				),
 			),
@@ -88,6 +89,7 @@ func (s *Server) readTools() []toolDef {
 				mcplib.WithOpenWorldHintAnnotation(false),
 				mcplib.WithString(
 					"type",
+					mcplib.Enum(listableResourceTypes...),
 					mcplib.Description(
 						"Resource type to enumerate: nodes, services, tasks, stacks, configs, secrets, networks, or volumes. Omit to search across every type at once (requires `query`).",
 					),
@@ -157,6 +159,7 @@ func (s *Server) readTools() []toolDef {
 				mcplib.WithOpenWorldHintAnnotation(false),
 				mcplib.WithString("type",
 					mcplib.Required(),
+					mcplib.Enum(describableTypeNames()...),
 					mcplib.Description(
 						"Resource type, singular: service, node, task, stack, config, secret, network or volume.",
 					),
@@ -190,6 +193,11 @@ func (s *Server) readTools() []toolDef {
 				mcplib.WithOpenWorldHintAnnotation(false),
 				mcplib.WithString(
 					"view",
+					mcplib.Enum(
+						cluster.TopologyViewNetwork,
+						cluster.TopologyViewPlacement,
+						cluster.TopologyViewDrainImpact,
+					),
 					mcplib.Description(
 						"Which projection to return: \"network\" (services joined to overlay networks, the default), \"placement\" (cluster nodes joined to the services they run), or \"drain-impact\" (the services on one node joined to the nodes that could take them; requires `node`).",
 					),
@@ -219,6 +227,7 @@ func (s *Server) readTools() []toolDef {
 				mcplib.WithOpenWorldHintAnnotation(false),
 				mcplib.WithString("target",
 					mcplib.Required(),
+					mcplib.Enum(metricTargetService, metricTargetNode, metricTargetCluster),
 					mcplib.Description(
 						"What to measure: \"service\", \"node\", or \"cluster\" to rank across the whole cluster.",
 					),
@@ -234,16 +243,19 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 				mcplib.WithString("by",
+					mcplib.Enum(rankByService, rankByNode),
 					mcplib.Description(
 						"What a cluster-wide ranking ranks: \"service\" (default) or \"node\". Ignored by every other target.",
 					),
 				),
 				mcplib.WithString("metric",
+					mcplib.Enum(metricCPU, metricMemory, metricNetwork),
 					mcplib.Description(
 						"Which metric: \"cpu\" (default), \"memory\" or \"network\". Service CPU is percent of a core and service memory is bytes; node CPU and memory are percentages. Network is two series, receive and transmit, in bytes per second — a ranking sums the two, since it asks which member moves the most traffic.",
 					),
 				),
 				mcplib.WithString("range",
+					mcplib.Enum(metricRangeNames()...),
 					mcplib.Description(
 						"Window to chart: \"1h\" (default), \"6h\", \"24h\" or \"7d\".",
 					),

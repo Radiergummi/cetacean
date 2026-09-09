@@ -56,7 +56,8 @@ resources they returned, so a host can offer somewhere to go next.
 </McpTool>
 
 <McpTool name="describe" level={0}>
-    <Fragment slot="arguments">`type` (singular, required), `id` (required), `raw`</Fragment>
+    <Fragment slot="arguments">`type` (singular, required: `service`, `node`, `task`, `stack`,
+        `config`, `secret`, `network`, `volume`), `id` (required), `raw`</Fragment>
 
     Returns one resource as a `Digest`. `id` takes an ID or a name — a hostname for a node, the rendered
     `&lt;service&gt;.&lt;slot&gt;` for a task, the plain name for everything else — and a name matching more than one
@@ -85,7 +86,7 @@ What the cluster is doing now, and what it did recently.
 
 <McpTool name="get_logs" level={0}>
     <Fragment slot="arguments">exactly one of `service`, `task`, `stack`, `cluster`; plus `contains`, `tail` (100 per
-        replica), `since`, `level`</Fragment>
+        replica), `since`, `level` (`debug`, `info`, `warn`, `error`, `fatal`)</Fragment>
 
     Fetches recent log lines from one scope.
 
