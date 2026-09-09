@@ -35,7 +35,7 @@ import { buildInstanceFilter } from "../lib/prometheusParser";
 import { stackResourceCharts } from "../lib/stackQueries";
 import { escapePromQL } from "../lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 
 export default function NodeDetail() {
@@ -69,15 +69,20 @@ export default function NodeDetail() {
     enabled: !!id,
   });
 
-  // Local labels state, synced from server on every re-fetch and updated
-  // optimistically after a successful patch.
-  const [nodeLabels, setNodeLabels] = useState<Record<string, string>>({});
+  // The labels the editor shows: the node's own, replaced by a successful
+  // patch's result until a re-fetch delivers a node that already carries it.
+  // Held against the version the patch was applied to, so the server's copy
+  // takes over on its own — where syncing from an effect meant a render with
+  // the previous node's labels every time one arrived.
+  const [patchedLabels, setPatchedLabels] = useState<{
+    from: number;
+    entries: Record<string, string>;
+  } | null>(null);
 
-  useEffect(() => {
-    if (node) {
-      setNodeLabels(node.Spec?.Labels ?? {});
-    }
-  }, [node]);
+  const nodeLabels =
+    patchedLabels && patchedLabels.from === node?.Version.Index
+      ? patchedLabels.entries
+      : (node?.Spec?.Labels ?? {});
 
   const monitoring = useMonitoringStatus();
   const hasPrometheus = isPrometheusReady(monitoring);
@@ -235,7 +240,8 @@ export default function NodeDetail() {
           validateKey={validateLabelKey}
           onSave={async (ops) => {
             const updated = await api.patchNodeLabels(node.ID, ops);
-            setNodeLabels(updated);
+            setPatchedLabels({ from: node.Version.Index, entries: updated });
+
             return updated;
           }}
         />
