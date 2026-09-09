@@ -424,6 +424,17 @@ function remarkCardTables() {
 
       const [header, ...rows] = table.children;
 
+      // A card reads one cell per column out of every row, so a table whose
+      // rows are not all as wide as its header would index past the end of
+      // one. Leave it as a table, the way `remarkDefinitionTables` does with a
+      // shape it cannot render, rather than failing the build on a stray pipe.
+      if (header.children.length < 2) {
+        return;
+      }
+      if (rows.some((row) => row.children.length !== header.children.length)) {
+        return;
+      }
+
       (parent.children as RootContent[]).splice(index, 2, cardList(header, rows));
 
       return index + 1;

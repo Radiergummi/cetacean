@@ -291,8 +291,6 @@ function figure(diagram: RenderResult, svg: string): Element {
     tagName: "figure",
     properties: {
       className: ["mermaid-figure"],
-      "aria-label": label,
-      role: "img",
       // The width mermaid laid the diagram out at. The stylesheet scales down
       // to fit the column but stops at a legibility floor and scrolls past it,
       // and never scales a small diagram up.
@@ -302,7 +300,11 @@ function figure(diagram: RenderResult, svg: string): Element {
       {
         type: "element",
         tagName: "div",
-        properties: { className: ["mermaid-viewport"] },
+        // `role="img"` sits here rather than on the figure because assistive
+        // technology presents the subtree of one as a single image: the pan,
+        // zoom and fullscreen buttons the enhancement script appends to the
+        // figure would be tabbable but never announced.
+        properties: { className: ["mermaid-viewport"], "aria-label": label, role: "img" },
         children: [
           {
             type: "element",

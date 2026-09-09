@@ -24,6 +24,7 @@ const html = await marked(raw, { renderer });
   description="Release history"
   slug="changelog"
   headings={headings}
+  sourcePath="CHANGELOG.md"
 >
   <Fragment set:html={html} />
 </DocsLayout>
