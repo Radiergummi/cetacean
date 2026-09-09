@@ -63,7 +63,8 @@ type ipBucket struct {
 	windowSec int
 }
 
-// ClientRegistry stores dynamically registered clients with LRU eviction.
+// ClientRegistry stores dynamically registered clients, evicting the oldest
+// registration once maxClients is reached.
 //
 // A nil registry is the DCR-disabled case. Its persistence methods tolerate
 // that receiver, so the state file can hold one unconditionally rather than
@@ -73,7 +74,7 @@ type ClientRegistry struct {
 
 	mu         sync.Mutex
 	clients    map[string]*ClientRegistration
-	order      []string // insertion-order for LRU eviction (oldest first)
+	order      []string // registration order; the oldest is evicted first
 	maxClients int
 
 	rateMu    sync.Mutex
