@@ -1,6 +1,6 @@
 ---
+import AnchorLink from "./AnchorLink.astro";
 import type {HTMLAttributes} from "astro/types";
-import {Link} from "@lucide/astro";
 
 interface Props extends HTMLAttributes<"section"> {
     id: string;
@@ -10,24 +10,27 @@ interface Props extends HTMLAttributes<"section"> {
 const {id, class: className, anchor = false, ...rest} = Astro.props;
 
 /**
+ * The card every reference on the site is drawn in. It lives here rather than at
+ * the four call sites because the footer below hangs off the card's own padding:
+ * its negative margins have to be the padding, and two numbers that must agree
+ * cannot be stated in different files.
+ */
+const cardClass = "group mt-2 rounded-lg border px-4 py-3.5 " +
+    "target:border-active target:ring-1 target:ring-active";
+
+/**
  * Rendered rather than probed with `Astro.slots.has`, which only reports whether
  * children were passed: a caller forwarding its own slot always passes some, so
  * only the rendered output says whether there is a description to wrap.
  */
 const description = (await Astro.slots.render("default")).trim();
+
+const facts = Astro.slots.has("facts") ? (await Astro.slots.render("facts")).trim() : "";
 ---
-<section {...rest} id={id} class={className}>
+<section {...rest} id={id} class:list={[cardClass, className]}>
     <header class="mb-1.5 flex items-center gap-2 code-heading">
         <slot name="heading" />
-        {anchor && (
-            <a
-                href={`#${id}`}
-                class="ms-auto text-sm leading-none text-muted-foreground no-underline opacity-0 transition-opacity group-hover:opacity-100 hover:text-active focus-visible:opacity-100 select-none transition duration-150"
-                aria-label={`Link to ${id}`}
-            >
-                <Link class="size-3" />
-            </a>
-        )}
+        {anchor && <AnchorLink id={id} class="ms-auto" />}
     </header>
 
     {description && (
@@ -37,5 +40,10 @@ const description = (await Astro.slots.render("default")).trim();
         />
     )}
 
-    <slot name="facts" />
+    {facts && (
+        <footer
+            class="-mx-4 -mb-3.5 rounded-b-inner border-t bg-muted px-4 py-2 text-sm text-muted-foreground"
+            set:html={facts}
+        />
+    )}
 </section>

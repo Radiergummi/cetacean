@@ -1,8 +1,8 @@
 ---
 import Heading from "@/components/Heading.astro";
 import SchemaDefinition from "@/components/SchemaDefinition.astro";
+import SchemaLinks from "@/components/SchemaLinks.astro";
 import DocsLayout from "../../layouts/DocsLayout.astro";
-import Badge from "../../components/Badge.astro";
 import {properties, rfc9457Properties, types} from "@/lib/schema.ts";
 
 const allProperties = [
@@ -47,16 +47,7 @@ const headings = [
                             {typeProperties.length > 0 && (
                                 <>
                                     <dt class="font-medium">Properties</dt>
-                                    <dd>
-                                        <ul class="flex flex-wrap gap-x-1 gap-y-0.5 m-0">
-                                            {typeProperties.map((property, index) => (
-                                                <li class="contents">
-                                                    {index > 0 && ", "}
-                                                    <a href={`/api/schema#${property}`}><code>{property}</code></a>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </dd>
+                                    <dd><SchemaLinks names={typeProperties} /></dd>
                                 </>
                             )}
                         </Fragment>
@@ -101,20 +92,7 @@ const headings = [
                             <dd><code>{expectedType}</code></dd>
 
                             <dt class="font-medium">Used on</dt>
-                            {usedOn.length > 0 && (
-                                <>
-                                    <dd>
-                                        <ul class="flex flex-wrap gap-x-1 gap-y-0.5 m-0">
-                                            {usedOn.map((property, index) => (
-                                                <li class="contents">
-                                                    {index > 0 && ", "}
-                                                    <a href={`/api/schema#${property}`}>{property}</a>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </dd>
-                                </>
-                            )}
+                            {usedOn.length > 0 && <dd><SchemaLinks names={usedOn} /></dd>}
                         </Fragment>
                     </SchemaDefinition>
                 </li>
