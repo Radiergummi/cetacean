@@ -18,19 +18,21 @@ export interface SeriesIsolation {
   index: number | null;
   /** Isolate by index, publishing to sibling charts. */
   isolate: (index: number | null) => void;
-  /** Drop the isolation without publishing — for when the series list changes. */
-  clear: () => void;
 }
 
 /**
  * Which series is isolated, whether this chart or its caller decides.
  *
- * Isolation is held by *index* here because that is what a click on a dataset
- * gives, but travels between charts by *label*, since sibling charts plot
- * different metrics and share only the series names. The two representations
- * are reconciled against the data on every read, which is also what makes a
- * label naming a series this chart does not have resolve to no isolation rather
- * than to whatever sits at that index.
+ * The isolation is a *label* in both modes, and the index a click gives is
+ * resolved back to one immediately. Holding an index instead — as the
+ * uncontrolled mode used to — meant the isolation silently changed meaning
+ * whenever the series list did, so the fetch had to reach back in and clear it
+ * through a ref assigned during render. A label needs no such telling: it is
+ * matched against the series actually plotted on every read, so one that has
+ * gone resolves to no isolation rather than to whatever moved into its slot.
+ *
+ * A label is also what travels between charts, since siblings plot different
+ * metrics and share only the series names.
  */
 export function useSeriesIsolation({
   chartId,
@@ -40,66 +42,56 @@ export function useSeriesIsolation({
 }: Options): SeriesIsolation {
   const sync = useChartSync();
   const controlled = isolatedLabel !== undefined;
-  const [localIndex, setLocalIndex] = useState<number | null>(null);
+  const [localLabel, setLocalLabel] = useState<string | null>(null);
 
   const dataRef = useRef(data);
   dataRef.current = data;
 
-  const controlledIndex = useMemo(() => {
-    if (!controlled || isolatedLabel == null || !data) {
+  const label = controlled ? (isolatedLabel ?? null) : localLabel;
+
+  const index = useMemo(() => {
+    if (label == null || !data) {
       return null;
     }
 
-    const index = data.series.findIndex(({ label }) => label === isolatedLabel);
+    const found = data.series.findIndex((series) => series.label === label);
 
-    return index >= 0 ? index : null;
-  }, [controlled, isolatedLabel, data]);
-
-  const index = controlled ? controlledIndex : localIndex;
+    return found >= 0 ? found : null;
+  }, [label, data]);
 
   const set = useCallback(
-    (next: number | null) => {
+    (next: string | null) => {
       if (controlled) {
-        onIsolationChange?.(next != null ? (dataRef.current?.series[next]?.label ?? null) : null);
+        onIsolationChange?.(next);
 
         return;
       }
 
-      setLocalIndex(next);
+      setLocalLabel(next);
     },
     [controlled, onIsolationChange],
   );
 
   useEffect(() => {
-    return sync.subscribeIsolation(chartId, (label) => {
-      const current = dataRef.current;
+    return sync.subscribeIsolation(chartId, (published) => {
+      // A sibling plots different metrics, so it can name a series this chart
+      // does not have. That is no isolation here rather than someone else's.
+      const known =
+        published != null && dataRef.current?.series.some(({ label }) => label === published);
 
-      if (!current || label == null) {
-        set(null);
-
-        return;
-      }
-
-      const found = current.series.findIndex((series) => series.label === label);
-
-      set(found >= 0 ? found : null);
+      set(known ? published : null);
     });
   }, [chartId, sync, set]);
 
   const isolate = useCallback(
     (next: number | null) => {
-      set(next);
-      sync.publishIsolation(
-        chartId,
-        next != null ? (dataRef.current?.series[next]?.label ?? null) : null,
-      );
+      const nextLabel = next != null ? (dataRef.current?.series[next]?.label ?? null) : null;
+
+      set(nextLabel);
+      sync.publishIsolation(chartId, nextLabel);
     },
     [chartId, set, sync],
   );
 
-  const clear = useCallback(() => {
-    set(null);
-  }, [set]);
-
-  return { index, isolate, clear };
+  return { index, isolate };
 }

@@ -148,12 +148,3 @@ export function appendMetricPoint(
     }),
   };
 }
-
-/** Returns true if the series labels changed between two datasets. */
-export function seriesChanged(previous: ParsedMetrics | null, next: ParsedMetrics): boolean {
-  if (!previous || previous.series.length !== next.series.length) {
-    return true;
-  }
-
-  return previous.series.some(({ label }, index) => label !== next.series[index]?.label);
-}

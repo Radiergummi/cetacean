@@ -29,7 +29,7 @@ import {
 } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 import { AreaChart, BarChart3, LineChart, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Line } from "react-chartjs-2";
 
 ChartJS.register(
@@ -101,14 +101,6 @@ export default function TimeSeriesChart({
   const [localStacked, setLocalStacked] = useState(false);
   const stacked = panel?.stacked ?? localStacked;
 
-  // The isolation has to exist before the fetch, which drops it when the series
-  // list changes underneath it, and the fetch before the isolation, which reads
-  // the series to turn an index into a label. The ref breaks that knot.
-  const clearIsolationRef = useRef<() => void>(() => {});
-  const clearIsolation = useCallback(() => {
-    clearIsolationRef.current();
-  }, []);
-
   const { state, errorMessage, data, refetch } = useMetricsSeries({
     query,
     range,
@@ -120,7 +112,6 @@ export default function TimeSeriesChart({
     refreshKey,
     streaming: panel?.streaming ?? true,
     onSeriesInfo,
-    onSeriesReset: clearIsolation,
   });
 
   const isolation = useSeriesIsolation({
@@ -129,8 +120,6 @@ export default function TimeSeriesChart({
     isolatedLabel,
     onIsolationChange,
   });
-
-  clearIsolationRef.current = isolation.clear;
 
   const tooltipRef = useRef(setTooltip);
   tooltipRef.current = setTooltip;
