@@ -24,7 +24,9 @@ beforeEach(() => {
   vi.stubGlobal(
     "matchMedia",
     vi.fn((query: string) => ({
-      matches: currentMatches,
+      get matches() {
+        return currentMatches;
+      },
       media: query,
       addEventListener: (_: string, listener: (event: { matches: boolean }) => void) => {
         listeners.push(listener);

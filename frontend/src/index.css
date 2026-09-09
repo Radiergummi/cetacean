@@ -207,15 +207,12 @@
    sync. macOS overlay scrollbars are invisible at rest, which is why a clipped
    row is otherwise the only hint that a region scrolls at all.
 
-   The covering gradients have to be painted in the surface's own colour, so a
-   region on anything but `--background` must set `--scroll-shadow-surface`. */
+   The covering gradients are painted in `--background`, so a region on another
+   surface needs its own colour here. */
 .scroll-shadows {
-  --scroll-shadow-surface: var(--background);
-
   background:
-    linear-gradient(var(--scroll-shadow-surface) 30%, transparent) top / 100% 1.5rem local no-repeat,
-    linear-gradient(transparent, var(--scroll-shadow-surface) 70%) bottom / 100% 1.5rem local
-      no-repeat,
+    linear-gradient(var(--background) 30%, transparent) top / 100% 1.5rem local no-repeat,
+    linear-gradient(transparent, var(--background) 70%) bottom / 100% 1.5rem local no-repeat,
     radial-gradient(farthest-side at 50% 0, oklch(from var(--foreground) l c h / 18%), transparent)
       top / 100% 0.5rem scroll no-repeat,
     radial-gradient(
