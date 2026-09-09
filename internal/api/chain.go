@@ -1,6 +1,9 @@
 package api
 
-import "net/http"
+import (
+	"net/http"
+	"slices"
+)
 
 // Constructor wraps a handler in one layer of middleware.
 type Constructor func(http.Handler) http.Handler
@@ -54,8 +57,8 @@ func (c Chain) Then(h http.Handler) http.Handler {
 		panic("api: Chain.Then called with a nil handler")
 	}
 
-	for i := len(c.constructors) - 1; i >= 0; i-- {
-		h = c.constructors[i](h)
+	for _, constructor := range slices.Backward(c.constructors) {
+		h = constructor(h)
 	}
 
 	return h

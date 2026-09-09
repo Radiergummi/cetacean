@@ -43,26 +43,36 @@ func TestChainRunsInDeclaredOrder(t *testing.T) {
 // TestDerivedChainsDoNotContaminate is the reason this type copies rather than
 // appending in place. Two chains derived from one base must not share a
 // backing array, or the second Append overwrites the first one's entry.
+//
+// The base must have two constructors to allocate zero spare capacity (len == cap).
+// Appending once produces a middle chain with spare capacity (len 3, cap 4), and
+// deriving twice from that middle chain is necessary to reproduce the corruption:
+// a naive append would write index 3 for both, and the second derivation would
+// silently overwrite the first one's marker.
 func TestDerivedChainsDoNotContaminate(t *testing.T) {
 	var order []string
-	base := NewChain(recorder(&order, "base"))
+	base := NewChain(
+		recorder(&order, "m1"),
+		recorder(&order, "m2"),
+	)
 
-	withA := base.Append(recorder(&order, "a"))
-	withB := base.Append(recorder(&order, "b"))
+	middle := base.Append(recorder(&order, "m3"))
+	withA := middle.Append(recorder(&order, "markerA"))
+	withB := middle.Append(recorder(&order, "markerB"))
 
-	if &withA.constructors[0] == &withB.constructors[0] {
+	if &withA.constructors[3] == &withB.constructors[3] {
 		t.Fatal("derived chains share a backing array")
 	}
 
 	order = nil
 	run(t, withA.ThenFunc(func(http.ResponseWriter, *http.Request) {}))
-	if want := []string{"base", "a"}; !slices.Equal(order, want) {
+	if want := []string{"m1", "m2", "m3", "markerA"}; !slices.Equal(order, want) {
 		t.Errorf("withA order = %v, want %v", order, want)
 	}
 
 	order = nil
 	run(t, withB.ThenFunc(func(http.ResponseWriter, *http.Request) {}))
-	if want := []string{"base", "b"}; !slices.Equal(order, want) {
+	if want := []string{"m1", "m2", "m3", "markerB"}; !slices.Equal(order, want) {
 		t.Errorf("withB order = %v, want %v", order, want)
 	}
 }
