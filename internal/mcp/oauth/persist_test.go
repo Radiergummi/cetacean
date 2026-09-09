@@ -2,10 +2,13 @@ package oauth
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // restart round-trips a store through the on-disk format the way a process
@@ -422,5 +425,126 @@ func TestStateFileSerializesConcurrentWriters(t *testing.T) {
 	}
 	if got := len(state.Consent); got != rounds {
 		t.Errorf("consent records on disk = %d, want %d", got, rounds)
+	}
+}
+
+// registrationBody is a minimal valid DCR request, so the persistence tests
+// below say what they are about rather than restating the RFC 7591 shape.
+const registrationBody = `{"client_name":"Claude Code","redirect_uris":["http://localhost:33418/callback"]}`
+
+func TestServerCarriesClientRegistrationsAcrossRestart(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	before := newPersistingServer(t, path, testResource)
+
+	status, reg := registerClient(t, before, registrationBody)
+	if status != http.StatusCreated {
+		t.Fatalf("register: status %d", status)
+	}
+
+	// A second Server over the same path stands in for the process restarting.
+	after := newPersistingServer(t, path, testResource)
+
+	restored := after.clients.Get(reg.ClientID)
+	if restored == nil {
+		t.Fatal("a client registered before the restart should still resolve")
+	}
+
+	if restored.ClientName != "Claude Code" {
+		t.Errorf("client name = %q", restored.ClientName)
+	}
+	if len(restored.RedirectURIs) != 1 ||
+		restored.RedirectURIs[0] != "http://localhost:33418/callback" {
+		t.Errorf("redirect uris = %v", restored.RedirectURIs)
+	}
+
+	// The redirect URI and the application type are what the authorize
+	// endpoint checks a request against, so a registration that came back
+	// without them would resolve and then reject every authorization.
+	if restored.ApplicationType != "native" {
+		t.Errorf("application type = %q, want native", restored.ApplicationType)
+	}
+}
+
+func TestRegistrationIsWrittenThrough(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	s := newPersistingServer(t, path, testResource)
+	if status, _ := registerClient(t, s, registrationBody); status != http.StatusCreated {
+		t.Fatalf("register: status %d", status)
+	}
+
+	if got := len(onDisk(t, path).Clients); got != 1 {
+		t.Errorf("registrations on disk = %d, want the new client written through", got)
+	}
+}
+
+// TestOlderStateFileLoadsWithoutRegistrations — the version bump must not cost
+// a deployment its tokens. A file written before registrations were persisted
+// still loads; its clients simply register once more.
+func TestOlderStateFileLoadsWithoutRegistrations(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	tokens := NewRefreshTokenStore()
+	token := tokens.Issue(RefreshTokenData{
+		Subject:  "user@example.com",
+		ClientID: "cetacean-legacy",
+		Resource: testResource,
+	}, time.Hour)
+
+	state := tokenState(tokens.Snapshot())
+	state.Version = 2
+
+	if err := writeState(path, state); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	after := newPersistingServer(t, path, testResource)
+
+	if _, ok := after.refreshTokens.Validate(token); !ok {
+		t.Error("a token from a pre-registration state file should still validate")
+	}
+	if got := len(after.clients.Snapshot()); got != 0 {
+		t.Errorf("registrations restored from a v2 file = %d, want 0", got)
+	}
+}
+
+// TestServerWithoutDCRIgnoresPersistedRegistrations — turning registration off
+// is a real deployment, and the state file may still hold clients from before
+// it was. There is no registry to restore them into, and nothing on the write
+// path may assume there is.
+func TestServerWithoutDCRIgnoresPersistedRegistrations(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	state := tokenState(NewRefreshTokenStore().Snapshot())
+	state.Clients = []ClientRegistration{{ClientID: "cetacean-from-before"}}
+
+	if err := writeState(path, state); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	s := NewServer(ServerConfig{
+		Issuer:      "https://cetacean.test",
+		MCPResource: testResource,
+		MCP: config.MCPConfig{
+			AccessTokenTTL:  time.Hour,
+			RefreshTokenTTL: 720 * time.Hour,
+			ConsentTTL:      testConsentTTL,
+		},
+		SigningKey: []byte("test-signing-key-32bytes-padded!!"),
+		StatePath:  path,
+	})
+
+	if s.clients != nil {
+		t.Fatal("a server with DCR disabled should hold no client registry")
+	}
+
+	// The write path runs with a nil registry, and the registrations it cannot
+	// restore go with it: a client the server would refuse to resolve has no
+	// business outliving the restart in the file.
+	s.refreshTokens.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
+
+	if got := len(onDisk(t, path).Clients); got != 0 {
+		t.Errorf("registrations on disk = %d, want them dropped with DCR disabled", got)
 	}
 }

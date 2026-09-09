@@ -169,9 +169,10 @@ The consent screen labels how the client identified itself. **Verified via publi
 named by a URL Cetacean fetched and checked. **Self-reported identity** means the client named itself; those are never
 remembered, so you approve them every time.
 
-Refresh tokens and approvals are stored in `mcp-tokens.json` under [`storage.data_dir`][storage.data_dir], at mode
-`0600`—anyone who can write that file can pre-approve a client. Nothing else survives a restart, which is why a single
-replica is required: the file is node-local, and an unset signing key would leave each replica signing differently.
+Refresh tokens, approvals and dynamically registered clients are stored in `mcp-tokens.json` under
+[`storage.data_dir`][storage.data_dir], at mode `0600`—anyone who can write that file can pre-approve a client. Nothing
+else survives a restart, which is why a single replica is required: the file is node-local, and an unset signing key
+would leave each replica signing differently.
 
 [authorization]: authorization
 [dashboard]: dashboard

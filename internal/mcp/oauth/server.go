@@ -45,9 +45,9 @@ type ServerConfig struct {
 	// HTTPClient is an optional HTTP client for CIMD fetches.
 	HTTPClient *http.Client
 
-	// StatePath is where the OAuth server's durable state — refresh tokens and
-	// remembered approvals — is persisted, so a restart does not force every
-	// client to re-authorize. Empty keeps both stores in memory only, which is
+	// StatePath is where the OAuth server's durable state — refresh tokens,
+	// remembered approvals and dynamic client registrations — is persisted, so
+	// a restart does not force every client to register and authorize again. Empty keeps both stores in memory only, which is
 	// what happens when the data directory is not writable.
 	StatePath string
 }
@@ -115,15 +115,26 @@ func NewServer(cfg ServerConfig) *Server {
 		} else {
 			refreshTokens.Restore(state.RefreshTokenSnapshot)
 			consent.Restore(state.Consent)
+			clients.Restore(state.Clients)
 			slog.Info("loaded MCP OAuth state",
 				"grants", len(state.Grants),
 				"approvals", len(state.Consent),
+				"clients", len(state.Clients),
 			)
 		}
 
-		file := &stateFile{path: cfg.StatePath, tokens: refreshTokens, consent: consent}
+		file := &stateFile{
+			path:    cfg.StatePath,
+			tokens:  refreshTokens,
+			consent: consent,
+			clients: clients,
+		}
 		refreshTokens.SetOnChange(file.write)
 		consent.SetOnChange(file.write)
+
+		if clients != nil {
+			clients.SetOnChange(file.write)
+		}
 	}
 
 	return &Server{
