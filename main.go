@@ -386,6 +386,15 @@ func main() {
 	}
 	spa := api.NewSPAHandler(distFS, cfg.BasePath)
 
+	// The SPA applies the stored theme from an inline script before the first
+	// paint; the CSP allows it by hashing the document actually being served,
+	// so the policy cannot drift from an edit to index.html.
+	inlineScriptHashes, err := api.InlineScriptHashes(distFS)
+	if err != nil {
+		slog.Error("failed to hash the SPA's inline scripts", "error", err)
+		os.Exit(1)
+	}
+
 	if cfg.Pprof {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
 	}
@@ -447,23 +456,24 @@ func main() {
 	defer closeMCP()
 
 	router := api.NewRouter(api.RouterConfig{
-		Handlers:          handlers,
-		Broadcaster:       broadcaster,
-		MetricsProxy:      metricsProxy,
-		SPA:               spa,
-		OpenAPISpec:       openapiSpec,
-		ScalarJS:          scalarJS,
-		EnablePprof:       cfg.Pprof,
-		EnableSelfMetrics: cfg.SelfMetrics,
-		AuthProvider:      authProvider,
-		BasePath:          cfg.BasePath,
-		PublicURL:         cfg.PublicURL,
-		CORS:              corsConfig,
-		TLSEnabled:        tlsCfg.Enabled(),
-		TrustedProxies:    cfg.TrustedProxies,
-		Resyncer:          watcher,
-		MCPHandler:        mcpHandler,
-		OAuthRoutes:       oauthRoutes,
+		Handlers:           handlers,
+		Broadcaster:        broadcaster,
+		MetricsProxy:       metricsProxy,
+		SPA:                spa,
+		InlineScriptHashes: inlineScriptHashes,
+		OpenAPISpec:        openapiSpec,
+		ScalarJS:           scalarJS,
+		EnablePprof:        cfg.Pprof,
+		EnableSelfMetrics:  cfg.SelfMetrics,
+		AuthProvider:       authProvider,
+		BasePath:           cfg.BasePath,
+		PublicURL:          cfg.PublicURL,
+		CORS:               corsConfig,
+		TLSEnabled:         tlsCfg.Enabled(),
+		TrustedProxies:     cfg.TrustedProxies,
+		Resyncer:           watcher,
+		MCPHandler:         mcpHandler,
+		OAuthRoutes:        oauthRoutes,
 	})
 
 	var serverTLSConfig *tls.Config
