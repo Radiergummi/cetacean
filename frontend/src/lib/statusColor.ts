@@ -7,7 +7,7 @@
  * coincidence rather than by construction. Both now read from here, so a state
  * that changes meaning changes in one place.
  */
-export type StatusTone = "ok" | "warning" | "danger" | "neutral";
+export type StatusTone = "ok" | "warning" | "danger" | "info" | "neutral";
 
 const stateTones: Record<string, StatusTone> = {
   running: "ok",
@@ -34,6 +34,7 @@ const toneDot: Record<StatusTone, string> = {
   ok: "bg-status-ok",
   warning: "bg-status-warning",
   danger: "bg-status-danger",
+  info: "bg-status-info",
   neutral: "bg-status-neutral",
 };
 
@@ -64,5 +65,28 @@ export const toneSurface: Record<StatusTone, string> = {
   ok: "bg-status-ok/15 text-status-ok",
   warning: "bg-status-warning/15 text-status-warning",
   danger: "bg-status-danger/15 text-status-danger",
+  info: "bg-status-info/15 text-status-info",
   neutral: "bg-status-neutral/15 text-status-neutral",
+};
+
+/** Text alone, for an icon or a label sitting on the page background. */
+export const toneText: Record<StatusTone, string> = {
+  ok: "text-status-ok",
+  warning: "text-status-warning",
+  danger: "text-status-danger",
+  info: "text-status-info",
+  neutral: "text-status-neutral",
+};
+
+/**
+ * A banner: the tinted surface plus an outline. It borrows the surface rather
+ * than restating the tint, because the contrast the tokens were chosen for is
+ * contrast against *that* tint.
+ */
+export const toneBanner: Record<StatusTone, string> = {
+  ok: `${toneSurface.ok} border-status-ok/30`,
+  warning: `${toneSurface.warning} border-status-warning/30`,
+  danger: `${toneSurface.danger} border-status-danger/30`,
+  info: `${toneSurface.info} border-status-info/30`,
+  neutral: `${toneSurface.neutral} border-status-neutral/30`,
 };
