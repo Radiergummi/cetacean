@@ -1,4 +1,6 @@
 ---
+import PageFooter from "@/components/PageFooter.astro";
+import PageHeader from "@/components/PageHeader.astro";
 import {Pencil} from "@lucide/astro";
 import BaseLayout from "./BaseLayout.astro";
 import TableOfContents from "../components/TableOfContents.astro";
@@ -52,76 +54,20 @@ const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : null;
         transition:animate="fade"
     >
         <article class="mx-auto" data-pagefind-body>
-            <span class="hidden" data-pagefind-meta="description">
-                {description}
-            </span>
-            {
-                category && (
-                             <meta
-                                 data-pagefind-filter={`category:${category}`}
-                             />
-                         )
-            }
-            {
-                tags?.map((tag) => (
-                    <meta data-pagefind-filter={`tag:${tag}`} />
-                ))
-            }
-            <div
-                class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
-                data-pagefind-ignore
-            >
-                <h1
-                    class="text-2xl font-semibold tracking-tight m-0"
-                    data-pagefind-meta="title"
-                >
-                    {title}
-                </h1>
-                {
-                    markdownUrl && editUrl && (
-                                              <CopyPageButton markdownUrl={markdownUrl} editUrl={editUrl} />
-                                          )
-                }
-            </div>
+            <PageHeader
+                title={title}
+                editUrl={editUrl}
+                markdownUrl={markdownUrl}
+                tags={tags}
+                description={description}
+                category={category}
+            />
+
             <div class="prose">
                 <slot />
             </div>
-            <div
-                class="mt-12 flex items-center justify-between gap-1.5 text-sm text-muted-foreground"
-                data-pagefind-ignore
-                hidden={!editUrl && !lastModified}
-            >
-                {editUrl && (
-                <a
-                    href={editUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Edit this page on GitHub (opens in new tab)"
-                    class="inline-flex items-center gap-1.5 text-inherit no-underline transition-colors hover:text-foreground"
-                >
-                    <Pencil class="size-4" aria-hidden="true" />
-                    Edit this page on GitHub
-                </a>
-                )}
-                {
-                    lastModified && (
-                                     <span class="last-modified">
-                                         Last updated{" "}
-                                         <time datetime={lastModified.toISOString()}>
-                                             {lastModified.toLocaleDateString(
-                                                 undefined,
-                                                 {
-                                                     year: "numeric",
-                                                     month: "long",
-                                                     day: "numeric",
-                                                 },
-                                             )}
-                                         </time>
-                                     </span>
-                                 )
-                }
-            </div>
-            <PrevNext slug={slug} />
+
+            <PageFooter slug={slug} lastModified={lastModified} editUrl={editUrl} />
         </article>
     </main>
 
@@ -132,14 +78,8 @@ const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : null;
     <div id="copy-status" class="sr-only" aria-live="polite" role="status"></div>
 
     <script is:inline>
-        // These wrappers and buttons exist only once this script runs, so
-        // their styling belongs here rather than in the global stylesheet.
-        const tableWrapperClass = "my-6 overflow-x-auto -mx-1 px-1";
-        const codeBlockWrapperClass = "relative";
         const copyClass =
-            "cursor-pointer px-2.5 py-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground";
-        const copyButtonClass = `absolute right-1.5 top-1.5 z-1 ${copyClass}`;
-        const codeTabsCopyClass = `ml-auto ${copyClass}`;
+            "cursor-pointer px-1 py-0.25 text-2xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground select-none";
 
         function copyWithFeedback(button, text) {
             navigator.clipboard.writeText(text).then(() => {
@@ -177,7 +117,7 @@ const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : null;
                     table.setAttribute("data-initialized", "");
 
                     const wrapper = document.createElement("div");
-                    wrapper.className = tableWrapperClass;
+                    wrapper.className = "my-6 overflow-x-auto -mx-1 px-1";
 
                     table.parentNode.insertBefore(wrapper, table);
                     wrapper.appendChild(table);
@@ -193,13 +133,13 @@ const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : null;
                     }
 
                     const wrapper = document.createElement("div");
-                    wrapper.className = codeBlockWrapperClass;
+                    wrapper.className = "relative";
 
                     pre.parentNode.insertBefore(wrapper, pre);
                     wrapper.appendChild(pre);
 
                     const button = document.createElement("button");
-                    button.className = copyButtonClass;
+                    button.className = `absolute right-1.5 top-1.5 z-1 ${copyClass}`;
                     button.textContent = "Copy";
 
                     button.addEventListener("click", () => {
@@ -227,7 +167,7 @@ const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : null;
                     const buttons = bar.querySelectorAll(".code-tabs-button");
 
                     const copyButton = document.createElement("button");
-                    copyButton.className = codeTabsCopyClass;
+                    copyButton.className = `ml-auto ${copyClass}`;
                     copyButton.textContent = "Copy";
 
                     copyButton.addEventListener("click", () => {
