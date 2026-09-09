@@ -277,13 +277,13 @@ repoint each service that uses it (`describe` the secret first, its `related` ar
 content can be read back, so use a secret for anything sensitive.
 
 <McpTool name="create_secret" level={2}>
-    <Fragment slot="arguments">`name`, `data`, `encoding`, `labels`</Fragment>
+    <Fragment slot="arguments">`name`, `data`, `encoding` (`utf8`, `base64`), `labels`</Fragment>
 
     Creates a Swarm secret.
 </McpTool>
 
 <McpTool name="create_config" level={2}>
-    <Fragment slot="arguments">`name`, `data`, `encoding`, `labels`</Fragment>
+    <Fragment slot="arguments">`name`, `data`, `encoding` (`utf8`, `base64`), `labels`</Fragment>
 
     Creates a Swarm config.
 </McpTool>
