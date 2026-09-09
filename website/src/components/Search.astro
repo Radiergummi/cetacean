@@ -266,7 +266,7 @@ import {Search} from "@lucide/astro";
     // Move overlay to body on initial load (persists across navigations via transition:persist).
     const overlay = document.getElementById("search-overlay");
 
-    if (overlay?.parentElement !== document.body) {
+    if (overlay && overlay.parentElement !== document.body) {
         document.body.appendChild(overlay);
     }
 
