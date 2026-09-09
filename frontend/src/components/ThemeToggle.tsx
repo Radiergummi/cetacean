@@ -7,9 +7,11 @@ type Theme = "light" | "dark" | "system";
 const cycle: Theme[] = ["light", "dark", "system"];
 
 /**
- * The same resolution public/assets/theme.js runs before the first paint. That
- * script owns the initial class so the page never flashes the wrong theme;
- * this component owns it from the first render onwards. Keep the two in step.
+ * The same resolution the inline script in index.html runs before the first
+ * paint. That script owns the initial class so the page never flashes the
+ * wrong theme; this component owns it from the first render onwards. Keep the
+ * two in step — the server hashes that script's bytes for the CSP, so editing
+ * it changes the header too.
  */
 function getInitialTheme(): Theme {
   const stored = readStoredValue("theme");
