@@ -161,8 +161,7 @@ function StackCard({ stack }: { stack: StackSummary }) {
       data-health={health}
       className={
         "group block rounded-lg border p-4 transition-all hover:border-foreground/20 hover:shadow-sm " +
-        "data-[health=critical]:border-status-danger/30 data-[health=critical]:bg-status-danger/10 " +
-        "dark:data-[health=critical]:border-status-danger/30 dark:data-[health=critical]:bg-status-danger/10"
+        "data-[health=critical]:border-status-danger/30 data-[health=critical]:bg-status-danger/10"
       }
     >
       {/* Header */}
