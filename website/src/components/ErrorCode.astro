@@ -1,0 +1,46 @@
+---
+import Badge from "./Badge.astro";
+import ReferenceEntry from "./ReferenceEntry.astro";
+
+/**
+ * One entry on the error reference, in the card the configuration reference
+ * uses for a setting, so the two references read as one system rather than two
+ * house styles.
+ *
+ * The `target:` highlight is the point of the card here rather than a detail of
+ * it: a problem document's `type` field is a link to one of these anchors, so a
+ * reader arriving from an actual error lands with that code already picked out
+ * of the hundred on the page.
+ */
+interface Props {
+  code: string;
+  title: string;
+  status: number;
+  suggestion: string;
+}
+
+const { code, title, status, suggestion } = Astro.props;
+
+/**
+ * `mt-2` rather than an adjacent-sibling rule: the top margin collapses with
+ * whatever precedes the first card, so a run of cards is spaced 0.5rem apart
+ * while the first one still sits at the paragraph gap below its heading.
+ */
+const cardClass =
+  "group mt-2 rounded-lg border px-4 py-3.5 target:border-active target:ring-1 target:ring-active";
+
+const footerClass =
+  "-mx-4 -mb-3.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-b-inner border-t bg-muted px-4 py-2 text-sm text-muted-foreground";
+---
+<ReferenceEntry id={code} class={cardClass} anchor>
+  <Fragment slot="heading">
+    <code>{code}</code>
+    <span class="text-sm font-medium text-muted-foreground">{title}</span>
+    <Badge tone="muted">{status}</Badge>
+  </Fragment>
+  <slot />
+  <div slot="facts" class={footerClass}>
+    <span class="font-medium">Resolve</span>
+    <span>{suggestion}</span>
+  </div>
+</ReferenceEntry>

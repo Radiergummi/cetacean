@@ -50,7 +50,29 @@ The stack runs Prometheus on a manager node, with node-exporter and cAdvisor on 
 If you already run Prometheus, set `prometheus.url` and check the scrape against the three requirements below. The
 bundled `prometheus.yml` and `compose.monitoring.yaml` already satisfy all three.
 
-### The instance label must identify the node
+```mermaid
+flowchart TB
+    accTitle: How metrics reach Cetacean
+    accDescr: node-exporter and cAdvisor run on every swarm node and are scraped by Prometheus, which Cetacean queries with PromQL.
+
+    subgraph swarm ["Every swarm node"]
+        direction TB
+        exporter["node-exporter"]
+        cadvisor["cAdvisor<br/>② emits the service name label"]
+    end
+
+    prometheus["Prometheus"]
+    cetacean["Cetacean"]
+
+    exporter -->|"① instance = node address"| prometheus
+    cadvisor -->|"③ job = cadvisor"| prometheus
+    prometheus -->|"PromQL"| cetacean
+
+    classDef accent fill:#2563eb,stroke:#2563eb,color:#ffffff
+    class cetacean accent
+```
+
+### ① The instance label must identify the node
 
 Cetacean matches metrics to nodes by the `instance` label. Scraping over an overlay network leaves it set to the
 task's overlay IP, which matches no node: Prometheus looks healthy and every node chart is empty.
@@ -69,7 +91,7 @@ Relabeling `instance` is required, not optional, whenever the scrape goes over a
 The [dashboard][dashboard] also maps a node to its instance through `node_uname_info`. Run node-exporter with
 `hostname: "{{.Node.Hostname}}"` so its `nodename` label reports the Swarm node hostname.
 
-### cAdvisor must emit the Swarm service label
+### ② cAdvisor must emit the Swarm service label
 
 Container metrics are attributed to services through `container_label_com_docker_swarm_service_name`. cAdvisor emits
 it when started with `--store_container_labels=true`.
@@ -95,7 +117,7 @@ count(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service
 One or zero means the factory did not register. `docker service logs monitoring_cadvisor` names the socket it could
 not reach.
 
-### The cAdvisor scrape job must be named `cadvisor`
+### ③ The cAdvisor scrape job must be named `cadvisor`
 
 Cetacean detects cAdvisor with `up{job="cadvisor"}`. Under any other job name the dashboard treats container metrics
 as unavailable and skips them on the service, task, and node pages. node-exporter is detected by the presence of

@@ -1,10 +1,12 @@
 ---
+import {Pencil} from "@lucide/astro";
 import BaseLayout from "./BaseLayout.astro";
 import TableOfContents from "../components/TableOfContents.astro";
 import CopyPageButton from "../components/CopyPageButton.astro";
 import PrevNext from "../components/PrevNext.astro";
-import { repoUrl } from "../lib/navigation";
-import { getLastModified } from "../lib/git";
+import MermaidViewport from "../components/MermaidViewport.astro";
+import {repoUrl} from "../lib/navigation";
+import {getLastModified} from "../lib/git";
 
 interface Heading {
     depth: number;
@@ -22,222 +24,278 @@ interface Props {
     tags?: string[];
 }
 
-const { title, description, slug, headings, markdownUrl, category, tags } =
-    Astro.props;
+const {
+    title,
+    description,
+    slug,
+    headings,
+    markdownUrl,
+    category,
+    tags,
+} = Astro.props;
 const lastModified = await getLastModified(`docs/${slug}.md`);
+const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
 ---
 
 <BaseLayout title={title} description={description} slug={slug} lastModified={lastModified}>
-            <main
-                id="main-content"
-                class="flex-1 min-w-0 py-10 px-8 md:px-12 lg:px-16"
-                transition:animate="fade"
-            >
-                <article class="prose mx-auto" data-pagefind-body>
-                    <span class="hidden" data-pagefind-meta="description"
-                        >{description}</span
-                    >
-                    {
-                        category && (
-                            <meta
-                                data-pagefind-filter={`category:${category}`}
-                            />
-                        )
-                    }
-                    {
-                        tags?.map((tag) => (
-                            <meta data-pagefind-filter={`tag:${tag}`} />
-                        ))
-                    }
-                    <div
-                        class="not-prose flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
-                        data-pagefind-ignore
-                    >
-                        <h1
-                            class="text-2xl font-semibold tracking-tight m-0"
-                            data-pagefind-meta="title"
-                        >
-                            {title}
-                        </h1>
-                        {
-                            markdownUrl && (
-                                <CopyPageButton markdownUrl={markdownUrl} />
-                            )
-                        }
-                    </div>
-                    <slot />
-                    <div class="edit-link not-prose" data-pagefind-ignore>
-                        <a
-                            href={`${repoUrl}/edit/main/docs/${slug}.md`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label="Edit this page on GitHub (opens in new tab)"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                class="size-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke-width="1.5"
-                                stroke="currentColor"
-                                aria-hidden="true"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
-                                ></path>
-                            </svg>
-                            Edit this page on GitHub
-                        </a>
-                        {
-                            lastModified && (
-                                <span class="last-modified">
-                                    Last updated{" "}
-                                    <time datetime={lastModified.toISOString()}>
-                                        {lastModified.toLocaleDateString(
-                                            undefined,
-                                            {
-                                                year: "numeric",
-                                                month: "long",
-                                                day: "numeric",
-                                            },
-                                        )}
-                                    </time>
-                                </span>
-                            )
-                        }
-                    </div>
-                    <PrevNext slug={slug} />
-                </article>
-            </main>
-            <TableOfContents headings={headings} />
-        <div id="copy-status" class="sr-only" aria-live="polite" role="status"></div>
-        <script is:inline>
-            function copyWithFeedback(button, text) {
-                navigator.clipboard.writeText(text).then(() => {
-                    button.textContent = "Copied!";
-                    const status = document.getElementById("copy-status");
-                    if (status) status.textContent = "Copied to clipboard";
-                    setTimeout(() => {
-                        button.textContent = "Copy";
-                        if (status) status.textContent = "";
-                    }, 2000);
-                });
+    <main
+        id="main-content"
+        class="flex-1 min-w-0 py-10 px-8 md:px-12 lg:px-16"
+        transition:animate="fade"
+    >
+        <article class="mx-auto" data-pagefind-body>
+            <span class="hidden" data-pagefind-meta="description">
+                {description}
+            </span>
+            {
+                category && (
+                             <meta
+                                 data-pagefind-filter={`category:${category}`}
+                             />
+                         )
             }
+            {
+                tags?.map((tag) => (
+                    <meta data-pagefind-filter={`tag:${tag}`} />
+                ))
+            }
+            <div
+                class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
+                data-pagefind-ignore
+            >
+                <h1
+                    class="text-2xl font-semibold tracking-tight m-0"
+                    data-pagefind-meta="title"
+                >
+                    {title}
+                </h1>
+                {
+                    markdownUrl && (
+                                    <CopyPageButton markdownUrl={markdownUrl} editUrl={editUrl} />
+                                )
+                }
+            </div>
+            <div class="prose">
+                <slot />
+            </div>
+            <div
+                class="mt-12 flex items-center justify-between gap-1.5 text-sm text-muted-foreground"
+                data-pagefind-ignore
+            >
+                <a
+                    href={editUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Edit this page on GitHub (opens in new tab)"
+                    class="inline-flex items-center gap-1.5 text-inherit no-underline transition-colors hover:text-foreground"
+                >
+                    <Pencil class="size-4" aria-hidden="true" />
+                    Edit this page on GitHub
+                </a>
+                {
+                    lastModified && (
+                                     <span class="last-modified">
+                                         Last updated{" "}
+                                         <time datetime={lastModified.toISOString()}>
+                                             {lastModified.toLocaleDateString(
+                                                 undefined,
+                                                 {
+                                                     year: "numeric",
+                                                     month: "long",
+                                                     day: "numeric",
+                                                 },
+                                             )}
+                                         </time>
+                                     </span>
+                                 )
+                }
+            </div>
+            <PrevNext slug={slug} />
+        </article>
+    </main>
 
-            document.addEventListener("astro:page-load", () => {
-                // Hide HTTP request separators (###).
-                document
-                    .querySelectorAll('pre[data-language="http"] .line')
-                    .forEach((line) => {
-                        if (line.textContent.trim() === "###")
-                            line.style.display = "none";
-                    });
+    <TableOfContents headings={headings} />
 
-                document
-                    .querySelectorAll(".prose table:not([data-initialized])")
-                    .forEach((table) => {
-                        table.setAttribute("data-initialized", "");
-                        const wrapper = document.createElement("div");
-                        wrapper.className = "table-wrapper";
-                        table.parentNode.insertBefore(wrapper, table);
-                        wrapper.appendChild(table);
-                    });
+    <MermaidViewport />
 
-                document
-                    .querySelectorAll(".prose pre:not([data-initialized])")
-                    .forEach((pre) => {
-                        pre.setAttribute("data-initialized", "");
-                        if (pre.closest(".code-tabs")) return;
-                        const wrapper = document.createElement("div");
-                        wrapper.className = "code-block-wrapper";
-                        pre.parentNode.insertBefore(wrapper, pre);
-                        wrapper.appendChild(pre);
+    <div id="copy-status" class="sr-only" aria-live="polite" role="status"></div>
 
-                        const button = document.createElement("button");
-                        button.className = "copy-button";
-                        button.textContent = "Copy";
-                        button.addEventListener("click", () => {
-                            const code = pre.querySelector("code");
-                            copyWithFeedback(
-                                button,
-                                code ? code.textContent : pre.textContent,
-                            );
-                        });
-                        wrapper.appendChild(button);
-                    });
+    <script is:inline>
+        // These wrappers and buttons exist only once this script runs, so
+        // their styling belongs here rather than in the global stylesheet.
+        const tableWrapperClass = "my-6 overflow-x-auto -mx-1 px-1";
+        const codeBlockWrapperClass = "relative";
+        const copyClass =
+            "cursor-pointer px-2.5 py-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground";
+        const copyButtonClass = `absolute right-1.5 top-1.5 z-1 ${copyClass}`;
+        const codeTabsCopyClass = `ml-auto ${copyClass}`;
 
-                // Code tabs: switch panels and persist preference.
-                const tabPrefs = JSON.parse(
-                    localStorage.getItem("code-tab-prefs") || "{}",
-                );
+        function copyWithFeedback(button, text) {
+            navigator.clipboard.writeText(text).then(() => {
+                button.textContent = "Copied!";
 
-                document
-                    .querySelectorAll(".code-tabs:not([data-initialized])")
-                    .forEach((tabs) => {
-                        tabs.setAttribute("data-initialized", "");
-                        const bar = tabs.querySelector(".code-tabs-bar");
-                        const buttons =
-                            bar.querySelectorAll(".code-tabs-button");
+                const status = document.getElementById("copy-status");
 
-                        const copyButton = document.createElement("button");
-                        copyButton.className = "code-tabs-copy";
-                        copyButton.textContent = "Copy";
-                        copyButton.addEventListener("click", () => {
-                            const activeCode = tabs.querySelector(
-                                ".code-tab-panel.active code",
-                            );
-                            if (activeCode)
-                                copyWithFeedback(
-                                    copyButton,
-                                    activeCode.textContent,
-                                );
-                        });
-                        bar.appendChild(copyButton);
+                if (status) {
+                    status.textContent = "Copied to clipboard";
+                }
 
-                        const labels = Array.from(buttons).map(
-                            (b) => b.textContent,
+                setTimeout(() => {
+                    button.textContent = "Copy";
+
+                    if (status) {
+                        status.textContent = "";
+                    }
+                }, 2000);
+            });
+        }
+
+        document.addEventListener("astro:page-load", () => {
+            // Hide HTTP request separators (###).
+            document
+                .querySelectorAll("pre[data-language=\"http\"] .line")
+                .forEach((line) => {
+                    if (line.textContent.trim() === "###") {
+                        line.style.display = "none";
+                    }
+                });
+
+            document
+                .querySelectorAll(".prose table:not([data-initialized])")
+                .forEach((table) => {
+                    table.setAttribute("data-initialized", "");
+
+                    const wrapper = document.createElement("div");
+                    wrapper.className = tableWrapperClass;
+
+                    table.parentNode.insertBefore(wrapper, table);
+                    wrapper.appendChild(table);
+                });
+
+            document
+                .querySelectorAll(".prose pre:not([data-initialized])")
+                .forEach((pre) => {
+                    pre.setAttribute("data-initialized", "");
+
+                    if (pre.closest(".code-tabs")) {
+                        return;
+                    }
+
+                    const wrapper = document.createElement("div");
+                    wrapper.className = codeBlockWrapperClass;
+
+                    pre.parentNode.insertBefore(wrapper, pre);
+                    wrapper.appendChild(pre);
+
+                    const button = document.createElement("button");
+                    button.className = copyButtonClass;
+                    button.textContent = "Copy";
+
+                    button.addEventListener("click", () => {
+                        const code = pre.querySelector("code");
+
+                        copyWithFeedback(
+                            button,
+                            code ? code.textContent : pre.textContent,
                         );
-                        const preferred = labels.find((l) => tabPrefs[l]);
-                        if (preferred) {
-                            activateGroup(tabs, labels.indexOf(preferred));
+                    });
+                    wrapper.appendChild(button);
+                });
+
+            // Code tabs: switch panels and persist preference.
+            const tabPrefs = JSON.parse(
+                localStorage.getItem("code-tab-prefs") || "{}",
+            );
+
+            document
+                .querySelectorAll(".code-tabs:not([data-initialized])")
+                .forEach((tabs) => {
+                    tabs.setAttribute("data-initialized", "");
+
+                    const bar = tabs.querySelector(".code-tabs-bar");
+                    const buttons = bar.querySelectorAll(".code-tabs-button");
+
+                    const copyButton = document.createElement("button");
+                    copyButton.className = codeTabsCopyClass;
+                    copyButton.textContent = "Copy";
+
+                    copyButton.addEventListener("click", () => {
+                        const activeCode = tabs.querySelector(
+                            ".code-tab-panel.active code",
+                        );
+
+                        if (activeCode) {
+                            copyWithFeedback(
+                                copyButton,
+                                activeCode.textContent,
+                            );
+                        }
+                    });
+                    bar.appendChild(copyButton);
+
+                    const labels = Array.from(buttons).map(
+                        ({textContent}) => textContent,
+                    );
+
+                    const preferred = labels.find((label) => tabPrefs[label]);
+
+                    if (preferred) {
+                        activateGroup(tabs, labels.indexOf(preferred));
+                    }
+
+                    bar.addEventListener("click", (event) => {
+                        const button = event.target.closest(".code-tabs-button");
+
+                        if (!button) {
+                            return;
                         }
 
-                        bar.addEventListener("click", (e) => {
-                            const button =
-                                e.target.closest(".code-tabs-button");
-                            if (!button) return;
-                            const idx = Number(button.dataset.tab);
-                            activateGroup(tabs, idx);
-                            tabPrefs[buttons[idx].textContent] = true;
-                            localStorage.setItem(
-                                "code-tab-prefs",
-                                JSON.stringify(tabPrefs),
-                            );
+                        const index = Number(button.dataset.tab);
 
-                            const label = buttons[idx].textContent;
-                            document
-                                .querySelectorAll(".code-tabs")
-                                .forEach((other) => {
-                                    if (other === tabs) return;
-                                    other
-                                        .querySelectorAll(".code-tabs-button")
-                                        .forEach((b, i) => {
-                                            if (b.textContent === label)
-                                                activateGroup(other, i);
-                                        });
-                                });
-                        });
+                        activateGroup(tabs, index);
+
+                        tabPrefs[buttons[index].textContent] = true;
+
+                        localStorage.setItem("code-tab-prefs", JSON.stringify(tabPrefs));
+
+                        const label = buttons[index].textContent;
+
+                        document
+                            .querySelectorAll(".code-tabs")
+                            .forEach((other) => {
+                                if (other === tabs) {
+                                    return;
+                                }
+
+                                other
+                                    .querySelectorAll(".code-tabs-button")
+                                    .forEach(({textContent}, index) => {
+                                        if (textContent === label) {
+                                            activateGroup(other, index);
+                                        }
+                                    });
+                            });
                     });
-                function activateGroup(group, idx) {
-                    const btns = group.querySelectorAll(".code-tabs-button");
-                    const pnls = group.querySelectorAll(".code-tab-panel");
-                    btns.forEach((b) => { b.classList.remove("active"); b.setAttribute("aria-selected", "false"); });
-                    pnls.forEach((p) => p.classList.remove("active"));
-                    if (btns[idx]) { btns[idx].classList.add("active"); btns[idx].setAttribute("aria-selected", "true"); }
-                    pnls[idx]?.classList.add("active");
+                });
+
+            function activateGroup(group, index) {
+                const buttons = group.querySelectorAll(".code-tabs-button");
+                const panels = group.querySelectorAll(".code-tab-panel");
+
+                buttons.forEach((button) => {
+                    button.classList.remove("active");
+                    button.setAttribute("aria-selected", "false");
+                });
+
+                panels.forEach((panel) => panel.classList.remove("active"));
+
+                if (buttons[index]) {
+                    buttons[index].classList.add("active");
+                    buttons[index].setAttribute("aria-selected", "true");
                 }
-            });
-        </script>
+
+                panels[index]?.classList.add("active");
+            }
+        });
+    </script>
 </BaseLayout>

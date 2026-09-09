@@ -40,7 +40,8 @@ the client asks for. There is no `/api/v1/` prefix; versioning lives in the medi
 | `text/vnd.graphviz`                | `.dot`      | Graphviz DOT, `/topology` only               |
 
 All negotiated responses include `Vary: Accept`. Requesting a type an endpoint cannot produce returns
-`406 Not Acceptable` with code `API003`; asking for SSE on an endpoint without a stream returns `406` with `API001`.
+`406 Not Acceptable` with code [`API003`](api/errors#API003); asking for SSE on an endpoint without a stream
+returns `406` with [`API001`](api/errors#API001).
 
 ```http tab
 GET /services HTTP/1.1
@@ -229,30 +230,9 @@ Domain-specific errors carry a stable code as the last path segment of `type`:
 }
 ```
 
-Codes are a three-letter domain prefix plus a three-digit number.
-
-| Prefix | Domain                           |
-|--------|----------------------------------|
-| `API`  | Protocol and content negotiation |
-| `AUT`  | Authentication                   |
-| `ACL`  | Authorization                    |
-| `OPS`  | Operations level                 |
-| `FLT`  | Filter expressions               |
-| `SEA`  | Search                           |
-| `MTR`  | Metrics and Prometheus           |
-| `LOG`  | Log streaming                    |
-| `SSE`  | SSE connections                  |
-| `ENG`  | Docker Engine                    |
-| `SWM`  | Swarm operations                 |
-| `PLG`  | Plugin operations                |
-| `NOD`  | Node operations                  |
-| `SVC`  | Service operations               |
-| `TSK`  | Task operations                  |
-| `STK`  | Stack operations                 |
-| `VOL`  | Volume operations                |
-| `NET`  | Network operations               |
-| `CFG`  | Config operations                |
-| `SEC`  | Secret operations                |
+Codes are a three-letter domain prefix plus a three-digit number. The
+[error reference](api/errors) lists every code with its status, meaning and
+resolution, grouped by domain.
 
 Generic HTTP errors use `"type": "about:blank"`. `GET /api/errors` lists every code with its description and
 suggestion; `GET /api/errors/{code}` returns one.
@@ -261,11 +241,11 @@ suggestion; `GET /api/errors/{code}` returns one.
 
 | Situation | Status | Codes | What to do |
 |---|---|---|---|
-| Resource changed between your read and your write | 409 | `SVC001`, `NOD002`, `CFG005`, `SEC005` | Re-read the resource and retry |
-| Endpoint above the configured [operations level][operations-level] | 403 | `OPS001` | Raise the operations level |
-| [ACL][authorization] denies read or write | 403 | `ACL001`, `ACL002` | The response names the resource and permission checked |
-| `PATCH` sent with the wrong `Content-Type` | 415 | `API004` | Use `application/json-patch+json` or `application/merge-patch+json` |
-| Docker daemon unreachable | 503 | `ENG001` | Check the socket and the daemon |
+| Resource changed between your read and your write | 409 | [`SVC001`](api/errors#SVC001), [`NOD002`](api/errors#NOD002), [`CFG005`](api/errors#CFG005), [`SEC005`](api/errors#SEC005) | Re-read the resource and retry |
+| Endpoint above the configured [operations level][operations-level] | 403 | [`OPS001`](api/errors#OPS001) | Raise the operations level |
+| [ACL][authorization] denies read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
+| `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
+| Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
 
 ## Caching
 

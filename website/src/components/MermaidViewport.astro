@@ -1,0 +1,163 @@
+---
+/**
+    * Turns the build-time diagram SVGs into pannable, zoomable figures.
+    *
+    * Everything here is an enhancement: the SVG is already in the page and already
+    * matches the active theme, so a reader without JavaScript loses the controls
+    * and nothing else. Panzoom is behind a dynamic import guarded on a diagram
+    * actually being present, so the pages without one pay nothing for it.
+    */
+import {Maximize, Undo2, ZoomIn, ZoomOut} from "@lucide/astro";
+import IconButton from "./IconButton.astro";
+
+const controls = [
+    {action: "zoom-in", label: "Zoom in", Icon: ZoomIn, disabled: false},
+    {action: "zoom-out", label: "Zoom out", Icon: ZoomOut, disabled: false},
+    {action: "reset", label: "Reset view", Icon: Undo2, disabled: true},
+    {action: "fullscreen", label: "Toggle fullscreen", Icon: Maximize, disabled: false},
+];
+---
+
+<template id="mermaid-controls-template">
+    <div class="flex justify-end gap-1 border-t p-1.5">
+        {
+            controls.map(({action, disabled, Icon, label}) => (
+                <IconButton
+                    class="flex size-7 items-center justify-center rounded-sm disabled:opacity-50 disabled:pointer-events-none"
+                    disabled={disabled}
+                    data-action={action}
+                    aria-label={label}
+                    title={label}
+                >
+                    <Icon class="size-4" aria-hidden="true" />
+                </IconButton>
+            ))
+        }
+    </div>
+</template>
+
+<script>
+    document.addEventListener("astro:page-load", async () => {
+        const figures = document.querySelectorAll<HTMLElement>(
+            ".mermaid-figure:not([data-interactive])",
+        );
+
+        if (figures.length === 0) {
+            return;
+        }
+
+        const template = document.getElementById(
+            "mermaid-controls-template",
+        ) as HTMLTemplateElement | null;
+
+        if (!template) {
+            return;
+        }
+
+        const {default: Panzoom} = await import("@panzoom/panzoom");
+
+        figures.forEach((figure) => {
+            const canvas = figure.querySelector<HTMLElement>(".mermaid-canvas");
+            const viewport = figure.querySelector<HTMLElement>(".mermaid-viewport");
+
+            if (!canvas || !viewport) {
+                return;
+            }
+
+            figure.setAttribute("data-interactive", "");
+
+            const panzoom = Panzoom(canvas, {
+                maxScale: 8,
+                minScale: 0.8,
+                startScale: 1,
+                animate: true,
+                pinchAndPan: true,
+                cursor: "grab",
+            });
+
+            // Panzoom writes `cursor` as an inline style on the canvas, so no
+            // stylesheet rule can swap it while dragging.
+            canvas.addEventListener("pointerdown", () => {
+                panzoom.setOptions({cursor: "grabbing"});
+            });
+
+            document.addEventListener("pointerup", () => {
+                panzoom.setOptions({cursor: "grab"});
+            });
+
+            // Plain scrolling stays page scrolling; zooming asks for a modifier,
+            // the way a map embedded in an article does.
+            viewport.addEventListener(
+                "wheel",
+                (event) => {
+                    if (event.ctrlKey || event.metaKey) {
+                        panzoom.zoomWithWheel(event);
+                    }
+                },
+                {passive: false},
+            );
+
+            const controls = template.content.cloneNode(true) as DocumentFragment;
+            const zoomInAction = controls.querySelector("[data-action=\"zoom-in\"]");
+            const zoomOutAction = controls.querySelector("[data-action=\"zoom-out\"]");
+            const resetAction = controls.querySelector("[data-action=\"reset\"]");
+
+            let pristine = true;
+
+            canvas.addEventListener("panzoomzoom", () => {
+                if (pristine) {
+                    pristine = false;
+
+                    return;
+                }
+
+                if (panzoom.getScale() === panzoom.getOptions().minScale) {
+                    zoomOutAction?.setAttribute("disabled", "");
+                } else if (panzoom.getScale() === panzoom.getOptions().maxScale) {
+                    zoomInAction?.setAttribute("disabled", "");
+                } else {
+                    zoomInAction?.removeAttribute("disabled");
+                    zoomOutAction?.removeAttribute("disabled");
+                }
+
+                resetAction?.removeAttribute("disabled");
+            });
+            canvas.addEventListener("panzoompan", () => {
+                if (pristine) {
+                    pristine = false;
+
+                    return;
+                }
+
+                resetAction?.removeAttribute("disabled");
+            });
+            canvas.addEventListener("panzoomreset", () => {
+                if (pristine) {
+                    pristine = false;
+
+                    return;
+                }
+
+                resetAction?.setAttribute("disabled", "");
+                zoomInAction?.removeAttribute("disabled");
+                zoomOutAction?.removeAttribute("disabled");
+            });
+
+            zoomInAction?.addEventListener("click", () => panzoom.zoomIn());
+            zoomOutAction?.addEventListener("click", () => panzoom.zoomOut());
+            resetAction?.addEventListener("click", () => panzoom.reset());
+
+            controls
+                .querySelector("[data-action=\"fullscreen\"]")
+                ?.addEventListener("click", () => {
+                    if (document.fullscreenElement === figure) {
+                        document.exitFullscreen();
+                    } else {
+                        figure.requestFullscreen();
+                    }
+                });
+
+            figure.appendChild(controls);
+        });
+    });
+</script>

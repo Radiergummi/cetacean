@@ -6,28 +6,30 @@ interface Props {
 }
 
 const { currentSlug } = Astro.props;
+
+/**
+ * A link marks the page it is on with `aria-current`, and the `current` and
+ * `inactive` variants read that back — so the two states are one class list
+ * here rather than a choice made per link.
+ */
+const linkClass =
+  "block rounded-md px-3 py-1.5 transition-colors current:bg-accent current:font-medium current:text-active inactive:text-muted-foreground inactive:hover:bg-accent/60 inactive:hover:text-foreground";
 ---
 
-<nav class="text-[0.8125rem]" aria-label="Documentation">
+<nav class="text-sm" aria-label="Documentation">
   {sidebarGroups.map((group) => (
     <div class="mb-8">
-      <h3 class="text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground mb-3 px-3">
+      <h3 class="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-3 px-3">
         {group.label}
       </h3>
-      <ul class="space-y-0.5">
+      <ul class="flex flex-col gap-0.5">
         {group.items.map(({ slug, title, reload }) => (
           <li>
             <a
               href={`/${slug}`}
-              class:list={[
-                "block rounded-md px-3 py-1.5 transition-colors",
-                currentSlug === slug
-                  ? "bg-accent font-medium"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent/60",
-              ]}
-              style={currentSlug === slug ? `color: var(--active)` : undefined}
-              {...(currentSlug === slug && { "aria-current": "page" })}
-              {...(reload && { "data-astro-reload": true })}
+              class={linkClass}
+              aria-current={currentSlug === slug ? "page" : undefined}
+              data-astro-reload={reload || undefined}
             >
               {title}
             </a>
@@ -36,17 +38,11 @@ const { currentSlug } = Astro.props;
       </ul>
     </div>
   ))}
-  <div class="border-t border-border pt-6 mt-2">
+  <div class="border-t pt-6 mt-2">
     <a
       href="/changelog"
-      class:list={[
-        "block rounded-md px-3 py-1.5 transition-colors",
-        currentSlug === "changelog"
-          ? "bg-accent font-medium"
-          : "text-muted-foreground hover:text-foreground hover:bg-accent/60",
-      ]}
-      style={currentSlug === "changelog" ? `color: var(--active)` : undefined}
-      {...(currentSlug === "changelog" && { "aria-current": "page" })}
+      class={linkClass}
+      aria-current={currentSlug === "changelog" ? "page" : undefined}
     >
       Changelog
     </a>

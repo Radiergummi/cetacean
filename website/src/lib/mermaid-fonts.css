@@ -1,0 +1,27 @@
+/**
+ * Loaded into the headless browser that renders the diagrams, so build-time
+ * text measurement uses the same font the site does. Without it the box sizes
+ * depend on whichever sans-serif the build machine happens to have, and a
+ * diagram rendered in CI would not match one rendered locally.
+ */
+@font-face {
+  font-family: "Geist Variable";
+  font-style: normal;
+  font-display: block;
+  font-weight: 100 900;
+  src: url("../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2")
+    format("woff2-variations");
+}
+
+/**
+ * The same weight `global.css` draws labels at. It has to be applied here too:
+ * mermaid measures each label and bakes the box it fits into the SVG, so a
+ * weight raised afterwards pushes the text back out of the box it was measured
+ * for. Keep the two rules in step.
+ */
+.nodeLabel,
+.edgeLabel,
+.cluster-label,
+.actor {
+  font-weight: 500;
+}

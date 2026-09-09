@@ -1,0 +1,26 @@
+---
+import type {HTMLAttributes} from "astro/types";
+
+/**
+ * The ghost control the header, the theme toggle and a diagram's toolbar share:
+ * muted until it is hovered, when it takes the accent ground. Buttons no longer
+ * get a pointer cursor from Tailwind's preflight, so the treatment carries one.
+ */
+/** Anchor attributes: `href` is what decides the tag, and is optional there. */
+type Props = HTMLAttributes<"a">;
+
+const {href, class: className, ...rest} = Astro.props;
+
+const Tag = href ? "a" : "button";
+const tagProps = href ? {href} : {type: "button" as const};
+---
+<Tag
+    class:list={[
+        "cursor-pointer text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+        className,
+    ]}
+    {...tagProps}
+    {...rest}
+>
+    <slot />
+</Tag>
