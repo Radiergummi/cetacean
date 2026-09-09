@@ -22,6 +22,13 @@ interface Props {
     markdownUrl?: string;
     category?: string;
     tags?: string[];
+
+    /**
+     * The page's source file, relative to the repository root. Pages generated
+     * from Go source have none, and get neither an edit link nor a modified
+     * date rather than a link to a file that was never written.
+     */
+    sourcePath?: string;
 }
 
 const {
@@ -32,9 +39,10 @@ const {
     markdownUrl,
     category,
     tags,
+    sourcePath,
 } = Astro.props;
-const lastModified = await getLastModified(`docs/${slug}.md`);
-const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
+const lastModified = sourcePath ? await getLastModified(sourcePath) : null;
+const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : null;
 ---
 
 <BaseLayout title={title} description={description} slug={slug} lastModified={lastModified}>
@@ -70,9 +78,9 @@ const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
                     {title}
                 </h1>
                 {
-                    markdownUrl && (
-                                    <CopyPageButton markdownUrl={markdownUrl} editUrl={editUrl} />
-                                )
+                    markdownUrl && editUrl && (
+                                              <CopyPageButton markdownUrl={markdownUrl} editUrl={editUrl} />
+                                          )
                 }
             </div>
             <div class="prose">
@@ -81,7 +89,9 @@ const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
             <div
                 class="mt-12 flex items-center justify-between gap-1.5 text-sm text-muted-foreground"
                 data-pagefind-ignore
+                hidden={!editUrl && !lastModified}
             >
+                {editUrl && (
                 <a
                     href={editUrl}
                     target="_blank"
@@ -92,6 +102,7 @@ const editUrl = `${repoUrl}/edit/main/docs/${slug}.md`;
                     <Pencil class="size-4" aria-hidden="true" />
                     Edit this page on GitHub
                 </a>
+                )}
                 {
                     lastModified && (
                                      <span class="last-modified">
