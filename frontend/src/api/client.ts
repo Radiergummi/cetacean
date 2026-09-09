@@ -42,7 +42,7 @@ import type {
   VolumeDetail,
 } from "./types";
 import { apiPath } from "@/lib/basePath";
-import type { z } from "zod";
+import { z } from "zod";
 
 const headers = { Accept: "application/json" };
 
@@ -209,6 +209,15 @@ function reportSchemaDrift(path: string, error: z.ZodError): void {
   );
 }
 
+/** Warns once per endpoint when a response is not the shape it claims. */
+function checkShape(endpoint: string, responseSchema: z.ZodType, data: unknown): void {
+  const result = responseSchema.safeParse(data);
+
+  if (!result.success) {
+    reportSchemaDrift(endpoint, result.error);
+  }
+}
+
 /** Test seam: schema reports are once-per-endpoint for the life of the page. */
 export function resetSchemaDriftReports(): void {
   reportedDrift.clear();
@@ -216,29 +225,30 @@ export function resetSchemaDriftReports(): void {
 
 async function fetchJSON<T>(
   path: string,
-  signal?: AbortSignal,
-  responseSchema?: z.ZodType,
+  signal: AbortSignal | undefined,
+  responseSchema: z.ZodType,
 ): Promise<FetchResult<T>> {
   const response = await request(path, headers, signal);
 
   const allowedMethods = parseAllowHeader(response);
   const data = await response.json();
 
-  if (responseSchema) {
-    const result = responseSchema.safeParse(data);
-
-    if (!result.success) {
-      reportSchemaDrift(path, result.error);
-    }
-  }
+  checkShape(path, responseSchema, data);
 
   return { data, allowedMethods };
 }
 
-async function fetchJGF<T>(path: string, signal?: AbortSignal): Promise<T> {
+async function fetchJGF<T>(
+  path: string,
+  responseSchema: z.ZodType,
+  signal?: AbortSignal,
+): Promise<T> {
   const response = await request(path, { Accept: "application/vnd.jgf+json" }, signal);
+  const data = await response.json();
 
-  return response.json();
+  checkShape(path, responseSchema, data);
+
+  return data;
 }
 
 async function fetchText(path: string, signal?: AbortSignal): Promise<string> {
@@ -284,8 +294,14 @@ async function mutationFetch<T>(
   return response.json();
 }
 
+/**
+ * The one deliberately unshaped read: `ServiceSubResource` renders whichever of
+ * the fourteen service sub-resources the URL names, so the shape is chosen at
+ * runtime and there is no single schema to hold it to. Everything else names
+ * one.
+ */
 export function get<T>(path: string, signal?: AbortSignal): Promise<FetchResult<T>> {
-  return fetchJSON(path, signal);
+  return fetchJSON(path, signal, z.unknown());
 }
 
 export function put<T>(path: string, body: unknown): Promise<T> {
@@ -450,9 +466,9 @@ function buildListQueryString(params?: ListParams): string {
 
 async function fetchRange<T>(
   path: string,
-  params?: ListParams | undefined,
-  signal?: AbortSignal | undefined,
-  itemSchema?: z.ZodType,
+  params: ListParams | undefined,
+  signal: AbortSignal | undefined,
+  itemSchema: z.ZodType,
 ): Promise<FetchResult<CollectionResponse<T>>> {
   const offset = params?.offset ?? 0;
   const end = offset + pageSize - 1;
@@ -493,13 +509,7 @@ async function fetchRange<T>(
   const allowedMethods = parseAllowHeader(response);
   const data = await response.json();
 
-  if (itemSchema) {
-    const result = schema.collectionOf(itemSchema).safeParse(data);
-
-    if (!result.success) {
-      reportSchemaDrift(path, result.error);
-    }
-  }
+  checkShape(path, schema.collectionOf(itemSchema), data);
 
   return { data, allowedMethods };
 }
@@ -699,7 +709,7 @@ export const api = {
 
     return data.items;
   },
-  topology: () => fetchJGF<JGFDocument>("/topology"),
+  topology: () => fetchJGF<JGFDocument>("/topology", schema.jgfDocumentSchema),
   nodeTasks: (id: string, signal?: AbortSignal) =>
     fetchJSON<CollectionResponse<Task>>(
       `/nodes/${id}/tasks`,

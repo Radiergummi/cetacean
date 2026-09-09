@@ -153,7 +153,7 @@ export const diskUsageSchema = z.looseObject({
  * missing or renamed count is the one drift that visibly breaks a table — the
  * infinite scroll either stops early or never stops.
  */
-export function collectionOf<T extends z.ZodType>(item: T) {
+function buildCollection<T extends z.ZodType>(item: T) {
   return z.looseObject({
     items: z.array(item),
     total: z.number(),
@@ -161,6 +161,66 @@ export function collectionOf<T extends z.ZodType>(item: T) {
     offset: z.number(),
   });
 }
+
+const collections = new WeakMap<z.ZodType, unknown>();
+
+/**
+ * Memoised on the item schema, because the envelope depends on nothing else and
+ * the callers build it per request: a paged list rebuilt the array schema, the
+ * object schema and their parse machinery on every page and every refetch.
+ */
+export function collectionOf<T extends z.ZodType>(item: T): ReturnType<typeof buildCollection<T>> {
+  const cached = collections.get(item);
+
+  if (cached) {
+    return cached as ReturnType<typeof buildCollection<T>>;
+  }
+
+  const collection = buildCollection(item);
+
+  collections.set(item, collection);
+
+  return collection;
+}
+
+/**
+ * A JGF document, as `/topology` serves it.
+ *
+ * The graph is the one response that used to arrive unchecked, and it is also
+ * the one whose drift has actually been felt: it carried no `runningReplicas`,
+ * so every service on the topology view was painted as fully up. Node and edge
+ * `metadata` stays open — what a vertex says about itself is per-type — but the
+ * envelope and the JSON-LD context every projection promises are pinned.
+ */
+const jgfMetadataSchema = z.looseObject({ "@context": z.string() });
+
+export const jgfDocumentSchema = z.looseObject({
+  graphs: z.array(
+    z.looseObject({
+      id: z.string(),
+      type: z.string(),
+      label: z.string(),
+      directed: z.boolean(),
+      metadata: jgfMetadataSchema,
+      nodes: z.record(
+        z.string(),
+        z.looseObject({ label: z.string(), metadata: jgfMetadataSchema }),
+      ),
+      edges: z
+        .array(
+          z.looseObject({
+            source: z.string(),
+            target: z.string(),
+            metadata: jgfMetadataSchema,
+          }),
+        )
+        .optional(),
+      hyperedges: z
+        .array(z.looseObject({ nodes: z.array(z.string()), metadata: jgfMetadataSchema }))
+        .optional(),
+    }),
+  ),
+});
 
 export const searchSchema = z.looseObject({
   query: z.string(),
