@@ -346,3 +346,61 @@ func TestDCRNativeApplicationTypeAllowsLoopback(t *testing.T) {
 		t.Fatalf("native client with a loopback redirect was rejected: status %d", status)
 	}
 }
+
+// TestClientRegistrySnapshotIsInEvictionOrder — the snapshot's order is what
+// Restore rebuilds the eviction queue from, so it has to be the registry's own
+// order rather than whatever the map iterates.
+func TestClientRegistrySnapshotIsInEvictionOrder(t *testing.T) {
+	registry := newClientRegistry(10, 10)
+
+	for _, id := range []string{"first", "second", "third"} {
+		registry.register(&ClientRegistration{ClientID: id})
+	}
+
+	snapshot := registry.Snapshot()
+	if len(snapshot) != 3 {
+		t.Fatalf("snapshot holds %d registrations, want 3", len(snapshot))
+	}
+
+	for i, want := range []string{"first", "second", "third"} {
+		if snapshot[i].ClientID != want {
+			t.Errorf("snapshot[%d] = %q, want %q", i, snapshot[i].ClientID, want)
+		}
+	}
+}
+
+// TestRestoredRegistryEvictsInTheOrderItWasWritten — a restored registry must
+// drop the same client the pre-restart one would have. Restoring in any other
+// order would silently re-target eviction at a client that had just been
+// registered.
+func TestRestoredRegistryEvictsInTheOrderItWasWritten(t *testing.T) {
+	registry := newClientRegistry(2, 10)
+	registry.Restore([]ClientRegistration{{ClientID: "older"}, {ClientID: "newer"}})
+
+	registry.register(&ClientRegistration{ClientID: "newest"})
+
+	if registry.Get("older") != nil {
+		t.Error("the oldest restored client should have been evicted first")
+	}
+	if registry.Get("newer") == nil || registry.Get("newest") == nil {
+		t.Error("the newer restored client and the fresh one should both remain")
+	}
+}
+
+// TestRestoreTruncatesToCurrentCapacity — the cap is read from config at every
+// start, so a file written under a larger one must not restore over it.
+func TestRestoreTruncatesToCurrentCapacity(t *testing.T) {
+	registry := newClientRegistry(2, 10)
+	registry.Restore([]ClientRegistration{
+		{ClientID: "oldest"},
+		{ClientID: "middle"},
+		{ClientID: "newest"},
+	})
+
+	if registry.Get("oldest") != nil {
+		t.Error("restoring past the cap should drop the oldest registration")
+	}
+	if registry.Get("middle") == nil || registry.Get("newest") == nil {
+		t.Error("restoring past the cap should keep the newest registrations")
+	}
+}

@@ -18,7 +18,11 @@ import (
 // v2 added consent records. A v1 file loads and yields none, which is exactly
 // the pre-upgrade behaviour: every client is prompted once more, then
 // remembered.
-const oauthStateVersion = 2
+//
+// v3 added dynamic client registrations, on the same terms: an older file
+// yields none, so every DCR client re-registers once and persists from then
+// on.
+const oauthStateVersion = 3
 
 // RefreshTokenSnapshot is the serializable state of a RefreshTokenStore.
 //
@@ -47,6 +51,11 @@ type oauthState struct {
 	// avoids inventing an encoding for a composite key built from three
 	// free-form strings.
 	Consent []ConsentRecord `json:"consent,omitempty"`
+
+	// Clients are the RFC 7591 registrations, oldest first. The order is the
+	// registry's eviction order rather than a presentation choice — see
+	// ClientRegistry.Snapshot.
+	Clients []ClientRegistration `json:"clients,omitempty"`
 }
 
 // RefreshTokenSnapEntry is one live token: the claims bound to it plus both
@@ -331,6 +340,9 @@ type stateFile struct {
 	path    string
 	tokens  *RefreshTokenStore
 	consent *ConsentStore
+
+	// clients is nil when DCR is disabled, which its snapshot tolerates.
+	clients *ClientRegistry
 }
 
 // write serializes every store's current state. A failed write is logged and
@@ -347,11 +359,13 @@ func (f *stateFile) write() {
 		Timestamp:            time.Now(),
 		RefreshTokenSnapshot: f.tokens.Snapshot(),
 		Consent:              f.consent.Snapshot(),
+		Clients:              f.clients.Snapshot(),
 	}
 
 	if err := writeState(f.path, state); err != nil {
 		slog.Warn(
-			"MCP OAuth state write failed; tokens and approvals will not survive a restart",
+			"MCP OAuth state write failed; tokens, approvals and client "+
+				"registrations will not survive a restart",
 			"error", err,
 			"path", f.path,
 		)

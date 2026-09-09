@@ -53,7 +53,13 @@ type ipBucket struct {
 }
 
 // ClientRegistry stores dynamically registered clients with LRU eviction.
+//
+// A nil registry is the DCR-disabled case. Its persistence methods tolerate
+// that receiver, so the state file can hold one unconditionally rather than
+// learning what a disabled registration endpoint means.
 type ClientRegistry struct {
+	changeNotifier
+
 	mu         sync.Mutex
 	clients    map[string]*ClientRegistration
 	order      []string // insertion-order for LRU eviction (oldest first)
@@ -84,7 +90,6 @@ func (r *ClientRegistry) Get(clientID string) *ClientRegistration {
 // register adds a client, evicting the oldest if at capacity.
 func (r *ClientRegistry) register(reg *ClientRegistration) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	// Evict oldest if at capacity.
 	if len(r.clients) >= r.maxClients && r.maxClients > 0 {
@@ -97,6 +102,69 @@ func (r *ClientRegistry) register(reg *ClientRegistration) {
 
 	r.clients[reg.ClientID] = reg
 	r.order = append(r.order, reg.ClientID)
+	r.mu.Unlock()
+
+	r.writeThrough()
+}
+
+// Snapshot returns the registrations in the registry's own eviction order,
+// oldest first.
+//
+// The order is state, not presentation: it decides which client the next
+// registration at capacity drops. Restoring a sorted copy would silently
+// re-target eviction at whichever client happened to sort first, and since the
+// order only ever grows at the tail it is stable across unrelated writes,
+// which is what keeps a token rotation from rewriting the file with reshuffled
+// clients.
+func (r *ClientRegistry) Snapshot() []ClientRegistration {
+	if r == nil {
+		return nil
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	registrations := make([]ClientRegistration, 0, len(r.clients))
+	for _, clientID := range r.order {
+		if reg, ok := r.clients[clientID]; ok {
+			registrations = append(registrations, *reg)
+		}
+	}
+
+	return registrations
+}
+
+// Restore replaces the registry's clients from a snapshot, keeping the newest
+// when the file holds more than the current capacity allows.
+//
+// An operator who lowered mcp.oauth.dcr.max_clients between restarts gets the
+// cap they configured, and the registrations dropped to reach it are the ones
+// the next registration would have evicted anyway.
+//
+// Nothing here is re-validated. A registration is not a credential — these are
+// public clients, and anyone can mint one at the registration endpoint — but a
+// forged redirect URI in a hand-edited file would now outlive a restart. That
+// is the same integrity property the consent records in this file already
+// carry, and the same mode 0600 protects it.
+func (r *ClientRegistry) Restore(registrations []ClientRegistration) {
+	if r == nil {
+		return
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.maxClients > 0 && len(registrations) > r.maxClients {
+		registrations = registrations[len(registrations)-r.maxClients:]
+	}
+
+	r.clients = make(map[string]*ClientRegistration, len(registrations))
+	r.order = make([]string, 0, len(registrations))
+
+	for _, reg := range registrations {
+		r.clients[reg.ClientID] = new(reg)
+		r.order = append(r.order, reg.ClientID)
+	}
 }
 
 // checkRateLimit returns true if the IP is allowed to make a registration request.
