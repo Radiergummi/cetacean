@@ -1,5 +1,6 @@
 import type { Recommendation, RecommendationSeverity } from "@/api/types";
 import { formatBytes, formatCores } from "@/lib/format";
+import { toneBanner, toneText } from "@/lib/statusColor";
 import { ArrowUp, Copy, RefreshCw, Scale, Shield, TrendingDown, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -17,18 +18,20 @@ export const severityRank: Record<RecommendationSeverity, number> = {
   info: 1,
 };
 
+// A severity is a status meaning, so it is drawn from the status tokens rather
+// than from its own light/dark pairs: those were the last `text-red-600
+// dark:text-red-400` holdouts, and they kept the `-600`/`-50` shades the tint
+// contrast documented in index.css rejects.
 export const severityStyles: Record<RecommendationSeverity, string> = {
-  critical: "text-red-600 dark:text-red-400",
-  warning: "text-amber-600 dark:text-amber-400",
-  info: "text-blue-600 dark:text-blue-400",
+  critical: toneText.danger,
+  warning: toneText.warning,
+  info: toneText.info,
 };
 
 export const bannerStyles: Record<RecommendationSeverity, string> = {
-  critical:
-    "border-red-300 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200",
-  warning:
-    "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200",
-  info: "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200",
+  critical: toneBanner.danger,
+  warning: toneBanner.warning,
+  info: toneBanner.info,
 };
 
 export function hintIcon(category: Recommendation["category"]): LucideIcon {
