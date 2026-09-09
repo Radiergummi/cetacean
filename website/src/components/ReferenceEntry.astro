@@ -2,14 +2,7 @@
 import type {HTMLAttributes} from "astro/types";
 import {Link} from "@lucide/astro";
 
-/**
- * The shell shared by the config parameters in `docs/configuration.mdx` and the
- * schema entries on `/api/schema`: a name, an optional description, and a block
- * of facts underneath. Everything that differs between the two — the chrome and
- * the shape of the facts block — is the caller's, so this holds only what they
- * agree on.
- */
-interface Props extends HTMLAttributes<"div"> {
+interface Props extends HTMLAttributes<"section"> {
     id: string;
     anchor?: boolean;
 }

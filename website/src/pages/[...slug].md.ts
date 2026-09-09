@@ -1,6 +1,6 @@
 import {readFile} from "node:fs/promises";
 import {join} from "node:path";
-import {docsDir, getDocPaths} from "../lib/docs";
+import {docsDir, getDocPaths, operationsLevels} from "../lib/docs";
 
 export async function getStaticPaths() {
   const docs = await getDocPaths();
@@ -44,9 +44,17 @@ function toMarkdown(content: string): string {
     // A tool's arguments render under its prose, where the card puts them,
     // rather than after the first paragraph, where the source used to.
     .replace(
-      /<McpTool name="([^"]+)">\s*<Fragment slot="arguments">([\s\S]*?)<\/Fragment>([\s\S]*?)<\/McpTool>/g,
-      (_, name: string, args: string, body: string) =>
-        [`#### \`${name}\``, body.trim(), `**Arguments** — ${args.trim()}`].join("\n\n"),
+      /<McpTool([^>]*)>\s*<Fragment slot="arguments">([\s\S]*?)<\/Fragment>([\s\S]*?)<\/McpTool>/g,
+      (_, rawAttributes: string, args: string, body: string) => {
+        const {name, level} = attributesOf(rawAttributes);
+
+        return [
+          `#### \`${name}\``,
+          body.trim(),
+          `**Arguments** — ${args.trim()}`,
+          `**Level** — ${level} (${operationsLevels[Number(level)]})`,
+        ].join("\n\n");
+      },
     )
     // The cards marker, back in the form a Markdown reader knows it by.
     .replace(/^\{\/\* cards \*\/}$/gm, "<!-- cards -->")
@@ -83,6 +91,22 @@ function toMarkdown(content: string): string {
     .replace(/\n{3,}/g, "\n\n");
 }
 
+/**
+ * A component with no case in `toMarkdown` degrades to its own tags, and this
+ * route serves `text/markdown` to readers and AI clients that cannot tell the
+ * difference. The build is static, so failing here fails `astro build` rather
+ * than shipping JSX as prose.
+ */
+function assertRendered(markdown: string, path: string): string {
+  const leftover = [...new Set(markdown.match(/<[A-Z][A-Za-z]*/g) ?? [])];
+
+  if (leftover.length > 0) {
+    throw new Error(`${path}: no Markdown fallback for ${leftover.join(", ")}`);
+  }
+
+  return markdown;
+}
+
 export async function GET({props}: { props: { filePath?: string } }) {
   const path = props.filePath ?? join(docsDir, "not-found");
 
@@ -91,7 +115,7 @@ export async function GET({props}: { props: { filePath?: string } }) {
 
     return new Response(
       path.endsWith(".mdx")
-      ? toMarkdown(content)
+      ? assertRendered(toMarkdown(content), path)
       : content,
       {headers: {"Content-Type": "text/markdown; charset=utf-8"}},
     );

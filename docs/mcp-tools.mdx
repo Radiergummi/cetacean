@@ -5,7 +5,10 @@ category: reference
 tags: [ mcp, ai, agents, tools, reference ]
 ---
 
-import McpTool from '@/components/McpTool.astro'
+
+
+
+import McpTool from "@/components/McpTool.astro";
 
 # MCP tools and resources
 
@@ -20,118 +23,120 @@ call time.
 
 Tools are gated by operations level ([`mcp.operations_level`][mcp.operations_level], inheriting `operations_level`)
 and by per-resource ACL write permission. Every MCP tool requires the same operations level as the API route for
-the same operation, so there is no separate MCP level table to keep in step.
+the same operation, so there is no MCP-specific scheme to learn.
 
 Each tool advertises the behavioural hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
 `openWorldHint`) clients use to gate confirmation prompts and an output schema the server validates results
 against. Mutating tools return `409` when someone else changed the resource first.
 
-`find` and `describe` attach links to the resources they returned, so a host can offer somewhere to go next.
+> [!CAUTION]
+> Removals are irreversible: no spec history is retained after a service removal, and a config, secret, or
+> volume payload cannot be recovered.
 
-### Level 0: Reads
+### Orientation
 
-Always available.
+Where to start, and how to turn a name into something you can act on. `find` and `describe` attach links to the
+resources they returned, so a host can offer somewhere to go next.
 
-<McpTool name="get_cluster_status">
-<Fragment slot="arguments">none</Fragment>
+<McpTool name="get_cluster_status" level={0}>
+    <Fragment slot="arguments">none</Fragment>
 
-Answers whether the cluster is healthy and, when it is not, names the services not in their desired state, the
-nodes down or draining, the rollouts in flight, and reserved against total CPU and memory. Start here.
+    Answers whether the cluster is healthy and, when it is not, names the services not in their desired state, the
+    nodes down or draining, the rollouts in flight, and reserved against total CPU and memory. Start here.
 </McpTool>
 
-<McpTool name="find">
-<Fragment slot="arguments">`type`, `query`, `state`, `stack`, `node`, `image`, `label`, `limit`, `offset`, `raw`</Fragment>
+<McpTool name="find" level={0}>
+    <Fragment slot="arguments">`type` (plural: `nodes`, `services`, `tasks`, `stacks`, `configs`, `secrets`, `networks`,
+        `volumes`), `query`, `state`, `stack`, `node`, `image`, `label`, `limit` (200 typed, 3 per type otherwise),
+        `offset`, `raw`</Fragment>
 
-Locates resources. With `type` it enumerates that type, paged. Without `type` it searches every type at once.
-
-`type` is plural: `nodes`, `services`, `tasks`, `stacks`, `configs`, `secrets`, `networks`, `volumes`. In a
-typed listing `limit` defaults to and is capped at 200, and `offset` pages. In the cross-type search `limit`
-instead caps matches per type (default 3), `offset` is ignored, and the result carries `counts`, the per-type
-breakdown behind `total`.
+    Locates resources. With `type` it enumerates that type, paged by `offset` and capped at the same 200 the default
+    sets. Without `type` it searches every type at once: `offset` is ignored, and the result carries `counts`, the
+    per-type breakdown behind `total`.
 </McpTool>
 
-<McpTool name="describe">
-<Fragment slot="arguments">`type` (singular, required), `id` (required), `raw`</Fragment>
+<McpTool name="describe" level={0}>
+    <Fragment slot="arguments">`type` (singular, required), `id` (required), `raw`</Fragment>
 
-Returns one resource as a `Digest`.
-
-`type` is singular, where `find`'s is plural. `id` accepts an ID or a name: a hostname for a node, the rendered
-`&lt;service&gt;.&lt;slot&gt; for a task, the plain name for everything else. A name matching more than one resource is
-refused, naming the matching IDs.
+    Returns one resource as a `Digest`. `id` takes an ID or a name — a hostname for a node, the rendered
+    `&lt;service&gt;.&lt;slot&gt;` for a task, the plain name for everything else — and a name matching more than one
+    resource
+    is refused, naming the matching IDs.
 </McpTool>
 
-<McpTool name="get_logs">
-<Fragment slot="arguments">exactly one of `service`, `task`, `stack`, `cluster`; plus `contains`, `tail`, `since`, `level`</Fragment>
+<McpTool name="get_topology" level={0}>
+    <Fragment slot="arguments">`view` (`network`, `placement`, `drain-impact`), `node` (for `drain-impact`)</Fragment>
 
-Fetches recent log lines from one scope.
+    Projects the cluster as a graph: `network` joins services to the overlay networks they attach to, `placement`
+    joins nodes to the services they run, and `drain-impact` joins the services on one node to the nodes that could
+    take them.
 
-A service merges the output of its live replicas; a task reads one replica and is the only way to reach one
-that has already exited, which makes it the form to reach for after a crash. It is also the most perishable:
-Swarm keeps a task's output only while it keeps the task record, five per replica slot by default
-(`--task-history-limit`), so a service restarting in a loop retains seconds of history and should be read
-first. `stack` and `cluster` merge server-side and attribute every line to its service, so grepping the cluster
-with `contains` costs one call. A wide read covers at most 25 services and reports any it could not reach in
-`errors` rather than failing. `tail` defaults to 100 lines per replica.
+    In `drain-impact` a service with no edges is stranded, and its `detail` names the placement constraint that
+    blocked it; a global service reports as `global`, since draining stops its task rather than relocating it.
+    Constraints are evaluated the way Swarm enforces them; spare capacity is not considered, since
+    [`get_cluster_status`](#get_cluster_status) already reports reserved against total. Where grants hid candidate
+    nodes, the graph carries
+    a `note` saying what the assessment was narrowed to.
 </McpTool>
 
-<McpTool name="get_events">
-<Fragment slot="arguments">`since`, `until`, `types`, `resource`, `limit`</Fragment>
+### Observation
 
-The change timeline, newest first.
+What the cluster is doing now, and what it did recently.
+
+<McpTool name="get_logs" level={0}>
+    <Fragment slot="arguments">exactly one of `service`, `task`, `stack`, `cluster`; plus `contains`, `tail` (100 per
+        replica), `since`, `level`</Fragment>
+
+    Fetches recent log lines from one scope.
+
+    A task reads one replica and is the only way to reach one that has already exited — the form to reach for after
+    a crash, and the most perishable, since Swarm discards a task's output with the task record, five per replica
+    slot by default. A service in a restart loop may hold seconds of history, so read it first. `stack` and
+    `cluster` merge server-side and attribute each line to its service, so grepping the cluster with `contains`
+    costs one call; a wide read covers at most 25 services and reports what it could not reach in `errors` rather
+    than failing.
 </McpTool>
 
-<McpTool name="get_topology">
-<Fragment slot="arguments">`view` (`network`, `placement`, `drain-impact`), `node`</Fragment>
+<McpTool name="get_events" level={0}>
+    <Fragment slot="arguments">`since`, `until`, `types`, `resource`, `limit`</Fragment>
 
-Projects the cluster as a graph in three views.
-
-The `network` view joins services to the overlay networks they attach to, `placement` joins nodes to the
-services they run, and `drain-impact` takes a `node` and joins the services running on it to the nodes that
-could take them. In `drain-impact` a service with no edges is stranded, and its `detail` names the placement
-constraint that blocked it. Global services are reported as `global`, since draining stops their task rather
-than relocating it. Placement constraints are evaluated the way Swarm enforces them; spare capacity is not
-considered, and `get_cluster_status` already reports reserved against total. The candidate nodes are the ones
-the caller may read, so where grants hid any, the graph carries a `note` saying what the assessment was
-narrowed to.
+    The change timeline, newest first.
 </McpTool>
 
-<McpTool name="get_metrics">
-<Fragment slot="arguments">`target` (required), `id`, `metric`, `range`, `top`, `by`</Fragment>
+<McpTool name="get_metrics" level={0}>
+    <Fragment slot="arguments">`target` (required: `service`, `node`, `cluster`), `id`, `metric` (`cpu`, `memory`,
+        `network`), `range` (`1h`, `6h`, `24h`, `7d`), `top` (5, capped at 10), `by`</Fragment>
 
-Charts or ranks CPU, memory, or network use.
+    Charts or ranks CPU, memory, or network use. It takes a target and a metric rather than PromQL, resolves the
+    service or node against Cetacean's cache, and checks the caller's read grant before querying.
 
-It takes a target and a metric rather than PromQL, resolves the service or node against Cetacean's cache, and
-checks the caller's read grant before querying. `metric` is `cpu` (default), `memory`, or `network`; `range` is
-`1h` (default), `6h`, `24h`, or `7d`. Asking for `top` turns it into a ranking: `target: "cluster"` ranks the
-busiest services (or nodes, with `by: "node"`) and `target: "node"` with an `id` ranks the services on that
-host, which answers why a node is hot. `top` defaults to 5 and is capped at 10. Metrics need Prometheus, plus
-cAdvisor for service metrics and node-exporter for node metrics; without them the tool says metrics are
-unavailable rather than returning empty series.
+    Asking for `top` turns it into a ranking: `target: "cluster"` ranks the busiest services, or nodes with
+    `by: "node"`, and `target: "node"` with an `id` ranks the services on that host, which answers why a node is
+    hot.
+
+    Metrics need Prometheus, plus cAdvisor for service metrics and node-exporter for node metrics; without them the
+    tool says metrics are unavailable rather than returning empty series.
 </McpTool>
 
-<McpTool name="get_recommendations">
-<Fragment slot="arguments">`severity`</Fragment>
+<McpTool name="get_recommendations" level={0}>
+    <Fragment slot="arguments">`severity`</Fragment>
 
-The recommendation engine's current findings.
-
-Returns the same findings as [`cetacean://recommendations`][mcp.resources], with totals counting what the caller may read. A
-finding with a remedy carries it as `fix`, naming the tool to call, for example
-`{"tool": "update_node", "section": "availability"}`. A finding whose REST `fixAction` route has no MCP tool
-behind it reports no `fix`.
+    The recommendation engine's current findings, the same ones [`cetacean://recommendations`][mcp.resources]
+    returns, with totals counting what the caller may read. A finding with a remedy carries it as `fix`, naming the
+    tool to call, for example `{"tool": "update_node", "section": "availability"}`. A finding whose REST `fixAction`
+    route has no MCP tool behind it reports no `fix`.
 </McpTool>
 
-<McpTool name="watch">
-<Fragment slot="arguments">`service` (required), `timeout`</Fragment>
+<McpTool name="watch" level={0}>
+    <Fragment slot="arguments">`service` (required), `timeout` (60s, capped at 300)</Fragment>
 
-Blocks until a service has settled, then reports whether it did.
-
-It exposes the same convergence rule the converging mutations use, as a read. `timeout` defaults to 60 seconds
-and is capped at 300; the wait cannot be cancelled once started.
+    Blocks until a service has settled, then reports whether it did. It exposes the same convergence rule the
+    converging mutations use, as a read; the wait cannot be cancelled once started.
 </McpTool>
 
-### Level 1: Operational
+### Service lifecycle
 
-`scale_service`, `update_service_image`, `rollback_service`, and `restart_service` accept
+Running services: how many replicas, which image, and starting over. All four converging tools accept
 [task augmentation][tasks] and return a summary of where the service ended up rather than its full spec:
 
 ```json
@@ -151,39 +156,46 @@ and is capped at 300; the wait cannot be cancelled once started.
 and `version` is the Swarm version index for a caller doing its own concurrency checks. `replicas` is omitted for a
 global service.
 
-<McpTool name="scale_service">
-<Fragment slot="arguments">`id`, `replicas`</Fragment>
+<McpTool name="scale_service" level={1}>
+    <Fragment slot="arguments">`id`, `replicas`</Fragment>
 
-Sets the desired replica count. `0` stops every task without removing the service.
+    Sets the desired replica count. `0` stops every task without removing the service.
 </McpTool>
 
-<McpTool name="update_service_image">
-<Fragment slot="arguments">`id`, `image`</Fragment>
+<McpTool name="update_service_image" level={1}>
+    <Fragment slot="arguments">`id`, `image`</Fragment>
 
-Sets the container image, triggering a rolling deploy per the service's update policy.
+    Sets the container image, triggering a rolling deploy per the service's update policy.
 </McpTool>
 
-<McpTool name="rollback_service">
-<Fragment slot="arguments">`id`</Fragment>
+<McpTool name="rollback_service" level={1}>
+    <Fragment slot="arguments">`id`</Fragment>
 
-Reverts to the previous spec. Only one previous spec is retained, so calling twice does not unwind further.
+    Reverts to the previous spec. Only one previous spec is retained, so calling twice does not unwind further.
 </McpTool>
 
-<McpTool name="restart_service">
-<Fragment slot="arguments">`id`</Fragment>
+<McpTool name="restart_service" level={1}>
+    <Fragment slot="arguments">`id`</Fragment>
 
-Forces a rolling restart by bumping `ForceUpdate`. No other spec field changes.
+    Forces a rolling restart by bumping `ForceUpdate`. No other spec field changes.
 </McpTool>
 
-<McpTool name="remove_task">
-<Fragment slot="arguments">`id`</Fragment>
+<McpTool name="remove_task" level={1}>
+    <Fragment slot="arguments">`id`</Fragment>
 
-Deletes a task; Swarm reschedules a replacement, so this is a forced reschedule.
+    Deletes a task; Swarm reschedules a replacement, so this is a forced reschedule.
 </McpTool>
 
-### Level 2: Configuration
+<McpTool name="remove_service" level={3}>
+    <Fragment slot="arguments">`id`</Fragment>
 
-The spec-editing tools return the section they changed rather than the whole service:
+    Deletes a service and stops every task. Does not delete the volumes, networks, configs, or secrets it
+    referenced.
+</McpTool>
+
+### Service configuration
+
+Editing a service's spec. These tools return the section they changed rather than the whole service:
 
 ```json
 {
@@ -201,133 +213,126 @@ The spec-editing tools return the section they changed rather than the whole ser
 `details` reports the edited section as `describe` would, naming environment variables and log driver options
 without their values—so raising a CPU limit never hands back the service's credentials.
 
-Swarm secrets and configs are immutable, so rotating one is three calls in order: `create_secret` for the
-replacement, `update_service_secrets` to repoint each service that uses it (`describe` the secret first, its
-`related` array names them), then `remove_secret` once nothing references it. Configs follow the same
-sequence, and unlike a secret a config's content can be read back, so use a secret for anything sensitive.
+`update_service_secrets`, `update_service_configs`, and `update_service_mounts` replace their set wholesale:
+pass every entry the service should end up with, because one left out is detached — and a container may lose
+data it was writing to a dropped mount.
 
-<McpTool name="update_service">
-<Fragment slot="arguments">`id`, `section`, `value`</Fragment>
+<McpTool name="update_service" level={2}>
+    <Fragment slot="arguments">`id`, `section`, `value`</Fragment>
 
-Changes one section of a service's spec.
+    Changes one section of a service's spec. `section` takes one of ten names, and `value` that section's new value:
 
-`section` takes one of ten names, and `value` that section's new value:
+    | Section | Value | Semantics |
+    |-------------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+    | `env` | Merge-patch object | A string sets a key, `null` deletes it, an omitted key is preserved |
+    | `labels` | Merge-patch object | As above; the only service section that does not trigger a rolling deploy, along
+    with the two policies |
+    | `resources` | `ResourceRequirements` | CPU and memory limits and reservations |
+    | `placement` | `Placement` | Constraints, preferences, max replicas per node, platforms; may reschedule tasks |
+    | `ports` | Array of `PortConfig` | Drops connections to any port it removes or remaps |
+    | `update-policy` | `UpdateConfig` | Applies to the next spec change |
+    | `rollback-policy` | `UpdateConfig` | Applies to `rollback_service` |
+    | `log-driver` | `Driver` | Name plus options; routes subsequent log lines |
+    | `healthcheck` | Probe | `test` as an array (`["CMD-SHELL", "curl -f localhost \|\| exit 1"]`), plus `interval`,
+    `timeout`, `startPeriod`, `retries`. Durations are strings such as `"10s"`. An empty `test` removes the check |
+    | `command` | `command` plus `args` | The entrypoint and what follows it, the split Docker makes. Omitting one
+    clears it |
 
-| Section           | Value                  | Semantics                                                                                                                                                                                             |
-|-------------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `env`             | Merge-patch object     | A string sets a key, `null` deletes it, an omitted key is preserved                                                                                                                                   |
-| `labels`          | Merge-patch object     | As above; the only service section that does not trigger a rolling deploy, along with the two policies                                                                                                |
-| `resources`       | `ResourceRequirements` | CPU and memory limits and reservations                                                                                                                                                                |
-| `placement`       | `Placement`            | Constraints, preferences, max replicas per node, platforms; may reschedule tasks                                                                                                                      |
-| `ports`           | Array of `PortConfig`  | Drops connections to any port it removes or remaps                                                                                                                                                    |
-| `update-policy`   | `UpdateConfig`         | Applies to the next spec change                                                                                                                                                                       |
-| `rollback-policy` | `UpdateConfig`         | Applies to `rollback_service`                                                                                                                                                                         |
-| `log-driver`      | `Driver`               | Name plus options; routes subsequent log lines                                                                                                                                                        |
-| `healthcheck`     | Probe                  | `test` as an array (`["CMD-SHELL", "curl -f localhost \|\| exit 1"]`), plus `interval`, `timeout`, `startPeriod`, `retries`. Durations are strings such as `"10s"`. An empty `test` removes the check |
-| `command`         | `command` plus `args`  | The entrypoint and what follows it, the split Docker makes. Omitting one clears it                                                                                                                    |
+    Every section other than `env` and `labels` replaces its section wholesale: a field you omit is cleared.
 
-Every section other than `env` and `labels` replaces its section wholesale: a field you omit is cleared.
-
-Secrets, configs, and mounts are not sections here. Each takes a list rather than a spec fragment, and
-attaching a secret checks a read grant on the secret as well as a write grant on the service, so each is a tool
-of its own. Passing one as a `section` is refused with the name of the tool to use.
+    Secrets, configs, and mounts are not sections here. Each takes a list rather than a spec fragment, and
+    attaching a secret checks a read grant on the secret as well as a write grant on the service, so each is a tool
+    of its own. Passing one as a `section` is refused with the name of the tool to use.
 </McpTool>
 
-<McpTool name="update_node_labels">
-<Fragment slot="arguments">`id`, `labels`</Fragment>
+<McpTool name="update_service_secrets" level={2}>
+    <Fragment slot="arguments">`id`, `secrets`</Fragment>
 
-Patches a node's labels (JSON Merge Patch).
+    Replaces the complete set of secrets a service receives.
 </McpTool>
 
-<McpTool name="create_secret">
-<Fragment slot="arguments">`name`, `data`, `encoding`, `labels`</Fragment>
+<McpTool name="update_service_configs" level={2}>
+    <Fragment slot="arguments">`id`, `configs`</Fragment>
 
-Creates a Swarm secret.
+    Replaces the complete set of configs a service receives.
 </McpTool>
 
-<McpTool name="create_config">
-<Fragment slot="arguments">`name`, `data`, `encoding`, `labels`</Fragment>
+<McpTool name="update_service_mounts" level={2}>
+    <Fragment slot="arguments">`id`, `mounts`</Fragment>
 
-Creates a Swarm config.
+    Replaces the complete set of mounts: named volumes, host bind mounts, tmpfs.
+
+    > [!CAUTION]
+    > A bind mount hands the container the host's filesystem at that path, and binding `/var/run/docker.sock` gives
+    > it control of the whole cluster. `update_service_mounts` will do it if asked; the operations level is not what
+    > stops it.
 </McpTool>
 
-<McpTool name="update_service_secrets">
-<Fragment slot="arguments">`id`, `secrets`</Fragment>
+### Cluster resources
 
-Replaces the complete set of secrets a service receives.
+Configs, secrets, networks, and volumes. Swarm secrets and configs are immutable, so rotating one is three
+calls in order: `create_secret` for the replacement, [`update_service_secrets`](#update_service_secrets) to
+repoint each service that uses it (`describe` the secret first, its `related` array names them), then
+`remove_secret` once nothing references it. Configs follow the same sequence, and unlike a secret a config's
+content can be read back, so use a secret for anything sensitive.
 
-The set is replaced wholesale: pass every secret the service should end up with, because one left out is
-detached.
+<McpTool name="create_secret" level={2}>
+    <Fragment slot="arguments">`name`, `data`, `encoding`, `labels`</Fragment>
+
+    Creates a Swarm secret.
 </McpTool>
 
-<McpTool name="update_service_configs">
-<Fragment slot="arguments">`id`, `configs`</Fragment>
+<McpTool name="create_config" level={2}>
+    <Fragment slot="arguments">`name`, `data`, `encoding`, `labels`</Fragment>
 
-Replaces the complete set of configs a service receives.
-
-The set is replaced wholesale: pass every config the service should end up with, because one left out is
-detached.
+    Creates a Swarm config.
 </McpTool>
 
-<McpTool name="update_service_mounts">
-<Fragment slot="arguments">`id`, `mounts`</Fragment>
+<McpTool name="remove_secret" level={3}>
+    <Fragment slot="arguments">`id`</Fragment>
 
-Replaces the complete set of mounts: named volumes, host bind mounts, tmpfs.
-
-The set is replaced wholesale: pass every mount the service should end up with, because one left out is
-detached, and a container may lose data it was writing to it.
-
-> [!CAUTION]
-> A bind mount hands the container the host's filesystem at that path, and binding `/var/run/docker.sock` gives
-> it control of the whole cluster. `update_service_mounts` will do it if asked; the operations level is not what
-> stops it.
+    Deletes a secret. Fails if any service still references it.
 </McpTool>
 
-### Level 3: Impactful
+<McpTool name="remove_config" level={3}>
+    <Fragment slot="arguments">`id`</Fragment>
 
-Removals are irreversible: no spec history is retained after a service removal, and a config, secret, or
-volume payload cannot be recovered.
-
-<McpTool name="update_node">
-<Fragment slot="arguments">`id`, `section`, `value`</Fragment>
-
-Changes a node's `availability` (`active`, `pause`, `drain`) or `role` (`worker`, `manager`).
-
-Draining a manager may destabilise the swarm, so prefer draining workers. Promoting a node adds a Raft voter
-and demoting removes one: never reduce the manager count below the quorum threshold, and on a three-manager
-cluster demote at most one at a time. Node labels stay a tool of their own, `update_node_labels`, at level 2,
-so a deployment that lets an agent relabel a node does not also let it demote a manager.
+    Deletes a config. Fails if any service still references it.
 </McpTool>
 
-<McpTool name="remove_service">
-<Fragment slot="arguments">`id`</Fragment>
+<McpTool name="remove_network" level={3}>
+    <Fragment slot="arguments">`id`</Fragment>
 
-Deletes a service and stops every task. Does not delete the volumes, networks, configs, or secrets it
-referenced.
+    Deletes an overlay network. Fails if a service is attached; `ingress` and `docker_gwbridge` cannot be removed.
 </McpTool>
 
-<McpTool name="remove_config">
-<Fragment slot="arguments">`id`</Fragment>
+<McpTool name="remove_volume" level={3}>
+    <Fragment slot="arguments">`name`, `force`</Fragment>
 
-Deletes a config. Fails if any service still references it.
+    Deletes a volume by name. Fails if a container is using it unless `force` is set.
 </McpTool>
 
-<McpTool name="remove_secret">
-<Fragment slot="arguments">`id`</Fragment>
+### Nodes
 
-Deletes a secret. Fails if any service still references it.
+Where work is allowed to run, and who votes in Raft.
+
+<McpTool name="update_node_labels" level={2}>
+    <Fragment slot="arguments">`id`, `labels`</Fragment>
+
+    Patches a node's labels (JSON Merge Patch).
 </McpTool>
 
-<McpTool name="remove_network">
-<Fragment slot="arguments">`id`</Fragment>
+<McpTool name="update_node" level={3}>
+    <Fragment slot="arguments">`id`, `section` (`availability`, `role`), `value` (`active`, `pause`, `drain` — or
+        `worker`, `manager`)</Fragment>
 
-Deletes an overlay network. Fails if a service is attached; `ingress` and `docker_gwbridge` cannot be removed.
-</McpTool>
+    Changes a node's availability or role.
 
-<McpTool name="remove_volume">
-<Fragment slot="arguments">`name`, `force`</Fragment>
-
-Deletes a volume by name. Fails if a container is using it unless `force` is set.
+    Draining a manager may destabilise the swarm, so prefer draining workers. Promoting a node adds a Raft voter
+    and demoting removes one: never reduce the manager count below the quorum threshold, and on a three-manager
+    cluster demote at most one at a time. Node labels stay a tool of their own,
+    [`update_node_labels`](#update_node_labels), at level 2, so a deployment that lets an agent relabel a node does
+    not also let it demote a manager.
 </McpTool>
 
 ## Resources
@@ -453,22 +458,28 @@ so a widget shows exactly what the calling identity's grants allow.
 
 {/* cards */}
 
-| Resource                        | Renders                        | Behaviour                                                                                                                           |
-|---------------------------------|--------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| `ui://cetacean/table`           | A `find` result                | Searchable, sortable table of one resource type, showing how many records it holds when the page is a subset                        |
-| `ui://cetacean/topology`        | A `get_topology` result        | Graph to pan, zoom, and drag; switching view re-runs the tool under the same identity and grants                                    |
-| `ui://cetacean/logs`            | A `get_logs` result            | Live tail, re-reading from the cursor the previous read returned; level and search filtering happens over the lines already fetched |
-| `ui://cetacean/metrics`         | A `get_metrics` result         | Line chart with a range picker; changing the range re-runs the tool. Every series is named in a legend with its latest value        |
-| `ui://cetacean/recommendations` | A `get_recommendations` result | Findings grouped by severity, most serious first. Picking one asks the host to send the model a follow-up, which a host may decline |
+| Resource                        | Renders                                                         | Behaviour                                                                                                                           |
+|---------------------------------|-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| `ui://cetacean/table`           | A [`find`][mcp.tools.find] result                               | Searchable, sortable table of one resource type, showing how many records it holds when the page is a subset                        |
+| `ui://cetacean/topology`        | A [`get_topology`][mcp.tools.get_topology] result               | Graph to pan, zoom, and drag; switching view re-runs the tool under the same identity and grants                                    |
+| `ui://cetacean/logs`            | A [`get_logs`][mcp.tools.get_logs] result                       | Live tail, re-reading from the cursor the previous read returned; level and search filtering happens over the lines already fetched |
+| `ui://cetacean/metrics`         | A [`get_metrics`][mcp.tools.get_metrics] result                 | Line chart with a range picker; changing the range re-runs the tool. Every series is named in a legend with its latest value        |
+| `ui://cetacean/recommendations` | A [`get_recommendations`][mcp.tools.get_recommendations] result | Findings grouped by severity, most serious first. Picking one asks the host to send the model a follow-up, which a host may decline |
 
-[api]: api
-[authentication]: authentication
-[dashboard]: dashboard
-[mcp]: mcp
-[mcp.issuer]: configuration#mcp.issuer
-[mcp.operations_level]: configuration#mcp.operations_level
-[mcp.resources]: mcp-tools#resources
-[operations-level]: configuration#operations-level
-[recommendations]: recommendations
-[server.public_url]: configuration#server.public_url
-[tasks]: mcp#wait-for-changes-to-take-effect
+
+[api]:  api
+[authentication]:  authentication
+[dashboard]:  dashboard
+[mcp]:  mcp
+[mcp.issuer]:  configuration#mcp.issuer
+[mcp.operations_level]:  configuration#mcp.operations_level
+[mcp.resources]:  mcp-tools#resources
+[mcp.tools.find]:  mcp-tools#find
+[mcp.tools.get_topology]:  mcp-tools#get_topology
+[mcp.tools.get_logs]:  mcp-tools#get_logs
+[mcp.tools.get_metrics]:  mcp-tools#get_metrics
+[mcp.tools.get_recommendations]:  mcp-tools#get_recommendations
+[operations-level]:  configuration#operations-level
+[recommendations]:  recommendations
+[server.public_url]:  configuration#server.public_url
+[tasks]:  mcp#wait-for-changes-to-take-effect

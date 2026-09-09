@@ -2,6 +2,8 @@ import { getCollection } from "astro:content";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+export { slugify } from "./slug";
+
 export const docsDir = resolve("../docs");
 export const changelogPath = resolve("../CHANGELOG.md");
 
@@ -20,9 +22,12 @@ export function latestVersion(): string {
   return `v${match[1]}`;
 }
 
-export function slugify(text: string): string {
-  return text.toLowerCase().replace(/\W+/g, "-").replace(/^-|-$/g, "");
-}
+/**
+ * The operations levels, by index: a tool's `level` is its position here. Shared
+ * by the tool cards and the raw Markdown route, which would otherwise each keep
+ * their own copy of the four names.
+ */
+export const operationsLevels = ["read-only", "operational", "configuration", "impactful"] as const;
 
 export async function getDocPaths() {
   const docs = await getCollection("docs");

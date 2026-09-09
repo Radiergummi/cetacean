@@ -1,16 +1,23 @@
 ---
 import ReferenceEntry from "./ReferenceEntry.astro";
+import ReferenceFacts from "./ReferenceFacts.astro";
+import {operationsLevels} from "@/lib/docs";
 
 /**
  * One tool on the MCP catalog, in the card the configuration and error
  * references use for a setting and a code, so the three references read as one
  * system rather than three house styles.
  *
- * Every tool carries exactly one fact, its argument list, so there is no
- * general labelling to do here. The list arrives as a slot rather than a prop
- * because a third of them run to prose — "exactly one of `service`, `task`,
- * ...; plus `contains`" — and a slot is Markdown the page has already rendered,
- * where a prop would be a string this had to parse.
+ * A tool carries two facts: the operations level that gates it, and its
+ * argument list. The level is a prop because it is one of four values the page
+ * must not invent; the arguments arrive as a slot because a third of the lists
+ * run to prose — "exactly one of `service`, `task`, ...; plus `contains`" — and
+ * a slot is Markdown the page has already rendered, where a prop would be a
+ * string this had to parse.
+ *
+ * The catalog groups tools by what they are for rather than by level, so the
+ * level has to be legible on the card itself; it reads as "1 · operational"
+ * because the number is what a deployment sets and the name is what it means.
  *
  * The name stays a heading, as it was when this page's entries were `####`
  * headings marked up by a Remark plugin: the tools are the section's outline to
@@ -19,11 +26,10 @@ import ReferenceEntry from "./ReferenceEntry.astro";
  */
 interface Props {
     name: string;
+    level: 0 | 1 | 2 | 3;
 }
 
-const {name} = Astro.props;
-
-const args = (await Astro.slots.render("arguments")).trim();
+const {name, level} = Astro.props;
 ---
 <ReferenceEntry
     id={name}
@@ -36,11 +42,14 @@ const args = (await Astro.slots.render("arguments")).trim();
 
     <slot />
 
-    <div
-        slot="facts"
-        class="-mx-4 -mb-3.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-b-inner border-t bg-muted px-4 py-2 text-sm text-code-foreground code-plain"
-    >
-        <span class="font-medium text-muted-foreground">arguments</span>
-        <span class="[&>:first-child]:mt-0 [&>:last-child]:mb-0" set:html={args} />
-    </div>
+    <ReferenceFacts slot="facts">
+        <dt class="font-medium">arguments</dt>
+        <dd class="*:first:mt-0 *:last:mb-0"><slot name="arguments" /></dd>
+
+        <dt class="font-medium">level</dt>
+        <dd>
+            <span class="font-mono tabular-nums slashed-zero">{level}</span>{" "}
+            (<span class="capitalize">{operationsLevels[level]}</span>)
+        </dd>
+    </ReferenceFacts>
 </ReferenceEntry>
