@@ -35,6 +35,17 @@ type ClientRegistration struct {
 	ApplicationType string `json:"application_type,omitempty"`
 }
 
+// clone returns a copy sharing no slice with the original, so a registration
+// handed out of the registry's lock cannot be mutated through the live one, or
+// the reverse.
+func (r ClientRegistration) clone() ClientRegistration {
+	r.RedirectURIs = slices.Clone(r.RedirectURIs)
+	r.GrantTypes = slices.Clone(r.GrantTypes)
+	r.ResponseTypes = slices.Clone(r.ResponseTypes)
+
+	return r
+}
+
 // dcrRequest is the incoming JSON body for RFC 7591 registration.
 type dcrRequest struct {
 	ClientName              string   `json:"client_name"`
@@ -127,7 +138,7 @@ func (r *ClientRegistry) Snapshot() []ClientRegistration {
 	registrations := make([]ClientRegistration, 0, len(r.clients))
 	for _, clientID := range r.order {
 		if reg, ok := r.clients[clientID]; ok {
-			registrations = append(registrations, *reg)
+			registrations = append(registrations, reg.clone())
 		}
 	}
 
@@ -162,7 +173,7 @@ func (r *ClientRegistry) Restore(registrations []ClientRegistration) {
 	r.order = make([]string, 0, len(registrations))
 
 	for _, reg := range registrations {
-		r.clients[reg.ClientID] = new(reg)
+		r.clients[reg.ClientID] = new(reg.clone())
 		r.order = append(r.order, reg.ClientID)
 	}
 }

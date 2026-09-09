@@ -479,10 +479,10 @@ func TestRegistrationIsWrittenThrough(t *testing.T) {
 	}
 }
 
-// TestOlderStateFileLoadsWithoutRegistrations — the version bump must not cost
-// a deployment its tokens. A file written before registrations were persisted
-// still loads; its clients simply register once more.
-func TestOlderStateFileLoadsWithoutRegistrations(t *testing.T) {
+// TestStateFileWithoutRegistrationsLoads — a file written before registrations
+// were persisted must cost a deployment nothing but the registrations
+// themselves, whose clients simply register once more.
+func TestStateFileWithoutRegistrationsLoads(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
 	tokens := NewRefreshTokenStore()
@@ -492,10 +492,7 @@ func TestOlderStateFileLoadsWithoutRegistrations(t *testing.T) {
 		Resource: testResource,
 	}, time.Hour)
 
-	state := tokenState(tokens.Snapshot())
-	state.Version = 2
-
-	if err := writeState(path, state); err != nil {
+	if err := writeState(path, tokenState(tokens.Snapshot())); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -505,15 +502,39 @@ func TestOlderStateFileLoadsWithoutRegistrations(t *testing.T) {
 		t.Error("a token from a pre-registration state file should still validate")
 	}
 	if got := len(after.clients.Snapshot()); got != 0 {
-		t.Errorf("registrations restored from a v2 file = %d, want 0", got)
+		t.Errorf("registrations restored from a file holding none = %d, want 0", got)
 	}
 }
 
-// TestServerWithoutDCRIgnoresPersistedRegistrations — turning registration off
-// is a real deployment, and the state file may still hold clients from before
-// it was. There is no registry to restore them into, and nothing on the write
-// path may assume there is.
-func TestServerWithoutDCRIgnoresPersistedRegistrations(t *testing.T) {
+// TestRegistrationsDidNotBumpTheStateVersion — registrations were added to the
+// file without a version bump, because the addition reads in both directions:
+// a file without the key loads here, and an older build ignores a key it does
+// not know. Bumping would make a rollback discard every token and approval in
+// the file, so the version stays where the last incompatible change left it.
+func TestRegistrationsDidNotBumpTheStateVersion(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	s := newPersistingServer(t, path, testResource)
+	if status, _ := registerClient(t, s, registrationBody); status != http.StatusCreated {
+		t.Fatalf("register: status %d", status)
+	}
+
+	state := onDisk(t, path)
+	if len(state.Clients) != 1 {
+		t.Fatalf("registrations on disk = %d, want the fixture written", len(state.Clients))
+	}
+
+	if state.Version != 2 {
+		t.Errorf("state version = %d, want 2 even with registrations present", state.Version)
+	}
+}
+
+// TestServerWithoutDCRKeepsPersistedRegistrations — turning registration off is
+// often a maintenance-window setting. There is no registry to restore into, and
+// nothing on the write path may assume there is — but a token rotation in the
+// meantime must not rewrite the registrations away, or turning DCR back on
+// costs every client the re-registration this file exists to avoid.
+func TestServerWithoutDCRKeepsPersistedRegistrations(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
 	state := tokenState(NewRefreshTokenStore().Snapshot())
@@ -539,12 +560,12 @@ func TestServerWithoutDCRIgnoresPersistedRegistrations(t *testing.T) {
 		t.Fatal("a server with DCR disabled should hold no client registry")
 	}
 
-	// The write path runs with a nil registry, and the registrations it cannot
-	// restore go with it: a client the server would refuse to resolve has no
-	// business outliving the restart in the file.
+	// The write path runs with a nil registry, and must carry through what it
+	// cannot snapshot.
 	s.refreshTokens.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
 
-	if got := len(onDisk(t, path).Clients); got != 0 {
-		t.Errorf("registrations on disk = %d, want them dropped with DCR disabled", got)
+	written := onDisk(t, path).Clients
+	if len(written) != 1 || written[0].ClientID != "cetacean-from-before" {
+		t.Errorf("registrations on disk = %v, want the pre-existing one kept", written)
 	}
 }
