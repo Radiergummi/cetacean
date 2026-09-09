@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - The topology view now draws its graph as soon as the page opens rather than waiting for the layout engine to download first — the engine is half a megabyte and everything else was queued behind it
 - A dropped connection or a server restart no longer leaves a page stuck on an error. Requests that fail for transport reasons are retried briefly before the error is shown; a request the server actually refused is still reported straight away
-- Status colours are consistent across the dashboard and adapt to dark mode on their own. Every badge, dot, banner and status figure now draws from one palette of five meanings — healthy, warning, failed, in-progress, inactive — where each screen previously picked its own light and dark shades independently, so the same state could be a different red in two places and a state badge could disagree with the dot beside it
+- Status colours are consistent across the dashboard and adapt to dark mode on their own. Every badge, dot, banner and status figure now draws from one palette of five meanings — healthy, warning, failed, in-progress, inactive — where each screen previously picked its own light and dark shades independently, so the same state could be a different red in two places and a state badge could disagree with the dot beside it. In light mode the palette is deeper than the shades it replaces, so a status badge is legible against its own tint rather than washing into it
 
 ### Fixed
 - Resource tables can now be sorted from the keyboard, and screen readers are told which column is sorted and which way. Clicking a column heading was the only way to sort, and the heading itself was announced as plain text

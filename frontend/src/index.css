@@ -30,12 +30,22 @@
      it would otherwise have to keep in step — that pair alone appeared 17
      times. Surfaces and borders come from the same token through Tailwind's
      opacity modifiers (`bg-status-ok/15`), which is what ui/button.tsx already
-     does for `destructive`. */
-  --status-ok: oklch(0.627 0.194 149.2);
-  --status-warning: oklch(0.666 0.179 58.3);
-  --status-danger: var(--destructive);
-  --status-info: oklch(0.546 0.245 262.9);
-  --status-neutral: var(--muted-foreground);
+     does for `destructive`.
+
+     Each value has to carry text twice: once on `--background`, and once on a
+     15% tint of itself, which is a lighter surface and therefore the harder of
+     the two. The `-600` shades these started as read 2.7-3.8:1 against their
+     own tint — the badge they replaced paired `-800` text with a `-100` fill
+     and read 6.4:1 — so light mode uses whichever shade per hue clears 4.5:1
+     there, which is `-800` for green and amber, `-700` for red and blue, and
+     `-600` for gray rather than one shade across the board. That is also why
+     danger and neutral state a value instead of aliasing `--destructive` and
+     `--muted-foreground`: both pass on the background and fail on the tint. */
+  --status-ok: oklch(0.448 0.119 151.328);
+  --status-warning: oklch(0.473 0.137 46.201);
+  --status-danger: oklch(0.505 0.213 27.518);
+  --status-info: oklch(0.488 0.243 264.376);
+  --status-neutral: oklch(0.439 0 0);
   --chart-1: #648fff;
   --chart-2: #ffb000;
   --chart-3: #dc267f;
@@ -59,12 +69,15 @@
 
 .dark {
   --link: oklch(0.695 0.17 254.624);
-  /* Lightened so they carry on the dark background; --status-danger and
-     --status-neutral track --destructive and --muted-foreground, which the
-     block below already re-states. */
+  /* Lightened so they carry on the dark background, where the same two
+     readings are 5.4-8.9:1. All five are restated because :root no longer
+     aliases danger and neutral, so inheriting any of them would bring a value
+     tuned for a white page onto a black one. */
   --status-ok: oklch(0.792 0.209 151.7);
   --status-warning: oklch(0.828 0.189 84.4);
+  --status-danger: oklch(0.704 0.191 22.216);
   --status-info: oklch(0.707 0.165 254.6);
+  --status-neutral: oklch(0.708 0 0);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

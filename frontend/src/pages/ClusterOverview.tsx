@@ -173,7 +173,7 @@ function HealthCard({
     <Link
       to={to}
       data-status={status}
-      className="group block cursor-pointer rounded-lg border bg-card p-5 transition-all hover:border-foreground/20 hover:shadow-sm data-[status=amber]:border-status-warning data-[status=amber]:bg-status-warning data-[status=green]:border-status-ok data-[status=green]:bg-status-ok data-[status=red]:border-status-danger data-[status=red]:bg-status-danger"
+      className="group block cursor-pointer rounded-lg border bg-card p-5 transition-all hover:border-foreground/20 hover:shadow-sm data-[status=amber]:border-status-warning/30 data-[status=amber]:bg-status-warning/5 data-[status=green]:border-status-ok/30 data-[status=green]:bg-status-ok/5 data-[status=red]:border-status-danger/30 data-[status=red]:bg-status-danger/5"
     >
       <div className="mb-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
         {label}
