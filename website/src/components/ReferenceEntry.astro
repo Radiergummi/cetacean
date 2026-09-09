@@ -1,5 +1,6 @@
 ---
-import type { HTMLAttributes } from "astro/types";
+import type {HTMLAttributes} from "astro/types";
+import {Link} from "@lucide/astro";
 
 /**
  * The shell shared by the config parameters in `docs/configuration.mdx` and the
@@ -9,11 +10,11 @@ import type { HTMLAttributes } from "astro/types";
  * agree on.
  */
 interface Props extends HTMLAttributes<"div"> {
-  id: string;
-  anchor?: boolean;
+    id: string;
+    anchor?: boolean;
 }
 
-const { id, class: className, anchor = false, ...rest } = Astro.props;
+const {id, class: className, anchor = false, ...rest} = Astro.props;
 
 /**
  * Rendered rather than probed with `Astro.slots.has`, which only reports whether
@@ -21,26 +22,27 @@ const { id, class: className, anchor = false, ...rest } = Astro.props;
  * only the rendered output says whether there is a description to wrap.
  */
 const description = (await Astro.slots.render("default")).trim();
-
-// Inline code carries a tinted pill from the prose layer; the name is a heading.
-const headingClass = "mb-1.5 flex items-baseline gap-2 code-heading";
 ---
-<div {...rest} id={id} class={className}>
-  <div class={headingClass}>
-    <slot name="heading" />
-    {anchor && (
-      <a
-        href={`#${id}`}
-        class="ml-auto text-sm leading-none text-muted-foreground no-underline opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        aria-label={`Link to ${id}`}
-      >#</a>
+<section {...rest} id={id} class={className}>
+    <header class="mb-1.5 flex items-center gap-2 code-heading">
+        <slot name="heading" />
+        {anchor && (
+            <a
+                href={`#${id}`}
+                class="ms-auto text-sm leading-none text-muted-foreground no-underline opacity-0 transition-opacity group-hover:opacity-100 hover:text-active focus-visible:opacity-100 select-none transition duration-150"
+                aria-label={`Link to ${id}`}
+            >
+                <Link class="size-3" />
+            </a>
+        )}
+    </header>
+
+    {description && (
+        <div
+            class="mb-3 leading-relaxed [&>:first-child]:mt-0 [&>:last-child]:mb-0"
+            set:html={description}
+        />
     )}
-  </div>
-  {description && (
-    <div
-      class="mb-3 text-sm leading-relaxed [&>:first-child]:mt-0 [&>:last-child]:mb-0"
-      set:html={description}
-    />
-  )}
-  <slot name="facts" />
-</div>
+
+    <slot name="facts" />
+</section>

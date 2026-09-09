@@ -164,7 +164,6 @@
 
 @layer base {
   /* region Base styles */
-
   * {
     @apply border-border;
   }
@@ -188,6 +187,7 @@
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-active;
   }
+
   /* endregion */
 }
 
@@ -319,13 +319,19 @@
       @apply rounded-lg my-6;
     }
 
-    /* Inline code */
+    /* region Inline code */
 
     code:not(pre code) {
-      @apply rounded-md px-1.5 py-0.5 text-sm font-mono font-medium bg-code-background text-code-foreground;
+      @apply text-sm font-mono font-medium text-code-foreground;
+
+      &:not(a > code) {
+        @apply rounded-md px-1.5 py-0.5 bg-code-background;
+      }
     }
 
-    /* Code blocks */
+    /* endregion */
+
+    /* region Code blocks */
 
     pre {
       @apply rounded-lg my-6 p-4 overflow-x-auto text-sm leading-relaxed border bg-code-background! text-code-foreground;
@@ -340,7 +346,9 @@
       }
     }
 
-    /* Callouts (GitHub-style alerts, see remarkCallouts in astro.config.ts) */
+    /* endregion */
+
+    /* region Callouts */
 
     .callout {
       @apply my-6 rounded-lg border px-4 py-3 text-sm leading-relaxed;
@@ -417,6 +425,10 @@
       @apply size-4 shrink-0;
     }
 
+    /* endregion */
+
+    /* region Tables */
+
     table {
       @apply w-full text-sm border-separate border-spacing-0;
     }
@@ -443,6 +455,8 @@
     tbody tr:hover td {
       @apply bg-muted;
     }
+
+    /* endregion */
 
     /* region Definition lists (from two-column prose tables) */
 
@@ -514,6 +528,7 @@
         @apply mb-1;
       }
     }
+
     /* endregion */
 
     /* region Cards (from tables marked <!-- cards -->) */
@@ -544,7 +559,7 @@
 
     .card-facts {
       @apply mt-3 -mx-4 -mb-3.5 grid grid-cols-[fit-content(8rem)_minmax(0,1fr)] gap-x-3 gap-y-1 items-baseline
-        rounded-b-inner border-t bg-muted px-4 py-2 text-sm text-muted-foreground;
+      rounded-b-inner border-t bg-muted px-4 py-2 text-sm text-muted-foreground;
 
       code {
         @apply rounded-none px-0 py-0 text-sm bg-transparent text-code-foreground;
@@ -555,41 +570,8 @@
       @apply font-medium;
     }
 
-    /*
-     * Entries (from a run of `####` marked <!-- entries -->). The same card, at
-     * body size: a card table's row is a blurb beside its neighbours, where an
-     * entry holds the page's own prose and has to read as the primary text.
-     * `:target` lands on the heading, which keeps the id, so the highlight is
-     * the card holding it.
-     */
-
-    .card-list.is-entries {
-      @apply gap-2;
-    }
-
-    .is-entries .card {
-      @apply text-base;
-
-      &:has(> .card-title:target) {
-        @apply border-active ring-1 ring-active;
-      }
-    }
-
-    .is-entries .card-title {
-      @apply mt-0;
-    }
-
-    .is-entries .card-description {
-      > :first-child {
-        @apply mt-0;
-      }
-
-      > :last-child {
-        @apply mb-0;
-      }
-    }
+    /* endregion */
   }
-  /* endregion */
 
   /* endregion */
 }
@@ -627,8 +609,8 @@
 .prose a[href*="mcp-tools#"]::before,
 .prose a[href*="api/explorer"]::before {
   @apply content-[''] inline-block size-[0.95em] align-text-bottom text-muted-foreground bg-current;
-  margin-right: 0.2em;
-  vertical-align: -0.115em;
+  margin-right: 0.3em;
+  vertical-align: -0.15em;
   mask-image: var(--link-icon);
   mask-size: contain;
   mask-repeat: no-repeat;
@@ -657,7 +639,7 @@
 
 .code-tabs-button {
   @apply cursor-pointer whitespace-nowrap bg-transparent border-0 border-b-2 border-transparent
-    px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors duration-150;
+  px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors duration-150;
 
   &:hover {
     @apply text-foreground;
