@@ -2,38 +2,34 @@ package mcp
 
 import (
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // These tests hold docs/mcp-tools.mdx against the catalog it documents. The
 // page states an operations level, an argument list and a set of accepted
-// values for each of 27 tools, a table of prompts and one of widgets, and four
+// values for each of 27 tools, a table of prompts, a table of widgets, and four
 // counts — all typed by hand against this package.
 //
 // They live here, in `package mcp`, because everything they read is unexported:
 // a script outside the package would need toolCatalog, toolDef.tier,
-// promptCatalog, promptTier and widgetCatalog exported first, which is a new
-// public surface on a domain package for the docs site's sake. Measured over
-// the repository's history, the drift these catch arrives from the docs side
-// roughly twenty times more often than from Go, and `ci.yml` carries no path
-// filter, so `go test` runs on a documentation-only pull request too.
+// promptCatalog, promptTier and uiResources exported first, which is a new
+// public surface on a domain package for the docs site's sake. That also puts
+// them in `go test ./...`, which `ci.yml` runs on every pull request including
+// a documentation-only one — and over this repository's history the catalog
+// files moved in 8 commits where `docs/` moved in 178, so a prose rewrite
+// dropping an argument is the likelier drift by far.
 //
-// Every rule runs schema-to-doc: a fact the catalog states must appear on the
-// page. The reverse would flag every value the prose names in passing, so an
-// argument deleted in Go and left in the docs is deliberately not caught. See
-// docs/specs/2026-09-09-mcp-catalog-drift-check-design.md.
-const (
-	catalogPath = "../../docs/mcp-tools.mdx"
-	widgetsPath = "../../frontend/src/widgets"
-)
+// Most rules run in both directions: the page must state every fact the catalog
+// holds, and must state no fact it does not. The exception is the value rule,
+// which reads a whole card and would otherwise flag every tool the prose names
+// in passing. See docs/specs/2026-09-09-mcp-catalog-drift-check-design.md.
+const catalogPath = "../../docs/mcp-tools.mdx"
 
 var (
 	cardPattern = regexp.MustCompile(
@@ -49,7 +45,7 @@ var (
 )
 
 // card is one <McpTool> block: the level it advertises, its arguments fact, and
-// its whole body. The two are kept apart because the rules read them at
+// its whole body. The last two are kept apart because the rules read them at
 // different scopes — see documentedNames and documentedValues.
 type card struct {
 	level     int
@@ -71,16 +67,13 @@ func catalogDoc(t *testing.T) string {
 func toolCards(t *testing.T) map[string]card {
 	t.Helper()
 
-	doc := catalogDoc(t)
 	cards := map[string]card{}
 
-	for _, match := range cardPattern.FindAllStringSubmatch(doc, -1) {
-		name, rawLevel, body := match[1], match[2], match[3]
+	for _, match := range cardPattern.FindAllStringSubmatch(catalogDoc(t), -1) {
+		name, body := match[1], match[3]
 
-		level, err := strconv.Atoi(rawLevel)
-		if err != nil {
-			t.Fatalf("card %q: level %q is not a number", name, rawLevel)
-		}
+		// The pattern matches a single digit, so this cannot fail.
+		level, _ := strconv.Atoi(match[2])
 
 		arguments := argumentsPattern.FindStringSubmatch(body)
 		if arguments == nil {
@@ -97,7 +90,10 @@ func toolCards(t *testing.T) map[string]card {
 	return cards
 }
 
-// documentedNames reads the arguments fact with parenthesised groups removed.
+// documentedNames reads the arguments fact with parenthesised groups removed,
+// which is the page's convention: an argument is named bare, and the values it
+// accepts go in parentheses after it.
+//
 // Both narrowings are load-bearing. Reading the whole card would let a property
 // named after one of update_service's ten sections pass on that card's section
 // table without being documented as an argument; keeping parentheses would let
@@ -124,42 +120,23 @@ func backticked(text string) map[string]bool {
 }
 
 // schemaEnum returns the values a property accepts, or nil where it declares
-// none. mcp-go's Enum option writes a []string, but the schema is a
-// map[string]any that any option may have written to, so both shapes are read.
+// none. mcp-go's Enum option writes a []string; anything else is not an enum
+// this reads. Values nested under `items` are out of reach and unchecked.
 func schemaEnum(property any) []string {
 	fields, ok := property.(map[string]any)
 	if !ok {
 		return nil
 	}
 
-	switch values := fields["enum"].(type) {
-	case []string:
-		return values
-	case []any:
-		var out []string
+	values, _ := fields["enum"].([]string)
 
-		for _, value := range values {
-			if text, ok := value.(string); ok {
-				out = append(out, text)
-			}
-		}
-
-		return out
-	}
-
-	return nil
-}
-
-func catalogServer(t *testing.T) *Server {
-	t.Helper()
-
-	return newResourceTestServer(t, cache.New(nil))
+	return values
 }
 
 // Rules 1 and 2: the page documents every tool, documents no tool that does not
 // exist, and gives each the level that actually gates it.
 func TestEveryToolHasACardAtItsTier(t *testing.T) {
-	srv := catalogServer(t)
+	srv := newTestServer(t)
 	cards := toolCards(t)
 	catalog := srv.toolCatalog()
 
@@ -186,9 +163,13 @@ func TestEveryToolHasACardAtItsTier(t *testing.T) {
 	}
 }
 
-// Rule 3: every argument a tool accepts is named in its card's arguments fact.
+// Rule 3: a card's arguments fact names every argument its tool accepts, and
+// names nothing else. The second direction is what keeps the first honest. It
+// costs no false positives — a fact naming a value bare would be claiming that
+// value is an argument — and it catches the reflow that moves a value out of
+// its parentheses, which would otherwise quietly widen what counts as named.
 func TestEveryToolArgumentIsDocumented(t *testing.T) {
-	srv := catalogServer(t)
+	srv := newTestServer(t)
 	cards := toolCards(t)
 
 	for _, def := range srv.toolCatalog() {
@@ -207,6 +188,16 @@ func TestEveryToolArgumentIsDocumented(t *testing.T) {
 				)
 			}
 		}
+
+		for name := range named {
+			if _, ok := def.tool.InputSchema.Properties[name]; !ok {
+				t.Errorf(
+					"card %q names %q as an argument, which the tool does not accept "+
+						"(the values an argument accepts belong in parentheses)",
+					def.tool.Name, name,
+				)
+			}
+		}
 	}
 }
 
@@ -215,7 +206,7 @@ func TestEveryToolArgumentIsDocumented(t *testing.T) {
 // for: its enum is derived from serviceSectionWriters' keys, so an eleventh
 // section is a one-key Go change that invalidates a ten-row table on the page.
 func TestEverySchemaEnumValueIsDocumented(t *testing.T) {
-	srv := catalogServer(t)
+	srv := newTestServer(t)
 	cards := toolCards(t)
 
 	for _, def := range srv.toolCatalog() {
@@ -239,52 +230,84 @@ func TestEverySchemaEnumValueIsDocumented(t *testing.T) {
 	}
 }
 
-// markdownTable returns the rows of the first table whose header contains every
-// given heading, with the header and the separator dropped.
-func markdownTable(t *testing.T, headings ...string) [][]string {
+// markdownTable returns the rows of the first table whose header holds every
+// given heading, each row keyed by heading. Keying by heading rather than by
+// position is what stops a column being inserted, or two being swapped, from
+// shifting every comparison into a failure that reads like drift.
+func markdownTable(t *testing.T, headings ...string) []map[string]string {
 	t.Helper()
 
-	var rows [][]string
+	lines := strings.Split(catalogDoc(t), "\n")
 
-	for line := range strings.SplitSeq(catalogDoc(t), "\n") {
+	for index, line := range lines {
+		if !isTableRow(line) {
+			continue
+		}
+
+		header := tableCells(line)
+		if !containsAll(header, headings) {
+			continue
+		}
+
+		// Markdown puts the separator immediately under the header, so the rows
+		// start two lines down.
+		rows := tableRows(header, lines[min(index+2, len(lines)):])
+		if len(rows) == 0 {
+			t.Fatalf("the table with headings %v in %s has no rows", headings, catalogPath)
+		}
+
+		return rows
+	}
+
+	t.Fatalf("no table with headings %v found in %s", headings, catalogPath)
+
+	return nil
+}
+
+// tableRows reads rows until the table ends at a blank line. A line that is not
+// a row and not blank continues the previous row's last cell: the page is
+// hand-wrapped, and its own section table wraps rows this way, so a reflow of
+// either table read here would otherwise truncate it — reporting every row past
+// the wrap as missing, which reads exactly like drift that is not there.
+func tableRows(header, lines []string) []map[string]string {
+	var rows []map[string]string
+
+	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		if !strings.HasPrefix(trimmed, "|") {
+		if trimmed == "" {
+			break
+		}
+
+		if !isTableRow(line) {
 			if len(rows) > 0 {
-				break // the table ended
+				last := header[len(header)-1]
+				rows[len(rows)-1][last] = strings.TrimSpace(rows[len(rows)-1][last] + " " + trimmed)
 			}
 
 			continue
 		}
 
-		cells := tableCells(trimmed)
+		row := map[string]string{}
 
-		if len(rows) == 0 {
-			if !containsAll(cells, headings) {
-				continue
+		for column, cell := range tableCells(line) {
+			if column < len(header) {
+				row[header[column]] = cell
 			}
-
-			rows = append(rows, cells)
-
-			continue
 		}
 
-		if strings.Trim(strings.Join(cells, ""), "-: ") == "" {
-			continue // the separator row
-		}
-
-		rows = append(rows, cells)
+		rows = append(rows, row)
 	}
 
-	if len(rows) < 2 {
-		t.Fatalf("no table with headings %v found in %s", headings, catalogPath)
-	}
+	return rows
+}
 
-	return rows[1:]
+func isTableRow(line string) bool {
+	return strings.HasPrefix(strings.TrimSpace(line), "|")
 }
 
 func tableCells(line string) []string {
-	parts := strings.Split(strings.Trim(line, "|"), "|")
+	parts := strings.Split(strings.Trim(strings.TrimSpace(line), "|"), "|")
 	cells := make([]string, 0, len(parts))
 
 	for _, part := range parts {
@@ -309,75 +332,15 @@ func bare(cell string) string {
 	return strings.Trim(cell, "`")
 }
 
-// Rule 5a: the prompts table's mechanical columns — the tier promptTier derives
-// from the tools a prompt drives, its argument, and the resource types it needs
-// read access to — match the catalog. Only the last column is prose.
-func TestPromptsTableMatchesTheCatalog(t *testing.T) {
-	srv := catalogServer(t)
-	tiers := srv.toolTiers()
-	rows := markdownTable(t, "Prompt", "Level", "Argument", "Reads")
-
-	documented := map[string][]string{}
-
-	for _, row := range rows {
-		documented[bare(row[0])] = row
-	}
-
-	for _, def := range promptCatalog() {
-		row, ok := documented[def.prompt.Name]
-		if !ok {
-			t.Errorf("prompt %q has no row in the prompts table", def.prompt.Name)
-
-			continue
-		}
-
-		if want := strconv.Itoa(int(promptTier(def, tiers))); row[1] != want {
-			t.Errorf(
-				"prompt %q: table says level %s, catalog derives %s",
-				def.prompt.Name,
-				row[1],
-				want,
-			)
-		}
-
-		var arguments []string
-
-		for _, argument := range def.prompt.Arguments {
-			arguments = append(arguments, argument.Name)
-		}
-
-		if got := namedInCell(row[2]); !slices.Equal(got, arguments) {
-			t.Errorf(
-				"prompt %q: table lists arguments %v, catalog declares %v",
-				def.prompt.Name,
-				got,
-				arguments,
-			)
-		}
-
-		if got := namedInCell(row[3]); !slices.Equal(got, def.reads) {
-			t.Errorf(
-				"prompt %q: table lists reads %v, catalog declares %v",
-				def.prompt.Name,
-				got,
-				def.reads,
-			)
-		}
-	}
-
-	for name := range documented {
-		if !slices.ContainsFunc(
-			promptCatalog(),
-			func(def promptDef) bool { return def.prompt.Name == name },
-		) {
-			t.Errorf("prompts table lists %q, which the catalog does not register", name)
-		}
-	}
+func sorted(names []string) []string {
+	return slices.Sorted(slices.Values(names))
 }
 
-// namedInCell reads a comma-separated table cell, treating "none" as empty.
+// namedInCell reads a comma-separated table cell, treating "none" as empty. An
+// empty cell is left as one, so it fails against whatever the catalog declares
+// rather than passing as "nothing declared".
 func namedInCell(cell string) []string {
-	if cell == "none" || cell == "" {
+	if cell == "none" {
 		return nil
 	}
 
@@ -390,78 +353,109 @@ func namedInCell(cell string) []string {
 	return names
 }
 
-// Rule 5b: the apps table matches the widgets that exist. It reads the widget
-// directories rather than widgetCatalog, because the build discovers widgets by
-// directory and the catalog is only the presentation copy — a widget deleted
-// with its copy left behind would otherwise go unnoticed. It checks the catalog
-// for orphans in both directions for the same reason.
-func TestAppsTableMatchesTheWidgets(t *testing.T) {
-	built := widgetDirectories(t)
-	rows := markdownTable(t, "Resource", "Renders")
+// Rule 5a: the prompts table's mechanical columns — the tier promptTier derives
+// from the tools a prompt drives, its argument, and the resource types it needs
+// read access to — match the catalog. Only the last column is prose.
+func TestPromptsTableMatchesTheCatalog(t *testing.T) {
+	srv := newTestServer(t)
+	tiers := srv.toolTiers()
+	catalog := promptCatalog()
 
-	documented := map[string]bool{}
+	documented := map[string]map[string]string{}
 
-	for _, row := range rows {
-		documented[strings.TrimPrefix(bare(row[0]), "ui://cetacean/")] = true
+	for _, row := range markdownTable(t, "Prompt", "Level", "Argument", "Reads") {
+		documented[bare(row["Prompt"])] = row
 	}
 
-	for _, name := range built {
-		if !documented[name] {
-			t.Errorf("widget %q has no row in the apps table", name)
+	for _, def := range catalog {
+		row, ok := documented[def.prompt.Name]
+		if !ok {
+			t.Errorf("prompt %q has no row in the prompts table", def.prompt.Name)
+
+			continue
 		}
 
-		if _, ok := widgetCatalog[name]; !ok {
+		if want := strconv.Itoa(int(promptTier(def, tiers))); row["Level"] != want {
 			t.Errorf(
-				"widget %q has no widgetCatalog entry, so it would be served with its bare name",
-				name,
+				"prompt %q: table says level %s, catalog derives %s",
+				def.prompt.Name, row["Level"], want,
+			)
+		}
+
+		var arguments []string
+
+		for _, argument := range def.prompt.Arguments {
+			arguments = append(arguments, argument.Name)
+		}
+
+		// Sorted on both sides: neither the cell's comma order nor the slice's
+		// carries meaning, so alphabetising either is not drift.
+		if got, want := sorted(namedInCell(row["Argument"])), sorted(arguments); !slices.Equal(
+			got,
+			want,
+		) {
+			t.Errorf(
+				"prompt %q: table lists arguments %v, catalog declares %v",
+				def.prompt.Name, got, want,
+			)
+		}
+
+		if got, want := sorted(namedInCell(row["Reads"])), sorted(def.reads); !slices.Equal(
+			got,
+			want,
+		) {
+			t.Errorf(
+				"prompt %q: table lists reads %v, catalog declares %v",
+				def.prompt.Name, got, want,
 			)
 		}
 	}
 
 	for name := range documented {
-		if !slices.Contains(built, name) {
-			t.Errorf("apps table lists %q, which is not a widget under %s", name, widgetsPath)
-		}
-	}
-
-	for name := range widgetCatalog {
-		if !slices.Contains(built, name) {
-			t.Errorf(
-				"widgetCatalog describes %q, which is not a widget under %s",
-				name,
-				widgetsPath,
-			)
+		if !slices.ContainsFunc(
+			catalog,
+			func(def promptDef) bool { return def.prompt.Name == name },
+		) {
+			t.Errorf("prompts table lists %q, which the catalog does not register", name)
 		}
 	}
 }
 
-func widgetDirectories(t *testing.T) []string {
-	t.Helper()
-
-	entries, err := os.ReadDir(widgetsPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", widgetsPath, err)
+// Rule 5b: the apps table matches the widgets that exist, in both directions.
+// It reads uiResources rather than the widget source directories, because that
+// is the registry the server serves from — a widget whose source is present but
+// whose bundle did not emit is not one a host can render, and the page
+// documents what a host can reach. ui_test.go's TestMain points that at
+// frontend/dist-widgets for the whole package.
+func TestAppsTableMatchesTheWidgets(t *testing.T) {
+	served := uiResources()
+	if len(served) == 0 {
+		t.Fatal("no widget resources: did `npm run build:widgets` run before `go test`?")
 	}
 
-	var names []string
+	documented := map[string]bool{}
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			names = append(names, filepath.Base(entry.Name()))
+	for _, row := range markdownTable(t, "Resource", "Renders") {
+		documented[strings.TrimPrefix(bare(row["Resource"]), "ui://cetacean/")] = true
+	}
+
+	for _, resource := range served {
+		if !documented[resource.Name] {
+			t.Errorf("widget %q has no row in the apps table", resource.Name)
 		}
 	}
 
-	if len(names) == 0 {
-		t.Fatalf("no widget directories under %s", widgetsPath)
+	for name := range documented {
+		if !slices.ContainsFunc(served, func(r uiResource) bool { return r.Name == name }) {
+			t.Errorf("apps table lists %q, which the server does not serve", name)
+		}
 	}
-
-	return names
 }
 
 // Rule 6: the intro's counts. Four numbers in one sentence that no reader of a
 // Go change would think to revisit.
 func TestCatalogCountsAreCurrent(t *testing.T) {
-	srv := catalogServer(t)
+	srv := newTestServer(t)
 
 	match := countsPattern.FindStringSubmatch(catalogDoc(t))
 	if match == nil {
@@ -476,7 +470,7 @@ func TestCatalogCountsAreCurrent(t *testing.T) {
 		{"resources", match[1], len(staticResources) + len(resourceTemplates)},
 		{"tools", match[2], len(srv.toolCatalog())},
 		{"prompts", match[3], len(promptCatalog())},
-		{"widgets", match[4], len(widgetDirectories(t))},
+		{"widgets", match[4], len(uiResources())},
 	} {
 		if count.documented != strconv.Itoa(count.actual) {
 			t.Errorf(
