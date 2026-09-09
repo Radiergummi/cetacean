@@ -152,7 +152,18 @@ export function useMetricsSeries({
     };
   }, [query, range, from, to, title, color, key, publish]);
 
+  // Holds the canceller of a fetch started outside the effect below — the tab
+  // coming back, or the refresh button. That effect cancels only the fetch it
+  // started itself, so one started elsewhere has to be cancelled here:
+  // otherwise a fetch still outstanding when the range changes publishes the
+  // previous range's series and sets `loadedKey` back, which drops `live` and
+  // tears the stream down until the current fetch lands.
+  const pendingFetchCancel = useRef<(() => void) | null>(null);
+
   useEffect(() => {
+    pendingFetchCancel.current?.();
+    pendingFetchCancel.current = null;
+
     // An HTTP request is the external system this effect exists to synchronise
     // with, and announcing that it started is the loading state.
     // oxlint-disable-next-line react/set-state-in-effect -- nothing to derive during render
@@ -171,6 +182,12 @@ export function useMetricsSeries({
   const [streamKey, setStreamKey] = useState(0);
   const fetchDataRef = useRef(fetchData);
   fetchDataRef.current = fetchData;
+
+  /** Starts a fetch outside the effect above, superseding any it started. */
+  const startFetch = useCallback(() => {
+    pendingFetchCancel.current?.();
+    pendingFetchCancel.current = fetchDataRef.current();
+  }, []);
 
   const live = loadedKey === key && from == null && to == null && streaming;
 
@@ -229,7 +246,7 @@ export function useMetricsSeries({
 
       // Refetch rather than resume: the window moved on while the tab was
       // hidden, and the stream's own initial frame replaces it on connect.
-      fetchDataRef.current();
+      startFetch();
       setStreamKey((previous) => previous + 1);
     };
 
@@ -243,11 +260,9 @@ export function useMetricsSeries({
     // connection this effect closed. Dropping it leaves the tab with no stream
     // until the range changes.
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-run trigger
-  }, [live, query, range, streamKey, publish]);
+  }, [live, query, range, streamKey, publish, startFetch]);
 
-  const refetch = useCallback(() => {
-    fetchDataRef.current();
-  }, []);
+  const refetch = startFetch;
 
   return { state, errorMessage, data, refetch };
 }
