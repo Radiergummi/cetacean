@@ -320,6 +320,7 @@ function VirtualLogBody({
   const [, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  // oxlint-disable-next-line react/incompatible-library -- `useVirtualizer` returns functions React Compiler cannot memoize, so it skips memoizing this component. That is the library's shape, not a fixable call site.
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => containerRef.current,

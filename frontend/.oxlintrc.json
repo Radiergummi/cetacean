@@ -34,11 +34,19 @@
     // writes it found are fixed (see hooks/useLatestRef.ts), and the few
     // remaining sites carry file-level `oxlint-disable` comments explaining
     // why they are intentional. New ones should not slip in.
-    "react/set-state-in-effect": "warn",
+    //
+    // `set-state-in-effect` and `incompatible-library` are worked down and so
+    // are held at "error" now, the same way: the two effects that synced state
+    // are gone (LogToolbar seeds from the event that opens its panel,
+    // NodeDetail derives its labels), and the two `useVirtualizer` call sites
+    // carry a disable comment, since that one is the library's shape rather
+    // than a fixable site. The remaining three report nothing today but are
+    // left as warnings, having never been audited.
+    "react/set-state-in-effect": "error",
     "react/static-components": "warn",
     "react/purity": "warn",
     "react/preserve-manual-memoization": "warn",
-    "react/incompatible-library": "warn",
+    "react/incompatible-library": "error",
     "react-perf/jsx-no-new-object-as-prop": "off",
     "react-perf/jsx-no-new-array-as-prop": "off",
     "react-perf/jsx-no-new-function-as-prop": "off",
