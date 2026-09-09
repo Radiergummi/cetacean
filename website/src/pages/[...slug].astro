@@ -13,6 +13,12 @@ export async function getStaticPaths() {
 
 const { entry } = Astro.props;
 const { Content, headings } = await render(entry);
+
+// The collection is loaded from `../docs`, so the loader reports paths
+// relative to this project; the edit link and the modified date both want
+// them relative to the repository root. The extension is the loader's to
+// tell us — `configuration` is an `.mdx` file and the rest are `.md`.
+const sourcePath = entry.filePath?.replace(/^\.\.\//, "");
 ---
 <DocsLayout
   title={entry.data.title}
@@ -20,6 +26,7 @@ const { Content, headings } = await render(entry);
   slug={entry.id}
   headings={headings}
   markdownUrl={`/${entry.id}.md`}
+  sourcePath={sourcePath}
   category={entry.data.category}
   tags={entry.data.tags}
 >
