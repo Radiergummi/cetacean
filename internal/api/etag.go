@@ -160,3 +160,48 @@ func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastMod
 	w.Write(body)         //nolint:errcheck
 	w.Write([]byte{'\n'}) //nolint:errcheck
 }
+
+// knownCodingSuffixes are the content-coding markers writeCachedJSON appends
+// to an ETag. They are stripped before a precondition comparison: the suffix
+// distinguishes representations for caching (RFC 9110 §8.8.3), but a
+// precondition is an assertion about resource state, and a client's validator
+// may have been obtained under different content negotiation than the request
+// carrying it back.
+var knownCodingSuffixes = []string{"-zstd", "-gzip"}
+
+func stripCodingSuffix(opaqueTag string) string {
+	for _, suffix := range knownCodingSuffixes {
+		if trimmed, found := strings.CutSuffix(opaqueTag, suffix); found {
+			return trimmed
+		}
+	}
+
+	return opaqueTag
+}
+
+// etagMatchStrong reports whether an If-Match header matches etag using strong
+// comparison, per RFC 9110 §13.1.1. Unlike etagMatch — which serves
+// If-None-Match and therefore compares weakly per §13.1.2 — a weak validator
+// never matches here.
+func etagMatchStrong(header, etag string) bool {
+	if header == "" {
+		return false
+	}
+	if strings.TrimSpace(header) == "*" {
+		return true
+	}
+
+	want := stripCodingSuffix(strings.Trim(etag, `"`))
+
+	for candidate := range strings.SplitSeq(header, ",") {
+		candidate = strings.TrimSpace(candidate)
+		if strings.HasPrefix(candidate, "W/") {
+			continue
+		}
+		if stripCodingSuffix(strings.Trim(candidate, `"`)) == want {
+			return true
+		}
+	}
+
+	return false
+}

@@ -277,3 +277,44 @@ func TestIfNoneMatchMismatchOverridesIfModifiedSince(t *testing.T) {
 		t.Fatalf("expected 200 (ETag mismatch overrides), got %d", w.Code)
 	}
 }
+
+func TestEtagMatchStrongRejectsWeakValidators(t *testing.T) {
+	const etag = `"abc123"`
+
+	cases := []struct {
+		name   string
+		header string
+		want   bool
+	}{
+		{"exact match", `"abc123"`, true},
+		{"one of several", `"other", "abc123"`, true},
+		{"wildcard", "*", true},
+		{"no match", `"different"`, false},
+		{"empty", "", false},
+		// RFC 9110 §13.1.1: If-Match uses strong comparison, so a weak
+		// validator never matches. etagMatch (used for If-None-Match, §13.1.2)
+		// strips W/ and would wrongly accept this.
+		{"weak validator", `W/"abc123"`, false},
+		{"weak among strong", `"nope", W/"abc123"`, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := etagMatchStrong(tc.header, etag); got != tc.want {
+				t.Errorf("etagMatchStrong(%q, %q) = %v, want %v",
+					tc.header, etag, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEtagMatchStrongIgnoresCodingSuffix(t *testing.T) {
+	// A client that read with Accept-Encoding: zstd holds "abc123-zstd" and
+	// may send it as If-Match on a request negotiated as identity.
+	if !etagMatchStrong(`"abc123-zstd"`, `"abc123"`) {
+		t.Error("coding-suffixed validator did not match its base tag")
+	}
+	if !etagMatchStrong(`"abc123"`, `"abc123-gzip"`) {
+		t.Error("base validator did not match a coding-suffixed current tag")
+	}
+}

@@ -114,6 +114,13 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "This endpoint was deprecated and has since been removed.",
 		Suggestion:  "See the endpoint named in the detail, or GET /api for the current surface.",
 	},
+	"API013": {
+		Code:        "API013",
+		Title:       "Precondition Failed",
+		Status:      http.StatusPreconditionFailed,
+		Description: "The If-Match header did not match the current state of the resource.",
+		Suggestion:  "Re-read the resource, take the ETag from that response, and retry with it.",
+	},
 
 	// ── AUT: authentication ───────────────────────────────────────────
 	"AUT001": {Code: "AUT001", Title: "Not Authenticated", Status: http.StatusUnauthorized,
