@@ -1,22 +1,21 @@
 ---
+import Heading from "@/components/Heading.astro";
+import SchemaDefinition from "@/components/SchemaDefinition.astro";
 import DocsLayout from "../../layouts/DocsLayout.astro";
 import Badge from "../../components/Badge.astro";
-import ReferenceEntry from "../../components/ReferenceEntry.astro";
 import {properties, rfc9457Properties, types} from "@/lib/schema.ts";
 
 const allProperties = [
     ...properties,
     ...rfc9457Properties,
 ].sort((a, b) => a.name.localeCompare(b.name));
+
 const headings = [
     {depth: 2, slug: "types", text: "Types"},
     ...types.map(({name}) => ({depth: 3, slug: name, text: name})),
     {depth: 2, slug: "properties", text: "Properties"},
     ...allProperties.map(({name}) => ({depth: 3, slug: name, text: name})),
 ];
-
-const metaClass =
-    "grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-sm text-muted-foreground code-plain";
 ---
 <DocsLayout
     title="Schema Reference"
@@ -31,71 +30,96 @@ const metaClass =
         at <a href="/api/schema.jsonld"><code>/api/schema.jsonld</code></a>.
     </p>
 
-    <h2 id="types">Types</h2>
-    <p>Each API response includes an <code>@type</code> value identifying the resource kind.</p>
+    <section>
+        <header>
+            <Heading level={2} id="types" anchor>Types</Heading>
+            <p>Each API response includes an <code>@type</code> value identifying the resource kind.</p>
+        </header>
 
-    {types.map(({description, endpoint, name, properties: typeProperties}) => (
-        <ReferenceEntry id={name} class="my-6">
-            <code slot="heading">{name}</code>
-            <p>{description}</p>
-            <div slot="facts" class={metaClass}>
-                <span class="font-medium">Endpoint</span>
-                <span><code>{endpoint}</code></span>
-                {typeProperties.length > 0 && (
-                    <>
-                        <span class="font-medium">Properties</span>
-                        <span>
-                            {typeProperties.map((property, index) => (
+        <ul class="flex flex-col gap-y-4 m-0">
+            {types.map(({description, endpoint, name, properties: typeProperties}) => (
+                <li class="contents">
+                    <SchemaDefinition name={name} description={description}>
+                        <Fragment slot="facts">
+                            <dt class="font-medium">Endpoint</dt>
+                            <dd><code>{endpoint}</code></dd>
+
+                            {typeProperties.length > 0 && (
                                 <>
-                                    {index > 0 && ", "}
-                                    <a href={`#${property}`}><code>{property}</code></a>
+                                    <dt class="font-medium">Properties</dt>
+                                    <dd>
+                                        <ul class="flex flex-wrap gap-x-1 gap-y-0.5 m-0">
+                                            {typeProperties.map((property, index) => (
+                                                <li class="contents">
+                                                    {index > 0 && ", "}
+                                                    <a href={`/api/schema#${property}`}><code>{property}</code></a>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </dd>
                                 </>
-                            ))}
-                        </span>
-                    </>
-                )}
-            </div>
-        </ReferenceEntry>
-    ))}
+                            )}
+                        </Fragment>
+                    </SchemaDefinition>
+                </li>
+            ))}
+        </ul>
+    </section>
 
-    <h2 id="properties">Properties</h2>
-    <p>
-        Properties are mapped to IRIs via the <code>@context</code>. The <code>urn:cetacean:</code> namespace
-        is the default vocabulary; RFC 9457 problem detail fields use <code>urn:ietf:rfc:9457#</code>.
-    </p>
+    <section>
+        <header>
+            <Heading level={2} id="properties" anchor>Properties</Heading>
+            <p>
+                Properties are mapped to IRIs via the <code>@context</code>. The <code>urn:cetacean:</code> namespace
+                is the default vocabulary; <a href="https://www.rfc-editor.org/info/rfc9457/" rel="noopener nofollow">RFC
+                9457</a> problem detail fields use <code>urn:ietf:rfc:9457#</code>.
+            </p>
+        </header>
 
-    {allProperties.map(({
-        container,
-        description,
-        expectedType,
-        iri,
-        name,
-        usedOn,
-    }) => (
-        <ReferenceEntry id={name} class="my-6">
-            <Fragment slot="heading">
-                <code>{name}</code>
-                {container &&
-                 <Badge tone="accent">{container}</Badge>}
-            </Fragment>
+        <ul class="flex flex-col gap-y-4 m-0">
+            {allProperties.map(({
+                container,
+                description,
+                expectedType,
+                iri,
+                name,
+                usedOn,
+            }) => (
+                <li class="contents">
+                    <SchemaDefinition
+                        name={name}
+                        container={container}
+                    >
 
-            <p set:html={description.replace(/`([^`]+)`/g, "<code>$1</code>")} />
+                        <p slot="description" set:html={description.replace(/`([^`]+)`/g, "<code>$1</code>")} />
 
-            <div slot="facts" class={metaClass}>
-                <span class="font-medium">IRI</span>
-                <span><code>{iri}</code></span>
-                <span class="font-medium">Type</span>
-                <span><code>{expectedType}</code></span>
-                <span class="font-medium">Used on</span>
-                <span>
-                    {usedOn.map((property, index) => (
-                        <>
-                            {index > 0 && ", "}
-                            <a href={`#${property}`}>{property}</a>
-                        </>
-                    ))}
-                </span>
-            </div>
-        </ReferenceEntry>
-    ))}
+                        <Fragment slot="facts">
+                            <dt class="font-medium">IRI</dt>
+                            <dd><code>{iri}</code></dd>
+
+                            <dt class="font-medium">Type</dt>
+                            <dd><code>{expectedType}</code></dd>
+
+                            <dt class="font-medium">Used on</dt>
+                            {usedOn.length > 0 && (
+                                <>
+                                    <dd>
+                                        <ul class="flex flex-wrap gap-x-1 gap-y-0.5 m-0">
+                                            {usedOn.map((property, index) => (
+                                                <li class="contents">
+                                                    {index > 0 && ", "}
+                                                    <a href={`/api/schema#${property}`}>{property}</a>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </dd>
+                                </>
+                            )}
+                        </Fragment>
+                    </SchemaDefinition>
+                </li>
+            ))}
+
+        </ul>
+    </section>
 </DocsLayout>

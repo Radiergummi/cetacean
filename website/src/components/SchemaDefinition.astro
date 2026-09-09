@@ -1,0 +1,33 @@
+---
+import Badge from "@/components/Badge.astro";
+import ReferenceEntry from "@/components/ReferenceEntry.astro";
+import ReferenceFacts from "@/components/ReferenceFacts.astro";
+
+interface Props {
+    name: string;
+    description?: string;
+    container?: string;
+}
+
+const {name, description, container} = Astro.props;
+---
+<ReferenceEntry
+    id={name}
+    class="group mt-2 rounded-lg border px-4 py-3.5 text-sm target:border-active target:ring-1 target:ring-active"
+    anchor
+>
+    <Fragment slot="heading">
+        <code>{name}</code>
+        {container &&
+         <Badge tone="accent">{container}</Badge>}
+    </Fragment>
+
+    <slot name="description">
+        {description &&
+         <p>{description}</p>}
+    </slot>
+
+    <ReferenceFacts slot="facts">
+        <slot name="facts" />
+    </ReferenceFacts>
+</ReferenceEntry>
