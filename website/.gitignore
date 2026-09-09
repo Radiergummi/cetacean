@@ -9,3 +9,6 @@ public/demo/404.html
 public/openapi.yaml
 public/scalar.js
 public/dist/
+
+# Generated at build time (the sync-assets script)
+src/data/errors.json

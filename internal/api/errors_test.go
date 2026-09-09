@@ -102,3 +102,60 @@ func TestWriteErrorCode_UnknownCode(t *testing.T) {
 		t.Errorf("status=%d, want 500", w.Code)
 	}
 }
+
+func TestErrorDomainsMatchTheRegistry(t *testing.T) {
+	labelled := make(map[string]bool, len(ErrorDomains))
+
+	for _, domain := range ErrorDomains {
+		if labelled[domain.Prefix] {
+			t.Errorf("ErrorDomains lists %q twice", domain.Prefix)
+		}
+		if domain.Label == "" {
+			t.Errorf("domain %q has no label", domain.Prefix)
+		}
+
+		labelled[domain.Prefix] = true
+	}
+
+	used := make(map[string]bool, len(ErrorDomains))
+
+	for code := range errorRegistry {
+		if len(code) != 6 {
+			t.Errorf("code %q is not three letters and three digits", code)
+			continue
+		}
+
+		prefix := code[:3]
+		used[prefix] = true
+
+		if !labelled[prefix] {
+			t.Errorf("code %s uses prefix %q, which ErrorDomains does not name", code, prefix)
+		}
+	}
+
+	for _, domain := range ErrorDomains {
+		if !used[domain.Prefix] {
+			t.Errorf("ErrorDomains names %q, which no error code uses", domain.Prefix)
+		}
+	}
+}
+
+func TestErrorDefsAreCompleteAndSorted(t *testing.T) {
+	defs := ErrorDefs()
+
+	if len(defs) != len(errorRegistry) {
+		t.Fatalf("ErrorDefs returned %d entries, want %d", len(defs), len(errorRegistry))
+	}
+
+	for i, def := range defs {
+		if def.Code == "" || def.Title == "" || def.Description == "" || def.Suggestion == "" {
+			t.Errorf("entry %d (%q) has an empty field: %+v", i, def.Code, def)
+		}
+		if def.Status < 400 || def.Status > 599 {
+			t.Errorf("%s has status %d, want a 4xx or 5xx", def.Code, def.Status)
+		}
+		if i > 0 && defs[i-1].Code >= def.Code {
+			t.Errorf("ErrorDefs is not sorted: %q precedes %q", defs[i-1].Code, def.Code)
+		}
+	}
+}

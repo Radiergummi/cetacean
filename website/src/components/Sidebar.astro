@@ -8,13 +8,27 @@ interface Props {
 const { currentSlug } = Astro.props;
 ---
 
-<aside class="hidden md:block w-60 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto py-8 pl-6 lg:pl-8 pr-6" aria-label="Documentation sidebar">
+<aside class="hidden md:block w-60 shrink-0 rail py-8 pl-6 lg:pl-8 pr-6" aria-label="Documentation sidebar">
   <SidebarNav currentSlug={currentSlug} />
 </aside>
 
-<div id="mobile-sidebar" class="mobile-sidebar-overlay fixed inset-0 z-40 pointer-events-none md:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu" aria-hidden="true">
-  <div id="mobile-sidebar-backdrop" class="mobile-sidebar-backdrop absolute inset-0" aria-hidden="true"></div>
-  <aside class="mobile-sidebar-panel absolute right-0 top-0 w-72 h-full bg-background border-l border-border overflow-y-auto pt-20 pb-8 px-6 shadow-xl">
+<div
+  id="mobile-sidebar"
+  class="group fixed inset-0 z-40 pointer-events-none drawer-open:pointer-events-auto md:hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Navigation menu"
+  aria-hidden="true"
+>
+  <div
+    id="mobile-sidebar-backdrop"
+    class="absolute inset-0 bg-black/0 backdrop-blur-none transition-backdrop duration-200 ease-out group-drawer-open:bg-black/40 group-drawer-open:backdrop-blur-xs"
+    aria-hidden="true"
+  ></div>
+  <aside
+    class="absolute right-0 top-0 h-full w-72 translate-x-full overflow-y-auto border-l bg-background px-6 pt-20 pb-8 shadow-xl transition-transform duration-250 ease-out group-drawer-open:translate-x-0"
+    data-panel
+  >
     <SidebarNav currentSlug={currentSlug} />
   </aside>
 </div>
@@ -25,9 +39,9 @@ const { currentSlug } = Astro.props;
 
     const getSidebar = () => document.getElementById("mobile-sidebar");
     const getToggle = () => document.getElementById("mobile-menu-toggle");
+    const isOpen = (sidebar) => sidebar.getAttribute("aria-hidden") === "false";
 
     const openSidebar = (sidebar) => {
-      sidebar.classList.add("open");
       sidebar.setAttribute("aria-hidden", "false");
       document.body.style.overflow = "hidden";
       getToggle()?.setAttribute("aria-expanded", "true");
@@ -36,7 +50,6 @@ const { currentSlug } = Astro.props;
     };
 
     const closeSidebar = (sidebar) => {
-      sidebar.classList.remove("open");
       sidebar.setAttribute("aria-hidden", "true");
       document.body.style.overflow = "";
       const toggle = getToggle();
@@ -51,7 +64,7 @@ const { currentSlug } = Astro.props;
       if (!sidebar) return;
 
       if (e.target.closest("#mobile-menu-toggle")) {
-        if (sidebar.classList.contains("open")) {
+        if (isOpen(sidebar)) {
           closeSidebar(sidebar);
         } else {
           openSidebar(sidebar);
@@ -64,11 +77,11 @@ const { currentSlug } = Astro.props;
 
     document.addEventListener("keydown", (e) => {
       const sidebar = getSidebar();
-      if (!sidebar || !sidebar.classList.contains("open")) return;
+      if (!sidebar || !isOpen(sidebar)) return;
       if (e.key === "Escape") {
         closeSidebar(sidebar);
       } else if (e.key === "Tab") {
-        const panel = sidebar.querySelector(".mobile-sidebar-panel");
+        const panel = sidebar.querySelector("[data-panel]");
         const focusable = panel.querySelectorAll('input, button, a[href], [tabindex]:not([tabindex="-1"])');
         if (focusable.length) {
           const first = focusable[0];
@@ -87,7 +100,6 @@ const { currentSlug } = Astro.props;
     document.addEventListener("astro:page-load", () => {
       const sidebar = getSidebar();
       if (sidebar) {
-        sidebar.classList.remove("open");
         sidebar.setAttribute("aria-hidden", "true");
       }
       document.body.style.overflow = "";

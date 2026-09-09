@@ -114,6 +114,21 @@ check there first when a grant seems to have no effect.
 pass. Operations level is a global ceiling on which categories of write the server exposes at all; grants decide
 which resources a given identity may write. A common pairing is `server.operations_level = 1` with per-team grants.
 
+```mermaid
+flowchart LR
+    accTitle: How a write request is authorized
+    accDescr: A write passes the operations level check first, then the per-resource grant check. Failing the first answers 403 OPS001, failing the second answers 403 ACL002.
+
+    request["Write request"] --> level{"Operations level allows<br/>this category of write?"}
+    level -->|no| ops["403 OPS001"]
+    level -->|yes| grant{"A grant gives write<br/>on this resource?"}
+    grant -->|no| acl["403 ACL002"]
+    grant -->|yes| handler["Handler runs"]
+
+    classDef accent fill:#2563eb,stroke:#2563eb,color:#ffffff
+    class handler accent
+```
+
 | Operations level | Grant           | Result                |
 | ---------------- | --------------- | --------------------- |
 | Allows           | Grants `write`  | Allowed               |
@@ -124,9 +139,9 @@ Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457
 
 | Code     | Status | Meaning                                                                  |
 | -------- | ------ | ------------------------------------------------------------------------ |
-| `ACL001` | 403    | Read denied on a detail endpoint, or the identity holds no grants at all |
-| `ACL002` | 403    | Write denied on this resource                                            |
-| `OPS001` | 403    | The operation needs a higher operations level than the server runs at    |
+| [`ACL001`](api/errors#ACL001) | 403    | Read denied on a detail endpoint, or the identity holds no grants at all |
+| [`ACL002`](api/errors#ACL002) | 403    | Write denied on this resource                                            |
+| [`OPS001`](api/errors#OPS001) | 403    | The operation needs a higher operations level than the server runs at    |
 
 Read responses carry an `Allow` header naming the write methods available on that resource, which is how the
 dashboard knows which action buttons to show you.

@@ -9,6 +9,9 @@ on:
       - "frontend/**"
       - "CHANGELOG.md"
       - "api/openapi.yaml"
+      # The error reference is generated from these; see website/package.json.
+      - "internal/api/errors.go"
+      - "scripts/dump-errors/**"
       # Served at /dist/ by the website; see website/package.json sync-assets.
       - "compose*.yaml"
       - "prometheus.yml"
@@ -34,6 +37,12 @@ jobs:
         with:
           node-version: 25
 
+      # The website build generates its error reference from internal/api; see
+      # website/package.json's sync-assets script.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
       - name: Build demo SPA
         working-directory: frontend
         run: |
@@ -45,6 +54,9 @@ jobs:
         working-directory: website
         run: |
           npm ci
+          # Diagrams in docs/ are rendered to SVG at build time by a headless
+          # browser; without it every mermaid block fails the build.
+          npx playwright install --with-deps chromium
           npm run build
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

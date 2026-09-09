@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - `server.public_url` sets the canonical external URL once, supplying the OAuth issuer for the MCP server and the OIDC redirect URL instead of configuring each separately
+- The documentation site now carries an error reference: every code the API can return, with its HTTP status, what it means and how to resolve it, grouped by domain. A `type` URI out of an error response — `/api/errors/SVC001` — previously led somewhere only a running Cetacean could answer. The page is generated from the server's own catalog at build time, so it cannot fall behind it. Links into the references also now show what they point at, so a setting, an error code, a schema type and an MCP tool are distinguishable before you follow them
 
 ### Changed
+- The MCP tool reference now gives every tool its own entry — what it does, its arguments, and the detail that applies to it — instead of a table per operations level followed by paragraphs describing tools further down the page. Each tool can also be linked to directly
 - Deploying Cetacean as a stack no longer requires creating an overlay network first. `compose.yaml` now stands on its own — `docker stack deploy -c compose.yaml cetacean` and nothing else. Connecting it to the bundled Prometheus is a second file, `compose.prometheus.yaml`, layered on top: `docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean`. That replaces passing `CETACEAN_PROMETHEUS_URL` through the shell on every deploy, where forgetting it once silently disconnected the charts
 
 ### Fixed

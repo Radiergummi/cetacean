@@ -8,6 +8,9 @@ interface Props {
 }
 
 const {title, description} = Astro.props;
+
+const secondaryButtonClass =
+    "inline-flex items-center rounded-lg border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors";
 ---
 <section class="flex flex-col items-center justify-center py-24 px-8 gap-12 text-center" data-pagefind-ignore>
     <header>
@@ -45,21 +48,18 @@ const {title, description} = Astro.props;
     <footer class="flex gap-3">
         <a
             href="/demo"
-            class="inline-flex items-center rounded-lg bg-foreground px-5 py-2.5 text-sm font-medium text-background hover:opacity-90 transition-opacity"
+            class="inline-flex items-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
             Try Demo
         </a>
-        <a
-            href="/getting-started"
-            class="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
-        >
+        <a href="/getting-started" class={secondaryButtonClass}>
             Get Started
         </a>
         <a
             href={repoUrl}
             target="_blank"
             rel="noopener"
-            class="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+            class={secondaryButtonClass}
             aria-label="GitHub (opens in new tab)"
         >
             GitHub

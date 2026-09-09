@@ -16,27 +16,42 @@ type ErrorDef struct {
 	Suggestion  string `json:"suggestion"`
 }
 
-// Error codes by domain prefix:
+// ErrorDomain names the domain a three-letter code prefix belongs to.
+type ErrorDomain struct {
+	Prefix string `json:"prefix"`
+	Label  string `json:"label"`
+}
+
+// ErrorDomains names every prefix used by errorRegistry, in the order a
+// reference presents them: protocol first, then identity, then the
+// cross-cutting subsystems, then one entry per resource type. That is not the
+// order the prefixes sort in, which is why this is a slice and not a map.
 //
-//	API — API-level / protocol errors
-//	AUT — authentication
-//	OPS — operations level
-//	FLT — filter expressions
-//	SEA — search
-//	MTR — metrics / Prometheus
-//	LOG — log streaming
-//	SSE — SSE streaming
-//	ENG — Docker Engine level
-//	SWM — swarm operations
-//	PLG — plugin operations
-//	NOD — node operations
-//	SVC — service operations
-//	TSK — task operations
-//	STK — stack operations
-//	VOL — volume operations
-//	NET — network operations
-//	CFG — config operations
-//	SEC — secret operations
+// It replaced a comment listing the same prefixes, which had already lost ACL.
+// TestErrorDomainsMatchTheRegistry now fails on that drift in both directions.
+var ErrorDomains = []ErrorDomain{
+	{Prefix: "API", Label: "Protocol and content negotiation"},
+	{Prefix: "AUT", Label: "Authentication"},
+	{Prefix: "ACL", Label: "Authorization"},
+	{Prefix: "OPS", Label: "Operations level"},
+	{Prefix: "FLT", Label: "Filter expressions"},
+	{Prefix: "SEA", Label: "Search"},
+	{Prefix: "MTR", Label: "Metrics and Prometheus"},
+	{Prefix: "LOG", Label: "Log streaming"},
+	{Prefix: "SSE", Label: "SSE connections"},
+	{Prefix: "ENG", Label: "Docker Engine"},
+	{Prefix: "SWM", Label: "Swarm operations"},
+	{Prefix: "PLG", Label: "Plugin operations"},
+	{Prefix: "NOD", Label: "Node operations"},
+	{Prefix: "SVC", Label: "Service operations"},
+	{Prefix: "TSK", Label: "Task operations"},
+	{Prefix: "STK", Label: "Stack operations"},
+	{Prefix: "VOL", Label: "Volume operations"},
+	{Prefix: "NET", Label: "Network operations"},
+	{Prefix: "CFG", Label: "Config operations"},
+	{Prefix: "SEC", Label: "Secret operations"},
+}
+
 var errorRegistry = map[string]ErrorDef{
 	// ── API: protocol / content negotiation ────────────────────────────
 	"API001": {Code: "API001", Title: "SSE Not Supported", Status: http.StatusNotAcceptable,
@@ -605,14 +620,23 @@ func sortedErrorCodes() []string {
 	return codes
 }
 
-// HandleErrorIndex serves the list of all well-known error codes.
-func HandleErrorIndex(w http.ResponseWriter, r *http.Request) {
+// ErrorDefs returns every well-known error, ordered by code. The HTTP handler
+// and scripts/dump-errors both read this, so the catalog the server answers
+// with and the one the website publishes cannot come from two different loops.
+func ErrorDefs() []ErrorDef {
 	codes := sortedErrorCodes()
-
 	defs := make([]ErrorDef, len(codes))
+
 	for i, code := range codes {
 		defs[i] = errorRegistry[code]
 	}
+
+	return defs
+}
+
+// HandleErrorIndex serves the list of all well-known error codes.
+func HandleErrorIndex(w http.ResponseWriter, r *http.Request) {
+	defs := ErrorDefs()
 
 	writeCachedJSON(w, r, NewCollectionResponse(r.Context(), defs, len(defs), len(defs), 0))
 }

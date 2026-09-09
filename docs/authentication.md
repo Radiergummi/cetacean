@@ -105,10 +105,50 @@ address. See [OIDC configuration][oidc] for all parameters.
 > With [`server.public_url`][server.public_url] set, `auth.oidc.redirect_url` is derived as
 > `{public_url}{base_path}/auth/callback` and only needs setting if your callback lives elsewhere.
 
+A request is matched against each credential in turn, and only one that accepts HTML is ever redirected:
+
+```mermaid
+flowchart LR
+    accTitle: How OIDC picks a credential
+    accDescr: A session cookie is tried first, then a bearer token, and only a request that accepts HTML is redirected to the identity provider.
+
+    request["Request"] --> session{"Session<br/>cookie?"}
+    session -->|yes| ok["Authenticated"]
+    session -->|no| bearer{"Bearer<br/>token?"}
+    bearer -->|valid| ok
+    bearer -->|invalid| invalid["401 invalid_token"]
+    bearer -->|none| html{"Accepts<br/>HTML?"}
+    html -->|yes| login["302 to the IdP"]
+    html -->|no| unauth["401 Bearer"]
+
+    classDef accent fill:#2563eb,stroke:#2563eb,color:#ffffff
+    class ok accent
+```
+
 ### Browser flow
 
 Opening the dashboard unauthenticated sends you to your IdP to sign in, then back to the page you asked for.
 `GET /auth/login` starts the same flow explicitly and honours a relative `?redirect=` path.
+
+```mermaid
+sequenceDiagram
+    accTitle: The OIDC browser sign-in flow
+    accDescr: Cetacean redirects an unauthenticated browser to the identity provider with PKCE, validates the callback, exchanges the code, and returns the browser to the page it asked for.
+
+    actor browser as Browser
+    participant cetacean as Cetacean
+    participant idp as Identity provider
+
+    browser->>cetacean: GET /services (Accept: text/html)
+    cetacean-->>browser: 302, plus state, nonce, PKCE and redirect cookies
+    browser->>idp: authorize, with the S256 code challenge
+    idp-->>browser: 302 /auth/callback?code&state&iss
+    browser->>cetacean: GET /auth/callback
+    Note over cetacean: iss, state and nonce checked,<br/>after the flow cookies are cleared
+    cetacean->>idp: exchange code with the PKCE verifier
+    idp-->>cetacean: ID token
+    cetacean-->>browser: session cookie, 302 back to /services
+```
 
 ### Machine flow
 
