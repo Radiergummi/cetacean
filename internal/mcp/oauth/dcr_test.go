@@ -201,10 +201,10 @@ func TestDCRRateLimit(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestDCRLRUEviction
+// TestDCROldestRegistrationEviction
 // ---------------------------------------------------------------------------
 
-func TestDCRLRUEviction(t *testing.T) {
+func TestDCROldestRegistrationEviction(t *testing.T) {
 	// Max 2 clients.
 	cfg := ServerConfig{
 		Issuer:      "https://cetacean.test",
@@ -240,7 +240,7 @@ func TestDCRLRUEviction(t *testing.T) {
 
 	// The first registered client should be evicted.
 	if s.clients.Get(ids[0]) != nil {
-		t.Error("first client should have been evicted by LRU")
+		t.Error("the oldest registration should have been evicted at the cap")
 	}
 	// The second and third should still be present.
 	if s.clients.Get(ids[1]) == nil {
