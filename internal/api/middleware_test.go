@@ -372,6 +372,46 @@ func TestRequestID_RejectsUnsafeCharacters(t *testing.T) {
 	}
 }
 
+// TestVaryAccumulatesAcrossMiddleware drives the assembled router, not a
+// single middleware in isolation: cors adds "Vary: Origin" and negotiate
+// runs after it. If negotiate ever overwrites instead of appending, a
+// cross-origin response would announce only "Vary: Accept" while still
+// reflecting Access-Control-Allow-Origin, letting a shared cache serve one
+// origin's response to another.
+func TestVaryAccumulatesAcrossMiddleware(t *testing.T) {
+	c := cache.New(nil)
+	h := newTestHandlers(t, withCache(c))
+	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	defer b.Close()
+	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
+	spa := NewSPAHandler(fs.FS(fsys), "")
+
+	router := NewRouter(RouterConfig{
+		Handlers:          h,
+		Broadcaster:       b,
+		SPA:               spa,
+		OpenAPISpec:       []byte("openapi: '3.1.0'"),
+		EnableSelfMetrics: true,
+		AuthProvider:      &auth.NoneProvider{},
+		CORS:              &CORSConfig{AllowedOrigins: []string{"https://example.test"}},
+	})
+
+	req := httptest.NewRequest("GET", "/nodes", nil)
+	req.Header.Set("Origin", "https://example.test")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	vary := rec.Header().Values("Vary")
+	joined := strings.Join(vary, ", ")
+	for _, want := range []string{"Origin", "Accept"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("Vary = %q, missing %q", joined, want)
+		}
+	}
+}
+
 func TestRequestID_AcceptsSafeCharacters(t *testing.T) {
 	for _, input := range []string{
 		"from-proxy-123",
