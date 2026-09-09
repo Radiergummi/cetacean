@@ -715,7 +715,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	// Computed for unverified clients too. Nothing is remembered for them, but
 	// the fingerprint costs a hash, and covering it uniformly means the POST
 	// re-prompts whenever the name or redirect URI on screen went stale — for
-	// DCR that is an LRU eviction and re-registration rather than a document
+	// DCR that is an eviction and re-registration rather than a document
 	// edit, but the user is equally owed a page describing the client that is
 	// about to receive the code.
 	fingerprint := consentFingerprint(meta)
