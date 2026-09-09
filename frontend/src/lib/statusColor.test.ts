@@ -62,3 +62,56 @@ describe("toneSurface", () => {
     }
   });
 });
+
+describe("status tint call sites", () => {
+  /**
+   * The status sweep rewrote pairs like `bg-yellow-500/5 … text-yellow-600`
+   * onto the shared tokens and dropped the opacity modifier, which left amber
+   * text sitting on solid amber in two warning banners, the plugin pill and the
+   * engine badge. An element that carries both a status background and status
+   * text of the same tone has to tint the background, or it paints its own text
+   * out. This reads one class list at a time, so it says nothing about a card
+   * that colours its background and its number from separate elements — the
+   * cluster overview does that, and only a browser catches it.
+   */
+  it("never paints status text on a solid background of the same tone", async () => {
+    const { readdirSync, readFileSync, statSync } = await import("node:fs");
+    const { join } = await import("node:path");
+
+    const sources: string[] = [];
+    const walk = (directory: string) => {
+      for (const entry of readdirSync(directory)) {
+        const path = join(directory, entry);
+
+        if (statSync(path).isDirectory()) {
+          walk(path);
+          continue;
+        }
+
+        if (/\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path)) {
+          sources.push(path);
+        }
+      }
+    };
+
+    walk("src");
+
+    const offenders: string[] = [];
+    for (const path of sources) {
+      const source = readFileSync(path, "utf8");
+
+      for (const [classList] of source.matchAll(/"([^"\n]*status-[^"\n]*)"/g)) {
+        for (const tone of ["ok", "warning", "danger", "info", "neutral"]) {
+          const solidBackground = new RegExp(`bg-status-${tone}(?![\\w/-])`);
+          const tonedText = new RegExp(`text-status-${tone}(?![\\w-])`);
+
+          if (solidBackground.test(classList) && tonedText.test(classList)) {
+            offenders.push(`${path}: ${classList.trim().slice(0, 60)}`);
+          }
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+});
