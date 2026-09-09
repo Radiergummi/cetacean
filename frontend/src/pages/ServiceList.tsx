@@ -11,9 +11,10 @@ import { SizingBadge } from "../components/SizingBadge";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
-import { serviceUpdateStatus } from "../lib/deriveServiceState";
+import { rolloutToneClass, serviceUpdateStatus } from "../lib/deriveServiceState";
 import { sizingCategories } from "../lib/sizingUtils";
 import { sortColumn } from "../lib/sortColumn";
+import { cn } from "../lib/utils";
 import { useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 
@@ -240,22 +241,9 @@ export default function ServiceList() {
   );
 }
 
-/**
- * A service's rollout state — Docker's `UpdateStatus`, and nothing about health.
- *
- * A settled rollout is deliberately uncoloured: green beside the red 0/1 in the
- * Replicas column read as a claim this column has no data to make. Colour is
- * kept for the states that are actually in flight.
- */
+/** A service's rollout state — Docker's `UpdateStatus`, and nothing about health. */
 function ServiceStatusBadge({ service }: { service: Pick<Service, "UpdateStatus"> }) {
   const { label, state } = serviceUpdateStatus(service);
 
-  return (
-    <span
-      data-state={state}
-      className="text-sm font-medium text-muted-foreground data-[state=paused]:text-status-warning data-[state=rollback_completed]:text-status-warning data-[state=rollback_paused]:text-status-warning data-[state=rollback_started]:text-status-warning data-[state=updating]:text-status-info"
-    >
-      {label}
-    </span>
-  );
+  return <span className={cn("text-sm font-medium", rolloutToneClass(state))}>{label}</span>;
 }

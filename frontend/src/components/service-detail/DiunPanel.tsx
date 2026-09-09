@@ -8,7 +8,7 @@ import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
 import { badgeBlue, saveIntegrationLabels } from "@/lib/integrationLabels";
 import { Plus, Trash2 } from "lucide-react";
-import { useId, useState } from "react";
+import { useState } from "react";
 
 const docsUrl = "https://crazymax.dev/diun/providers/swarm/#docker-labels";
 
@@ -76,7 +76,6 @@ export function DiunPanel({
     .split(";")
     .map((trigger) => trigger.trim());
 
-  const sortTagsId = useId();
   const [formEnabled, setFormEnabled] = useState(integration.enabled);
   const [formRegopt, setFormRegopt] = useState(integration.regopt ?? "");
   const [formWatchRepo, setFormWatchRepo] = useState(integration.watchRepo ?? false);
@@ -225,33 +224,29 @@ export function DiunPanel({
       </div>
 
       <div className="grid items-start gap-x-4 gap-y-3 lg:grid-cols-3">
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor={sortTagsId}
-            className="text-xs font-medium text-foreground"
-          >
-            Sort tags
-          </label>
-          <select
-            id={sortTagsId}
-            className="h-8 w-full rounded-md border bg-background px-2 text-sm"
-            value={formSortTags}
-            onChange={(event) => setFormSortTags(event.target.value)}
-          >
-            <option value="">—</option>
-            {sortTagsOptions.map((option) => (
-              <option
-                key={option}
-                value={option}
-              >
-                {option}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground">
-            How to sort tags when watch repo is enabled
-          </p>
-        </div>
+        <Field
+          label="Sort tags"
+          description="How to sort tags when watch repo is enabled"
+        >
+          {(control) => (
+            <select
+              {...control}
+              className="h-8 w-full rounded-md border bg-background px-2 text-sm"
+              value={formSortTags}
+              onChange={(event) => setFormSortTags(event.target.value)}
+            >
+              <option value="">—</option>
+              {sortTagsOptions.map((option) => (
+                <option
+                  key={option}
+                  value={option}
+                >
+                  {option}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
 
         <div className="flex flex-col gap-1.5">
           <NumberField
