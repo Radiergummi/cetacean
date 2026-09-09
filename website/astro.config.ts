@@ -350,11 +350,11 @@ function remarkDefinitionTables() {
         return;
       }
 
-      if (rows.some(({children}) => children.length !== 2)) {
+      if (rows.some(({ children }) => children.length !== 2)) {
         return;
       }
 
-      const total = rows.reduce((sum, {children}) => sum + nodeText(children[1]).length, 0);
+      const total = rows.reduce((sum, { children }) => sum + nodeText(children[1]).length, 0);
       const compact = total / rows.length < compactCellLength;
 
       // `visit` types the parent as every node that could hold this one, and
@@ -445,7 +445,7 @@ function remarkCardTables() {
       if (header.children.length < 2) {
         return;
       }
-      if (rows.some(({children}) => children.length !== header.children.length)) {
+      if (rows.some(({ children }) => children.length !== header.children.length)) {
         return;
       }
 
@@ -471,12 +471,12 @@ function isCardsMarker(node: RootContent): boolean {
   return value === "<!-- cards -->" || value === "/* cards */";
 }
 
-function cardList({children}: TableRow, rows: TableRow[]): Paragraph {
+function cardList({ children }: TableRow, rows: TableRow[]): Paragraph {
   const labels = children.map((cell) => nodeText(cell));
 
   return container(
     "div",
-    rows.map(({children}) => card(labels, children, descriptionColumn(rows))),
+    rows.map(({ children }) => card(labels, children, descriptionColumn(rows))),
     { className: ["card-list"] },
   );
 }
