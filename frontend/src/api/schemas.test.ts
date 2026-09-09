@@ -22,9 +22,9 @@ function jsonResponse(data: unknown, headers?: Record<string, string>) {
   });
 }
 
-/** The issue list from the nth report, which is the second console argument. */
+/** The issue list from the nth report, which is the third console argument. */
 function issuesOf(call: number): string[] {
-  const issues = consoleError.mock.calls[call]?.[1];
+  const issues = consoleError.mock.calls[call]?.[2];
 
   return Array.isArray(issues) ? (issues as string[]) : [];
 }
@@ -75,7 +75,7 @@ describe("response validation", () => {
 
     expect(consoleError).toHaveBeenCalledTimes(1);
 
-    expect(String(consoleError.mock.calls[0]?.[0])).toContain("/nodes/n1");
+    expect(String(consoleError.mock.calls[0]?.[1])).toContain("/nodes/n1");
     expect(issuesOf(0).join(" ")).toContain("node.ID");
   });
 
@@ -104,7 +104,7 @@ describe("response validation", () => {
     await api.search("other");
 
     expect(consoleError).toHaveBeenCalledTimes(1);
-    expect(consoleError.mock.calls[0]?.[0]).toContain("/search");
+    expect(consoleError.mock.calls[0]?.[1]).toContain("/search");
   });
 
   it("checks the list envelope, which is what pagination reads", async () => {

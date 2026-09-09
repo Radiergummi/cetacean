@@ -214,9 +214,13 @@ function reportSchemaDrift(path: string, error: z.ZodError): void {
     .slice(0, 5)
     .map(({ message, path: at }) => `${at.join(".") || "(root)"}: ${message}`);
 
+  // The endpoint is a substitution rather than part of the format string:
+  // console.error treats its first argument as one, and the path can carry a
+  // resource id out of the URL bar.
   // eslint-disable-next-line no-console
   console.error(
-    `[api] ${endpoint} is not the shape this dashboard expects. Rendering it anyway.`,
+    "[api] %s is not the shape this dashboard expects. Rendering it anyway.",
+    endpoint,
     issues,
   );
 }
