@@ -1,0 +1,25 @@
+---
+import AnchorLink from "./AnchorLink.astro";
+import type {HTMLAttributes} from "astro/types";
+
+interface Props extends HTMLAttributes<"h1" | "h2" | "h3" | "h4" | "h5" | "h6"> {
+    level: 1 | 2 | 3 | 4 | 5 | 6 | "1" | "2" | "3" | "4" | "5" | "6";
+    anchor?: boolean;
+}
+
+const {
+    anchor,
+    class: className,
+    id,
+    level,
+    ...rest
+} = Astro.props;
+
+const Tag = `h${level}` as keyof HTMLElementTagNameMap;
+---
+
+<Tag id={id} class:list={["group w-full flex items-center", className]} {...rest}>
+    <slot />
+
+    {anchor && id && <AnchorLink id={id} class="ms-[1em]" />}
+</Tag>

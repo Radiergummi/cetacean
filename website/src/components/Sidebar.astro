@@ -2,109 +2,120 @@
 import SidebarNav from "./SidebarNav.astro";
 
 interface Props {
-  currentSlug: string;
+    currentSlug: string;
 }
 
-const { currentSlug } = Astro.props;
+const {currentSlug} = Astro.props;
 ---
 
-<aside class="hidden md:block w-60 shrink-0 rail py-8 pl-6 lg:pl-8 pr-6" aria-label="Documentation sidebar">
-  <SidebarNav currentSlug={currentSlug} />
+<aside
+    class="hidden md:block print:hidden w-60 shrink-0 rail py-8 pl-6 lg:pl-8 pr-6 select-none"
+    aria-label="Documentation sidebar"
+>
+    <SidebarNav currentSlug={currentSlug} />
 </aside>
 
 <div
-  id="mobile-sidebar"
-  class="group fixed inset-0 z-40 pointer-events-none drawer-open:pointer-events-auto md:hidden"
-  role="dialog"
-  aria-modal="true"
-  aria-label="Navigation menu"
-  aria-hidden="true"
->
-  <div
-    id="mobile-sidebar-backdrop"
-    class="absolute inset-0 bg-black/0 backdrop-blur-none transition-backdrop duration-200 ease-out group-drawer-open:bg-black/40 group-drawer-open:backdrop-blur-xs"
+    id="mobile-sidebar"
+    class="group fixed inset-0 z-40 pointer-events-none drawer-open:pointer-events-auto md:hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Navigation menu"
     aria-hidden="true"
-  ></div>
-  <aside
-    class="absolute right-0 top-0 h-full w-72 translate-x-full overflow-y-auto border-l bg-background px-6 pt-20 pb-8 shadow-xl transition-transform duration-250 ease-out group-drawer-open:translate-x-0"
-    data-panel
-  >
-    <SidebarNav currentSlug={currentSlug} />
-  </aside>
+>
+    <div
+        id="mobile-sidebar-backdrop"
+        class="absolute inset-0 bg-black/0 backdrop-blur-none transition-backdrop duration-200 ease-out group-drawer-open:bg-black/40 group-drawer-open:backdrop-blur-xs"
+        aria-hidden="true"
+    ></div>
+    <aside
+        class="absolute right-0 top-0 h-full w-72 translate-x-full overflow-y-auto border-l bg-background px-6 pt-20 pb-8 shadow-xl transition-transform duration-250 ease-out group-drawer-open:translate-x-0"
+        data-panel
+    >
+        <SidebarNav currentSlug={currentSlug} />
+    </aside>
 </div>
 
 <script is:inline>
-  if (!window.__sidebarInitialized) {
-    window.__sidebarInitialized = true;
+    if (!window.__sidebarInitialized) {
+        window.__sidebarInitialized = true;
 
-    const getSidebar = () => document.getElementById("mobile-sidebar");
-    const getToggle = () => document.getElementById("mobile-menu-toggle");
-    const isOpen = (sidebar) => sidebar.getAttribute("aria-hidden") === "false";
+        const getSidebar = () => document.getElementById("mobile-sidebar");
+        const getToggle = () => document.getElementById("mobile-menu-toggle");
+        const isOpen = (sidebar) => sidebar.getAttribute("aria-hidden") === "false";
 
-    const openSidebar = (sidebar) => {
-      sidebar.setAttribute("aria-hidden", "false");
-      document.body.style.overflow = "hidden";
-      getToggle()?.setAttribute("aria-expanded", "true");
-      const firstLink = sidebar.querySelector("a[href]");
-      if (firstLink) requestAnimationFrame(() => firstLink.focus());
-    };
+        const openSidebar = (sidebar) => {
+            sidebar.setAttribute("aria-hidden", "false");
+            document.body.style.overflow = "hidden";
+            getToggle()?.setAttribute("aria-expanded", "true");
+            const firstLink = sidebar.querySelector("a[href]");
+            if (firstLink) {
+                requestAnimationFrame(() => firstLink.focus());
+            }
+        };
 
-    const closeSidebar = (sidebar) => {
-      sidebar.setAttribute("aria-hidden", "true");
-      document.body.style.overflow = "";
-      const toggle = getToggle();
-      if (toggle) {
-        toggle.setAttribute("aria-expanded", "false");
-        toggle.focus();
-      }
-    };
+        const closeSidebar = (sidebar) => {
+            sidebar.setAttribute("aria-hidden", "true");
+            document.body.style.overflow = "";
+            const toggle = getToggle();
+            if (toggle) {
+                toggle.setAttribute("aria-expanded", "false");
+                toggle.focus();
+            }
+        };
 
-    document.addEventListener("click", (e) => {
-      const sidebar = getSidebar();
-      if (!sidebar) return;
+        document.addEventListener("click", (e) => {
+            const sidebar = getSidebar();
+            if (!sidebar) {
+                return;
+            }
 
-      if (e.target.closest("#mobile-menu-toggle")) {
-        if (isOpen(sidebar)) {
-          closeSidebar(sidebar);
-        } else {
-          openSidebar(sidebar);
-        }
-      }
-      if (e.target.closest("#mobile-sidebar-backdrop")) {
-        closeSidebar(sidebar);
-      }
-    });
+            if (e.target.closest("#mobile-menu-toggle")) {
+                if (isOpen(sidebar)) {
+                    closeSidebar(sidebar);
+                } else {
+                    openSidebar(sidebar);
+                }
+            }
+            if (e.target.closest("#mobile-sidebar-backdrop")) {
+                closeSidebar(sidebar);
+            }
+        });
 
-    document.addEventListener("keydown", (e) => {
-      const sidebar = getSidebar();
-      if (!sidebar || !isOpen(sidebar)) return;
-      if (e.key === "Escape") {
-        closeSidebar(sidebar);
-      } else if (e.key === "Tab") {
-        const panel = sidebar.querySelector("[data-panel]");
-        const focusable = panel.querySelectorAll('input, button, a[href], [tabindex]:not([tabindex="-1"])');
-        if (focusable.length) {
-          const first = focusable[0];
-          const last = focusable[focusable.length - 1];
-          if (e.shiftKey && document.activeElement === first) {
-            e.preventDefault();
-            last.focus();
-          } else if (!e.shiftKey && document.activeElement === last) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
-      }
-    });
+        document.addEventListener("keydown", (e) => {
+            const sidebar = getSidebar();
+            if (!sidebar || !isOpen(sidebar)) {
+                return;
+            }
+            if (e.key === "Escape") {
+                closeSidebar(sidebar);
+            } else if (e.key === "Tab") {
+                const panel = sidebar.querySelector("[data-panel]");
+                const focusable = panel.querySelectorAll("input, button, a[href], [tabindex]:not([tabindex=\"-1\"])");
+                if (focusable.length) {
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+                    if (e.shiftKey && document.activeElement === first) {
+                        e.preventDefault();
+                        last.focus();
+                    } else if (!e.shiftKey && document.activeElement === last) {
+                        e.preventDefault();
+                        first.focus();
+                    }
+                }
+            }
+        });
 
-    document.addEventListener("astro:page-load", () => {
-      const sidebar = getSidebar();
-      if (sidebar) {
-        sidebar.setAttribute("aria-hidden", "true");
-      }
-      document.body.style.overflow = "";
-      const toggle = getToggle();
-      if (toggle) toggle.setAttribute("aria-expanded", "false");
-    });
-  }
+        document.addEventListener("astro:page-load", () => {
+            const sidebar = getSidebar();
+            if (sidebar) {
+                sidebar.setAttribute("aria-hidden", "true");
+            }
+            document.body.style.overflow = "";
+            const toggle = getToggle();
+            if (toggle) {
+                toggle.setAttribute("aria-expanded", "false");
+            }
+        });
+    }
 </script>

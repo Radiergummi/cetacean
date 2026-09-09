@@ -1,4 +1,4 @@
-import { buildContext } from "../../lib/schema";
+import { buildContext } from "@/lib/schema.ts";
 
 export function GET() {
   return new Response(JSON.stringify(buildContext(), null, 2), {

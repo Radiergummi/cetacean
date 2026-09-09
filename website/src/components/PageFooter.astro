@@ -1,0 +1,51 @@
+---
+import PrevNext from "@/components/PrevNext.astro";
+import {Pencil} from "@lucide/astro";
+
+interface Props {
+    editUrl?: string;
+    lastModified?: Date;
+    slug: string;
+}
+
+const {editUrl, lastModified, slug} = Astro.props;
+---
+<footer class="mt-12">
+    <div
+        class="flex items-center justify-between gap-1.5 text-sm text-muted-foreground"
+        data-pagefind-ignore
+        hidden={!editUrl && !lastModified}
+    >
+        {editUrl && (
+            <a
+                href={editUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Edit this page on GitHub (opens in new tab)"
+                class="inline-flex items-center gap-1.5 text-inherit no-underline transition-colors hover:text-foreground select-none"
+            >
+                <Pencil class="size-4" aria-hidden="true" />
+                Edit this page on GitHub
+            </a>
+        )}
+        {
+            lastModified && (
+                             <span class="last-modified">
+                                 Last updated{" "}
+                                 <time datetime={lastModified.toISOString()}>
+                                     {lastModified.toLocaleDateString(
+                                         undefined,
+                                         {
+                                             year: "numeric",
+                                             month: "long",
+                                             day: "numeric",
+                                         },
+                                     )}
+                                 </time>
+                             </span>
+                         )
+        }
+    </div>
+
+    <PrevNext slug={slug} />
+</footer>

@@ -13,7 +13,7 @@ const { headings } = Astro.props;
 const filtered = headings.filter(({depth}) => depth >= 2 && depth <= 3);
 ---
 {filtered.length > 0 && (
-  <aside class="hidden xl:block w-48 shrink-0 rail py-8 pr-6 lg:pr-8 pl-4" aria-label="On this page">
+  <aside class="hidden xl:block print:hidden select-none w-48 shrink-0 rail py-8 pr-6 lg:pr-8 pl-4" aria-label="On this page">
     <h3 class="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-4">
       On this page
     </h3>

@@ -1,19 +1,22 @@
 ---
-import type { HTMLAttributes } from "astro/types";
+import AnchorLink from "./AnchorLink.astro";
+import type {HTMLAttributes} from "astro/types";
 
-/**
- * The shell shared by the config parameters in `docs/configuration.mdx` and the
- * schema entries on `/api/schema`: a name, an optional description, and a block
- * of facts underneath. Everything that differs between the two — the chrome and
- * the shape of the facts block — is the caller's, so this holds only what they
- * agree on.
- */
-interface Props extends HTMLAttributes<"div"> {
-  id: string;
-  anchor?: boolean;
+interface Props extends HTMLAttributes<"section"> {
+    id: string;
+    anchor?: boolean;
 }
 
-const { id, class: className, anchor = false, ...rest } = Astro.props;
+const {id, class: className, anchor = false, ...rest} = Astro.props;
+
+/**
+ * The card every reference on the site is drawn in. It lives here rather than at
+ * the four call sites because the footer below hangs off the card's own padding:
+ * its negative margins have to be the padding, and two numbers that must agree
+ * cannot be stated in different files.
+ */
+const cardClass = "group mt-2 rounded-lg border px-4 py-3.5 " +
+    "target:border-active target:ring-1 target:ring-active";
 
 /**
  * Rendered rather than probed with `Astro.slots.has`, which only reports whether
@@ -22,25 +25,25 @@ const { id, class: className, anchor = false, ...rest } = Astro.props;
  */
 const description = (await Astro.slots.render("default")).trim();
 
-// Inline code carries a tinted pill from the prose layer; the name is a heading.
-const headingClass = "mb-1.5 flex items-baseline gap-2 code-heading";
+const facts = Astro.slots.has("facts") ? (await Astro.slots.render("facts")).trim() : "";
 ---
-<div {...rest} id={id} class={className}>
-  <div class={headingClass}>
-    <slot name="heading" />
-    {anchor && (
-      <a
-        href={`#${id}`}
-        class="ml-auto text-sm leading-none text-muted-foreground no-underline opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        aria-label={`Link to ${id}`}
-      >#</a>
+<section {...rest} id={id} class:list={[cardClass, className]}>
+    <header class="mb-1.5 flex items-center gap-2 code-heading">
+        <slot name="heading" />
+        {anchor && <AnchorLink id={id} class="ms-auto" />}
+    </header>
+
+    {description && (
+        <div
+            class="mb-3 leading-relaxed [&>:first-child]:mt-0 [&>:last-child]:mb-0"
+            set:html={description}
+        />
     )}
-  </div>
-  {description && (
-    <div
-      class="mb-3 text-sm leading-relaxed [&>:first-child]:mt-0 [&>:last-child]:mb-0"
-      set:html={description}
-    />
-  )}
-  <slot name="facts" />
-</div>
+
+    {facts && (
+        <footer
+            class="-mx-4 -mb-3.5 rounded-b-inner border-t bg-muted px-4 py-2 text-sm text-muted-foreground"
+            set:html={facts}
+        />
+    )}
+</section>

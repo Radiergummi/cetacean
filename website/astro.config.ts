@@ -5,13 +5,13 @@ import mdx from "@astrojs/mdx";
 import tailwindcss from "@tailwindcss/vite";
 import { visit } from "unist-util-visit";
 import { rehypeMermaid } from "@/lib/mermaid-diagrams.ts";
+import { slugify } from "@/lib/slug.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sirv from "sirv";
 import type { Element, ElementContent, Properties } from "hast";
 import type {
   Code,
-  Heading,
   Html,
   Paragraph,
   PhrasingContent,
@@ -69,37 +69,42 @@ const defaultTabLabels: Record<string, string> = {
 function remarkCodeTabs() {
   return (tree: Root) => {
     const { children } = tree;
-    let i = 0;
+    let index = 0;
     let tabGroupCount = 0;
 
-    while (i < children.length) {
-      if (!isTabCode(children[i])) {
-        i++;
+    while (index < children.length) {
+      if (!isTabCode(children[index])) {
+        index++;
+
         continue;
       }
 
       const group: Code[] = [];
 
-      while (i < children.length) {
-        const node = children[i];
+      while (index < children.length) {
+        const node = children[index];
 
         if (!isTabCode(node)) {
           break;
         }
 
         group.push(node);
-        i++;
+
+        index++;
       }
 
       if (group.length < 2) {
         stripTabMeta(group[0]);
+
         continue;
       }
 
       const labels = group.map((node) => {
         const language = node.lang ?? "";
         const label = parseTabLabel(node.meta) || defaultTabLabels[language] || language || "Code";
+
         stripTabMeta(node);
+
         return label;
       });
 
@@ -107,8 +112,8 @@ function remarkCodeTabs() {
       const replacement: RootContent[] = [];
       const buttons = labels
         .map(
-          (label, idx) =>
-            `<button role="tab" class="code-tabs-button${idx === 0 ? " active" : ""}" data-tab="${idx}" aria-selected="${idx === 0}" aria-controls="${tabGroupId}-panel-${idx}" id="${tabGroupId}-tab-${idx}">${label}</button>`,
+          (label, index) =>
+            `<button role="tab" class="code-tabs-button${index === 0 ? " active" : ""}" data-tab="${index}" aria-selected="${index === 0}" aria-controls="${tabGroupId}-panel-${index}" id="${tabGroupId}-tab-${index}">${label}</button>`,
         )
         .join("");
 
@@ -128,9 +133,11 @@ function remarkCodeTabs() {
 
       replacement.push(html("</div>"));
 
-      const start = i - group.length;
+      const start = index - group.length;
+
       children.splice(start, group.length, ...replacement);
-      i = start + replacement.length;
+
+      index = start + replacement.length;
     }
   };
 }
@@ -141,6 +148,7 @@ function isTabCode(node: RootContent | undefined): node is Code {
 
 function parseTabLabel(meta: string | null | undefined) {
   const match = meta?.match(/tab="([^"]+)"/);
+
   return match?.[1] ?? null;
 }
 
@@ -241,6 +249,7 @@ function remarkCallouts() {
       if (!text.value) {
         paragraph.children.shift();
       }
+
       if (paragraph.children.length === 0) {
         node.children.shift();
       }
@@ -340,11 +349,12 @@ function remarkDefinitionTables() {
       if (header.children.length !== 2) {
         return;
       }
-      if (rows.some((row) => row.children.length !== 2)) {
+
+      if (rows.some(({ children }) => children.length !== 2)) {
         return;
       }
 
-      const total = rows.reduce((sum, row) => sum + nodeText(row.children[1]).length, 0);
+      const total = rows.reduce((sum, { children }) => sum + nodeText(children[1]).length, 0);
       const compact = total / rows.length < compactCellLength;
 
       // `visit` types the parent as every node that could hold this one, and
@@ -398,21 +408,25 @@ function definitionList(rows: TableRow[], compact: boolean): Paragraph {
  * becomes the title, the second the description, and any further cells become
  * labelled facts under it, headed by their column name.
  *
+ * MDX has no HTML comments, so an `.mdx` doc writes the same marker as an
+ * expression comment instead. `isCardsMarker` reads both, and a doc that
+ * changes format keeps its cards.
+ *
  * This one is opted into rather than detected. Three-column tables split into
  * cards and genuine matrices with nothing to tell them apart mechanically —
  * the authentication guide compares two Tailscale modes in the same shape the
  * MCP reference uses to list tools, and every rule that catches the one
- * catches the other. The marker is an HTML comment, so the source stays a
+ * catches the other. The marker is a comment either way, so the source stays a
  * plain GFM table that GitHub and the raw `.md` route render as they always
  * did, and the author decides.
  *
- * Rows gain an id from their title, which a table row cannot have, so a tool
+ * Rows gain an ID from their title, which a table row cannot have, so a tool
  * or a finding can be linked to directly.
  */
 function remarkCardTables() {
   return (tree: Root) => {
-    visit(tree, "html", (node, index, parent) => {
-      if (!parent || index === undefined || node.value.trim() !== "<!-- cards -->") {
+    visit(tree, isCardsMarker, (node, index, parent) => {
+      if (!parent || index === undefined) {
         return;
       }
 
@@ -431,7 +445,7 @@ function remarkCardTables() {
       if (header.children.length < 2) {
         return;
       }
-      if (rows.some((row) => row.children.length !== header.children.length)) {
+      if (rows.some(({ children }) => children.length !== header.children.length)) {
         return;
       }
 
@@ -442,12 +456,27 @@ function remarkCardTables() {
   };
 }
 
-function cardList(header: TableRow, rows: TableRow[]): Paragraph {
-  const labels = header.children.map((cell) => nodeText(cell));
+/**
+ * The marker in the only form each format has for it: an HTML comment in
+ * Markdown, and the expression an MDX doc's comment parses to. Both node types
+ * carry their source in `value`, so the value is the whole of the test.
+ */
+function isCardsMarker(node: RootContent): boolean {
+  if (node.type !== "html" && node.type !== "mdxFlowExpression") {
+    return false;
+  }
+
+  const value = "value" in node ? node.value.trim() : "";
+
+  return value === "<!-- cards -->" || value === "/* cards */";
+}
+
+function cardList({ children }: TableRow, rows: TableRow[]): Paragraph {
+  const labels = children.map((cell) => nodeText(cell));
 
   return container(
     "div",
-    rows.map((row) => card(labels, row.children, descriptionColumn(rows))),
+    rows.map(({ children }) => card(labels, children, descriptionColumn(rows))),
     { className: ["card-list"] },
   );
 }
@@ -503,143 +532,7 @@ function card(labels: string[], cells: TableCell[], description: number): Paragr
     );
   }
 
-  return container("div", children, { className: ["card"], id: slug(nodeText(title)) });
-}
-
-function slug(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\w]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-/**
- * A run of `####` headings marked `<!-- entries -->` renders as one reference
- * card apiece: the heading titles the card, everything under it is the body,
- * and a paragraph opening `**Label** —` drops out of the prose into a labelled
- * fact along the bottom.
- *
- * This is the shape `ConfigParam` gives a setting, reached from plain markdown.
- * The MCP catalog needs it and cannot use that component: it is 27 tools
- * carrying a paragraph of prose each, which is more than a card table's cell
- * can hold, and the page is a `.md` that GitHub and the raw route serve as
- * source. So the marker buys the card and the source stays headings and
- * paragraphs.
- *
- * The heading node is kept as the title rather than rebuilt as a div, so the
- * entries are still headings to a screen reader and still carry the id a link
- * to one resolves against — which is why the card takes no id of its own.
- */
-function remarkReferenceEntries() {
-  return (tree: Root) => {
-    visit(tree, "html", (node, index, parent) => {
-      if (!parent || index === undefined || node.value.trim() !== "<!-- entries -->") {
-        return;
-      }
-
-      const siblings = parent.children as RootContent[];
-      let end = index + 1;
-
-      while (end < siblings.length && !endsRun(siblings[end])) {
-        end++;
-      }
-
-      const entries: Entry[] = [];
-      const lead: RootContent[] = [];
-
-      for (const child of siblings.slice(index + 1, end)) {
-        if (child.type === "heading" && child.depth === 4) {
-          entries.push({ heading: child, body: [] });
-        } else if (entries.length) {
-          entries[entries.length - 1].body.push(child);
-        } else {
-          lead.push(child);
-        }
-      }
-
-      if (!entries.length) {
-        return;
-      }
-
-      siblings.splice(
-        index,
-        end - index,
-        ...lead,
-        container("div", entries.map(entryCard), { className: ["card-list", "is-entries"] }),
-      );
-
-      return index + lead.length + 1;
-    });
-  };
-}
-
-interface Entry {
-  heading: Heading;
-  body: RootContent[];
-}
-
-/** A run of entries ends where the section does, at the next `##` or `###`. */
-function endsRun(node: RootContent): boolean {
-  return node.type === "heading" && node.depth <= 3;
-}
-
-function entryCard({ heading, body }: Entry): Paragraph {
-  heading.data = { ...heading.data, hProperties: { className: ["card-title"] } };
-
-  const prose: RootContent[] = [];
-  const facts: RootContent[] = [];
-
-  for (const node of body) {
-    const fact = labelledFact(node);
-
-    if (fact) {
-      facts.push(...fact);
-    } else {
-      prose.push(node);
-    }
-  }
-
-  const children: RootContent[] = [heading];
-
-  if (prose.length) {
-    children.push(container("div", prose, { className: ["card-description"] }));
-  }
-
-  if (facts.length) {
-    children.push(container("div", facts, { className: ["card-facts"] }));
-  }
-
-  return container("div", children, { className: ["card"] });
-}
-
-/**
- * `**Arguments** — the rest of the line` becomes a label and its value. The em
- * dash is required as well as the bold opening, so a paragraph that merely
- * starts with a bold phrase stays prose.
- */
-function labelledFact(node: RootContent): RootContent[] | null {
-  if (node.type !== "paragraph") {
-    return null;
-  }
-
-  const [label, ...rest] = node.children;
-  const [separator] = rest;
-
-  if (label?.type !== "strong" || separator?.type !== "text" || !/^\s*—/.test(separator.value)) {
-    return null;
-  }
-
-  const value: PhrasingContent[] = [
-    { ...separator, value: separator.value.replace(/^\s*—\s*/, "") },
-    ...rest.slice(1),
-  ];
-
-  return [
-    container("span", [{ type: "text", value: nodeText(label).toLowerCase() }], {
-      className: ["card-label"],
-    }),
-    container("span", value as RootContent[], { className: ["card-value"] }),
-  ];
+  return container("div", children, { className: ["card"], id: slugify(nodeText(title)) });
 }
 
 function remarkStripTitle() {
@@ -662,7 +555,6 @@ const remarkPlugins: RemarkPlugins = [
   remarkCallouts,
   remarkCardTables,
   remarkDefinitionTables,
-  remarkReferenceEntries,
   remarkDocsLinks,
   remarkStripTitle,
 ];

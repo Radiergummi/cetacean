@@ -1,9 +1,11 @@
 package mcp
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -338,7 +340,7 @@ func filterLogLines(lines []logs.LogLine, level string) []logs.LogLine {
 	if level == "" {
 		return lines
 	}
-	minRank, ok := logLevelRank[strings.ToUpper(level)]
+	minRank, ok := logLevelRank[strings.ToLower(level)]
 	if !ok {
 		return lines
 	}
@@ -351,12 +353,22 @@ func filterLogLines(lines []logs.LogLine, level string) []logs.LogLine {
 	return out
 }
 
+// logLevelRank orders the levels `level` accepts. Keyed in the lower case a
+// caller writes and the schema advertises; filterLogLines lower-cases before
+// looking one up, so either case works on the wire.
 var logLevelRank = map[string]int{
-	"DEBUG": 0,
-	"INFO":  1,
-	"WARN":  2,
-	"ERROR": 3,
-	"FATAL": 4,
+	"debug": 0,
+	"info":  1,
+	"warn":  2,
+	"error": 3,
+	"fatal": 4,
+}
+
+// logLevelNames lists the levels `level` accepts, least severe first.
+func logLevelNames() []string {
+	return slices.SortedFunc(maps.Keys(logLevelRank), func(a, b string) int {
+		return cmp.Compare(logLevelRank[a], logLevelRank[b])
+	})
 }
 
 func lineLevelRank(msg string) int {

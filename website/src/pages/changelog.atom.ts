@@ -1,6 +1,6 @@
 import type { APIContext } from "astro";
-import { readFileSync } from "node:fs";
 import { marked } from "marked";
+import { readFileSync } from "node:fs";
 import { changelogPath } from "../lib/docs";
 
 interface Release {
@@ -14,15 +14,21 @@ async function parseReleases(raw: string, limit = 20): Promise<Release[]> {
   const releases: Release[] = [];
 
   for (const section of sections) {
-    const headerMatch = section.match(/^\[([^\]]+)\]\s*-\s*(\d{4}-\d{2}-\d{2})/);
-    if (!headerMatch || headerMatch[1] === "Unreleased") continue;
+    const headerMatch = section.match(/^\[([^\]]+)]\s*-\s*(\d{4}-\d{2}-\d{2})/);
+
+    if (!headerMatch || headerMatch[1] === "Unreleased") {
+      continue;
+    }
 
     const newlineIndex = section.indexOf("\n");
     const body = section.slice(newlineIndex + 1).trim();
     const html = await marked.parse(body);
 
     releases.push({ version: headerMatch[1], date: headerMatch[2], html });
-    if (releases.length >= limit) break;
+
+    if (releases.length >= limit) {
+      break;
+    }
   }
 
   return releases;

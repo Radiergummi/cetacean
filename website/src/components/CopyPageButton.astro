@@ -20,7 +20,7 @@ const menuItemTextClass = "flex flex-col leading-snug";
 const menuItemTitleClass = "font-semibold";
 const menuItemHintClass = "text-xs text-muted-foreground";
 ---
-<div class="relative inline-flex" data-copy-page data-markdown-url={markdownUrl}>
+<div class="relative inline-flex select-none print:hidden" data-copy-page data-markdown-url={markdownUrl}>
   <button
     type="button"
     class="inline-flex cursor-pointer items-center gap-1.5 rounded-l-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
@@ -108,15 +108,26 @@ const menuItemHintClass = "text-xs text-muted-foreground";
     const copyMarkdown = (dropdown) => {
       const label = dropdown.querySelector("[data-label]");
 
+      // The label is the only feedback there is, so a refused clipboard write
+      // or a markdown route that answers anything but 200 has to reach it.
+      const flash = (message) => {
+        label.textContent = message;
+        setTimeout(() => {
+          label.textContent = "Copy page";
+        }, 2000);
+      };
+
       fetch(dropdown.dataset.markdownUrl)
-        .then((response) => response.text())
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("markdown route answered " + response.status);
+          }
+
+          return response.text();
+        })
         .then((text) => navigator.clipboard.writeText(text))
-        .then(() => {
-          label.textContent = "Copied!";
-          setTimeout(() => {
-            label.textContent = "Copy page";
-          }, 2000);
-        });
+        .then(() => flash("Copied!"))
+        .catch(() => flash("Copy failed"));
     };
 
     document.addEventListener("click", (e) => {

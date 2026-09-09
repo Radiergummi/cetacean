@@ -20,9 +20,12 @@ export function latestVersion(): string {
   return `v${match[1]}`;
 }
 
-export function slugify(text: string): string {
-  return text.toLowerCase().replace(/\W+/g, "-").replace(/^-|-$/g, "");
-}
+/**
+ * The operations levels, by index: a tool's `level` is its position here. Shared
+ * by the tool cards and the raw Markdown route, which would otherwise each keep
+ * their own copy of the four names.
+ */
+export const operationsLevels = ["read-only", "operational", "configuration", "impactful"] as const;
 
 export async function getDocPaths() {
   const docs = await getCollection("docs");

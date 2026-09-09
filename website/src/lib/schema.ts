@@ -870,13 +870,13 @@ export const types: ResourceType[] = [
 
 /** Build the JSON-LD context document from the property definitions. */
 export function buildContext(): Record<string, unknown> {
-  const ctx: Record<string, unknown> = {
+  const context: Record<string, unknown> = {
     "@vocab": "urn:cetacean:",
   };
 
-  for (const prop of [...properties, ...rfc9457Properties]) {
-    ctx[prop.name] = prop.container ? { "@container": prop.container } : prop.iri;
+  for (const { container, iri, name } of [...properties, ...rfc9457Properties]) {
+    context[name] = container ? { "@container": container } : iri;
   }
 
-  return { "@context": ctx };
+  return { "@context": context };
 }

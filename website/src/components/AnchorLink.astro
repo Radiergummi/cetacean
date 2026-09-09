@@ -1,0 +1,30 @@
+---
+import {Link} from "@lucide/astro";
+
+/**
+ * The link that appears beside a heading or a reference card on hover, giving
+ * the reader the URL of the thing they are looking at.
+ *
+ * It is a component rather than a class both places repeat because the anchor
+ * is only discoverable if it behaves the same everywhere: it appears on hover,
+ * it stays visible once focused, and it announces where it points.
+ */
+interface Props {
+    id: string;
+    class?: string;
+}
+
+const {id, class: className} = Astro.props;
+---
+<a
+    href={`#${id}`}
+    class:list={[
+        "text-sm leading-none text-muted-foreground no-underline opacity-0 transition-opacity",
+        "group-hover:opacity-100 hover:text-active focus-visible:opacity-100 select-none",
+        "transition duration-150",
+        className,
+    ]}
+    aria-label={`Link to ${id}`}
+>
+    <Link class="size-3" />
+</a>

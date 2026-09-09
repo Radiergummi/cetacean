@@ -1,0 +1,54 @@
+---
+import ReferenceEntry from "./ReferenceEntry.astro";
+import ReferenceFacts from "./ReferenceFacts.astro";
+import {operationsLevels} from "@/lib/docs";
+
+/**
+ * One tool on the MCP catalog, in the card the configuration and error
+ * references use for a setting and a code, so the three references read as one
+ * system rather than three house styles.
+ *
+ * A tool carries two facts: the operations level that gates it, and its
+ * argument list. The level is a prop because it is one of four values the page
+ * must not invent; the arguments arrive as a slot because a third of the lists
+ * run to prose — "exactly one of `service`, `task`, ...; plus `contains`" — and
+ * a slot is Markdown the page has already rendered, where a prop would be a
+ * string this had to parse.
+ *
+ * The catalog groups tools by what they are for rather than by level, so the
+ * level has to be legible on the card itself; it reads as "1 · operational"
+ * because the number is what a deployment sets and the name is what it means.
+ *
+ * The name stays a heading, as it was when this page's entries were `####`
+ * headings marked up by a Remark plugin: the tools are the section's outline to
+ * a screen reader, and `text-base` keeps them at the size of the prose they
+ * introduce rather than the smaller type a settings card uses.
+ */
+interface Props {
+    name: string;
+    level: 0 | 1 | 2 | 3;
+}
+
+const {name, level} = Astro.props;
+---
+<ReferenceEntry
+    id={name}
+    anchor
+>
+    <h4 slot="heading" class="code-heading m-0 text-base font-semibold">
+        <code>{name}</code>
+    </h4>
+
+    <slot />
+
+    <ReferenceFacts slot="facts">
+        <dt class="font-medium">arguments</dt>
+        <dd class="*:first:mt-0 *:last:mb-0"><slot name="arguments" /></dd>
+
+        <dt class="font-medium">level</dt>
+        <dd>
+            <span class="font-mono tabular-nums slashed-zero">{level}</span>{" "}
+            (<span class="capitalize">{operationsLevels[level]}</span>)
+        </dd>
+    </ReferenceFacts>
+</ReferenceEntry>
