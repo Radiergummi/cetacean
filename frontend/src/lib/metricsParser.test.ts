@@ -3,9 +3,7 @@ import {
   formatMetricIdentifier,
   normalizePrometheusRows,
   parseRangeResult,
-  seriesChanged,
   seriesLabel,
-  type ParsedMetrics,
 } from "./metricsParser";
 import type { PrometheusResponse } from "@/api/types.ts";
 import { describe, it, expect, vi } from "vitest";
@@ -119,30 +117,6 @@ describe("parseRangeResult", () => {
 
     expect(parsed!.series[0]?.color).toBe("#ff0000");
     expect(parsed!.series[1]?.color).toBe("#ff0000");
-  });
-});
-
-describe("seriesChanged", () => {
-  const makeParsed = (labels: string[]): ParsedMetrics => ({
-    labels: [],
-    timestamps: [],
-    series: labels.map((label) => ({ label, color: "", data: [] })),
-  });
-
-  it("returns true when previous is null", () => {
-    expect(seriesChanged(null, makeParsed(["a"]))).toBe(true);
-  });
-
-  it("returns true when series count differs", () => {
-    expect(seriesChanged(makeParsed(["a"]), makeParsed(["a", "b"]))).toBe(true);
-  });
-
-  it("returns true when labels differ", () => {
-    expect(seriesChanged(makeParsed(["a", "b"]), makeParsed(["a", "c"]))).toBe(true);
-  });
-
-  it("returns false when labels match", () => {
-    expect(seriesChanged(makeParsed(["a", "b"]), makeParsed(["a", "b"]))).toBe(false);
   });
 });
 

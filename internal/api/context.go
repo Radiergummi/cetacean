@@ -14,6 +14,7 @@ const jsonLDContextDoc = `{
     "kind": "urn:cetacean:kind",
     "name": "urn:cetacean:name",
     "replicas": "urn:cetacean:replicas",
+    "runningReplicas": "urn:cetacean:runningReplicas",
     "mode": "urn:cetacean:mode",
     "role": "urn:cetacean:role",
     "state": "urn:cetacean:state",

@@ -66,6 +66,7 @@ export default function PluginDetail() {
   }, [name]);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- the fetch is the external system
     fetchPlugin();
   }, [fetchPlugin]);
 
@@ -248,7 +249,7 @@ export default function PluginDetail() {
           value={
             <span
               className={
-                plugin.Enabled ? "text-green-700 dark:text-green-400" : "text-muted-foreground"
+                plugin.Enabled ? "text-status-ok dark:text-status-ok" : "text-muted-foreground"
               }
             >
               {plugin.Enabled ? "Enabled" : "Disabled"}

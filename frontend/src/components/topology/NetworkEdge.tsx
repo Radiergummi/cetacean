@@ -66,29 +66,29 @@ function buildOrthogonalPath(points: Point[], radius = 6): string {
 
   for (let index = 1; index < points.length - 1; index++) {
     const prev = points[index - 1];
-    const curr = points[index];
+    const currentPoint = points[index];
     const next = points[index + 1];
 
-    if (!prev || !curr || !next) {
+    if (!prev || !currentPoint || !next) {
       continue;
     }
 
-    const dPrev = Math.max(Math.abs(curr.x - prev.x), Math.abs(curr.y - prev.y));
-    const dNext = Math.max(Math.abs(next.x - curr.x), Math.abs(next.y - curr.y));
+    const dPrev = Math.max(Math.abs(currentPoint.x - prev.x), Math.abs(currentPoint.y - prev.y));
+    const dNext = Math.max(Math.abs(next.x - currentPoint.x), Math.abs(next.y - currentPoint.y));
     const r = Math.min(radius, dPrev / 2, dNext / 2);
 
-    const dx1 = Math.sign(curr.x - prev.x);
-    const dy1 = Math.sign(curr.y - prev.y);
-    const dx2 = Math.sign(next.x - curr.x);
-    const dy2 = Math.sign(next.y - curr.y);
+    const dx1 = Math.sign(currentPoint.x - prev.x);
+    const dy1 = Math.sign(currentPoint.y - prev.y);
+    const dx2 = Math.sign(next.x - currentPoint.x);
+    const dy2 = Math.sign(next.y - currentPoint.y);
 
-    const ax = curr.x - dx1 * r;
-    const ay = curr.y - dy1 * r;
-    const bx = curr.x + dx2 * r;
-    const by = curr.y + dy2 * r;
+    const ax = currentPoint.x - dx1 * r;
+    const ay = currentPoint.y - dy1 * r;
+    const bx = currentPoint.x + dx2 * r;
+    const by = currentPoint.y + dy2 * r;
 
     d += ` L ${ax} ${ay}`;
-    d += ` Q ${curr.x} ${curr.y} ${bx} ${by}`;
+    d += ` Q ${currentPoint.x} ${currentPoint.y} ${bx} ${by}`;
   }
 
   const last = points[points.length - 1];
@@ -208,11 +208,14 @@ export default function NetworkEdge({
             }}
           >
             {data.networks.map((net) => (
-              <div
+              <button
                 key={net.id}
-                className="flex cursor-pointer items-center gap-1.5 py-0.5 hover:underline"
-                onMouseDown={(e) => {
-                  e.stopPropagation();
+                type="button"
+                className="flex w-full cursor-pointer items-center gap-1.5 py-0.5 text-left hover:underline"
+                // React Flow claims the click on an edge, so the navigation
+                // has to happen before it does.
+                onMouseDown={(event) => {
+                  event.stopPropagation();
                   navigate(`/networks/${net.id}`);
                 }}
               >
@@ -224,7 +227,7 @@ export default function NetworkEdge({
                 <span className="text-muted-foreground">
                   {net.driver} · {net.scope}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         )}

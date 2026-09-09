@@ -40,14 +40,14 @@ export function DeploymentChanges({
             {old && change ? (
               <>
                 <span
-                  className="truncate font-mono text-xs text-red-600 line-through dark:text-red-400"
+                  className="truncate font-mono text-xs text-status-danger line-through"
                   title={old}
                 >
                   {renderSwarmTemplate(old)}
                 </span>
                 <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
                 <span
-                  className="truncate font-mono text-xs text-green-600 dark:text-green-400"
+                  className="truncate font-mono text-xs text-status-ok"
                   title={change}
                 >
                   {renderSwarmTemplate(change)}
@@ -55,14 +55,14 @@ export function DeploymentChanges({
               </>
             ) : old ? (
               <span
-                className="truncate font-mono text-xs text-red-600 dark:text-red-400"
+                className="truncate font-mono text-xs text-status-danger"
                 title={old}
               >
                 {renderSwarmTemplate(old)}
               </span>
             ) : (
               <span
-                className="truncate font-mono text-xs text-green-600 dark:text-green-400"
+                className="truncate font-mono text-xs text-status-ok"
                 title={change ?? ""}
               >
                 {renderSwarmTemplate(change ?? "")}

@@ -4,14 +4,56 @@
     <meta charset="UTF-8" />
     <link
       rel="icon"
-      type="image/svg+xml"
-      href="/vite.svg"
+      href="./favicon.ico"
+      sizes="32x32"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      href="./favicon-32x32.png"
     />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
+    <!--
+      Lets the browser paint its canvas in the reader's preferred scheme before
+      any stylesheet arrives, so "system" costs no flash at all.
+    -->
+    <meta
+      name="color-scheme"
+      content="light dark"
+    />
     <title>Cetacean</title>
+    <!--
+      Applies the stored theme before the first paint, render-blocking on
+      purpose: the React tree sets the same class from an effect, which lands
+      after the browser has already painted a light background, so a dark-mode
+      reader saw a white flash on every load.
+
+      Inline rather than a file: it is ~600 bytes on the critical path of every
+      cold load, and the server allows it by hashing whatever inline scripts
+      this document actually carries (internal/api's InlineScriptHashes), so
+      the Content-Security-Policy cannot fall out of step with an edit here.
+
+      The resolution rule is mirrored in components/ThemeToggle.tsx, which owns
+      the theme once React is running. Keep the two in step.
+    -->
+    <script>
+      try {
+        var stored = localStorage.getItem("theme");
+        var theme =
+          stored === "dark" || stored === "light" || stored === "system" ? stored : "system";
+        var dark =
+          theme === "dark" ||
+          (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+        document.documentElement.classList.toggle("dark", dark);
+      } catch {
+        // A browser set to block site data throws on localStorage. The default
+        // stylesheet is the light theme, which is what the page already shows.
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

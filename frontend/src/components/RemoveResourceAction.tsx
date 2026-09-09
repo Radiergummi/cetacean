@@ -103,9 +103,7 @@ export function RemoveResourceAction({
       </AlertDialog>
       {remove.error && (
         <div className="flex items-center gap-2">
-          <p className="text-xs text-red-600 dark:text-red-400">
-            {errorInfo?.suggestion ?? remove.error}
-          </p>
+          <p className="text-xs text-status-danger">{errorInfo?.suggestion ?? remove.error}</p>
           {showForceRemove && (
             <Button
               variant="destructive"

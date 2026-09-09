@@ -71,11 +71,20 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
     const maxHeight = lineHeight * 5 + paddingTop + paddingBottom;
 
     textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight)}px`;
+    // `value` is the trigger, not an input: the effect measures the textarea's
+    // scrollHeight, which only changes once the new value has been laid out.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-run trigger
   }, [value]);
 
-  useEffect(() => {
+  // A fresh suggestion list starts at the top. Settled during render, so the
+  // dropdown never paints one frame with the previous list's row highlighted.
+  const suggestions = completion?.suggestions;
+  const [previousSuggestions, setPreviousSuggestions] = useState(suggestions);
+
+  if (previousSuggestions !== suggestions) {
+    setPreviousSuggestions(suggestions);
     setHighlightIndex(0);
-  }, [completion?.suggestions]);
+  }
 
   /**
    * Replaces the current token with the selected suggestion and updates the textarea.
@@ -250,6 +259,7 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
       </div>
 
       <button
+        type="button"
         onClick={onRun}
         disabled={loading}
         className="inline-flex h-8 items-center gap-1.5 self-start rounded-md border bg-background px-2.5 text-xs hover:bg-muted disabled:opacity-50"

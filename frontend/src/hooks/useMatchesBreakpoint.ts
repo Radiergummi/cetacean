@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 const breakpoints = {
   sm: 640,
@@ -17,19 +17,27 @@ export function useMatchesBreakpoint(
   const offset = breakpoints[breakpoint];
   const query = direction === "below" ? `(max-width: ${offset - 1}px)` : `(min-width: ${offset}px)`;
 
-  const [matches, setMatches] = useState(() => matchMedia(query).matches);
+  // One list per query, not one per call: React reads the snapshot on every
+  // render, and `matchMedia` parses the query and registers a live object with
+  // the style engine each time it is called.
+  const mediaQuery = useMemo(() => matchMedia(query), [query]);
 
-  useEffect(() => {
-    const mediaQuery = matchMedia(query);
+  // The viewport is an external store, so React reads it directly rather than
+  // mirroring it into state from an effect. That also closes the gap the effect
+  // left: a change landing between the first render and the listener being
+  // attached used to go unnoticed until the next one.
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      mediaQuery.addEventListener("change", onStoreChange);
 
-    setMatches(mediaQuery.matches);
+      return () => mediaQuery.removeEventListener("change", onStoreChange);
+    },
+    [mediaQuery],
+  );
 
-    const handler = (event: { matches: boolean }) => setMatches(event.matches);
-
-    mediaQuery.addEventListener("change", handler);
-
-    return () => mediaQuery.removeEventListener("change", handler);
-  }, [query]);
-
-  return matches;
+  return useSyncExternalStore(
+    subscribe,
+    () => mediaQuery.matches,
+    () => false,
+  );
 }

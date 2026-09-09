@@ -115,7 +115,7 @@ func TestRequestLogger_5xxLevel(t *testing.T) {
 func TestSecurityHeaders(t *testing.T) {
 	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}), false)
+	}), false, nil)
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
@@ -127,12 +127,10 @@ func TestSecurityHeaders(t *testing.T) {
 	if got := w.Header().Get("X-Frame-Options"); got != "DENY" {
 		t.Errorf("X-Frame-Options=%q, want DENY", got)
 	}
-	if got := w.Header().
-		Get("Content-Security-Policy"); got != "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" {
-		t.Errorf(
-			"Content-Security-Policy=%q, want default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:",
-			got,
-		)
+	want := "default-src 'self'; script-src 'self'; " +
+		"style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+	if got := w.Header().Get("Content-Security-Policy"); got != want {
+		t.Errorf("Content-Security-Policy=%q, want %q", got, want)
 	}
 	if got := w.Header().Get("Referrer-Policy"); got != "no-referrer" {
 		t.Errorf("Referrer-Policy=%q, want no-referrer", got)
@@ -145,7 +143,7 @@ func TestSecurityHeaders(t *testing.T) {
 func TestSecurityHeaders_HSTS(t *testing.T) {
 	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}), true)
+	}), true, nil)
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()

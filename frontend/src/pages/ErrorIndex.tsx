@@ -26,7 +26,7 @@ export default function ErrorIndex() {
         return res.json();
       })
       .then(setErrors)
-      .catch((err) => setError(err.message));
+      .catch((definition) => setError(definition.message));
   }, []);
 
   if (error) {
@@ -60,14 +60,14 @@ export default function ErrorIndex() {
   };
 
   const grouped = new Map<string, ErrorDef[]>();
-  for (const err of errors) {
-    const prefix = err.code.slice(0, 3);
+  for (const definition of errors) {
+    const prefix = definition.code.slice(0, 3);
     const list = grouped.get(prefix);
 
     if (list) {
-      list.push(err);
+      list.push(definition);
     } else {
-      grouped.set(prefix, [err]);
+      grouped.set(prefix, [definition]);
     }
   }
 

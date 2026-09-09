@@ -66,7 +66,7 @@ func TestBuildNetworkJGF(t *testing.T) {
 		{ID: "net1", Name: "mystack_default", Driver: "overlay", Scope: "swarm"},
 	}
 
-	g := buildNetworkJGF(services, networks, "/api/context.jsonld")
+	g := buildNetworkJGF(services, networks, nil, "/api/context.jsonld")
 
 	// 2 service nodes
 	if len(g.Nodes) != 2 {
@@ -326,7 +326,7 @@ func TestHandleTopology_JGF(t *testing.T) {
 }
 
 func TestBuildNetworkJGF_EmptyInput(t *testing.T) {
-	g := buildNetworkJGF(nil, nil, "/api/context.jsonld")
+	g := buildNetworkJGF(nil, nil, nil, "/api/context.jsonld")
 
 	if g.ID != "network" {
 		t.Errorf("id=%q, want network", g.ID)
@@ -428,7 +428,7 @@ func TestBuildNetworkJGF_IsolatedService(t *testing.T) {
 		// No VIPs.
 	})
 
-	g := buildNetworkJGF(c.ListServices(), c.ListNetworks(), jsonLDContext)
+	g := buildNetworkJGF(c.ListServices(), c.ListNetworks(), c.RunningTaskCounts(), jsonLDContext)
 
 	if len(g.Nodes) != 1 {
 		t.Fatalf("nodes=%d, want 1", len(g.Nodes))
@@ -724,7 +724,7 @@ func TestBuildNetworkJGFSeesDNSRRAttachments(t *testing.T) {
 	}
 	networks := []network.Summary{{ID: "net1", Name: "app_default", Driver: "overlay"}}
 
-	g := buildNetworkJGF(services, networks, "/api/context.jsonld")
+	g := buildNetworkJGF(services, networks, nil, "/api/context.jsonld")
 
 	if len(g.Edges) != 1 {
 		t.Fatalf("edges=%d, want 1 — the dnsrr service must still share net1", len(g.Edges))
@@ -824,7 +824,7 @@ func TestBuildNetworkJGFOrdersSharedNetworksDeterministically(t *testing.T) {
 	}
 
 	names := func() []string {
-		g := buildNetworkJGF(services, networks, "/api/context.jsonld")
+		g := buildNetworkJGF(services, networks, nil, "/api/context.jsonld")
 		if len(g.Edges) != 1 {
 			t.Fatalf("edges=%d, want 1", len(g.Edges))
 		}
@@ -919,5 +919,67 @@ func TestRemovedTopologyProjectionsAreGone(t *testing.T) {
 				t.Errorf("detail = %q, want it to point at the replacement", problem.Detail)
 			}
 		})
+	}
+}
+
+// The dashboard's topology card reads runningReplicas beside replicas to
+// colour its status dot. It used to fall back to the desired count when the
+// running one was absent — which it always was — so every service on the graph
+// rendered as fully up, including one running nothing.
+func TestNetworkJGFCarriesRunningReplicas(t *testing.T) {
+	replicas := uint64(3)
+	services := []swarm.Service{
+		{
+			ID: "svc1",
+			Spec: swarm.ServiceSpec{
+				Annotations: swarm.Annotations{Name: "web"},
+				Mode: swarm.ServiceMode{
+					Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+				},
+			},
+		},
+		{
+			ID: "svc2",
+			Spec: swarm.ServiceSpec{
+				Annotations: swarm.Annotations{Name: "down"},
+				Mode: swarm.ServiceMode{
+					Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+				},
+			},
+		},
+	}
+
+	g := buildNetworkJGF(services, nil, map[string]int{"svc1": 2}, "/api/context.jsonld")
+
+	for _, tc := range []struct {
+		id   string
+		want int
+	}{
+		{"svc1", 2},
+		// Absent from the counts map, so it is running none — and the field
+		// still has to be present, or the consumer is back to guessing.
+		{"svc2", 0},
+	} {
+		node, ok := g.Nodes[jgf.URN("service", tc.id)]
+		if !ok {
+			t.Fatalf("missing node for %s", tc.id)
+		}
+
+		got, ok := node.Metadata["runningReplicas"].(int)
+		if !ok {
+			t.Fatalf(
+				"%s: runningReplicas missing or not an int: %#v",
+				tc.id,
+				node.Metadata["runningReplicas"],
+			)
+		}
+
+		if got != tc.want {
+			t.Errorf("%s: runningReplicas=%d, want %d", tc.id, got, tc.want)
+		}
+
+		if desired, _ := node.Metadata["replicas"].(int); desired != 3 {
+			t.Errorf("%s: replicas=%d, want 3", tc.id, desired)
+		}
 	}
 }

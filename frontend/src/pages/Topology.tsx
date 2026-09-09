@@ -16,7 +16,7 @@ import { computeLayout } from "../lib/layoutElk";
 import {
   networkGraphToReactFlow,
   placementGraphToReactFlow,
-  hashColor,
+  stackColors,
 } from "../lib/topologyTransform";
 import { getErrorMessage } from "../lib/utils";
 import { useLatestRef } from "@/hooks/useLatestRef";
@@ -34,22 +34,17 @@ const physicalNodeTypes = { physicalNode: PhysicalNodeCard };
 
 type View = "logical" | "physical";
 
-function StackLegend({
-  stackColors,
-  isMobile,
-}: {
-  stackColors: Map<string, string>;
-  isMobile: boolean;
-}) {
+function StackLegend({ colors, isMobile }: { colors: Map<string, string>; isMobile: boolean }) {
   const [open, setOpen] = useState(!isMobile);
 
-  if (stackColors.size === 0) {
+  if (colors.size === 0) {
     return null;
   }
 
   if (isMobile && !open) {
     return (
       <button
+        type="button"
         onClick={() => setOpen(true)}
         className="absolute right-3 bottom-3 z-10 rounded-lg border bg-card/90 p-2 shadow-sm backdrop-blur-sm"
         title="Show legend"
@@ -65,6 +60,7 @@ function StackLegend({
         <span className="font-medium text-muted-foreground">Stacks</span>
         {isMobile && (
           <button
+            type="button"
             onClick={() => setOpen(false)}
             className="ms-2 text-muted-foreground hover:text-foreground"
           >
@@ -73,7 +69,7 @@ function StackLegend({
         )}
       </div>
       <div className="flex flex-col gap-1">
-        {[...stackColors.entries()].map(([stack, color]) => (
+        {[...colors.entries()].map(([stack, color]) => (
           <span
             key={stack}
             className="flex items-center gap-1.5"
@@ -129,6 +125,9 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
     return () => {
       cancelled = true;
     };
+    // `structureKey` digests the graph's shape. The layout reads the refs, but
+    // it is the key changing that says the shape moved and a layout is owed.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-run trigger
   }, [structureKey, nodesRef, edgesRef]);
 
   // Patch node data in-place when only display data changes (replicas, status, etc.)
@@ -139,6 +138,9 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
 
     const dataMap = new Map(rawNodes.map(({ id, data }) => [id, data]));
 
+    // React Flow owns the node array and is only updated by writing back to it;
+    // patching in place is how its controlled API is driven.
+    // oxlint-disable-next-line react/set-state-in-effect -- React Flow's store is the external system
     setNodes((previous) =>
       previous.map((node) => {
         const data = dataMap.get(node.id);
@@ -155,18 +157,9 @@ function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) 
   const { nodes: rawNodes, edges: rawEdges } = useMemo(() => networkGraphToReactFlow(data), [data]);
   const { nodes, edges, ready } = useElkLayout(rawNodes, rawEdges);
 
-  const stackColors = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const hyperedge of data.hyperedges ?? []) {
-      if (hyperedge.metadata.kind === "stack") {
-        const name = hyperedge.metadata.name as string;
-        if (!map.has(name)) {
-          map.set(name, hashColor(name));
-        }
-      }
-    }
-    return map;
-  }, [data]);
+  // The same map the graph itself is coloured from — the legend built its own
+  // before, which only agreed with the cards because both hashed the name.
+  const legendColors = useMemo(() => stackColors(data), [data]);
 
   if (Object.keys(data.nodes).length === 0) {
     return (
@@ -203,7 +196,7 @@ function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) 
         </ReactFlow>
         <StackLegend
           key={isMobile ? "mobile" : "desktop"}
-          stackColors={stackColors}
+          colors={legendColors}
           isMobile={isMobile}
         />
       </div>
@@ -259,8 +252,8 @@ export default function Topology() {
     queryFn: () => api.topology(),
   });
 
-  const networkData = topologyData?.graphs.find((g) => g.id === "network") ?? null;
-  const placementData = topologyData?.graphs.find((g) => g.id === "placement") ?? null;
+  const networkData = topologyData?.graphs.find((graph) => graph.id === "network") ?? null;
+  const placementData = topologyData?.graphs.find((graph) => graph.id === "placement") ?? null;
   const error = queryError ? getErrorMessage(queryError, "Failed to load topology") : null;
 
   useDebouncedInvalidation("/events", [["topology"]], 2_000);
@@ -285,6 +278,7 @@ export default function Topology() {
         <div className="flex h-64 flex-col items-center justify-center gap-3">
           <p className="text-sm text-destructive">{error}</p>
           <button
+            type="button"
             className="rounded-md bg-muted px-3 py-1.5 text-sm hover:bg-muted/80"
             onClick={() => {
               void queryClient.invalidateQueries({ queryKey: ["topology"] });

@@ -28,10 +28,11 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       if (this.props.inline) {
         return (
-          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400">
+          <div className="flex items-center gap-2 rounded-lg border border-status-danger/30 bg-status-danger/10 p-3 text-sm text-status-danger">
             <AlertTriangle className="size-4 shrink-0" />
             <span className="truncate">{this.state.error.message}</span>
             <button
+              type="button"
               onClick={() => this.setState({ error: null })}
               className="ms-auto shrink-0 text-xs font-medium underline hover:no-underline"
             >
@@ -43,7 +44,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <AlertTriangle className="mb-4 size-12 text-red-500" />
+          <AlertTriangle className="mb-4 size-12 text-status-danger" />
           <h2 className="mb-2 text-lg font-semibold">Something went wrong</h2>
           <p className="mb-4 max-w-md text-sm text-muted-foreground">
             This view couldn&apos;t be displayed. The cluster data may have changed unexpectedly
@@ -51,12 +52,14 @@ export default class ErrorBoundary extends Component<Props, State> {
           </p>
           <div className="mb-4 flex gap-2">
             <button
+              type="button"
               onClick={() => this.setState({ error: null })}
               className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
             >
               Try again
             </button>
             <button
+              type="button"
               onClick={() => window.location.reload()}
               className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
             >

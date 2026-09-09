@@ -80,13 +80,15 @@ export default function CreateDataResourceForm({
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={`my-${lowerType}`}
+            // The dialog just opened at the person's request; its first field is where they are going.
+            // oxlint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           />
         </div>
 
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <Label>Data</Label>
+            <span className="text-sm leading-none font-medium">Data</span>
             <div className="flex gap-1 text-xs">
               <button
                 type="button"

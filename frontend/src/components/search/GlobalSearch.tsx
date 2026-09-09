@@ -32,6 +32,7 @@ const GlobalSearch = forwardRef<GlobalSearchHandle, { className?: string }>(func
   return (
     <div className={className}>
       <button
+        type="button"
         className="flex size-8 cursor-pointer items-center justify-center gap-2 rounded-md text-sm transition select-none hover:bg-muted xl:size-auto xl:min-w-3xs xl:justify-between xl:border xl:bg-muted/50 xl:py-1 xl:ps-2 xl:pe-1.5 xl:text-muted-foreground xl:hover:bg-muted"
         onClick={() => setOpen(true)}
       >

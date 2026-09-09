@@ -27,13 +27,22 @@ export function TimeRangeSelector({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Sync custom inputs when opening
-  useEffect(() => {
+  // Seed the custom inputs from the current range as the panel opens, rather
+  // than syncing them from an effect. Every path that changes `value` closes
+  // the panel — a preset, or applying a custom range — so opening is the only
+  // moment they need to agree, and syncing on `value` would overwrite what
+  // someone had already typed.
+  const toggle = () => {
     if (open) {
-      setCustomSince(value.since ? toLocalInput(value.since) : "");
-      setCustomUntil(value.until ? toLocalInput(value.until) : "");
+      setOpen(false);
+
+      return;
     }
-  }, [open, value.since, value.until]);
+
+    setCustomSince(value.since ? toLocalInput(value.since) : "");
+    setCustomUntil(value.until ? toLocalInput(value.until) : "");
+    setOpen(true);
+  };
 
   const applyCustom = () => {
     const since = customSince ? new Date(customSince).toISOString() : undefined;
@@ -58,7 +67,8 @@ export function TimeRangeSelector({
       ref={ref}
     >
       <button
-        onClick={() => setOpen(!open)}
+        type="button"
+        onClick={toggle}
         data-active={value.since || value.until || undefined}
         className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-xs hover:bg-muted data-active:border-primary/30 data-active:bg-primary/10 data-active:text-primary"
         title="Time range"
@@ -76,17 +86,18 @@ export function TimeRangeSelector({
               Presets
             </div>
             <div className="flex flex-wrap gap-1">
-              {presets.map((p) => (
+              {presets.map((preset) => (
                 <button
-                  key={p.label}
+                  type="button"
+                  key={preset.label}
                   onClick={() => {
-                    onChange(p.getValue());
+                    onChange(preset.getValue());
                     setOpen(false);
                   }}
-                  aria-pressed={value.label === p.label}
+                  aria-pressed={value.label === preset.label}
                   className="rounded-md bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted/80 aria-pressed:bg-primary aria-pressed:text-primary-foreground"
                 >
-                  {p.label}
+                  {preset.label}
                 </button>
               ))}
             </div>
@@ -108,6 +119,7 @@ export function TimeRangeSelector({
                 />
                 {customSince && (
                   <button
+                    type="button"
                     onClick={() => setCustomSince("")}
                     className="text-muted-foreground hover:text-foreground"
                   >
@@ -125,6 +137,7 @@ export function TimeRangeSelector({
                 />
                 {customUntil && (
                   <button
+                    type="button"
                     onClick={() => setCustomUntil("")}
                     className="text-muted-foreground hover:text-foreground"
                   >
@@ -133,6 +146,7 @@ export function TimeRangeSelector({
                 )}
               </label>
               <button
+                type="button"
                 onClick={applyCustom}
                 disabled={!customSince && !customUntil}
                 className="h-7 w-full rounded-md bg-primary text-xs font-medium text-primary-foreground disabled:opacity-40"
@@ -170,7 +184,7 @@ export function LevelFilter({
   );
 }
 
-const STREAM_OPTIONS = ["all", "stdout", "stderr"] as const;
+const streamOptions = ["all", "stdout", "stderr"] as const;
 
 export function StreamFilterToggle({
   value,
@@ -181,8 +195,9 @@ export function StreamFilterToggle({
 }) {
   return (
     <div className="flex h-8 items-center overflow-hidden rounded-md border bg-background">
-      {STREAM_OPTIONS.map((opt) => (
+      {streamOptions.map((opt) => (
         <button
+          type="button"
           key={opt}
           onClick={() => onChange(opt)}
           aria-pressed={value === opt}
@@ -210,6 +225,10 @@ function useCountdown(deadline: number | null | undefined): number {
       return;
     }
 
+    // The clock is the external system: `Date.now()` cannot be read during
+    // render, and this resyncs the moment a new deadline arrives rather than up
+    // to a second later.
+    // oxlint-disable-next-line react/set-state-in-effect -- reading the clock
     setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 1000);
 
@@ -243,7 +262,7 @@ export function LiveStatus({
 
   if (retrying) {
     return (
-      <span className="me-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+      <span className="me-2 flex items-center gap-1.5 text-xs text-status-warning">
         <Spinner className="size-3" />
         <span>
           {status.reason
@@ -256,8 +275,8 @@ export function LiveStatus({
 
   if (live) {
     return (
-      <span className="me-2 flex items-center gap-1.5 text-xs text-green-500 opacity-100 transition starting:opacity-0">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
+      <span className="me-2 flex items-center gap-1.5 text-xs text-status-ok opacity-100 transition starting:opacity-0">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-ok" />
         Live
       </span>
     );
@@ -270,6 +289,7 @@ export function LiveStatus({
           {status.reason ? `Live tail stopped — ${status.reason}.` : "Live tail stopped."}
         </span>
         <button
+          type="button"
           onClick={onResume}
           className="rounded-md border px-2 py-0.5 text-xs hover:bg-muted"
         >

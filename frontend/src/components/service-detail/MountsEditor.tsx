@@ -5,6 +5,7 @@ import ResourceName from "@/components/ResourceName";
 import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { getErrorMessage } from "@/lib/utils";
@@ -166,62 +167,66 @@ export function MountsEditor({
                   </Button>
 
                   <div className="grid grid-cols-2 gap-3 pe-10">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-                        Type <DockerDocsLink href="https://docs.docker.com/engine/storage/" />
-                      </label>
-
-                      <select
-                        value={mount.Type}
-                        onChange={(event) => handleTypeChange(index, event.target.value)}
-                        className={selectClassName}
-                      >
-                        {mountTypes.map((type) => (
-                          <option
-                            key={type}
-                            value={type}
-                          >
-                            {type}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <Field
+                      label={
+                        <>
+                          Type <DockerDocsLink href="https://docs.docker.com/engine/storage/" />
+                        </>
+                      }
+                      labelClassName="gap-1"
+                    >
+                      {(control) => (
+                        <select
+                          {...control}
+                          value={mount.Type}
+                          onChange={(event) => handleTypeChange(index, event.target.value)}
+                          className={selectClassName}
+                        >
+                          {mountTypes.map((type) => (
+                            <option
+                              key={type}
+                              value={type}
+                            >
+                              {type}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </Field>
 
                     {mount.Type !== "tmpfs" && (
-                      <div className="flex flex-col gap-1.5">
-                        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-                          {sourceLabel(mount.Type)}
-                        </label>
+                      <Field label={sourceLabel(mount.Type)}>
+                        {(control) => (
+                          <Input
+                            {...control}
+                            value={mount.Source}
+                            onChange={(event) =>
+                              updateMount(index, {
+                                ...mount,
+                                Source: event.target.value,
+                              })
+                            }
+                            placeholder={mount.Type === "bind" ? "/host/path" : ""}
+                          />
+                        )}
+                      </Field>
+                    )}
 
+                    <Field label="Container path">
+                      {(control) => (
                         <Input
-                          value={mount.Source}
+                          {...control}
+                          value={mount.Target}
                           onChange={(event) =>
                             updateMount(index, {
                               ...mount,
-                              Source: event.target.value,
+                              Target: event.target.value,
                             })
                           }
-                          placeholder={mount.Type === "bind" ? "/host/path" : ""}
+                          placeholder="/container/path"
                         />
-                      </div>
-                    )}
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-                        Container path
-                      </label>
-
-                      <Input
-                        value={mount.Target}
-                        onChange={(event) =>
-                          updateMount(index, {
-                            ...mount,
-                            Target: event.target.value,
-                          })
-                        }
-                        placeholder="/container/path"
-                      />
-                    </div>
+                      )}
+                    </Field>
 
                     <div className="flex flex-col gap-1.5">
                       <label className="flex items-center gap-2 text-xs font-medium text-foreground">
@@ -240,34 +245,33 @@ export function MountsEditor({
                     </div>
 
                     {mount.Type === "bind" && (
-                      <div className="flex flex-col gap-1.5">
-                        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-                          Propagation
-                        </label>
-
-                        <select
-                          value={mount.BindOptions?.Propagation ?? "rprivate"}
-                          onChange={(event) =>
-                            updateMount(index, {
-                              ...mount,
-                              BindOptions: {
-                                ...mount.BindOptions,
-                                Propagation: event.target.value,
-                              },
-                            })
-                          }
-                          className={selectClassName}
-                        >
-                          {propagationOptions.map((option) => (
-                            <option
-                              key={option}
-                              value={option}
-                            >
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <Field label="Propagation">
+                        {(control) => (
+                          <select
+                            {...control}
+                            value={mount.BindOptions?.Propagation ?? "rprivate"}
+                            onChange={(event) =>
+                              updateMount(index, {
+                                ...mount,
+                                BindOptions: {
+                                  ...mount.BindOptions,
+                                  Propagation: event.target.value,
+                                },
+                              })
+                            }
+                            className={selectClassName}
+                          >
+                            {propagationOptions.map((option) => (
+                              <option
+                                key={option}
+                                value={option}
+                              >
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </Field>
                     )}
 
                     {mount.Type === "volume" && (
@@ -291,96 +295,92 @@ export function MountsEditor({
                           </label>
                         </div>
 
-                        <div className="flex flex-col gap-1.5">
-                          <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-                            Subpath
-                          </label>
+                        <Field label="Subpath">
+                          {(control) => (
+                            <Input
+                              {...control}
+                              value={mount.VolumeOptions?.Subpath ?? ""}
+                              onChange={(event) =>
+                                updateMount(index, {
+                                  ...mount,
+                                  VolumeOptions: {
+                                    ...mount.VolumeOptions,
+                                    Subpath: event.target.value || undefined,
+                                  },
+                                })
+                              }
+                              placeholder="Optional subpath"
+                            />
+                          )}
+                        </Field>
+                      </>
+                    )}
 
+                    {mount.Type === "tmpfs" && (
+                      <>
+                        <Field label="Size (bytes)">
+                          {(control) => (
+                            <Input
+                              {...control}
+                              type="number"
+                              min={0}
+                              value={mount.TmpfsOptions?.SizeBytes ?? ""}
+                              onChange={(event) =>
+                                updateMount(index, {
+                                  ...mount,
+                                  TmpfsOptions: {
+                                    ...mount.TmpfsOptions,
+                                    SizeBytes: Number(event.target.value) || undefined,
+                                  },
+                                })
+                              }
+                              placeholder="0 (unlimited)"
+                            />
+                          )}
+                        </Field>
+
+                        <Field label="Mode (octal)">
+                          {(control) => (
+                            <Input
+                              {...control}
+                              type="number"
+                              min={0}
+                              value={mount.TmpfsOptions?.Mode ?? ""}
+                              onChange={(event) =>
+                                updateMount(index, {
+                                  ...mount,
+                                  TmpfsOptions: {
+                                    ...mount.TmpfsOptions,
+                                    Mode: Number(event.target.value) || undefined,
+                                  },
+                                })
+                              }
+                              placeholder="1777"
+                            />
+                          )}
+                        </Field>
+                      </>
+                    )}
+
+                    {mount.Type === "image" && (
+                      <Field label="Subpath">
+                        {(control) => (
                           <Input
-                            value={mount.VolumeOptions?.Subpath ?? ""}
+                            {...control}
+                            value={mount.ImageOptions?.Subpath ?? ""}
                             onChange={(event) =>
                               updateMount(index, {
                                 ...mount,
-                                VolumeOptions: {
-                                  ...mount.VolumeOptions,
+                                ImageOptions: {
+                                  ...mount.ImageOptions,
                                   Subpath: event.target.value || undefined,
                                 },
                               })
                             }
                             placeholder="Optional subpath"
                           />
-                        </div>
-                      </>
-                    )}
-
-                    {mount.Type === "tmpfs" && (
-                      <>
-                        <div className="flex flex-col gap-1.5">
-                          <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-                            Size (bytes)
-                          </label>
-
-                          <Input
-                            type="number"
-                            min={0}
-                            value={mount.TmpfsOptions?.SizeBytes ?? ""}
-                            onChange={(event) =>
-                              updateMount(index, {
-                                ...mount,
-                                TmpfsOptions: {
-                                  ...mount.TmpfsOptions,
-                                  SizeBytes: Number(event.target.value) || undefined,
-                                },
-                              })
-                            }
-                            placeholder="0 (unlimited)"
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                          <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-                            Mode (octal)
-                          </label>
-
-                          <Input
-                            type="number"
-                            min={0}
-                            value={mount.TmpfsOptions?.Mode ?? ""}
-                            onChange={(event) =>
-                              updateMount(index, {
-                                ...mount,
-                                TmpfsOptions: {
-                                  ...mount.TmpfsOptions,
-                                  Mode: Number(event.target.value) || undefined,
-                                },
-                              })
-                            }
-                            placeholder="1777"
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {mount.Type === "image" && (
-                      <div className="flex flex-col gap-1.5">
-                        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-                          Subpath
-                        </label>
-
-                        <Input
-                          value={mount.ImageOptions?.Subpath ?? ""}
-                          onChange={(event) =>
-                            updateMount(index, {
-                              ...mount,
-                              ImageOptions: {
-                                ...mount.ImageOptions,
-                                Subpath: event.target.value || undefined,
-                              },
-                            })
-                          }
-                          placeholder="Optional subpath"
-                        />
-                      </div>
+                        )}
+                      </Field>
                     )}
                   </div>
                 </div>

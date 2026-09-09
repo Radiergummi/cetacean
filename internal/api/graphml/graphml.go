@@ -94,6 +94,12 @@ func Render(g jgf.Graph) ([]byte, error) {
 			{ID: "label", For: attrForNode, AttrName: "label", AttrType: attrTypeStr},
 			{ID: "kind", For: attrForNode, AttrName: "kind", AttrType: attrTypeStr},
 			{ID: "replicas", For: attrForNode, AttrName: "replicas", AttrType: attrTypeInt},
+			{
+				ID:       "runningReplicas",
+				For:      attrForNode,
+				AttrName: "runningReplicas",
+				AttrType: attrTypeInt,
+			},
 			{ID: "image", For: attrForNode, AttrName: "image", AttrType: attrTypeStr},
 			{ID: "mode", For: attrForNode, AttrName: "mode", AttrType: attrTypeStr},
 			{ID: "ports", For: attrForNode, AttrName: "ports", AttrType: attrTypeStr},
@@ -179,6 +185,22 @@ func Render(g jgf.Graph) ([]byte, error) {
 }
 
 // buildNodeElem constructs a <node> element from a JGF node.
+// intData renders one integer-typed metadata value. A JGF document built in
+// this process carries Go ints; one decoded from JSON carries float64, and both
+// reach here.
+func intData(key string, value any) (dataElem, bool) {
+	switch v := value.(type) {
+	case nil:
+		return dataElem{}, false
+	case int:
+		return dataElem{Key: key, Value: strconv.Itoa(v)}, true
+	case float64:
+		return dataElem{Key: key, Value: strconv.Itoa(int(v))}, true
+	default:
+		return dataElem{Key: key, Value: fmt.Sprintf("%v", v)}, true
+	}
+}
+
 func buildNodeElem(urn string, node jgf.Node) nodeElem {
 	elem := nodeElem{ID: urn}
 
@@ -190,14 +212,9 @@ func buildNodeElem(urn string, node jgf.Node) nodeElem {
 		elem.Data = append(elem.Data, dataElem{Key: "kind", Value: kind})
 	}
 
-	if replicas, ok := node.Metadata["replicas"]; ok {
-		switch r := replicas.(type) {
-		case int:
-			elem.Data = append(elem.Data, dataElem{Key: "replicas", Value: strconv.Itoa(r)})
-		case float64:
-			elem.Data = append(elem.Data, dataElem{Key: "replicas", Value: strconv.Itoa(int(r))})
-		default:
-			elem.Data = append(elem.Data, dataElem{Key: "replicas", Value: fmt.Sprintf("%v", r)})
+	for _, key := range []string{"replicas", "runningReplicas"} {
+		if data, ok := intData(key, node.Metadata[key]); ok {
+			elem.Data = append(elem.Data, data)
 		}
 	}
 

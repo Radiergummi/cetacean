@@ -1,9 +1,10 @@
 import type { MonitoringStatus as Status } from "../../api/types";
+import { readStoredValue, writeStoredValue } from "@/lib/storage";
 import { AlertTriangle, BarChart3, X } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 
-const DISMISS_KEY = "cetacean:dismiss-monitoring-banner";
+const dismissKey = "cetacean:dismiss-monitoring-banner";
 
 interface Props {
   status: Status;
@@ -11,7 +12,7 @@ interface Props {
 }
 
 export default function MonitoringStatus({ status, source }: Props) {
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISS_KEY) === "true");
+  const [dismissed, setDismissed] = useState(() => readStoredValue(dismissKey) === "true");
 
   // Fully healthy — nothing to show
   if (status.prometheusConfigured && status.prometheusReachable) {
@@ -32,9 +33,9 @@ export default function MonitoringStatus({ status, source }: Props) {
 
     return (
       <Banner
-        icon={<BarChart3 className="size-5 shrink-0 text-blue-600 dark:text-blue-400" />}
+        icon={<BarChart3 className="size-5 shrink-0 text-status-info" />}
         onDismiss={() => {
-          localStorage.setItem(DISMISS_KEY, "true");
+          writeStoredValue(dismissKey, "true");
           setDismissed(true);
         }}
       >
@@ -42,14 +43,12 @@ export default function MonitoringStatus({ status, source }: Props) {
           <strong>Monitoring not configured.</strong> Deploy the monitoring stack to enable CPU,
           memory, and disk metrics across your cluster.
         </p>
-        <pre className="mt-2 max-w-fit overflow-x-auto rounded bg-blue-100 px-2 py-1 text-xs dark:bg-blue-500/10">
+        <pre className="mt-2 max-w-fit overflow-x-auto rounded bg-status-info/15 px-2 py-1 text-xs">
           docker stack deploy -c compose.monitoring.yaml cetacean-monitoring
         </pre>
         <p className="mt-3 text-xs">
           Then set{" "}
-          <code className="rounded bg-blue-100 px-1 py-0.5 font-mono dark:bg-blue-500/20">
-            prometheus.url
-          </code>{" "}
+          <code className="rounded bg-status-info/15 px-1 py-0.5 font-mono">prometheus.url</code>{" "}
           and restart Cetacean.
         </p>
       </Banner>
@@ -60,7 +59,7 @@ export default function MonitoringStatus({ status, source }: Props) {
   if (!status.prometheusReachable) {
     return (
       <Banner
-        icon={<AlertTriangle className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />}
+        icon={<AlertTriangle className="size-5 shrink-0 text-status-warning" />}
         variant="warn"
       >
         <p className="text-sm">
@@ -68,7 +67,7 @@ export default function MonitoringStatus({ status, source }: Props) {
           service is running and reachable from Cetacean.
         </p>
         {status.error && (
-          <pre className="mt-2 max-w-full overflow-x-auto rounded bg-amber-100 px-2 py-1 text-xs dark:bg-amber-500/10">
+          <pre className="mt-2 max-w-full overflow-x-auto rounded bg-status-warning/15 px-2 py-1 text-xs">
             {status.error}
           </pre>
         )}
@@ -105,9 +104,9 @@ export default function MonitoringStatus({ status, source }: Props) {
 
   return (
     <Banner
-      icon={<BarChart3 className="size-5 shrink-0 text-blue-600 dark:text-blue-400" />}
+      icon={<BarChart3 className="size-5 shrink-0 text-status-info" />}
       onDismiss={() => {
-        localStorage.setItem(DISMISS_KEY, "true");
+        writeStoredValue(dismissKey, "true");
         setDismissed(true);
       }}
     >
@@ -137,14 +136,15 @@ function Banner({
   return (
     <div
       data-variant={variant}
-      className="group mb-4 flex items-start gap-3 rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 data-[variant=warn]:border-amber-300 data-[variant=warn]:bg-amber-50 dark:border-blue-500/30 dark:bg-blue-500/10 dark:data-[variant=warn]:border-amber-500/30 dark:data-[variant=warn]:bg-amber-500/10"
+      className="group mb-4 flex items-start gap-3 rounded-lg border border-status-info/30 bg-status-info/10 px-4 py-3 data-[variant=warn]:border-status-warning/30 data-[variant=warn]:bg-status-warning/10"
     >
       {icon}
-      <div className="flex-1 text-blue-800 group-data-[variant=warn]:text-amber-800 dark:text-blue-200 dark:group-data-[variant=warn]:text-amber-200">
+      <div className="flex-1 text-status-info group-data-[variant=warn]:text-status-warning">
         {children}
       </div>
       {onDismiss && (
         <button
+          type="button"
           onClick={onDismiss}
           className="shrink-0 cursor-pointer text-current opacity-40 transition-opacity hover:opacity-70"
           aria-label="Dismiss"

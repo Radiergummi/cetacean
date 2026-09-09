@@ -21,7 +21,7 @@ export function HealthDot(props: HealthDotProps) {
       role="img"
       aria-label={health}
       data-health={health}
-      className="inline-block size-2.5 shrink-0 rounded-full bg-yellow-500 data-[health=critical]:bg-red-500 data-[health=healthy]:bg-green-500"
+      className="inline-block size-2.5 shrink-0 rounded-full bg-status-warning data-[health=critical]:bg-status-danger data-[health=healthy]:bg-status-ok"
     />
   );
 }
@@ -35,7 +35,7 @@ export function ReplicaHealth({ running, desired }: { running: number; desired: 
   return (
     <span
       data-healthy={healthy || undefined}
-      className="font-medium text-red-600 tabular-nums data-healthy:text-green-600 dark:text-red-400 dark:data-healthy:text-green-400"
+      className="font-medium text-status-danger tabular-nums data-healthy:text-status-ok"
     >
       {running}/{desired}
     </span>

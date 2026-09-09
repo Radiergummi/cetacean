@@ -307,14 +307,14 @@ export function ResourcesEditor({
           />
         </div>
       ) : capacityError ? (
-        <p className="text-xs text-red-600 dark:text-red-400">
+        <p className="text-xs text-status-danger">
           Failed to load cluster capacity. Try closing and reopening the editor.
         </p>
       ) : (
         <div className="h-24 animate-pulse rounded bg-muted" />
       )}
 
-      {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+      {saveError && <p className="text-xs text-status-danger">{saveError}</p>}
 
       <footer className="flex items-center justify-end gap-2">
         <Button

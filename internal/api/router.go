@@ -40,8 +40,13 @@ type RouterConfig struct {
 	PublicURL         string
 	CORS              *CORSConfig
 	TLSEnabled        bool
-	TrustedProxies    []netip.Prefix
-	Resyncer          Resyncer
+
+	// InlineScriptHashes are CSP `'sha256-…'` tokens for the SPA's inline
+	// scripts, from InlineScriptHashes. Empty means no inline script runs.
+	InlineScriptHashes []string
+
+	TrustedProxies []netip.Prefix
+	Resyncer       Resyncer
 
 	// MCPHandler, when non-nil, is mounted at {BasePath}/mcp. main.go builds
 	// it from internal/mcp; the api package stays decoupled from mcp-go.
@@ -673,7 +678,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	handler = negotiate(handler)
 	handler = auth.Middleware(authProvider)(handler)
 	handler = cors(cfg.CORS)(handler)
-	handler = securityHeaders(handler, cfg.TLSEnabled)
+	handler = securityHeaders(handler, cfg.TLSEnabled, cfg.InlineScriptHashes)
 	handler = recovery(handler)
 	handler = realIP(cfg.TrustedProxies)(handler)
 	handler = requestID(handler)
@@ -712,13 +717,16 @@ func isResourcePath(path string) bool {
 	}
 }
 
-func securityHeaders(next http.Handler, tlsEnabled bool) http.Handler {
+func securityHeaders(next http.Handler, tlsEnabled bool, inlineScriptHashes []string) http.Handler {
+	// Built once: the policy is the same on every response, and hashing the
+	// SPA's inline scripts per request would be pure waste.
+	csp := contentSecurityPolicy(inlineScriptHashes)
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().
-			Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:")
+		w.Header().Set("Content-Security-Policy", csp)
 		if tlsEnabled {
 			w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		}

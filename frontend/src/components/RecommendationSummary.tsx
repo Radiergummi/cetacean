@@ -23,7 +23,7 @@ export default function RecommendationSummary() {
       <div className="mt-1.5 flex gap-3 text-xs text-muted-foreground">
         {summary.critical > 0 && (
           <span>
-            <span className="mr-1 inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] leading-none font-medium text-white dark:bg-red-500">
+            <span className="mr-1 inline-flex min-w-5 items-center justify-center rounded-full bg-status-danger px-1.5 py-0.5 text-[10px] leading-none font-medium text-white">
               {summary.critical}
             </span>
             critical
@@ -31,7 +31,7 @@ export default function RecommendationSummary() {
         )}
         {summary.warning > 0 && (
           <span>
-            <span className="mr-1 inline-flex min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] leading-none font-medium text-white dark:bg-amber-500">
+            <span className="mr-1 inline-flex min-w-5 items-center justify-center rounded-full bg-status-warning px-1.5 py-0.5 text-[10px] leading-none font-medium text-white">
               {summary.warning}
             </span>
             warnings
@@ -39,7 +39,7 @@ export default function RecommendationSummary() {
         )}
         {summary.info > 0 && (
           <span>
-            <span className="mr-1 inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] leading-none font-medium text-white dark:bg-blue-500">
+            <span className="mr-1 inline-flex min-w-5 items-center justify-center rounded-full bg-status-info px-1.5 py-0.5 text-[10px] leading-none font-medium text-white">
               {summary.info}
             </span>
             info

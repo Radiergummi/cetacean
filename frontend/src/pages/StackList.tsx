@@ -81,14 +81,16 @@ export default function StackList() {
         cell: ({ serviceCount }) => serviceCount,
       },
       {
-        header: "Status",
+        // Rollout, not health — the Tasks column is what says whether the
+        // stack is running, so a settled rollout is left uncoloured here.
+        header: "Rollout",
         cell: ({ updatingServices }) =>
           updatingServices > 0 ? (
-            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+            <span className="text-sm font-medium text-status-info">
               Updating {updatingServices}
             </span>
           ) : (
-            <span className="text-sm font-medium text-green-600 dark:text-green-400">Stable</span>
+            <span className="text-sm font-medium text-muted-foreground">Stable</span>
           ),
       },
     ],
@@ -127,6 +129,7 @@ export default function StackList() {
         <EmptyState message={search ? "No stacks match your search" : "No stacks found"} />
       ) : viewMode === "table" ? (
         <DataTable
+          label="Stacks"
           columns={columns}
           data={filtered}
           keyFn={({ name }) => name}
@@ -158,8 +161,8 @@ function StackCard({ stack }: { stack: StackSummary }) {
       data-health={health}
       className={
         "group block rounded-lg border p-4 transition-all hover:border-foreground/20 hover:shadow-sm " +
-        "data-[health=critical]:border-red-200 data-[health=critical]:bg-red-50/50 " +
-        "dark:data-[health=critical]:border-red-900 dark:data-[health=critical]:bg-red-950/20"
+        "data-[health=critical]:border-status-danger/30 data-[health=critical]:bg-status-danger/10 " +
+        "dark:data-[health=critical]:border-status-danger/30 dark:data-[health=critical]:bg-status-danger/10"
       }
     >
       {/* Header */}
@@ -167,7 +170,7 @@ function StackCard({ stack }: { stack: StackSummary }) {
         <HealthDot health={health} />
         <span className="truncate font-medium">{stack.name}</span>
         {stack.updatingServices > 0 && (
-          <span className="ms-auto rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+          <span className="ms-auto rounded bg-status-info/15 px-1.5 py-0.5 text-[10px] font-medium text-status-info">
             Updating {stack.updatingServices}
           </span>
         )}
@@ -185,7 +188,7 @@ function StackCard({ stack }: { stack: StackSummary }) {
           <div className="flex h-2 overflow-hidden rounded-full bg-muted">
             <div
               data-complete={percentage >= 100 || undefined}
-              className="bg-yellow-500 transition-all data-complete:bg-green-500"
+              className="bg-status-warning transition-all data-complete:bg-status-ok"
               style={{ width: `${percentage}%` }}
             />
           </div>
@@ -259,7 +262,8 @@ function ResourceBar({
   format: (value: number) => string;
 }) {
   const percentage = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
-  const color = percentage > 90 ? "bg-red-500" : percentage > 70 ? "bg-yellow-500" : "bg-blue-500";
+  const color =
+    percentage > 90 ? "bg-status-danger" : percentage > 70 ? "bg-status-warning" : "bg-status-info";
 
   return (
     <div className="mb-2">

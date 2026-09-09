@@ -1,4 +1,5 @@
 import TaskStatusBadge from "./TaskStatusBadge";
+import { statusTone } from "@/lib/statusColor";
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 
@@ -13,28 +14,26 @@ describe("TaskStatusBadge", () => {
     expect(screen.getByText("unknown")).toBeInTheDocument();
   });
 
-  it("applies green classes for running", () => {
+  // The badge must not carry its own opinion about what a state means — that
+  // mapping belongs to lib/statusColor, which the status dot reads too.
+  it.each([
+    ["running", "ok"],
+    ["failed", "danger"],
+    ["preparing", "warning"],
+    ["shutdown", "neutral"],
+    ["foobar", "neutral"],
+  ])("renders %s with the %s tone token", (state, tone) => {
+    render(<TaskStatusBadge state={state} />);
+
+    const className = screen.getByText(state).className;
+
+    expect(statusTone(state)).toBe(tone);
+    expect(className).toContain(`bg-status-${tone}`);
+    expect(className).toContain(`text-status-${tone}`);
+  });
+
+  it("states no palette shade of its own", () => {
     render(<TaskStatusBadge state="running" />);
-    expect(screen.getByText("running").className).toContain("bg-green");
-  });
-
-  it("applies red classes for failed", () => {
-    render(<TaskStatusBadge state="failed" />);
-    expect(screen.getByText("failed").className).toContain("bg-red");
-  });
-
-  it("applies yellow classes for preparing", () => {
-    render(<TaskStatusBadge state="preparing" />);
-    expect(screen.getByText("preparing").className).toContain("bg-yellow");
-  });
-
-  it("applies gray classes for shutdown", () => {
-    render(<TaskStatusBadge state="shutdown" />);
-    expect(screen.getByText("shutdown").className).toContain("bg-gray");
-  });
-
-  it("applies fallback classes for unknown state", () => {
-    render(<TaskStatusBadge state="foobar" />);
-    expect(screen.getByText("foobar").className).toContain("bg-gray");
+    expect(screen.getByText("running").className).not.toMatch(/-(green|red|yellow|gray)-\d/);
   });
 });

@@ -1,26 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-const DEBOUNCE_MS = 300;
+const debounceMilliseconds = 300;
 
 /**
  * URL-backed search parameter with debounced URL updates.
  *
  * Returns [inputValue, debouncedValue, setInputValue].
  * - inputValue: updates immediately on every keystroke (for the input field)
- * - debouncedValue: updates the URL after DEBOUNCE_MS (for data fetching)
+ * - debouncedValue: updates the URL after debounceMilliseconds (for data fetching)
  * - setInputValue: setter for both (clear button, etc.)
  */
 export function useSearchParam(key: string): [string, string, (value: string) => void] {
   const [params, setParams] = useSearchParams();
   const urlValue = params.get(key) ?? "";
   const [inputValue, setInputValue] = useState(urlValue);
+  const [lastUrlValue, setLastUrlValue] = useState(urlValue);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Sync input when the URL changes externally (e.g., browser back/forward)
-  useEffect(() => {
+  // Sync the input when the URL changes externally (browser back/forward).
+  // Adjusting during render rather than in an effect: the effect committed a
+  // render showing the old text before correcting it.
+  if (urlValue !== lastUrlValue) {
+    setLastUrlValue(urlValue);
     setInputValue(urlValue);
-  }, [urlValue]);
+  }
 
   const setValue = useCallback(
     (value: string) => {
@@ -42,7 +46,7 @@ export function useSearchParam(key: string): [string, string, (value: string) =>
           },
           { replace: true },
         );
-      }, DEBOUNCE_MS);
+      }, debounceMilliseconds);
     },
     [key, setParams],
   );

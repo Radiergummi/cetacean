@@ -114,11 +114,11 @@ function ImageUpdatePopover({
           }}
           placeholder="image:tag"
           className="mb-2 font-mono"
+          // Focuses the input this edit-in-place control just replaced its trigger with.
+          // oxlint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
-        {validationError && (
-          <p className="mb-2 text-xs text-red-600 dark:text-red-400">{validationError}</p>
-        )}
+        {validationError && <p className="mb-2 text-xs text-status-danger">{validationError}</p>}
         <div className="flex gap-2">
           <Button
             onClick={() => {
@@ -166,11 +166,14 @@ export default function ContainerImage({
     "",
   );
   const href = imageRegistryUrl(image);
+  // A module-level Lucide component out of a lookup, not a new one.
+  // oxlint-disable-next-line react/static-components
   const Icon = registryIcon(image);
 
   const inner = (
     <>
       {Icon && (
+        // oxlint-disable-next-line react/static-components
         <Icon
           className="h-4 w-4 shrink-0"
           aria-hidden="true"

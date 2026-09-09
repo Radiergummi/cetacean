@@ -2,8 +2,21 @@ import { useMatchesBreakpoint } from "./useMatchesBreakpoint";
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-let listeners: Array<(e: { matches: boolean }) => void> = [];
+let listeners: Array<(event: { matches: boolean }) => void> = [];
 let currentMatches = false;
+
+/**
+ * A real MediaQueryList has already updated `matches` by the time it dispatches
+ * `change`. Emitting the event without moving the store is a state the browser
+ * cannot be in, and the hook reads the store rather than the event.
+ */
+function emitMatches(matches: boolean) {
+  currentMatches = matches;
+
+  for (const listener of listeners) {
+    listener({ matches });
+  }
+}
 
 beforeEach(() => {
   listeners = [];
@@ -11,13 +24,15 @@ beforeEach(() => {
   vi.stubGlobal(
     "matchMedia",
     vi.fn((query: string) => ({
-      matches: currentMatches,
-      media: query,
-      addEventListener: (_: string, cb: (e: { matches: boolean }) => void) => {
-        listeners.push(cb);
+      get matches() {
+        return currentMatches;
       },
-      removeEventListener: (_: string, cb: (e: { matches: boolean }) => void) => {
-        listeners = listeners.filter((listener) => listener !== cb);
+      media: query,
+      addEventListener: (_: string, listener: (event: { matches: boolean }) => void) => {
+        listeners.push(listener);
+      },
+      removeEventListener: (_: string, listener: (event: { matches: boolean }) => void) => {
+        listeners = listeners.filter((existing) => existing !== listener);
       },
     })),
   );
@@ -45,9 +60,7 @@ describe("useMatchesBreakpoint", () => {
   it("updates when media query changes", () => {
     const { result } = renderHook(() => useMatchesBreakpoint("md", "below"));
     expect(result.current).toBe(false);
-    act(() => {
-      for (const cb of listeners) cb({ matches: true });
-    });
+    act(() => emitMatches(true));
     expect(result.current).toBe(true);
   });
 

@@ -1,6 +1,7 @@
 import { IntegrationSection } from "./IntegrationSection";
 import type { ShepherdIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { saveIntegrationLabels } from "@/lib/integrationLabels";
@@ -61,14 +62,16 @@ export function ShepherdPanel({
         <span className="text-xs font-medium text-foreground">Enabled</span>
       </label>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Auth config</label>
-        <Input
-          value={formAuthConfig}
-          onChange={(event) => setFormAuthConfig(event.target.value)}
-          placeholder="registry:credentials"
-        />
-      </div>
+      <Field label="Auth config">
+        {(control) => (
+          <Input
+            {...control}
+            value={formAuthConfig}
+            onChange={(event) => setFormAuthConfig(event.target.value)}
+            placeholder="registry:credentials"
+          />
+        )}
+      </Field>
     </div>
   );
 

@@ -124,10 +124,10 @@ export function detectLevelFromJSON(message: string): Level | null {
     }
 
     for (const key of levelKeys) {
-      const val = parsedData[key];
+      const entryValue = parsedData[key];
 
-      if (typeof val === "string") {
-        const level = classifyLevel(val);
+      if (typeof entryValue === "string") {
+        const level = classifyLevel(entryValue);
 
         if (level) {
           return level;

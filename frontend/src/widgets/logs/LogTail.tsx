@@ -56,6 +56,10 @@ export function LogTail({ error, lines, service }: Props) {
     }
 
     container.scrollTop = container.scrollHeight;
+    // A new line arriving is exactly when the tail should scroll. The effect
+    // reads the container's height rather than the count, which is why the rule
+    // cannot see the connection.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-run trigger
   }, [filtered.length, following]);
 
   return (
@@ -81,7 +85,7 @@ export function LogTail({ error, lines, service }: Props) {
         </span>
       </div>
 
-      {error && <p className="text-xs text-red-600 dark:text-red-300">{error.message}</p>}
+      {error && <p className="text-xs text-status-danger">{error.message}</p>}
 
       {lines.length === 0 && !error ? (
         <p className="p-3 text-sm opacity-70">Waiting for output from {service}…</p>

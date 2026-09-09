@@ -79,6 +79,7 @@ export function LogSearch({
         />
         <div className="absolute right-1.5 flex items-center gap-0.5">
           <button
+            type="button"
             onClick={() => setCaseSensitive(!caseSensitive)}
             aria-pressed={caseSensitive}
             className="rounded px-1 py-0.5 font-mono text-[10px] font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
@@ -87,6 +88,7 @@ export function LogSearch({
             Aa
           </button>
           <button
+            type="button"
             onClick={() => setUseRegex(!useRegex)}
             aria-pressed={useRegex}
             className="rounded px-1 py-0.5 font-mono text-[10px] font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
@@ -96,6 +98,7 @@ export function LogSearch({
           </button>
           {search && (
             <button
+              type="button"
               onClick={() => setSearch("")}
               className="p-0.5 text-muted-foreground hover:text-foreground"
             >

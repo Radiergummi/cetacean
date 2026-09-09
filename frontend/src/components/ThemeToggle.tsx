@@ -1,16 +1,20 @@
+import { readStoredValue, writeStoredValue } from "@/lib/storage";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type Theme = "light" | "dark" | "system";
 
-const CYCLE: Theme[] = ["light", "dark", "system"];
+const cycle: Theme[] = ["light", "dark", "system"];
 
+/**
+ * The same resolution the inline script in index.html runs before the first
+ * paint. That script owns the initial class so the page never flashes the
+ * wrong theme; this component owns it from the first render onwards. Keep the
+ * two in step — the server hashes that script's bytes for the CSP, so editing
+ * it changes the header too.
+ */
 function getInitialTheme(): Theme {
-  if (typeof window === "undefined") {
-    return "system";
-  }
-
-  const stored = localStorage.getItem("theme");
+  const stored = readStoredValue("theme");
 
   if (stored === "dark" || stored === "light" || stored === "system") {
     return stored;
@@ -35,7 +39,7 @@ export default function ThemeToggle() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", resolveTheme(theme) === "dark");
-    localStorage.setItem("theme", theme);
+    writeStoredValue("theme", theme);
   }, [theme]);
 
   // Listen for OS theme changes when in system mode
@@ -56,7 +60,8 @@ export default function ThemeToggle() {
 
   return (
     <button
-      onClick={() => setTheme(CYCLE[(CYCLE.indexOf(theme) + 1) % CYCLE.length] ?? "system")}
+      type="button"
+      onClick={() => setTheme(cycle[(cycle.indexOf(theme) + 1) % cycle.length] ?? "system")}
       aria-label={`Theme: ${labels[theme]}`}
       className="flex size-8 cursor-pointer items-center justify-center rounded-md transition hover:bg-muted"
     >

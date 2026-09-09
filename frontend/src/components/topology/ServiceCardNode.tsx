@@ -1,3 +1,7 @@
+import { rolloutToneClass } from "../../lib/deriveServiceState";
+import { replicaHealthColor } from "../../lib/statusColor";
+import type { RolloutStatus } from "../../lib/topologyTransform";
+import { cn } from "../../lib/utils";
 import ResourceName from "../ResourceName";
 import { useHighlight } from "./HighlightContext";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
@@ -11,26 +15,54 @@ type ServiceCardData = {
   replicas: number;
   runningReplicas?: number | undefined;
   ports?: string[] | undefined;
-  updateStatus?: string | undefined;
+  rollout?: RolloutStatus | undefined;
   stackColor?: string | undefined;
   hasSourceEdge?: boolean | undefined;
   hasTargetEdge?: boolean | undefined;
 };
 
+/**
+ * The replica line on a card: how many tasks are up, and the tone that says
+ * whether that is enough.
+ *
+ * A global service has no desired count — Docker does not publish one, and
+ * `ReplicaCount` reports 0 — so it is described by what is running rather than
+ * measured against a denominator that would read as 1/0.
+ */
+export function replicaStatus(
+  mode: string,
+  running: number,
+  desired: number,
+): { label: string; tone: string } {
+  if (mode === "global") {
+    return {
+      label: `${running} running`,
+      tone: running > 0 ? "bg-status-ok" : "bg-status-danger",
+    };
+  }
+
+  return {
+    label: `${running}/${desired}`,
+    tone: replicaHealthColor(running, desired),
+  };
+}
+
 export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCardData }) {
   const navigate = useNavigate();
   const { hoveredId, neighbors, setHovered } = useHighlight();
-  const running = data.runningReplicas ?? data.replicas;
 
-  const statusColor =
-    running === data.replicas ? "bg-green-500" : running > 0 ? "bg-yellow-500" : "bg-red-500";
+  // No `?? data.replicas` fallback: the graph did not carry a running count at
+  // all, so falling back to the desired one painted every service green.
+  const { label, tone } = replicaStatus(data.mode, data.runningReplicas ?? 0, data.replicas);
 
   const dimmed = hoveredId != null && hoveredId !== data.id && !neighbors.has(data.id);
 
   return (
-    <div
+    <button
+      type="button"
       data-dimmed={dimmed || undefined}
-      className="w-56 cursor-pointer rounded-lg bg-card p-3 shadow-sm transition-all duration-200 data-dimmed:opacity-25 data-dimmed:grayscale-50"
+      aria-label={`Service ${data.name}`}
+      className="block w-56 cursor-pointer rounded-lg bg-card p-3 text-left shadow-sm transition-all duration-200 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none data-dimmed:opacity-25 data-dimmed:grayscale-50"
       style={{
         borderWidth: 2,
         borderStyle: "solid",
@@ -60,10 +92,8 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
       </div>
 
       <div className="mb-1 flex items-center gap-1.5 text-xs">
-        <span className={`inline-block size-2 rounded-full ${statusColor}`} />
-        <span>
-          {running}/{data.replicas}
-        </span>
+        <span className={`inline-block size-2 rounded-full ${tone}`} />
+        <span>{label}</span>
       </div>
 
       {data.ports && data.ports.length > 0 && (
@@ -74,7 +104,14 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
         </div>
       )}
 
-      {data.updateStatus && <div className="mt-1 text-xs text-yellow-500">Updating…</div>}
+      {/* Only a rollout still in flight. `updateStatus` is "completed" on every
+          service that has ever been updated, so rendering on its presence
+          labelled the whole cluster "Updating…" forever. */}
+      {data.rollout && (
+        <div className={cn("mt-1 text-xs", rolloutToneClass(data.rollout.state))}>
+          {data.rollout.label}
+        </div>
+      )}
 
       {data.hasTargetEdge && (
         <Handle
@@ -90,6 +127,6 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
           className="size-0! border-0! bg-transparent!"
         />
       )}
-    </div>
+    </button>
   );
 }

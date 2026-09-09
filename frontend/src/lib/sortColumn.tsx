@@ -11,15 +11,24 @@ export function sortColumn(
   sortKey: string | undefined,
   sortDir: SortDir,
   toggle: (key: string) => void,
-): { header: ReactNode; onHeaderClick: () => void } {
+): {
+  header: ReactNode;
+  onHeaderClick: () => void;
+  sortDirection: "ascending" | "descending" | "none";
+} {
+  const active = sortKey === key;
+
   return {
     header: (
       <SortIndicator
         label={label}
-        active={sortKey === key}
+        active={active}
         dir={sortDir}
       />
     ),
     onHeaderClick: () => toggle(key),
+    // `aria-sort` on the header is what announces the sort. Without it the
+    // only cue was the chevron, which a screen reader never sees.
+    sortDirection: !active ? "none" : sortDir === "asc" ? "ascending" : "descending",
   };
 }

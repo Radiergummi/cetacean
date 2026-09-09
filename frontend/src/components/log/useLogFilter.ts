@@ -1,5 +1,5 @@
 import type { Level, LogLine } from "./log-utils";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 export function useLogFilter(lines: LogLine[]) {
   const [search, setSearch] = useState("");
@@ -47,9 +47,21 @@ export function useLogFilter(lines: LogLine[]) {
     return result;
   }, [lines, searchMatcher, levelFilter, taskFilter]);
 
-  useEffect(() => {
+  // The cursor used to reset on `filtered`'s identity, which a live tail changes
+  // on every frame — so stepping through matches on a streaming log was pulled
+  // back to the first hit before it could be read. What should reset it is the
+  // *criteria* changing, which is a different question from the list growing.
+  // Adjusted during render rather than in an effect so no pass ever commits a
+  // cursor pointing past the end.
+  const criteria = `${search}|${caseSensitive}|${useRegex}|${levelFilter}|${taskFilter ?? ""}`;
+  const [previousCriteria, setPreviousCriteria] = useState(criteria);
+
+  if (previousCriteria !== criteria) {
+    setPreviousCriteria(criteria);
     setMatchIndex(0);
-  }, [filtered]);
+  } else if (matchIndex > 0 && matchIndex >= filtered.length) {
+    setMatchIndex(Math.max(filtered.length - 1, 0));
+  }
 
   return {
     search,

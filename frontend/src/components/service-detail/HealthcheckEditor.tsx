@@ -240,7 +240,7 @@ function DisplayMode({
       <div className="flex items-start gap-2">
         <span
           data-mode={shell ? "shell" : "exec"}
-          className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium data-[mode=exec]:bg-blue-100 data-[mode=exec]:text-blue-800 data-[mode=shell]:bg-green-100 data-[mode=shell]:text-green-800 dark:data-[mode=exec]:bg-blue-900/30 dark:data-[mode=exec]:text-blue-300 dark:data-[mode=shell]:bg-green-900/30 dark:data-[mode=shell]:text-green-300"
+          className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium data-[mode=exec]:bg-status-info/15 data-[mode=exec]:text-status-info data-[mode=shell]:bg-status-ok/15 data-[mode=shell]:text-status-ok"
         >
           {shell ? "Shell" : "Exec"}
         </span>
@@ -466,7 +466,7 @@ function EditMode({
         </>
       )}
 
-      {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+      {saveError && <p className="text-xs text-status-danger">{saveError}</p>}
 
       <footer className="flex items-center justify-end gap-2">
         <Button

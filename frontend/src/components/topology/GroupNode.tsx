@@ -38,7 +38,7 @@ export default function GroupNode({ data }: NodeProps & { data: GroupData }) {
         {isNode && data.state && (
           <span
             data-ready={data.state === "ready" || undefined}
-            className="inline-block size-2 rounded-full bg-red-500 data-ready:bg-green-500"
+            className="inline-block size-2 rounded-full bg-status-danger data-ready:bg-status-ok"
           />
         )}
 

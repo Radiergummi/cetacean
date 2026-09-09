@@ -32,7 +32,7 @@ export default function PluginTable({ plugins }: { plugins: Plugin[] }) {
               <td className="p-3">
                 <span
                   data-enabled={Enabled || undefined}
-                  className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground data-enabled:bg-green-500/10 data-enabled:text-green-500"
+                  className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground data-enabled:bg-status-ok/10 data-enabled:text-status-ok"
                 >
                   {Enabled ? "Enabled" : "Disabled"}
                 </span>

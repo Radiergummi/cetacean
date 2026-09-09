@@ -12,9 +12,9 @@ interface Props {
  * and "1 warning" in the group headings.
  */
 const severityBar: Record<Severity, string> = {
-  critical: "bg-red-500",
-  warning: "bg-yellow-500",
-  info: "bg-blue-400",
+  critical: "bg-status-danger",
+  warning: "bg-status-warning",
+  info: "bg-status-info",
 };
 
 /**
