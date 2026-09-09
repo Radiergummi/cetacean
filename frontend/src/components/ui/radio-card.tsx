@@ -52,6 +52,10 @@ export function RadioCardGroup({ children, className }: RadioCardGroupProps) {
   }, []);
 
   return (
+    // A radiogroup is not itself a tab stop: focus moves to the checked radio,
+    // which carries tabIndex 0 while the rest carry -1. Making the group
+    // focusable would add a second stop in front of the radios.
+    // oxlint-disable-next-line jsx-a11y/interactive-supports-focus
     <div
       ref={groupRef}
       role="radiogroup"

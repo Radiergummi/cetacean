@@ -1,6 +1,6 @@
 import { NumberField } from "@/components/ui/number-field";
 import { bestDurationUnit, durationUnits } from "@/lib/duration";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 interface DurationInputProps {
   value: number;
@@ -10,11 +10,16 @@ interface DurationInputProps {
 
 export function DurationInput({ value, onChange, disabled }: DurationInputProps) {
   const [unit, setUnit] = useState(() => bestDurationUnit(value));
-  const displayValue = value === 0 ? 0 : value / unit.factor;
+  const [lastValue, setLastValue] = useState(value);
 
-  useEffect(() => {
+  // Re-pick the unit when the duration changes, during render rather than in
+  // an effect — the effect rendered once with the previous unit first.
+  if (value !== lastValue) {
+    setLastValue(value);
     setUnit(bestDurationUnit(value));
-  }, [value]);
+  }
+
+  const displayValue = value === 0 ? 0 : value / unit.factor;
 
   return (
     <div className="flex items-end gap-2">

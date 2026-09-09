@@ -56,7 +56,7 @@ export default function ErrorCodeDetail() {
 
         <p className="text-sm">{errorDef.description}</p>
 
-        <div className="rounded-md border-s-2 border-blue-500 bg-blue-50 p-4 dark:bg-blue-950/30">
+        <div className="rounded-md border-s-2 border-status-info bg-status-info/10 p-4">
           <p className="text-sm">
             <span className="font-medium">Suggestion: </span>
             {errorDef.suggestion}

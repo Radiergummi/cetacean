@@ -46,7 +46,12 @@ export function useSwarmQuery<T>(
     },
   });
 
-  const data = query.data?.pages.flatMap((page) => page.data.items) ?? [];
+  // Flattening on every render handed consumers a new array each time, which
+  // is enough to re-fire any effect keyed on it — DataTable dropped the
+  // keyboard cursor that way. React Query keeps `pages` by reference until the
+  // data actually changes, so memoizing on it is enough.
+  const pages = query.data?.pages;
+  const data = useMemo(() => pages?.flatMap((page) => page.data.items) ?? [], [pages]);
 
   const lastPage = query.data?.pages[query.data.pages.length - 1];
   const total = lastPage?.data.total ?? 0;
@@ -199,7 +204,7 @@ export function useSwarmQuery<T>(
           void queryClient.invalidateQueries({ queryKey: key });
         }
       },
-      [queryClient, queryKeyRef, getIdRef],
+      [queryClient, queryKeyRef, getIdRef, filteredRef],
     ),
   );
 

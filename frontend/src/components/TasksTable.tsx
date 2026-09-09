@@ -192,7 +192,7 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                       </span>
                     </td>
                     <td className="p-3 text-sm">{DesiredState}</td>
-                    <td className="p-3 text-sm text-red-600 dark:text-red-400">{errorMessage}</td>
+                    <td className="p-3 text-sm text-status-danger">{errorMessage}</td>
                     <td className="p-3 text-sm text-muted-foreground">
                       {Timestamp ? <TimeAgo date={Timestamp} /> : "\u2014"}
                     </td>

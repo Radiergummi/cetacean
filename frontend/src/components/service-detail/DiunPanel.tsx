@@ -2,12 +2,13 @@ import { IntegrationSection } from "./IntegrationSection";
 import type { DiunIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import KeyValuePills from "@/components/data/KeyValuePills";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
 import { badgeBlue, saveIntegrationLabels } from "@/lib/integrationLabels";
 import { Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 const docsUrl = "https://crazymax.dev/diun/providers/swarm/#docker-labels";
 
@@ -75,6 +76,7 @@ export function DiunPanel({
     .split(";")
     .map((trigger) => trigger.trim());
 
+  const sortTagsId = useId();
   const [formEnabled, setFormEnabled] = useState(integration.enabled);
   const [formRegopt, setFormRegopt] = useState(integration.regopt ?? "");
   const [formWatchRepo, setFormWatchRepo] = useState(integration.watchRepo ?? false);
@@ -224,8 +226,14 @@ export function DiunPanel({
 
       <div className="grid items-start gap-x-4 gap-y-3 lg:grid-cols-3">
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-foreground">Sort tags</label>
+          <label
+            htmlFor={sortTagsId}
+            className="text-xs font-medium text-foreground"
+          >
+            Sort tags
+          </label>
           <select
+            id={sortTagsId}
             className="h-8 w-full rounded-md border bg-background px-2 text-sm"
             value={formSortTags}
             onChange={(event) => setFormSortTags(event.target.value)}
@@ -276,35 +284,47 @@ export function DiunPanel({
           <p className="text-xs text-muted-foreground">When to send notifications</p>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-foreground">Registry options</label>
-          <Input
-            value={formRegopt}
-            onChange={(event) => setFormRegopt(event.target.value)}
-            placeholder="my-registry"
-          />
-          <p className="text-xs text-muted-foreground">Registry options from Diun configuration</p>
-        </div>
+        <Field
+          label="Registry options"
+          description="Registry options from Diun configuration"
+        >
+          {(control) => (
+            <Input
+              {...control}
+              value={formRegopt}
+              onChange={(event) => setFormRegopt(event.target.value)}
+              placeholder="my-registry"
+            />
+          )}
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-foreground">Hub link</label>
-          <Input
-            value={formHubLink}
-            onChange={(event) => setFormHubLink(event.target.value)}
-            placeholder="https://hub.example.com"
-          />
-          <p className="text-xs text-muted-foreground">Override the registry hub link</p>
-        </div>
+        <Field
+          label="Hub link"
+          description="Override the registry hub link"
+        >
+          {(control) => (
+            <Input
+              {...control}
+              value={formHubLink}
+              onChange={(event) => setFormHubLink(event.target.value)}
+              placeholder="https://hub.example.com"
+            />
+          )}
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-foreground">Platform</label>
-          <Input
-            value={formPlatform}
-            onChange={(event) => setFormPlatform(event.target.value)}
-            placeholder="linux/amd64"
-          />
-          <p className="text-xs text-muted-foreground">Platform for image analysis</p>
-        </div>
+        <Field
+          label="Platform"
+          description="Platform for image analysis"
+        >
+          {(control) => (
+            <Input
+              {...control}
+              value={formPlatform}
+              onChange={(event) => setFormPlatform(event.target.value)}
+              placeholder="linux/amd64"
+            />
+          )}
+        </Field>
       </div>
 
       <div className="flex flex-col gap-1.5">

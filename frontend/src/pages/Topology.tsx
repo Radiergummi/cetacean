@@ -50,6 +50,7 @@ function StackLegend({
   if (isMobile && !open) {
     return (
       <button
+        type="button"
         onClick={() => setOpen(true)}
         className="absolute right-3 bottom-3 z-10 rounded-lg border bg-card/90 p-2 shadow-sm backdrop-blur-sm"
         title="Show legend"
@@ -65,6 +66,7 @@ function StackLegend({
         <span className="font-medium text-muted-foreground">Stacks</span>
         {isMobile && (
           <button
+            type="button"
             onClick={() => setOpen(false)}
             className="ms-2 text-muted-foreground hover:text-foreground"
           >
@@ -259,8 +261,8 @@ export default function Topology() {
     queryFn: () => api.topology(),
   });
 
-  const networkData = topologyData?.graphs.find((g) => g.id === "network") ?? null;
-  const placementData = topologyData?.graphs.find((g) => g.id === "placement") ?? null;
+  const networkData = topologyData?.graphs.find((graph) => graph.id === "network") ?? null;
+  const placementData = topologyData?.graphs.find((graph) => graph.id === "placement") ?? null;
   const error = queryError ? getErrorMessage(queryError, "Failed to load topology") : null;
 
   useDebouncedInvalidation("/events", [["topology"]], 2_000);
@@ -285,6 +287,7 @@ export default function Topology() {
         <div className="flex h-64 flex-col items-center justify-center gap-3">
           <p className="text-sm text-destructive">{error}</p>
           <button
+            type="button"
             className="rounded-md bg-muted px-3 py-1.5 text-sm hover:bg-muted/80"
             onClick={() => {
               void queryClient.invalidateQueries({ queryKey: ["topology"] });

@@ -3073,55 +3073,6 @@
     },
     {
       "type": "library",
-      "name": "next-themes",
-      "version": "0.4.6",
-      "bom-ref": "frontend@0.0.0|next-themes@0.4.6",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/next-themes@0.4.6",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/pacocoursey/next-themes.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/pacocoursey/next-themes#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/pacocoursey/next-themes/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/next-themes/-/next-themes-0.4.6.tgz",
-          "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "a59be00f92f4204bd7e7ff465b21cc7f79bc04a895430b023077e8168b17b5704c9da4b4667209f524f86f836a2d5283126f10071a0d34635a06fd89345e9734"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/next-themes"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "react-chartjs-2",
       "version": "5.3.1",
       "bom-ref": "frontend@0.0.0|react-chartjs-2@5.3.1",

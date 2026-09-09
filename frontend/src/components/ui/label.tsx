@@ -5,6 +5,9 @@ import type { ComponentProps } from "react";
 
 function Label({ className, ...props }: ComponentProps<"label">) {
   return (
+    // This is the primitive, not a use of it: `htmlFor` arrives through
+    // `...props` from whichever field renders it, which the rule cannot see.
+    // oxlint-disable-next-line jsx-a11y/label-has-associated-control
     <label
       data-slot="label"
       className={cn(

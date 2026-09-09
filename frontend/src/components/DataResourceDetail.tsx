@@ -10,7 +10,7 @@ import PageHeader from "./PageHeader";
 import { RemoveResourceAction } from "./RemoveResourceAction";
 import ResourceName from "./ResourceName";
 import ServiceRefList from "./ServiceRefList";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 interface DataResourceDetailProps {
   resourceType: "config" | "secret";
@@ -52,11 +52,15 @@ export default function DataResourceDetail({
   children,
 }: DataResourceDetailProps) {
   const [labels, setLabels] = useState<Record<string, string>>(initialLabels);
+  const [lastInitialLabels, setLastInitialLabels] = useState(initialLabels);
   const { stack } = parseStackLabels(initialLabels);
 
-  useEffect(() => {
+  // A refetch hands down a new object; adopt it during render rather than
+  // committing a render that still shows the previous labels.
+  if (initialLabels !== lastInitialLabels) {
+    setLastInitialLabels(initialLabels);
     setLabels(initialLabels);
-  }, [initialLabels]);
+  }
 
   return (
     <div className="flex flex-col gap-6">

@@ -1,6 +1,6 @@
 import { navigationShortcuts } from "../lib/shortcuts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useEffect } from "react";
-import { createPortal } from "react-dom";
 
 interface ShortcutGroup {
   title: string;
@@ -34,10 +34,20 @@ const groups: ShortcutGroup[] = [
   },
 ];
 
+/**
+ * The `?` overlay.
+ *
+ * It rides on the shared Dialog rather than its own portal so that it traps
+ * focus, returns it to whatever opened it, and dismisses on Escape and on an
+ * outside press without hand-rolling any of it — the hand-rolled version had a
+ * backdrop that only a mouse could dismiss and let Tab wander behind it.
+ */
 export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
+  // `?` closes the overlay as well as opening it. Escape and outside presses
+  // are the Dialog's own.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" || event.key === "?") {
+      if (event.key === "?") {
         event.preventDefault();
         onClose();
       }
@@ -48,21 +58,26 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 animate-[fade-in_150ms_ease-out] bg-background/60 backdrop-blur-sm"
-      onClick={onClose}
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) {
+          onClose();
+        }
+      }}
     >
-      <div
-        className="mx-auto mt-[10vh] max-w-lg animate-[slide-down_150ms_ease-out] overflow-hidden rounded-lg border bg-popover shadow-lg"
-        onClick={(event) => event.stopPropagation()}
+      <DialogContent
+        showCloseButton={false}
+        className="top-[10vh] max-w-lg translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-lg"
       >
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h2 className="text-sm font-medium">Keyboard Shortcuts</h2>
+        <DialogHeader className="flex-row items-center justify-between border-b px-4 py-3">
+          <DialogTitle className="text-sm font-medium">Keyboard Shortcuts</DialogTitle>
           <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
             Esc
           </kbd>
-        </div>
+        </DialogHeader>
+
         <div className="max-h-[60vh] space-y-5 overflow-y-auto p-4">
           {groups.map(({ shortcuts, title }) => (
             <div key={title}>
@@ -91,8 +106,7 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-      </div>
-    </div>,
-    document.body,
+      </DialogContent>
+    </Dialog>
   );
 }

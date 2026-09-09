@@ -6,7 +6,7 @@ type HighlightState = {
   setHovered: (id: string | null) => void;
 };
 
-const ctx = createContext<HighlightState>({
+const highlightContext = createContext<HighlightState>({
   hoveredId: null,
   neighbors: new Set(),
   setHovered: () => {},
@@ -51,9 +51,9 @@ export function HighlightProvider({
     [hoveredId, neighbors, setHovered],
   );
 
-  return <ctx.Provider value={value}>{children}</ctx.Provider>;
+  return <highlightContext.Provider value={value}>{children}</highlightContext.Provider>;
 }
 
 export function useHighlight() {
-  return useContext(ctx);
+  return useContext(highlightContext);
 }

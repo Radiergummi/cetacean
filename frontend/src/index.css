@@ -25,6 +25,17 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --link: oklch(0.488 0.243 264.376);
+  /* Status palette. One token per meaning per theme, so a call site writes
+     `text-status-danger` rather than the `text-red-600 dark:text-red-400` pair
+     it would otherwise have to keep in step — that pair alone appeared 17
+     times. Surfaces and borders come from the same token through Tailwind's
+     opacity modifiers (`bg-status-ok/15`), which is what ui/button.tsx already
+     does for `destructive`. */
+  --status-ok: oklch(0.627 0.194 149.2);
+  --status-warning: oklch(0.666 0.179 58.3);
+  --status-danger: var(--destructive);
+  --status-info: oklch(0.546 0.245 262.9);
+  --status-neutral: var(--muted-foreground);
   --chart-1: #648fff;
   --chart-2: #ffb000;
   --chart-3: #dc267f;
@@ -44,18 +55,16 @@
   --chart-crosshair: rgba(136, 136, 136, 0.3);
   --chart-zoom: rgba(100, 143, 255, 0.15);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
   --link: oklch(0.695 0.17 254.624);
+  /* Lightened so they carry on the dark background; --status-danger and
+     --status-neutral track --destructive and --muted-foreground, which the
+     block below already re-states. */
+  --status-ok: oklch(0.792 0.209 151.7);
+  --status-warning: oklch(0.828 0.189 84.4);
+  --status-info: oklch(0.707 0.165 254.6);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -74,32 +83,6 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  --chart-1: #648fff;
-  --chart-2: #ffb000;
-  --chart-3: #dc267f;
-  --chart-4: #785ef0;
-  --chart-5: #fe6100;
-  --chart-6: #02d4f5;
-  --chart-7: #ffd966;
-  --chart-8: #cf9fff;
-  --chart-9: #ff85b3;
-  --chart-10: #47c1bf;
-  --chart-cpu: var(--chart-1);
-  --chart-memory: #34d399;
-  --chart-ok: #10b981;
-  --chart-warning: #f59e0b;
-  --chart-critical: #ef4444;
-  --chart-reserved: #3b82f6;
-  --chart-crosshair: rgba(136, 136, 136, 0.3);
-  --chart-zoom: rgba(100, 143, 255, 0.15);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @theme inline {
@@ -123,6 +106,11 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-link: var(--link);
+  --color-status-ok: var(--status-ok);
+  --color-status-warning: var(--status-warning);
+  --color-status-danger: var(--status-danger);
+  --color-status-info: var(--status-info);
+  --color-status-neutral: var(--status-neutral);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -139,14 +127,6 @@
   --color-chart-warning: var(--chart-warning);
   --color-chart-critical: var(--chart-critical);
   --color-chart-reserved: var(--chart-reserved);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -166,8 +146,13 @@
   html {
     @apply font-sans antialiased;
   }
-  /* Subtle alternating rows for all data tables */
-  tbody tr:nth-child(even) {
+  /* Subtle alternating rows for all data tables.
+     A virtualized body stripes its own rows through `data-stripe` and opts out
+     of the positional rule: its spacer rows live in the same tbody, so
+     nth-child parity there tracks how far the table is scrolled rather than
+     where a row sits in the collection, and every stripe inverted on scroll. */
+  tbody tr:nth-child(even):not([data-virtual-row]),
+  tbody tr[data-stripe] {
     background: oklch(from var(--muted) l c h / 30%);
   }
 }

@@ -9,14 +9,14 @@ function barColor(percent: number, isReservation: boolean): string {
   const mid = isReservation ? 80 : 70;
 
   if (percent >= high) {
-    return "bg-red-500";
+    return "bg-status-danger";
   }
 
   if (percent >= mid) {
-    return "bg-amber-500";
+    return "bg-status-warning";
   }
 
-  return "bg-blue-500";
+  return "bg-status-info";
 }
 
 function Bar({

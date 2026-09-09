@@ -59,10 +59,10 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     const key = logLineKey(line);
 
     setPinnedLines((previous) => {
-      const idx = previous.findIndex((l) => logLineKey(l) === key);
+      const index = previous.findIndex((pinned) => logLineKey(pinned) === key);
 
-      if (idx !== -1) {
-        return [...previous.slice(0, idx), ...previous.slice(idx + 1)];
+      if (index !== -1) {
+        return [...previous.slice(0, index), ...previous.slice(index + 1)];
       }
 
       if (previous.length >= 3) {
@@ -183,7 +183,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const hasContent = !data.loading && !data.error && data.lines.length > 0 && filtered.length > 0;
 
   const toolbar = (
-    <nav
+    <div
       role="toolbar"
       className={
         isFullscreen
@@ -288,6 +288,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
 
       {taskFilter && (
         <button
+          type="button"
           onClick={() => setTaskFilter(null)}
           className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1.5 text-xs text-primary hover:bg-primary/20"
           title="Clear task filter"
@@ -305,7 +306,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
           icon={<Minimize className="size-3.5" />}
         />
       )}
-    </nav>
+    </div>
   );
 
   return (

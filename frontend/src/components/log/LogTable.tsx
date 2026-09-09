@@ -74,9 +74,11 @@ function LogRow({
       key={line.index}
       ref={measureRef}
       data-index={dataIndex}
+      data-virtual-row=""
+      data-stripe={dataIndex !== undefined && dataIndex % 2 === 1 ? "" : undefined}
       data-json={jsonLine ? "" : undefined}
       data-highlight={highlight || undefined}
-      className="group even:bg-background/50 hover:bg-muted/50 data-highlight:bg-yellow-500/10 data-json:cursor-pointer"
+      className="group hover:bg-muted/50 data-highlight:bg-yellow-500/10 data-json:cursor-pointer"
       onClick={onToggle && jsonLine ? () => onToggle(line.index) : undefined}
     >
       <td
@@ -350,8 +352,12 @@ function VirtualLogBody({
   return (
     <tbody>
       {firstVirtualItem && (
-        <tr>
+        <tr
+          role="presentation"
+          data-virtual-row=""
+        >
           <td
+            role="presentation"
             style={{ height: firstVirtualItem.start, padding: 0 }}
             colSpan={colCount}
           />
@@ -388,8 +394,12 @@ function VirtualLogBody({
       })}
 
       {lastVirtualItem && (
-        <tr>
+        <tr
+          role="presentation"
+          data-virtual-row=""
+        >
           <td
+            role="presentation"
             style={{
               height: Math.max(0, totalSize - lastVirtualItem.end),
               padding: 0,

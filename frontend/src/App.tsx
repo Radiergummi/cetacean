@@ -120,6 +120,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             <div className="ml-auto flex items-center gap-3 lg:ml-0">
               <ShortcutTooltip keys={["?"]}>
                 <button
+                  type="button"
                   className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md transition hover:bg-muted"
                   onClick={() => setShortcutsOpen(true)}
                   aria-label="Keyboard shortcuts"
@@ -132,6 +133,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               <UserBadge />
 
               <button
+                type="button"
                 className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted lg:hidden"
                 onClick={() => setMenuOpen(!menuOpen)}
                 aria-label="Toggle menu"
@@ -146,11 +148,8 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           {menuOpen && (
-            <div
-              className="flex w-full flex-col gap-1 py-3 lg:hidden"
-              onClick={() => setMenuOpen(false)}
-            >
-              <NavLinks />
+            <div className="flex w-full flex-col gap-1 py-3 lg:hidden">
+              <NavLinks onNavigate={() => setMenuOpen(false)} />
             </div>
           )}
         </div>
@@ -174,13 +173,14 @@ function RecommendationsIndicator() {
   return (
     <ShortcutTooltip keys={["g", "r"]}>
       <button
+        type="button"
         className="relative inline-flex size-8 cursor-pointer items-center justify-center rounded-md transition hover:bg-muted"
         onClick={() => navigate("/recommendations")}
         aria-label="Recommendations"
       >
         <Lightbulb className="size-4" />
         {total > 0 && (
-          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-status-warning text-[10px] font-bold text-white">
             {total > 99 ? "99" : total}
           </span>
         )}
@@ -189,7 +189,7 @@ function RecommendationsIndicator() {
   );
 }
 
-function NavLinks() {
+function NavLinks({ onNavigate }: { onNavigate?: (() => void) | undefined }) {
   const location = useLocation();
   const links = [
     { to: "/nodes", label: "Nodes", keys: ["g", "n"] },
@@ -215,6 +215,7 @@ function NavLinks() {
           >
             <Link
               to={to}
+              onClick={onNavigate}
               aria-current={active ? "page" : undefined}
               className="py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground lg:border-b-2 lg:border-transparent lg:px-3 lg:aria-[current=page]:border-foreground"
             >

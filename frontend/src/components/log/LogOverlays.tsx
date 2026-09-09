@@ -32,6 +32,7 @@ export function LogOverlays({
     <>
       {atTop && hasOlderLogs && (
         <button
+          type="button"
           onClick={loadOlder}
           disabled={loadingOlder}
           data-pinned={pinnedCount || undefined}
@@ -44,6 +45,7 @@ export function LogOverlays({
 
       {!following ? (
         <button
+          type="button"
           onClick={() => setFollowing(true)}
           className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs text-foreground shadow-lg transition-colors hover:bg-muted"
         >
@@ -52,6 +54,7 @@ export function LogOverlays({
         </button>
       ) : !live && hasNewerLogs ? (
         <button
+          type="button"
           onClick={loadNewer}
           disabled={loadingNewer}
           className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs text-foreground shadow-lg transition-colors hover:bg-muted"

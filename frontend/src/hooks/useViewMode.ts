@@ -1,4 +1,5 @@
 import { useMatchesBreakpoint } from "./useMatchesBreakpoint";
+import { readStoredValue, writeStoredValue } from "@/lib/storage";
 import { useCallback, useState } from "react";
 
 export type ViewMode = "table" | "grid";
@@ -10,7 +11,7 @@ export function useViewMode(
   const isMobile = useMatchesBreakpoint("md", "below");
 
   const [mode, setMode] = useState<ViewMode>(() => {
-    const stored = localStorage.getItem(`viewMode:${key}`);
+    const stored = readStoredValue(`viewMode:${key}`);
 
     return stored === "table" || stored === "grid" ? stored : defaultMode;
   });
@@ -18,7 +19,7 @@ export function useViewMode(
   const set = useCallback(
     (mode: ViewMode) => {
       setMode(mode);
-      localStorage.setItem(`viewMode:${key}`, mode);
+      writeStoredValue(`viewMode:${key}`, mode);
     },
     [key],
   );

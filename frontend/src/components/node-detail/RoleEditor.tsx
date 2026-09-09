@@ -111,7 +111,7 @@ export function RoleEditor({
                   </RadioCardGroup>
 
                   {isDemoting && (
-                    <div className="rounded-md border border-yellow-500/25 bg-yellow-500/5 px-3 py-2 text-xs leading-relaxed text-yellow-600 dark:text-yellow-500">
+                    <div className="rounded-md border border-status-warning bg-status-warning px-3 py-2 text-xs leading-relaxed text-status-warning">
                       {isLeader && (
                         <p className={cn("font-medium", quorum !== null && "mb-2")}>
                           This node is the Raft leader. Demoting it will trigger a leader

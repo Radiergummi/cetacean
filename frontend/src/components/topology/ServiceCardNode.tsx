@@ -23,14 +23,20 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
   const running = data.runningReplicas ?? data.replicas;
 
   const statusColor =
-    running === data.replicas ? "bg-green-500" : running > 0 ? "bg-yellow-500" : "bg-red-500";
+    running === data.replicas
+      ? "bg-status-ok"
+      : running > 0
+        ? "bg-status-warning"
+        : "bg-status-danger";
 
   const dimmed = hoveredId != null && hoveredId !== data.id && !neighbors.has(data.id);
 
   return (
-    <div
+    <button
+      type="button"
       data-dimmed={dimmed || undefined}
-      className="w-56 cursor-pointer rounded-lg bg-card p-3 shadow-sm transition-all duration-200 data-dimmed:opacity-25 data-dimmed:grayscale-50"
+      aria-label={`Service ${data.name}`}
+      className="block w-56 cursor-pointer rounded-lg bg-card p-3 text-left shadow-sm transition-all duration-200 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none data-dimmed:opacity-25 data-dimmed:grayscale-50"
       style={{
         borderWidth: 2,
         borderStyle: "solid",
@@ -74,7 +80,7 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
         </div>
       )}
 
-      {data.updateStatus && <div className="mt-1 text-xs text-yellow-500">Updating…</div>}
+      {data.updateStatus && <div className="mt-1 text-xs text-status-warning">Updating…</div>}
 
       {data.hasTargetEdge && (
         <Handle
@@ -90,6 +96,6 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
           className="size-0! border-0! bg-transparent!"
         />
       )}
-    </div>
+    </button>
   );
 }

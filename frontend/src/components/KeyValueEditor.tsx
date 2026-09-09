@@ -111,6 +111,8 @@ export function KeyValueEditor({
           onChange={(event) => setNewKey(event.target.value)}
           placeholder={keyPlaceholder}
           className="font-mono text-xs"
+          // Focuses the key input of the row the person just added.
+          // oxlint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
       )}

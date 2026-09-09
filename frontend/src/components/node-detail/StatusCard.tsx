@@ -5,7 +5,7 @@ const size = 50;
 
 const statuses: Record<string, { fill: string; icon: React.ReactNode }> = {
   ready: {
-    fill: "fill-green-500",
+    fill: "fill-status-ok",
     icon: (
       <path
         d="M15 25.5 L21.5 32 L35 19"
@@ -18,7 +18,7 @@ const statuses: Record<string, { fill: string; icon: React.ReactNode }> = {
     ),
   },
   down: {
-    fill: "fill-red-500",
+    fill: "fill-status-danger",
     icon: (
       <path
         d="M17 17 L33 33 M33 17 L17 33"
@@ -30,7 +30,7 @@ const statuses: Record<string, { fill: string; icon: React.ReactNode }> = {
     ),
   },
   disconnected: {
-    fill: "fill-amber-500",
+    fill: "fill-status-warning",
     icon: (
       <path
         d="M25 16 L25 28 M25 33 L25 33.5"

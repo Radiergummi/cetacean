@@ -6,6 +6,7 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -15,6 +16,8 @@ interface Column<T> {
   cell: (item: T) => ReactNode;
   className?: string | undefined;
   onHeaderClick?: (() => void) | undefined;
+  /** Announced on the column header; set by `sortColumn` for sortable ones. */
+  sortDirection?: "ascending" | "descending" | "none" | undefined;
 }
 
 interface Props<T> {
@@ -25,10 +28,12 @@ interface Props<T> {
   onRowClick?: ((item: T) => void) | undefined;
   hasMore?: boolean | undefined;
   onLoadMore?: (() => void) | undefined;
+  /** Names the grid for assistive technology. */
+  label?: string | undefined;
 }
 
-const VIRTUAL_THRESHOLD = 100;
-const ROW_HEIGHT_ESTIMATE = 48;
+const virtualThreshold = 100;
+const rowHeightEstimate = 48;
 
 function PlainBody<T>({
   columns,
@@ -37,12 +42,14 @@ function PlainBody<T>({
   rowClassName,
   onRowClick,
   selectedIndex,
-}: Props<T> & { selectedIndex: number }) {
+  rowId,
+}: Props<T> & { selectedIndex: number; rowId: (index: number) => string }) {
   return (
     <tbody>
       {data.map((item, index) => (
         <tr
           key={keyFn(item)}
+          id={rowId(index)}
           data-clickable={onRowClick ? "" : undefined}
           data-selected={index === selectedIndex || undefined}
           aria-selected={onRowClick ? index === selectedIndex : undefined}
@@ -73,11 +80,16 @@ function VirtualBody<T>({
   onRowClick,
   scrollRef,
   selectedIndex,
-}: Props<T> & { scrollRef: RefObject<HTMLDivElement | null>; selectedIndex: number }) {
+  rowId,
+}: Props<T> & {
+  scrollRef: RefObject<HTMLDivElement | null>;
+  selectedIndex: number;
+  rowId: (index: number) => string;
+}) {
   const virtualizer = useVirtualizer({
     count: data.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT_ESTIMATE,
+    estimateSize: () => rowHeightEstimate,
     overscan: 20,
   });
 
@@ -97,8 +109,12 @@ function VirtualBody<T>({
   return (
     <tbody>
       {firstVirtualItem && (
-        <tr>
+        <tr
+          role="presentation"
+          data-virtual-row=""
+        >
           <td
+            role="presentation"
             style={{ height: firstVirtualItem.start, padding: 0 }}
             colSpan={columns.length}
           />
@@ -115,7 +131,10 @@ function VirtualBody<T>({
           <tr
             key={keyFn(item)}
             ref={virtualizer.measureElement}
+            id={rowId(index)}
             data-index={index}
+            data-virtual-row=""
+            data-stripe={index % 2 === 1 || undefined}
             data-clickable={onRowClick ? "" : undefined}
             data-selected={index === selectedIndex || undefined}
             aria-selected={onRowClick ? index === selectedIndex : undefined}
@@ -137,8 +156,12 @@ function VirtualBody<T>({
         );
       })}
       {lastVirtualItem && (
-        <tr>
+        <tr
+          role="presentation"
+          data-virtual-row=""
+        >
           <td
+            role="presentation"
             style={{
               height: Math.max(0, totalSize - lastVirtualItem.end),
               padding: 0,
@@ -159,24 +182,34 @@ export default function DataTable<T>({
   onRowClick,
   hasMore,
   onLoadMore,
+  label,
 }: Props<T>) {
+  const gridId = useId();
+  const rowId = useCallback((index: number) => `${gridId}-row-${index}`, [gridId]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLTableRowElement>(null);
-  const useVirtual = data.length > VIRTUAL_THRESHOLD;
+  const useVirtual = data.length > virtualThreshold;
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
   const prevVirtualRef = useRef(useVirtual);
 
-  // Reset selection when data changes; reset scroll when switching render mode
+  // Keep the cursor pointing at a row that still exists, rather than dropping
+  // it whenever `data` changes. The list hooks rebuild that array on every
+  // render and an SSE event rewrites the rows it holds, so keying a reset on
+  // its identity cleared the selection under the person's hands on any live
+  // collection. Only a list that shrank past the cursor has to move it.
   useEffect(() => {
-    setSelectedIndex(-1);
+    setSelectedIndex((index) => Math.min(index, data.length - 1));
+  }, [data.length]);
 
+  // Reset scroll when switching render mode
+  useEffect(() => {
     if (prevVirtualRef.current !== useVirtual && scrollRef.current) {
       scrollRef.current.scrollTop = 0;
     }
 
     prevVirtualRef.current = useVirtual;
-  }, [data, useVirtual]);
+  }, [useVirtual]);
 
   // Scroll selected plain row into view
   useEffect(() => {
@@ -249,24 +282,46 @@ export default function DataTable<T>({
   return (
     <div
       ref={scrollRef}
-      tabIndex={0}
       data-virtual={useVirtual || undefined}
-      className="overflow-x-auto rounded-lg border outline-none focus-visible:ring-3 focus-visible:ring-ring/50 data-virtual:max-h-[calc(100vh-16rem)] data-virtual:overflow-y-auto"
-      onKeyDown={onKeyDown}
+      className="overflow-x-auto rounded-lg border data-virtual:max-h-[calc(100vh-16rem)] data-virtual:overflow-y-auto"
     >
-      <table className="w-full min-w-max">
+      {/*
+        The grid, not the scroll container, is what takes focus: the cursor it
+        moves is published through `aria-activedescendant`, which has to sit on
+        the element owning the rows it points at.
+      */}
+      <table
+        role="grid"
+        aria-label={label}
+        aria-activedescendant={selectedIndex >= 0 ? rowId(selectedIndex) : undefined}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        className="w-full min-w-max outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
         <thead className="sticky top-0 z-10 bg-background">
           <tr className="border-b bg-muted/50">
             {columns.map((column, index) => (
               <th
                 key={index}
-                data-clickable={column.onHeaderClick ? "" : undefined}
-                className={`p-3 text-left text-sm font-medium ${
-                  column.className ?? ""
-                } data-clickable:cursor-pointer data-clickable:select-none data-clickable:hover:bg-muted/80`}
-                onClick={column.onHeaderClick}
+                aria-sort={column.sortDirection}
+                className={`text-left text-sm font-medium ${column.className ?? ""}`}
               >
-                {column.header}
+                {/*
+                  A sortable header is a real button. It was a click handler on
+                  the `<th>`, which left sorting reachable by mouse only and
+                  announced the column as plain text.
+                */}
+                {column.onHeaderClick ? (
+                  <button
+                    type="button"
+                    onClick={column.onHeaderClick}
+                    className="flex w-full cursor-pointer items-center p-3 text-left font-medium select-none hover:bg-muted/80 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                  >
+                    {column.header}
+                  </button>
+                ) : (
+                  <span className="block p-3">{column.header}</span>
+                )}
               </th>
             ))}
           </tr>
@@ -281,6 +336,7 @@ export default function DataTable<T>({
             onRowClick={onRowClick}
             scrollRef={scrollRef}
             selectedIndex={selectedIndex}
+            rowId={rowId}
           />
         ) : (
           <PlainBody
@@ -290,6 +346,7 @@ export default function DataTable<T>({
             rowClassName={rowClassName}
             onRowClick={onRowClick}
             selectedIndex={selectedIndex}
+            rowId={rowId}
           />
         )}
 
