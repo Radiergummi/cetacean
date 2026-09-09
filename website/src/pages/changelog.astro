@@ -2,7 +2,8 @@
 import DocsLayout from "../layouts/DocsLayout.astro";
 import { readFileSync } from "node:fs";
 import { marked } from "marked";
-import { changelogPath, slugify } from "../lib/docs";
+import { changelogPath } from "../lib/docs";
+import { slugify } from "../lib/slug";
 
 const raw = readFileSync(changelogPath, "utf-8");
 const headings: { depth: number; slug: string; text: string }[] = [];

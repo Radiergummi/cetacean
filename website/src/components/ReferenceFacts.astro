@@ -1,21 +1,18 @@
 ---
 /**
- * The strip of labelled facts along the bottom of a reference card, as the
+ * Labelled facts for the strip along the bottom of a reference card, as the
  * schema definitions on `/api/schema` and the MCP tools in `docs/mcp-tools.mdx`
- * both want it: a fixed label column with its values beside it.
+ * both want them: a fixed label column with its values beside it.
  *
  * Pass `<dt>`/`<dd>` pairs. It carries no facts of its own, so what a reference
- * calls its facts stays that reference's business while the chrome — the
- * rounded-off footer, the label column, the rhythm between rows — is decided
- * once. `ConfigParam` and `ErrorCode` deliberately do not use it: a run of short
+ * calls its facts stays that reference's business while the label column and
+ * the rhythm between rows are decided once; the strip itself belongs to
+ * `ReferenceEntry`, which owns the padding its edges hang off. `ConfigParam`
+ * and `ErrorCode` deliberately do not use this: a run of short
  * `flag`/`env`/`default` pairs reads better inline than in a column, and an
  * error's hint is one sentence rather than a list.
  */
 ---
-<footer
-    class="-mx-4 -mb-3.5 rounded-b-inner border-t bg-muted px-4 py-2 text-sm text-muted-foreground"
->
-    <dl class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 code-plain">
-        <slot />
-    </dl>
-</footer>
+<dl class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 code-plain">
+    <slot />
+</dl>
