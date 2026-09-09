@@ -1,11 +1,12 @@
 ---
+import Heading from "@/components/Heading.astro";
 import DocsLayout from "../../layouts/DocsLayout.astro";
 import ErrorCode from "../../components/ErrorCode.astro";
-import { errorDomains, errorsInDomain } from "../../lib/errors";
+import {errorDomains, errorsInDomain} from "@/lib/errors.ts";
 
 const domains = errorDomains.map((domain) => ({
-  ...domain,
-  errors: errorsInDomain(domain.prefix),
+    ...domain,
+    errors: errorsInDomain(domain.prefix),
 }));
 
 /**
@@ -13,45 +14,50 @@ const domains = errorDomains.map((domain) => ({
  * most pages on the site, and the codes are already grouped and alphabetical
  * within a group, so the domain is the only thing left to navigate by.
  */
-const headings = domains.map((domain) => ({
-  depth: 2,
-  slug: domain.prefix,
-  text: `${domain.prefix} — ${domain.label}`,
+const headings = domains.map(({label, prefix}) => ({
+    depth: 2,
+    slug: prefix,
+    text: `${prefix}: ${label}`,
 }));
 ---
 <DocsLayout
-  title="Error Reference"
-  description="Every well-known error code the Cetacean API returns, with its HTTP status, what it means, and how to resolve it."
-  slug="api/errors"
-  headings={headings}
+    title="Error Reference"
+    description="Every well-known error code the Cetacean API returns, with its HTTP status, what it means, and how to resolve it."
+    slug="api/errors"
+    headings={headings}
 >
-  <p>
-    A domain-specific error carries a stable code as the last path segment of the
-    <code>type</code> field in its
-    <a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457</a> problem document —
-    <code>"type": "/api/errors/SVC001"</code> is the entry below. Generic HTTP errors
-    use <code>about:blank</code> and have no code.
-  </p>
-  <p>
-    A running Cetacean serves the same catalog at <code>GET /api/errors</code>, and one
-    entry at <code>GET /api/errors/{"{code}"}</code>. This page is generated from the
-    same source, so the two cannot disagree.
-  </p>
+    <p>
+        A domain-specific error carries a stable code as the last path segment of the
+        <code>type</code> field in its
+        <a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457</a> problem document —
+        <code>"type": "/api/errors/SVC001"</code> is the entry below. Generic HTTP errors
+        use <code>about:blank</code> and have no code.
+    </p>
+    <p>
+        A running Cetacean serves the same catalog at <code>GET /api/errors</code>, and one
+        entry at <code>GET /api/errors/{"{code}"}</code>. This page is generated from the
+        same source, so the two cannot disagree.
+    </p>
 
-  {domains.map((domain) => (
-    <>
-      <h2 id={domain.prefix}>{domain.prefix} — {domain.label}</h2>
+    {domains.map(({errors, label, prefix}) => (
+        <>
+            <Heading level="2" id={prefix} anchor>
+                <span class="px-1.5 py-1 rounded-md me-2.5 bg-primary text-primary-foreground">
+                    {prefix}
+                </span>
+                <span>{label}</span>
+            </Heading>
 
-      {domain.errors.map((def) => (
-        <ErrorCode
-          code={def.code}
-          title={def.title}
-          status={def.status}
-          suggestion={def.suggestion}
-        >
-          {def.description}
-        </ErrorCode>
-      ))}
-    </>
-  ))}
+            {errors.map(({code, description, status, suggestion, title}) => (
+                <ErrorCode
+                    code={code}
+                    title={title}
+                    status={status}
+                    suggestion={suggestion}
+                >
+                    {description}
+                </ErrorCode>
+            ))}
+        </>
+    ))}
 </DocsLayout>

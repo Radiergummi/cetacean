@@ -5,15 +5,20 @@ import { marked } from "marked";
 import { changelogPath, slugify } from "../lib/docs";
 
 const raw = readFileSync(changelogPath, "utf-8");
-
 const headings: { depth: number; slug: string; text: string }[] = [];
 const renderer = new marked.Renderer();
+
 renderer.heading = function ({ text, depth }) {
-  if (depth === 1) return "";
+  if (depth === 1) {
+      return "";
+  }
+
   const slug = slugify(text);
+
   if (depth === 2) {
     headings.push({ depth, slug, text });
   }
+
   return `<h${depth} id="${slug}">${text}</h${depth}>`;
 };
 

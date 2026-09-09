@@ -1,5 +1,5 @@
 ---
-import { getEntry } from "astro:content";
+import {getEntry} from "astro:content";
 import Head from "../components/Head.astro";
 import Header from "../components/Header.astro";
 import Hero from "../components/Hero.astro";
@@ -8,15 +8,15 @@ import "../styles/global.css";
 const home = await getEntry("docs", "index");
 ---
 <html lang="en">
-  <head>
+<head>
     <Head title="Cetacean" description={home.data.description} isHome />
-  </head>
-  <body class="min-h-screen">
-    <Header currentPath="/" />
-    <div class="mx-auto max-w-shell">
-      <main id="main-content" class="min-w-0">
+</head>
+<body class="min-h-screen">
+<Header currentPath="/" />
+<div class="mx-auto max-w-shell">
+    <main id="main-content" class="min-w-0">
         <Hero title="Cetacean" description={home.data.description} />
-      </main>
-    </div>
-  </body>
+    </main>
+</div>
+</body>
 </html>

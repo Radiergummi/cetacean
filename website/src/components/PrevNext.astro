@@ -13,7 +13,7 @@ const labelClass = "text-xs font-medium uppercase tracking-wide text-muted-foreg
 const titleClass = "text-sm font-medium";
 ---
 {(prev || next) && (
-  <nav class="mt-4 flex justify-between gap-4 border-t pt-6" aria-label="Page navigation">
+  <nav class="mt-4 flex justify-between gap-4 border-t pt-6 select-none" aria-label="Page navigation">
     {prev ? (
       <a href={`/${prev.slug}`} class={linkClass}>
         <span class={labelClass}>Previous</span>
