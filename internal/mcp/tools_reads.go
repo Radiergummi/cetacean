@@ -67,7 +67,7 @@ func (s *Server) readTools() []toolDef {
 					"level",
 					mcplib.Enum(logLevelNames()...),
 					mcplib.Description(
-						"Minimum log level (debug, info, warn, error, fatal). Best-effort — depends on the service emitting structured levels.",
+						"Minimum log level. Best-effort — depends on the service emitting structured levels.",
 					),
 				),
 			),
@@ -91,7 +91,7 @@ func (s *Server) readTools() []toolDef {
 					"type",
 					mcplib.Enum(listableResourceTypes...),
 					mcplib.Description(
-						"Resource type to enumerate: nodes, services, tasks, stacks, configs, secrets, networks, or volumes. Omit to search across every type at once (requires `query`).",
+						"Resource type to enumerate. Omit to search across every type at once (requires `query`).",
 					),
 				),
 				mcplib.WithString(
@@ -161,7 +161,7 @@ func (s *Server) readTools() []toolDef {
 					mcplib.Required(),
 					mcplib.Enum(describableTypeNames()...),
 					mcplib.Description(
-						"Resource type, singular: service, node, task, stack, config, secret, network or volume.",
+						"Resource type, singular — where `find`'s is plural.",
 					),
 				),
 				mcplib.WithString("id",
@@ -249,13 +249,13 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 				mcplib.WithString("metric",
-					mcplib.Enum(metricCPU, metricMemory, metricNetwork),
+					mcplib.Enum(metricNames(metricCatalog[metricTargetService])...),
 					mcplib.Description(
 						"Which metric: \"cpu\" (default), \"memory\" or \"network\". Service CPU is percent of a core and service memory is bytes; node CPU and memory are percentages. Network is two series, receive and transmit, in bytes per second — a ranking sums the two, since it asks which member moves the most traffic.",
 					),
 				),
 				mcplib.WithString("range",
-					mcplib.Enum(metricRangeNames()...),
+					mcplib.Enum(rangeNames()...),
 					mcplib.Description(
 						"Window to chart: \"1h\" (default), \"6h\", \"24h\" or \"7d\".",
 					),
