@@ -106,7 +106,7 @@ export default function ServiceList() {
           },
         },
         {
-          header: "Status",
+          header: "Rollout",
           cell: (service) => <ServiceStatusBadge service={service} />,
         },
       ];
@@ -240,13 +240,20 @@ export default function ServiceList() {
   );
 }
 
+/**
+ * A service's rollout state — Docker's `UpdateStatus`, and nothing about health.
+ *
+ * A settled rollout is deliberately uncoloured: green beside the red 0/1 in the
+ * Replicas column read as a claim this column has no data to make. Colour is
+ * kept for the states that are actually in flight.
+ */
 function ServiceStatusBadge({ service }: { service: Pick<Service, "UpdateStatus"> }) {
   const { label, state } = serviceUpdateStatus(service);
 
   return (
     <span
       data-state={state}
-      className="text-sm font-medium text-status-ok data-[state=paused]:text-status-warning data-[state=rollback_completed]:text-status-warning data-[state=rollback_paused]:text-status-warning data-[state=rollback_started]:text-status-warning data-[state=updating]:text-status-info"
+      className="text-sm font-medium text-muted-foreground data-[state=paused]:text-status-warning data-[state=rollback_completed]:text-status-warning data-[state=rollback_paused]:text-status-warning data-[state=rollback_started]:text-status-warning data-[state=updating]:text-status-info"
     >
       {label}
     </span>

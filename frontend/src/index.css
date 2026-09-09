@@ -199,3 +199,29 @@
 .topology-edge-flow {
   animation: edge-flow 0.6s linear infinite;
 }
+
+/* Scroll shadows: a cue that a scroll region has more above or below it.
+   The two `local` gradients scroll with the content and cover the two `scroll`
+   shadows when the region is at an end, so each shadow shows only when there is
+   something in that direction — no scroll listener, and nothing to keep in
+   sync. macOS overlay scrollbars are invisible at rest, which is why a clipped
+   row is otherwise the only hint that a region scrolls at all.
+
+   The covering gradients have to be painted in the surface's own colour, so a
+   region on anything but `--background` must set `--scroll-shadow-surface`. */
+.scroll-shadows {
+  --scroll-shadow-surface: var(--background);
+
+  background:
+    linear-gradient(var(--scroll-shadow-surface) 30%, transparent) top / 100% 1.5rem local no-repeat,
+    linear-gradient(transparent, var(--scroll-shadow-surface) 70%) bottom / 100% 1.5rem local
+      no-repeat,
+    radial-gradient(farthest-side at 50% 0, oklch(from var(--foreground) l c h / 18%), transparent)
+      top / 100% 0.5rem scroll no-repeat,
+    radial-gradient(
+        farthest-side at 50% 100%,
+        oklch(from var(--foreground) l c h / 18%),
+        transparent
+      )
+      bottom / 100% 0.5rem scroll no-repeat;
+}

@@ -102,18 +102,28 @@ const updateStatusLabels: Record<string, string> = {
 };
 
 /**
- * Derive a normalised { label, state } from a service's UpdateStatus.
- * "completed" maps to "stable"; missing status also maps to "stable".
+ * Derive a normalised { label, state } from a raw `UpdateStatus.State`.
+ *
+ * "completed" maps to "stable", as does a missing state. Docker leaves
+ * "completed" on a service forever, so anything reading the bare string has to
+ * come through here or it will call a rollout that finished months ago current
+ * — which is what drew "Updating…" on every topology card.
  */
-export function serviceUpdateStatus(service: Pick<Service, "UpdateStatus">): {
+export function updateStatusOf(state: string | null | undefined): {
   label: string;
   state: string;
 } {
-  const state = service.UpdateStatus?.State;
-
   if (!state || state === "completed") {
     return { label: "Stable", state: "stable" };
   }
 
   return { label: updateStatusLabels[state] || state, state };
+}
+
+/** The same, from a service. */
+export function serviceUpdateStatus(service: Pick<Service, "UpdateStatus">): {
+  label: string;
+  state: string;
+} {
+  return updateStatusOf(service.UpdateStatus?.State);
 }

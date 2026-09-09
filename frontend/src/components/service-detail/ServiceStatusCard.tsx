@@ -11,12 +11,12 @@ export function ServiceStatusCard({ service }: { service: Service }) {
 
   return (
     <InfoCard
-      label="Status"
+      label="Rollout"
       value={
         <div className="flex flex-col">
           <span
             data-state={state}
-            className="text-base font-medium text-status-ok data-[state=paused]:text-status-warning data-[state=rollback_completed]:text-status-warning data-[state=rollback_paused]:text-status-warning data-[state=rollback_started]:text-status-warning data-[state=updating]:text-status-info"
+            className="text-base font-medium text-muted-foreground data-[state=paused]:text-status-warning data-[state=rollback_completed]:text-status-warning data-[state=rollback_paused]:text-status-warning data-[state=rollback_started]:text-status-warning data-[state=updating]:text-status-info"
           >
             {label}
           </span>
