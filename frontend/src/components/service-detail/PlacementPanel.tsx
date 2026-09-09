@@ -13,7 +13,7 @@ export function PlacementPanel({ placement }: { placement: Placement }) {
           {constraints.map((constraint) => {
             const humanized = humanizeConstraint(constraint);
             const pillClassName =
-              "inline-flex items-center rounded-lg border px-3 py-2 text-sm data-exclude:border-red-200 data-exclude:bg-red-50 data-exclude:text-red-800 dark:data-exclude:border-red-800 dark:data-exclude:bg-red-950/30 dark:data-exclude:text-red-300";
+              "inline-flex items-center rounded-lg border px-3 py-2 text-sm data-exclude:border-status-danger/30 data-exclude:bg-status-danger/10 data-exclude:text-status-danger dark:data-exclude:border-status-danger/30 dark:data-exclude:bg-status-danger/10 dark:data-exclude:text-status-danger";
 
             if (!humanized) {
               return (

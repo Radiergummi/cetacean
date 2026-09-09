@@ -54,7 +54,7 @@ export function NodeActions({ node, allowedMethods }: { node: Node; allowedMetho
       disabled={!isDown || remove.loading}
       className={
         isDown
-          ? "border-red-500/50 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
+          ? "border-status-danger text-status-danger hover:bg-status-danger/10 dark:text-status-danger dark:hover:bg-status-danger/10"
           : ""
       }
       onClick={() => setDialogOpen(true)}
@@ -77,9 +77,7 @@ export function NodeActions({ node, allowedMethods }: { node: Node; allowedMetho
 
       {remove.error && (
         <div className="flex items-center gap-2">
-          <p className="text-xs text-red-600 dark:text-red-400">
-            {errorInfo?.suggestion ?? remove.error}
-          </p>
+          <p className="text-xs text-status-danger">{errorInfo?.suggestion ?? remove.error}</p>
           {showForceRemove && (
             <Button
               variant="destructive"

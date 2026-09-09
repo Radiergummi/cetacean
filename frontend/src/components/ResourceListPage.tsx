@@ -89,6 +89,7 @@ export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
         <EmptyState message={config.emptyMessage(!!search)} />
       ) : viewMode === "table" ? (
         <DataTable
+          label={config.title}
           columns={columns}
           data={data}
           keyFn={config.keyFn}

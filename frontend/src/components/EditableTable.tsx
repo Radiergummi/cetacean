@@ -202,7 +202,7 @@ export function EditableTable<T>({
                           size="icon"
                           onClick={() => removeRow(index)}
                           title="Remove"
-                          className="text-muted-foreground hover:text-red-600"
+                          className="text-muted-foreground hover:text-status-danger"
                         >
                           <Trash2 className="size-3.5" />
                         </Button>
@@ -223,7 +223,7 @@ export function EditableTable<T>({
                         <tr className="bg-transparent!">
                           <td
                             colSpan={3}
-                            className="px-3 pb-2 text-xs text-red-600 dark:text-red-400"
+                            className="px-3 pb-2 text-xs text-status-danger"
                           >
                             {error}
                           </td>
@@ -235,7 +235,7 @@ export function EditableTable<T>({
               </tbody>
             </table>
 
-            {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+            {saveError && <p className="text-xs text-status-danger">{saveError}</p>}
 
             <footer className="flex items-center gap-2 p-3">
               <Button

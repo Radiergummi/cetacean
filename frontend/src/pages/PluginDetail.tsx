@@ -248,7 +248,7 @@ export default function PluginDetail() {
           value={
             <span
               className={
-                plugin.Enabled ? "text-green-700 dark:text-green-400" : "text-muted-foreground"
+                plugin.Enabled ? "text-status-ok dark:text-status-ok" : "text-muted-foreground"
               }
             >
               {plugin.Enabled ? "Enabled" : "Disabled"}

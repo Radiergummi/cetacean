@@ -13,15 +13,15 @@ import { showErrorToast } from "../../lib/showErrorToast";
 import { getErrorMessage } from "../../lib/utils";
 import ResourceName from "../ResourceName";
 import { Spinner } from "../Spinner";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ArrowRight, ChevronRight, Search, Zap } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
-    return <Spinner className="size-3 shrink-0 text-blue-500" />;
+    return <Spinner className="size-3 shrink-0 text-status-info" />;
   }
 
   const color = statusColor(state);
@@ -92,6 +92,9 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const [searching, setSearching] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const paletteId = useId();
+  const listboxId = `${paletteId}-listbox`;
+  const optionId = useCallback((index: number) => `${paletteId}-option-${index}`, [paletteId]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const navigate = useNavigate();
@@ -413,9 +416,12 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
           currentStep &&
           (currentStep.type === "number" || currentStep.type === "text")
         ) {
-          const val = currentStep.type === "number" ? Number(query) : query;
+          const stepValue = currentStep.type === "number" ? Number(query) : query;
 
-          if (currentStep.type === "number" && (isNaN(val as number) || query.trim() === "")) {
+          if (
+            currentStep.type === "number" &&
+            (isNaN(stepValue as number) || query.trim() === "")
+          ) {
             return;
           }
 
@@ -423,7 +429,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
             return;
           }
 
-          advanceStep(val);
+          advanceStep(stepValue);
 
           return;
         }
@@ -439,14 +445,6 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
         if (flat[flatIndex]) {
           selectItem(flat[flatIndex]);
-        }
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-
-        if (activeAction) {
-          goBackStep();
-        } else {
-          onClose();
         }
       } else if (event.key === "Backspace" && query === "" && activeAction) {
         event.preventDefault();
@@ -466,7 +464,6 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
       activateAction,
       selectItem,
       goBackStep,
-      onClose,
     ],
   );
 
@@ -482,14 +479,14 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const groups = useMemo(() => {
     const result: { type: SearchResourceType; items: { index: number; result: SearchResult }[] }[] =
       [];
-    let idx = actionSuggestionOffset;
+    let optionIndex = actionSuggestionOffset;
     const typesToRender = resourceFilter ? [resourceFilter] : typeOrder;
 
     for (const type of typesToRender) {
       const results = response?.results[type];
 
       if (results && results.length > 0) {
-        const items = results.map((r) => ({ index: idx++, result: r }));
+        const items = results.map((result) => ({ index: optionIndex++, result }));
 
         result.push({ type, items });
       }
@@ -502,17 +499,32 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const hasResults = flat.length > 0;
   const showSearchResults = currentStep?.type === "resource" || !activeAction;
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 animate-[fade-in_150ms_ease-out] bg-background/60 backdrop-blur-sm"
-      onClick={onClose}
+  const listboxOpen = showSearchResults && (totalItems > 0 || (hasQuery && hasResponse));
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(next, details) => {
+        if (next) {
+          return;
+        }
+
+        // Inside a multi-step action, Escape means "back one step", not
+        // "close" — so the dismissal is cancelled and the step unwound.
+        if (details.reason === "escape-key" && activeAction) {
+          details.cancel();
+          goBackStep();
+
+          return;
+        }
+
+        onClose();
+      }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
+      <DialogContent
+        showCloseButton={false}
         aria-label="Search"
-        className="mx-4 mt-[5vh] max-w-lg animate-[slide-down_150ms_ease-out] rounded-lg border bg-popover shadow-lg md:mx-auto md:mt-[15vh]"
-        onClick={(event) => event.stopPropagation()}
+        className="top-[5vh] max-w-lg translate-y-0 gap-0 p-0 sm:max-w-lg md:top-[15vh]"
         onKeyDown={onKeyDown}
       >
         {activeAction && (
@@ -526,9 +538,23 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
         <div className="flex items-center gap-2 border-b px-3 py-2.5">
           <Search className="size-4 shrink-0 text-muted-foreground" />
+          {/*
+            The APG combobox contract: focus never leaves this input, and the
+            row it is pointing at is published through aria-activedescendant.
+            Without it, arrowing through results was silent — the highlight was
+            a colour and nothing else.
+          */}
           <input
             ref={inputRef}
             type={currentStep?.type === "number" ? "number" : "text"}
+            role="combobox"
+            aria-expanded={listboxOpen}
+            aria-controls={listboxId}
+            aria-autocomplete="list"
+            aria-activedescendant={
+              listboxOpen && highlightIndex >= 0 ? optionId(highlightIndex) : undefined
+            }
+            aria-label={placeholder}
             value={query}
             onChange={(event) => onInputChange(event.target.value)}
             placeholder={placeholder}
@@ -548,18 +574,20 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
             <span className="text-sm text-foreground">Confirm: {pendingConfirm.action.label}?</span>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setPendingConfirm(null)}
                 className="rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() => {
                   const { action, args } = pendingConfirm;
                   setPendingConfirm(null);
                   void doExecute(action, args);
                 }}
-                className="text-destructive-foreground rounded-md bg-destructive px-2.5 py-1 text-xs font-medium hover:bg-destructive/90"
+                className="rounded-md bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive hover:bg-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30"
               >
                 Confirm
               </button>
@@ -568,59 +596,87 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="max-h-72 overflow-y-auto">
-          {actionMatch && !activeAction && (
-            <button
-              data-active={highlightIndex === 0 || undefined}
-              className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground"
-              onClick={() => activateAction(actionMatch.action)}
-              onMouseEnter={() => setHighlightIndex(0)}
-            >
-              <Zap className="size-4 shrink-0 text-amber-500" />
-              <span>{actionMatch.action.label}</span>
-            </button>
+          {showSearchResults && hasQuery && !hasResults && response && (
+            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+              No results for &ldquo;{query}&rdquo;
+            </div>
           )}
 
-          {showSearchResults && (
-            <>
-              {hasQuery && !hasResults && response && (
-                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  No results for &ldquo;{query}&rdquo;
-                </div>
+          {/*
+            One listbox holds every highlightable row, the action suggestion
+            included, because `highlightIndex` numbers them in one sequence and
+            aria-activedescendant has to resolve inside the listbox it names.
+            Rows are options rather than buttons: a button would be its own tab
+            stop, so Tab would walk the results instead of leaving the palette.
+          */}
+          <ul
+            id={listboxId}
+            role="listbox"
+            aria-label="Search results"
+            className="flex flex-col gap-3"
+          >
+            {actionMatch &&
+              !activeAction && (
+                // Focus stays in the combobox input, which owns the arrow keys
+                // and Enter; an option in this pattern is pointed at, never
+                // focused, so it carries no key handler of its own.
+                // oxlint-disable-next-line jsx-a11y/click-events-have-key-events
+                <li
+                  id={optionId(0)}
+                  role="option"
+                  aria-selected={highlightIndex === 0}
+                  data-active={highlightIndex === 0 || undefined}
+                  className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground"
+                  onClick={() => activateAction(actionMatch.action)}
+                  onMouseEnter={() => setHighlightIndex(0)}
+                >
+                  <Zap className="size-4 shrink-0 text-amber-500" />
+                  <span>{actionMatch.action.label}</span>
+                </li>
               )}
 
-              <ul className="flex flex-col gap-3">
-                {groups.map(({ items, type }) => (
-                  <li key={type}>
-                    <section>
-                      <header className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase">
-                        <span>{typeLabels[type]}</span>
-                      </header>
+            {showSearchResults &&
+              groups.map(({ items, type }) => (
+                <li
+                  key={type}
+                  role="group"
+                  aria-label={typeLabels[type]}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="block px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase"
+                  >
+                    {typeLabels[type]}
+                  </span>
 
-                      {items.map(({ index, result }) => (
-                        <button
-                          key={`${type}-${result.id}`}
-                          data-active={index === highlightIndex || undefined}
-                          className="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-1.5 text-left text-sm text-foreground hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground"
-                          onClick={() => selectItem({ type, result })}
-                          onMouseEnter={() => setHighlightIndex(index)}
-                        >
-                          <span className="flex items-center gap-1.5 truncate font-medium">
-                            {result.state && <StateOrb state={result.state} />}
-                            <ResourceName name={result.name} />
-                          </span>
-                          {result.detail && (
-                            <span className="truncate text-xs text-muted-foreground">
-                              {result.detail}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </section>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+                  {items.map(({ index, result }) => (
+                    // Pointed at through aria-activedescendant rather than
+                    // focused — see the note on the listbox above.
+                    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus
+                    <span
+                      key={`${type}-${result.id}`}
+                      id={optionId(index)}
+                      role="option"
+                      aria-selected={index === highlightIndex}
+                      data-active={index === highlightIndex || undefined}
+                      className="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-1.5 text-left text-sm text-foreground hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground"
+                      onClick={() => selectItem({ type, result })}
+                      onMouseEnter={() => setHighlightIndex(index)}
+                    >
+                      <span className="flex items-center gap-1.5 truncate font-medium">
+                        {result.state && <StateOrb state={result.state} />}
+                        <ResourceName name={result.name} />
+                      </span>
+                      {result.detail && (
+                        <span className="truncate text-xs text-muted-foreground">
+                          {result.detail}
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </li>
+              ))}
+          </ul>
 
           {activeAction &&
             currentStep &&
@@ -653,6 +709,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
               {response.total} result{response.total !== 1 ? "s" : ""}
             </span>
             <button
+              type="button"
               className="text-primary hover:underline"
               onClick={() => {
                 navigate(`/search?q=${encodeURIComponent(query)}`);
@@ -663,8 +720,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         )}
-      </div>
-    </div>,
-    document.body,
+      </DialogContent>
+    </Dialog>
   );
 }

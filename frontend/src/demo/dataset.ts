@@ -853,7 +853,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
       Spec: {
         ContainerSpec: { Image: image },
       },
-      ServiceName: services.find((s) => s.ID === serviceID)?.Spec.Name,
+      ServiceName: services.find((service) => service.ID === serviceID)?.Spec.Name,
       NodeHostname: nodesByID.get(nodeID)?.Description.Hostname,
     };
   };
@@ -980,15 +980,15 @@ export function buildDataset(): Dataset {
   const secrets = buildSecrets();
   const services = buildServices();
 
-  const nodesByID = new Map(nodes.map((n) => [n.ID, n]));
-  const servicesByID = new Map(services.map((s) => [s.ID, s]));
-  const configsByID = new Map(configs.map((c) => [c.ID, c]));
-  const secretsByID = new Map(secrets.map((s) => [s.ID, s]));
-  const networksByID = new Map(networks.map((n) => [n.Id, n]));
-  const volumesByName = new Map(volumes.map((v) => [v.Name, v]));
+  const nodesByID = new Map(nodes.map((node) => [node.ID, node]));
+  const servicesByID = new Map(services.map((service) => [service.ID, service]));
+  const configsByID = new Map(configs.map((config) => [config.ID, config]));
+  const secretsByID = new Map(secrets.map((secret) => [secret.ID, secret]));
+  const networksByID = new Map(networks.map((network) => [network.Id, network]));
+  const volumesByName = new Map(volumes.map((volume) => [volume.Name, volume]));
 
   const tasks = buildTasks(services, nodesByID);
-  const tasksByID = new Map(tasks.map((t) => [t.ID, t]));
+  const tasksByID = new Map(tasks.map((task) => [task.ID, task]));
 
   return {
     nodes,

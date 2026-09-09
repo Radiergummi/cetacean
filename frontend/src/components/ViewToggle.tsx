@@ -10,6 +10,7 @@ export default function ViewToggle({ mode, onChange }: Props) {
   return (
     <div className="inline-flex shrink-0 rounded-md border">
       <button
+        type="button"
         onClick={() => onChange("table")}
         aria-pressed={mode === "table"}
         aria-label="Table view"
@@ -18,6 +19,7 @@ export default function ViewToggle({ mode, onChange }: Props) {
         <TableProperties className="size-4" />
       </button>
       <button
+        type="button"
         onClick={() => onChange("grid")}
         aria-pressed={mode === "grid"}
         aria-label="Grid view"

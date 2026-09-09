@@ -48,11 +48,11 @@ export function generateMockSeries(
         ? 1e8 + Math.random() * 2e9
         : Math.random() * 100;
     const volatility = base * 0.15;
-    let val = base;
+    let value = base;
     const data = timestamps.map(() => {
-      val += (Math.random() - 0.48) * volatility;
-      val = Math.max(0, val);
-      return val;
+      value += (Math.random() - 0.48) * volatility;
+      value = Math.max(0, value);
+      return value;
     });
 
     return {

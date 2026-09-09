@@ -1,7 +1,26 @@
 import type { Edge, Node } from "@xyflow/react";
-import ELK, { type ElkExtendedEdge, type ElkNode } from "elkjs/lib/elk.bundled.js";
+import type { ELK as ElkInstance, ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 
-const elk = new ELK();
+/**
+ * ELK is a GWT-compiled layout engine and by far the heaviest thing the
+ * dashboard ships — 1.6 MB, half a megabyte gzipped. Importing it at module
+ * scope put it in the same chunk as React Flow, so the topology page could not
+ * draw a single node until all of it had arrived. Loading it on the first
+ * layout instead lets the graph render while the engine is still on the wire,
+ * and keeps it out of every other route entirely.
+ *
+ * The promise is cached, so concurrent callers share one instance and one
+ * download.
+ */
+let elkInstance: Promise<ElkInstance> | null = null;
+
+function loadElk(): Promise<ElkInstance> {
+  elkInstance ??= import("elkjs/lib/elk.bundled.js").then(
+    ({ default: ELK }) => new ELK() as ElkInstance,
+  );
+
+  return elkInstance;
+}
 
 const nodeWidth = 224; // matches w-56 (14rem) in ServiceCardNode
 const defaultNodeHeight = 120;
@@ -15,8 +34,10 @@ export async function computeLayout(
   edges: Edge[],
   direction: "RIGHT" | "DOWN" = "RIGHT",
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
-  const groups = nodes.filter((n) => isGroup(n.type));
-  const leaves = nodes.filter((n) => !isGroup(n.type));
+  const elk = await loadElk();
+
+  const groups = nodes.filter((node) => isGroup(node.type));
+  const leaves = nodes.filter((node) => !isGroup(node.type));
 
   const groupChildren = new Map<string, ElkNode[]>();
 

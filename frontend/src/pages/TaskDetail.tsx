@@ -255,11 +255,11 @@ export default function TaskDetail() {
         )}
 
         {status.Err && (
-          <div className="col-span-full rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30">
-            <div className="mb-1 text-xs font-medium tracking-wider text-red-600 uppercase dark:text-red-400">
+          <div className="col-span-full rounded-lg border border-status-danger/30 bg-status-danger/10 p-4">
+            <div className="mb-1 text-xs font-medium tracking-wider text-status-danger uppercase">
               Error
             </div>
-            <div className="text-sm text-red-700 dark:text-red-300">{status.Err}</div>
+            <div className="text-sm text-status-danger">{status.Err}</div>
           </div>
         )}
 

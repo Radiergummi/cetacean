@@ -26,6 +26,10 @@ import { afterEach, vi } from "vitest";
   };
 });
 
+// Selecting a table row scrolls it into view. jsdom implements neither
+// Element.prototype.scrollIntoView nor the layout it would need to honour it.
+Element.prototype.scrollIntoView = vi.fn<() => void>();
+
 // Chart.js requires matchMedia which jsdom does not provide
 Object.defineProperty(window, "matchMedia", {
   writable: true,

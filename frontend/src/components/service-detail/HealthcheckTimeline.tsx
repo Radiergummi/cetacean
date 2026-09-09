@@ -244,16 +244,16 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
         )}
 
         {/* Start period checks (forgiven) */}
-        {startChecks.map((t) => (
-          <Tooltip key={`s${t}`}>
+        {startChecks.map((timestamp) => (
+          <Tooltip key={`s${timestamp}`}>
             <TooltipTrigger
               render={
                 <circle
-                  cx={x(t)}
+                  cx={x(timestamp)}
                   cy={axisY}
                   r={2.5}
                   className="fill-amber-400 transition-transform outline-none hover:scale-150 focus-visible:scale-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50 dark:fill-amber-500"
-                  style={{ transformOrigin: `${x(t)}px ${axisY}px` }}
+                  style={{ transformOrigin: `${x(timestamp)}px ${axisY}px` }}
                   tabIndex={0}
                   stroke="transparent"
                   strokeWidth={6}
@@ -267,14 +267,14 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
             <TooltipContent>
               <p className="font-medium">Start period check</p>
               <p>Failure forgiven during grace period</p>
-              <p className="text-muted-foreground">{formatDuration(t, true)}</p>
+              <p className="text-muted-foreground">{formatDuration(timestamp, true)}</p>
             </TooltipContent>
           </Tooltip>
         ))}
 
         {/* Interval tick dots (skip start-period checks — already rendered as amber) */}
         {intervalTicks
-          .filter((t) => t >= startPeriod)
+          .filter((timestamp) => timestamp >= startPeriod)
           .map((t, i) => {
             const isFirst = i === 0;
 

@@ -150,18 +150,22 @@ export function ExtraHostsEditor({
                     value={row.ip}
                     onChange={(event) => updateRow(index, "ip", event.target.value)}
                     placeholder="192.168.1.1"
-                    className={cn("font-mono", ipInvalid && "border-red-500")}
+                    className={cn("font-mono", ipInvalid && "border-status-danger")}
                   />
-                  {ipInvalid && <p className="text-[10px] text-red-500">Invalid IP address</p>}
+                  {ipInvalid && (
+                    <p className="text-[10px] text-status-danger">Invalid IP address</p>
+                  )}
                 </div>
                 <div className="flex flex-1 flex-col gap-0.5">
                   <Input
                     value={row.hostname}
                     onChange={(event) => updateRow(index, "hostname", event.target.value)}
                     placeholder="myhost"
-                    className={cn("font-mono", hostnameInvalid && "border-red-500")}
+                    className={cn("font-mono", hostnameInvalid && "border-status-danger")}
                   />
-                  {hostnameInvalid && <p className="text-[10px] text-red-500">Invalid hostname</p>}
+                  {hostnameInvalid && (
+                    <p className="text-[10px] text-status-danger">Invalid hostname</p>
+                  )}
                 </div>
                 <Button
                   variant="outline"

@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "react-perf", "import", "vitest"],
+  "plugins": ["react", "react-perf", "import", "vitest", "jsx-a11y"],
   "categories": {
     "correctness": "error",
     "suspicious": "warn",
@@ -61,6 +61,60 @@
     "no-implied-eval": "error",
     "no-new-wrappers": "error",
     "no-void": ["error", { "allowAsStatement": true }],
+    // A label wrapping its own control associates implicitly, but the rule
+    // only sees that through components it has been told are controls.
+    "jsx-a11y/label-has-associated-control": [
+      "error",
+      {
+        "labelComponents": ["Label"],
+        "controlComponents": [
+          "Switch",
+          "Input",
+          "DurationInput",
+          "NumberField",
+          "MultiCombobox",
+          "Combobox",
+          "Slider"
+        ],
+        "depth": 5
+      }
+    ],
+    // Upstream jsx-a11y ships default element/role pairs for exactly these
+    // cases; oxlint's port does not, so they are restored here. `role="grid"`
+    // on a `<table>` is the correct way to build a keyboard-navigable grid,
+    // and `role="presentation"` on a `<tr>` is how a layout row says it is not
+    // part of the data.
+    "jsx-a11y/no-noninteractive-element-to-interactive-role": [
+      "error",
+      {
+        "table": ["grid"],
+        "td": ["gridcell"],
+        "ul": ["listbox", "menu", "menubar", "radiogroup", "tablist", "tree", "treegrid"],
+        "ol": ["listbox", "menu", "menubar", "radiogroup", "tablist", "tree", "treegrid"],
+        "li": ["menuitem", "option", "row", "tab", "treeitem"]
+      }
+    ],
+    "jsx-a11y/no-interactive-element-to-noninteractive-role": [
+      "error",
+      {
+        "tr": ["none", "presentation"],
+        "td": ["none", "presentation"],
+        "tbody": ["none", "presentation"],
+        "thead": ["none", "presentation"],
+        "tfoot": ["none", "presentation"]
+      }
+    ],
+    // Reports every empty spacer `<td>`/`<th>` as an unlabelled control. A
+    // table cell is not a control, and the layout cells a virtualized body and
+    // the skeletons need are exactly what it flags — 17 reports, none of them
+    // a real one.
+    "jsx-a11y/control-has-associated-label": "off",
+    // Its advice is unsound for the two patterns this app actually uses:
+    // `role="status"` on a live region is not `<output>` (a form calculation
+    // result), and `role="img"` on a composed graphic is not `<img>` (which
+    // needs a src). Same for `role="combobox"`/`listbox`/`option` on the query
+    // input, where the suggested `<select>` is a different widget.
+    "jsx-a11y/prefer-tag-over-role": "off",
     "import/no-cycle": "error",
     "import/no-self-import": "error",
     "import/no-unassigned-import": "off"

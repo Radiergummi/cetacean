@@ -174,6 +174,9 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
   };
 
   const handlePreset = (seconds: number, close: () => void) => {
+    // Reading the clock is the point, and this runs on click rather than
+    // during render — the rule flags it because the closure is built here.
+    // oxlint-disable-next-line react/purity
     const now = Math.floor(Date.now() / 1000);
 
     setCustomRange(now - seconds, now);
@@ -186,6 +189,7 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
     <div className="flex flex-wrap items-center gap-2">
       {drillStack && (
         <button
+          type="button"
           onClick={() => setDrillStack(null)}
           className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1.5 text-xs text-primary hover:bg-primary/20"
           title="Clear stack filter (Esc)"
@@ -231,6 +235,7 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
             <div className="mb-3 grid grid-cols-2 gap-1.5">
               {quickPresets.map(({ label, seconds }) => (
                 <button
+                  type="button"
                   key={label}
                   onClick={() => handlePreset(seconds, close)}
                   className="rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -259,6 +264,7 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
                 />
               </label>
               <button
+                type="button"
                 onClick={() => handleCustomApply(close)}
                 className="w-full rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
               >

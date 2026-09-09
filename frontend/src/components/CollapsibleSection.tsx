@@ -1,3 +1,4 @@
+import { readStoredValue, writeStoredValue } from "@/lib/storage";
 import { ChevronRight } from "lucide-react";
 import type React from "react";
 import { useCallback, useState } from "react";
@@ -30,22 +31,14 @@ export function useSectionCollapse(title: string, defaultOpen = true) {
   const scope = usePageScope();
 
   const [open, setOpen] = useState(() => {
-    try {
-      const stored = localStorage.getItem(sectionKey(scope, title));
+    const stored = readStoredValue(sectionKey(scope, title));
 
-      return stored !== null ? stored === "1" : defaultOpen;
-    } catch {
-      return defaultOpen;
-    }
+    return stored !== null ? stored === "1" : defaultOpen;
   });
 
   const toggle = useCallback(() => {
     setOpen((prev) => {
-      try {
-        localStorage.setItem(sectionKey(scope, title), prev ? "0" : "1");
-      } catch {
-        /* ignore */
-      }
+      writeStoredValue(sectionKey(scope, title), prev ? "0" : "1");
 
       return !prev;
     });

@@ -39,7 +39,7 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
         </span>
         <span
           data-ready={data.state === "ready" || undefined}
-          className="inline-block size-2 rounded-full bg-red-500 data-ready:bg-green-500"
+          className="inline-block size-2 rounded-full bg-status-danger data-ready:bg-status-ok"
         />
         {data.availability !== "active" && (
           <span className="text-[10px] text-muted-foreground">{data.availability}</span>
@@ -51,9 +51,11 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
       ) : (
         <div className="grid grid-cols-3 gap-2">
           {data.services.map((svc) => (
-            <div
+            <button
               key={svc.serviceId}
-              className="cursor-pointer rounded-lg border bg-card p-2.5 shadow-sm transition-shadow hover:shadow-md"
+              type="button"
+              aria-label={`Service ${svc.serviceName}`}
+              className="cursor-pointer rounded-lg border bg-card p-2.5 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
               onClick={() => navigate(`/services/${svc.serviceId}`)}
             >
               <div
@@ -76,7 +78,7 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
                   {svc.running}/{svc.total} tasks
                 </span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}

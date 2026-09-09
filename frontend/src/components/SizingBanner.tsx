@@ -103,7 +103,7 @@ export function SizingBanner({ hints, canFix, onFixed }: Props) {
           );
         })}
 
-        {error && <p className="text-xs font-medium text-red-700 dark:text-red-400">{error}</p>}
+        {error && <p className="text-xs font-medium text-status-danger">{error}</p>}
       </div>
     </div>
   );

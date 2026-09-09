@@ -1062,7 +1062,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     http.get("*/stacks/summary", () => {
       const items = buildStackSummaries(dataset);
       return jsonResponse<CollectionResponse<StackSummary & { "@id": string; "@type": string }>>({
-        items: items.map((s) => wrapItem(s, "StackSummary", `/stacks/${s.name}`)),
+        items: items.map((summary) => wrapItem(summary, "StackSummary", `/stacks/${summary.name}`)),
         total: items.length,
         limit: 50,
         offset: 0,
@@ -1276,7 +1276,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<
         CollectionResponse<DiskUsageSummary & { "@id": string; "@type": string }>
       >({
-        items: summaries.map((s) => wrapItem(s, "DiskUsageSummary", `/disk-usage/${s.type}`)),
+        items: summaries.map((summary) =>
+          wrapItem(summary, "DiskUsageSummary", `/disk-usage/${summary.type}`),
+        ),
         total: summaries.length,
         limit: 50,
         offset: 0,
@@ -1506,7 +1508,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return notFound();
       }
 
-      dataset.services = dataset.services.filter((s) => s.ID !== id);
+      dataset.services = dataset.services.filter((service) => service.ID !== id);
       dataset.servicesByID.delete(id);
 
       for (const task of dataset.tasks) {

@@ -250,6 +250,7 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
       </div>
 
       <button
+        type="button"
         onClick={onRun}
         disabled={loading}
         className="inline-flex h-8 items-center gap-1.5 self-start rounded-md border bg-background px-2.5 text-xs hover:bg-muted disabled:opacity-50"
