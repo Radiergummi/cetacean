@@ -1055,7 +1055,12 @@ func TestServiceScaleACL_DeniedByResourceName(t *testing.T) {
 			func(s swarm.Service) string { return s.Spec.Name },
 		),
 	)(
-		requireLevel(config.OpsOperational, config.OpsImpactful)(h.HandleScaleService),
+		requireLevel(
+			config.OpsOperational,
+			config.OpsImpactful,
+		)(
+			http.HandlerFunc(h.HandleScaleService),
+		),
 	)
 
 	body := `{"replicas": 3}`
@@ -1109,7 +1114,12 @@ func TestServiceScaleACL_AllowedByResourceName(t *testing.T) {
 			func(s swarm.Service) string { return s.Spec.Name },
 		),
 	)(
-		requireLevel(config.OpsOperational, config.OpsImpactful)(h.HandleScaleService),
+		requireLevel(
+			config.OpsOperational,
+			config.OpsImpactful,
+		)(
+			http.HandlerFunc(h.HandleScaleService),
+		),
 	)
 
 	body := `{"replicas": 3}`
@@ -1151,7 +1161,12 @@ func TestTaskRemoveACL_ResolvesToParentService(t *testing.T) {
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
 	handler := h.requireWriteACL(h.taskServiceResource)(
-		requireLevel(config.OpsImpactful, config.OpsImpactful)(h.HandleRemoveTask),
+		requireLevel(
+			config.OpsImpactful,
+			config.OpsImpactful,
+		)(
+			http.HandlerFunc(h.HandleRemoveTask),
+		),
 	)
 
 	req := httptest.NewRequest("DELETE", "/tasks/task1", nil)
@@ -1186,7 +1201,12 @@ func TestTaskRemoveACL_DeniedWhenParentServiceNotGranted(t *testing.T) {
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
 	handler := h.requireWriteACL(h.taskServiceResource)(
-		requireLevel(config.OpsImpactful, config.OpsImpactful)(h.HandleRemoveTask),
+		requireLevel(
+			config.OpsImpactful,
+			config.OpsImpactful,
+		)(
+			http.HandlerFunc(h.HandleRemoveTask),
+		),
 	)
 
 	req := httptest.NewRequest("DELETE", "/tasks/task1", nil)
@@ -1592,7 +1612,12 @@ func TestGetUnlockKey_BlockedAtOpsLevel0(t *testing.T) {
 		},
 	}))
 
-	handler := requireLevel(config.OpsImpactful, config.OpsReadOnly)(h.HandleGetUnlockKey)
+	handler := requireLevel(
+		config.OpsImpactful,
+		config.OpsReadOnly,
+	)(
+		http.HandlerFunc(h.HandleGetUnlockKey),
+	)
 
 	req := httptest.NewRequest("GET", "/swarm/unlock-key", nil)
 	w := httptest.NewRecorder()

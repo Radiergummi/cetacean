@@ -113,9 +113,14 @@ func TestRequestLogger_5xxLevel(t *testing.T) {
 }
 
 func TestSecurityHeaders(t *testing.T) {
-	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}), false, nil)
+	handler := securityHeaders(
+		false,
+		nil,
+	)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
@@ -141,9 +146,14 @@ func TestSecurityHeaders(t *testing.T) {
 }
 
 func TestSecurityHeaders_HSTS(t *testing.T) {
-	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}), true, nil)
+	handler := securityHeaders(
+		true,
+		nil,
+	)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
