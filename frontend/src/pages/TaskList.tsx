@@ -222,6 +222,7 @@ export default function TaskList() {
         />
       ) : viewMode === "table" ? (
         <DataTable
+          label="Tasks"
           columns={columns}
           data={filteredTasks}
           keyFn={({ ID }) => ID}

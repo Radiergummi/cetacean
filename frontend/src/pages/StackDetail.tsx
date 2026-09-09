@@ -148,7 +148,7 @@ export default function StackDetail() {
                     <span>
                       <span
                         data-healthy={taskCounts[ID].running >= taskCounts[ID].desired || undefined}
-                        className="text-yellow-600 data-healthy:text-green-600"
+                        className="text-status-warning data-healthy:text-status-ok"
                       >
                         {taskCounts[ID].running}
                       </span>

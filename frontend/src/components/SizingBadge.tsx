@@ -43,7 +43,7 @@ function formatCompactLabel(hint: Recommendation): string {
 export function SizingBadge({ hints }: { hints: Recommendation[] }) {
   if (hints.length === 0) {
     return (
-      <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+      <span className="inline-flex items-center gap-1 text-status-ok">
         <Check className="size-3.5" />
         OK
       </span>
@@ -64,10 +64,15 @@ export function SizingBadge({ hints }: { hints: Recommendation[] }) {
     }
   }
 
+  // `hintIcon` returns a module-level Lucide component, so this binds an
+  // existing component rather than creating one — the rule cannot see that
+  // through the lookup.
+  // oxlint-disable-next-line react/static-components
   const Icon = hintIcon(top.category);
 
   const badge = (
     <span className={`inline-flex items-center gap-1 ${severityStyles[top.severity]}`}>
+      {/* oxlint-disable-next-line react/static-components */}
       <Icon className="size-3.5" />
       {formatCompactLabel(top)}
     </span>

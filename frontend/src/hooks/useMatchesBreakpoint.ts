@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 const breakpoints = {
   sm: 640,
@@ -17,19 +17,24 @@ export function useMatchesBreakpoint(
   const offset = breakpoints[breakpoint];
   const query = direction === "below" ? `(max-width: ${offset - 1}px)` : `(min-width: ${offset}px)`;
 
-  const [matches, setMatches] = useState(() => matchMedia(query).matches);
+  // The viewport is an external store, so React reads it directly rather than
+  // mirroring it into state from an effect. That also closes the gap the effect
+  // left: a change landing between the first render and the listener being
+  // attached used to go unnoticed until the next one.
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      const mediaQuery = matchMedia(query);
 
-  useEffect(() => {
-    const mediaQuery = matchMedia(query);
+      mediaQuery.addEventListener("change", onStoreChange);
 
-    setMatches(mediaQuery.matches);
+      return () => mediaQuery.removeEventListener("change", onStoreChange);
+    },
+    [query],
+  );
 
-    const handler = (event: { matches: boolean }) => setMatches(event.matches);
-
-    mediaQuery.addEventListener("change", handler);
-
-    return () => mediaQuery.removeEventListener("change", handler);
-  }, [query]);
-
-  return matches;
+  return useSyncExternalStore(
+    subscribe,
+    () => matchMedia(query).matches,
+    () => false,
+  );
 }

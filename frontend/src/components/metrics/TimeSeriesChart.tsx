@@ -248,7 +248,9 @@ export default function TimeSeriesChart({
             );
 
             setParsedMetrics(mock);
-            onSeriesInfoRef.current?.(mock.series.map((s) => ({ label: s.label, color: s.color })));
+            onSeriesInfoRef.current?.(
+              mock.series.map((series) => ({ label: series.label, color: series.color })),
+            );
 
             if (seriesChanged(fetchedDataRef.current, mock)) {
               setIsolatedIndex(null);
@@ -265,7 +267,9 @@ export default function TimeSeriesChart({
         }
 
         setParsedMetrics(parsed);
-        onSeriesInfoRef.current?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
+        onSeriesInfoRef.current?.(
+          parsed.series.map((series) => ({ label: series.label, color: series.color })),
+        );
 
         if (seriesChanged(fetchedDataRef.current, parsed)) {
           setIsolatedIndex(null);
@@ -849,6 +853,7 @@ export default function TimeSeriesChart({
         {stackable && panel?.stacked == null && (
           <div className="ms-1 flex items-center gap-0.5">
             <button
+              type="button"
               onClick={() => setLocalStacked(false)}
               aria-pressed={!stacked}
               className="rounded p-0.5 hover:bg-muted/50 aria-pressed:bg-muted"
@@ -857,6 +862,7 @@ export default function TimeSeriesChart({
               <LineChart className="size-3.5" />
             </button>
             <button
+              type="button"
               onClick={() => setLocalStacked(true)}
               aria-pressed={stacked}
               className="rounded p-0.5 hover:bg-muted/50 aria-pressed:bg-muted"
@@ -877,6 +883,7 @@ export default function TimeSeriesChart({
           <div className="text-center">
             <p className="mb-2 text-sm text-destructive">{errorMessage}</p>
             <button
+              type="button"
               onClick={fetchData}
               className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
             >

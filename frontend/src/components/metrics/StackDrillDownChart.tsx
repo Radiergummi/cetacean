@@ -102,6 +102,7 @@ export default function StackDrillDownChart({
       />
       <div className="mt-1">
         <button
+          type="button"
           onClick={() => setShowLegend((v) => !v)}
           className="text-[11px] text-muted-foreground hover:text-foreground"
         >
@@ -117,6 +118,7 @@ export default function StackDrillDownChart({
 
               return (
                 <button
+                  type="button"
                   key={label}
                   onClick={() => setIsolatedLabel(isolatedLabel === label ? null : label)}
                   className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground"
@@ -133,6 +135,7 @@ export default function StackDrillDownChart({
 
             {!drillStack && (
               <button
+                type="button"
                 onClick={() => setShowAll((v) => !v)}
                 className="text-[11px] text-primary hover:underline"
               >

@@ -81,7 +81,7 @@ export function LogTail({ error, lines, service }: Props) {
         </span>
       </div>
 
-      {error && <p className="text-xs text-red-600 dark:text-red-300">{error.message}</p>}
+      {error && <p className="text-xs text-status-danger">{error.message}</p>}
 
       {lines.length === 0 && !error ? (
         <p className="p-3 text-sm opacity-70">Waiting for output from {service}…</p>

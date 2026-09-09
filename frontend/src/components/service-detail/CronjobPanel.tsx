@@ -2,6 +2,7 @@ import { CronSchedule } from "./CronSchedule";
 import { IntegrationSection } from "./IntegrationSection";
 import type { CronjobIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
@@ -107,16 +108,29 @@ export function CronjobPanel({
         <span className="text-xs font-medium text-foreground">Enabled</span>
       </label>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Schedule</label>
-        <Input
-          className="font-mono"
-          value={formSchedule}
-          onChange={(event) => setFormSchedule(event.target.value)}
-          placeholder="*/5 * * * *"
-        />
-        {cronError && <p className="text-xs text-destructive">{cronError}</p>}
-      </div>
+      <Field label="Schedule">
+        {(control) => (
+          <>
+            <Input
+              {...control}
+              className="font-mono"
+              value={formSchedule}
+              onChange={(event) => setFormSchedule(event.target.value)}
+              placeholder="*/5 * * * *"
+              aria-invalid={cronError ? true : undefined}
+              aria-errormessage={cronError ? control.id + "-error" : undefined}
+            />
+            {cronError && (
+              <p
+                id={control.id + "-error"}
+                className="text-xs text-destructive"
+              >
+                {cronError}
+              </p>
+            )}
+          </>
+        )}
+      </Field>
 
       <label className="flex items-center gap-2">
         <Switch

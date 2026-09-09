@@ -99,13 +99,13 @@ function redirectToLoginAndStop(): never {
  * Reads an RFC 9457 problem body into an ApiError, falling back to the status
  * text when the response carries no problem document.
  */
-export async function problemFromResponse(res: Response): Promise<ApiError> {
+export async function problemFromResponse(response: Response): Promise<ApiError> {
   let type = "about:blank";
-  let title = res.statusText;
+  let title = response.statusText;
   let detail = "";
 
   try {
-    const body = await res.json();
+    const body = await response.json();
     if (body?.type) {
       type = body.type;
     }
@@ -119,11 +119,11 @@ export async function problemFromResponse(res: Response): Promise<ApiError> {
     // response wasn't JSON
   }
 
-  return new ApiError(type, title, res.status, detail);
+  return new ApiError(type, title, response.status, detail);
 }
 
-async function throwResponseError(res: Response): Promise<never> {
-  throw await problemFromResponse(res);
+async function throwResponseError(response: Response): Promise<never> {
+  throw await problemFromResponse(response);
 }
 
 /** Default request timeout in milliseconds. */
@@ -152,41 +152,41 @@ async function request(
   requestHeaders: HeadersInit | undefined,
   signal: AbortSignal | undefined,
 ): Promise<Response> {
-  const res = await fetch(apiPath(path), {
+  const response = await fetch(apiPath(path), {
     ...(requestHeaders ? { headers: requestHeaders } : {}),
     signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
   });
 
-  if (!res.ok) {
-    if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
+  if (!response.ok) {
+    if (response.status === 401 && response.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
       redirectToLoginAndStop();
     }
 
-    await throwResponseError(res);
+    await throwResponseError(response);
   }
 
-  return res;
+  return response;
 }
 
 async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<FetchResult<T>> {
-  const res = await request(path, headers, signal);
+  const response = await request(path, headers, signal);
 
-  const allowedMethods = parseAllowHeader(res);
-  const data = await res.json();
+  const allowedMethods = parseAllowHeader(response);
+  const data = await response.json();
 
   return { data, allowedMethods };
 }
 
 async function fetchJGF<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await request(path, { Accept: "application/vnd.jgf+json" }, signal);
+  const response = await request(path, { Accept: "application/vnd.jgf+json" }, signal);
 
-  return res.json();
+  return response.json();
 }
 
 async function fetchText(path: string, signal?: AbortSignal): Promise<string> {
-  const res = await request(path, undefined, signal);
+  const response = await request(path, undefined, signal);
 
-  return res.text();
+  return response.text();
 }
 
 async function mutationFetch<T>(
@@ -209,21 +209,21 @@ async function mutationFetch<T>(
     init.body = JSON.stringify(body);
   }
 
-  const res = await fetch(apiPath(path), init);
+  const response = await fetch(apiPath(path), init);
 
-  if (!res.ok) {
-    if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
+  if (!response.ok) {
+    if (response.status === 401 && response.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
       redirectToLoginAndStop();
     }
 
-    await throwResponseError(res);
+    await throwResponseError(response);
   }
 
-  if (res.status === 204) {
+  if (response.status === 204) {
     return undefined as T;
   }
 
-  return res.json();
+  return response.json();
 }
 
 export function get<T>(path: string, signal?: AbortSignal): Promise<FetchResult<T>> {
@@ -263,13 +263,13 @@ export function setsEqual(a: Set<string>, b: Set<string>): boolean {
 }
 
 export async function headAllowedMethods(path: string): Promise<Set<string>> {
-  const res = await fetch(apiPath(path), {
+  const response = await fetch(apiPath(path), {
     method: "HEAD",
     headers,
     signal: AbortSignal.timeout(defaultTimeoutMilliseconds),
   });
 
-  return parseAllowHeader(res);
+  return parseAllowHeader(response);
 }
 
 export interface LogLine {

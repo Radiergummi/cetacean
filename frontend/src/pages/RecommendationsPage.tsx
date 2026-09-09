@@ -85,6 +85,9 @@ interface CardProps {
 }
 
 function RecommendationCard({ hint, applying, onApply }: CardProps) {
+  // A module-level Lucide component out of a lookup, not a new one — see the
+  // same binding in components/SizingBadge.tsx.
+  // oxlint-disable-next-line react/static-components
   const CategoryIcon = hintIcon(hint.category);
   const hasFix = hint.fixAction != null && hint.suggested != null;
   const isApplying = applying === recommendationKey(hint);
@@ -95,6 +98,7 @@ function RecommendationCard({ hint, applying, onApply }: CardProps) {
     <Collapsible.Root className="rounded-lg border bg-card">
       <div className="flex items-start justify-between gap-4 px-4 py-3">
         <div className="flex min-w-0 items-start gap-3">
+          {/* oxlint-disable-next-line react/static-components */}
           <CategoryIcon
             aria-label={hint.severity}
             className={`mt-0.5 size-4 shrink-0 ${severityStyles[hint.severity]}`}
@@ -216,6 +220,7 @@ export default function RecommendationsPage() {
 
           return (
             <button
+              type="button"
               key={tab}
               onClick={() => setFilter(tab)}
               className={`px-3 py-2 text-sm transition-colors ${
@@ -230,7 +235,7 @@ export default function RecommendationsPage() {
         })}
       </div>
 
-      {error && <p className="text-sm font-medium text-red-700 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm font-medium text-status-danger">{error}</p>}
 
       {filteredItems.length === 0 ? (
         <EmptyState message="No recommendations — your cluster looks healthy" />

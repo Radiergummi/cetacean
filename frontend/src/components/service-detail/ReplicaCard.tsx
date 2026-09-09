@@ -32,7 +32,7 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
           cx={size / 2}
           cy={size / 2}
           r={size / 2}
-          className="fill-green-500"
+          className="fill-status-ok"
         />
         <path
           d="M15 25.5 L21.5 32 L35 19"
@@ -72,7 +72,7 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
         strokeDashoffset={offset}
         strokeLinecap="round"
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        className="text-red-500"
+        className="text-status-danger"
       />
     </svg>
   );
@@ -269,9 +269,7 @@ export function ReplicaCard({
           />
         )}
 
-        {validationError && (
-          <p className="mb-2 text-xs text-red-600 dark:text-red-400">{validationError}</p>
-        )}
+        {validationError && <p className="mb-2 text-xs text-status-danger">{validationError}</p>}
 
         <div className="flex gap-2">
           <Button
@@ -329,7 +327,7 @@ export function ReplicaCard({
       </span>
 
       {!healthy && (
-        <div className="mt-1 text-xs text-red-600 dark:text-red-400">
+        <div className="mt-1 text-xs text-status-danger">
           {desired - running} replica{desired - running !== 1 ? "s" : ""} not running
         </div>
       )}

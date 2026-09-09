@@ -19,6 +19,7 @@ export function useDetailResource<T>(
 ) {
   const queryClient = useQueryClient();
   const fetchHistory = options?.history !== false;
+  const extraQueryKeys = options?.extraQueryKeys;
 
   const resourceQuery = useQuery({
     queryKey: ["detail", ssePath],
@@ -38,8 +39,8 @@ export function useDetailResource<T>(
     invalidationKeys.push(["detail-history", ssePath]);
   }
 
-  if (options?.extraQueryKeys) {
-    invalidationKeys.push(...options.extraQueryKeys);
+  if (extraQueryKeys) {
+    invalidationKeys.push(...extraQueryKeys);
   }
 
   useDebouncedInvalidation(ssePath, invalidationKeys);
@@ -66,12 +67,12 @@ export function useDetailResource<T>(
       void queryClient.invalidateQueries({ queryKey: ["detail-history", ssePath] });
     }
 
-    if (options?.extraQueryKeys) {
-      for (const queryKey of options.extraQueryKeys) {
+    if (extraQueryKeys) {
+      for (const queryKey of extraQueryKeys) {
         void queryClient.invalidateQueries({ queryKey: [...queryKey] });
       }
     }
-  }, [queryClient, ssePath, fetchHistory, options?.extraQueryKeys]);
+  }, [queryClient, ssePath, fetchHistory, extraQueryKeys]);
 
   return { data, history, error, retry, allowedMethods };
 }

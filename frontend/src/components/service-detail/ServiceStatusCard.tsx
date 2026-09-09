@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 export function ServiceStatusCard({ service }: { service: Service }) {
   const { label, state } = serviceUpdateStatus(service);
   const ts = service.UpdateStatus?.CompletedAt || service.UpdateStatus?.StartedAt;
-  const msg = service.UpdateStatus?.Message;
+  const message = service.UpdateStatus?.Message;
 
   return (
     <InfoCard
@@ -16,17 +16,17 @@ export function ServiceStatusCard({ service }: { service: Service }) {
         <div className="flex flex-col">
           <span
             data-state={state}
-            className="text-base font-medium text-green-600 data-[state=paused]:text-amber-600 data-[state=rollback_completed]:text-amber-600 data-[state=rollback_paused]:text-amber-600 data-[state=rollback_started]:text-amber-600 data-[state=updating]:text-blue-600 dark:text-green-400 dark:data-[state=paused]:text-amber-400 dark:data-[state=rollback_completed]:text-amber-400 dark:data-[state=rollback_paused]:text-amber-400 dark:data-[state=rollback_started]:text-amber-400 dark:data-[state=updating]:text-blue-400"
+            className="text-base font-medium text-status-ok data-[state=paused]:text-status-warning data-[state=rollback_completed]:text-status-warning data-[state=rollback_paused]:text-status-warning data-[state=rollback_started]:text-status-warning data-[state=updating]:text-status-info"
           >
             {label}
           </span>
           {ts && <span className="text-xs text-muted-foreground">{formatRelativeDate(ts)}</span>}
-          {msg && label !== "Stable" && (
+          {message && label !== "Stable" && (
             <Tooltip>
               <TooltipTrigger
-                render={<span className="truncate text-xs text-muted-foreground">{msg}</span>}
+                render={<span className="truncate text-xs text-muted-foreground">{message}</span>}
               />
-              <TooltipContent>{msg}</TooltipContent>
+              <TooltipContent>{message}</TooltipContent>
             </Tooltip>
           )}
         </div>

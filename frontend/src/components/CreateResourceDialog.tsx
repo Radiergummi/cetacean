@@ -69,24 +69,48 @@ export default function CreateResourceDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {children}
+        {/*
+          A real form, so Enter submits from any field and the browser runs its
+          own validation first. The fields and the Create button were previously
+          only adjacent, which left Enter doing nothing at all.
+        */}
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
 
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-          <Button
-            disabled={!canSubmit || action.loading}
-            onClick={() => {
-              void action.execute(async () => {
-                const path = await onSubmit();
-                setOpen(false);
-                onReset();
-                navigate(path);
-              }, `Failed to create ${resourceType.toLowerCase()}`);
-            }}
-          >
-            {action.loading ? "Creating\u2026" : "Create"}
-          </Button>
-        </DialogFooter>
+            if (!canSubmit || action.loading) {
+              return;
+            }
+
+            void action.execute(async () => {
+              const path = await onSubmit();
+              setOpen(false);
+              onReset();
+              navigate(path);
+            }, `Failed to create ${resourceType.toLowerCase()}`);
+          }}
+        >
+          {children}
+
+          <DialogFooter>
+            <DialogClose
+              render={
+                <Button
+                  variant="outline"
+                  type="button"
+                />
+              }
+            >
+              Cancel
+            </DialogClose>
+            <Button
+              type="submit"
+              disabled={!canSubmit || action.loading}
+            >
+              {action.loading ? "Creating\u2026" : "Create"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

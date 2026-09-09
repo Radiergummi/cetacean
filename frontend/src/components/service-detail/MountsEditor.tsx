@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { getErrorMessage } from "@/lib/utils";
 import { ArrowRight, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState, type MouseEvent } from "react";
+import { useId, useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 
 interface MountsEditorProps {
@@ -54,6 +54,7 @@ export function MountsEditor({
   onSaved,
   canEdit = false,
 }: MountsEditorProps & { canEdit?: boolean }) {
+  const fieldId = useId();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -167,11 +168,15 @@ export function MountsEditor({
 
                   <div className="grid grid-cols-2 gap-3 pe-10">
                     <div className="flex flex-col gap-1.5">
-                      <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                      <label
+                        htmlFor={`${fieldId}-${index}-type`}
+                        className="flex items-center gap-1 text-xs font-medium text-foreground"
+                      >
                         Type <DockerDocsLink href="https://docs.docker.com/engine/storage/" />
                       </label>
 
                       <select
+                        id={`${fieldId}-${index}-type`}
                         value={mount.Type}
                         onChange={(event) => handleTypeChange(index, event.target.value)}
                         className={selectClassName}
@@ -189,11 +194,15 @@ export function MountsEditor({
 
                     {mount.Type !== "tmpfs" && (
                       <div className="flex flex-col gap-1.5">
-                        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                        <label
+                          htmlFor={`${fieldId}-${index}-sourcelabel-mount-type`}
+                          className="flex items-center gap-1 text-xs font-medium text-foreground"
+                        >
                           {sourceLabel(mount.Type)}
                         </label>
 
                         <Input
+                          id={`${fieldId}-${index}-sourcelabel-mount-type`}
                           value={mount.Source}
                           onChange={(event) =>
                             updateMount(index, {
@@ -207,11 +216,15 @@ export function MountsEditor({
                     )}
 
                     <div className="flex flex-col gap-1.5">
-                      <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                      <label
+                        htmlFor={`${fieldId}-${index}-container-path`}
+                        className="flex items-center gap-1 text-xs font-medium text-foreground"
+                      >
                         Container path
                       </label>
 
                       <Input
+                        id={`${fieldId}-${index}-container-path`}
                         value={mount.Target}
                         onChange={(event) =>
                           updateMount(index, {
@@ -241,11 +254,15 @@ export function MountsEditor({
 
                     {mount.Type === "bind" && (
                       <div className="flex flex-col gap-1.5">
-                        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                        <label
+                          htmlFor={`${fieldId}-${index}-propagation`}
+                          className="flex items-center gap-1 text-xs font-medium text-foreground"
+                        >
                           Propagation
                         </label>
 
                         <select
+                          id={`${fieldId}-${index}-propagation`}
                           value={mount.BindOptions?.Propagation ?? "rprivate"}
                           onChange={(event) =>
                             updateMount(index, {
@@ -292,11 +309,15 @@ export function MountsEditor({
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                          <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                          <label
+                            htmlFor={`${fieldId}-${index}-subpath`}
+                            className="flex items-center gap-1 text-xs font-medium text-foreground"
+                          >
                             Subpath
                           </label>
 
                           <Input
+                            id={`${fieldId}-${index}-subpath`}
                             value={mount.VolumeOptions?.Subpath ?? ""}
                             onChange={(event) =>
                               updateMount(index, {
@@ -316,11 +337,15 @@ export function MountsEditor({
                     {mount.Type === "tmpfs" && (
                       <>
                         <div className="flex flex-col gap-1.5">
-                          <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                          <label
+                            htmlFor={`${fieldId}-${index}-size-bytes`}
+                            className="flex items-center gap-1 text-xs font-medium text-foreground"
+                          >
                             Size (bytes)
                           </label>
 
                           <Input
+                            id={`${fieldId}-${index}-size-bytes`}
                             type="number"
                             min={0}
                             value={mount.TmpfsOptions?.SizeBytes ?? ""}
@@ -338,11 +363,15 @@ export function MountsEditor({
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                          <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                          <label
+                            htmlFor={`${fieldId}-${index}-mode-octal`}
+                            className="flex items-center gap-1 text-xs font-medium text-foreground"
+                          >
                             Mode (octal)
                           </label>
 
                           <Input
+                            id={`${fieldId}-${index}-mode-octal`}
                             type="number"
                             min={0}
                             value={mount.TmpfsOptions?.Mode ?? ""}
@@ -363,11 +392,15 @@ export function MountsEditor({
 
                     {mount.Type === "image" && (
                       <div className="flex flex-col gap-1.5">
-                        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                        <label
+                          htmlFor={`${fieldId}-${index}-subpath-2`}
+                          className="flex items-center gap-1 text-xs font-medium text-foreground"
+                        >
                           Subpath
                         </label>
 
                         <Input
+                          id={`${fieldId}-${index}-subpath-2`}
                           value={mount.ImageOptions?.Subpath ?? ""}
                           onChange={(event) =>
                             updateMount(index, {

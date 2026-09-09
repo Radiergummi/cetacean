@@ -24,7 +24,13 @@ export default defineConfig({
           ) {
             return "vendor-charts";
           }
-          if (id.includes("node_modules/@xyflow/") || id.includes("node_modules/elkjs/")) {
+          // ELK is loaded on demand by lib/layoutElk.ts and must stay in its
+          // own chunk — grouping it with React Flow put half a megabyte in
+          // front of the first rendered node.
+          if (id.includes("node_modules/elkjs/")) {
+            return "vendor-elk";
+          }
+          if (id.includes("node_modules/@xyflow/")) {
             return "vendor-topology";
           }
 

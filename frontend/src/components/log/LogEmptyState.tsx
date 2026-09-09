@@ -42,14 +42,13 @@ export function LogEmptyState({
         style={style}
       >
         <div className="flex flex-col items-center gap-3 text-center">
-          <AlertTriangle className="size-6 text-red-500 dark:text-red-400" />
+          <AlertTriangle className="size-6 text-status-danger" />
           <div>
-            <p className="mb-1 text-sm font-medium text-red-600 dark:text-red-400">
-              Failed to load logs
-            </p>
+            <p className="mb-1 text-sm font-medium text-status-danger">Failed to load logs</p>
             <p className="mb-3 text-xs text-muted-foreground">{error}</p>
           </div>
           <button
+            type="button"
             onClick={onRetry}
             className="rounded-md border px-4 py-1.5 text-sm hover:bg-muted"
           >

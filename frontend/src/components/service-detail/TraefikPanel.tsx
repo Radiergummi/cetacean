@@ -6,6 +6,7 @@ import type {
   TraefikService,
 } from "@/api/types";
 import KeyValuePills from "@/components/data/KeyValuePills";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { NumberField } from "@/components/ui/number-field";
@@ -31,7 +32,7 @@ function RouterCard({ router }: { router: TraefikRouter }) {
         <span className="font-medium">{router.name}</span>
 
         {router.tls && (
-          <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
+          <span className="inline-flex items-center gap-1 text-xs text-status-ok">
             <Lock className="h-3 w-3" />
             {router.tls.certResolver && <span>{router.tls.certResolver}</span>}
           </span>
@@ -155,50 +156,62 @@ function RouterEditCard({
     <article className="space-y-3 rounded-lg border p-3">
       <header className="font-medium text-muted-foreground">{state.name}</header>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Rule</label>
-        <textarea
-          className="min-h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          value={state.rule}
-          onChange={(event) => onChange({ ...state, rule: event.target.value })}
-        />
-        <p className="text-xs text-muted-foreground">
-          Routing rule expression, e.g. Host(`example.com`)
-        </p>
-      </div>
+      <Field
+        label="Rule"
+        description="Routing rule expression, e.g. Host(`example.com`)"
+      >
+        {(control) => (
+          <textarea
+            {...control}
+            className="min-h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            value={state.rule}
+            onChange={(event) => onChange({ ...state, rule: event.target.value })}
+          />
+        )}
+      </Field>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Entrypoints</label>
-        <MultiCombobox
-          values={state.entrypoints}
-          onChange={(entrypoints) => onChange({ ...state, entrypoints })}
-          options={[]}
-          placeholder="Add entrypoint..."
-        />
-        <p className="text-xs text-muted-foreground">Entrypoints this router listens on</p>
-      </div>
+      <Field
+        label="Entrypoints"
+        description="Entrypoints this router listens on"
+      >
+        {(control) => (
+          <MultiCombobox
+            {...control}
+            values={state.entrypoints}
+            onChange={(entrypoints) => onChange({ ...state, entrypoints })}
+            options={[]}
+            placeholder="Add entrypoint..."
+          />
+        )}
+      </Field>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Middlewares</label>
-        <MultiCombobox
-          values={state.middlewares}
-          onChange={(middlewares) => onChange({ ...state, middlewares })}
-          options={[]}
-          placeholder="Add middleware..."
-        />
-        <p className="text-xs text-muted-foreground">Middleware names to apply to this router</p>
-      </div>
+      <Field
+        label="Middlewares"
+        description="Middleware names to apply to this router"
+      >
+        {(control) => (
+          <MultiCombobox
+            {...control}
+            values={state.middlewares}
+            onChange={(middlewares) => onChange({ ...state, middlewares })}
+            options={[]}
+            placeholder="Add middleware..."
+          />
+        )}
+      </Field>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Service</label>
-        <Input
-          value={state.service}
-          onChange={(event) => onChange({ ...state, service: event.target.value })}
-        />
-        <p className="text-xs text-muted-foreground">
-          Backend Traefik service to forward requests to
-        </p>
-      </div>
+      <Field
+        label="Service"
+        description="Backend Traefik service to forward requests to"
+      >
+        {(control) => (
+          <Input
+            {...control}
+            value={state.service}
+            onChange={(event) => onChange({ ...state, service: event.target.value })}
+          />
+        )}
+      </Field>
 
       <NumberField
         label="Priority"
@@ -208,15 +221,19 @@ function RouterEditCard({
       />
       <p className="text-xs text-muted-foreground">Higher values win on rule conflicts</p>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">TLS cert resolver</label>
-        <Input
-          value={state.certResolver}
-          onChange={(event) => onChange({ ...state, certResolver: event.target.value })}
-          placeholder="letsencrypt"
-        />
-        <p className="text-xs text-muted-foreground">Certificate resolver for automatic TLS</p>
-      </div>
+      <Field
+        label="TLS cert resolver"
+        description="Certificate resolver for automatic TLS"
+      >
+        {(control) => (
+          <Input
+            {...control}
+            value={state.certResolver}
+            onChange={(event) => onChange({ ...state, certResolver: event.target.value })}
+            placeholder="letsencrypt"
+          />
+        )}
+      </Field>
     </article>
   );
 }
@@ -241,16 +258,20 @@ function ServiceEditCard({
       />
       <p className="text-xs text-muted-foreground">Backend server port for load balancing</p>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Scheme</label>
-        <Input
-          className="w-32"
-          value={state.scheme}
-          onChange={(event) => onChange({ ...state, scheme: event.target.value })}
-          placeholder="http"
-        />
-        <p className="text-xs text-muted-foreground">Backend protocol (http, https, or h2c)</p>
-      </div>
+      <Field
+        label="Scheme"
+        description="Backend protocol (http, https, or h2c)"
+      >
+        {(control) => (
+          <Input
+            {...control}
+            className="w-32"
+            value={state.scheme}
+            onChange={(event) => onChange({ ...state, scheme: event.target.value })}
+            placeholder="http"
+          />
+        )}
+      </Field>
     </article>
   );
 }

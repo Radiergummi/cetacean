@@ -10,6 +10,9 @@ interface MultiComboboxOption {
 }
 
 interface MultiComboboxProps {
+  /** Placed on whatever takes focus, so a Field's label can point at it. */
+  id?: string | undefined;
+  "aria-describedby"?: string | undefined;
   values: string[];
   onChange: (values: string[]) => void;
   options: MultiComboboxOption[];
@@ -42,6 +45,8 @@ function Chips({ values, onRemove }: { values: string[]; onRemove: (value: strin
 }
 
 export function MultiCombobox({
+  id,
+  "aria-describedby": describedBy,
   values,
   onChange,
   options,
@@ -63,7 +68,7 @@ export function MultiCombobox({
   }
 
   function remove(value: string) {
-    onChange(values.filter((v) => v !== value));
+    onChange(values.filter((existing) => existing !== value));
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -93,6 +98,8 @@ export function MultiCombobox({
           onRemove={remove}
         />
         <input
+          id={id}
+          aria-describedby={describedBy}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
@@ -124,6 +131,8 @@ export function MultiCombobox({
       }}
     >
       <PopoverTrigger
+        id={id}
+        aria-describedby={describedBy}
         className={cn(
           "flex min-h-8 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-1 text-sm",
           "hover:bg-muted outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",

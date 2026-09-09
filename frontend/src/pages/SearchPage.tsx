@@ -16,7 +16,7 @@ function StateOrb({ state }: { state: string }) {
     return (
       <Loader2
         aria-label="Updating"
-        className="size-3 shrink-0 animate-spin text-blue-500"
+        className="size-3 shrink-0 animate-spin text-status-info"
       />
     );
   }

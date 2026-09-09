@@ -95,6 +95,7 @@ export function ResourceTable({ resourceType, records, total }: Props) {
         <p className="p-3 text-sm opacity-70">No {resourceType} match this filter.</p>
       ) : (
         <DataTable
+          label={resourceType}
           columns={tableColumns}
           data={visible}
           keyFn={({ id }) => id}
