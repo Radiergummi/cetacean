@@ -60,15 +60,6 @@ var metricRanges = map[string]metricRange{
 
 const defaultMetricRange = "1h"
 
-// metricRangeNames lists the presets `range` accepts, shortest window first —
-// the order a reader expects, where sorting the keys as strings would put 24h
-// before 6h. Derived from the table, so a new preset advertises itself.
-func metricRangeNames() []string {
-	return slices.SortedFunc(maps.Keys(metricRanges), func(a, b string) int {
-		return cmp.Compare(metricRanges[a].window, metricRanges[b].window)
-	})
-}
-
 // metricQuery is one series of a metric: the name it is reported under and the
 // PromQL that produces it, with `%s` where the resolved selector goes.
 type metricQuery struct {
@@ -487,15 +478,13 @@ func metricNames(metrics map[string]metricSpec) []string {
 	return names
 }
 
+// rangeNames lists the presets `range` accepts — the advertised enum and the
+// list both "unknown range" errors print. Shortest window first, the order a
+// reader expects, where sorting the keys as strings would put 24h before 6h.
 func rangeNames() []string {
-	names := make([]string, 0, len(metricRanges))
-	for name := range metricRanges {
-		names = append(names, name)
-	}
-
-	slices.Sort(names)
-
-	return names
+	return slices.SortedFunc(maps.Keys(metricRanges), func(a, b string) int {
+		return cmp.Compare(metricRanges[a].window, metricRanges[b].window)
+	})
 }
 
 // promTime renders a Prometheus timestamp — a float of Unix seconds — as the
