@@ -1,0 +1,46 @@
+---
+import ReferenceEntry from "./ReferenceEntry.astro";
+
+/**
+ * One tool on the MCP catalog, in the card the configuration and error
+ * references use for a setting and a code, so the three references read as one
+ * system rather than three house styles.
+ *
+ * Every tool carries exactly one fact, its argument list, so there is no
+ * general labelling to do here. The list arrives as a slot rather than a prop
+ * because a third of them run to prose — "exactly one of `service`, `task`,
+ * ...; plus `contains`" — and a slot is Markdown the page has already rendered,
+ * where a prop would be a string this had to parse.
+ *
+ * The name stays a heading, as it was when this page's entries were `####`
+ * headings marked up by a Remark plugin: the tools are the section's outline to
+ * a screen reader, and `text-base` keeps them at the size of the prose they
+ * introduce rather than the smaller type a settings card uses.
+ */
+interface Props {
+    name: string;
+}
+
+const {name} = Astro.props;
+
+const args = (await Astro.slots.render("arguments")).trim();
+---
+<ReferenceEntry
+    id={name}
+    class="group mt-2 rounded-lg border px-4 py-3.5 target:border-active target:ring-1 target:ring-active"
+    anchor
+>
+    <h4 slot="heading" class="code-heading m-0 text-base font-semibold">
+        <code>{name}</code>
+    </h4>
+
+    <slot />
+
+    <div
+        slot="facts"
+        class="-mx-4 -mb-3.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-b-inner border-t bg-muted px-4 py-2 text-sm text-code-foreground code-plain"
+    >
+        <span class="font-medium text-muted-foreground">arguments</span>
+        <span class="[&>:first-child]:mt-0 [&>:last-child]:mb-0" set:html={args} />
+    </div>
+</ReferenceEntry>

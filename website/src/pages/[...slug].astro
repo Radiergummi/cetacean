@@ -5,6 +5,7 @@ import { getDocPaths } from "../lib/docs";
 
 export async function getStaticPaths() {
   const docs = await getDocPaths();
+
   return docs.map((doc) => ({
     params: { slug: doc.id },
     props: { entry: doc },
@@ -14,10 +15,11 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content, headings } = await render(entry);
 
-// The collection is loaded from `../docs`, so the loader reports paths
-// relative to this project; the edit link and the modified date both want
-// them relative to the repository root. The extension is the loader's to
-// tell us — `configuration` is an `.mdx` file and the rest are `.md`.
+// The collection is loaded from `../docs`, so the loader reports paths relative
+// to this project; the edit link and the modified date both want them relative
+// to the repository root. The extension is the loader's to tell us: the docs
+// that reach for a component — `configuration` and `mcp-tools` — are `.mdx`,
+// and the rest are `.md`.
 const sourcePath = entry.filePath?.replace(/^\.\.\//, "");
 ---
 <DocsLayout

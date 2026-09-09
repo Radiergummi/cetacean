@@ -80,7 +80,7 @@ repository:
 - [Authentication](docs/authentication.md) and [Authorization](docs/authorization.md)
 - [Dashboard](docs/dashboard.md)
 - [API guide](docs/api.md)
-- [MCP server](docs/mcp.md) and [MCP tools and resources](docs/mcp-tools.md)
+- [MCP server](docs/mcp.md) and [MCP tools and resources](docs/mcp-tools.mdx)
 
 ## Build from source
 
