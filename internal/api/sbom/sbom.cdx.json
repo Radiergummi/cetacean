@@ -2183,18 +2183,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/google.golang.org/grpc@v1.83.1?type=module",
+      "bom-ref": "pkg:golang/google.golang.org/grpc@v1.83.2?type=module",
       "type": "library",
       "name": "google.golang.org/grpc",
-      "version": "v1.83.1",
+      "version": "v1.83.2",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "1c83b4f8112d04feaca32aafa82f2c3548d9edb4ecfb484542e145f91032fbe6"
+          "content": "10c6a7791a264ce6c0d0153b23cbd7820ffbf2e139309f4cf01dfd117d96b1c5"
         }
       ],
-      "purl": "pkg:golang/google.golang.org/grpc@v1.83.1?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/google.golang.org/grpc@v1.83.2?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {

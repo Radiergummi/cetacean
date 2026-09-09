@@ -9692,7 +9692,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-google.golang.org/grpc v1.83.1
+google.golang.org/grpc v1.83.2
 License: Apache-2.0
 
 
