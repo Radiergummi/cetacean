@@ -5,6 +5,7 @@ import mdx from "@astrojs/mdx";
 import tailwindcss from "@tailwindcss/vite";
 import { visit } from "unist-util-visit";
 import { rehypeMermaid } from "@/lib/mermaid-diagrams.ts";
+import { slugify } from "@/lib/slug.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sirv from "sirv";
@@ -415,7 +416,7 @@ function definitionList(rows: TableRow[], compact: boolean): Paragraph {
  * cards and genuine matrices with nothing to tell them apart mechanically —
  * the authentication guide compares two Tailscale modes in the same shape the
  * MCP reference uses to list tools, and every rule that catches the one
- * catches the other. The marker is an HTML comment, so the source stays a
+ * catches the other. The marker is a comment either way, so the source stays a
  * plain GFM table that GitHub and the raw `.md` route render as they always
  * did, and the author decides.
  *
@@ -444,7 +445,7 @@ function remarkCardTables() {
       if (header.children.length < 2) {
         return;
       }
-      if (rows.some((row) => row.children.length !== header.children.length)) {
+      if (rows.some(({children}) => children.length !== header.children.length)) {
         return;
       }
 
@@ -461,17 +462,21 @@ function remarkCardTables() {
  * carry their source in `value`, so the value is the whole of the test.
  */
 function isCardsMarker(node: RootContent): boolean {
+  if (node.type !== "html" && node.type !== "mdxFlowExpression") {
+    return false;
+  }
+
   const value = "value" in node ? node.value.trim() : "";
 
   return value === "<!-- cards -->" || value === "/* cards */";
 }
 
-function cardList(header: TableRow, rows: TableRow[]): Paragraph {
-  const labels = header.children.map((cell) => nodeText(cell));
+function cardList({children}: TableRow, rows: TableRow[]): Paragraph {
+  const labels = children.map((cell) => nodeText(cell));
 
   return container(
     "div",
-    rows.map((row) => card(labels, row.children, descriptionColumn(rows))),
+    rows.map(({children}) => card(labels, children, descriptionColumn(rows))),
     { className: ["card-list"] },
   );
 }
@@ -527,14 +532,7 @@ function card(labels: string[], cells: TableCell[], description: number): Paragr
     );
   }
 
-  return container("div", children, { className: ["card"], id: slug(nodeText(title)) });
-}
-
-function slug(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/\W+/g, "-")
-    .replace(/^-|-$/g, "");
+  return container("div", children, { className: ["card"], id: slugify(nodeText(title)) });
 }
 
 function remarkStripTitle() {
