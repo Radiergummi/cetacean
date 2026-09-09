@@ -1,9 +1,11 @@
 package mcp
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -357,6 +359,21 @@ var logLevelRank = map[string]int{
 	"WARN":  2,
 	"ERROR": 3,
 	"FATAL": 4,
+}
+
+// logLevelNames lists the levels `level` accepts, least severe first, in the
+// lower case a caller writes them — lineLevelRank upper-cases before looking
+// one up, so either case works, and one spelling belongs in the schema.
+func logLevelNames() []string {
+	ranked := slices.SortedFunc(maps.Keys(logLevelRank), func(a, b string) int {
+		return cmp.Compare(logLevelRank[a], logLevelRank[b])
+	})
+
+	for index, level := range ranked {
+		ranked[index] = strings.ToLower(level)
+	}
+
+	return ranked
 }
 
 func lineLevelRank(msg string) int {
