@@ -23,7 +23,7 @@ const { code, title, status, suggestion } = Astro.props;
 ---
 <ReferenceEntry
     id={code}
-    class="group mt-2 rounded-lg border px-4 py-3.5 text-sm target:border-active target:ring-1 target:ring-active"
+    class="text-sm"
     anchor
 >
   <Fragment slot="heading">
@@ -34,8 +34,8 @@ const { code, title, status, suggestion } = Astro.props;
 
   <slot />
 
-  <footer slot="facts" class="-mx-4 -mb-3.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-b-inner border-t bg-muted px-4 py-2 text-sm text-muted-foreground">
+  <div slot="facts" class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
     <span class="font-medium">Hint</span>
     <span>{suggestion}</span>
-  </footer>
+  </div>
 </ReferenceEntry>

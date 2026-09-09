@@ -1,0 +1,24 @@
+---
+/**
+ * A comma-separated run of cross-references into this page's own anchors.
+ *
+ * The names are schema identifiers either way — a type under a property's "used
+ * on", a property under a type's "properties" — so they are set in `<code>` as
+ * they are everywhere else on the page, and a reference looks like the thing it
+ * points at. The list was written out per section until the two copies drifted
+ * on exactly that.
+ */
+interface Props {
+    names: string[];
+}
+
+const {names} = Astro.props;
+---
+<ul class="flex flex-wrap gap-x-1 gap-y-0.5 m-0">
+    {names.map((name, index) => (
+        <li class="contents">
+            {index > 0 && ", "}
+            <a href={`/api/schema#${name}`}><code>{name}</code></a>
+        </li>
+    ))}
+</ul>

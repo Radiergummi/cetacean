@@ -2,8 +2,6 @@ import { getCollection } from "astro:content";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-export { slugify } from "./slug";
-
 export const docsDir = resolve("../docs");
 export const changelogPath = resolve("../CHANGELOG.md");
 
