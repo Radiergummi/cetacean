@@ -81,14 +81,16 @@ export default function StackList() {
         cell: ({ serviceCount }) => serviceCount,
       },
       {
-        header: "Status",
+        // Rollout, not health — the Tasks column is what says whether the
+        // stack is running, so a settled rollout is left uncoloured here.
+        header: "Rollout",
         cell: ({ updatingServices }) =>
           updatingServices > 0 ? (
             <span className="text-sm font-medium text-status-info">
               Updating {updatingServices}
             </span>
           ) : (
-            <span className="text-sm font-medium text-status-ok">Stable</span>
+            <span className="text-sm font-medium text-muted-foreground">Stable</span>
           ),
       },
     ],

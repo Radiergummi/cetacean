@@ -1,3 +1,4 @@
+import type { RolloutStatus } from "../../lib/topologyTransform";
 import ResourceName from "../ResourceName";
 import { useHighlight } from "./HighlightContext";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
@@ -11,23 +12,46 @@ type ServiceCardData = {
   replicas: number;
   runningReplicas?: number | undefined;
   ports?: string[] | undefined;
-  updateStatus?: string | undefined;
+  rollout?: RolloutStatus | undefined;
   stackColor?: string | undefined;
   hasSourceEdge?: boolean | undefined;
   hasTargetEdge?: boolean | undefined;
 };
 
+/**
+ * The replica line on a card: how many tasks are up, and the tone that says
+ * whether that is enough.
+ *
+ * A global service has no desired count — Docker does not publish one, and
+ * `ReplicaCount` reports 0 — so it is described by what is running rather than
+ * measured against a denominator that would read as 1/0.
+ */
+export function replicaStatus(
+  mode: string,
+  running: number,
+  desired: number,
+): { label: string; tone: string } {
+  if (mode === "global") {
+    return {
+      label: `${running} running`,
+      tone: running > 0 ? "bg-status-ok" : "bg-status-danger",
+    };
+  }
+
+  return {
+    label: `${running}/${desired}`,
+    tone:
+      running === desired ? "bg-status-ok" : running > 0 ? "bg-status-warning" : "bg-status-danger",
+  };
+}
+
 export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCardData }) {
   const navigate = useNavigate();
   const { hoveredId, neighbors, setHovered } = useHighlight();
-  const running = data.runningReplicas ?? data.replicas;
 
-  const statusColor =
-    running === data.replicas
-      ? "bg-status-ok"
-      : running > 0
-        ? "bg-status-warning"
-        : "bg-status-danger";
+  // No `?? data.replicas` fallback: the graph did not carry a running count at
+  // all, so falling back to the desired one painted every service green.
+  const { label, tone } = replicaStatus(data.mode, data.runningReplicas ?? 0, data.replicas);
 
   const dimmed = hoveredId != null && hoveredId !== data.id && !neighbors.has(data.id);
 
@@ -66,10 +90,8 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
       </div>
 
       <div className="mb-1 flex items-center gap-1.5 text-xs">
-        <span className={`inline-block size-2 rounded-full ${statusColor}`} />
-        <span>
-          {running}/{data.replicas}
-        </span>
+        <span className={`inline-block size-2 rounded-full ${tone}`} />
+        <span>{label}</span>
       </div>
 
       {data.ports && data.ports.length > 0 && (
@@ -80,7 +102,17 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
         </div>
       )}
 
-      {data.updateStatus && <div className="mt-1 text-xs text-status-warning">Updating…</div>}
+      {/* Only a rollout still in flight. `updateStatus` is "completed" on every
+          service that has ever been updated, so rendering on its presence
+          labelled the whole cluster "Updating…" forever. */}
+      {data.rollout && (
+        <div
+          data-state={data.rollout.state}
+          className="mt-1 text-xs text-status-warning data-[state=updating]:text-status-info"
+        >
+          {data.rollout.label}
+        </div>
+      )}
 
       {data.hasTargetEdge && (
         <Handle

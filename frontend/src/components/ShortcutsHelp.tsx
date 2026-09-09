@@ -78,7 +78,7 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
           </kbd>
         </DialogHeader>
 
-        <div className="max-h-[60vh] space-y-5 overflow-y-auto p-4">
+        <div className="scroll-shadows max-h-[60vh] space-y-5 overflow-y-auto p-4">
           {groups.map(({ shortcuts, title }) => (
             <div key={title}>
               <h3 className="mb-2 text-xs font-medium text-muted-foreground uppercase">{title}</h3>

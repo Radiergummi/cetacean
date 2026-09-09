@@ -79,8 +79,10 @@ func nodeStatement(urn string, node jgf.Node) string {
 		"label=" + dotQuote(node.Label),
 	}
 
-	if v, ok := node.Metadata["replicas"]; ok {
-		attrs = append(attrs, "replicas="+dotQuote(fmt.Sprintf("%v", v)))
+	for _, key := range []string{"replicas", "runningReplicas"} {
+		if v, ok := node.Metadata[key]; ok {
+			attrs = append(attrs, key+"="+dotQuote(fmt.Sprintf("%v", v)))
+		}
 	}
 
 	for _, key := range []string{"kind", "image", "mode", "updateStatus"} {

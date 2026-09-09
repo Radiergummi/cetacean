@@ -50,7 +50,7 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 	)
 
 	contextURL := absPath(r.Context(), jsonLDContext)
-	networkGraph := buildNetworkJGF(services, networks, contextURL)
+	networkGraph := buildNetworkJGF(services, networks, h.cache.RunningTaskCounts(), contextURL)
 
 	// Build service name/image lookup and readable set from ACL-filtered services.
 	svcNames := make(map[string]string, len(services))
@@ -98,7 +98,7 @@ func (h *Handlers) buildACLFilteredNetworkGraph(r *http.Request) jgf.Graph {
 	)
 	networks := h.cache.ListNetworks()
 	contextURL := absPath(r.Context(), jsonLDContext)
-	return buildNetworkJGF(services, networks, contextURL)
+	return buildNetworkJGF(services, networks, h.cache.RunningTaskCounts(), contextURL)
 }
 
 // HandleTopologyGraphML serves the network topology as a GraphML document.
@@ -132,9 +132,17 @@ func (h *Handlers) HandleTopologyDOT(w http.ResponseWriter, r *http.Request) {
 }
 
 // buildNetworkJGF produces a JGF hypergraph of the network topology.
+//
+// running is the per-service count of tasks actually up, keyed by service ID,
+// as cache.RunningTaskCounts reports it. It is carried per node alongside the
+// desired count because the two together are what says whether a service is
+// healthy, and a consumer given only "replicas" has no way to tell — the
+// dashboard's card drew a green desired/desired for every service in the
+// cluster, including one running nothing at all.
 func buildNetworkJGF(
 	services []swarm.Service,
 	networks []network.Summary,
+	running map[string]int,
 	contextURL string,
 ) jgf.Graph {
 	overlays := cluster.OverlayNetworks(networks)
@@ -152,9 +160,10 @@ func buildNetworkJGF(
 		urn := jgf.URN("service", svc.ID)
 
 		meta := jgf.Metadata{
-			"@context": contextURL,
-			"kind":     "service",
-			"replicas": cluster.ReplicaCount(svc),
+			"@context":        contextURL,
+			"kind":            "service",
+			"replicas":        cluster.ReplicaCount(svc),
+			"runningReplicas": running[svc.ID],
 		}
 
 		if svc.Spec.TaskTemplate.ContainerSpec != nil {
