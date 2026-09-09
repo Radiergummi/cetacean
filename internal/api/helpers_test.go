@@ -1,10 +1,14 @@
 package api
 
 import (
+	"io/fs"
+	"net/http"
 	"testing"
+	"testing/fstest"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/sse"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/prometheus"
@@ -100,4 +104,26 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		cfg.recEngine,
 		cfg.aclEval,
 	)
+}
+
+// newTestRouterWithCache builds a fully wired router around a caller-seeded
+// cache, for tests that need to exercise real routes (middleware chains,
+// content negotiation, preconditions) rather than call a handler directly.
+func newTestRouterWithCache(t testing.TB, c *cache.Cache) http.Handler {
+	t.Helper()
+
+	h := newTestHandlers(t, withCache(c))
+	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	t.Cleanup(b.Close)
+	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
+	spa := NewSPAHandler(fs.FS(fsys), "")
+
+	return NewRouter(RouterConfig{
+		Handlers:          h,
+		Broadcaster:       b,
+		SPA:               spa,
+		OpenAPISpec:       []byte("openapi: '3.1.0'"),
+		EnableSelfMetrics: true,
+		AuthProvider:      &auth.NoneProvider{},
+	})
 }

@@ -239,21 +239,18 @@ func envSliceToMap(env []string) map[string]string {
 }
 
 func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
-	svc, ok := h.lookupServiceACL(w, r)
-	if !ok {
+	if _, ok := h.lookupServiceACL(w, r); !ok {
 		return
 	}
-	var env []string
-	if svc.Spec.TaskTemplate.ContainerSpec != nil {
-		env = svc.Spec.TaskTemplate.ContainerSpec.Env
+
+	rep, ok := h.serviceEnvRepresentation(r)
+	if !ok {
+		writeErrorCode(w, r, notFoundCodes["service"],
+			"service "+r.PathValue("id")+" not found")
+		return
 	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/services/"+svc.ID+"/env", "ServiceEnv", EnvResponse{
-			Env: envSliceToMap(env),
-		}),
-	)
+
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request) {

@@ -348,7 +348,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		"GET /services/{id}/env",
 		contentNegotiated(h.HandleGetServiceEnv, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /services/{id}/env", svcTier2.ThenFunc(h.HandlePatchServiceEnv))
+	mux.Handle("PATCH /services/{id}/env",
+		svcTier2.Append(h.precond(h.serviceEnvRepresentation)).
+			ThenFunc(h.HandlePatchServiceEnv))
 	mux.HandleFunc(
 		"GET /services/{id}/labels",
 		contentNegotiated(h.HandleGetServiceLabels, feedHandlers{}, spa),
