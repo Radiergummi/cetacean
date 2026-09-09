@@ -1,16 +1,35 @@
 import type { JGFGraph } from "../api/types";
 import { getChartColor } from "./chartColors";
+import { updateStatusOf } from "./deriveServiceState";
 import { stripStackPrefix } from "./parseStackLabels";
 import type { Edge, Node } from "@xyflow/react";
 
-export function hashColor(id: string): string {
-  let hash = 0;
+/**
+ * Colour every stack in a graph, one palette slot each.
+ *
+ * Assigned by position over the sorted names rather than hashed. The hash this
+ * replaces multiplied by 31 and took the palette index mod 10, and 31 ≡ 1
+ * (mod 10), so the index collapsed to the sum of the character codes: `cetacean`
+ * and `monitoring` both landed on slot 6 and drew the same amber dot.
+ *
+ * The graph and the legend both call this, so they cannot disagree about which
+ * colour a stack is. Past ten stacks the palette wraps, which is the palette's
+ * limit rather than this function's.
+ */
+export function stackColors(graph: JGFGraph): Map<string, string> {
+  const names = new Set<string>();
 
-  for (let index = 0; index < id.length; index++) {
-    hash = (hash * 31 + id.charCodeAt(index)) | 0;
+  for (const hyperedge of graph.hyperedges ?? []) {
+    if (hyperedge.metadata.kind === "stack") {
+      names.add(hyperedge.metadata.name as string);
+    }
   }
 
-  return getChartColor(Math.abs(hash));
+  const colors = new Map<string, string>();
+
+  [...names].sort().forEach((name, index) => colors.set(name, getChartColor(index)));
+
+  return colors;
 }
 
 /** Extract the bare resource ID from a URN like `urn:cetacean:service:abc123`. */
@@ -21,7 +40,7 @@ function urnToId(urn: string): string {
 }
 
 /** Estimate rendered card height for ELK layout (matches ServiceCardNode CSS). */
-function estimateCardHeight(ports?: string[], updateStatus?: string): number {
+function estimateCardHeight(ports?: string[], rollout?: RolloutStatus): number {
   // base: border(4) + p-3(24) + name(20) + mb(4) + image(16) + mb(4) + replicas(16) + mb(4)
   let height = 92;
 
@@ -29,11 +48,23 @@ function estimateCardHeight(ports?: string[], updateStatus?: string): number {
     height += ports.length * 16;
   }
 
-  if (updateStatus) {
+  if (rollout) {
     height += 20;
   }
 
   return height;
+}
+
+/** A rollout still in flight, or undefined once it has settled. */
+export interface RolloutStatus {
+  label: string;
+  state: string;
+}
+
+function rolloutInFlight(state: string | undefined): RolloutStatus | undefined {
+  const rollout = updateStatusOf(state);
+
+  return rollout.state === "stable" ? undefined : rollout;
 }
 
 export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges: Edge[] } {
@@ -59,12 +90,7 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
     }
   }
 
-  // Assign stack colors
-  const stackColorMap = new Map<string, string>();
-
-  for (const stack of [...stackMembers.keys()].sort()) {
-    stackColorMap.set(stack, hashColor(stack));
-  }
+  const stackColorMap = stackColors(graph);
 
   // Build connected service set (backend guarantees canonical edge direction)
   const graphEdges = graph.edges ?? [];
@@ -95,7 +121,7 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
     const metadata = jgfNode.metadata;
     const stack = serviceStack.get(urn);
     const ports = metadata.ports as string[] | undefined;
-    const updateStatus = metadata.updateStatus as string | undefined;
+    const rollout = rolloutInFlight(metadata.updateStatus as string | undefined);
 
     const node: Node = {
       id: urn,
@@ -107,12 +133,13 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
         mode: metadata.mode as string,
         image: metadata.image as string,
         replicas: metadata.replicas as number,
+        runningReplicas: metadata.runningReplicas as number | undefined,
         ports,
-        updateStatus,
+        rollout,
         stackColor: stack ? stackColorMap.get(stack) : undefined,
         hasSourceEdge: connectedSources.has(urn),
         hasTargetEdge: connectedTargets.has(urn),
-        _elkHeight: estimateCardHeight(ports, updateStatus),
+        _elkHeight: estimateCardHeight(ports, rollout),
       },
     };
 

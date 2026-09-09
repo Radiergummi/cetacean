@@ -16,7 +16,7 @@ import { computeLayout } from "../lib/layoutElk";
 import {
   networkGraphToReactFlow,
   placementGraphToReactFlow,
-  hashColor,
+  stackColors,
 } from "../lib/topologyTransform";
 import { getErrorMessage } from "../lib/utils";
 import { useLatestRef } from "@/hooks/useLatestRef";
@@ -34,16 +34,10 @@ const physicalNodeTypes = { physicalNode: PhysicalNodeCard };
 
 type View = "logical" | "physical";
 
-function StackLegend({
-  stackColors,
-  isMobile,
-}: {
-  stackColors: Map<string, string>;
-  isMobile: boolean;
-}) {
+function StackLegend({ colors, isMobile }: { colors: Map<string, string>; isMobile: boolean }) {
   const [open, setOpen] = useState(!isMobile);
 
-  if (stackColors.size === 0) {
+  if (colors.size === 0) {
     return null;
   }
 
@@ -75,7 +69,7 @@ function StackLegend({
         )}
       </div>
       <div className="flex flex-col gap-1">
-        {[...stackColors.entries()].map(([stack, color]) => (
+        {[...colors.entries()].map(([stack, color]) => (
           <span
             key={stack}
             className="flex items-center gap-1.5"
@@ -163,18 +157,9 @@ function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) 
   const { nodes: rawNodes, edges: rawEdges } = useMemo(() => networkGraphToReactFlow(data), [data]);
   const { nodes, edges, ready } = useElkLayout(rawNodes, rawEdges);
 
-  const stackColors = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const hyperedge of data.hyperedges ?? []) {
-      if (hyperedge.metadata.kind === "stack") {
-        const name = hyperedge.metadata.name as string;
-        if (!map.has(name)) {
-          map.set(name, hashColor(name));
-        }
-      }
-    }
-    return map;
-  }, [data]);
+  // The same map the graph itself is coloured from — the legend built its own
+  // before, which only agreed with the cards because both hashed the name.
+  const legendColors = useMemo(() => stackColors(data), [data]);
 
   if (Object.keys(data.nodes).length === 0) {
     return (
@@ -211,7 +196,7 @@ function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) 
         </ReactFlow>
         <StackLegend
           key={isMobile ? "mobile" : "desktop"}
-          stackColors={stackColors}
+          colors={legendColors}
           isMobile={isMobile}
         />
       </div>
