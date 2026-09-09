@@ -44,7 +44,7 @@ export function EngineCard({ version }: { version: string }) {
               href={latest.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-0.5 rounded bg-status-warning px-1.5 py-0.5 text-xs font-medium text-status-warning hover:bg-status-warning/80"
+              className="inline-flex items-center gap-0.5 rounded bg-status-warning/10 px-1.5 py-0.5 text-xs font-medium text-status-warning hover:bg-status-warning/20"
             >
               {latest.version} available
               <ArrowUpRight className="size-3" />

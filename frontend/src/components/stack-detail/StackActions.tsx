@@ -64,7 +64,7 @@ export function StackActions({ stackName, allowedMethods, resourceCounts }: Stac
       <Button
         variant="outline"
         size="sm"
-        className="border-status-danger text-status-danger hover:bg-status-danger/10"
+        className="border-status-danger/50 text-status-danger hover:bg-status-danger/10"
         disabled={remove.loading}
         onClick={() => setDialogOpen(true)}
       >
@@ -108,7 +108,7 @@ export function StackActions({ stackName, allowedMethods, resourceCounts }: Stac
           </div>
 
           {partialErrors && (
-            <div className="rounded-md border border-status-warning bg-status-warning px-3 py-2 text-xs leading-relaxed text-status-warning">
+            <div className="rounded-md border border-status-warning/25 bg-status-warning/5 px-3 py-2 text-xs leading-relaxed text-status-warning">
               <p className="mb-1 font-medium">Some resources could not be removed:</p>
               <ul className="list-inside list-disc">
                 {partialErrors.map(({ type, id, error }, index) => (
