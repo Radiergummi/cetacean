@@ -96,7 +96,10 @@ function toMarkdown(content: string): string {
  * than shipping JSX as prose.
  */
 function assertRendered(markdown: string, path: string): string {
-  const leftover = [...new Set(markdown.match(/<[A-Z][A-Za-z]*/g) ?? [])];
+  // A placeholder like `<Hostname>` inside a code span or fence is prose the
+  // docs are free to write, not a component that failed to render.
+  const prose = markdown.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");
+  const leftover = [...new Set(prose.match(/<[A-Z][A-Za-z]*/g) ?? [])];
 
   if (leftover.length > 0) {
     throw new Error(`${path}: no Markdown fallback for ${leftover.join(", ")}`);
@@ -108,14 +111,18 @@ function assertRendered(markdown: string, path: string): string {
 export async function GET({ props }: { props: { filePath?: string } }) {
   const path = props.filePath ?? join(docsDir, "not-found");
 
-  try {
-    const content = await readFile(path, "utf-8");
+  let content: string;
 
-    return new Response(
-      path.endsWith(".mdx") ? assertRendered(toMarkdown(content), path) : content,
-      { headers: { "Content-Type": "text/markdown; charset=utf-8" } },
-    );
+  // Only the read may legitimately fail. Rendering happens outside the catch,
+  // so an unhandled component fails `astro build` instead of being swallowed
+  // into the 404 this returns for a missing file.
+  try {
+    content = await readFile(path, "utf-8");
   } catch {
     return new Response("Not found", { status: 404 });
   }
+
+  return new Response(path.endsWith(".mdx") ? assertRendered(toMarkdown(content), path) : content, {
+    headers: { "Content-Type": "text/markdown; charset=utf-8" },
+  });
 }
