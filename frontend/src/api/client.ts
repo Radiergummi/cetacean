@@ -90,11 +90,23 @@ export function redirectToLogin(): void {
   window.location.href = apiPath(`/auth/login?redirect=${redirect}`);
 }
 
+/**
+ * Thrown while the browser navigates to the login page. It is not a failed
+ * request — retrying it would repeat both the fetch and the navigation — which
+ * is why `queryClient` matches on the type rather than on a message.
+ */
+export class LoginRedirectError extends Error {
+  constructor() {
+    super("redirecting to login");
+    this.name = "LoginRedirectError";
+  }
+}
+
 function redirectToLoginAndStop(): never {
   redirectToLogin();
 
   // Throw to prevent callers from continuing while the browser navigates away.
-  throw new Error("redirecting to login");
+  throw new LoginRedirectError();
 }
 
 /**

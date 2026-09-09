@@ -1,4 +1,4 @@
-import { ApiError } from "@/api/client";
+import { ApiError, LoginRedirectError } from "@/api/client";
 import { QueryClient } from "@tanstack/react-query";
 
 export const queryClient = new QueryClient({
@@ -16,6 +16,10 @@ export const queryClient = new QueryClient({
        */
       retry: (failureCount, error) => {
         if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+          return false;
+        }
+
+        if (error instanceof LoginRedirectError) {
           return false;
         }
 
