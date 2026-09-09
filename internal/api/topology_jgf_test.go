@@ -967,7 +967,11 @@ func TestNetworkJGFCarriesRunningReplicas(t *testing.T) {
 
 		got, ok := node.Metadata["runningReplicas"].(int)
 		if !ok {
-			t.Fatalf("%s: runningReplicas missing or not an int: %#v", tc.id, node.Metadata["runningReplicas"])
+			t.Fatalf(
+				"%s: runningReplicas missing or not an int: %#v",
+				tc.id,
+				node.Metadata["runningReplicas"],
+			)
 		}
 
 		if got != tc.want {
