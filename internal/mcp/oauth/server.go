@@ -46,9 +46,10 @@ type ServerConfig struct {
 	HTTPClient *http.Client
 
 	// StatePath is where the OAuth server's durable state — refresh tokens,
-	// remembered approvals and dynamic client registrations — is persisted, so
-	// a restart does not force every client to register and authorize again. Empty keeps both stores in memory only, which is
-	// what happens when the data directory is not writable.
+	// remembered approvals and dynamic client registrations — is persisted,
+	// so a restart does not force every client to register and authorize
+	// again. Empty keeps all three in memory only, which is what happens when
+	// the data directory is not writable.
 	StatePath string
 }
 
@@ -94,6 +95,8 @@ func NewServer(cfg ServerConfig) *Server {
 	refreshTokens := NewRefreshTokenStore()
 	consent := NewConsentStore(cfg.MCP.ConsentTTL)
 
+	var carriedClients []ClientRegistration
+
 	if cfg.StatePath != "" {
 		sweepTempFiles(cfg.StatePath)
 
@@ -115,7 +118,13 @@ func NewServer(cfg ServerConfig) *Server {
 		} else {
 			refreshTokens.Restore(state.RefreshTokenSnapshot)
 			consent.Restore(state.Consent)
+
+			// Restore is a no-op with DCR disabled; carriedClients is what
+			// keeps the file's registrations from being rewritten away in
+			// that case, and is read only then.
 			clients.Restore(state.Clients)
+			carriedClients = state.Clients
+
 			slog.Info("loaded MCP OAuth state",
 				"grants", len(state.Grants),
 				"approvals", len(state.Consent),
@@ -124,10 +133,11 @@ func NewServer(cfg ServerConfig) *Server {
 		}
 
 		file := &stateFile{
-			path:    cfg.StatePath,
-			tokens:  refreshTokens,
-			consent: consent,
-			clients: clients,
+			path:           cfg.StatePath,
+			tokens:         refreshTokens,
+			consent:        consent,
+			clients:        clients,
+			carriedClients: carriedClients,
 		}
 		refreshTokens.SetOnChange(file.write)
 		consent.SetOnChange(file.write)
