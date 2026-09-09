@@ -1,3 +1,8 @@
+// oxlint-disable react/refs -- the props mirrored here are read from inside a
+// fetch callback and a stream listener, both of which run outside React's
+// render and would otherwise close over the values of the render that started
+// them. This is the suppression TimeSeriesChart.tsx already carried; it moved
+// with the code it covers.
 import { api } from "@/api/client.ts";
 import type { PrometheusResponse } from "@/api/types.ts";
 import { openEventStream } from "@/lib/eventStream.ts";
@@ -163,11 +168,17 @@ export function useMetricsSeries({
   }, [query, range, from, to, title, color, key, publish]);
 
   useEffect(() => {
+    // An HTTP request is the external system this effect exists to synchronise
+    // with, and announcing that it started is the loading state.
+    // oxlint-disable-next-line react/set-state-in-effect -- nothing to derive during render
     const cancel = fetchData();
 
     return () => {
       cancel?.();
     };
+    // `refreshKey` exists only to be changed: the panel's refresh button bumps
+    // it to force a refetch of an unchanged query. Nothing reads it — the point.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-run trigger
   }, [fetchData, refreshKey]);
 
   // Reopened on demand: closing the stream when the tab hides frees a
@@ -243,6 +254,10 @@ export function useMetricsSeries({
       stream.close();
       document.removeEventListener("visibilitychange", visibilityHandler);
     };
+    // `streamKey` is bumped when a hidden tab comes back, to reopen the
+    // connection this effect closed. Dropping it leaves the tab with no stream
+    // until the range changes.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-run trigger
   }, [live, query, range, streamKey, publish]);
 
   const refetch = useCallback(() => {

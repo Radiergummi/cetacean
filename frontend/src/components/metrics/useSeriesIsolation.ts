@@ -1,3 +1,6 @@
+// oxlint-disable react/refs -- `dataRef` is read from the cross-chart sync
+// subscription and from the isolate callback, both of which run outside render.
+// Depending on `data` instead would resubscribe on every streamed point.
 import { useChartSync } from "./ChartSyncProvider";
 import type { ParsedMetrics } from "@/lib/metricsParser.ts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

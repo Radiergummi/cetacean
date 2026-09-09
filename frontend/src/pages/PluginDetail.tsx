@@ -66,6 +66,7 @@ export default function PluginDetail() {
   }, [name]);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- the fetch is the external system
     fetchPlugin();
   }, [fetchPlugin]);
 
