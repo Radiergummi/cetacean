@@ -1,13 +1,13 @@
-import {readFile} from "node:fs/promises";
-import {join} from "node:path";
-import {docsDir, getDocPaths, operationsLevels} from "../lib/docs";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { docsDir, getDocPaths, operationsLevels } from "../lib/docs";
 
 export async function getStaticPaths() {
   const docs = await getDocPaths();
 
-  return docs.map(({filePath, id: slug}) => ({
-    params: {slug},
-    props: {filePath},
+  return docs.map(({ filePath, id: slug }) => ({
+    params: { slug },
+    props: { filePath },
   }));
 }
 
@@ -39,56 +39,54 @@ function attributesOf(source: string): Record<string, string> {
  * replaced it, so a reader who has only ever seen this route sees no change.
  */
 function toMarkdown(content: string): string {
-  return content
-    .replace(/^import\s[^\n]*\n/gm, "")
-    // A tool's arguments render under its prose, where the card puts them,
-    // rather than after the first paragraph, where the source used to.
-    .replace(
-      /<McpTool([^>]*)>\s*<Fragment slot="arguments">([\s\S]*?)<\/Fragment>([\s\S]*?)<\/McpTool>/g,
-      (_, rawAttributes: string, args: string, body: string) => {
-        const {name, level} = attributesOf(rawAttributes);
+  return (
+    content
+      .replace(/^import\s[^\n]*\n/gm, "")
+      // A tool's arguments render under its prose, where the card puts them,
+      // rather than after the first paragraph, where the source used to.
+      .replace(
+        /<McpTool([^>]*)>\s*<Fragment slot="arguments">([\s\S]*?)<\/Fragment>([\s\S]*?)<\/McpTool>/g,
+        (_, rawAttributes: string, args: string, body: string) => {
+          const { name, level } = attributesOf(rawAttributes);
 
-        return [
-          `#### \`${name}\``,
-          body.trim(),
-          `**Arguments** — ${args.trim()}`,
-          `**Level** — ${level} (${operationsLevels[Number(level)]})`,
-        ].join("\n\n");
-      },
-    )
-    // The cards marker, back in the form a Markdown reader knows it by.
-    .replace(/^\{\/\* cards \*\/}$/gm, "<!-- cards -->")
-    .replace(
-      /<ConfigParam([^>]*)>([\s\S]*?)<\/ConfigParam>/g,
-      (_, rawAttributes: string, body: string) => {
-        const {
-          name,
-          flag,
-          env,
-          default: fallback,
-          required,
-          deprecated,
-        } = attributesOf(rawAttributes);
+          return [
+            `#### \`${name}\``,
+            body.trim(),
+            `**Arguments** — ${args.trim()}`,
+            `**Level** — ${level} (${operationsLevels[Number(level)]})`,
+          ].join("\n\n");
+        },
+      )
+      // The cards marker, back in the form a Markdown reader knows it by.
+      .replace(/^\{\/\* cards \*\/}$/gm, "<!-- cards -->")
+      .replace(
+        /<ConfigParam([^>]*)>([\s\S]*?)<\/ConfigParam>/g,
+        (_, rawAttributes: string, body: string) => {
+          const {
+            name,
+            flag,
+            env,
+            default: fallback,
+            required,
+            deprecated,
+          } = attributesOf(rawAttributes);
 
-        const badges = [required && "**Required.**", deprecated && "**Deprecated.**"].filter(
-          Boolean,
-        );
-        const facts = [
-          flag && `- flag: \`${flag}\``,
-          env && `- env: \`${env}\``,
-          fallback !== undefined && `- default: \`${fallback}\``,
-        ].filter(Boolean);
+          const badges = [required && "**Required.**", deprecated && "**Deprecated.**"].filter(
+            Boolean,
+          );
+          const facts = [
+            flag && `- flag: \`${flag}\``,
+            env && `- env: \`${env}\``,
+            fallback !== undefined && `- default: \`${fallback}\``,
+          ].filter(Boolean);
 
-        const description = [...badges, body.trim()]
-          .filter(Boolean)
-          .join(" ");
+          const description = [...badges, body.trim()].filter(Boolean).join(" ");
 
-        return [`### \`${name}\``, description, facts.join("\n")]
-          .filter(Boolean)
-          .join("\n\n");
-      },
-    )
-    .replace(/\n{3,}/g, "\n\n");
+          return [`### \`${name}\``, description, facts.join("\n")].filter(Boolean).join("\n\n");
+        },
+      )
+      .replace(/\n{3,}/g, "\n\n")
+  );
 }
 
 /**
@@ -107,19 +105,17 @@ function assertRendered(markdown: string, path: string): string {
   return markdown;
 }
 
-export async function GET({props}: { props: { filePath?: string } }) {
+export async function GET({ props }: { props: { filePath?: string } }) {
   const path = props.filePath ?? join(docsDir, "not-found");
 
   try {
     const content = await readFile(path, "utf-8");
 
     return new Response(
-      path.endsWith(".mdx")
-      ? assertRendered(toMarkdown(content), path)
-      : content,
-      {headers: {"Content-Type": "text/markdown; charset=utf-8"}},
+      path.endsWith(".mdx") ? assertRendered(toMarkdown(content), path) : content,
+      { headers: { "Content-Type": "text/markdown; charset=utf-8" } },
     );
   } catch {
-    return new Response("Not found", {status: 404});
+    return new Response("Not found", { status: 404 });
   }
 }

@@ -1,7 +1,7 @@
-import type {APIContext} from "astro";
-import {marked} from "marked";
-import {readFileSync} from "node:fs";
-import {changelogPath} from "../lib/docs";
+import type { APIContext } from "astro";
+import { marked } from "marked";
+import { readFileSync } from "node:fs";
+import { changelogPath } from "../lib/docs";
 
 interface Release {
   version: string;
@@ -24,7 +24,7 @@ async function parseReleases(raw: string, limit = 20): Promise<Release[]> {
     const body = section.slice(newlineIndex + 1).trim();
     const html = await marked.parse(body);
 
-    releases.push({version: headerMatch[1], date: headerMatch[2], html});
+    releases.push({ version: headerMatch[1], date: headerMatch[2], html });
 
     if (releases.length >= limit) {
       break;
@@ -69,6 +69,6 @@ ${entries}
 </feed>`;
 
   return new Response(atom, {
-    headers: {"Content-Type": "application/atom+xml; charset=utf-8"},
+    headers: { "Content-Type": "application/atom+xml; charset=utf-8" },
   });
 }

@@ -874,7 +874,7 @@ export function buildContext(): Record<string, unknown> {
     "@vocab": "urn:cetacean:",
   };
 
-  for (const {container, iri, name} of [...properties, ...rfc9457Properties]) {
+  for (const { container, iri, name } of [...properties, ...rfc9457Properties]) {
     context[name] = container ? { "@container": container } : iri;
   }
 
