@@ -75,15 +75,15 @@ describe("status tint call sites", () => {
    * cluster overview does that, and only a browser catches it.
    */
   it("never paints status text on a solid background of the same tone", async () => {
-    const { readdirSync, readFileSync, statSync } = await import("node:fs");
+    const { readdirSync, readFileSync } = await import("node:fs");
     const { join } = await import("node:path");
 
     const sources: string[] = [];
     const walk = (directory: string) => {
-      for (const entry of readdirSync(directory)) {
-        const path = join(directory, entry);
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
 
-        if (statSync(path).isDirectory()) {
+        if (entry.isDirectory()) {
           walk(path);
           continue;
         }
@@ -96,15 +96,17 @@ describe("status tint call sites", () => {
 
     walk("src");
 
+    const tonePatterns = ["ok", "warning", "danger", "info", "neutral"].map((tone) => ({
+      solidBackground: new RegExp(`bg-status-${tone}(?![\\w/-])`),
+      tonedText: new RegExp(`text-status-${tone}(?![\\w-])`),
+    }));
+
     const offenders: string[] = [];
     for (const path of sources) {
       const source = readFileSync(path, "utf8");
 
       for (const [classList] of source.matchAll(/"([^"\n]*status-[^"\n]*)"/g)) {
-        for (const tone of ["ok", "warning", "danger", "info", "neutral"]) {
-          const solidBackground = new RegExp(`bg-status-${tone}(?![\\w/-])`);
-          const tonedText = new RegExp(`text-status-${tone}(?![\\w-])`);
-
+        for (const { solidBackground, tonedText } of tonePatterns) {
           if (solidBackground.test(classList) && tonedText.test(classList)) {
             offenders.push(`${path}: ${classList.trim().slice(0, 60)}`);
           }

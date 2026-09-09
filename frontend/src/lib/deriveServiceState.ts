@@ -120,6 +120,25 @@ export function updateStatusOf(state: string | null | undefined): {
   return { label: updateStatusLabels[state] || state, state };
 }
 
+const rolloutToneClasses: Record<string, string> = {
+  updating: "text-status-info",
+  paused: "text-status-warning",
+  rollback_started: "text-status-warning",
+  rollback_paused: "text-status-warning",
+  rollback_completed: "text-status-warning",
+};
+
+/**
+ * The colour a rollout state is drawn in.
+ *
+ * A settled rollout is deliberately uncoloured — green beside a red replica
+ * count reads as a claim this field has no data to make — so anything not in
+ * flight falls through to the muted default.
+ */
+export function rolloutToneClass(state: string): string {
+  return rolloutToneClasses[state] ?? "text-muted-foreground";
+}
+
 /** The same, from a service. */
 export function serviceUpdateStatus(service: Pick<Service, "UpdateStatus">): {
   label: string;

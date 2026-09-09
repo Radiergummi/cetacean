@@ -1,4 +1,7 @@
+import { rolloutToneClass } from "../../lib/deriveServiceState";
+import { replicaHealthColor } from "../../lib/statusColor";
 import type { RolloutStatus } from "../../lib/topologyTransform";
+import { cn } from "../../lib/utils";
 import ResourceName from "../ResourceName";
 import { useHighlight } from "./HighlightContext";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
@@ -40,8 +43,7 @@ export function replicaStatus(
 
   return {
     label: `${running}/${desired}`,
-    tone:
-      running === desired ? "bg-status-ok" : running > 0 ? "bg-status-warning" : "bg-status-danger",
+    tone: replicaHealthColor(running, desired),
   };
 }
 
@@ -106,10 +108,7 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
           service that has ever been updated, so rendering on its presence
           labelled the whole cluster "Updating…" forever. */}
       {data.rollout && (
-        <div
-          data-state={data.rollout.state}
-          className="mt-1 text-xs text-status-warning data-[state=updating]:text-status-info"
-        >
+        <div className={cn("mt-1 text-xs", rolloutToneClass(data.rollout.state))}>
           {data.rollout.label}
         </div>
       )}

@@ -1,6 +1,7 @@
 import type { Service } from "../../api/types";
-import { serviceUpdateStatus } from "../../lib/deriveServiceState";
+import { rolloutToneClass, serviceUpdateStatus } from "../../lib/deriveServiceState";
 import { formatRelativeDate } from "../../lib/format";
+import { cn } from "../../lib/utils";
 import InfoCard from "../InfoCard";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
@@ -14,12 +15,7 @@ export function ServiceStatusCard({ service }: { service: Service }) {
       label="Rollout"
       value={
         <div className="flex flex-col">
-          <span
-            data-state={state}
-            className="text-base font-medium text-muted-foreground data-[state=paused]:text-status-warning data-[state=rollback_completed]:text-status-warning data-[state=rollback_paused]:text-status-warning data-[state=rollback_started]:text-status-warning data-[state=updating]:text-status-info"
-          >
-            {label}
-          </span>
+          <span className={cn("text-base font-medium", rolloutToneClass(state))}>{label}</span>
           {ts && <span className="text-xs text-muted-foreground">{formatRelativeDate(ts)}</span>}
           {message && label !== "Stable" && (
             <Tooltip>
