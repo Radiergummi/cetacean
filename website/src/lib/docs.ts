@@ -1,6 +1,6 @@
-import {getCollection} from "astro:content";
-import {readFileSync} from "node:fs";
-import {resolve} from "node:path";
+import { getCollection } from "astro:content";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 export const docsDir = resolve("../docs");
 export const changelogPath = resolve("../CHANGELOG.md");
@@ -21,14 +21,11 @@ export function latestVersion(): string {
 }
 
 export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/\W+/g, "-")
-    .replace(/^-|-$/g, "");
+  return text.toLowerCase().replace(/\W+/g, "-").replace(/^-|-$/g, "");
 }
 
 export async function getDocPaths() {
   const docs = await getCollection("docs");
 
-  return docs.filter(({data: {category}}) => category !== "overview");
+  return docs.filter(({ data: { category } }) => category !== "overview");
 }
