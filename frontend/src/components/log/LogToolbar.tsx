@@ -216,6 +216,10 @@ function useCountdown(deadline: number | null | undefined): number {
       return;
     }
 
+    // The clock is the external system: `Date.now()` cannot be read during
+    // render, and this resyncs the moment a new deadline arrives rather than up
+    // to a second later.
+    // oxlint-disable-next-line react/set-state-in-effect -- reading the clock
     setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 1000);
 

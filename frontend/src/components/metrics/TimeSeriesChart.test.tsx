@@ -49,7 +49,7 @@ vi.mock("@/api/client.ts", () => ({
 }));
 
 const streamListeners: Record<string, (event: MessageEvent) => void> = {};
-const closeStream = vi.fn();
+const closeStream = vi.fn<() => void>();
 
 vi.mock("@/lib/eventStream.ts", () => ({
   openEventStream: (
@@ -186,7 +186,7 @@ describe("TimeSeriesChart data states", () => {
   });
 
   it("hands the series back to the caller as it parsed them", async () => {
-    const onSeriesInfo = vi.fn();
+    const onSeriesInfo = vi.fn<(series: { label: string; color: string }[]) => void>();
 
     await renderChart({ onSeriesInfo });
 

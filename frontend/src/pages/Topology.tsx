@@ -131,6 +131,9 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
     return () => {
       cancelled = true;
     };
+    // `structureKey` digests the graph's shape. The layout reads the refs, but
+    // it is the key changing that says the shape moved and a layout is owed.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-run trigger
   }, [structureKey, nodesRef, edgesRef]);
 
   // Patch node data in-place when only display data changes (replicas, status, etc.)
@@ -141,6 +144,9 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
 
     const dataMap = new Map(rawNodes.map(({ id, data }) => [id, data]));
 
+    // React Flow owns the node array and is only updated by writing back to it;
+    // patching in place is how its controlled API is driven.
+    // oxlint-disable-next-line react/set-state-in-effect -- React Flow's store is the external system
     setNodes((previous) =>
       previous.map((node) => {
         const data = dataMap.get(node.id);
