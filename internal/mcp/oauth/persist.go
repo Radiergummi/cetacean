@@ -19,10 +19,14 @@ import (
 // the pre-upgrade behaviour: every client is prompted once more, then
 // remembered.
 //
-// v3 added dynamic client registrations, on the same terms: an older file
-// yields none, so every DCR client re-registers once and persists from then
-// on.
-const oauthStateVersion = 3
+// Client registrations arrived after v2 and did not bump it, because the
+// version gates compatibility rather than recording what a build happens to
+// write. The addition is readable in both directions: a file without the key
+// loads here and yields none, and an older build ignores a key it does not
+// know. Bumping would have made a rollback destructive — the old build
+// refuses anything newer, so it would discard every refresh token and
+// approval in the file, not just the registrations it cannot use.
+const oauthStateVersion = 2
 
 // RefreshTokenSnapshot is the serializable state of a RefreshTokenStore.
 //
@@ -55,6 +59,12 @@ type oauthState struct {
 	// Clients are the RFC 7591 registrations, oldest first. The order is the
 	// registry's eviction order rather than a presentation choice — see
 	// ClientRegistry.Snapshot.
+	//
+	// Unlike the token snapshot above, this is the live type rather than a
+	// shape of its own, which would normally make the file hostage to a field
+	// rename. It is not: every tag here is an RFC 7591 field name, so what the
+	// file holds is a registration response as the spec defines it, and the
+	// names cannot move without breaking the wire format first.
 	Clients []ClientRegistration `json:"clients,omitempty"`
 }
 
@@ -341,8 +351,15 @@ type stateFile struct {
 	tokens  *RefreshTokenStore
 	consent *ConsentStore
 
-	// clients is nil when DCR is disabled, which its snapshot tolerates.
+	// clients is nil when DCR is disabled.
 	clients *ClientRegistry
+
+	// carriedClients is what the file held at startup, written back verbatim
+	// while there is no registry to snapshot. Disabling DCR is often a
+	// maintenance-window setting, and a single token rotation would otherwise
+	// rewrite the registrations away — costing every client the
+	// re-registration this file exists to avoid the next time it is on.
+	carriedClients []ClientRegistration
 }
 
 // write serializes every store's current state. A failed write is logged and
@@ -354,12 +371,17 @@ func (f *stateFile) write() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	registrations := f.carriedClients
+	if f.clients != nil {
+		registrations = f.clients.Snapshot()
+	}
+
 	state := oauthState{
 		Version:              oauthStateVersion,
 		Timestamp:            time.Now(),
 		RefreshTokenSnapshot: f.tokens.Snapshot(),
 		Consent:              f.consent.Snapshot(),
-		Clients:              f.clients.Snapshot(),
+		Clients:              registrations,
 	}
 
 	if err := writeState(f.path, state); err != nil {
