@@ -27,13 +27,22 @@ export function TimeRangeSelector({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Sync custom inputs when opening
-  useEffect(() => {
+  // Seed the custom inputs from the current range as the panel opens, rather
+  // than syncing them from an effect. Every path that changes `value` closes
+  // the panel — a preset, or applying a custom range — so opening is the only
+  // moment they need to agree, and syncing on `value` would overwrite what
+  // someone had already typed.
+  const toggle = () => {
     if (open) {
-      setCustomSince(value.since ? toLocalInput(value.since) : "");
-      setCustomUntil(value.until ? toLocalInput(value.until) : "");
+      setOpen(false);
+
+      return;
     }
-  }, [open, value.since, value.until]);
+
+    setCustomSince(value.since ? toLocalInput(value.since) : "");
+    setCustomUntil(value.until ? toLocalInput(value.until) : "");
+    setOpen(true);
+  };
 
   const applyCustom = () => {
     const since = customSince ? new Date(customSince).toISOString() : undefined;
@@ -59,7 +68,7 @@ export function TimeRangeSelector({
     >
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={toggle}
         data-active={value.since || value.until || undefined}
         className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-xs hover:bg-muted data-active:border-primary/30 data-active:bg-primary/10 data-active:text-primary"
         title="Time range"
