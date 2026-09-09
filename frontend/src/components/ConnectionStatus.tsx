@@ -75,7 +75,7 @@ export default function ConnectionStatus() {
       <div
         data-connected={connected || undefined}
         data-pulsing={pulsing || undefined}
-        className="size-2 animate-pulse rounded-full bg-status-danger transition-shadow duration-300 data-connected:animate-none data-connected:bg-status-ok data-pulsing:shadow-[0_0_6px_2px_rgba(34,197,94,0.5)]"
+        className="size-2 animate-pulse rounded-full bg-status-danger transition-shadow duration-300 data-connected:animate-none data-connected:bg-status-ok data-pulsing:shadow-[0_0_6px_2px_oklch(from_var(--status-ok)_l_c_h/50%)]"
       />
       <span className="hidden text-xs text-muted-foreground sm:inline">
         {connected ? (

@@ -74,7 +74,7 @@ function LogRow({
       key={line.index}
       ref={measureRef}
       data-index={dataIndex}
-      data-virtual-row=""
+      data-virtual-row={dataIndex !== undefined ? "" : undefined}
       data-stripe={dataIndex !== undefined && dataIndex % 2 === 1 ? "" : undefined}
       data-json={jsonLine ? "" : undefined}
       data-highlight={highlight || undefined}
