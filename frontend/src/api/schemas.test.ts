@@ -22,6 +22,13 @@ function jsonResponse(data: unknown, headers?: Record<string, string>) {
   });
 }
 
+/** The issue list from the nth report, which is the second console argument. */
+function issuesOf(call: number): string[] {
+  const issues = consoleError.mock.calls[call]?.[1];
+
+  return Array.isArray(issues) ? (issues as string[]) : [];
+}
+
 function node(overrides: Record<string, unknown> = {}) {
   return {
     ID: "n1",
@@ -68,10 +75,8 @@ describe("response validation", () => {
 
     expect(consoleError).toHaveBeenCalledTimes(1);
 
-    const [message, issues] = consoleError.mock.calls[0] as [string, string[]];
-
-    expect(message).toContain("/nodes/n1");
-    expect(issues.join(" ")).toContain("node.ID");
+    expect(String(consoleError.mock.calls[0]?.[0])).toContain("/nodes/n1");
+    expect(issuesOf(0).join(" ")).toContain("node.ID");
   });
 
   it("accepts a field the server added that the dashboard does not know", async () => {
@@ -110,7 +115,7 @@ describe("response validation", () => {
     await api.nodes();
 
     expect(consoleError).toHaveBeenCalledTimes(1);
-    expect((consoleError.mock.calls[0]?.[1] as string[]).join(" ")).toContain("total");
+    expect(issuesOf(0).join(" ")).toContain("total");
   });
 
   it("checks the items inside the envelope too", async () => {
@@ -120,8 +125,6 @@ describe("response validation", () => {
 
     await api.nodes();
 
-    expect((consoleError.mock.calls[0]?.[1] as string[]).join(" ")).toContain(
-      "items.0.Status.State",
-    );
+    expect(issuesOf(0).join(" ")).toContain("items.0.Status.State");
   });
 });

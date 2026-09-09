@@ -197,10 +197,12 @@ export default function DataTable<T>({
   // it whenever `data` changes. The list hooks rebuild that array on every
   // render and an SSE event rewrites the rows it holds, so keying a reset on
   // its identity cleared the selection under the person's hands on any live
-  // collection. Only a list that shrank past the cursor has to move it.
-  useEffect(() => {
-    setSelectedIndex((index) => Math.min(index, data.length - 1));
-  }, [data.length]);
+  // collection. Only a list that shrank past the cursor has to move it, and
+  // that is settled during render so no pass ever commits an
+  // `aria-activedescendant` naming a row that is no longer there.
+  if (selectedIndex >= data.length) {
+    setSelectedIndex(data.length - 1);
+  }
 
   // Reset scroll when switching render mode
   useEffect(() => {

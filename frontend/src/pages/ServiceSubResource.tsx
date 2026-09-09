@@ -42,6 +42,9 @@ export default function ServiceSubResource() {
       return;
     }
 
+    // The two requests below are the external system; this is their own
+    // progress, not data derived from a prop.
+    // oxlint-disable-next-line react/set-state-in-effect -- loading state of a fetch
     setLoading(true);
     setError(null);
 
@@ -68,6 +71,8 @@ export default function ServiceSubResource() {
       });
 
     return () => controller.abort();
+    // `retryCount` is what the retry button increments: a trigger, not an input.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-run trigger
   }, [id, subResource, label, retryCount]);
 
   if (!label) {
