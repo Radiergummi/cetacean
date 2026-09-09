@@ -1,3 +1,4 @@
+import * as schema from "./schemas";
 import type {
   ClusterCapacity,
   CollectionResponse,
@@ -41,6 +42,7 @@ import type {
   VolumeDetail,
 } from "./types";
 import { apiPath } from "@/lib/basePath";
+import type { z } from "zod";
 
 const headers = { Accept: "application/json" };
 
@@ -168,11 +170,67 @@ async function request(
   return response;
 }
 
-async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<FetchResult<T>> {
+/**
+ * Endpoints already reported this session, so a page polling a drifted endpoint
+ * every couple of seconds says it once rather than filling the console.
+ */
+const reportedDrift = new Set<string>();
+
+/** Strips the query string, so `/services/abc?x=1` groups with `/services/abc`. */
+function endpointOf(path: string): string {
+  return path.split("?")[0] ?? path;
+}
+
+/**
+ * Reports a response that is not the shape the dashboard was written against.
+ *
+ * Deliberately does not throw. The dashboard renders a server it disagrees with
+ * exactly as it did before — a missing field was already going to show as a
+ * blank cell — and this makes the reason visible instead of leaving it to be
+ * guessed at from the symptom.
+ */
+function reportSchemaDrift(path: string, error: z.ZodError): void {
+  const endpoint = endpointOf(path);
+
+  if (reportedDrift.has(endpoint)) {
+    return;
+  }
+
+  reportedDrift.add(endpoint);
+
+  const issues = error.issues
+    .slice(0, 5)
+    .map(({ message, path: at }) => `${at.join(".") || "(root)"}: ${message}`);
+
+  // eslint-disable-next-line no-console
+  console.error(
+    `[api] ${endpoint} is not the shape this dashboard expects. Rendering it anyway.`,
+    issues,
+  );
+}
+
+/** Test seam: schema reports are once-per-endpoint for the life of the page. */
+export function resetSchemaDriftReports(): void {
+  reportedDrift.clear();
+}
+
+async function fetchJSON<T>(
+  path: string,
+  signal?: AbortSignal,
+  responseSchema?: z.ZodType,
+): Promise<FetchResult<T>> {
   const response = await request(path, headers, signal);
 
   const allowedMethods = parseAllowHeader(response);
   const data = await response.json();
+
+  if (responseSchema) {
+    const result = responseSchema.safeParse(data);
+
+    if (!result.success) {
+      reportSchemaDrift(path, result.error);
+    }
+  }
 
   return { data, allowedMethods };
 }
@@ -394,6 +452,7 @@ async function fetchRange<T>(
   path: string,
   params?: ListParams | undefined,
   signal?: AbortSignal | undefined,
+  itemSchema?: z.ZodType,
 ): Promise<FetchResult<CollectionResponse<T>>> {
   const offset = params?.offset ?? 0;
   const end = offset + pageSize - 1;
@@ -434,6 +493,14 @@ async function fetchRange<T>(
   const allowedMethods = parseAllowHeader(response);
   const data = await response.json();
 
+  if (itemSchema) {
+    const result = schema.collectionOf(itemSchema).safeParse(data);
+
+    if (!result.success) {
+      reportSchemaDrift(path, result.error);
+    }
+  }
+
   return { data, allowedMethods };
 }
 
@@ -445,11 +512,18 @@ function totalFromContentRange(header: string | null): number | null {
 }
 
 export const api = {
-  whoami: () => fetchJSON<Identity>("/profile").then(({ data }) => data),
-  cluster: () => fetchJSON<ClusterSnapshot>("/cluster").then(({ data }) => data),
+  whoami: () =>
+    fetchJSON<Identity>("/profile", undefined, schema.identitySchema).then(({ data }) => data),
+  cluster: () =>
+    fetchJSON<ClusterSnapshot>("/cluster", undefined, schema.clusterSchema).then(
+      ({ data }) => data,
+    ),
   resync: () => post<{ status: string; durationMs?: number }>("/-/resync"),
-  swarm: () => fetchJSON<SwarmInfo>("/swarm"),
-  unlockKey: () => fetchJSON<{ unlockKey: string }>("/swarm/unlock-key").then(({ data }) => data),
+  swarm: () => fetchJSON<SwarmInfo>("/swarm", undefined, schema.swarmSchema),
+  unlockKey: () =>
+    fetchJSON<{ unlockKey: string }>("/swarm/unlock-key", undefined, schema.unlockKeySchema).then(
+      ({ data }) => data,
+    ),
   patchSwarmOrchestration: (data: Record<string, unknown>) =>
     patch("/swarm/orchestration", data, "application/merge-patch+json"),
   patchSwarmRaft: (data: Record<string, unknown>) =>
@@ -467,14 +541,20 @@ export const api = {
     mutationFetch<void>("/swarm/unlock", "POST", { unlockKey }, "application/json"),
   forceRotateCA: () => mutationFetch<void>("/swarm/force-rotate-ca", "POST"),
   plugins: () =>
-    fetchJSON<CollectionResponse<Plugin>>("/plugins").then(({ data, allowedMethods }) => ({
+    fetchJSON<CollectionResponse<Plugin>>(
+      "/plugins",
+      undefined,
+      schema.collectionOf(schema.pluginSchema),
+    ).then(({ data, allowedMethods }) => ({
       data: data.items,
       allowedMethods,
     })),
   plugin: (name: string, signal?: AbortSignal) =>
-    fetchJSON<{ plugin: Plugin }>(`/plugins/${encodeURIComponent(name)}`, signal).then(
-      ({ data, allowedMethods }) => ({ data: data.plugin, allowedMethods }),
-    ),
+    fetchJSON<{ plugin: Plugin }>(
+      `/plugins/${encodeURIComponent(name)}`,
+      signal,
+      schema.pluginDetailSchema,
+    ).then(({ data, allowedMethods }) => ({ data: data.plugin, allowedMethods })),
   pluginPrivileges: (remote: string) =>
     mutationFetch<{ privileges: PluginPrivilege[] }>(
       "/plugins/privileges",
@@ -497,63 +577,93 @@ export const api = {
     ),
   configurePlugin: (name: string, settings: { args?: string[]; env?: string[] }) =>
     patch<void>(`/plugins/${encodeURIComponent(name)}/settings`, settings, "application/json"),
-  clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics").then(({ data }) => data),
-  monitoringStatus: () => fetchJSON<MonitoringStatus>("/metrics/status").then(({ data }) => data),
-  nodes: (params?: ListParams, signal?: AbortSignal) => fetchRange<Node>("/nodes", params, signal),
+  clusterMetrics: () =>
+    fetchJSON<ClusterMetrics>("/cluster/metrics", undefined, schema.clusterMetricsSchema).then(
+      ({ data }) => data,
+    ),
+  monitoringStatus: () =>
+    fetchJSON<MonitoringStatus>("/metrics/status", undefined, schema.monitoringStatusSchema).then(
+      ({ data }) => data,
+    ),
+  nodes: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Node>("/nodes", params, signal, schema.nodeSchema),
   node: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ node: Node }>(`/nodes/${id}`, signal).then(({ data, allowedMethods }) => ({
-      data: data.node,
-      allowedMethods,
-    })),
-  services: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<ServiceListItem>("/services", params, signal),
-  recommendations: () =>
-    fetchJSON<RecommendationsResponse>("/recommendations").then(({ data }) => data),
-  service: (id: string, signal?: AbortSignal) =>
-    fetchJSON<ServiceDetail>(`/services/${id}`, signal),
-  tasks: (params?: ListParams, signal?: AbortSignal) => fetchRange<Task>("/tasks", params, signal),
-  stacks: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<Stack>("/stacks", params, signal),
-  stacksSummary: () =>
-    fetchJSON<CollectionResponse<StackSummary>>("/stacks/summary").then(({ data }) => data.items),
-  stack: (name: string, signal?: AbortSignal) =>
-    fetchJSON<{ stack: StackDetail }>(`/stacks/${name}`, signal).then(
+    fetchJSON<{ node: Node }>(`/nodes/${id}`, signal, schema.nodeDetailSchema).then(
       ({ data, allowedMethods }) => ({
-        data: data.stack,
+        data: data.node,
         allowedMethods,
       }),
     ),
-  configs: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<Config>("/configs", params, signal),
-  config: (id: string, signal?: AbortSignal) => fetchJSON<ConfigDetail>(`/configs/${id}`, signal),
-  secrets: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<Secret>("/secrets", params, signal),
-  secret: (id: string, signal?: AbortSignal) => fetchJSON<SecretDetail>(`/secrets/${id}`, signal),
-  networks: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<Network>("/networks", params, signal),
-  network: (id: string, signal?: AbortSignal) =>
-    fetchJSON<NetworkDetail>(`/networks/${id}`, signal),
-  volumes: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<Volume>("/volumes", params, signal),
-  volume: (name: string, signal?: AbortSignal) =>
-    fetchJSON<VolumeDetail>(`/volumes/${name}`, signal),
-  task: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ task: Task }>(`/tasks/${id}`, signal).then(({ data, allowedMethods }) => ({
-      data: data.task,
+  services: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<ServiceListItem>("/services", params, signal, schema.serviceListSchema),
+  recommendations: () =>
+    fetchJSON<RecommendationsResponse>(
+      "/recommendations",
+      undefined,
+      schema.recommendationsSchema,
+    ).then(({ data }) => data),
+  service: (id: string, signal?: AbortSignal) =>
+    fetchJSON<ServiceDetail>(`/services/${id}`, signal, schema.serviceDetailSchema),
+  tasks: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Task>("/tasks", params, signal, schema.taskSchema),
+  stacks: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Stack>("/stacks", params, signal, schema.stackListSchema),
+  stacksSummary: () =>
+    fetchJSON<CollectionResponse<StackSummary>>(
+      "/stacks/summary",
+      undefined,
+      schema.collectionOf(schema.stackSummarySchema),
+    ).then(({ data }) => data.items),
+  stack: (name: string, signal?: AbortSignal) =>
+    fetchJSON<{ stack: StackDetail }>(
+      `/stacks/${name}`,
+      signal,
+      schema.stackDetailResponseSchema,
+    ).then(({ data, allowedMethods }) => ({
+      data: data.stack,
       allowedMethods,
     })),
+  configs: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Config>("/configs", params, signal, schema.configSchema),
+  config: (id: string, signal?: AbortSignal) =>
+    fetchJSON<ConfigDetail>(`/configs/${id}`, signal, schema.configDetailSchema),
+  secrets: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Secret>("/secrets", params, signal, schema.secretSchema),
+  secret: (id: string, signal?: AbortSignal) =>
+    fetchJSON<SecretDetail>(`/secrets/${id}`, signal, schema.secretDetailSchema),
+  networks: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Network>("/networks", params, signal, schema.networkSchema),
+  network: (id: string, signal?: AbortSignal) =>
+    fetchJSON<NetworkDetail>(`/networks/${id}`, signal, schema.networkDetailSchema),
+  volumes: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Volume>("/volumes", params, signal, schema.volumeSchema),
+  volume: (name: string, signal?: AbortSignal) =>
+    fetchJSON<VolumeDetail>(`/volumes/${name}`, signal, schema.volumeDetailSchema),
+  task: (id: string, signal?: AbortSignal) =>
+    fetchJSON<{ task: Task }>(`/tasks/${id}`, signal, schema.taskDetailSchema).then(
+      ({ data, allowedMethods }) => ({
+        data: data.task,
+        allowedMethods,
+      }),
+    ),
   taskLogs: (id: string, options?: LogOptions) =>
-    fetchJSON<LogResponse>(`/tasks/${id}/logs?${buildLogParams(options)}`, options?.signal).then(
-      ({ data }) => data,
-    ),
+    fetchJSON<LogResponse>(
+      `/tasks/${id}/logs?${buildLogParams(options)}`,
+      options?.signal,
+      schema.logResponseSchema,
+    ).then(({ data }) => data),
   serviceTasks: (id: string, signal?: AbortSignal) =>
-    fetchJSON<CollectionResponse<Task>>(`/services/${id}/tasks`, signal).then(
-      ({ data }) => data.items,
-    ),
+    fetchJSON<CollectionResponse<Task>>(
+      `/services/${id}/tasks`,
+      signal,
+      schema.collectionOf(schema.taskSchema),
+    ).then(({ data }) => data.items),
   serviceLogs: (id: string, options?: LogOptions) =>
-    fetchJSON<LogResponse>(`/services/${id}/logs?${buildLogParams(options)}`, options?.signal).then(
-      ({ data }) => data,
-    ),
+    fetchJSON<LogResponse>(
+      `/services/${id}/logs?${buildLogParams(options)}`,
+      options?.signal,
+      schema.logResponseSchema,
+    ).then(({ data }) => data),
   serviceLogsStreamURL: (
     id: string,
     options?: { after?: string | undefined; stream?: string | undefined },
@@ -584,15 +694,18 @@ export const api = {
     const { data } = await fetchJSON<CollectionResponse<HistoryEntry>>(
       `/history${query ? `?${query}` : ""}`,
       signal,
+      schema.collectionOf(schema.historyEntrySchema),
     );
 
     return data.items;
   },
   topology: () => fetchJGF<JGFDocument>("/topology"),
   nodeTasks: (id: string, signal?: AbortSignal) =>
-    fetchJSON<CollectionResponse<Task>>(`/nodes/${id}/tasks`, signal).then(
-      ({ data }) => data.items,
-    ),
+    fetchJSON<CollectionResponse<Task>>(
+      `/nodes/${id}/tasks`,
+      signal,
+      schema.collectionOf(schema.taskSchema),
+    ).then(({ data }) => data.items),
   metricsQuery: async (query: string, time?: string) => {
     const params = new URLSearchParams({ query });
 
@@ -600,13 +713,21 @@ export const api = {
       params.set("time", time);
     }
 
-    const { data } = await fetchJSON<PrometheusResponse>(`/metrics?${params}`);
+    const { data } = await fetchJSON<PrometheusResponse>(
+      `/metrics?${params}`,
+      undefined,
+      schema.prometheusSchema,
+    );
 
     return data;
   },
   metricsQueryRange: async (query: string, start: string, end: string, step: string) => {
     const params = new URLSearchParams({ query, start, end, step });
-    const { data } = await fetchJSON<PrometheusResponse>(`/metrics?${params}`);
+    const { data } = await fetchJSON<PrometheusResponse>(
+      `/metrics?${params}`,
+      undefined,
+      schema.prometheusSchema,
+    );
 
     return data;
   },
@@ -615,12 +736,21 @@ export const api = {
     return apiPath(`/metrics?${params}`);
   },
   diskUsage: () =>
-    fetchJSON<CollectionResponse<DiskUsageSummary>>("/disk-usage").then(({ data }) => data.items),
-  clusterCapacity: () => fetchJSON<ClusterCapacity>("/cluster/capacity").then(({ data }) => data),
-  dockerLatestVersion: () =>
-    fetchJSON<{ version: string; url: string }>("/-/docker-latest-version").then(
+    fetchJSON<CollectionResponse<DiskUsageSummary>>(
+      "/disk-usage",
+      undefined,
+      schema.collectionOf(schema.diskUsageSchema),
+    ).then(({ data }) => data.items),
+  clusterCapacity: () =>
+    fetchJSON<ClusterCapacity>("/cluster/capacity", undefined, schema.clusterCapacitySchema).then(
       ({ data }) => data,
     ),
+  dockerLatestVersion: () =>
+    fetchJSON<{ version: string; url: string }>(
+      "/-/docker-latest-version",
+      undefined,
+      schema.dockerVersionSchema,
+    ).then(({ data }) => data),
   metricsLabels: async (match?: string) => {
     const params = new URLSearchParams();
 
@@ -628,18 +758,25 @@ export const api = {
       params.set("match[]", match);
     }
 
-    const { data } = await fetchJSON<{ data: string[] }>(`/metrics/labels?${params}`);
+    const { data } = await fetchJSON<{ data: string[] }>(
+      `/metrics/labels?${params}`,
+      undefined,
+      schema.metricsLabelsSchema,
+    );
 
     return data.data;
   },
   metricsLabelValues: (name: string) =>
-    fetchJSON<{ data: string[] }>(`/metrics/labels/${encodeURIComponent(name)}`).then(
-      ({ data }) => data.data,
-    ),
+    fetchJSON<{ data: string[] }>(
+      `/metrics/labels/${encodeURIComponent(name)}`,
+      undefined,
+      schema.metricsLabelsSchema,
+    ).then(({ data }) => data.data),
   search: (q: string, limit?: number, signal?: AbortSignal) =>
     fetchJSON<SearchResponse>(
       `/search?q=${encodeURIComponent(q)}${limit !== undefined ? `&limit=${limit}` : ""}`,
       signal,
+      schema.searchSchema,
     ).then(({ data }) => data),
   scaleService: (id: string, replicas: number) =>
     put<ServiceDetail>(`/services/${id}/scale`, { replicas }),
@@ -688,46 +825,65 @@ export const api = {
 
   // Tier 2: sub-resource GETs
   serviceEnv: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ env: Record<string, string> }>(`/services/${id}/env`, signal).then(
-      ({ data }) => data.env,
-    ),
+    fetchJSON<{ env: Record<string, string> }>(
+      `/services/${id}/env`,
+      signal,
+      schema.envSchema,
+    ).then(({ data }) => data.env),
   nodeLabels: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ labels: Record<string, string> }>(`/nodes/${id}/labels`, signal).then(
-      ({ data }) => data.labels,
-    ),
+    fetchJSON<{ labels: Record<string, string> }>(
+      `/nodes/${id}/labels`,
+      signal,
+      schema.labelsSchema,
+    ).then(({ data }) => data.labels),
   nodeRole: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ role: "worker" | "manager"; isLeader: boolean; managerCount: number }>(
       `/nodes/${id}/role`,
       signal,
+      schema.nodeRoleSchema,
     ).then(({ data }) => data),
   serviceLabels: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ labels: Record<string, string> }>(`/services/${id}/labels`, signal).then(
-      ({ data }) => data.labels,
-    ),
+    fetchJSON<{ labels: Record<string, string> }>(
+      `/services/${id}/labels`,
+      signal,
+      schema.labelsSchema,
+    ).then(({ data }) => data.labels),
   serviceResources: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ resources: Record<string, unknown> }>(`/services/${id}/resources`, signal).then(
-      ({ data }) => data.resources,
-    ),
+    fetchJSON<{ resources: Record<string, unknown> }>(
+      `/services/${id}/resources`,
+      signal,
+      schema.resourcesSchema,
+    ).then(({ data }) => data.resources),
   serviceHealthcheck: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ healthcheck: Healthcheck | null }>(`/services/${id}/healthcheck`, signal).then(
-      ({ data }) => data.healthcheck,
-    ),
+    fetchJSON<{ healthcheck: Healthcheck | null }>(
+      `/services/${id}/healthcheck`,
+      signal,
+      schema.healthcheckSchema,
+    ).then(({ data }) => data.healthcheck),
   serviceConfigs: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ configs: ServiceConfigRef[] }>(`/services/${id}/configs`, signal).then(
-      ({ data }) => data.configs,
-    ),
+    fetchJSON<{ configs: ServiceConfigRef[] }>(
+      `/services/${id}/configs`,
+      signal,
+      schema.serviceConfigsSchema,
+    ).then(({ data }) => data.configs),
   serviceSecrets: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ secrets: ServiceSecretRef[] }>(`/services/${id}/secrets`, signal).then(
-      ({ data }) => data.secrets,
-    ),
+    fetchJSON<{ secrets: ServiceSecretRef[] }>(
+      `/services/${id}/secrets`,
+      signal,
+      schema.serviceSecretsSchema,
+    ).then(({ data }) => data.secrets),
   serviceNetworks: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ networks: ServiceNetworkRef[] }>(`/services/${id}/networks`, signal).then(
-      ({ data }) => data.networks,
-    ),
+    fetchJSON<{ networks: ServiceNetworkRef[] }>(
+      `/services/${id}/networks`,
+      signal,
+      schema.serviceNetworksSchema,
+    ).then(({ data }) => data.networks),
   serviceMounts: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ mounts: ServiceMount[] }>(`/services/${id}/mounts`, signal).then(
-      ({ data }) => data.mounts ?? [],
-    ),
+    fetchJSON<{ mounts: ServiceMount[] }>(
+      `/services/${id}/mounts`,
+      signal,
+      schema.mountsSchema,
+    ).then(({ data }) => data.mounts ?? []),
 
   // Tier 2: sub-resource PATCHes
   patchServiceEnv: (id: string, ops: PatchOp[]) =>
@@ -758,14 +914,16 @@ export const api = {
     put<{ healthcheck: Healthcheck }>(`/services/${id}/healthcheck`, healthcheck),
 
   servicePorts: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ ports: PortConfig[] }>(`/services/${id}/ports`, signal).then(
+    fetchJSON<{ ports: PortConfig[] }>(`/services/${id}/ports`, signal, schema.portsSchema).then(
       ({ data }) => data.ports,
     ),
 
   servicePlacement: (id: string) =>
-    fetchJSON<{ placement: Placement }>(`/services/${id}/placement`).then(
-      ({ data }) => data.placement,
-    ),
+    fetchJSON<{ placement: Placement }>(
+      `/services/${id}/placement`,
+      undefined,
+      schema.placementSchema,
+    ).then(({ data }) => data.placement),
 
   putServicePlacement: (id: string, placement: Placement) =>
     put<{ placement: Placement }>(`/services/${id}/placement`, placement),
@@ -823,7 +981,11 @@ export const api = {
     ),
 
   serviceContainerConfig: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ containerConfig: ContainerConfig }>(`/services/${id}/container-config`, signal),
+    fetchJSON<{ containerConfig: ContainerConfig }>(
+      `/services/${id}/container-config`,
+      signal,
+      schema.containerConfigSchema,
+    ),
 
   patchServiceContainerConfig: (id: string, partial: Record<string, unknown>) =>
     patch<{ containerConfig: ContainerConfig }>(
@@ -833,10 +995,12 @@ export const api = {
     ).then(({ containerConfig }) => containerConfig),
 
   health: (signal?: AbortSignal) =>
-    fetchJSON<HealthInfo>(`/-/health`, signal).then(({ data }) => data),
+    fetchJSON<HealthInfo>(`/-/health`, signal, schema.healthSchema).then(({ data }) => data),
 
   licenses: (signal?: AbortSignal) =>
-    fetchJSON<LicensesResponse>(`/-/licenses`, signal).then(({ data }) => data),
+    fetchJSON<LicensesResponse>(`/-/licenses`, signal, schema.licensesSchema).then(
+      ({ data }) => data,
+    ),
 
   licenseText: (id: string, signal?: AbortSignal) =>
     fetchText(`/-/licenses/texts/${encodeURIComponent(id)}`, signal),
