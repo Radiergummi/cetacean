@@ -6,12 +6,7 @@
 import { api } from "@/api/client.ts";
 import type { PrometheusResponse } from "@/api/types.ts";
 import { openEventStream } from "@/lib/eventStream.ts";
-import {
-  appendMetricPoint,
-  type ParsedMetrics,
-  parseRangeResult,
-  seriesChanged,
-} from "@/lib/metricsParser.ts";
+import { appendMetricPoint, type ParsedMetrics, parseRangeResult } from "@/lib/metricsParser.ts";
 import { generateMockSeries } from "@/lib/mockChartData.ts";
 import { getErrorMessage } from "@/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -47,8 +42,6 @@ interface Options {
   streaming: boolean;
   /** Called whenever a fetch or a stream frame republishes the series list. */
   onSeriesInfo?: ((series: { label: string; color: string }[]) => void) | undefined;
-  /** Called when the series changed identity, so a stale isolation can be dropped. */
-  onSeriesReset?: (() => void) | undefined;
 }
 
 export interface MetricsSeries {
@@ -87,7 +80,6 @@ export function useMetricsSeries({
   refreshKey,
   streaming,
   onSeriesInfo,
-  onSeriesReset,
 }: Options): MetricsSeries {
   const [state, setState] = useState<MetricsState>("loading");
   const [errorMessage, setErrorMessage] = useState("");
@@ -104,19 +96,12 @@ export function useMetricsSeries({
   colorRef.current = color;
   const onSeriesInfoRef = useRef(onSeriesInfo);
   onSeriesInfoRef.current = onSeriesInfo;
-  const onSeriesResetRef = useRef(onSeriesReset);
-  onSeriesResetRef.current = onSeriesReset;
 
   const key = `${query}|${range}|${from ?? ""}|${to ?? ""}`;
 
   const publish = useCallback((parsed: ParsedMetrics) => {
     setData(parsed);
     onSeriesInfoRef.current?.(parsed.series.map(({ color, label }) => ({ color, label })));
-
-    if (seriesChanged(dataRef.current, parsed)) {
-      onSeriesResetRef.current?.();
-    }
-
     setState("data");
   }, []);
 
@@ -127,7 +112,7 @@ export function useMetricsSeries({
     const now = Math.floor(Date.now() / 1000);
     const start = from ?? now - seconds;
     const end = to ?? now;
-    const step = Math.max(Math.floor((end - start) / 300), 15);
+    const step = stepFor(end - start);
     let cancelled = false;
 
     api
