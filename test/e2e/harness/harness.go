@@ -69,9 +69,12 @@ func up() (*Env, error) {
 
 	composeFile := filepath.Join(root, "test", "e2e", "compose.e2e.yaml")
 
+	ctx, cancel := context.WithTimeout(context.Background(), upTimeout)
+	defer cancel()
+
 	// No --wait: cert-init is a one-shot that exits, which --wait treats as a
 	// failure. The explicit polls below are the stronger check anyway.
-	cmd := exec.Command("docker", "compose", "-f", composeFile, "up", "-d")
+	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "up", "-d")
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 
