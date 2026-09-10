@@ -2546,6 +2546,7 @@ paths:
       description: Sets the replica count for a replicated service.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/Prefer"
       requestBody:
         required: true
         content:
@@ -2567,6 +2568,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDetail"
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2586,6 +2589,7 @@ paths:
       description: Updates the container image for a service.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/Prefer"
       requestBody:
         required: true
         content:
@@ -2607,6 +2611,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDetail"
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2626,6 +2632,7 @@ paths:
       description: Rolls back the service to its previous specification.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/Prefer"
       responses:
         "200":
           description: Service rollback initiated
@@ -2652,6 +2659,8 @@ paths:
                     StartedAt: "2026-04-13T08:15:00Z"
                     Message: rollback initiated
                 integrations: []
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2671,6 +2680,7 @@ paths:
       description: Forces a re-deploy of the service by incrementing its ForceUpdate counter.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/Prefer"
       responses:
         "200":
           description: Service restart initiated
@@ -2694,6 +2704,8 @@ paths:
                     Mode:
                       Replicated: { Replicas: 3 }
                 integrations: []
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3957,6 +3969,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/Prefer"
       requestBody:
         required: true
         content:
@@ -3985,6 +3998,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDetail"
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -4042,6 +4057,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/Prefer"
       requestBody:
         required: true
         content:
@@ -4066,6 +4082,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDetail"
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -5609,6 +5627,23 @@ components:
         changed since. Omitting the header skips the check.
       example: '"a1b2c3d4e5f6a1b2"'
 
+    Prefer:
+      name: Prefer
+      in: header
+      required: false
+      schema:
+        type: string
+      description: >
+        Optional RFC 7240 preferences, comma-separated. `wait=<seconds>` holds
+        the response until the cluster has settled on the change, up to a
+        server ceiling of 300 seconds; the response then carries
+        `Preference-Applied: wait=<seconds>` reporting the wait actually
+        applied. A wait that runs out answers 202 with the last progress line
+        and no `Preference-Applied`. `respond-async` answers 202 immediately.
+        `return=minimal` answers 204 with no body. Omitting the header leaves
+        the endpoint's behaviour unchanged.
+      example: wait=30
+
     search:
       name: search
       in: query
@@ -5725,6 +5760,30 @@ components:
   responses:
     NotModified:
       description: Not modified (ETag matched If-None-Match)
+
+    ServiceAccepted:
+      description: >
+        Accepted: Docker took the change, but the cluster has not settled on
+        it. Returned when `Prefer: respond-async` was sent, or when a
+        `Prefer: wait` ran out before the service converged. Poll or stream
+        the `Location` URL to follow the rollout.
+      headers:
+        Location:
+          description: The service to read convergence from
+          schema:
+            type: string
+            example: /services/r8m2x5nk3p7q
+        Preference-Applied:
+          description: >
+            `respond-async` when that preference was applied. Absent on a
+            wait that ran out — the preference was asked for and not met.
+          schema:
+            type: string
+            example: respond-async
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ServiceAccepted"
 
     BadRequest:
       description: Bad request (invalid filter, missing parameter, etc.)
@@ -7268,6 +7327,25 @@ components:
               description: Detected third-party integrations (e.g. Traefik)
               items:
                 $ref: "#/components/schemas/Integration"
+
+    ServiceAccepted:
+      description: >
+        Service detail for a change the cluster has not settled on yet, with
+        the last convergence line the wait observed
+      allOf:
+        - $ref: "#/components/schemas/DetailEnvelope"
+        - type: object
+          properties:
+            service:
+              type: object
+              description: Docker swarm.Service object
+            progress:
+              type: string
+              description: >
+                The last convergence line observed, e.g.
+                "waiting: 2/5 replicas running". Absent when the response was
+                sent without waiting.
+              example: "waiting: 2/5 replicas running"
 
     Integration:
       description: A detected third-party integration on a service

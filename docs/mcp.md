@@ -87,6 +87,11 @@ Clients that support this opt in per call; the agent handles it, there is nothin
 settled within five minutes is reported as failed, and [`mcp.max_concurrent_tasks`][mcp.max_concurrent_tasks] (default
 is 32) caps how many such waits run at once.
 
+Four tools wait; the [API][api] offers the same wait on six endpoints, adding service mode and endpoint mode. That is
+deliberate rather than an oversight: waiting over MCP costs a held task slot per call, so it is offered on the changes
+an agent routinely makes and watches, while an HTTP client waits on its own connection and pays for nothing it is not
+using.
+
 ## Trace agent activity
 
 Point [`tracing.endpoint`][tracing.endpoint] at an OpenTelemetry collector that accepts OTLP over HTTP:
@@ -173,6 +178,7 @@ Refresh tokens and approvals are stored in `mcp-tokens.json` under [`storage.dat
 `0600`—anyone who can write that file can pre-approve a client. Nothing else survives a restart, which is why a single
 replica is required: the file is node-local, and an unset signing key would leave each replica signing differently.
 
+[api]: api
 [authorization]: authorization
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools

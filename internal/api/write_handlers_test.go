@@ -4689,3 +4689,171 @@ func TestHandleGetServiceEndpointMode_ReadOnly(t *testing.T) {
 		t.Errorf("Allow=%q, want %q", allow, "GET, HEAD")
 	}
 }
+
+// preferTestService is the service the Prefer: wait subtests mutate: two
+// desired replicas at version 5. The fake writer hands that same version
+// back, so cluster.AwaitService has a real minVersion to gate the cache on.
+func preferTestService() swarm.Service {
+	replicas := uint64(2)
+
+	return swarm.Service{
+		ID:   "svc1",
+		Meta: swarm.Meta{Version: swarm.Version{Index: 5}},
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+			},
+		},
+	}
+}
+
+// newPreferTestRouter wires a router whose scale writer returns
+// preferTestService unchanged. When converged, the cache also holds the two
+// running tasks that service wants, so the wait settles on its very first
+// read; otherwise the cache holds none and a wait can only run out.
+//
+// Nothing here sleeps: the converged rows return immediately, and the rows
+// that must time out ask for a zero-second wait.
+func newPreferTestRouter(t testing.TB, converged bool) http.Handler {
+	t.Helper()
+
+	c := cache.New(nil)
+	c.SetService(preferTestService())
+
+	if converged {
+		for i := range 2 {
+			c.SetTask(swarm.Task{
+				ID:           fmt.Sprintf("task%d", i),
+				ServiceID:    "svc1",
+				DesiredState: swarm.TaskStateRunning,
+				Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+			})
+		}
+	}
+
+	wc := &mockWriteClient{
+		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
+			scaleServiceFn: func(context.Context, string, uint64) (swarm.Service, error) {
+				return preferTestService(), nil
+			},
+		},
+	}
+
+	return newTestRouterWithCache(t, c, withWriteClient(wc))
+}
+
+// scaleWithPrefer builds a scale request carrying the given Prefer header,
+// or none at all when prefer is empty.
+func scaleWithPrefer(prefer string) *http.Request {
+	req := httptest.NewRequest(
+		"PUT", "/services/svc1/scale", strings.NewReader(`{"replicas":2}`),
+	)
+	req.Header.Set("Accept", "application/json")
+
+	if prefer != "" {
+		req.Header.Set("Prefer", prefer)
+	}
+
+	return req
+}
+
+// TestPreferWaitOnScale covers every row of the wire-behaviour table in
+// docs/specs/2026-09-09-http-semantics-design.md, driven through the real
+// router so the middleware chain and content negotiation are in play.
+func TestPreferWaitOnScale(t *testing.T) {
+	t.Run("no Prefer header behaves exactly as before", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		newPreferTestRouter(t, false).ServeHTTP(rec, scaleWithPrefer(""))
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("Preference-Applied"); got != "" {
+			t.Errorf("Preference-Applied = %q, want empty", got)
+		}
+		if got := rec.Header().Get("Location"); got != "" {
+			t.Errorf("Location = %q, want empty", got)
+		}
+	})
+
+	t.Run("converged wait returns 200 and reports the preference", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		newPreferTestRouter(t, true).ServeHTTP(rec, scaleWithPrefer("wait=5"))
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("Preference-Applied"); got != "wait=5" {
+			t.Errorf("Preference-Applied = %q, want %q", got, "wait=5")
+		}
+	})
+
+	t.Run("timed-out wait returns 202 with the progress line", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		newPreferTestRouter(t, false).ServeHTTP(rec, scaleWithPrefer("wait=0"))
+
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("status = %d, want 202; body: %s", rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("Preference-Applied"); got != "" {
+			t.Errorf("Preference-Applied = %q, want empty on a timeout", got)
+		}
+		if got := rec.Header().Get("Location"); got != "/services/svc1" {
+			t.Errorf("Location = %q, want /services/svc1", got)
+		}
+
+		var body struct {
+			Progress string `json:"progress"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decoding body: %v", err)
+		}
+		if body.Progress == "" {
+			t.Errorf("progress = %q, want the last convergence line", body.Progress)
+		}
+	})
+
+	t.Run("a wait above the ceiling reports the clamped value", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		newPreferTestRouter(t, true).ServeHTTP(rec, scaleWithPrefer("wait=600"))
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("Preference-Applied"); got != "wait=300" {
+			t.Errorf("Preference-Applied = %q, want %q — the applied wait, not the requested one",
+				got, "wait=300")
+		}
+	})
+
+	t.Run("respond-async returns 202 with Location", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		newPreferTestRouter(t, false).ServeHTTP(rec, scaleWithPrefer("respond-async"))
+
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("status = %d, want 202; body: %s", rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("Location"); got != "/services/svc1" {
+			t.Errorf("Location = %q, want /services/svc1", got)
+		}
+		if got := rec.Header().Get("Preference-Applied"); got != "respond-async" {
+			t.Errorf("Preference-Applied = %q, want %q", got, "respond-async")
+		}
+	})
+
+	t.Run("respond-async with a wait still returns 202", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		newPreferTestRouter(t, true).ServeHTTP(rec, scaleWithPrefer("respond-async, wait=10"))
+
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("status = %d, want 202; body: %s", rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("Location"); got != "/services/svc1" {
+			t.Errorf("Location = %q, want /services/svc1", got)
+		}
+		if got := rec.Header().Get("Preference-Applied"); got != "respond-async" {
+			t.Errorf("Preference-Applied = %q, want %q", got, "respond-async")
+		}
+	})
+}

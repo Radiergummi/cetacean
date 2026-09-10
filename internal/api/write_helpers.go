@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
@@ -16,6 +18,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // lookupOr404 resolves a resource from the cache by key. Returns false (and
@@ -173,18 +176,109 @@ func writeMutation[T any](
 }
 
 // writeServiceMutation calls a service writer function and writes the standard
-// service detail response.
-func writeServiceMutation(
+// service detail response, honouring the RFC 7240 wait and respond-async
+// preferences on the way.
+//
+// It spells out what writeMutation does rather than calling it, because the
+// preference handling sits between the write and the response: a wait that
+// runs out answers 202 instead, and threading that back through
+// writeMutation's single response callback would take a sentinel error.
+func (h *Handlers) writeServiceMutation(
 	w http.ResponseWriter,
 	r *http.Request,
 	id string,
 	fn func() (swarm.Service, error),
 ) {
-	writeMutation(w, r, "service", id, "SVC001", func(svc swarm.Service) DetailResponse {
-		return NewDetailResponse(r.Context(), "/services/"+id, "Service", ServiceResponse{
-			Service: svc,
-		})
-	}, fn)
+	svc, err := fn()
+	if err != nil {
+		writeResourceError(w, r, err, "service", id, "SVC001")
+		return
+	}
+
+	if h.awaitPreferred(w, r, id, svc) {
+		return
+	}
+
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(), "/services/"+id, "Service", ServiceResponse{Service: svc},
+	))
+}
+
+// awaitPreferred applies the RFC 7240 wait and respond-async preferences to a
+// service mutation Docker has already accepted, and reports whether it wrote
+// the response itself.
+//
+// The version to converge to comes from the service the write returned, not
+// from the cache: docker.Client ends every service write with a fresh
+// InspectService, while the cache is filled asynchronously by the watcher, so
+// reading the version back off it is a race.
+//
+// The request context is passed through as given. A client that hangs up
+// should cancel its own wait — MCP's detached context is a workaround for
+// mcp-go running tasks on an already-cancelled request, and copying it here
+// would keep a five-minute goroutine alive per abandoned request.
+func (h *Handlers) awaitPreferred(
+	w http.ResponseWriter,
+	r *http.Request,
+	id string,
+	svc swarm.Service,
+) bool {
+	// id addresses the response — the same path the 200 identifies itself
+	// by, so the two cannot name one service differently. svc.ID addresses
+	// the cache, which is keyed by ID and by nothing else.
+	wait, wanted := preferWait(r)
+	async := preferRespondAsync(r)
+
+	if !wanted && !async {
+		return false
+	}
+
+	var (
+		progress string
+		err      error
+	)
+
+	if wanted {
+		progress, err = cluster.AwaitService(
+			r.Context(), h.cache, svc.ID, svc.Version.Index,
+			cluster.ConvergencePollInterval, wait,
+		)
+	}
+
+	// A synchronous wait that settled renders the normal response. The value
+	// reported back is the wait actually applied, which preferWait may have
+	// clamped to the server ceiling — RFC 7240 §2 asks for what was applied,
+	// not for what was asked.
+	if wanted && !async && err == nil {
+		w.Header().Set(
+			"Preference-Applied",
+			"wait="+strconv.FormatInt(int64(wait/time.Second), 10),
+		)
+
+		return false
+	}
+
+	// Location points at the service itself rather than at a task resource:
+	// its UpdateStatus reports convergence there, with a per-resource SSE
+	// stream beside it (RFC 7240 §4.1 asks only for somewhere to obtain
+	// status).
+	w.Header().Set("Location", absPath(r.Context(), "/services/"+id))
+
+	if async {
+		w.Header().Set("Preference-Applied", "respond-async")
+	}
+
+	// writeJSONStatus rather than writeCachedJSONStatus: this is the
+	// no-store mutation response the 200 path writes, at a different status.
+	// An ETag on it would invite a 304 on a write that did happen.
+	writeJSONStatus(w, http.StatusAccepted, NewDetailResponse(
+		r.Context(), "/services/"+id, "Service", AcceptedServiceResponse{
+			Service:  svc,
+			Progress: progress,
+		},
+	))
+
+	return true
 }
 
 // writeNodeMutation calls a node writer function and writes the standard

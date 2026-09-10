@@ -29,6 +29,21 @@ type ServiceResponse struct {
 	Integrations []any         `json:"integrations,omitempty"`
 }
 
+// AcceptedServiceResponse is the extra payload for the 202 a service
+// mutation answers when the caller asked to wait and the cluster has not
+// settled yet (RFC 7240 wait / respond-async). It carries the same service
+// the 200 would, plus the last convergence line the wait observed, so a
+// caller told "not yet" is also told how far the rollout got.
+//
+// It repeats ServiceResponse's service field rather than embedding it:
+// goccy/go-json v0.10.6 segfaults marshalling an embedded ServiceResponse.
+// Nothing is lost by the repetition — the mutation path never populates
+// ServiceResponse's changes or integrations.
+type AcceptedServiceResponse struct {
+	Service  swarm.Service `json:"service"`
+	Progress string        `json:"progress,omitempty"`
+}
+
 // TaskResponse is the extra payload for GET /tasks/{id}.
 type TaskResponse struct {
 	Task    EnrichedTask   `json:"task"`

@@ -35,7 +35,7 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("scaling service", "service", id, "replicas", *req.Replicas)
 
-	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.ScaleService(r.Context(), id, *req.Replicas)
 	})
 }
@@ -103,7 +103,7 @@ func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Reques
 
 	slog.Info("updating service mode", "service", id, "mode", req.Mode)
 
-	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.UpdateServiceMode(r.Context(), id, mode)
 	})
 }
@@ -136,7 +136,7 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 
 	slog.Info("updating service endpoint mode", "service", id, "mode", req.Mode)
 
-	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.UpdateServiceEndpointMode(r.Context(), id, mode)
 	})
 }
@@ -158,7 +158,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 
 	slog.Info("updating service image", "service", id, "image", req.Image)
 
-	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.UpdateServiceImage(r.Context(), id, req.Image)
 	})
 }
@@ -177,7 +177,7 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 
 	slog.Info("rolling back service", "service", id)
 
-	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.RollbackService(r.Context(), id)
 	})
 }
@@ -201,7 +201,7 @@ func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) 
 
 	slog.Info("restarting service", "service", id)
 
-	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.RestartService(r.Context(), id)
 	})
 }
