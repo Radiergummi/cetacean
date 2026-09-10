@@ -1648,6 +1648,7 @@ paths:
             type: boolean
             default: false
           example: false
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Plugin removed
@@ -1655,6 +1656,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /plugins/{name}/enable:
     post:
@@ -1968,6 +1971,7 @@ paths:
             type: boolean
             default: false
           example: false
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Node removed
@@ -1977,6 +1981,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /nodes/{id}/tasks:
     get:
@@ -2127,6 +2133,7 @@ paths:
         Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2171,6 +2178,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -2219,6 +2228,7 @@ paths:
       description: Promotes or demotes a node. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2257,6 +2267,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   # ── Services ─────────────────────────────────────────────────────────
 
@@ -2413,6 +2425,7 @@ paths:
       description: Removes a service from the swarm. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Service removed
@@ -2420,6 +2433,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/tasks:
     get:
@@ -2730,6 +2745,7 @@ paths:
         `application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2776,6 +2792,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -2815,6 +2833,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2846,6 +2865,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -2883,6 +2904,7 @@ paths:
       description: Replaces the placement constraints and preferences for the service.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2914,6 +2936,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/ports:
     get:
@@ -2947,6 +2971,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2978,6 +3003,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3017,6 +3044,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3048,6 +3076,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3087,6 +3117,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3118,6 +3149,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3153,6 +3186,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3180,6 +3214,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3221,6 +3257,7 @@ paths:
         Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3267,6 +3304,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3305,6 +3344,7 @@ paths:
       description: Replaces the healthcheck configuration for the service. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3339,6 +3379,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
     patch:
       operationId: patchServiceHealthcheck
       x-badges:
@@ -3352,6 +3394,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3383,6 +3426,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3428,6 +3473,7 @@ paths:
       description: Replaces the config references for the service. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3481,6 +3527,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/secrets:
     get:
@@ -3524,6 +3572,7 @@ paths:
       description: Replaces the secret references for the service. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3577,6 +3626,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/networks:
     get:
@@ -3620,6 +3671,7 @@ paths:
       description: Replaces the network attachments for the service. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3672,6 +3724,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/mounts:
     get:
@@ -3709,6 +3763,7 @@ paths:
       description: Replaces the mount configuration for the service. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3751,6 +3806,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/container-config:
     get:
@@ -3810,6 +3867,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3842,6 +3900,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3896,6 +3956,7 @@ paths:
         For replicated mode, specify the initial replica count. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3932,6 +3993,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/endpoint-mode:
     get:
@@ -3978,6 +4041,7 @@ paths:
         Changes the service endpoint mode between vip and dnsrr. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -4010,6 +4074,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   # ── Tasks ────────────────────────────────────────────────────────────
 
@@ -4158,11 +4224,14 @@ paths:
         Only works on tasks whose containers are still accessible on the node.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Task removed
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /tasks/{id}/logs:
     get:
@@ -4461,6 +4530,7 @@ paths:
           schema:
             type: string
           example: myapp
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "200":
           description: Stack removal initiated
@@ -4483,6 +4553,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   # ── Configs ──────────────────────────────────────────────────────────
 
@@ -4663,6 +4735,7 @@ paths:
       description: Removes a config from the swarm. Fails if the config is in use by a service. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Config removed
@@ -4672,6 +4745,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /configs/{id}/labels:
     get:
@@ -4710,6 +4785,7 @@ paths:
         Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -4754,6 +4830,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -4935,6 +5013,7 @@ paths:
       description: Removes a secret from the swarm. Fails if the secret is in use by a service. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Secret removed
@@ -4944,6 +5023,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /secrets/{id}/labels:
     get:
@@ -4982,6 +5063,7 @@ paths:
         Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -5027,6 +5109,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -5153,6 +5237,7 @@ paths:
       description: Removes a network from the swarm. Fails if services are still attached. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Network removed
@@ -5162,6 +5247,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   # ── Volumes ──────────────────────────────────────────────────────────
 
@@ -5303,6 +5390,7 @@ paths:
             type: boolean
             default: false
           example: false
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Volume removed
@@ -5312,6 +5400,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   # ── Search ───────────────────────────────────────────────────────────
 
@@ -5506,6 +5596,18 @@ components:
       schema:
         type: string
       example: qz7k3v9xm2p4
+
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      schema:
+        type: string
+      description: >
+        Optional RFC 9110 precondition. Supply the ETag from a GET on this
+        same path; the write is refused with 412 if the resource has
+        changed since. Omitting the header skips the check.
+      example: '"a1b2c3d4e5f6a1b2"'
 
     search:
       name: search
@@ -5732,6 +5834,21 @@ components:
             title: Invalid Request Body
             status: 415
             detail: "PATCH requires Content-Type: application/json-patch+json or application/merge-patch+json"
+            instance: /services/r8m2x5nk3p7q/env
+            requestId: req_a1b2c3d4e5f6
+
+    PreconditionFailed:
+      description: The If-Match precondition failed — the resource has changed since the supplied ETag was read
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            "@context": /api/context.jsonld
+            type: /api/errors/API013
+            title: Precondition Failed
+            status: 412
+            detail: If-Match did not match the current state of the resource
             instance: /services/r8m2x5nk3p7q/env
             requestId: req_a1b2c3d4e5f6
 

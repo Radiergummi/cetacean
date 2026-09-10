@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Write operations accept an optional `If-Match` header, so a change can be refused with 412 if the resource was modified since you read it — useful for scripts and automation that shouldn't clobber someone else's concurrent edit. The header is entirely optional and every existing write keeps working unchanged if you don't send it
 - `server.public_url` sets the canonical external URL once, supplying the OAuth issuer for the MCP server and the OIDC redirect URL instead of configuring each separately
 - The documentation site now carries an error reference: every code the API can return, with its HTTP status, what it means and how to resolve it, grouped by domain. A `type` URI out of an error response — `/api/errors/SVC001` — previously led somewhere only a running Cetacean could answer. The page is generated from the server's own catalog at build time, so it cannot fall behind it. Links into the references also now show what they point at, so a setting, an error code, a schema type and an MCP tool are distinguishable before you follow them
 

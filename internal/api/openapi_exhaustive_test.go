@@ -217,3 +217,243 @@ func resolvePath(template string) (string, bool) {
 
 	return template, false
 }
+
+// writeEndpointCheck is one non-GET spec operation exercised by the
+// behavioural half of TestEveryWriteEndpointDocumentsPreconditions: the spec
+// path template it proves coverage for, and the concrete request that drives
+// it against newSeededTestRouter.
+type writeEndpointCheck struct {
+	method      string
+	template    string
+	path        string
+	body        string
+	contentType string
+}
+
+// resourceIDPlaceholder maps each ID newSeededTestRouter's fixture uses to
+// the OpenAPI path parameter it fills. specTemplate uses it to turn a
+// pairedEndpoints concrete path back into the spec's template, so the 30
+// precondition-carrying rows don't have to be retyped here.
+var resourceIDPlaceholder = map[string]string{
+	"svc1":      "{id}",
+	"node1":     "{id}",
+	"cfg1":      "{id}",
+	"sec1":      "{id}",
+	"net1":      "{id}",
+	"task1":     "{id}",
+	"vol1":      "{name}",
+	"plug1":     "{name}",
+	seededStack: "{name}",
+}
+
+// specTemplate turns a concrete fixture path (as used in pairedEndpoints)
+// back into the OpenAPI path template it was resolved from.
+func specTemplate(concretePath string) string {
+	segments := strings.Split(concretePath, "/")
+	for i, segment := range segments {
+		if placeholder, ok := resourceIDPlaceholder[segment]; ok {
+			segments[i] = placeholder
+		}
+	}
+	return strings.Join(segments, "/")
+}
+
+// preconditionedWriteEndpointChecks adapts pairedEndpoints (Task 7's table of
+// every route that got an If-Match wrapper) into writeEndpointChecks, so this
+// test's behavioural pass proves presence of a precondition from the very
+// same rows that prove it round-trips, rather than a second hand-kept list.
+func preconditionedWriteEndpointChecks() []writeEndpointCheck {
+	checks := make([]writeEndpointCheck, 0, len(pairedEndpoints))
+	for _, e := range pairedEndpoints {
+		checks = append(checks, writeEndpointCheck{
+			method:      e.writeMethod,
+			template:    specTemplate(e.writePath),
+			path:        e.writePath,
+			body:        e.body,
+			contentType: e.contentType,
+		})
+	}
+	return checks
+}
+
+// unpreconditionedWriteEndpointChecks drives every non-GET spec operation
+// that carries no If-Match precondition, so the behavioural pass can prove
+// absence as confidently as presence: a route that grows a precondition
+// without documenting it must fail here exactly as a documented precondition
+// missing its h.precond wrapper fails in preconditionedWriteEndpointChecks.
+//
+// Several of these reach a nil or under-stubbed backend
+// (newSeededTestRouter's h.systemClient is nil; its plugin/write clients
+// stub only what pairedEndpoints needs) and answer with a plain error
+// rather than success. That's fine — only h.precond ever answers 412, and
+// none of these routes carry it, so any non-412 status proves the point.
+var unpreconditionedWriteEndpointChecks = []writeEndpointCheck{
+	{"POST", "/configs", "/configs",
+		`{"name":"cfg2","data":"aGVsbG8="}`, "application/json"},
+	{"POST", "/secrets", "/secrets",
+		`{"name":"sec2","data":"aHVudGVyMg=="}`, "application/json"},
+	{"PUT", "/nodes/{id}/availability", "/nodes/node1/availability",
+		`{"availability":"drain"}`, "application/json"},
+	{"PUT", "/services/{id}/scale", "/services/svc1/scale",
+		`{"replicas":3}`, "application/json"},
+	{"PUT", "/services/{id}/image", "/services/svc1/image",
+		`{"image":"nginx:1.28"}`, "application/json"},
+	{"POST", "/services/{id}/rollback", "/services/svc1/rollback", "", ""},
+	{"POST", "/services/{id}/restart", "/services/svc1/restart", "", ""},
+	{"POST", "/plugins", "/plugins",
+		`{"remote":"registry.example.com/plugin:latest"}`, "application/json"},
+	{"POST", "/plugins/privileges", "/plugins/privileges",
+		`{"remote":"registry.example.com/plugin:latest"}`, "application/json"},
+	{"POST", "/plugins/{name}/enable", "/plugins/plug1/enable", "", ""},
+	{"POST", "/plugins/{name}/disable", "/plugins/plug1/disable", "", ""},
+	{"POST", "/plugins/{name}/upgrade", "/plugins/plug1/upgrade",
+		`{"remote":"registry.example.com/plugin:v2"}`, "application/json"},
+	{"PATCH", "/plugins/{name}/settings", "/plugins/plug1/settings",
+		`{"args":["FOO=bar"]}`, "application/json"},
+	{"PATCH", "/swarm/orchestration", "/swarm/orchestration",
+		`{}`, "application/merge-patch+json"},
+	{"PATCH", "/swarm/raft", "/swarm/raft",
+		`{}`, "application/merge-patch+json"},
+	{"PATCH", "/swarm/dispatcher", "/swarm/dispatcher",
+		`{}`, "application/merge-patch+json"},
+	{"PATCH", "/swarm/ca", "/swarm/ca",
+		`{}`, "application/merge-patch+json"},
+	{"PATCH", "/swarm/encryption", "/swarm/encryption",
+		`{}`, "application/merge-patch+json"},
+	{"POST", "/swarm/rotate-token", "/swarm/rotate-token",
+		`{"target":"worker"}`, "application/json"},
+	{"POST", "/swarm/rotate-unlock-key", "/swarm/rotate-unlock-key", "", ""},
+	{"POST", "/swarm/force-rotate-ca", "/swarm/force-rotate-ca", "", ""},
+	{"POST", "/swarm/unlock", "/swarm/unlock",
+		`{"unlockKey":"SWMKEY-x"}`, "application/json"},
+}
+
+// writeEndpointChecksExcluded lists spec operations the behavioural pass
+// cannot drive, with the reason, so a gap in coverage is a documented
+// decision rather than a silent skip. Nothing here carries a precondition
+// (see the coverage assertion below, which fails loudly if that ever
+// changes without a driver being added).
+var writeEndpointChecksExcluded = map[string]string{
+	"POST /auth/logout": "session endpoint, not a cluster resource with " +
+		"a representation for If-Match to compare against. The NoneProvider " +
+		"newSeededTestRouter uses doesn't register it (only OIDCProvider " +
+		"does), so no router path reaches the real handler to exercise here " +
+		"— it falls through to the SPA handler instead.",
+}
+
+// TestEveryWriteEndpointDocumentsPreconditions holds the OpenAPI spec and the
+// router together in both directions.
+//
+// The spec-internal pass checks every non-GET operation documents a 412
+// response iff it documents an If-Match parameter — catching half-documented
+// endpoints where one was added without the other.
+//
+// The behavioural pass then drives every non-GET spec operation (via
+// preconditionedWriteEndpointChecks and unpreconditionedWriteEndpointChecks,
+// together covering every non-GET operation except those explicitly listed
+// in writeEndpointChecksExcluded) against newSeededTestRouter with a bogus
+// If-Match, and requires 412 exactly when that operation's spec entry
+// documents the precondition. This is what actually couples the spec to the
+// router: the spec-internal pass alone would pass trivially if the spec
+// documented zero preconditions while the router enforced thirty of them, or
+// the reverse. A route that gains a precondition without documenting it
+// fails here (got 412, spec says no), and a documented precondition on a
+// route that has none fails too (spec says yes, got something else).
+//
+// It does not validate the shape of a 412 response body against the spec's
+// schema — TestEveryReadEndpointMatchesSpec and TestResponsesMatchOpenAPISpec
+// cover response-schema conformance, and neither exercises non-GET error
+// bodies. Coverage here depends on the two check tables staying exhaustive:
+// a new write endpoint added to the spec without a corresponding row in one
+// of them, or in writeEndpointChecksExcluded, fails the coverage assertion
+// at the end rather than being silently skipped.
+func TestEveryWriteEndpointDocumentsPreconditions(t *testing.T) {
+	_, doc, _ := loadTestSpec(t)
+
+	documented := map[string]bool{}
+
+	for path, item := range doc.Paths.Map() {
+		for method, op := range item.Operations() {
+			if method == http.MethodGet || method == http.MethodHead {
+				continue
+			}
+
+			_, has412 := op.Responses.Map()["412"]
+			hasIfMatch := false
+			for _, p := range op.Parameters {
+				if p.Value != nil && p.Value.Name == "If-Match" {
+					hasIfMatch = true
+					break
+				}
+			}
+
+			if has412 != hasIfMatch {
+				t.Errorf("%s %s: documents 412=%v but If-Match=%v — both or neither",
+					method, path, has412, hasIfMatch)
+			}
+
+			documented[method+" "+path] = has412
+		}
+	}
+
+	router := newSeededTestRouter(t)
+
+	checks := append(preconditionedWriteEndpointChecks(), unpreconditionedWriteEndpointChecks...)
+	seen := map[string]bool{}
+
+	for _, c := range checks {
+		key := c.method + " " + c.template
+		seen[key] = true
+
+		wantDoc, ok := documented[key]
+		if !ok {
+			t.Errorf(
+				"%s: not present in the OpenAPI spec — remove this row or fix the template",
+				key,
+			)
+			continue
+		}
+
+		t.Run(key, func(t *testing.T) {
+			var body io.Reader
+			if c.body != "" {
+				body = strings.NewReader(c.body)
+			}
+
+			req := httptest.NewRequest(c.method, c.path, body)
+			req.Header.Set("If-Match", `"bogus-etag"`)
+			req.Header.Set("Accept", "application/json")
+			if c.contentType != "" {
+				req.Header.Set("Content-Type", c.contentType)
+			}
+
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			got412 := rec.Code == http.StatusPreconditionFailed
+			if got412 != wantDoc {
+				t.Errorf(
+					"%s %s = %d (412=%v), want documented=%v; body: %s",
+					c.method, c.path, rec.Code, got412, wantDoc, rec.Body.String(),
+				)
+			}
+		})
+	}
+
+	for key, hasPrecond := range documented {
+		if seen[key] {
+			continue
+		}
+		if reason, ok := writeEndpointChecksExcluded[key]; ok {
+			t.Logf("skipping %s: %s", key, reason)
+			continue
+		}
+		t.Errorf(
+			"%s: no driver in this test's check tables — add one to "+
+				"preconditionedWriteEndpointChecks/unpreconditionedWriteEndpointChecks "+
+				"(or writeEndpointChecksExcluded with a reason) so the behavioural pass "+
+				"can prove its precondition state (documented=%v)",
+			key, hasPrecond,
+		)
+	}
+}

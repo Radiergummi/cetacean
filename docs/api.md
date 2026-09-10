@@ -500,6 +500,40 @@ passes the per-resource [ACL][authorization] write check.
 > [!NOTE]
 > `GET /swarm/unlock-key` returns a credential, so it is gated at level 3 like the writes beside it.
 
+### Preconditions
+
+Every write endpoint whose exact path also serves a `GET` accepts an optional `If-Match` request
+header ([RFC 9110 §13.1.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1)). Supply the
+`ETag` a `GET` on that same path returned; if the resource has changed since, the write is
+refused with `412 Precondition Failed` (error code `API013`) instead of being applied. The header
+is always optional — omit it and the write proceeds exactly as it did before this existed.
+
+29 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
+`PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
+`PUT /services/{id}/placement`, `PATCH /services/{id}/ports`,
+`PATCH /services/{id}/update-policy`, `PATCH /services/{id}/rollback-policy`,
+`PATCH /services/{id}/log-driver`, `PATCH /services/{id}/configs`,
+`PATCH /services/{id}/secrets`, `PATCH /services/{id}/networks`,
+`PATCH /services/{id}/mounts`, `PATCH /services/{id}/container-config`,
+`PUT /services/{id}/mode`, `PUT /services/{id}/endpoint-mode`, `DELETE /services/{id}`,
+`PATCH /nodes/{id}/labels`, `PUT /nodes/{id}/role`, `DELETE /nodes/{id}`,
+`PATCH /configs/{id}/labels`, `DELETE /configs/{id}`, `PATCH /secrets/{id}/labels`,
+`DELETE /secrets/{id}`, `DELETE /networks/{id}`, `DELETE /volumes/{name}`,
+`DELETE /tasks/{id}`, `DELETE /stacks/{name}`, `DELETE /plugins/{name}`.
+
+23 do not. Most of these are action-style endpoints with no `GET` at that exact path to compare
+an `ETag` against: `PUT /services/{id}/scale`, `PUT /services/{id}/image`,
+`POST /services/{id}/restart`, `POST /services/{id}/rollback`, `PUT /nodes/{id}/availability`,
+`POST /plugins/{name}/enable`, `POST /plugins/{name}/disable`, `POST /plugins/{name}/upgrade`,
+`PATCH /plugins/{name}/settings`, `POST /plugins/privileges`, `PATCH /swarm/ca`,
+`PATCH /swarm/dispatcher`, `PATCH /swarm/encryption`, `PATCH /swarm/orchestration`,
+`PATCH /swarm/raft`, `POST /swarm/rotate-token`, `POST /swarm/rotate-unlock-key`,
+`POST /swarm/force-rotate-ca`, `POST /swarm/unlock`, and `POST /auth/logout`. The remaining
+three — `POST /configs`, `POST /secrets`, `POST /plugins` — are deliberately excluded for a
+different reason: their nearest `GET` is the collection listing, and its `ETag` turns over on any
+member change, which would make "create only if the collection is unchanged" a precondition
+almost nothing could ever satisfy.
+
 ## MCP server
 
 Cetacean can also serve its cluster view over the Model Context Protocol. Set [`mcp.enabled`][mcp.enabled] to
