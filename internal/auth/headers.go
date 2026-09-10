@@ -11,22 +11,21 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// maxSubjectLen caps the subject header value to prevent abuse via
-// extremely long headers that could bloat logs, sessions, or storage.
+// maxSubjectLen caps the subject header value, so an over-long one cannot
+// bloat logs, sessions or storage.
 const maxSubjectLen = 256
 
 // HeadersProvider authenticates requests using trusted proxy headers.
 type HeadersProvider struct {
 	cfg config.HeadersConfig
 
-	// extraHeaders are additional header names whose values are captured
-	// into Identity.Raw. Used to pass the ACL grants header through to
-	// the grant source.
+	// extraHeaders are header names whose values are captured into
+	// Identity.Raw, which is how the ACL grants header reaches its source.
 	extraHeaders []string
 }
 
-// NewHeadersProvider creates a new HeadersProvider with the given configuration.
-// Extra header names are captured into Identity.Raw for use by grant sources.
+// NewHeadersProvider creates a HeadersProvider. Extra header names are
+// captured into Identity.Raw for grant sources.
 func NewHeadersProvider(cfg config.HeadersConfig, extraHeaders ...string) *HeadersProvider {
 	return &HeadersProvider{cfg: cfg, extraHeaders: extraHeaders}
 }
@@ -42,7 +41,6 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 		return nil, errors.New("request did not arrive through a trusted proxy")
 	}
 
-	// Check shared secret (constant-time).
 	if p.cfg.SecretHeader != "" {
 		got := []byte(r.Header.Get(p.cfg.SecretHeader))
 		want := []byte(p.cfg.SecretValue)
@@ -101,8 +99,7 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 
 func (p *HeadersProvider) RegisterRoutes(_ *http.ServeMux) {}
 
-// validateSubject checks the subject header value for sanity: non-empty,
-// no control characters, and within length limits.
+// validateSubject rejects an empty, over-long, or control-character subject.
 func validateSubject(s string) error {
 	if s == "" {
 		return errors.New("empty value")
