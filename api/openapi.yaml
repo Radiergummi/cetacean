@@ -5634,14 +5634,16 @@ components:
       schema:
         type: string
       description: >
-        Optional RFC 7240 preferences, comma-separated. `wait=<seconds>` holds
-        the response until the cluster has settled on the change, up to a
-        server ceiling of 300 seconds; the response then carries
-        `Preference-Applied: wait=<seconds>` reporting the wait actually
-        applied. A wait that runs out answers 202 with the last progress line
-        and no `Preference-Applied`. `respond-async` answers 202 immediately.
-        `return=minimal` answers 204 with no body. Omitting the header leaves
-        the endpoint's behaviour unchanged.
+        Optional RFC 7240 convergence preferences, comma-separated.
+        `wait=<seconds>` holds the response until the cluster has settled on
+        the change, up to a server ceiling of 300 seconds; the response then
+        carries `Preference-Applied: wait=<seconds>` reporting the wait
+        actually applied. A wait that runs out answers 202 with the last
+        progress line and no `Preference-Applied`. `respond-async` answers 202
+        immediately. Omitting the header leaves the endpoint's behaviour
+        unchanged. The unrelated `return=minimal` preference is honoured on
+        every write endpoint, this one included, and is not documented per
+        endpoint.
       example: wait=30
 
     search:

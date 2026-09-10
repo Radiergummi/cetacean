@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -4737,6 +4738,11 @@ func newPreferTestRouter(t testing.TB, converged bool) http.Handler {
 			scaleServiceFn: func(context.Context, string, uint64) (swarm.Service, error) {
 				return preferTestService(), nil
 			},
+			updateServiceModeFn: func(
+				context.Context, string, swarm.ServiceMode,
+			) (swarm.Service, error) {
+				return preferTestService(), nil
+			},
 		},
 	}
 
@@ -4856,4 +4862,65 @@ func TestPreferWaitOnScale(t *testing.T) {
 			t.Errorf("Preference-Applied = %q, want %q", got, "respond-async")
 		}
 	})
+
+	t.Run("return=minimal with a wait waits, then answers 204", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		newPreferTestRouter(t, true).ServeHTTP(rec, scaleWithPrefer("return=minimal, wait=5"))
+
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want 204; body: %s", rec.Code, rec.Body.String())
+		}
+		if rec.Body.Len() != 0 {
+			t.Errorf("body = %q, want empty", rec.Body.String())
+		}
+
+		// Both preferences were honoured, so both are named. RFC 7240 §3
+		// makes Preference-Applied list-valued, which is why the wait set
+		// here survives writePreferMinimal adding its own token.
+		applied := rec.Header().Values("Preference-Applied")
+		if !slices.Contains(applied, "wait=5") || !slices.Contains(applied, "return=minimal") {
+			t.Errorf("Preference-Applied = %q, want both %q and %q",
+				applied, "wait=5", "return=minimal")
+		}
+	})
+}
+
+// TestPreferWaitWithIfMatch pins the one seam where preconditions and
+// preferences meet: PUT /services/{id}/mode and /endpoint-mode are the only
+// endpoints carrying both. The precondition wrapper runs before the handler,
+// so a matching If-Match should leave the wait to behave exactly as it does
+// without one.
+func TestPreferWaitWithIfMatch(t *testing.T) {
+	router := newPreferTestRouter(t, true)
+
+	read := httptest.NewRequest("GET", "/services/svc1/mode", nil)
+	read.Header.Set("Accept", "application/json")
+	readRec := httptest.NewRecorder()
+	router.ServeHTTP(readRec, read)
+
+	if readRec.Code != http.StatusOK {
+		t.Fatalf("reading the mode: status = %d, want 200", readRec.Code)
+	}
+
+	etag := readRec.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("reading the mode: no ETag to precondition on")
+	}
+
+	write := httptest.NewRequest(
+		"PUT", "/services/svc1/mode", strings.NewReader(`{"mode":"replicated","replicas":2}`),
+	)
+	write.Header.Set("Accept", "application/json")
+	write.Header.Set("Content-Type", "application/json")
+	write.Header.Set("If-Match", etag)
+	write.Header.Set("Prefer", "wait=5")
+	writeRec := httptest.NewRecorder()
+	router.ServeHTTP(writeRec, write)
+
+	if writeRec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", writeRec.Code, writeRec.Body.String())
+	}
+	if got := writeRec.Header().Get("Preference-Applied"); got != "wait=5" {
+		t.Errorf("Preference-Applied = %q, want %q", got, "wait=5")
+	}
 }

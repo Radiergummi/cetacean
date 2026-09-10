@@ -67,8 +67,15 @@ func preferRespondAsync(r *http.Request) bool {
 // writePreferMinimal sends a 204 No Content response with the
 // Preference-Applied header confirming the server honored the
 // return=minimal preference (RFC 7240 §3).
+//
+// It adds rather than sets, because Preference-Applied is a list-valued
+// field: repeated field lines are equivalent to one comma-joined value, and
+// a request may have had more than one preference honoured. A service
+// mutation carrying "return=minimal, wait=30" waits first — awaitPreferred
+// reports the wait it applied — and setting here would clobber that, naming
+// one of the two preferences the server actually honoured.
 func writePreferMinimal(w http.ResponseWriter) {
-	w.Header().Set("Preference-Applied", "return=minimal")
+	w.Header().Add("Preference-Applied", "return=minimal")
 	w.WriteHeader(http.StatusNoContent)
 }
 

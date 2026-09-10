@@ -302,7 +302,7 @@ curl -X PUT http://localhost:9000/services/abc123/scale \
 | `wait=600` | clamped to the 300 second ceiling; `Preference-Applied: wait=300` reports the wait applied |
 | `respond-async` | `202` straight away, plus `Location` and `Preference-Applied: respond-async` |
 | `respond-async, wait=10` | waits up to 10 seconds, then `202` with `Location` |
-| `return=minimal, wait=30` | waits, then `204` |
+| `return=minimal, wait=30` | waits, then `204`; `Preference-Applied` names both preferences |
 
 A `202` carries `Location` pointing at the service itself, which is where the rollout can be followed: its
 `UpdateStatus` reports convergence, and the same URL opens a [live stream](#real-time-events) with

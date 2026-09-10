@@ -35,9 +35,18 @@ type ServiceResponse struct {
 // the 200 would, plus the last convergence line the wait observed, so a
 // caller told "not yet" is also told how far the rollout got.
 //
-// It repeats ServiceResponse's service field rather than embedding it:
-// goccy/go-json v0.10.6 segfaults marshalling an embedded ServiceResponse.
-// Nothing is lost by the repetition — the mutation path never populates
+// It repeats ServiceResponse's service field rather than embedding it, and
+// must keep doing so: goccy/go-json v0.10.6 SIGSEGVs marshalling an
+// embedded struct that carries both a large nested struct (swarm.Service)
+// and a nil omitempty slice (ServiceResponse's integrations), when the
+// outer struct has at least one sibling field of its own (progress).
+// Reproduced against the library alone, with none of our code involved.
+//
+// Tidying this back into an embedded form reintroduces a crash that lands
+// *after* the 202 status line is written, so the recovery middleware can
+// only append an error body to a response already committed as a success —
+// the caller sees a 202 with a garbled body rather than a 500. Nothing is
+// lost by the repetition: the mutation path never populates
 // ServiceResponse's changes or integrations.
 type AcceptedServiceResponse struct {
 	Service  swarm.Service `json:"service"`
