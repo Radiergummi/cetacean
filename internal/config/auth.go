@@ -385,3 +385,21 @@ func defaultRedirectURL(publicURL, basePath string) string {
 
 	return publicURL + basePath + "/auth/callback"
 }
+
+// ValidateCertMode reports whether cert auth mode can serve.
+//
+// Identity comes from a client certificate, which reaches Cetacean one of two
+// ways: presented on a TLS connection it terminates itself, or forwarded in
+// the RFC 9440 Client-Cert header by a proxy that terminated TLS instead. The
+// second is believed only from a trusted proxy, so one of the two settings
+// must be present — with neither, no request can ever authenticate.
+func ValidateCertMode(tlsEnabled bool, trustedProxies []netip.Prefix) error {
+	if tlsEnabled || len(trustedProxies) > 0 {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"cert auth mode requires either tls.cert and tls.key, to terminate TLS here, " +
+			"or server.trusted_proxies, to accept a Client-Cert header from a proxy that terminates it",
+	)
+}

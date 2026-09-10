@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -649,5 +650,31 @@ func TestOIDCStillRequiresRedirectURLWithoutPublicURL(t *testing.T) {
 
 	if _, err := LoadAuth(nil, nil, "", ""); err == nil {
 		t.Fatal("LoadAuth = nil error, want the existing 'oidc mode requires' rejection")
+	}
+}
+
+func TestValidateCertMode(t *testing.T) {
+	proxies := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
+
+	tests := []struct {
+		name           string
+		tlsEnabled     bool
+		trustedProxies []netip.Prefix
+		wantErr        bool
+	}{
+		{"TLS terminated here", true, nil, false},
+		{"TLS terminated by a trusted proxy", false, proxies, false},
+		{"both", true, proxies, false},
+		{"neither, so no certificate can ever arrive", false, nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateCertMode(tt.tlsEnabled, tt.trustedProxies)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateCertMode(%v, %v) = %v, wantErr = %v",
+					tt.tlsEnabled, tt.trustedProxies, err, tt.wantErr)
+			}
+		})
 	}
 }

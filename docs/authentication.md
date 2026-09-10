@@ -307,8 +307,7 @@ Groups from multiple matching grants are merged and deduplicated. Malformed capa
 
 Authenticates with [mTLS](https://en.wikipedia.org/wiki/Mutual_authentication#mTLS) client certificates. Standard
 [X.509](https://www.rfc-editor.org/rfc/rfc5280) certificates and [SPIFFE](https://spiffe.io/) X.509-SVIDs both
-work. Requires TLS termination at Cetacean, so this mode cannot sit behind a TLS-terminating proxy. See [client
-certificate configuration][client-certificates] for the CA setting.
+work. See [client certificate configuration][client-certificates] for the CA setting.
 
 ```yaml
 environment:
@@ -325,6 +324,28 @@ secrets:
 Clients without a certificate signed by that CA cannot connect. Identity comes from the SPIFFE URI SAN, else the
 Common Name, else the first email SAN—a certificate carrying none of the three is rejected, as is one carrying
 more than one SPIFFE SAN. Groups come from Organizational Unit (OU) fields.
+
+### Behind a TLS-terminating proxy
+
+Cetacean does not have to terminate TLS itself. A proxy that does can forward the certificate it verified in the
+[`Client-Cert`](https://www.rfc-editor.org/rfc/rfc9440) header, and identity is built from it exactly as it would
+be from a directly presented one:
+
+```yaml
+environment:
+  CETACEAN_AUTH_MODE: cert
+  CETACEAN_TRUSTED_PROXIES: "10.0.0.0/8"
+```
+
+> [!WARNING]
+> The header is accepted **only** from an address in [`server.trusted_proxies`][server.trusted_proxies], and one
+> of the two—TLS here, or a trusted proxy—is required for cert mode to start. Anyone able to reach Cetacean
+> directly can set the header, so the proxy must also strip any `Client-Cert` arriving from its own clients.
+
+The proxy is responsible for verifying the certificate against a CA:
+[`auth.cert.ca`][auth.cert.ca] configures Cetacean's own TLS listener and is not consulted for a forwarded
+certificate. A certificate presented directly to Cetacean always wins over the header.
+`Client-Cert-Chain` is ignored—it carries the issuer chain for a party doing its own validation.
 
 ## Trusted proxy headers
 
@@ -521,6 +542,7 @@ response schemas.
 [auth.mode]: configuration#auth.mode
 [auth.oidc.client_id]: configuration#auth.oidc.client_id
 [auth.oidc.client_secret]: configuration#auth.oidc.client_secret
+[auth.cert.ca]: configuration#auth.cert.ca
 [auth.oidc.issuer]: configuration#auth.oidc.issuer
 [auth.oidc.redirect_url]: configuration#auth.oidc.redirect_url
 [auth.oidc.session_key]: configuration#auth.oidc.session_key

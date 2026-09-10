@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -13,14 +15,10 @@ import (
 type CertProvider struct{}
 
 func (p *CertProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Identity, error) {
-	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-		return nil, &AuthError{
-			Msg:             "client certificate required",
-			WWWAuthenticate: "mutual-tls",
-		}
+	cert, err := clientCertificate(r)
+	if err != nil {
+		return nil, err
 	}
-
-	cert := r.TLS.PeerCertificates[0]
 
 	id := &Identity{
 		Subject:     cert.Subject.CommonName,
@@ -73,6 +71,82 @@ func (p *CertProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Id
 }
 
 func (p *CertProvider) RegisterRoutes(_ *http.ServeMux) {}
+
+// clientCertificate returns the certificate identifying the client: the one
+// presented on this connection, or — when TLS was terminated by a trusted
+// proxy in front of us — the one that proxy forwarded in the RFC 9440
+// Client-Cert header.
+//
+// A certificate presented here was verified here, so it always wins. A
+// forwarded one is believed only because the proxy that verified it is
+// trusted, which is why the verdict recorded at the edge gates it: RFC 9440 §3
+// requires that an origin server "MUST only accept the Client-Cert and
+// Client-Cert-Chain header fields from a trusted TTRP". Anyone can set a
+// header.
+//
+// Client-Cert-Chain is deliberately not read. It carries the issuer chain for
+// a relying party that wants to validate the certificate itself, and the
+// terminating proxy has already done that; nothing here would consume it.
+func clientCertificate(r *http.Request) (*x509.Certificate, error) {
+	if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
+		return r.TLS.PeerCertificates[0], nil
+	}
+
+	header := r.Header.Get("Client-Cert")
+	if header == "" || !FromTrustedProxy(r.Context()) {
+		return nil, &AuthError{
+			Msg:             "client certificate required",
+			WWWAuthenticate: "mutual-tls",
+		}
+	}
+
+	der, err := decodeClientCert(header)
+	if err != nil {
+		return nil, &AuthError{Msg: err.Error(), WWWAuthenticate: "mutual-tls"}
+	}
+
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, &AuthError{
+			Msg:             fmt.Sprintf("Client-Cert does not carry a certificate: %v", err),
+			WWWAuthenticate: "mutual-tls",
+		}
+	}
+
+	return cert, nil
+}
+
+// decodeClientCert decodes an RFC 9440 Client-Cert value. It is an RFC 8941
+// Byte Sequence: the DER certificate in base64 with no line breaks, delimited
+// by a colon at each end.
+func decodeClientCert(value string) ([]byte, error) {
+	value = strings.TrimSpace(value)
+	// An empty byte sequence ("::") is well-formed; it simply carries no
+	// certificate, which x509.ParseCertificate reports better than this can.
+	if len(value) < 2 || value[0] != ':' || value[len(value)-1] != ':' {
+		return nil, fmt.Errorf(
+			"Client-Cert is not a byte sequence; expected :base64:, got %q",
+			truncate(value),
+		)
+	}
+
+	der, err := base64.StdEncoding.DecodeString(value[1 : len(value)-1])
+	if err != nil {
+		return nil, fmt.Errorf("Client-Cert is not valid base64: %w", err)
+	}
+
+	return der, nil
+}
+
+// truncate shortens a header value for an error message. A certificate is
+// kilobytes of base64 and none of it helps a reader.
+func truncate(s string) string {
+	const limit = 32
+	if len(s) <= limit {
+		return s
+	}
+	return s[:limit] + "…"
+}
 
 // extractSPIFFEID returns the SPIFFE ID from the URI SANs, or "" if none
 // present. Returns an error if the cert contains multiple SPIFFE URIs

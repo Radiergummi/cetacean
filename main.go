@@ -129,9 +129,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "TLS configuration error: %v\n", err)
 		os.Exit(1)
 	}
-	if authCfg.Mode == "cert" && !tlsCfg.Enabled() {
-		fmt.Fprintf(os.Stderr, "cert auth mode requires tls.cert and tls.key\n")
-		os.Exit(1)
+	if authCfg.Mode == "cert" {
+		if err := config.ValidateCertMode(tlsCfg.Enabled(), cfg.TrustedProxies); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	// Resolve trusted proxies for headers auth: the deprecated
