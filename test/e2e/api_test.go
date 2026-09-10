@@ -16,21 +16,59 @@ import (
 )
 
 // startNone brings up the shared environment with a no-auth binary on the
-// `none` lane's reserved port.
-func startNone(t *testing.T) (*harness.Env, *sut.Process) {
+// `none` lane's reserved port. opsLevel sets CETACEAN_OPERATIONS_LEVEL; pass
+// "" to leave it unset and take the binary's default (operational, tier 1).
+func startNone(t *testing.T, opsLevel string) (*harness.Env, *sut.Process) {
 	t.Helper()
 
 	env := harness.Up(t)
 	env.SwarmInit(t)
 	fixtures.DeployBaseline(t, env)
 
+	envVars := map[string]string{"CETACEAN_AUTH_MODE": "none"}
+	if opsLevel != "" {
+		envVars["CETACEAN_OPERATIONS_LEVEL"] = opsLevel
+	}
+
 	proc := sut.Start(t, sut.Config{
 		Port:       19001,
 		DockerHost: env.DockerHost,
-		Env:        map[string]string{"CETACEAN_AUTH_MODE": "none"},
+		Env:        envVars,
 	})
 
 	return env, proc
+}
+
+// serviceID resolves a service's ID from /services by name. GET /services/{id}
+// only accepts the Docker service ID (cache.GetService is a direct map
+// lookup, not a name resolver), so tests addressing a service by its fixture
+// name must look the ID up first.
+func serviceID(t *testing.T, proc *sut.Process, name string) string {
+	t.Helper()
+
+	var body struct {
+		Items []struct {
+			ID   string `json:"ID"`
+			Spec struct {
+				Name string `json:"Name"`
+			} `json:"Spec"`
+		} `json:"items"`
+	}
+
+	resp := getJSON(t, proc, "/services", &body) //nolint:bodyclose // closed in getJSON
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /services: status = %d, want 200", resp.StatusCode)
+	}
+
+	for _, item := range body.Items {
+		if item.Spec.Name == name {
+			return item.ID
+		}
+	}
+
+	t.Fatalf("service %q not found in /services", name)
+
+	return ""
 }
 
 func getJSON(t *testing.T, proc *sut.Process, path string, into any) *http.Response {
@@ -59,7 +97,7 @@ func getJSON(t *testing.T, proc *sut.Process, path string, into any) *http.Respo
 }
 
 func TestServicesListReportsTheBaseline(t *testing.T) {
-	_, proc := startNone(t)
+	_, proc := startNone(t, "")
 
 	var body struct {
 		Total int `json:"total"`
@@ -96,7 +134,7 @@ func TestServicesListReportsTheBaseline(t *testing.T) {
 }
 
 func TestETagRoundTripReturns304(t *testing.T) {
-	_, proc := startNone(t)
+	_, proc := startNone(t, "")
 
 	first := getJSON(t, proc, "/services", nil) //nolint:bodyclose // closed in getJSON
 
@@ -139,7 +177,7 @@ func TestETagRoundTripReturns304(t *testing.T) {
 // buildACLFilteredNetworkGraph), so only that graph's node URNs are checked
 // against the alternate renderings.
 func TestTopologyRenderingsAgree(t *testing.T) {
-	_, proc := startNone(t)
+	_, proc := startNone(t, "")
 
 	var doc struct {
 		Graphs []struct {
@@ -197,37 +235,61 @@ func TestTopologyRenderingsAgree(t *testing.T) {
 	}
 }
 
+// TestAllowHeaderReflectsOperationsLevel checks the Allow header on a service
+// DETAIL endpoint, not the list: setAllowList (internal/api/allow.go) is what
+// answers GET /services, and it only adds POST for config/secret/plugin — not
+// service — so /services' Allow header is "GET, HEAD" at every operations
+// level and can't tell tier gating from a broken one. setAllow, which reads
+// resourceWriteMethods["service"] (PUT/POST at tier 1, PATCH at tier 2), is
+// what GET /services/{id} uses, so that is the endpoint that actually
+// reflects the tier.
+//
+// Both halves are asserted deliberately: tier 0 having no PUT/POST is
+// unfalsifiable on its own (an empty header or a 404 would pass it too), so
+// tier 1 having both PUT and POST present is checked as well, proving the
+// header is genuinely populated from the tier and that the request reached
+// the handler under test.
 func TestAllowHeaderReflectsOperationsLevel(t *testing.T) {
-	env := harness.Up(t)
-	env.SwarmInit(t)
-	fixtures.DeployBaseline(t, env)
+	t.Run("ops level 0 denies writes", func(t *testing.T) {
+		_, proc := startNone(t, "0")
+		id := serviceID(t, proc, "shop_web")
 
-	readOnly := sut.Start(t, sut.Config{
-		Port:       19001,
-		DockerHost: env.DockerHost,
-		Env: map[string]string{
-			"CETACEAN_AUTH_MODE":        "none",
-			"CETACEAN_OPERATIONS_LEVEL": "0",
-		},
+		resp := getJSON(t, proc, "/services/"+id, nil) //nolint:bodyclose // closed in getJSON
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET /services/%s: status = %d, want 200", id, resp.StatusCode)
+		}
+
+		allow := resp.Header.Get("Allow")
+		if allow == "" {
+			t.Fatal("no Allow header on /services/{id}")
+		}
+
+		if strings.Contains(allow, "PUT") || strings.Contains(allow, "POST") {
+			t.Errorf("Allow = %q at ops level 0; want no PUT/POST", allow)
+		}
 	})
 
-	resp := getJSON(t, readOnly, "/services", nil) //nolint:bodyclose // closed in getJSON
+	t.Run("ops level 1 allows writes", func(t *testing.T) {
+		_, proc := startNone(t, "1")
+		id := serviceID(t, proc, "shop_web")
 
-	allow := resp.Header.Get("Allow")
-	if allow == "" {
-		t.Fatal("no Allow header on /services")
-	}
+		resp := getJSON(t, proc, "/services/"+id, nil) //nolint:bodyclose // closed in getJSON
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET /services/%s: status = %d, want 200", id, resp.StatusCode)
+		}
 
-	if strings.Contains(allow, "PUT") || strings.Contains(allow, "PATCH") {
-		t.Errorf("Allow = %q at ops level 0; want reads only", allow)
-	}
+		allow := resp.Header.Get("Allow")
+		if !strings.Contains(allow, "PUT") || !strings.Contains(allow, "POST") {
+			t.Errorf("Allow = %q at ops level 1; want PUT and POST present", allow)
+		}
+	})
 }
 
 // TestMetricsReport503WhenPrometheusIsUnconfigured is the spec's one
 // phase-one metrics case: with no Prometheus configured, the nil-receiver
 // paths must say so (MTR001, 503) rather than serve an empty chart.
 func TestMetricsReport503WhenPrometheusIsUnconfigured(t *testing.T) {
-	_, proc := startNone(t)
+	_, proc := startNone(t, "")
 
 	resp := getJSON(t, proc, "/metrics", nil) //nolint:bodyclose // closed in getJSON
 
