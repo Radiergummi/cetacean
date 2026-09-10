@@ -114,7 +114,9 @@ Tracing stays off until the endpoint is set. A malformed endpoint stops startup 
 - **Auth mode `none` leaves `/mcp` open.** Anyone who can reach it gets whatever the operations level allows.
   Use it only on a trusted network.
 - **Set [`server.cors.origins`][server.cors.origins] if the consent screen crosses origins.** It also guards
-  `/mcp` itself against DNS rebinding. Non-browser clients are unaffected.
+  `/mcp` itself against DNS rebinding. Name the origins rather than using `*`: a browser-based client's every
+  call is a `POST`, and a wildcard cannot be a trusted origin for [cross-origin protection][cross-origin], so
+  those calls are refused. Non-browser clients send no `Origin` and are unaffected by either check.
 - **Run a single replica.** Sign-in state lives in one process; see [How it works](#how-it-works).
 
 ## Troubleshooting
@@ -194,6 +196,7 @@ replica is required: the file is node-local, and an unset signing key would leav
 [mcp.operations_level]: configuration#mcp.operations_level
 [mcp.signing_key]: configuration#mcp.signing_key
 [mcp.task_ttl]: configuration#mcp.task_ttl
+[cross-origin]: api#cross-origin-requests
 [server.cors.origins]: configuration#server.cors.origins
 [server.operations_level]: configuration#server.operations_level
 [server.public_url]: configuration#server.public_url

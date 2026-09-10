@@ -19,22 +19,13 @@ import (
 // configurations describe one trust decision: an origin CORS admits must not
 // then be refused here. A wildcard cannot be mirrored — "*" is not an origin,
 // and reading it as "trust everyone" would disable the protection through a
-// setting that says nothing about CSRF — so it warns instead.
-func crossOriginProtection(cfg *CORSConfig) func(http.Handler) http.Handler {
+// setting that says nothing about CSRF. main.go reports that at startup,
+// beside the setting it is about; here it only means nothing is trusted.
+func crossOriginProtection(cfg *CORSConfig) Constructor {
 	protection := http.NewCrossOriginProtection()
 
-	if cfg.Enabled() {
+	if cfg.Enabled() && !cfg.Wildcard() {
 		for _, origin := range cfg.AllowedOrigins {
-			if origin == "*" {
-				slog.Warn(
-					"server.cors.origins is a wildcard, which cannot be a trusted "+
-						"origin for cross-origin protection: cross-origin writes from "+
-						"a browser will be refused",
-					"suggestion", "list the origins explicitly",
-				)
-				continue
-			}
-
 			if err := protection.AddTrustedOrigin(origin); err != nil {
 				slog.Warn(
 					"ignoring an unusable entry in server.cors.origins",

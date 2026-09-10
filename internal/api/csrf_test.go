@@ -2,17 +2,13 @@ package api
 
 import (
 	"context"
-	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"testing/fstest"
 
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
-	"github.com/radiergummi/cetacean/internal/api/sse"
-	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -34,26 +30,12 @@ func newCSRFTestRouter(t testing.TB, origins ...string) http.Handler {
 		},
 	}
 
-	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
-	t.Cleanup(b.Close)
-	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
-	spa := NewSPAHandler(fs.FS(fsys), "")
-
-	var cors *CORSConfig
-	if len(origins) > 0 {
-		cors = &CORSConfig{AllowedOrigins: origins}
-	}
-
-	return NewRouter(RouterConfig{
-		Handlers:          h,
-		Broadcaster:       b,
-		SPA:               spa,
-		OpenAPISpec:       []byte("openapi: '3.1.0'"),
-		EnableSelfMetrics: true,
-		AuthProvider:      &auth.NoneProvider{},
-		CORS:              cors,
-	})
+	return newTestRouterWithConfig(
+		t,
+		[]routerOption{withCORS(origins...)},
+		withCache(c),
+		withWriteClient(wc),
+	)
 }
 
 // restartRequest builds a POST that reaches a real write handler, so a request

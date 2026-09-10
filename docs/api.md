@@ -329,7 +329,8 @@ non-browser client: `curl`, a script, or an [MCP][mcp] host outside the browser.
 
 A wildcard is the one configuration where the two halves cannot agree. `*` is not an origin, so it cannot be trusted
 for writes: browsers may read the API from anywhere while cross-origin writes are still refused. List the origins
-explicitly if a browser client on another origin has to write.
+explicitly if a browser client on another origin has to write. That includes a browser-based [MCP][mcp] client such as
+MCP Inspector, whose every call is a `POST`: name the origin it runs on rather than using `*`.
 
 ## Waiting for a change to take effect
 

@@ -837,15 +837,21 @@ func TestCallback_TokenExchangeFails_ClearsCookies(t *testing.T) {
 	assertAuthFlowCookiesCleared(t, resp)
 }
 
-func TestLogout_SameOrigin_ClearsSession(t *testing.T) {
+// TestLogout_ThroughRegisteredRoute pins that RegisterRoutes reaches the
+// logout handler. What the handler itself does is covered directly by
+// TestLogout_ClearsSession in oidc_callback_test.go; this drives the mux, so
+// it fails if the route is dropped or registered under another method.
+//
+// It used to set Sec-Fetch-Site to get past a cross-origin check on this
+// route. That check now lives in the router, where the whole chain can be
+// driven — see TestCrossSiteRequestToAuthRouteIsRefused in internal/api.
+func TestLogout_ThroughRegisteredRoute(t *testing.T) {
 	server := newMockOIDCServer(t)
 	p := newTestOIDCProvider(t, server.URL)
 	mux := http.NewServeMux()
 	p.RegisterRoutes(mux)
 
 	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-	r.Header.Set("Sec-Fetch-Site", "same-origin")
-	r.Host = "app.example.com"
 	w := httptest.NewRecorder()
 
 	mux.ServeHTTP(w, r)
