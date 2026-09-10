@@ -419,11 +419,8 @@ func main() {
 		corsConfig = &api.CORSConfig{AllowedOrigins: cfg.CORSOrigins}
 		slog.Info("CORS enabled", "origins", cfg.CORSOrigins)
 
-		// One setting decides two things: which origins may read the API, and
-		// which may write to it. A wildcard can only answer the first — "*" is
-		// not an origin, so it cannot be a trusted origin for cross-site
-		// request forgery protection, and reading it as "trust everyone" would
-		// disable that protection through a setting that says nothing about it.
+		// A wildcard can only answer half of what this setting decides: "*" is
+		// not an origin, so it cannot be trusted for cross-origin writes.
 		if corsConfig.Wildcard() {
 			slog.Warn(
 				"server.cors.origins is a wildcard: browsers may read the API " +

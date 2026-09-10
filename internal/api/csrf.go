@@ -5,22 +5,14 @@ import (
 	"net/http"
 )
 
-// crossOriginProtection refuses non-safe cross-origin browser requests, using
-// the stdlib's Fetch Metadata check (Go 1.25+). Session cookies are already
-// SameSite=Lax, which covers the cookie-bearing modes; this also covers the
-// modes whose credentials are ambient rather than cookie-borne — Tailscale,
-// mTLS and trusted-proxy headers all authenticate a browser request that
-// carries no cookie at all.
+// crossOriginProtection refuses non-safe cross-origin browser requests. Not
+// only defence in depth: Tailscale, mTLS and trusted-proxy headers all
+// authenticate a browser request that carries no cookie at all, so SameSite
+// covers none of them.
 //
-// Safe methods pass untouched, as do requests carrying neither Sec-Fetch-Site
-// nor Origin — curl, the MCP transport, and every other non-browser client.
-//
-// The CORS allowlist is mirrored in as trusted origins, because the two
-// configurations describe one trust decision: an origin CORS admits must not
-// then be refused here. A wildcard cannot be mirrored — "*" is not an origin,
-// and reading it as "trust everyone" would disable the protection through a
-// setting that says nothing about CSRF. main.go reports that at startup,
-// beside the setting it is about; here it only means nothing is trusted.
+// The CORS allowlist is mirrored in as trusted origins — an origin CORS admits
+// must not then be refused here. A wildcard cannot be ("*" is not an origin);
+// main.go warns about that at startup.
 func crossOriginProtection(cfg *CORSConfig) Constructor {
 	protection := http.NewCrossOriginProtection()
 
