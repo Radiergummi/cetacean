@@ -69,10 +69,56 @@ services:
     networks:
       - e2e
 
+  # --- OIDC provider (oidc lane) ---
+  dex:
+    image: dexidp/dex
+    command: ["dex", "serve", "/etc/dex/dex.yaml"]
+    ports:
+      - "19010:5556"
+    configs:
+      - source: dex-config
+        target: /etc/dex/dex.yaml
+    networks:
+      - e2e
+
 networks:
   e2e:
 
 configs:
+  dex-config:
+    content: |
+      issuer: http://localhost:19010/dex
+
+      storage:
+        type: sqlite3
+        config:
+          file: ":memory:"
+
+      web:
+        http: 0.0.0.0:5556
+
+      # The oidc lane drives Dex with an http.Client + cookiejar rather than a
+      # browser: there is nothing to click a "Grant Access" consent screen,
+      # so skipping it here is what makes the lane exercise the login flow
+      # itself instead of a second scraped form.
+      oauth2:
+        skipApprovalScreen: true
+
+      staticClients:
+        - id: cetacean
+          secret: cetacean-e2e-secret
+          name: Cetacean E2E
+          redirectURIs:
+            - http://localhost:19002/auth/callback
+
+      enablePasswordDB: true
+
+      staticPasswords:
+        - email: dev@localhost
+          hash: "$$2a$$10$$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
+          username: Dev User
+          userID: "00000000-0000-0000-0000-000000000001"
+
   caddyfile-cert:
     content: |
       :19104 {
