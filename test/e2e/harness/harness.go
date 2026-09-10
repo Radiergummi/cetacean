@@ -22,7 +22,6 @@ import (
 
 const (
 	dockerHost   = "tcp://127.0.0.1:12375"
-	composeName  = "cetacean-e2e"
 	upTimeout    = 90 * time.Second
 	pollInterval = 500 * time.Millisecond
 )
@@ -43,6 +42,13 @@ var (
 // Up brings the environment up and returns it. The environment is shared by
 // every test in a run — bringing up a fresh engine per test would cost more
 // than the isolation is worth, and fixtures are namespaced instead.
+//
+// Up does NOT register a t.Cleanup teardown, and must not: the environment is
+// shared process-wide through sync.Once, so a Cleanup scoped to whichever
+// test happened to call Up first would tear it down under its sibling tests.
+// Teardown is owned by the `make test-stack` recipe instead, which brings the
+// environment down on a successful run and deliberately leaves it running on
+// failure, so a failed case stays available for inspection.
 func Up(t *testing.T) *Env {
 	t.Helper()
 

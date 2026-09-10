@@ -55,9 +55,17 @@ test-e2e:
 
 ## Run the end-to-end stack suite (local only; needs Docker)
 ## -p 1 serialises packages: each reserves the same lane ports, so parallel
-## packages would fight over them.
+## packages would fight over them. The environment is torn down on success and
+## deliberately left running on failure, so a failed case can be inspected.
 test-stack: build
-	go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...
+	@go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...; \
+	status=$$?; \
+	if [ $$status -eq 0 ]; then \
+		$(MAKE) e2e-down; \
+	else \
+		echo "e2e environment left running for inspection; tear down with: make e2e-down"; \
+	fi; \
+	exit $$status
 
 ## Bring the end-to-end environment up and leave it running
 e2e-up:
