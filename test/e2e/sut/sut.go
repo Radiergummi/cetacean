@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -28,6 +29,12 @@ const (
 	readyTimeout = 30 * time.Second
 	exitTimeout  = 30 * time.Second
 	pollInterval = 200 * time.Millisecond
+
+	// maxLaunchAttempts bounds retries of a launch that fails with EADDRINUSE
+	// during startup. waitPortFree already proves the port bindable before
+	// the child starts, so this only covers the residual race between that
+	// probe's close and the child's own bind.
+	maxLaunchAttempts = 3
 )
 
 // Config describes one run of the binary.
@@ -82,14 +89,27 @@ func (p *Process) reap() error {
 func Start(t *testing.T, cfg Config) *Process {
 	t.Helper()
 
-	proc := launch(t, cfg)
-	t.Cleanup(proc.Stop)
+	for attempt := 1; ; attempt++ {
+		proc := launch(t, cfg)
+		t.Cleanup(proc.Stop)
 
-	if err := proc.waitReady(); err != nil {
+		err := proc.waitReady()
+		if err == nil {
+			return proc
+		}
+
+		// waitPortFree already proved the port bindable before this child
+		// started; a bind failure here is the small remaining race between
+		// that probe's close and the child's own bind, not a real conflict.
+		// Retry it a bounded number of times before giving up. Any other
+		// startup failure fails immediately — a config the binary refuses
+		// must still fail fast and loudly.
+		if attempt < maxLaunchAttempts && addrInUseOutput(proc.Logs()) {
+			continue
+		}
+
 		t.Fatalf("%v\n--- binary output ---\n%s", err, proc.Logs())
 	}
-
-	return proc
 }
 
 // StartExpectingExit starts the binary and waits for it to exit by itself.
@@ -98,32 +118,48 @@ func Start(t *testing.T, cfg Config) *Process {
 func StartExpectingExit(t *testing.T, cfg Config) (int, string) {
 	t.Helper()
 
-	proc := launch(t, cfg)
+	for attempt := 1; ; attempt++ {
+		proc := launch(t, cfg)
 
-	select {
-	case <-proc.exited:
-		// cmd.ProcessState is populated whether the child exited cleanly or
-		// not, so ExitCode() alone reports the outcome; waitErr is only
-		// examined to distinguish a genuine Wait failure (not an
-		// *exec.ExitError) from an ordinary non-zero exit.
-		if proc.waitErr != nil {
-			var exitErr *exec.ExitError
-			if !errors.As(proc.waitErr, &exitErr) {
-				t.Fatalf("Wait: %v", proc.waitErr)
+		select {
+		case <-proc.exited:
+			// cmd.ProcessState is populated whether the child exited cleanly or
+			// not, so ExitCode() alone reports the outcome; waitErr is only
+			// examined to distinguish a genuine Wait failure (not an
+			// *exec.ExitError) from an ordinary non-zero exit.
+			if proc.waitErr != nil {
+				var exitErr *exec.ExitError
+				if !errors.As(proc.waitErr, &exitErr) {
+					t.Fatalf("Wait: %v", proc.waitErr)
+				}
 			}
+
+			// See Start: a bind failure this soon after waitPortFree's probe
+			// is the residual close/bind race, not the config refusal this
+			// helper exists to observe. Retry it, bounded, before failing.
+			if addrInUseOutput(proc.Logs()) {
+				if attempt < maxLaunchAttempts {
+					continue
+				}
+
+				t.Fatalf(
+					"binary could not bind port %d after %d attempts\n--- binary output ---\n%s",
+					cfg.Port, attempt, proc.Logs(),
+				)
+			}
+
+			return proc.cmd.ProcessState.ExitCode(), proc.Logs()
+
+		case <-time.After(exitTimeout):
+			proc.Stop()
+			t.Fatalf(
+				"binary still running after %s; expected it to refuse\n%s",
+				exitTimeout,
+				proc.Logs(),
+			)
+
+			return 0, ""
 		}
-
-		return proc.cmd.ProcessState.ExitCode(), proc.Logs()
-
-	case <-time.After(exitTimeout):
-		proc.Stop()
-		t.Fatalf(
-			"binary still running after %s; expected it to refuse\n%s",
-			exitTimeout,
-			proc.Logs(),
-		)
-
-		return 0, ""
 	}
 }
 
@@ -294,26 +330,47 @@ func (p *Process) waitReady() error {
 	return fmt.Errorf("binary not ready at %s within %s", p.BaseURL, readyTimeout)
 }
 
-// waitPortFree blocks until nothing is listening on port.
+// waitPortFree blocks until the address the child is about to bind is
+// actually free. It probes by binding, not by dialing: a refused dial only
+// proves nothing is *accepting* yet, not that the previous SUT's listener
+// fd has been closed, and http.Server stops accepting before that close
+// happens — the dial probe returns "free" during that window, and the next
+// child's bind loses the race. Binding is the only proof that the child
+// could bind too, and closing that probe listener immediately reopens the
+// same window at a much smaller scale, which launch's own retry covers.
+//
+// It binds ":<port>" — the wildcard address the child receives via
+// CETACEAN_LISTEN_ADDR — rather than 127.0.0.1, since a probe on a narrower
+// address can succeed where the child's own bind would still fail.
 func waitPortFree(t *testing.T, port int) {
 	t.Helper()
 
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	addr := fmt.Sprintf(":%d", port)
 	deadline := time.Now().Add(15 * time.Second)
 
-	dialer := net.Dialer{Timeout: 200 * time.Millisecond}
+	var lc net.ListenConfig
 
 	for time.Now().Before(deadline) {
-		conn, err := dialer.DialContext(context.Background(), "tcp", addr)
-		if err != nil {
+		ln, err := lc.Listen(context.Background(), "tcp", addr)
+		if err == nil {
+			ln.Close()
+
 			return
 		}
 
-		conn.Close()
 		time.Sleep(pollInterval)
 	}
 
 	t.Fatalf("port %d still in use after 15s", port)
+}
+
+// addrInUseOutput reports whether the child's captured output shows it
+// failed to bind its listen address. Go formats an EADDRINUSE bind failure
+// as "...: bind: address already in use" on every platform this suite
+// targets, so the substring is a cheap, reliable signature — and it is the
+// only startup failure Start/StartExpectingExit retry rather than fail on.
+func addrInUseOutput(output string) bool {
+	return strings.Contains(output, "address already in use")
 }
 
 func binaryPath(t *testing.T) string {
