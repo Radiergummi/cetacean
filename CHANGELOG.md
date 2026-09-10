@@ -7,15 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The documentation site is now navigable by an agent that arrives without being told how. Every page advertises its Markdown version in the page head, and every Markdown version names the page it belongs to; the home page, the changelog and the schema and error references gained Markdown versions of their own, so nothing is HTML-only. `/llms.txt` lists the whole site with a description per page, `/openapi.json` (and `/openapi.yaml`) describe every URL the site serves and what each returns, and the sitemap now dates every entry
+
+### Changed
+- The Cetacean API specification the documentation site publishes moved from `/openapi.yaml` to `/api/openapi.yaml`, beside the API reference, the schema reference and the error reference. The site's own OpenAPI description now occupies the root, where a tool probing an origin looks for it — so `/openapi.json` describes the documentation site and `/api/openapi.yaml` describes Cetacean, with neither standing in for the other
+
+### Fixed
+- Documentation pages name themselves consistently. Each page's canonical URL carried a `.html` extension that no link, and no sitemap entry, ever used — nominating a second address for every page on the site
+
 ## [0.14.0] - 2026-09-10
 
 ### Added
 - `server.public_url` sets the canonical external URL once, supplying the OAuth issuer for the MCP server and the OIDC redirect URL instead of configuring each separately
-- The documentation site is now navigable by an agent that arrives without being told how. Every page advertises its Markdown version in the page head, and every Markdown version names the page it belongs to; the home page, the changelog and the schema and error references gained Markdown versions of their own, so nothing is HTML-only. `/llms.txt` lists the whole site with a description per page, `/openapi.json` (and `/openapi.yaml`) describe every URL the site serves and what each returns, and the sitemap now dates every entry
 - The documentation site now carries an error reference: every code the API can return, with its HTTP status, what it means and how to resolve it, grouped by domain. A `type` URI out of an error response — `/api/errors/SVC001` — previously led somewhere only a running Cetacean could answer. The page is generated from the server's own catalog at build time, so it cannot fall behind it. Links into the references also now show what they point at, so a setting, an error code, a schema type and an MCP tool are distinguishable before you follow them
 
 ### Changed
-- The Cetacean API specification the documentation site publishes moved from `/openapi.yaml` to `/api/openapi.yaml`, beside the API reference, the schema reference and the error reference. The site's own OpenAPI description now occupies the root, where a tool probing an origin looks for it — so `/openapi.json` describes the documentation site and `/api/openapi.yaml` describes Cetacean, with neither standing in for the other
 - MCP tools now advertise the values each argument accepts, so a client can offer them and a model no longer has to infer them from prose: the resource types `find` and `describe` take, `get_topology`'s views, `get_metrics`' target, metric, range and ranking key, and `get_logs`' levels — which also gained `fatal`, a level the log filter has always accepted and no description mentioned
 - The MCP tool reference now gives every tool its own entry — what it does, its arguments, and the detail that applies to it — instead of a table per operations level followed by paragraphs describing tools further down the page. Each tool can also be linked to directly
 - Deploying Cetacean as a stack no longer requires creating an overlay network first. `compose.yaml` now stands on its own — `docker stack deploy -c compose.yaml cetacean` and nothing else. Connecting it to the bundled Prometheus is a second file, `compose.prometheus.yaml`, layered on top: `docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean`. That replaces passing `CETACEAN_PROMETHEUS_URL` through the shell on every deploy, where forgetting it once silently disconnected the charts
@@ -25,7 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The service and stack lists now head their rollout column "Rollout" rather than "Status", and a settled rollout is no longer coloured green. The column reports Docker's update state, which says nothing about whether the service is running — so a service with no replicas up read as a green "Stable" beside a red 0/1. Health stays in the Replicas and Tasks columns beside it
 
 ### Fixed
-- Documentation pages name themselves consistently. Each page's canonical URL carried a `.html` extension that no link, and no sitemap entry, ever used — nominating a second address for every page on the site
 - Service cards in the topology view show how many replicas are actually running. The graph never carried a running count, so every card displayed its desired count against itself with a green dot — a service running nothing looked identical to a healthy one. Global services, which have no desired count, now say how many tasks are up instead of reading as 0/0
 - The topology view no longer labels every service "Updating…". It went by whether a service had an update status at all rather than what that status said, and Docker leaves a finished rollout on a service indefinitely — so on any cluster that had ever been deployed, every card claimed to be mid-update. Only a rollout actually in progress is called out now
 - Stacks in the topology view can be told apart by colour again. Each stack's colour came from a hash of its name that collapsed to little more than the sum of its characters, so unrelated stacks routinely drew the same dot and the legend could not distinguish them. Every stack now takes its own colour
