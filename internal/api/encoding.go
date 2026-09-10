@@ -174,6 +174,11 @@ func resolveEncoding(r *http.Request) Encoding {
 // parseAcceptEncoding parses an Accept-Encoding field value into a map of
 // lowercased coding token (including the literal "*") to its q-value,
 // defaulting to 1 when a listed coding carries no q parameter.
+//
+// A weight outside RFC 9110 §12.4.2's 0–1 range is clamped into it rather
+// than taken at face value: "gzip;q=5" is not a stronger preference than
+// q=1, it is a malformed one, and letting it through would put an
+// out-of-range number into a comparison the spec defines over that range.
 func parseAcceptEncoding(header string) map[string]float64 {
 	weights := make(map[string]float64)
 
@@ -193,7 +198,7 @@ func parseAcceptEncoding(header string) map[string]float64 {
 				continue
 			}
 			if parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil {
-				q = parsed
+				q = min(max(parsed, 0), 1)
 			}
 		}
 

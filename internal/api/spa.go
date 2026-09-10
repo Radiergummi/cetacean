@@ -36,6 +36,13 @@ type assetVariant struct {
 // deliberately stores it unquoted, matching computeETag's derivation before
 // it wraps the result in quotes — so serveAsset adds the quotes itself when
 // writing the header.
+//
+// A variant's ETag hashes the *compressed* bytes, where the API's codedETag
+// suffixes a hash of the identity ones. Both are correct for what they serve:
+// stripCodingSuffix exists so a validator handed back as If-Match can be
+// reduced to the representation-independent one, and no asset is ever an
+// If-Match target — so nothing here needs the base hash to be recoverable,
+// and hashing what is actually sent is the simpler rule.
 type assetEntry struct {
 	ETag     string                  `json:"etag"`
 	Variants map[string]assetVariant `json:"variants"`
@@ -132,8 +139,19 @@ func serveAsset(
 	// Set Content-Type from the original path's extension: http.ServeContent
 	// would otherwise sniff the compressed variant's bytes when the manifest
 	// isn't around to tell it otherwise, and get it wrong.
-	if ct := mime.TypeByExtension(filepath.Ext(path)); ct != "" {
-		w.Header().Set("Content-Type", ct)
+	//
+	// An extension with no mapping needs an answer all the same once a
+	// variant is in play, because sniffing a gzip or zstd frame reliably
+	// yields application/gzip — a plausible-looking Content-Type that is a
+	// statement about the coding, not about the resource. Identity is left to
+	// sniff: there the bytes are the resource, and sniffing them is right.
+	contentType := mime.TypeByExtension(filepath.Ext(path))
+	if contentType == "" && coding != EncodingIdentity {
+		contentType = "application/octet-stream"
+	}
+
+	if contentType != "" {
+		w.Header().Set("Content-Type", contentType)
 	}
 
 	if etag != "" {

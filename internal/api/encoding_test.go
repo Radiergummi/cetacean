@@ -33,6 +33,10 @@ func TestResolveEncoding(t *testing.T) {
 		// A coding the client never listed is never chosen, however low the
 		// weight it is competing against.
 		{"identity;q=-1", EncodingIdentity},
+		// A q-value outside 0-1 is malformed, not an emphatic preference.
+		// Clamped to 1, gzip merely ties with zstd, and zstd takes the tie;
+		// taken at face value, 5 would have won it.
+		{"gzip;q=5, zstd", EncodingZstd},
 	}
 
 	for _, tc := range cases {
