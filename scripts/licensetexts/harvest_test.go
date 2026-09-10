@@ -333,11 +333,12 @@ func TestHarvestFailsWhenTheSurrogateIsAbsent(t *testing.T) {
 	}
 }
 
-func TestHarvestKeepsAPackageThatPublishesNoLicenseAnywhere(t *testing.T) {
+func TestHarvestSubstitutesAttributionForAPackageWithNoLicenseAnywhere(t *testing.T) {
 	// @replit/codemirror-css-color-picker declares MIT and ships no text, and
-	// neither does its repository — there is nothing to attribute and nothing
-	// to borrow. It keeps its inventory entry and gains no text, the way an
-	// ecosystem with no package store does.
+	// neither does its repository — there is nothing to read and nothing to
+	// borrow. It still has to reach the notices with a resolvable text, which
+	// is what internal/api/sbom's own tests require of every component, so it
+	// gets a substitute saying so rather than being left out.
 	doc := sbom.Document{Components: []sbom.Component{
 		{Name: "@replit/codemirror-css-color-picker", Version: "1.0.0", Ecosystem: "npm"},
 	}}
@@ -347,7 +348,23 @@ func TestHarvestKeepsAPackageThatPublishesNoLicenseAnywhere(t *testing.T) {
 		t.Fatalf("Harvest: %v", err)
 	}
 
-	if len(artifact.Components) != 0 {
-		t.Errorf("got %+v, want no text entry", artifact.Components)
+	entry, ok := artifact.Components["npm:@replit/codemirror-css-color-picker@1.0.0"]
+	if !ok {
+		t.Fatalf("component missing from artifact: %+v", artifact.Components)
+	}
+
+	text, ok := artifact.Texts[entry.License]
+	if !ok {
+		t.Fatalf("license id %q does not resolve to a text", entry.License)
+	}
+
+	if !strings.Contains(text, "No license text is published") {
+		t.Errorf("substitute text = %q", text)
+	}
+
+	// Naming a licence it does not carry is the failure mode worth pinning:
+	// the substitute states the declaration, it does not reproduce a grant.
+	if strings.Contains(text, "Permission is hereby granted") {
+		t.Errorf("substitute text reproduces an MIT grant nobody published: %q", text)
 	}
 }

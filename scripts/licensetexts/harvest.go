@@ -80,22 +80,29 @@ var licenseSurrogates = map[string]string{
 	"@headlessui/vue": "@headlessui/tailwindcss",
 }
 
-// licenseTextless names packages that publish no license text anywhere — not
-// in the tarball, and not in the upstream repository either — so there is
-// nothing to attribute and nothing a surrogate could stand in for. They keep
-// their inventory entry and the license they declare; only the text is absent.
+// licenseTextless supplies the attribution for packages that publish no
+// license text anywhere — not in the tarball, and not in the upstream
+// repository either — so there is nothing to read and nothing a surrogate
+// could stand in for. The value is what the attribution document prints where
+// the text would go.
 //
-// Writing the text ourselves is the one thing not to do here: MIT names a
-// copyright holder and a year, and inventing those asserts something the
-// authors never wrote.
+// A substitute rather than a skip, because every component the binary ships
+// must appear in the notices and resolve to a text: TestNoticesCoversEvery-
+// Component and TestProjectedJSONHasPopulatedTextIDs hold exactly that, and a
+// package whose license nobody wrote down is the one a reader most needs told
+// about. Omitting it would hide the gap rather than disclose it.
 //
-// Each entry records what was checked, so a later reader can tell a package
-// upstream never licensed in writing from one this list has simply outgrown.
+// What the substitute must not be is an MIT text: that names a copyright
+// holder and a year, and inventing those asserts something the authors never
+// wrote. It states the declaration and what was checked, and stops there.
 var licenseTextless = map[string]string{
-	// github.com/replit/Codemirror-CSS-color-picker holds no license file on
-	// its default branch (GitHub's license API reports none), and the tarball
-	// carries none. package.json and the npm registry both declare MIT.
-	"@replit/codemirror-css-color-picker": "MIT declared in package.json; no text upstream (checked 2026-09-10)",
+	"@replit/codemirror-css-color-picker": "No license text is published for this package.\n" +
+		"\n" +
+		"Its package.json and the npm registry both declare MIT, and its\n" +
+		"repository, github.com/replit/Codemirror-CSS-color-picker, carries no\n" +
+		"license file on its default branch. The declared license stands; only\n" +
+		"its text is missing, and none is reproduced here because writing one\n" +
+		"would assert a copyright holder and year the authors never stated.\n",
 }
 
 // Harvest resolves every Go and npm component to its source directory and
@@ -139,8 +146,11 @@ func Harvest(doc sbom.Document, roots Roots) (sbom.Artifact, error) {
 		}
 
 		if len(licenses) == 0 {
-			if _, known := licenseTextless[component.Name]; known {
-				// Nothing to attach, and deliberately so — see licenseTextless.
+			if substitute, known := licenseTextless[component.Name]; known {
+				artifact.Components[sbom.ComponentKey(component)] = sbom.ComponentTexts{
+					License: intern(substitute),
+				}
+
 				continue
 			}
 
