@@ -84,9 +84,22 @@ func TestEveryReadEndpointCarriesAValidator(t *testing.T) {
 			if reason, known := knownBypasses[pathTemplate]; known {
 				seenBypass[pathTemplate] = true
 
-				if validated && negotiated {
-					t.Errorf("listed as a known bypass (%s) but goes through "+
-						"the helpers now — remove the entry", reason)
+				// Either half is enough to make the entry stale. A bypass is
+				// the absence of both, because the two arrive together: the
+				// write helpers are the only thing that sets a validator here,
+				// and negotiateCoding is one of only two places that write
+				// Vary: Accept-Encoding — spa.go is the other, and no listed
+				// bypass is the SPA. Requiring both, as this did, let a
+				// half-finished fix sit here indefinitely: an endpoint that
+				// gained an ETag but no coding stayed listed as bypassing the
+				// helpers it had already partly started using, which is the
+				// one state the entry cannot honestly describe.
+				if validated || negotiated {
+					t.Errorf("listed as a known bypass (%s) but answered with "+
+						"validator=%t and Vary: Accept-Encoding=%t — a bypass is "+
+						"neither. Finish the fix and remove the entry, or record "+
+						"here what the endpoint actually does",
+						reason, validated, negotiated)
 				}
 
 				return
