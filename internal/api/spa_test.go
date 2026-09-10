@@ -137,6 +137,12 @@ func TestSPAToleratesAbsentManifest(t *testing.T) {
 // this repo's real build already leaves one on disk (Task 14), so a missing
 // manifest here means the frontend hasn't been built for this checkout, and
 // the fix is `npm run build`, not a silently vacuous pass.
+//
+// It hashes every file it names rather than merely stat-ing it, because the
+// manifest's whole purpose is to describe content: an existence check passes
+// for a variant compressed from a snapshot taken mid-build, which is exactly
+// how a dist shipping `__VITE_PRELOAD__` in its .gz and .zst - and nothing
+// but a ReferenceError in the browser - once got past this test.
 func TestEmbeddedManifestMatchesEmbeddedFiles(t *testing.T) {
 	distDir := filepath.Join("..", "..", "frontend", "dist")
 	manifestPath := filepath.Join(distDir, "assets-manifest.json")
@@ -157,9 +163,34 @@ func TestEmbeddedManifestMatchesEmbeddedFiles(t *testing.T) {
 
 	suffixByCoding := map[string]string{"gzip": ".gz", "zstd": ".zst"}
 
+	// The manifest stores bare hex; computeETag returns it quoted.
+	etagOf := func(t *testing.T, path string) (string, bool) {
+		t.Helper()
+
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return "", false
+		}
+
+		return strings.Trim(computeETag(body), `"`), true
+	}
+
 	for assetPath, entry := range manifest {
-		if _, err := os.Stat(filepath.Join(distDir, filepath.FromSlash(assetPath))); err != nil {
-			t.Errorf("manifest names %s, but it is missing from frontend/dist: %v", assetPath, err)
+		identityPath := filepath.Join(distDir, filepath.FromSlash(assetPath))
+
+		identityETag, ok := etagOf(t, identityPath)
+		if !ok {
+			t.Errorf("manifest names %s, but it is missing from frontend/dist", assetPath)
+			continue
+		}
+
+		if identityETag != entry.ETag {
+			t.Errorf(
+				"manifest ETag for %s is %s, but the file on disk hashes to %s",
+				assetPath,
+				entry.ETag,
+				identityETag,
+			)
 		}
 
 		for coding, variant := range entry.Variants {
@@ -169,16 +200,58 @@ func TestEmbeddedManifestMatchesEmbeddedFiles(t *testing.T) {
 				continue
 			}
 
-			variantPath := filepath.Join(distDir, filepath.FromSlash(assetPath)+suffix)
-			if _, err := os.Stat(variantPath); err != nil {
+			variantPath := identityPath + suffix
+
+			variantETag, ok := etagOf(t, variantPath)
+			if !ok {
 				t.Errorf(
-					"manifest names %s variant %q (%s), but it is missing from frontend/dist: %v",
+					"manifest names %s variant %q (%s), but it is missing from frontend/dist",
 					assetPath,
 					coding,
 					variant.ETag,
-					err,
+				)
+				continue
+			}
+
+			if variantETag != variant.ETag {
+				t.Errorf(
+					"manifest ETag for %s variant %q is %s, but the file on disk hashes to %s",
+					assetPath,
+					coding,
+					variant.ETag,
+					variantETag,
 				)
 			}
+		}
+	}
+}
+
+// TestEmbeddedManifestOmitsIndexHTML holds the build to the one file the SPA
+// handler never routes through serveAsset: NewSPAHandler intercepts
+// index.html and serves a copy with <base href> injected, so a build-time
+// variant of it could never match the bytes served - and /index.html.gz,
+// absent from the manifest, would fall through to serveAsset and hand out the
+// un-injected shell.
+func TestEmbeddedManifestOmitsIndexHTML(t *testing.T) {
+	distDir := filepath.Join("..", "..", "frontend", "dist")
+
+	data, err := os.ReadFile(filepath.Join(distDir, "assets-manifest.json"))
+	if err != nil {
+		t.Fatalf("reading the manifest: %v (run `npm run build` in frontend/ first)", err)
+	}
+
+	var manifest map[string]assetEntry
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("parsing the manifest: %v", err)
+	}
+
+	if _, listed := manifest["index.html"]; listed {
+		t.Error("manifest lists index.html, which the SPA handler never serves from disk")
+	}
+
+	for _, suffix := range []string{".gz", ".zst"} {
+		if _, err := os.Stat(filepath.Join(distDir, "index.html"+suffix)); err == nil {
+			t.Errorf("frontend/dist holds index.html%s, which nothing serves", suffix)
 		}
 	}
 }
