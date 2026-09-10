@@ -109,10 +109,16 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 // newTestRouterWithCache builds a fully wired router around a caller-seeded
 // cache, for tests that need to exercise real routes (middleware chains,
 // content negotiation, preconditions) rather than call a handler directly.
-func newTestRouterWithCache(t testing.TB, c *cache.Cache) http.Handler {
+// Additional testHandlersOption values (e.g. withWriteClient) are applied on
+// top of the cache.
+func newTestRouterWithCache(
+	t testing.TB,
+	c *cache.Cache,
+	opts ...testHandlersOption,
+) http.Handler {
 	t.Helper()
 
-	h := newTestHandlers(t, withCache(c))
+	h := newTestHandlers(t, append([]testHandlersOption{withCache(c)}, opts...)...)
 	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
 	t.Cleanup(b.Close)
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}

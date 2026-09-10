@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,35 @@ import (
 )
 
 func TestPreconditionOnServiceEnv(t *testing.T) {
+	// stubEnvWriteClient lets a PATCH that reaches the handler actually
+	// succeed, so "admitted"/"unaffected" subtests can assert the real 200
+	// rather than merely "not 412" — a check a handler-side panic would pass
+	// just as well.
+	stubEnvWriteClient := &mockWriteClient{
+		mockServiceSpecWriter: mockServiceSpecWriter{
+			updateServiceEnvFn: func(
+				_ context.Context,
+				id string,
+				env map[string]string,
+			) (swarm.Service, error) {
+				envSlice := make([]string, 0, len(env))
+				for k, v := range env {
+					envSlice = append(envSlice, k+"="+v)
+				}
+				return swarm.Service{
+					ID:   id,
+					Meta: swarm.Meta{Version: swarm.Version{Index: 8}},
+					Spec: swarm.ServiceSpec{
+						Annotations: swarm.Annotations{Name: "web"},
+						TaskTemplate: swarm.TaskSpec{
+							ContainerSpec: &swarm.ContainerSpec{Env: envSlice},
+						},
+					},
+				}, nil
+			},
+		},
+	}
+
 	newServer := func(t *testing.T) (http.Handler, string) {
 		t.Helper()
 		c := cache.New(nil)
@@ -25,7 +55,7 @@ func TestPreconditionOnServiceEnv(t *testing.T) {
 				},
 			},
 		})
-		router := newTestRouterWithCache(t, c)
+		router := newTestRouterWithCache(t, c, withWriteClient(stubEnvWriteClient))
 
 		req := httptest.NewRequest("GET", "/services/svc1/env", nil)
 		req.Header.Set("Accept", "application/json")
@@ -53,8 +83,8 @@ func TestPreconditionOnServiceEnv(t *testing.T) {
 
 	t.Run("matching If-Match is admitted", func(t *testing.T) {
 		router, etag := newServer(t)
-		if got := patch(t, router, etag); got == http.StatusPreconditionFailed {
-			t.Errorf("status = 412 with a matching If-Match")
+		if got := patch(t, router, etag); got != http.StatusOK {
+			t.Errorf("status = %d, want 200 with a matching If-Match", got)
 		}
 	})
 
@@ -75,8 +105,8 @@ func TestPreconditionOnServiceEnv(t *testing.T) {
 
 	t.Run("absent If-Match changes nothing", func(t *testing.T) {
 		router, _ := newServer(t)
-		if got := patch(t, router, ""); got == http.StatusPreconditionFailed {
-			t.Error("status = 412 with no If-Match header")
+		if got := patch(t, router, ""); got != http.StatusOK {
+			t.Errorf("status = %d, want 200 with no If-Match header", got)
 		}
 	})
 

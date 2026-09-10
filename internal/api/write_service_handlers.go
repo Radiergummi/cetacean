@@ -239,6 +239,9 @@ func envSliceToMap(env []string) map[string]string {
 }
 
 func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
+	// Two lookups, deliberately: lookupServiceACL writes its own 403/404 on
+	// denial, while serviceEnvRepresentation must stay silent so precond can
+	// answer a miss with 412 instead — they cannot be merged into one call.
 	if _, ok := h.lookupServiceACL(w, r); !ok {
 		return
 	}
