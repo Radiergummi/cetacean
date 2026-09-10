@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The interactive API reference at `/api` moves six months forward, picking up everything Scalar has fixed and reworked since. It will keep up from now on: the playground is an ordinary dependency of the build rather than a copy of the bundle kept by hand, so it is upgraded, licensed and watched for advisories along with everything else
+
 ## [0.14.0] - 2026-09-10
 
 ### Added

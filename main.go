@@ -51,7 +51,19 @@ var widgetDist embed.FS
 //go:embed api/openapi.yaml
 var openapiSpec []byte
 
-//go:embed api/scalar/standalone.js
+// scalarJS is the Scalar API reference bundle served at /api/scalar.js, copied
+// out of node_modules into frontend/dist by the frontend build's postbuild
+// step. It comes from npm rather than a copy committed here so that one
+// dependency declaration governs it: Dependabot watches the version, the SBOM
+// and THIRD_PARTY_LICENSES pick it up with the rest of the frontend's
+// production dependencies, and there is no 3.5MB blob in the tree to go stale
+// unnoticed — the committed one had reached six months and 613 releases behind
+// before anything noticed, because nothing was watching it.
+//
+// Embedded by its own directive rather than read out of frontendDist so a
+// missing file fails `go build`, the way the two directives above do.
+//
+//go:embed frontend/dist/scalar.js
 var scalarJS []byte
 
 func main() {

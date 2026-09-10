@@ -244,6 +244,13 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 ### Embedding
 `main.go` uses `//go:embed frontend/dist/*` to embed the built frontend into the Go binary. The frontend must be built before `go build`.
 
+The Scalar bundle served at `/api/scalar.js` is embedded from `frontend/dist/scalar.js`, which the frontend
+build's `postbuild` step copies out of `node_modules/@scalar/api-reference`. It used to be a copy committed at
+`api/scalar/standalone.js`, which nothing watched: it sat six months and 613 releases behind, absent from
+Dependabot, the SBOM and `THIRD_PARTY_LICENSES` alike. As an ordinary production dependency of `frontend` it is
+covered by all three. Its own `//go:embed` directive is deliberate — a missing file fails `go build` rather than
+serving an empty script.
+
 ## Releases
 - **Always sign release tags** with `git tag -s` (never `git tag -a`). Unsigned tags show as "unverified" on GitHub and immutable releases prevent fixing this after the fact.
 - **Always update `CHANGELOG.md`** when committing user-facing changes (features, fixes, security). Add entries under `[Unreleased]`. When cutting a release, move unreleased entries to a new version heading with the release date.
