@@ -7,10 +7,12 @@ package sut
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -59,7 +61,22 @@ type Process struct {
 	cmd    *exec.Cmd
 	output *lockedBuffer
 	client *http.Client
-	once   sync.Once
+
+	exited   chan struct{} // closed once the child has been reaped
+	waitOnce sync.Once
+	waitErr  error
+	stopOnce sync.Once
+}
+
+// reap waits for the child exactly once. It is the ONLY caller of cmd.Wait in
+// this package: cmd.Wait populates cmd.ProcessState and awaits the goroutines
+// copying stdout/stderr into output, so after it returns both the exit code
+// and the full log are available. Calling it from more than one goroutine is
+// safe.
+func (p *Process) reap() error {
+	p.waitOnce.Do(func() { p.waitErr = p.cmd.Wait() })
+
+	return p.waitErr
 }
 
 func Start(t *testing.T, cfg Config) *Process {
@@ -83,25 +100,28 @@ func StartExpectingExit(t *testing.T, cfg Config) (int, string) {
 
 	proc := launch(t, cfg)
 
-	done := make(chan error, 1)
-	go func() { done <- proc.cmd.Wait() }()
-
 	select {
-	case err := <-done:
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
-			return exit.ExitCode(), proc.Logs()
+	case <-proc.exited:
+		// cmd.ProcessState is populated whether the child exited cleanly or
+		// not, so ExitCode() alone reports the outcome; waitErr is only
+		// examined to distinguish a genuine Wait failure (not an
+		// *exec.ExitError) from an ordinary non-zero exit.
+		if proc.waitErr != nil {
+			var exitErr *exec.ExitError
+			if !errors.As(proc.waitErr, &exitErr) {
+				t.Fatalf("Wait: %v", proc.waitErr)
+			}
 		}
 
-		if err != nil {
-			t.Fatalf("Wait: %v", err)
-		}
-
-		return 0, proc.Logs()
+		return proc.cmd.ProcessState.ExitCode(), proc.Logs()
 
 	case <-time.After(exitTimeout):
 		proc.Stop()
-		t.Fatalf("binary still running after %s; expected it to refuse\n%s", exitTimeout, proc.Logs())
+		t.Fatalf(
+			"binary still running after %s; expected it to refuse\n%s",
+			exitTimeout,
+			proc.Logs(),
+		)
 
 		return 0, ""
 	}
@@ -119,7 +139,7 @@ func launch(t *testing.T, cfg Config) *Process {
 
 	out := &lockedBuffer{}
 
-	cmd := exec.Command(bin)
+	cmd := exec.CommandContext(context.Background(), bin)
 	cmd.Stdout = out
 	cmd.Stderr = out
 	cmd.Env = buildEnv(cfg)
@@ -133,12 +153,20 @@ func launch(t *testing.T, cfg Config) *Process {
 		scheme = "https"
 	}
 
-	return &Process{
+	proc := &Process{
 		BaseURL: fmt.Sprintf("%s://127.0.0.1:%d", scheme, cfg.Port),
 		cmd:     cmd,
 		output:  out,
 		client:  buildClient(t, cfg),
+		exited:  make(chan struct{}),
 	}
+
+	go func() {
+		_ = proc.reap()
+		close(proc.exited)
+	}()
+
+	return proc
 }
 
 // buildEnv produces the child's complete environment. PATH is carried because
@@ -155,9 +183,7 @@ func buildEnv(cfg Config) []string {
 		"CETACEAN_SNAPSHOT":    "false",
 	}
 
-	for k, v := range cfg.Env {
-		env[k] = v
-	}
+	maps.Copy(env, cfg.Env)
 
 	out := make([]string, 0, len(env))
 	for k, v := range env {
@@ -207,25 +233,37 @@ func buildClient(t *testing.T, cfg Config) *http.Client {
 
 func (p *Process) Client() *http.Client { return p.client }
 
+// get issues a GET against the running binary. It exists only so waitReady's
+// polling loop can build a request rather than call the context-less
+// (*http.Client).Get; the client's own Timeout still bounds each attempt.
+func (p *Process) get(url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.client.Do(req)
+}
+
 // Logs returns everything the binary has written so far. Cetacean logs
 // structured JSON to stderr, so this doubles as an assertion target.
 func (p *Process) Logs() string { return p.output.String() }
 
+// Stop reaps the child through the one shared reaper goroutine started in
+// launch; it never calls Wait itself, only waits for that goroutine's result.
 func (p *Process) Stop() {
-	p.once.Do(func() {
+	p.stopOnce.Do(func() {
 		if p.cmd.Process == nil {
 			return
 		}
 
 		_ = p.cmd.Process.Signal(os.Interrupt)
 
-		done := make(chan struct{})
-		go func() { _, _ = p.cmd.Process.Wait(); close(done) }()
-
 		select {
-		case <-done:
+		case <-p.exited:
 		case <-time.After(10 * time.Second):
 			_ = p.cmd.Process.Kill()
+			<-p.exited
 		}
 	})
 }
@@ -234,7 +272,7 @@ func (p *Process) waitReady() error {
 	deadline := time.Now().Add(readyTimeout)
 
 	for time.Now().Before(deadline) {
-		resp, err := p.client.Get(p.BaseURL + "/-/ready")
+		resp, err := p.get(p.BaseURL + "/-/ready")
 		if err == nil {
 			resp.Body.Close()
 
@@ -243,11 +281,14 @@ func (p *Process) waitReady() error {
 			}
 		}
 
-		if p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited() {
-			return fmt.Errorf("binary exited during startup with code %d", p.cmd.ProcessState.ExitCode())
+		select {
+		case <-p.exited:
+			return fmt.Errorf(
+				"binary exited during startup with code %d",
+				p.cmd.ProcessState.ExitCode(),
+			)
+		case <-time.After(pollInterval):
 		}
-
-		time.Sleep(pollInterval)
 	}
 
 	return fmt.Errorf("binary not ready at %s within %s", p.BaseURL, readyTimeout)
@@ -260,8 +301,10 @@ func waitPortFree(t *testing.T, port int) {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	deadline := time.Now().Add(15 * time.Second)
 
+	dialer := net.Dialer{Timeout: 200 * time.Millisecond}
+
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+		conn, err := dialer.DialContext(context.Background(), "tcp", addr)
 		if err != nil {
 			return
 		}
