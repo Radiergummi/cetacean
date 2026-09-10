@@ -396,40 +396,75 @@ func TestCompressedResponsesKeepConditionalCaching(t *testing.T) {
 // every browser sends Accept-Encoding, every conditional write from a browser
 // would 412. The base hash must be coding-independent, with the coding only
 // ever appended as a suffix stripCodingSuffix knows how to remove.
+//
+// There is a row per JSON helper because the preconditioned surface is split
+// between them and a single row leaves the other half unguarded:
+// writeCachedJSONTimed renders the seven whole-resource details, while
+// writeCachedJSONStatus renders everything else — every service and node
+// section from representations.go, the stack and plugin details, the label
+// endpoints. Patch either helper to hash encoded bytes and its own row fails;
+// with one row, patching the other passes the whole package.
 func TestCompressedETagStillSatisfiesIfMatch(t *testing.T) {
-	router := newSeededTestRouter(t)
-
-	read := httptest.NewRequest("GET", "/services/svc1", nil)
-	read.Header.Set("Accept", "application/json")
-	read.Header.Set("Accept-Encoding", "zstd")
-	readRec := httptest.NewRecorder()
-	router.ServeHTTP(readRec, read)
-
-	if readRec.Code != http.StatusOK {
-		t.Fatalf("GET status = %d, want 200", readRec.Code)
-	}
-	// Guard the premise: an uncompressed read would make the rest of this
-	// test pass for the wrong reason.
-	if got := readRec.Header().Get("Content-Encoding"); got != "zstd" {
-		t.Fatalf("Content-Encoding = %q, want zstd — fixture body too small to compress", got)
-	}
-
-	etag := readRec.Header().Get("ETag")
-	if !strings.HasSuffix(strings.Trim(etag, `"`), "-zstd") {
-		t.Fatalf("ETag = %q, want a -zstd suffix", etag)
+	cases := []struct {
+		name string
+		// helper names the write path this row is here to cover, so a
+		// failure says which half of the surface broke.
+		helper      string
+		getPath     string
+		writeMethod string
+		writePath   string
+		wantStatus  int
+	}{
+		{
+			"service detail", "writeCachedJSONTimed",
+			"/services/svc1", "DELETE", "/services/svc1", http.StatusNoContent,
+		},
+		{
+			"stack detail", "writeCachedJSONStatus",
+			"/stacks/demo", "DELETE", "/stacks/demo", http.StatusOK,
+		},
 	}
 
-	write := httptest.NewRequest("DELETE", "/services/svc1", nil)
-	write.Header.Set("Accept", "application/json")
-	write.Header.Set("If-Match", etag)
-	writeRec := httptest.NewRecorder()
-	router.ServeHTTP(writeRec, write)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router := newSeededTestRouter(t)
 
-	if writeRec.Code != http.StatusNoContent {
-		t.Errorf(
-			"DELETE /services/svc1 = %d, want 204 with the ETag its own compressed GET returned",
-			writeRec.Code,
-		)
+			read := httptest.NewRequest("GET", tc.getPath, nil)
+			read.Header.Set("Accept", "application/json")
+			read.Header.Set("Accept-Encoding", "zstd")
+			readRec := httptest.NewRecorder()
+			router.ServeHTTP(readRec, read)
+
+			if readRec.Code != http.StatusOK {
+				t.Fatalf("GET %s = %d, want 200", tc.getPath, readRec.Code)
+			}
+			// Guard the premise: an uncompressed read would make the rest of
+			// this row pass for the wrong reason.
+			if got := readRec.Header().Get("Content-Encoding"); got != "zstd" {
+				t.Fatalf(
+					"GET %s Content-Encoding = %q, want zstd — fixture body too small to compress",
+					tc.getPath, got,
+				)
+			}
+
+			etag := readRec.Header().Get("ETag")
+			if !strings.HasSuffix(strings.Trim(etag, `"`), "-zstd") {
+				t.Fatalf("ETag = %q, want a -zstd suffix", etag)
+			}
+
+			write := httptest.NewRequest(tc.writeMethod, tc.writePath, nil)
+			write.Header.Set("Accept", "application/json")
+			write.Header.Set("If-Match", etag)
+			writeRec := httptest.NewRecorder()
+			router.ServeHTTP(writeRec, write)
+
+			if writeRec.Code != tc.wantStatus {
+				t.Errorf(
+					"%s %s = %d, want %d with the ETag its own compressed GET returned (%s)",
+					tc.writeMethod, tc.writePath, writeRec.Code, tc.wantStatus, tc.helper,
+				)
+			}
+		})
 	}
 }
 
@@ -560,10 +595,15 @@ func TestAtomFeedsAreCompressed(t *testing.T) {
 // undo exactly what codedETag did; a coding added to one and not the other
 // would leave every conditional write from a client using it failing with a
 // 412 nothing in the test suite would otherwise notice.
+//
+// It iterates compressibleEncodings rather than a literal pair, so a third
+// coding is covered the moment it exists — which is what makes the claim
+// above true rather than merely stated. TestCompressibleEncodingsCoversTheEnum
+// keeps that list honest in turn.
 func TestCodedETagSuffixesAreStrippable(t *testing.T) {
 	base := computeETag([]byte("a representation"))
 
-	for _, coding := range []Encoding{EncodingGzip, EncodingZstd} {
+	for _, coding := range compressibleEncodings {
 		t.Run(coding.String(), func(t *testing.T) {
 			tagged := codedETag(base, coding)
 

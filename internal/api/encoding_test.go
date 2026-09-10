@@ -147,3 +147,39 @@ func TestCompressionDisabled(t *testing.T) {
 		t.Error("compressionDisabled(r) = false after disableCompression was called")
 	}
 }
+
+// TestCompressibleEncodingsCoversTheEnum keeps compressibleEncodings from
+// falling behind the Encoding enum it stands for. Every test that iterates it
+// to claim coverage of "all codings" — TestCodedETagSuffixesAreStrippable
+// above all — is only as honest as this list, so a coding added to the enum
+// and not to the list would quietly narrow those tests rather than fail them.
+//
+// The enum has no sentinel to count to, so the scan uses the one property
+// String() gives us: every real coding names itself, and everything else
+// falls through to "identity". Sixty-four is far past any plausible number of
+// content-codings and costs nothing.
+func TestCompressibleEncodingsCoversTheEnum(t *testing.T) {
+	listed := make(map[Encoding]bool, len(compressibleEncodings))
+
+	for _, coding := range compressibleEncodings {
+		if coding == EncodingIdentity {
+			t.Error("compressibleEncodings contains identity, which is the absence of a coding")
+		}
+		if listed[coding] {
+			t.Errorf("compressibleEncodings lists %v twice", coding)
+		}
+		listed[coding] = true
+	}
+
+	for candidate := EncodingIdentity + 1; candidate < EncodingIdentity+64; candidate++ {
+		if candidate.String() == EncodingIdentity.String() {
+			continue
+		}
+		if !listed[candidate] {
+			t.Errorf(
+				"Encoding %q is in the enum but missing from compressibleEncodings",
+				candidate.String(),
+			)
+		}
+	}
+}

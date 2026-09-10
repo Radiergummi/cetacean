@@ -52,6 +52,34 @@ Accept: application/json
 curl -H "Accept: application/json" http://localhost:9000/services
 ```
 
+### Compression
+
+JSON, Atom and JSON Feed responses, and the `/topology` graph formats, are compressed when the request offers a
+coding Cetacean serves and the body exceeds 1 KiB. Two codings are served, `zstd` and `gzip`, negotiated from
+`Accept-Encoding` per [RFC 9110 §12.5.3](https://www.rfc-editor.org/rfc/rfc9110#section-12.5.3) — `q` values and
+`*` included, and `zstd` preferred at equal weight. Smaller bodies are sent uncompressed regardless; there is
+nothing to gain and a frame header to pay for.
+
+`Vary: Accept-Encoding` is sent on every one of these responses whether or not anything was compressed, since what
+they return does depend on the header. `Content-Encoding` appears only when a coding was actually applied.
+
+A compressed representation carries its coding on the `ETag`, as a suffix inside the quotes:
+
+```bash
+curl -sD- -H 'Accept-Encoding: zstd' -o/dev/null http://localhost:9000/services/web
+# < Content-Encoding: zstd
+# < Vary: Accept-Encoding
+# < ETag: "a1b2c3d4e5f60718-zstd"
+```
+
+The suffix distinguishes the two representations for caches, which is what
+[RFC 9110 §8.8.3](https://www.rfc-editor.org/rfc/rfc9110#section-8.8.3) requires. It does **not** stop the validator
+being used as [`If-Match`](#preconditions) on a write: the hash is always taken over the uncompressed body, so a
+validator obtained under compression and one obtained without it agree, and either is accepted verbatim.
+
+`/search` and its feeds are never compressed. The response repeats the query you sent back to you alongside content
+the ACL filtered for you, and compressed length would leak whether a guessed query matched something you can see.
+
 ## Feeds
 
 Resource list and detail endpoints, plus `/events`, `/history`, `/search`, and

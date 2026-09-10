@@ -43,6 +43,15 @@ func (e Encoding) String() string {
 // what the client accepts.
 const compressionThreshold = 1024
 
+// compressibleEncodings is every coding this server will ever apply — the
+// Encoding enum minus identity. It exists so that anything having to reason
+// about "all the codings" reads one list instead of repeating a literal:
+// notably the tests holding codedETag's suffixes against the ones
+// stripCodingSuffix removes, which would otherwise assert coverage they do
+// not have. knownCodingSuffixes is deliberately *not* derived from it — a
+// list checked against itself can never catch drift.
+var compressibleEncodings = []Encoding{EncodingGzip, EncodingZstd}
+
 // zstdEncoder is a single package-level encoder shared by all requests.
 // zstd.Encoder.EncodeAll is documented safe for concurrent use — each call
 // checks out one of the encoder's internal workers for the duration of the

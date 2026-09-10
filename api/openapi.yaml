@@ -5747,10 +5747,26 @@ components:
 
   headers:
     ETag:
-      description: Weak ETag for conditional requests (use with If-None-Match)
+      description: >
+        Strong validator for conditional requests: send it back as
+        `If-None-Match` to revalidate a cached copy, or as `If-Match` to make
+        a write conditional on the resource not having changed. A compressed
+        representation carries its content-coding as a suffix inside the
+        quotes; the hash itself is always of the uncompressed body, so a
+        suffixed validator is still accepted verbatim as `If-Match`.
       schema:
         type: string
-        example: '"w/abc123"'
+        example: '"a1b2c3d4e5f60718"'
+
+    Content-Encoding:
+      description: >
+        Content-coding applied to the response body, when the request's
+        `Accept-Encoding` offered one and the body exceeds 1 KiB. Absent
+        otherwise. `Vary: Accept-Encoding` is sent either way.
+      schema:
+        type: string
+        enum: [zstd, gzip]
+        example: zstd
 
     Link:
       description: RFC 8288 pagination links (rel="next", rel="prev")
