@@ -47,12 +47,7 @@ func (h *Handlers) HandleGetServiceMode(w http.ResponseWriter, r *http.Request) 
 	}
 	h.setAllowSubResource(w, r, "PUT", config.OpsImpactful, "service:"+svc.Spec.Name)
 
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceModeRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceModeRepresentation)
 }
 
 func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.Request) {
@@ -62,12 +57,7 @@ func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.R
 	}
 	h.setAllowSubResource(w, r, "PUT", config.OpsImpactful, "service:"+svc.Spec.Name)
 
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceEndpointModeRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceEndpointModeRepresentation)
 }
 
 func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Request) {
@@ -226,12 +216,7 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceEnvRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceEnvRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request) {
@@ -307,12 +292,7 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceResourcesRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceResourcesRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Request) {
@@ -374,12 +354,7 @@ func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.servicePortsRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.servicePortsRepresentation)
 }
 
 func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Request) {
@@ -432,12 +407,7 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceHealthcheckRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceHealthcheckRepresentation)
 }
 
 func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -481,12 +451,7 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.servicePlacementRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.servicePlacementRepresentation)
 }
 
 func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Request) {
@@ -529,12 +494,7 @@ func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceUpdatePolicyRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceUpdatePolicyRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http.Request) {
@@ -590,12 +550,7 @@ func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http
 	if !ok {
 		return
 	}
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceRollbackPolicyRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceRollbackPolicyRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
@@ -650,12 +605,7 @@ func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceLogDriverRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceLogDriverRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Request) {
@@ -815,12 +765,7 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 		return
 	}
 
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceContainerConfigRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceContainerConfigRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *http.Request) {
@@ -944,12 +889,7 @@ func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceConfigsRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceConfigsRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Request) {
@@ -1022,12 +962,7 @@ func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceSecretsRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceSecretsRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Request) {
@@ -1100,12 +1035,7 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceNetworksRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceNetworksRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Request) {
@@ -1164,12 +1094,7 @@ func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceMountsRepresentation)
-	if !ok {
-		return
-	}
-
-	writeCachedJSON(w, r, rep)
+	h.writeServiceRepresentation(w, r, svc.ID, h.serviceMountsRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Request) {

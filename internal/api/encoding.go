@@ -91,8 +91,6 @@ func encodeBody(body []byte, e Encoding) ([]byte, Encoding) {
 		return gzipEncode(body), EncodingGzip
 	case EncodingZstd:
 		return zstdEncoder.EncodeAll(body, nil), EncodingZstd
-	case EncodingIdentity:
-		return body, EncodingIdentity
 	default:
 		return body, EncodingIdentity
 	}

@@ -35,6 +35,25 @@ type representationFunc func(*http.Request) (any, bool)
 // The miss is all but unreachable — the handler's ACL lookup has just resolved
 // the same resource — but the builder cannot write the 404 itself without
 // breaking the 412-vs-404 rule, so the handler owns it.
+// writeServiceRepresentation is the tail every service sub-resource GET
+// shares: build the representation, answer 404 if the service vanished
+// between the ACL check and here, and write it with its ETag. The handlers
+// keep their own lookup, ACL check and Allow header, which is where they
+// genuinely differ.
+func (h *Handlers) writeServiceRepresentation(
+	w http.ResponseWriter,
+	r *http.Request,
+	serviceID string,
+	rep representationFunc,
+) {
+	value, ok := representationOr404(w, r, "service", serviceID, rep)
+	if !ok {
+		return
+	}
+
+	writeCachedJSON(w, r, value)
+}
+
 func representationOr404(
 	w http.ResponseWriter,
 	r *http.Request,

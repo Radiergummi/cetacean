@@ -64,18 +64,24 @@ func preferRespondAsync(r *http.Request) bool {
 	return slices.Contains(preferTokens(r), "respond-async")
 }
 
+// applyPreference records one preference the server honoured (RFC 7240 §3).
+//
+// Every site that reports a preference goes through here, and it always adds
+// rather than sets. Preference-Applied is a list-valued field, so repeated
+// field lines are equivalent to one comma-joined value, and a single response
+// may honour more than one preference: a service mutation carrying
+// "return=minimal, wait=30" waits, then answers 204, and both are true of it.
+// Setting would make the result depend on which site ran last — an ordering
+// invariant no type enforces — so no caller may set this header directly.
+func applyPreference(w http.ResponseWriter, token string) {
+	w.Header().Add("Preference-Applied", token)
+}
+
 // writePreferMinimal sends a 204 No Content response with the
 // Preference-Applied header confirming the server honored the
 // return=minimal preference (RFC 7240 §3).
-//
-// It adds rather than sets, because Preference-Applied is a list-valued
-// field: repeated field lines are equivalent to one comma-joined value, and
-// a request may have had more than one preference honoured. A service
-// mutation carrying "return=minimal, wait=30" waits first — awaitPreferred
-// reports the wait it applied — and setting here would clobber that, naming
-// one of the two preferences the server actually honoured.
 func writePreferMinimal(w http.ResponseWriter) {
-	w.Header().Add("Preference-Applied", "return=minimal")
+	applyPreference(w, "return=minimal")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -83,7 +89,7 @@ func writePreferMinimal(w http.ResponseWriter) {
 // Preference-Applied header but no body (RFC 7240 §4.2).
 // The caller should set the Location header before calling this.
 func writePreferCreated(w http.ResponseWriter) {
-	w.Header().Set("Preference-Applied", "return=minimal")
+	applyPreference(w, "return=minimal")
 	w.WriteHeader(http.StatusCreated)
 }
 

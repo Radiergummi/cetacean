@@ -250,8 +250,8 @@ func (h *Handlers) awaitPreferred(
 	// clamped to the server ceiling — RFC 7240 §2 asks for what was applied,
 	// not for what was asked.
 	if wanted && !async && err == nil {
-		w.Header().Set(
-			"Preference-Applied",
+		applyPreference(
+			w,
 			"wait="+strconv.FormatInt(int64(wait/time.Second), 10),
 		)
 
@@ -265,7 +265,7 @@ func (h *Handlers) awaitPreferred(
 	w.Header().Set("Location", absPath(r.Context(), "/services/"+id))
 
 	if async {
-		w.Header().Set("Preference-Applied", "respond-async")
+		applyPreference(w, "respond-async")
 	}
 
 	// writeJSONStatus rather than writeCachedJSONStatus: this is the

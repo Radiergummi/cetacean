@@ -62,6 +62,13 @@ func negotiateCoding(w http.ResponseWriter, r *http.Request, body []byte) Encodi
 		return EncodingIdentity
 	}
 
+	// Length first: parsing Accept-Encoding allocates, and almost every
+	// client sends one, so a sub-threshold body would pay for a negotiation
+	// whose result appliedEncoding is about to discard.
+	if len(body) < compressionThreshold {
+		return EncodingIdentity
+	}
+
 	coding := appliedEncoding(resolveEncoding(r), len(body))
 	if coding == EncodingIdentity {
 		return EncodingIdentity
