@@ -540,7 +540,7 @@ header ([RFC 9110 §13.1.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.1.
 refused with `412 Precondition Failed` (error code `API013`) instead of being applied. The header
 is always optional — omit it and the write proceeds exactly as it did before this existed.
 
-29 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
+30 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
 `PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
 `PUT /services/{id}/placement`, `PATCH /services/{id}/ports`,
 `PATCH /services/{id}/update-policy`, `PATCH /services/{id}/rollback-policy`,

@@ -49,6 +49,25 @@ func TestPreferMinimal(t *testing.T) {
 			header: []string{"respond-async"},
 			want:   false,
 		},
+		{
+			// RFC 7240 §2 draws the line between the two halves: "for both
+			// preference token names and parameter names, comparison is case
+			// insensitive while values are case sensitive".
+			name:   "mixed case name is honoured",
+			header: []string{"Return=minimal"},
+			want:   true,
+		},
+		{
+			name:   "mixed case value is a different preference",
+			header: []string{"return=Minimal"},
+			want:   false,
+		},
+		{
+			// RFC 7240 §2: a preference may carry parameters we ignore.
+			name:   "preference parameter",
+			header: []string{"return=minimal; foo=bar"},
+			want:   true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -99,6 +118,8 @@ func TestPreferWait(t *testing.T) {
 		{"non-numeric is ignored", []string{"wait=soon"}, 0, false},
 		{"negative is ignored", []string{"wait=-5"}, 0, false},
 		{"quoted value", []string{`wait="30"`}, 30 * time.Second, true},
+		{"mixed case name", []string{"Wait=30"}, 30 * time.Second, true},
+		{"preference parameter", []string{"wait=30; foo=bar"}, 30 * time.Second, true},
 	}
 
 	for _, tc := range cases {
@@ -123,6 +144,8 @@ func TestPreferRespondAsync(t *testing.T) {
 	}{
 		{"respond-async", true},
 		{"respond-async, wait=10", true},
+		{"Respond-Async", true},
+		{"respond-async; foo=bar", true},
 		{"return=minimal", false},
 		{"", false},
 	}

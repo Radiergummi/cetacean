@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -23,27 +22,52 @@ func preferTokens(r *http.Request) []string {
 	return tokens
 }
 
+// preference splits one Prefer token into its name and its value.
+//
+// Preference names are case-insensitive (RFC 7240 §2), so the name comes back
+// lowercased. Anything after the first ";" is a preference-parameter, which
+// §2 allows on any preference and this server understands none of — dropping
+// it here is what keeps `wait=30; foo=bar` a wait rather than a malformed
+// token. A value given as a quoted-string loses its surrounding quotes.
+func preference(token string) (name, value string) {
+	token, _, _ = strings.Cut(token, ";")
+
+	name, value, _ = strings.Cut(token, "=")
+	name = strings.ToLower(strings.TrimSpace(name))
+	value = strings.TrimSpace(value)
+
+	if len(value) >= 2 && strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
+		value = value[1 : len(value)-1]
+	}
+
+	return name, value
+}
+
 // preferMinimal returns true if the request carries a Prefer header
 // containing the "return=minimal" preference token (RFC 7240 §4.2).
 func preferMinimal(r *http.Request) bool {
-	return slices.Contains(preferTokens(r), "return=minimal")
+	for _, token := range preferTokens(r) {
+		// The name matches case-insensitively and the value does not: RFC 7240
+		// §2 draws the line exactly there — "for both preference token names
+		// and parameter names, comparison is case insensitive while values are
+		// case sensitive". So "Return=minimal" is this preference and
+		// "return=MINIMAL" is a different, unrecognised one.
+		if name, value := preference(token); name == "return" && value == "minimal" {
+			return true
+		}
+	}
+
+	return false
 }
 
 // preferWait returns the RFC 7240 §4.3 wait preference in seconds, clamped to
 // cluster.ConvergenceTimeout. A malformed or negative value is ignored rather
-// than rejected: §2 says an unparseable preference is simply not applied. The
-// value may be a bare token or a quoted-string (RFC 7240 §2), so a single
-// pair of surrounding double quotes is stripped before parsing.
+// than rejected: §2 says an unparseable preference is simply not applied.
 func preferWait(r *http.Request) (time.Duration, bool) {
 	for _, token := range preferTokens(r) {
-		name, value, found := strings.Cut(token, "=")
-		if !found || strings.TrimSpace(name) != "wait" {
+		name, value := preference(token)
+		if name != "wait" {
 			continue
-		}
-
-		value = strings.TrimSpace(value)
-		if len(value) >= 2 && strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
-			value = value[1 : len(value)-1]
 		}
 
 		seconds, err := strconv.Atoi(value)
@@ -61,7 +85,13 @@ func preferWait(r *http.Request) (time.Duration, bool) {
 
 // preferRespondAsync reports the RFC 7240 §4.1 respond-async preference.
 func preferRespondAsync(r *http.Request) bool {
-	return slices.Contains(preferTokens(r), "respond-async")
+	for _, token := range preferTokens(r) {
+		if name, _ := preference(token); name == "respond-async" {
+			return true
+		}
+	}
+
+	return false
 }
 
 // applyPreference records one preference the server honoured (RFC 7240 §3).

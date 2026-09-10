@@ -146,13 +146,17 @@ func resolveEncoding(r *http.Request) Encoding {
 		return 0
 	}
 
+	// gzip is considered before zstd so that, at equal weight, zstd's own
+	// ">=" overrides it — which is what makes zstd the tie-break winner. Both
+	// require a positive weight, so a coding the client never accepted cannot
+	// be chosen just because identity's weight came back lower.
 	best, bestQ := EncodingIdentity, weightOf("identity")
 
-	if q := weightOf("zstd"); q > 0 && q >= bestQ {
-		best, bestQ = EncodingZstd, q
+	if q := weightOf("gzip"); q > 0 && q >= bestQ {
+		best, bestQ = EncodingGzip, q
 	}
-	if q := weightOf("gzip"); q > bestQ {
-		best = EncodingGzip
+	if q := weightOf("zstd"); q > 0 && q >= bestQ {
+		best = EncodingZstd
 	}
 
 	return best

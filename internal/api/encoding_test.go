@@ -25,6 +25,14 @@ func TestResolveEncoding(t *testing.T) {
 		{"br", EncodingIdentity}, // unsupported
 		{"*", EncodingZstd},
 		{"identity", EncodingIdentity},
+		// A compressed coding wins a tie against identity, and zstd wins a
+		// tie against gzip.
+		{"gzip, identity", EncodingGzip},
+		{"gzip;q=1.0, identity;q=1.0", EncodingGzip},
+		{"gzip, zstd, identity", EncodingZstd},
+		// A coding the client never listed is never chosen, however low the
+		// weight it is competing against.
+		{"identity;q=-1", EncodingIdentity},
 	}
 
 	for _, tc := range cases {
