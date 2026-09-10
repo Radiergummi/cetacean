@@ -390,20 +390,11 @@ func TestCompressedResponsesKeepConditionalCaching(t *testing.T) {
 	}
 }
 
-// TestCompressedETagStillSatisfiesIfMatch is the regression this task exists
-// to avoid. precond hashes the identity representation and never compresses,
-// so an ETag hashed over compressed bytes could never match one — and since
-// every browser sends Accept-Encoding, every conditional write from a browser
-// would 412. The base hash must be coding-independent, with the coding only
-// ever appended as a suffix stripCodingSuffix knows how to remove.
-//
-// There is a row per JSON helper because the preconditioned surface is split
-// between them and a single row leaves the other half unguarded:
-// writeCachedJSONTimed renders the seven whole-resource details, while
-// writeCachedJSONStatus renders everything else — every service and node
-// section from representations.go, the stack and plugin details, the label
-// endpoints. Patch either helper to hash encoded bytes and its own row fails;
-// with one row, patching the other passes the whole package.
+// TestCompressedETagStillSatisfiesIfMatch guards the base hash staying
+// coding-independent: precond hashes the identity representation, so an ETag
+// hashed over compressed bytes could never match one, and every browser sends
+// Accept-Encoding. There is a row per JSON helper because the preconditioned
+// surface is split between them, and one row would leave the other unguarded.
 func TestCompressedETagStillSatisfiesIfMatch(t *testing.T) {
 	cases := []struct {
 		name string
@@ -469,13 +460,10 @@ func TestCompressedETagStillSatisfiesIfMatch(t *testing.T) {
 }
 
 // TestSearchIsNeverCompressed covers both search representations: the JSON
-// handler echoes ?q= verbatim into the body, and the feed titles itself with
-// it, in both cases beside ACL-filtered content. That is the BREACH shape, so
-// both opt out.
-//
-// The cache is seeded until each response clears compressionThreshold on its
-// own — the seeded fixture's search answers in a few hundred bytes, which
-// would make either assertion pass whether the opt-out were wired or not.
+// handler echoes ?q= into the body and the feed titles itself with it, both
+// beside ACL-filtered content, so both opt out. The cache is seeded until each
+// response clears compressionThreshold, or either assertion would pass whether
+// the opt-out were wired or not.
 func TestSearchIsNeverCompressed(t *testing.T) {
 	c := cache.New(nil)
 	for i := range 60 {
@@ -522,13 +510,10 @@ func TestSearchIsNeverCompressed(t *testing.T) {
 }
 
 func TestSSEStillStreamsUnderCompression(t *testing.T) {
-	// No ResponseWriter is wrapped anywhere in this design, so the
-	// w.(http.Flusher) assertions in sse/broadcaster.go, log_handlers.go and
-	// metricsstream.go keep working. This asserts that structurally.
-	//
-	// The broadcaster is wired onto the handlers rather than left to
-	// newTestRouterWithCache's own: streamList reads the handlers' one, and a
-	// nil there panics before the stream is ever opened.
+	// No ResponseWriter is wrapped anywhere, so the w.(http.Flusher) assertions
+	// in sse/broadcaster.go, log_handlers.go and metricsstream.go keep working.
+	// The broadcaster is wired onto the handlers because streamList reads
+	// theirs, and a nil one panics before the stream opens.
 	broadcaster := sse.NewBroadcaster(0, noopErrorWriter, nil)
 	t.Cleanup(broadcaster.Close)
 
@@ -591,15 +576,9 @@ func TestAtomFeedsAreCompressed(t *testing.T) {
 }
 
 // TestCodedETagSuffixesAreStrippable holds codedETag and knownCodingSuffixes
-// together. The precondition path works only because stripCodingSuffix can
-// undo exactly what codedETag did; a coding added to one and not the other
-// would leave every conditional write from a client using it failing with a
-// 412 nothing in the test suite would otherwise notice.
-//
-// It iterates compressibleEncodings rather than a literal pair, so a third
-// coding is covered the moment it exists — which is what makes the claim
-// above true rather than merely stated. TestCompressibleEncodingsCoversTheEnum
-// keeps that list honest in turn.
+// together: the precondition path works only because stripCodingSuffix undoes
+// exactly what codedETag did. It iterates compressibleEncodings rather than a
+// literal pair, so a third coding is covered the moment it exists.
 func TestCodedETagSuffixesAreStrippable(t *testing.T) {
 	base := computeETag([]byte("a representation"))
 

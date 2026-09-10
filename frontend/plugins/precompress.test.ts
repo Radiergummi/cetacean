@@ -13,10 +13,7 @@ interface FakeFile {
   contents: string | Buffer;
   /**
    * What the in-memory bundle record still claims, where that has gone stale.
-   * Vite's own post plugins run after user ones and rewrite chunk code in
-   * their generateBundle, so a value read out of the bundle can differ from
-   * the file that ends up on disk. Setting this proves the plugin reads the
-   * file rather than the record.
+   * Setting it proves the plugin reads the file rather than the record.
    */
   bundleCode?: string;
 }
@@ -100,10 +97,8 @@ describe("precompress", () => {
   });
 
   it("leaves index.html alone", () => {
-    // NewSPAHandler intercepts index.html and answers with a copy carrying an
-    // injected <base href>, so a build-time variant could never match the
-    // bytes served — and /index.html.gz, absent from the manifest, would fall
-    // through to serveAsset and hand out the un-injected shell.
+    // NewSPAHandler answers index.html with an injected copy, so a build-time
+    // variant could never match the bytes served.
     const outDir = runPrecompress(fakeFiles());
 
     expect(existsSync(join(outDir, "index.html.gz"))).toBe(false);
@@ -112,10 +107,9 @@ describe("precompress", () => {
   });
 
   it("compresses what is on disk, not what the bundle record still says", () => {
-    // The defect this plugin was rewritten for: hooked into generateBundle,
-    // it compressed chunks before vite:build-import-analysis had rewritten
-    // their __VITE_PRELOAD__ markers, shipping variants that threw
-    // ReferenceError in every browser that negotiated one.
+    // Hooked into generateBundle, this compressed chunks before
+    // vite:build-import-analysis rewrote their __VITE_PRELOAD__ markers,
+    // shipping variants that threw ReferenceError in the browser.
     const written = "__vite__mapDeps([0,1]);".repeat(100);
     const outDir = runPrecompress({
       "assets/app.js": {
@@ -147,10 +141,9 @@ describe("precompress", () => {
   });
 
   it("compresses a file exactly at the 1024-byte threshold", () => {
-    // The server's own skip condition (internal/api/encoding.go) is a strict
-    // less-than against the same 1024-byte threshold, so 1024 is the smallest
-    // size either side compresses. Pinning it here keeps the two from
-    // silently disagreeing about where the line falls.
+    // The server's skip condition (internal/api/encoding.go) is a strict
+    // less-than against the same threshold, so 1024 is the smallest size either
+    // side compresses.
     const outDir = runPrecompress({
       "assets/exact.js": { type: "chunk", contents: "a".repeat(1024) },
     });
@@ -173,17 +166,15 @@ describe("precompress ETag and size correctness", () => {
     const gzipBytes = gzipSync(originalSource);
     const zstdBytes = zstdCompressSync(originalSource);
 
-    // A format check (/^[0-9a-f]{32}$/) passes even if the gzip and zstd
-    // digests were swapped, or if a variant's ETag were computed over the
-    // original bytes instead of its own compressed bytes. Recomputing each
-    // digest independently is what actually catches that.
+    // A format check would pass with the gzip and zstd digests swapped, or with
+    // a variant's ETag computed over the original bytes; recomputing each digest
+    // independently is what catches that.
     expect(entry.etag).toBe(digest(originalSource));
     expect(entry.variants.gzip.etag).toBe(digest(gzipBytes));
     expect(entry.variants.zstd.etag).toBe(digest(zstdBytes));
 
-    // Belt-and-suspenders: the three digests must be pairwise distinct, so
-    // a swap between them cannot coincidentally still satisfy the equality
-    // checks above.
+    // The three digests must be pairwise distinct, so a swap between them
+    // cannot still satisfy the equality checks above.
     const etags = [entry.etag, entry.variants.gzip.etag, entry.variants.zstd.etag];
     expect(new Set(etags).size).toBe(3);
 

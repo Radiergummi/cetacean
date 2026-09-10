@@ -40,15 +40,10 @@ func TestChainRunsInDeclaredOrder(t *testing.T) {
 	}
 }
 
-// TestDerivedChainsDoNotContaminate is the reason this type copies rather than
-// appending in place. Two chains derived from one base must not share a
-// backing array, or the second Append overwrites the first one's entry.
-//
-// The base must have two constructors to allocate zero spare capacity (len == cap).
-// Appending once produces a middle chain with spare capacity (len 3, cap 4), and
-// deriving twice from that middle chain is necessary to reproduce the corruption:
-// a naive append would write index 3 for both, and the second derivation would
-// silently overwrite the first one's marker.
+// TestDerivedChainsDoNotContaminate is why Chain copies rather than appending in
+// place. Reproducing the corruption needs a base at len == cap, one Append to
+// produce a middle chain with spare capacity, and two derivations from that
+// middle chain: a naive append writes the same index for both.
 func TestDerivedChainsDoNotContaminate(t *testing.T) {
 	var order []string
 	base := NewChain(

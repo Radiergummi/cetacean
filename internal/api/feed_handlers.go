@@ -34,9 +34,8 @@ type feedData struct {
 	Limit      int
 	LastItemID uint64 // numeric ID of last entry for pagination cursors
 
-	// QueryParams names the query parameters this particular feed reads
-	// beyond the pagination pair, and so the only ones its links may echo
-	// back. Only the search feed has any — see feedQuery.
+	// QueryParams names the query parameters this feed reads beyond the
+	// pagination pair, and so the only ones its links may echo back.
 	QueryParams []string
 }
 
@@ -153,9 +152,8 @@ func (h *Handlers) handleFeedSearch(
 }
 
 // searchFeedData is historyFeedData for the search feed, the one feed that
-// reads ?q= and so the only one whose links may carry it back. That it is
-// also the one feed served uncompressed is what makes echoing it safe;
-// handleFeedSearch pairs this with disableCompression for that reason.
+// reads ?q= and so the only one whose links may carry it back. Echoing it is
+// safe only because handleFeedSearch pairs it with disableCompression.
 func searchFeedData(
 	r *http.Request,
 	title string,
@@ -458,18 +456,10 @@ var feedPaginationParams = []string{"before", "limit"}
 // feedQuery returns the subset of r's query this feed's links may carry: the
 // pagination pair every feed reads, plus whatever else data declared.
 //
-// Feed links are built from this rather than from the request's raw query
-// because the rest of it is attacker-chosen text: reflected verbatim into a
-// feed, it would sit in a compressed body beside ACL-filtered resource names,
-// which is the BREACH shape HandleSearch and handleFeedSearch already refuse
-// to compress at all. Dropping what the feed never read costs nothing and
-// leaves no reflection to reason about.
-//
-// The set is per-feed rather than global because "what a feed reads" is not
-// one answer: ?q= is read by handleFeedSearch alone, and echoing it from
-// /history — which is compressed — would rebuild that same shape one
-// parameter wide. The one feed allowed to echo it is also the one served
-// uncompressed.
+// The rest of the raw query is attacker-chosen text, and reflecting it into a
+// compressed feed beside ACL-filtered resource names is the BREACH shape. The
+// set is per-feed rather than global because ?q= is read by handleFeedSearch
+// alone, and echoing it from a compressed feed would rebuild that shape.
 func feedQuery(r *http.Request, data feedData) url.Values {
 	source := r.URL.Query()
 	kept := make(url.Values, len(feedPaginationParams)+len(data.QueryParams))

@@ -46,15 +46,12 @@ func etagMatch(header, etag string) bool {
 }
 
 // negotiateCoding picks the content-coding this response body will be served
-// under and stamps the headers describing it. It returns the coding rather
-// than encoding anything, so a caller can suffix its ETag and evaluate
-// If-None-Match first: a 304 needs the validator but has no body to spend a
-// compression pass on, and on a dashboard that polls, the 304 is the common
-// path.
+// under and stamps the headers describing it. It returns the coding rather than
+// encoding anything, so a caller can suffix its ETag and answer a 304 without
+// spending a compression pass on a body it will not send.
 //
-// Vary is added whether or not anything was compressed — the response varies
-// by Accept-Encoding either way — and with Add rather than Set, so it extends
-// the Vary another layer already wrote instead of replacing it.
+// Vary is added whether or not anything was compressed, with Add rather than
+// Set so it extends a Vary another layer already wrote.
 func negotiateCoding(w http.ResponseWriter, r *http.Request, body []byte) Encoding {
 	w.Header().Add("Vary", "Accept-Encoding")
 
@@ -62,12 +59,9 @@ func negotiateCoding(w http.ResponseWriter, r *http.Request, body []byte) Encodi
 		return EncodingIdentity
 	}
 
-	// Length first: parsing Accept-Encoding allocates, and almost every
-	// client sends one, so a sub-threshold body would pay for a negotiation
-	// whose result the threshold is about to discard. This *is* the threshold
-	// gate — it is appliedEncoding's rule, reached before the negotiation
-	// rather than after it — which is why what follows only has to ask what
-	// the client accepts.
+	// This is appliedEncoding's threshold gate, applied before the negotiation
+	// rather than after it: parsing Accept-Encoding allocates, and the result
+	// would only be discarded.
 	if len(body) < compressionThreshold {
 		return EncodingIdentity
 	}
@@ -86,12 +80,9 @@ func negotiateCoding(w http.ResponseWriter, r *http.Request, body []byte) Encodi
 // served under, per RFC 9110 §8.8.3: two codings of one resource are two
 // representations and cannot share a strong validator.
 //
-// The suffix goes inside the quotes and is appended to a hash of the
-// *identity* bytes, never of the encoded ones. That is what lets
-// stripCodingSuffix recover the underlying validator, and so what lets a
-// client hand back an If-Match it obtained under compression on a request
-// precond evaluates without any — which, since every browser sends
-// Accept-Encoding, is every conditional write a browser makes.
+// The suffix is appended to a hash of the identity bytes, never of the encoded
+// ones, so stripCodingSuffix can recover the underlying validator when a client
+// hands back an If-Match obtained under a different negotiation.
 func codedETag(etag string, coding Encoding) string {
 	if coding == EncodingIdentity {
 		return etag
@@ -112,9 +103,8 @@ func writeRawWithETag(w http.ResponseWriter, r *http.Request, data []byte) {
 // time, whose ETag the caller hashed once at startup rather than on every
 // request — including the 304s, which never touch the body at all.
 //
-// The precomputed tag is the identity validator, so compression suffixes it
-// and hashes nothing: there is no hash step here to redirect at the encoded
-// bytes, and there must not be one.
+// The precomputed tag is the identity validator: compression suffixes it and
+// hashes nothing.
 func writeRawWithPrecomputedETag(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -179,13 +169,11 @@ func writeCachedJSONStatus(w http.ResponseWriter, r *http.Request, status int, v
 }
 
 // writeEncodedJSON sends a JSON body and its trailing newline under coding.
-// The newline is compressed together with the body rather than written after
-// it — a client decoding the frame would otherwise find a stray byte past its
-// end.
+// The newline is compressed together with the body: written after it, a client
+// decoding the frame would find a stray byte past its end.
 func writeEncodedJSON(w http.ResponseWriter, status int, body []byte, coding Encoding) {
-	// The coding is the one appliedEncoding already settled on, and adding a
-	// byte cannot push a body back under the threshold, so the coding
-	// encodeBody applies here is the coding the ETag was suffixed with.
+	// Adding a byte cannot push a body back under the threshold, so this is
+	// still the coding the ETag was suffixed with.
 	payload, _ := encodeBody(append(body, '\n'), coding)
 
 	w.WriteHeader(status)
@@ -239,12 +227,10 @@ func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastMod
 	writeEncodedJSON(w, http.StatusOK, body, coding)
 }
 
-// knownCodingSuffixes are the content-coding markers writeCachedJSON appends
-// to an ETag. They are stripped before a precondition comparison: the suffix
-// distinguishes representations for caching (RFC 9110 §8.8.3), but a
-// precondition is an assertion about resource state, and a client's validator
-// may have been obtained under different content negotiation than the request
-// carrying it back.
+// knownCodingSuffixes are the content-coding markers codedETag appends. They
+// are stripped before a precondition comparison: the suffix distinguishes
+// representations for caching, but a precondition asserts resource state, and a
+// validator may have been obtained under a different negotiation.
 var knownCodingSuffixes = []string{"-zstd", "-gzip"}
 
 func stripCodingSuffix(opaqueTag string) string {

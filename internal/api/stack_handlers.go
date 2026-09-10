@@ -41,10 +41,9 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 		r,
 		"stack",
 		name,
-		// GetStack, not GetStackDetail: this lookup only has to establish that
-		// the stack exists and name it for the ACL check, and GetStackDetail
-		// copies and sorts every member service, config, secret, network and
-		// volume. stackRepresentation builds the detail once, below.
+		// GetStack, not GetStackDetail: this lookup only establishes that the
+		// stack exists and names it for the ACL check. stackRepresentation
+		// builds the detail once, below.
 		h.cache.GetStack,
 		func(s cache.Stack) string {
 			return "stack:" + name

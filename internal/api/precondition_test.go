@@ -148,13 +148,10 @@ type preconditionEndpoint struct {
 
 // pairedEndpoints is every path in the router carrying both a GET and a write
 // method, and so every path that declares an If-Match precondition. The three
-// collection creates (POST /configs, /secrets, /plugins) are deliberately
-// absent: their paired GET is a collection whose ETag turns over on any
-// member change, which makes "create only if the collection is unchanged" a
-// precondition nobody can satisfy.
-//
-// /services/{id}/healthcheck appears twice — PUT replaces and PATCH merges,
-// both against the one representation.
+// collection creates (POST /configs, /secrets, /plugins) are absent: their
+// paired GET is a collection whose ETag turns over on any member change, so no
+// caller could satisfy the precondition. /services/{id}/healthcheck appears
+// twice, for the PUT and the PATCH, against the one representation.
 var pairedEndpoints = []preconditionEndpoint{
 	{
 		"service env", "/services/svc1/env", "PATCH", "/services/svc1/env",
@@ -292,20 +289,11 @@ var pairedEndpoints = []preconditionEndpoint{
 // declares a precondition, then drives its write twice: once with the ETag the
 // read just returned, and once with a strong tag that cannot match.
 //
-// The mismatched row is what catches a route that never got its precond
-// wrapper — an unconditioned write admits every If-Match, the right one
-// included, so the matching row alone would pass. The matching row proves the
-// write is reachable and that the route is conditioned on *this* URI's
-// representation: point it at another builder and the two validators come from
-// different resources, so the round trip breaks. It also holds
-// writeCachedJSON's ETag derivation and precond's together.
-//
-// What neither row can prove is that a builder still renders what its GET
-// rendered before the body moved out of the handler. The handler now calls the
-// builder, so a corrupted builder corrupts both validators identically and the
-// round trip still matches. That fidelity rests on the extraction being
-// verbatim and on the GET tests elsewhere in this package; do not read a green
-// run here as covering it.
+// The mismatched row catches a route that never got its precond wrapper, since
+// an unconditioned write admits every If-Match; the matching row proves the
+// route is conditioned on this URI's representation. Neither can prove a
+// builder still renders what its GET rendered — a corrupted builder corrupts
+// both validators identically — so do not read a green run as covering that.
 func TestPreconditionRoundTripsForEveryPairedEndpoint(t *testing.T) {
 	write := func(t *testing.T, router http.Handler, tc preconditionEndpoint, ifMatch string) int {
 		t.Helper()

@@ -374,16 +374,10 @@ func TestPaginationLinks(t *testing.T) {
 		}
 	})
 
-	// A feed link built from the raw query reflects whatever the caller put
-	// there into a compressed body, beside ACL-filtered resource names — the
-	// BREACH shape the search endpoints refuse to compress at all. Only the
-	// parameters a feed actually reads may appear in one.
-	//
-	// "Actually reads" is per-feed, not global: ?q= is read by the search
-	// feed alone, and /history is compressed, so echoing q there would
-	// rebuild the same shape one parameter wide. Both directions are
-	// asserted — a fix that simply dropped q everywhere would pass the
-	// refusal below while silently breaking the search feed's own links.
+	// Only the parameters a feed actually reads may appear in its links, or a
+	// compressed feed reflects caller-chosen text beside ACL-filtered names.
+	// Both directions are asserted: dropping q everywhere would pass the
+	// refusal below while breaking the search feed's own links.
 	t.Run("a feed that does not read a param never echoes it", func(t *testing.T) {
 		req := httptest.NewRequest(
 			"GET",

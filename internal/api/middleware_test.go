@@ -372,12 +372,9 @@ func TestRequestID_RejectsUnsafeCharacters(t *testing.T) {
 	}
 }
 
-// TestVaryAccumulatesAcrossMiddleware drives the assembled router, not a
-// single middleware in isolation: cors adds "Vary: Origin" and negotiate
-// runs after it. If negotiate ever overwrites instead of appending, a
-// cross-origin response would announce only "Vary: Accept" while still
-// reflecting Access-Control-Allow-Origin, letting a shared cache serve one
-// origin's response to another.
+// TestVaryAccumulatesAcrossMiddleware drives the assembled router: cors adds
+// "Vary: Origin" and negotiate runs after it. If negotiate overwrites rather
+// than appends, a shared cache can serve one origin's response to another.
 func TestVaryAccumulatesAcrossMiddleware(t *testing.T) {
 	c := cache.New(nil)
 	h := newTestHandlers(t, withCache(c))

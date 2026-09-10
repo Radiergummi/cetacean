@@ -107,10 +107,8 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 }
 
 // newTestRouterWithCache builds a fully wired router around a caller-seeded
-// cache, for tests that need to exercise real routes (middleware chains,
-// content negotiation, preconditions) rather than call a handler directly.
-// Additional testHandlersOption values (e.g. withWriteClient) are applied on
-// top of the cache.
+// cache, for tests that exercise real routes rather than call a handler
+// directly. Further testHandlersOption values are applied on top of the cache.
 func newTestRouterWithCache(
 	t testing.TB,
 	c *cache.Cache,

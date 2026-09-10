@@ -44,12 +44,10 @@ func seedService(t *testing.T, c *cache.Cache, id string, desired, running int) 
 	}
 }
 
-// TestAwaitServiceRefusesToJudgeAStaleCache is the regression this extraction
-// exists to prevent. The watcher fills the cache asynchronously, so at the
-// moment a write returns the cache still holds the pre-mutation spec and
-// tasks: a 5→2 scale then asks 2 running against a desired 5 and would report
-// converged instantly, with five replicas still up. No predicate over those
-// numbers can tell — only the version gate can.
+// TestAwaitServiceRefusesToJudgeAStaleCache: the watcher fills the cache
+// asynchronously, so at the moment a write returns a 5→2 scale asks 2 running
+// against a desired 5 and would report converged with five replicas still up.
+// Only the version gate can tell.
 func TestAwaitServiceRefusesToJudgeAStaleCache(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
@@ -241,15 +239,11 @@ func TestServiceConvergedHandlesUnknownService(t *testing.T) {
 	}
 }
 
-// A scale-down must not report success while the replicas it removed are
-// still running.
-//
-// The cache is filled asynchronously by the event watcher, so at the moment a
-// write returns it still holds the spec *and* the tasks from before it: a
-// 5-to-2 scale looks like two desired against five running, or five against
-// five, depending on which half has landed. Neither is a convergence, and no
-// predicate over those numbers alone could tell — so the wait refuses to judge
-// anything older than the version the write produced.
+// A scale-down must not report success while the replicas it removed are still
+// running. The cache is filled asynchronously, so mid-write a 5-to-2 scale looks
+// like two desired against five running, or five against five, depending on
+// which half has landed; the wait refuses to judge anything older than the
+// version the write produced.
 func TestServiceConvergedWaitsForTheWriteToReachTheCache(t *testing.T) {
 	c := cache.New(nil)
 	seedService(t, c, "svc-1", 5 /* desired */, 5 /* running */)

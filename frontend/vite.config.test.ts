@@ -2,10 +2,8 @@ import viteConfig from "./vite.config.ts";
 import { describe, expect, it } from "vitest";
 
 /**
- * viteConfig.plugins is an array whose entries are themselves plugins or
- * arrays of plugins — @vitejs/plugin-react and @tailwindcss/vite each
- * return several. This flattens one level of nesting deep enough to find
- * every registered plugin object by name.
+ * Flattens viteConfig.plugins, whose entries are plugins or arrays of them,
+ * into the names of every registered plugin.
  */
 function flattenPluginNames(plugins: unknown): Array<string | undefined> {
   if (Array.isArray(plugins)) {
@@ -21,12 +19,8 @@ function flattenPluginNames(plugins: unknown): Array<string | undefined> {
 
 describe("vite.config plugin registration", () => {
   it("registers the precompress plugin", () => {
-    // Nothing else in this project's test suite touches vite.config.ts
-    // itself — every precompress test drives the plugin function directly
-    // with a fake bundle. That leaves a dropped `precompress()` call in the
-    // `plugins` array (e.g. lost in a merge conflict) invisible to
-    // `npx vitest run`, caught only by a manual `npm run build`, which CI
-    // does not repeat for this project. This test closes that gap.
+    // Every other precompress test drives the plugin function directly, so a
+    // dropped `precompress()` call here would only surface in a manual build.
     const names = flattenPluginNames(viteConfig.plugins);
 
     expect(names).toContain("cetacean:precompress");

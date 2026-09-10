@@ -4711,11 +4711,8 @@ func preferTestService() swarm.Service {
 
 // newPreferTestRouter wires a router whose scale writer returns
 // preferTestService unchanged. When converged, the cache also holds the two
-// running tasks that service wants, so the wait settles on its very first
-// read; otherwise the cache holds none and a wait can only run out.
-//
-// Nothing here sleeps: the converged rows return immediately, and the rows
-// that must time out ask for a zero-second wait.
+// running tasks it wants, so the wait settles on its first read; otherwise the
+// cache holds none and the wait can only run out. Nothing here sleeps.
 func newPreferTestRouter(t testing.TB, converged bool) http.Handler {
 	t.Helper()
 
@@ -4884,12 +4881,9 @@ func TestPreferWaitOnScale(t *testing.T) {
 		}
 	})
 
-	// The whole point of holding the connection open is to answer with the
-	// settled service. Docker's own result describes the moment it accepted
-	// the write — a mid-rollout UpdateStatus, and the version the wait was
-	// measured against — so rendering that would report the state the wait
-	// existed to move past, and hand back a Version that collides on the
-	// caller's next write.
+	// Docker's own result describes the moment it accepted the write, so
+	// rendering that would report the state the wait existed to move past and
+	// hand back a Version that collides on the caller's next write.
 	t.Run("a honoured wait answers with the settled service", func(t *testing.T) {
 		c := cache.New(nil)
 
@@ -4951,10 +4945,8 @@ func TestPreferWaitOnScale(t *testing.T) {
 }
 
 // TestPreferWaitWithIfMatch pins the one seam where preconditions and
-// preferences meet: PUT /services/{id}/mode and /endpoint-mode are the only
-// endpoints carrying both. The precondition wrapper runs before the handler,
-// so a matching If-Match should leave the wait to behave exactly as it does
-// without one.
+// preferences meet: PUT /services/{id}/mode and /endpoint-mode carry both. The
+// precondition runs first, so a matching If-Match should change nothing.
 func TestPreferWaitWithIfMatch(t *testing.T) {
 	router := newPreferTestRouter(t, true)
 

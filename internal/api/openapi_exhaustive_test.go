@@ -276,17 +276,11 @@ func preconditionedWriteEndpointChecks() []writeEndpointCheck {
 	return checks
 }
 
-// unpreconditionedWriteEndpointChecks drives every non-GET spec operation
-// that carries no If-Match precondition, so the behavioural pass can prove
-// absence as confidently as presence: a route that grows a precondition
-// without documenting it must fail here exactly as a documented precondition
-// missing its h.precond wrapper fails in preconditionedWriteEndpointChecks.
-//
-// Several of these reach a nil or under-stubbed backend
-// (newSeededTestRouter's h.systemClient is nil; its plugin/write clients
-// stub only what pairedEndpoints needs) and answer with a plain error
-// rather than success. That's fine — only h.precond ever answers 412, and
-// none of these routes carry it, so any non-412 status proves the point.
+// unpreconditionedWriteEndpointChecks drives every non-GET spec operation that
+// carries no If-Match precondition, so the behavioural pass proves absence as
+// confidently as presence. Several reach a nil or under-stubbed backend and
+// answer with an error; only h.precond ever answers 412, so any other status
+// proves the point.
 var unpreconditionedWriteEndpointChecks = []writeEndpointCheck{
 	{"POST", "/configs", "/configs",
 		`{"name":"cfg2","data":"aGVsbG8="}`, "application/json"},
@@ -328,11 +322,9 @@ var unpreconditionedWriteEndpointChecks = []writeEndpointCheck{
 		`{"unlockKey":"SWMKEY-x"}`, "application/json"},
 }
 
-// writeEndpointChecksExcluded lists spec operations the behavioural pass
-// cannot drive, with the reason, so a gap in coverage is a documented
-// decision rather than a silent skip. Nothing here carries a precondition
-// (see the coverage assertion below, which fails loudly if that ever
-// changes without a driver being added).
+// writeEndpointChecksExcluded lists spec operations the behavioural pass cannot
+// drive, with the reason. Nothing here carries a precondition; the coverage
+// assertion below fails if that changes without a driver being added.
 var writeEndpointChecksExcluded = map[string]string{
 	"POST /auth/logout": "session endpoint, not a cluster resource with " +
 		"a representation for If-Match to compare against. The NoneProvider " +
@@ -344,29 +336,16 @@ var writeEndpointChecksExcluded = map[string]string{
 // TestEveryWriteEndpointDocumentsPreconditions holds the OpenAPI spec and the
 // router together in both directions.
 //
-// The spec-internal pass checks every non-GET operation documents a 412
-// response iff it documents an If-Match parameter — catching half-documented
-// endpoints where one was added without the other.
+// The spec-internal pass checks that every non-GET operation documents a 412
+// response iff it documents an If-Match parameter. The behavioural pass then
+// drives every non-GET spec operation against newSeededTestRouter with a bogus
+// If-Match and requires 412 exactly when the spec documents the precondition,
+// which is what actually couples the two: the spec-internal pass alone would
+// pass trivially if the spec documented no preconditions while the router
+// enforced thirty.
 //
-// The behavioural pass then drives every non-GET spec operation (via
-// preconditionedWriteEndpointChecks and unpreconditionedWriteEndpointChecks,
-// together covering every non-GET operation except those explicitly listed
-// in writeEndpointChecksExcluded) against newSeededTestRouter with a bogus
-// If-Match, and requires 412 exactly when that operation's spec entry
-// documents the precondition. This is what actually couples the spec to the
-// router: the spec-internal pass alone would pass trivially if the spec
-// documented zero preconditions while the router enforced thirty of them, or
-// the reverse. A route that gains a precondition without documenting it
-// fails here (got 412, spec says no), and a documented precondition on a
-// route that has none fails too (spec says yes, got something else).
-//
-// It does not validate the shape of a 412 response body against the spec's
-// schema — TestEveryReadEndpointMatchesSpec and TestResponsesMatchOpenAPISpec
-// cover response-schema conformance, and neither exercises non-GET error
-// bodies. Coverage here depends on the two check tables staying exhaustive:
-// a new write endpoint added to the spec without a corresponding row in one
-// of them, or in writeEndpointChecksExcluded, fails the coverage assertion
-// at the end rather than being silently skipped.
+// It does not validate the shape of the 412 body; coverage depends on the two
+// check tables staying exhaustive, which the assertion at the end enforces.
 func TestEveryWriteEndpointDocumentsPreconditions(t *testing.T) {
 	_, doc, _ := loadTestSpec(t)
 

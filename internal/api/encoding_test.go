@@ -153,15 +153,10 @@ func TestCompressionDisabled(t *testing.T) {
 }
 
 // TestCompressibleEncodingsCoversTheEnum keeps compressibleEncodings from
-// falling behind the Encoding enum it stands for. Every test that iterates it
-// to claim coverage of "all codings" — TestCodedETagSuffixesAreStrippable
-// above all — is only as honest as this list, so a coding added to the enum
-// and not to the list would quietly narrow those tests rather than fail them.
-//
-// The enum has no sentinel to count to, so the scan uses the one property
-// String() gives us: every real coding names itself, and everything else
-// falls through to "identity". Sixty-four is far past any plausible number of
-// content-codings and costs nothing.
+// falling behind the Encoding enum: a coding added to the enum and not the list
+// would quietly narrow every test that iterates it to claim coverage of "all
+// codings". The enum has no sentinel, so the scan leans on String() naming
+// every real coding and falling through to "identity" for everything else.
 func TestCompressibleEncodingsCoversTheEnum(t *testing.T) {
 	listed := make(map[Encoding]bool, len(compressibleEncodings))
 

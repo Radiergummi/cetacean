@@ -8,12 +8,9 @@ import (
 
 // precond evaluates RFC 9110 §13.1.1 If-Match against the representation a GET
 // at this same URI would return. It is optional everywhere: a request without
-// the header passes straight through, so no existing client is affected.
-//
-// Comparing against the same-URI representation is what makes this actually
-// If-Match rather than a bespoke precondition — and it is what gives networks,
-// volumes, tasks, stacks and plugins a working precondition despite carrying
-// no Docker version at all.
+// the header passes straight through. Comparing against the same-URI
+// representation is also what gives networks, volumes, tasks, stacks and
+// plugins a precondition, despite carrying no Docker version at all.
 func (h *Handlers) precond(rep representationFunc) Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

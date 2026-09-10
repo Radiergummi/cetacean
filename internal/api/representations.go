@@ -18,28 +18,18 @@ import (
 // representationFunc builds the value a GET at this URI would serialize, so a
 // precondition can be compared against the exact ETag that GET emits.
 //
-// It reports false when the resource does not exist and must never write to
-// the response — the precondition middleware and the GET handler answer that
-// case differently (412 versus 404).
-//
-// Every paired GET handler delegates its body to one of these and keeps only
-// its ACL check, which is why those handlers look the resource up twice: the
-// ACL lookup writes its own 403/404 on denial, and a builder that did the same
-// could no longer be reused by the precondition. The duplicate read is one
-// map lookup under a read lock; the alternative is two descriptions of one
-// resource that can drift.
+// It reports false when the resource does not exist and must never write to the
+// response: the precondition middleware answers that with 412 and the GET
+// handler with 404. That is why a paired handler looks its resource up twice —
+// once for its ACL check, which writes its own 403/404, and once here.
 type representationFunc func(*http.Request) (any, bool)
 
 // representationOr404 evaluates a paired GET's representation builder and,
 // when the resource is gone, answers with that resource's own not-found code.
-// The miss is all but unreachable — the handler's ACL lookup has just resolved
-// the same resource — but the builder cannot write the 404 itself without
-// breaking the 412-vs-404 rule, so the handler owns it.
-// writeServiceRepresentation is the tail every service sub-resource GET
-// shares: build the representation, answer 404 if the service vanished
-// between the ACL check and here, and write it with its ETag. The handlers
-// keep their own lookup, ACL check and Allow header, which is where they
-// genuinely differ.
+// The builder cannot write the 404 itself without breaking the 412-vs-404 rule.
+// writeServiceRepresentation is the tail every service sub-resource GET shares:
+// build the representation, answer 404 if the service vanished since the ACL
+// check, and write it with its ETag.
 func (h *Handlers) writeServiceRepresentation(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -439,9 +429,8 @@ func (h *Handlers) stackRepresentation(r *http.Request) (any, bool) {
 }
 
 // pluginDetail is the body both the plugin GET and its precondition
-// representation serialize. The GET keeps its own inspect because it maps the
-// inspect error to a status code; the representation cannot, so the two share
-// the rendering rather than the lookup.
+// representation serialize. They share the rendering rather than the lookup,
+// because only the GET maps an inspect error to a status code.
 func pluginDetail(r *http.Request, name string, plugin types.Plugin) DetailResponse {
 	return NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", PluginResponse{
 		Plugin: plugin,
@@ -449,9 +438,8 @@ func pluginDetail(r *http.Request, name string, plugin types.Plugin) DetailRespo
 }
 
 // pluginRepresentation is the one builder that does not read the cache:
-// plugins are inspected from the daemon on demand, exactly as the GET does.
-// An inspect failure reports "no current representation", which is what a
-// precondition against an unreadable resource means.
+// plugins are inspected from the daemon on demand, as the GET does. An inspect
+// failure reports "no current representation".
 func (h *Handlers) pluginRepresentation(r *http.Request) (any, bool) {
 	name := r.PathValue("name")
 

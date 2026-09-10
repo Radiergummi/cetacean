@@ -179,10 +179,9 @@ func writeMutation[T any](
 // service detail response, honouring the RFC 7240 wait and respond-async
 // preferences on the way.
 //
-// It spells out what writeMutation does rather than calling it, because the
-// preference handling sits between the write and the response: a wait that
-// runs out answers 202 instead, and threading that back through
-// writeMutation's single response callback would take a sentinel error.
+// It spells out what writeMutation does rather than calling it: the preference
+// handling sits between the write and the response, and a wait that runs out
+// answers 202 instead.
 func (h *Handlers) writeServiceMutation(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -210,23 +209,17 @@ func (h *Handlers) writeServiceMutation(
 // caller should render, and reports whether it wrote the response itself.
 //
 // The version to converge to comes from the service the write returned, not
-// from the cache: docker.Client ends every service write with a fresh
-// InspectService, while the cache is filled asynchronously by the watcher, so
-// reading the version back off it is a race.
-//
-// The request context is passed through as given. A client that hangs up
-// should cancel its own wait — MCP's detached context is a workaround for
-// mcp-go running tasks on an already-cancelled request, and copying it here
-// would keep a five-minute goroutine alive per abandoned request.
+// from the asynchronously filled cache, where reading it back is a race. The
+// request context is passed through as given, so a client that hangs up cancels
+// its own wait rather than leaving a five-minute goroutine behind.
 func (h *Handlers) awaitPreferred(
 	w http.ResponseWriter,
 	r *http.Request,
 	id string,
 	svc swarm.Service,
 ) (swarm.Service, bool) {
-	// id addresses the response — the same path the 200 identifies itself
-	// by, so the two cannot name one service differently. svc.ID addresses
-	// the cache, which is keyed by ID and by nothing else.
+	// id addresses the response, matching how the 200 identifies itself;
+	// svc.ID addresses the cache, which is keyed by ID alone.
 	wait, wanted := preferWait(r)
 	async := preferRespondAsync(r)
 
@@ -246,10 +239,8 @@ func (h *Handlers) awaitPreferred(
 		)
 	}
 
-	// A synchronous wait that settled renders the normal response. The value
-	// reported back is the wait actually applied, which preferWait may have
-	// clamped to the server ceiling — RFC 7240 §2 asks for what was applied,
-	// not for what was asked.
+	// RFC 7240 §2 asks for the wait actually applied, which preferWait may
+	// have clamped to the server ceiling, not for the one requested.
 	if wanted && !async && err == nil {
 		applyPreference(
 			w,
@@ -257,13 +248,9 @@ func (h *Handlers) awaitPreferred(
 		)
 
 		// The service Docker returned describes the moment it accepted the
-		// write: a mid-rollout UpdateStatus, and the version the wait was
-		// measured against. Having held the connection open until the
-		// cluster settled, answering with that snapshot would report the
-		// state the wait existed to move past. AwaitService only succeeds
-		// once the cache holds a version at or beyond that one, so the
-		// cached copy is the settled service — unless it has since been
-		// removed, and the write's own result is then the best answer left.
+		// write — the state the wait existed to move past. AwaitService only
+		// succeeds once the cache holds that version or beyond, so the cached
+		// copy is the settled one, unless it has since been removed.
 		if settled, ok := h.cache.GetService(svc.ID); ok {
 			return settled, false
 		}
@@ -271,19 +258,16 @@ func (h *Handlers) awaitPreferred(
 		return svc, false
 	}
 
-	// Location points at the service itself rather than at a task resource:
-	// its UpdateStatus reports convergence there, with a per-resource SSE
-	// stream beside it (RFC 7240 §4.1 asks only for somewhere to obtain
-	// status).
+	// RFC 7240 §4.1 asks only for somewhere to obtain status: the service's own
+	// UpdateStatus reports convergence, with a per-resource SSE stream beside it.
 	w.Header().Set("Location", absPath(r.Context(), "/services/"+id))
 
 	if async {
 		applyPreference(w, "respond-async")
 	}
 
-	// writeJSONStatus rather than writeCachedJSONStatus: this is the
-	// no-store mutation response the 200 path writes, at a different status.
-	// An ETag on it would invite a 304 on a write that did happen.
+	// writeJSONStatus, not writeCachedJSONStatus: an ETag here would invite a
+	// 304 on a write that did happen.
 	writeJSONStatus(w, http.StatusAccepted, NewDetailResponse(
 		r.Context(), "/services/"+id, "Service", AcceptedServiceResponse{
 			Service:  svc,

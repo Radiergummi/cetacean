@@ -6,24 +6,19 @@ import type { Plugin, Rollup } from "vite";
 
 /**
  * Minimum size, in bytes, a file must reach before it is worth compressing.
- * Mirrors the server's own compression threshold (internal/api/encoding.go)
- * so a build never precompresses something the server would have served
- * uncompressed anyway.
+ * Mirrors the server's threshold in internal/api/encoding.go.
  */
 const defaultThresholdBytes = 1024;
 
 /**
- * File extensions that are already compressed, so gzipping or zstd-ing them
- * again wastes a build cycle for a larger, not smaller, variant.
+ * File extensions that are already compressed, where a variant would be larger.
  */
 const defaultSkippedExtensions = ["png", "ico", "woff2", "woff", "jpg", "webp", "avif"] as const;
 
 /**
- * Files the server never serves from disk, so a build-time variant of them is
- * dead weight at best. NewSPAHandler intercepts index.html and answers with a
- * copy carrying an injected <base href> and <link rel=canonical>, which are
- * different bytes from the ones built here — and an index.html.gz reachable
- * over HTTP would hand out the un-injected shell.
+ * Files the server never serves from disk. NewSPAHandler answers index.html
+ * with an injected copy, so an index.html.gz would hand out the un-injected
+ * shell.
  */
 const defaultSkippedFileNames = ["index.html"] as const;
 
@@ -52,13 +47,9 @@ interface ManifestEntry {
 }
 
 /**
- * computeETag mirrors Go's computeETag (internal/api/etag.go): the SHA-256
- * of the bytes, truncated to 16 bytes and hex-encoded. Go's version wraps
- * the result in double quotes to form an HTTP ETag; this manifest stores
- * the bare hex digest instead, and it is Task 15's Go code that adds the
- * quotes when turning a manifest entry into a response header. Adding
- * quotes here would double-quote the value there, so this asymmetry is
- * deliberate, not an oversight.
+ * computeETag mirrors Go's computeETag (internal/api/etag.go): SHA-256 of the
+ * bytes, truncated to 16 and hex-encoded. The manifest stores the bare digest;
+ * the Go handler adds the quotes, and adding them here would double them.
  */
 function computeETag(data: Uint8Array): string {
   return createHash("sha256").update(data).digest().subarray(0, 16).toString("hex");
@@ -75,23 +66,15 @@ function extensionOf(fileName: string): string {
 
 /**
  * precompress emits gzip and zstd variants of every chunk and asset in the
- * build output, plus an assets-manifest.json describing them (size and ETag
- * per representation). Go's SPA handler reads the manifest at startup to
- * serve a precompressed variant instead of compressing on every request.
- *
- * Files under the size threshold, or with an already-compressed extension,
- * are left alone and do not appear in the manifest.
+ * build output, plus an assets-manifest.json describing them (size and ETag per
+ * representation), which Go's SPA handler reads at startup. Files under the
+ * threshold, or with an already-compressed extension, are left out of both.
  *
  * The work happens in writeBundle, reading each file back from the output
- * directory rather than out of the in-memory bundle, because the bundle is
- * not final until every generateBundle hook has run — and Vite orders its own
- * internal post plugins after user `enforce: "post"` ones, so
- * vite:build-import-analysis rewrites the __VITE_PRELOAD__ marker into
- * __vite__mapDeps(...) after a plugin like this one would have seen it.
- * Compressing that snapshot shipped variants referencing an undefined
- * identifier, which every browser reached before the identity file. What is
- * on disk when writeBundle runs is what the server will serve, so that is
- * what gets hashed and compressed.
+ * directory rather than from the in-memory bundle: Vite orders its own internal
+ * post plugins after user `enforce: "post"` ones, so vite:build-import-analysis
+ * rewrites __VITE_PRELOAD__ after a generateBundle hook here would have seen it,
+ * and the variants would reference an undefined identifier.
  */
 export function precompress(options: PrecompressOptions = {}): Plugin {
   const thresholdBytes = options.thresholdBytes ?? defaultThresholdBytes;
