@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"html"
 	"io"
 	"net/http"
@@ -38,6 +39,11 @@ const oidcBaseURL = "http://localhost:19002"
 // extra_hosts or container DNS trick required.
 const dexIssuer = "http://localhost:19010/dex"
 
+// sessionCookieName mirrors the unexported cookieName in internal/auth's
+// session.go (the __Host- prefix and value are not exported, so this names
+// it again rather than importing for one string).
+const sessionCookieName = "__Host-cetacean_session"
+
 // loginFormPattern extracts a login form's action attribute. Verified
 // against Dex v2.46.0's actual served login page (`docker run dexidp/dex`
 // against the same config added to compose.e2e.yaml): the page has exactly
@@ -59,6 +65,13 @@ func TestOIDCLoginEstablishesASession(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
 
+	// dex has no compose healthcheck, and main.go performs OIDC discovery
+	// synchronously at startup, exiting the SUT immediately on failure — so
+	// without this, a cold image pull or a loaded machine can start
+	// sut.Start below before Dex has bound its listener, and the SUT dies
+	// rather than the test failing with a clear message.
+	waitDexReady(t)
+
 	proc := sut.Start(t, sut.Config{
 		Port:       19002,
 		DockerHost: env.DockerHost,
@@ -77,6 +90,12 @@ func TestOIDCLoginEstablishesASession(t *testing.T) {
 	}
 
 	client := &http.Client{Jar: jar, Timeout: 30 * time.Second}
+
+	// Negative control: a passing assertion at the end of this test should
+	// mean "the login flow works", not merely "some path to 200 exists". Run
+	// this against the same client, before its jar holds anything, so the
+	// 200 later cannot be explained by state left over from this check.
+	assertUnauthenticatedIsRefused(t, client, proc)
 
 	loginURL, body := requestProtectedPath(t, client, proc)
 
@@ -107,7 +126,72 @@ func TestOIDCLoginEstablishesASession(t *testing.T) {
 		)
 	}
 
+	assertSessionCookieIsSet(t, client)
 	assertWhoamiReportsDexIdentity(t, client, proc)
+}
+
+// waitDexReady blocks until Dex's own OIDC discovery document is served and
+// names the issuer this test configures. Dex has no built-in healthcheck in
+// compose.e2e.yaml; polling the discovery document rather than a bare TCP
+// dial also turns this into a correctness check rather than just a liveness
+// one — an issuer mismatch is caught here, by name, instead of surfacing
+// later as a confusing token-validation failure deep in the OIDC flow.
+// Mirrors cert_test.go's waitCaddyReady: an explicit poll against the same
+// path the test itself depends on, not a generic port probe.
+func waitDexReady(t *testing.T) {
+	t.Helper()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	deadline := time.Now().Add(30 * time.Second)
+
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		lastErr = probeDexDiscovery(t, client)
+		if lastErr == nil {
+			return
+		}
+
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	t.Fatalf("dex not serving its discovery document at %s within 30s: %v", dexIssuer, lastErr)
+}
+
+// probeDexDiscovery makes one attempt at the check waitDexReady polls.
+func probeDexDiscovery(t *testing.T, client *http.Client) error {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(
+		t.Context(), http.MethodGet, dexIssuer+"/.well-known/openid-configuration", nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+
+	var discovery struct {
+		Issuer string `json:"issuer"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&discovery); err != nil {
+		return fmt.Errorf("decode discovery document: %w", err)
+	}
+
+	if discovery.Issuer != dexIssuer {
+		return fmt.Errorf("issuer = %q, want %q", discovery.Issuer, dexIssuer)
+	}
+
+	return nil
 }
 
 // requestProtectedPath makes the initial, unauthenticated request a browser
@@ -180,10 +264,9 @@ func submitLogin(t *testing.T, client *http.Client, actionURL *url.URL) *url.URL
 	return resp.Request.URL
 }
 
-// assertWhoamiReportsDexIdentity reads back the identity the session cookie
-// now carries, confirming it names the Dex static user rather than merely
-// confirming the redirect chain completed.
-func assertWhoamiReportsDexIdentity(t *testing.T, client *http.Client, proc *sut.Process) {
+// whoamiRequest issues one GET /auth/whoami through client, the one request
+// shape both the negative control and the final identity check need.
+func whoamiRequest(t *testing.T, client *http.Client) *http.Response {
 	t.Helper()
 
 	req, err := http.NewRequestWithContext(
@@ -202,6 +285,59 @@ func assertWhoamiReportsDexIdentity(t *testing.T, client *http.Client, proc *sut
 	if err != nil {
 		t.Fatalf("whoami: %v", err)
 	}
+
+	return resp
+}
+
+// assertUnauthenticatedIsRefused is the negative control this lane needs
+// precisely because it is about authentication: without it, a passing
+// TestOIDCLoginEstablishesASession would only show that logging in works,
+// not that it is required. handleWhoami's authenticateQuiet returns 401
+// (AUT001) with no session cookie and no Bearer token — there is no other
+// path to success it could be silently taking instead.
+func assertUnauthenticatedIsRefused(t *testing.T, client *http.Client, proc *sut.Process) {
+	t.Helper()
+
+	resp := whoamiRequest(t, client)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf(
+			"whoami status = %d, want 401 (an unauthenticated caller must be refused)\n--- binary output ---\n%s",
+			resp.StatusCode,
+			proc.Logs(),
+		)
+	}
+}
+
+// assertSessionCookieIsSet pins the mechanism this lane exists to prove: the
+// callback actually left the signed session cookie in the jar. Without this,
+// a passing identity check below could in principle be explained by
+// something other than the session cookie the callback is supposed to set.
+func assertSessionCookieIsSet(t *testing.T, client *http.Client) {
+	t.Helper()
+
+	u, err := url.Parse(oidcBaseURL)
+	if err != nil {
+		t.Fatalf("parse %s: %v", oidcBaseURL, err)
+	}
+
+	for _, c := range client.Jar.Cookies(u) {
+		if c.Name == sessionCookieName {
+			return
+		}
+	}
+
+	t.Errorf("%s not present in jar after callback", sessionCookieName)
+}
+
+// assertWhoamiReportsDexIdentity reads back the identity the session cookie
+// now carries, confirming it names the Dex static user rather than merely
+// confirming the redirect chain completed.
+func assertWhoamiReportsDexIdentity(t *testing.T, client *http.Client, proc *sut.Process) {
+	t.Helper()
+
+	resp := whoamiRequest(t, client)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
