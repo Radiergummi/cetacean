@@ -35,6 +35,10 @@ const (
 // request context so a disconnecting client cancels the wait; MCP detaches
 // before calling, because mcp-go runs tasks on a goroutine holding an
 // already-cancelled request context.
+//
+// The returned progress line is only ever the last one observed, not a
+// running feed — a caller wanting to report progress *during* the wait has to
+// poll the cache itself.
 func AwaitService(
 	ctx context.Context,
 	c *cache.Cache,
@@ -58,7 +62,14 @@ func AwaitService(
 
 		select {
 		case <-bounded.Done():
-			return progress, fmt.Errorf("service %s did not converge: %s", serviceID, progress)
+			// Wrap bounded's own error, not ctx's: bounded is the WithTimeout
+			// child, so a parent cancellation surfaces as context.Canceled and
+			// a genuine timeout as context.DeadlineExceeded, and callers can
+			// tell the two apart — a timed-out wait should still hand back the
+			// mutation result, a cancelled or otherwise failed one should not.
+			return progress, fmt.Errorf(
+				"service %s did not converge (%s): %w", serviceID, progress, bounded.Err(),
+			)
 		case <-ticker.C:
 		}
 	}

@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -162,8 +163,8 @@ func TestAwaitConvergenceRespectsDeadline(t *testing.T) {
 	defer cancel()
 
 	progress, err := AwaitService(ctx, c, "svc-1", 0, 10*time.Millisecond, time.Minute)
-	if err == nil {
-		t.Fatal("AwaitService did not report an error once the deadline passed")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
 	}
 	if progress == "" {
 		t.Error("progress should describe what was still outstanding")
