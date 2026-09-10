@@ -40,11 +40,12 @@ const (
 	OrphanVolume     = "orphan-vol"
 	UsedVolume       = "shop-data"
 
-	fixtureImage       = "cetacean-e2e-fixture:latest"
-	imageBuildTimeout  = 5 * time.Minute
-	convergeTimeout    = 3 * time.Minute
-	convergePollEvery  = 2 * time.Second
-	removeStackTimeout = 30 * time.Second
+	fixtureImage         = "cetacean-e2e-fixture:latest"
+	imageBuildTimeout    = 5 * time.Minute
+	convergeTimeout      = 3 * time.Minute
+	convergePollEvery    = 2 * time.Second
+	removeStackTimeout   = 60 * time.Second
+	removeStackPollEvery = 500 * time.Millisecond
 
 	stackLabel = "com.docker.stack.namespace"
 
@@ -519,37 +520,114 @@ func runningTasks(t *testing.T, env *harness.Env, serviceID string) int {
 // removeStack removes every service and network carrying the stack's label.
 // It runs from t.Cleanup, where t.Context() is already canceled, so it uses
 // an independent, bounded context rather than the test's own.
+//
+// Both stages have to wait, not just fire once: ServiceRemove and the task
+// teardown it triggers are asynchronous, so a network can still show "active
+// endpoints" for a moment after its services are gone. removeStack first
+// polls ServiceList to confirm the stack's services have actually left the
+// engine (not just that ServiceRemove was accepted), then retries each
+// NetworkRemove with a bounded backoff to ride out the remaining endpoint-
+// detachment lag. A failure that survives the deadline is reported with
+// t.Errorf, not logged: a leaked network collides with the next run's
+// same-named create, and a t.Logf nobody reads is how that leak went
+// unnoticed before.
 func removeStack(t *testing.T, env *harness.Env, stack string) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), removeStackTimeout)
 	defer cancel()
 
+	deadline := time.Now().Add(removeStackTimeout)
 	stackFilter := filters.NewArgs(filters.Arg("label", stackLabel+"="+stack))
 
 	services, err := env.Docker.ServiceList(ctx, swarm.ServiceListOptions{Filters: stackFilter})
 	if err != nil {
-		t.Logf("ServiceList for stack %s: %v", stack, err)
+		t.Errorf("ServiceList for stack %s: %v", stack, err)
 	}
 
 	for _, svc := range services {
 		if err := env.Docker.ServiceRemove(ctx, svc.ID); err != nil {
-			t.Logf("ServiceRemove %s: %v", svc.Spec.Name, err)
+			t.Errorf("ServiceRemove %s: %v", svc.Spec.Name, err)
 		}
+	}
+
+	if len(services) > 0 {
+		waitServicesGone(t, ctx, env, stackFilter, stack, deadline)
 	}
 
 	networks, err := env.Docker.NetworkList(ctx, network.ListOptions{Filters: stackFilter})
 	if err != nil {
-		t.Logf("NetworkList for stack %s: %v", stack, err)
+		t.Errorf("NetworkList for stack %s: %v", stack, err)
 
 		return
 	}
 
 	for _, net := range networks {
-		if err := env.Docker.NetworkRemove(ctx, net.ID); err != nil {
-			t.Logf("NetworkRemove %s: %v", net.Name, err)
-		}
+		removeNetworkWithRetry(t, ctx, env, net.ID, net.Name, deadline)
 	}
+}
+
+// waitServicesGone blocks until the engine reports no services left under
+// stackFilter, or deadline passes. ServiceRemove accepting the call does not
+// mean the service — and the tasks and endpoints it owns — are actually torn
+// down yet.
+func waitServicesGone(
+	t *testing.T,
+	ctx context.Context,
+	env *harness.Env,
+	stackFilter filters.Args,
+	stack string,
+	deadline time.Time,
+) {
+	t.Helper()
+
+	for time.Now().Before(deadline) {
+		remaining, err := env.Docker.ServiceList(
+			ctx,
+			swarm.ServiceListOptions{Filters: stackFilter},
+		)
+		if err != nil {
+			t.Errorf("ServiceList for stack %s: %v", stack, err)
+
+			return
+		}
+
+		if len(remaining) == 0 {
+			return
+		}
+
+		time.Sleep(removeStackPollEvery)
+	}
+
+	t.Errorf("stack %s: services still present after %s", stack, removeStackTimeout)
+}
+
+// removeNetworkWithRetry retries NetworkRemove until it succeeds or deadline
+// passes, to ride out the endpoint-detachment lag that follows service
+// removal. A network still standing when the deadline expires is reported
+// against the test that leaked it, since it will collide with the next run's
+// attempt to create a network of the same name.
+func removeNetworkWithRetry(
+	t *testing.T,
+	ctx context.Context,
+	env *harness.Env,
+	id, name string,
+	deadline time.Time,
+) {
+	t.Helper()
+
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		lastErr = env.Docker.NetworkRemove(ctx, id)
+		if lastErr == nil {
+			return
+		}
+
+		time.Sleep(removeStackPollEvery)
+	}
+
+	t.Errorf("NetworkRemove %s: %v (network left behind for the next run)", name, lastErr)
 }
 
 // repoRoot walks up from this source file to the module root, mirroring
