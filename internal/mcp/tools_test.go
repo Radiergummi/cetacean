@@ -536,6 +536,26 @@ var restTierParity = map[string]config.OperationsLevel{
 	"update_node":            config.OpsImpactful,
 }
 
+// restTierMismatches records a tool whose tier is known to differ from the one
+// REST gates the same operation at, with the REST tier it differs from. Listed
+// rather than left out of restTierParity so the debt is visible and cannot grow
+// quietly — the same bargain knownBypasses strikes in
+// internal/api/validator_coverage_test.go: the mismatch is asserted to still
+// exist, so whichever way it is resolved the entry fails as stale and closing
+// the gap is a deletion.
+//
+// Which side of a mismatch is wrong is a decision rather than a typo, so
+// recording one here is not endorsing it.
+var restTierMismatches = map[string]config.OperationsLevel{
+	// remove_task is OpsOperational while DELETE /tasks/{id} is gated at
+	// OpsImpactful (taskTier3 in internal/api/router.go, and the task DELETE
+	// row in allow.go). At level 1 an agent can force-reschedule any task
+	// while the dashboard answers OPS001 for the same edit — the drift this
+	// table was built for, pointing the other way, and in the direction that
+	// matters more: MCP is the permissive side. See #224.
+	"remove_task": config.OpsImpactful,
+}
+
 // TestToolTiersMatchTheRESTRoutes fails when a tool drifts from the tier its
 // REST equivalent is gated at. update_node_labels is the case that prompted
 // the table: REST gated PATCH /nodes/{id}/labels at tier 3 while this sat at
@@ -545,12 +565,38 @@ var restTierParity = map[string]config.OperationsLevel{
 // The REST side is pinned separately — TestPatchNodeLabelsIsAdmittedAtTierTwo
 // in internal/api — because the two packages deliberately do not import each
 // other, so this is two tests naming one rule rather than one driving both.
+//
+// A tool in restTierMismatches is held to the opposite assertion: the gap is
+// recorded, so closing it has to delete the entry rather than silently drift
+// past it.
 func TestToolTiersMatchTheRESTRoutes(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil))
 
+	for name := range restTierMismatches {
+		if _, both := restTierParity[name]; both {
+			t.Errorf("%s is in both restTierParity and restTierMismatches, "+
+				"which cannot both be true", name)
+		}
+	}
+
 	unseen := maps.Clone(restTierParity)
+	unseenMismatches := maps.Clone(restTierMismatches)
 
 	for _, def := range srv.toolCatalog() {
+		if rest, known := restTierMismatches[def.tool.Name]; known {
+			delete(unseenMismatches, def.tool.Name)
+
+			if def.tier == rest {
+				t.Errorf(
+					"%s now matches the REST tier (%v) — remove its "+
+						"restTierMismatches entry and add it to restTierParity",
+					def.tool.Name, rest,
+				)
+			}
+
+			continue
+		}
+
 		want, checked := restTierParity[def.tool.Name]
 		if !checked {
 			continue
@@ -568,6 +614,11 @@ func TestToolTiersMatchTheRESTRoutes(t *testing.T) {
 
 	for name := range unseen {
 		t.Errorf("%s is named in restTierParity but is not registered", name)
+	}
+
+	for name := range unseenMismatches {
+		t.Errorf("%s is named in restTierMismatches but is not registered — "+
+			"remove the entry", name)
 	}
 }
 

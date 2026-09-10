@@ -1,6 +1,9 @@
 package api
 
 import (
+	"bytes"
+	"compress/gzip"
+	"io"
 	"io/fs"
 	"net/http"
 	"testing"
@@ -126,6 +129,46 @@ func decodeZstd(t testing.TB, body []byte) []byte {
 	}
 
 	return plain
+}
+
+// decodeGzip decompresses a gzip response body, failing the test if it is not
+// a valid stream.
+func decodeGzip(t testing.TB, body []byte) []byte {
+	t.Helper()
+
+	reader, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("response body is not a valid gzip stream: %v", err)
+	}
+	defer reader.Close()
+
+	plain, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("gzip stream did not decode: %v", err)
+	}
+
+	return plain
+}
+
+// decodeCoding decompresses a body under the coding its Content-Encoding named,
+// so a test can check the bytes against the label rather than trusting it. An
+// unrecognised token fails rather than passing the body through: treating it as
+// identity is exactly how a mislabelled body would look correct.
+func decodeCoding(t testing.TB, encoding string, body []byte) []byte {
+	t.Helper()
+
+	switch encoding {
+	case "gzip":
+		return decodeGzip(t, body)
+	case "zstd":
+		return decodeZstd(t, body)
+	case "", "identity":
+		return body
+	default:
+		t.Fatalf("unexpected Content-Encoding %q", encoding)
+
+		return nil
+	}
 }
 
 // routerOption adjusts the RouterConfig newTestRouterWithCache assembles, for

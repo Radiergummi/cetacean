@@ -19,10 +19,10 @@ import (
 // dashboard answered OPS001 for an edit MCP performed — the transport drift
 // internal/cluster exists to prevent.
 //
-// The reciprocal test is TestNodeLabelEditorMatchesTheRESTTier in
-// internal/mcp. The
-// two packages are deliberately decoupled — neither imports the other — so
-// this is two tests naming one rule rather than one test driving both.
+// The reciprocal test is TestToolTiersMatchTheRESTRoutes in internal/mcp,
+// over its restTierParity table. The two packages are deliberately decoupled
+// — neither imports the other — so this is two tests naming one rule rather
+// than one test driving both.
 
 // patchNodeLabels sends a merge patch to the node labels endpoint at the
 // given operations level and returns the response.
@@ -50,9 +50,9 @@ func patchNodeLabels(t testing.TB, level config.OperationsLevel) *httptest.Respo
 func TestPatchNodeLabelsIsAdmittedAtTierTwo(t *testing.T) {
 	rec := patchNodeLabels(t, config.OpsConfiguration)
 
-	if rec.Code == http.StatusForbidden {
-		t.Fatalf("status = 403 at operations level 2, want the edit admitted; body: %s",
-			rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d at operations level 2, want 200 — the edit MCP "+
+			"performs at this level; body: %s", rec.Code, rec.Body.String())
 	}
 }
 

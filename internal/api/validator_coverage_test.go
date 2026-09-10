@@ -124,9 +124,12 @@ func TestEveryReadEndpointCarriesAValidator(t *testing.T) {
 
 // skipValidatorCoverage names the GET endpoints that deliberately answer
 // without going through a write helper. It is separate from skipEndpoint,
-// whose exclusions are about schema validation: /api/scalar.js is skipped
-// there for not being JSON, and is one of the endpoints this test exists to
-// cover.
+// whose exclusions are about schema validation.
+//
+// Note the walk only reaches endpoints the OpenAPI document declares, so it
+// finds the next bypass only for those. /api/scalar.js is not among them — the
+// spec has no path for it — and is covered instead by TestAPIDocsAreCompressed
+// and TestAPIDocsRevalidate, which drive the route directly.
 func skipValidatorCoverage(path string) bool {
 	switch {
 	// Streams: the body is open-ended, so there is nothing to hash and

@@ -151,10 +151,6 @@ func TestFeedLinkHeaders(t *testing.T) {
 		}
 	})
 
-	// The href carries the pagination pair every feed reads plus whatever
-	// the registration declares — here ?q=, as the real /search route
-	// declares it. A parameter no feed reads is dropped; that rule is
-	// covered in dispatch_feedlink_test.go.
 	// The href carries only what the feed reads, so a parameter no feed
 	// declares must not come back — the rule feedQuery states for the links
 	// inside a feed body, now applied to the alternate Link headers too.
