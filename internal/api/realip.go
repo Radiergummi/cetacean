@@ -34,13 +34,10 @@ func realIP(trusted []netip.Prefix) func(http.Handler) http.Handler {
 	}
 }
 
-// peerOf resolves the address the connection arrived from, together with the
-// verdict on whether it is a configured trusted proxy, and the port to carry
-// over onto a resolved client address.
-//
-// A RemoteAddr naming no parseable address yields an untrusted verdict rather
-// than none: the edge decides for every request, so a consumer finding no
-// verdict at all knows this middleware never ran and can refuse on that.
+// peerOf resolves the address the connection arrived from, the verdict on
+// whether it is a configured trusted proxy, and the port to carry onto a
+// resolved client address. An unparseable RemoteAddr yields an untrusted
+// verdict rather than none, so no verdict at all means this never ran.
 func peerOf(r *http.Request, trusted []netip.Prefix) (auth.Peer, string) {
 	host, port, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -55,15 +52,14 @@ func peerOf(r *http.Request, trusted []netip.Prefix) (auth.Peer, string) {
 	return auth.Peer{Addr: addr, Trusted: isTrusted(addr, trusted)}, port
 }
 
-// resolveClientIP walks the forwarding chain right-to-left, returning the
-// first (rightmost) node that is NOT a trusted proxy, joined with the peer's
-// port. The caller has already established that the peer itself is trusted.
+// resolveClientIP returns the rightmost node in the forwarding chain that is
+// not a trusted proxy, joined with the peer's port. The caller has already
+// established that the peer itself is trusted.
 //
-// RFC 7239's Forwarded is preferred over the de-facto X-Forwarded-For, and
-// both are walked the same way — the two order their nodes identically, first
-// proxy first. A Forwarded header naming no address at all makes no statement
-// about the client, so the fallback is on the absence of an address rather
-// than of the header.
+// Forwarded (RFC 7239) is preferred over X-Forwarded-For and walked the same
+// way, both ordering nodes first proxy first. One naming no address makes no
+// statement about the client, so the fallback turns on the absence of an
+// address rather than of the header.
 func resolveClientIP(r *http.Request, peerPort string, trusted []netip.Prefix) (string, bool) {
 	nodes := forwardedNodes(r.Header.Values("Forwarded"))
 	if !namesAnyAddr(nodes) {

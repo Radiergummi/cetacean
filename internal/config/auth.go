@@ -200,9 +200,8 @@ func LoadAuth(flags *Flags, fc *fileConfig, publicURL, basePath string) (*AuthCo
 				"",
 			),
 		}
-		// auth.cert.ca configures our own TLS listener, so whether it is
-		// required depends on TLS config LoadAuth cannot see: ValidateCertMode
-		// decides.
+		// Whether auth.cert.ca is required depends on TLS config LoadAuth
+		// cannot see; ValidateCertMode decides.
 
 	case "headers":
 		fh := fileHeaders(fa)
@@ -386,15 +385,10 @@ func defaultRedirectURL(publicURL, basePath string) string {
 	return publicURL + basePath + "/auth/callback"
 }
 
-// ValidateCertMode reports whether cert auth mode can serve.
-//
-// A client certificate reaches Cetacean one of two ways: presented on a TLS
-// connection it terminates itself, or forwarded in the RFC 9440 Client-Cert
-// header by a proxy that terminated TLS instead — believed only from a trusted
-// proxy. With neither setting, no request can ever authenticate.
-//
-// auth.cert.ca is required only for the first: it configures our own listener,
-// and a forwarded certificate was verified by the proxy against its own CA.
+// ValidateCertMode reports whether cert auth mode can serve. A client
+// certificate arrives either on a TLS connection Cetacean terminates
+// (auth.cert.ca) or forwarded by a trusted proxy that terminated it instead
+// (server.trusted_proxies); with neither, no request can ever authenticate.
 func ValidateCertMode(tlsEnabled bool, certCA string, trustedProxies []netip.Prefix) error {
 	if tlsEnabled {
 		if certCA == "" {

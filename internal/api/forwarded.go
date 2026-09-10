@@ -5,12 +5,10 @@ import (
 	"strings"
 )
 
-// forwardedNodes returns the node identifier named by the "for" parameter of
-// each RFC 7239 Forwarded element, in the order the elements appear:
-// left-to-right, first proxy first, the same ordering X-Forwarded-For uses.
-//
-// Nodes are returned as they stand, "unknown" and obfuscated identifiers
-// included; nodeAddr decides which of them name an address.
+// forwardedNodes returns the node identifier named by each RFC 7239 Forwarded
+// element's "for" parameter, first proxy first — the ordering X-Forwarded-For
+// uses. Nodes are returned as they stand; nodeAddr decides which name an
+// address.
 func forwardedNodes(values []string) []string {
 	var nodes []string
 
@@ -29,15 +27,11 @@ func forwardedNodes(values []string) []string {
 	return nodes
 }
 
-// nodeAddr returns the IP address a Forwarded node identifier names.
-//
-// RFC 7239 §6 gives four forms for a nodename — an IPv4 address, a bracketed
-// IPv6 address, the literal "unknown", and an obfuscated identifier beginning
-// with "_" — each with an optional ":port". Only the first two name an
-// address; the other two deliberately do not, and report false.
-//
-// An IPv4-mapped address is unmapped, so a proxy naming a hop as
-// ::ffff:10.0.0.2 is still matched against an IPv4 trusted-proxy prefix.
+// nodeAddr returns the IP address a Forwarded node identifier names. Of RFC
+// 7239 §6's four nodename forms only an IPv4 address and a bracketed IPv6
+// address name one; "unknown" and obfuscated identifiers report false. An
+// IPv4-mapped address is unmapped, so ::ffff:10.0.0.2 still matches an IPv4
+// trusted-proxy prefix.
 func nodeAddr(node string) (netip.Addr, bool) {
 	host := node
 
@@ -49,10 +43,8 @@ func nodeAddr(node string) (netip.Addr, bool) {
 		}
 		host = node[1:end]
 
-	// A single colon can only separate an IPv4 address from its port: an
-	// address holding colons of its own is required to be bracketed. Where it
-	// is not — which happens in the wild — the whole value parses as an IPv6
-	// address below.
+	// A lone colon separates an IPv4 address from its port; an unbracketed
+	// address carrying more parses as IPv6 below.
 	case strings.Count(node, ":") == 1:
 		host, _, _ = strings.Cut(node, ":")
 	}
@@ -66,8 +58,7 @@ func nodeAddr(node string) (netip.Addr, bool) {
 }
 
 // splitOutsideQuotes splits s on sep, ignoring separators inside a
-// quoted-string. A quoted-pair escapes the character following the backslash,
-// so an escaped DQUOTE does not end the string.
+// quoted-string, where a backslash escapes the character that follows.
 func splitOutsideQuotes(s string, sep byte) []string {
 	var (
 		parts   []string

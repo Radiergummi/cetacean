@@ -262,9 +262,8 @@ func TestLoadAuth_HeadersNoTrustedProxies(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Proxy-Secret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
 
-	// LoadAuth no longer rejects missing trusted proxies — that check
-	// moved to main.go where the general CETACEAN_TRUSTED_PROXIES is
-	// resolved and can provide the value.
+	// The check moved to main.go, where the general CETACEAN_TRUSTED_PROXIES
+	// is resolved and can supply the value.
 	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

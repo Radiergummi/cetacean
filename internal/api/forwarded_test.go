@@ -36,9 +36,8 @@ func TestForwardedNodes(t *testing.T) {
 			values: []string{`by=203.0.113.43;for=192.0.2.1;proto=https;host=example.com`},
 			want:   []string{"192.0.2.1"},
 		},
-		// The three quoting cases below hide a "for" inside another
-		// parameter's value: a proxy reflecting attacker-controlled input into
-		// host or by must not be able to inject a node into the chain.
+		// The three quoting cases below hide a "for" inside another parameter's
+		// value: reflected input must not inject a node into the chain.
 		{
 			name:   "a comma inside a quoted string does not start a new element",
 			values: []string{`for=192.0.2.1;host="x, for=203.0.113.99"`},

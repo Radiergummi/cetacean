@@ -17,9 +17,8 @@ import (
 	"time"
 )
 
-// newClientCert builds a self-signed certificate and returns it both parsed
-// and DER-encoded, so a test can hand the same certificate to the TLS
-// connection state or to the Client-Cert header.
+// newClientCert builds a self-signed certificate, parsed and DER-encoded, so a
+// test can hand the same one to the TLS connection state or the header.
 func newClientCert(t *testing.T, commonName string, uris []*url.URL) (*x509.Certificate, []byte) {
 	t.Helper()
 
@@ -67,9 +66,8 @@ func spiffeURI(t *testing.T, raw string) []*url.URL {
 	return []*url.URL{u}
 }
 
-// TestCertProvider_HeaderFromTrustedProxy covers RFC 9440's whole point: a
-// forwarded certificate builds identity by the same path a directly-presented
-// one takes, SPIFFE URI SAN included.
+// TestCertProvider_HeaderFromTrustedProxy: a forwarded certificate builds
+// identity by the same path a presented one takes, SPIFFE URI SAN included.
 func TestCertProvider_HeaderFromTrustedProxy(t *testing.T) {
 	_, der := newClientCert(t, "alice", spiffeURI(t, "spiffe://example.org/workload/api"))
 
@@ -95,9 +93,8 @@ func TestCertProvider_HeaderFromTrustedProxy(t *testing.T) {
 	}
 }
 
-// TestCertProvider_HeaderFromUntrustedPeerRejected is the security property:
-// anyone can send the header, and RFC 9440 §3 allows believing it only from a
-// trusted TTRP.
+// TestCertProvider_HeaderFromUntrustedPeerRejected: anyone can send the
+// header, and RFC 9440 §3 allows believing it only from a trusted TTRP.
 func TestCertProvider_HeaderFromUntrustedPeerRejected(t *testing.T) {
 	_, der := newClientCert(t, "mallory", nil)
 
@@ -119,8 +116,8 @@ func TestCertProvider_HeaderFromUntrustedPeerRejected(t *testing.T) {
 	}
 }
 
-// TestCertProvider_PeerCertificateWinsOverHeader pins the precedence: a
-// certificate we verified ourselves cannot be displaced by a header.
+// TestCertProvider_PeerCertificateWinsOverHeader: a certificate verified here
+// cannot be displaced by a header.
 func TestCertProvider_PeerCertificateWinsOverHeader(t *testing.T) {
 	peerCert, _ := newClientCert(t, "alice", nil)
 	_, headerDER := newClientCert(t, "mallory", nil)
@@ -139,9 +136,9 @@ func TestCertProvider_PeerCertificateWinsOverHeader(t *testing.T) {
 	}
 }
 
-// TestCertProvider_DuplicateHeaderRejected covers a proxy that adds the header
-// instead of replacing it: the client's own value arrives first, and taking it
-// would let anyone reaching the proxy pick their identity.
+// TestCertProvider_DuplicateHeaderRejected: when a proxy appends instead of
+// replacing, the client's value arrives first — taking it would let anyone
+// reaching the proxy pick their identity.
 func TestCertProvider_DuplicateHeaderRejected(t *testing.T) {
 	_, mallory := newClientCert(t, "mallory", nil)
 	_, alice := newClientCert(t, "alice", nil)
