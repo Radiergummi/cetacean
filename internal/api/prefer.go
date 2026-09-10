@@ -2,20 +2,66 @@ package api
 
 import (
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
+
+// preferTokens yields each comma-separated preference token across every
+// Prefer field, since RFC 7240 allows both forms.
+func preferTokens(r *http.Request) []string {
+	var tokens []string
+	for _, v := range r.Header.Values("Prefer") {
+		for token := range strings.SplitSeq(v, ",") {
+			tokens = append(tokens, strings.TrimSpace(token))
+		}
+	}
+
+	return tokens
+}
 
 // preferMinimal returns true if the request carries a Prefer header
 // containing the "return=minimal" preference token (RFC 7240 §4.2).
 func preferMinimal(r *http.Request) bool {
-	for _, v := range r.Header.Values("Prefer") {
-		for token := range strings.SplitSeq(v, ",") {
-			if strings.TrimSpace(token) == "return=minimal" {
-				return true
-			}
+	return slices.Contains(preferTokens(r), "return=minimal")
+}
+
+// preferWait returns the RFC 7240 §4.3 wait preference in seconds, clamped to
+// cluster.ConvergenceTimeout. A malformed or negative value is ignored rather
+// than rejected: §2 says an unparseable preference is simply not applied. The
+// value may be a bare token or a quoted-string (RFC 7240 §2), so a single
+// pair of surrounding double quotes is stripped before parsing.
+func preferWait(r *http.Request) (time.Duration, bool) {
+	for _, token := range preferTokens(r) {
+		name, value, found := strings.Cut(token, "=")
+		if !found || strings.TrimSpace(name) != "wait" {
+			continue
 		}
+
+		value = strings.TrimSpace(value)
+		if len(value) >= 2 && strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
+			value = value[1 : len(value)-1]
+		}
+
+		seconds, err := strconv.Atoi(value)
+		if err != nil || seconds < 0 {
+			return 0, false
+		}
+
+		wait := min(time.Duration(seconds)*time.Second, cluster.ConvergenceTimeout)
+
+		return wait, true
 	}
-	return false
+
+	return 0, false
+}
+
+// preferRespondAsync reports the RFC 7240 §4.1 respond-async preference.
+func preferRespondAsync(r *http.Request) bool {
+	return slices.Contains(preferTokens(r), "respond-async")
 }
 
 // writePreferMinimal sends a 204 No Content response with the
