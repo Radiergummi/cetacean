@@ -5,6 +5,7 @@ package fixtures_test
 import (
 	"testing"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/radiergummi/cetacean/test/e2e/fixtures"
 	"github.com/radiergummi/cetacean/test/e2e/harness"
@@ -54,5 +55,80 @@ func TestDeployBaselineIsIdempotent(t *testing.T) {
 
 	if len(before) != len(after) {
 		t.Errorf("service count changed on redeploy: %d -> %d", len(before), len(after))
+	}
+}
+
+// TestBaselineShopWebUsesItsResources asserts the used-vs-orphan contrast the
+// baseline is designed around is real: shop_web must actually reference the
+// shop config, secret, network and volume, not merely coexist with them. A
+// test that only counted services would not catch four resources that are
+// created but never attached to anything.
+func TestBaselineShopWebUsesItsResources(t *testing.T) {
+	env := harness.Up(t)
+	env.SwarmInit(t)
+	fixtures.DeployBaseline(t, env)
+
+	svc, _, err := env.Docker.ServiceInspectWithRaw(
+		t.Context(),
+		"shop_web",
+		swarm.ServiceInspectOptions{},
+	)
+	if err != nil {
+		t.Fatalf("ServiceInspectWithRaw shop_web: %v", err)
+	}
+
+	containerSpec := svc.Spec.TaskTemplate.ContainerSpec
+	if containerSpec == nil {
+		t.Fatalf("shop_web has no container spec")
+	}
+
+	configNames := map[string]bool{}
+	for _, ref := range containerSpec.Configs {
+		configNames[ref.ConfigName] = true
+	}
+
+	if !configNames["shop-config"] {
+		t.Errorf("shop_web configs = %v, want shop-config", configNames)
+	}
+
+	secretNames := map[string]bool{}
+	for _, ref := range containerSpec.Secrets {
+		secretNames[ref.SecretName] = true
+	}
+
+	if !secretNames["shop-secret"] {
+		t.Errorf("shop_web secrets = %v, want shop-secret", secretNames)
+	}
+
+	// The daemon normalizes a network attachment's Target to the network's
+	// ID, so resolve shop-net's ID rather than comparing against its name.
+	shopNet, err := env.Docker.NetworkInspect(t.Context(), "shop-net", network.InspectOptions{})
+	if err != nil {
+		t.Fatalf("NetworkInspect shop-net: %v", err)
+	}
+
+	networkTargets := map[string]bool{}
+	for _, attachment := range svc.Spec.TaskTemplate.Networks {
+		networkTargets[attachment.Target] = true
+	}
+
+	if !networkTargets[shopNet.ID] {
+		t.Errorf("shop_web networks = %v, want shop-net (%s)", networkTargets, shopNet.ID)
+	}
+
+	volumeMounted := false
+
+	for _, m := range containerSpec.Mounts {
+		if m.Source == fixtures.UsedVolume && m.Target == "/data" {
+			volumeMounted = true
+		}
+	}
+
+	if !volumeMounted {
+		t.Errorf(
+			"shop_web mounts = %v, want %s at /data",
+			containerSpec.Mounts,
+			fixtures.UsedVolume,
+		)
 	}
 }

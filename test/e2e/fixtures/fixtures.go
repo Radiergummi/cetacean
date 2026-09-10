@@ -19,6 +19,7 @@ import (
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -37,6 +38,7 @@ const (
 	OrphanSecret     = "orphan-secret"
 	OrphanNetwork    = "orphan-net"
 	OrphanVolume     = "orphan-vol"
+	UsedVolume       = "shop-data"
 
 	fixtureImage       = "cetacean-e2e-fixture:latest"
 	imageBuildTimeout  = 5 * time.Minute
@@ -45,6 +47,13 @@ const (
 	removeStackTimeout = 30 * time.Second
 
 	stackLabel = "com.docker.stack.namespace"
+
+	// baselineSentinel is a config created as the very last step of
+	// DeployBaseline. baselinePresent tests only for this, not for any
+	// individual resource, so a run that fails partway through leaves no
+	// sentinel and the next call re-drives the whole baseline rather than
+	// silently adopting a half-built one.
+	baselineSentinel = "e2e-baseline-complete"
 )
 
 // ServiceSpec is the subset of a service definition the fixtures need.
@@ -54,6 +63,16 @@ type ServiceSpec struct {
 	Global   bool
 	Command  []string
 	Labels   map[string]string
+	Configs  []string    // config names to mount
+	Secrets  []string    // secret names to mount
+	Networks []string    // network names to attach
+	Mounts   []MountSpec // volumes to mount
+}
+
+// MountSpec attaches a named volume at a path in the container.
+type MountSpec struct {
+	Volume string
+	Target string
 }
 
 // DeployBaseline deploys the shared cluster. It is idempotent so a second
@@ -69,6 +88,7 @@ func DeployBaseline(t *testing.T, env *harness.Env) {
 
 	createNetwork(t, env, "shop-net", map[string]string{stackLabel: StackShop})
 	createNetwork(t, env, OrphanNetwork, nil)
+	createVolume(t, env, UsedVolume, map[string]string{stackLabel: StackShop})
 	createVolume(t, env, OrphanVolume, nil)
 	createConfig(
 		t,
@@ -97,6 +117,10 @@ func DeployBaseline(t *testing.T, env *harness.Env) {
 				"traefik.enable":                "true",
 				"traefik.http.routers.web.rule": "Host(`shop.local`)",
 			},
+			Configs:  []string{"shop-config"},
+			Secrets:  []string{"shop-secret"},
+			Networks: []string{"shop-net"},
+			Mounts:   []MountSpec{{Volume: UsedVolume, Target: "/data"}},
 		},
 		{
 			Name:     "shop_lonely",
@@ -138,6 +162,11 @@ func DeployBaseline(t *testing.T, env *harness.Env) {
 
 		waitConverged(t, env, spec.Name)
 	}
+
+	// Last step, deliberately: its presence is what DeployBaseline's
+	// idempotency check relies on, so a run that failed earlier leaves no
+	// sentinel and gets re-driven rather than adopted half-built.
+	createConfig(t, env, baselineSentinel, []byte("ok\n"), nil)
 }
 
 // DeployStack deploys a throwaway stack and removes it in cleanup.
@@ -147,6 +176,11 @@ func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpe
 	ensureImage(t, env)
 
 	stack := fmt.Sprintf("%s-%d", name, time.Now().UnixNano())
+
+	// Registered before anything is created: removeStack already tolerates a
+	// stack with no services, so if a create call below fails partway
+	// through, cleanup still runs rather than leaking what succeeded.
+	t.Cleanup(func() { removeStack(t, env, stack) })
 
 	for _, spec := range specs {
 		spec.Name = stack + "_" + spec.Name
@@ -159,8 +193,6 @@ func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpe
 
 		createService(t, env, spec)
 	}
-
-	t.Cleanup(func() { removeStack(t, env, stack) })
 
 	for _, spec := range specs {
 		waitConverged(t, env, stack+"_"+spec.Name)
@@ -228,18 +260,22 @@ func ensureImage(t *testing.T, env *harness.Env) {
 	}
 }
 
-// baselinePresent reports whether the shared shop stack has already been
-// deployed, which is what makes DeployBaseline idempotent.
+// baselinePresent reports whether a previous DeployBaseline call ran to
+// completion. It tests only for baselineSentinel — not for any individual
+// resource — so a run that failed partway through (leaving no sentinel) is
+// re-driven rather than mistaken for a finished baseline.
 func baselinePresent(t *testing.T, env *harness.Env) bool {
 	t.Helper()
 
-	services, err := env.Docker.ServiceList(t.Context(), swarm.ServiceListOptions{})
+	configs, err := env.Docker.ConfigList(t.Context(), swarm.ConfigListOptions{
+		Filters: filters.NewArgs(filters.Arg("name", baselineSentinel)),
+	})
 	if err != nil {
-		t.Fatalf("ServiceList: %v", err)
+		t.Fatalf("ConfigList: %v", err)
 	}
 
-	for _, svc := range services {
-		if svc.Spec.Labels[stackLabel] == StackShop {
+	for _, cfg := range configs {
+		if cfg.Spec.Name == baselineSentinel {
 			return true
 		}
 	}
@@ -318,6 +354,44 @@ func createService(t *testing.T, env *harness.Env, spec ServiceSpec) {
 		mode.Replicated = &swarm.ReplicatedService{Replicas: &replicas}
 	}
 
+	configRefs := make([]*swarm.ConfigReference, len(spec.Configs))
+	for i, name := range spec.Configs {
+		configRefs[i] = &swarm.ConfigReference{
+			ConfigID:   configID(t, env, name),
+			ConfigName: name,
+			File: &swarm.ConfigReferenceFileTarget{
+				Name: name,
+				UID:  "0",
+				GID:  "0",
+				Mode: 0o444,
+			},
+		}
+	}
+
+	secretRefs := make([]*swarm.SecretReference, len(spec.Secrets))
+	for i, name := range spec.Secrets {
+		secretRefs[i] = &swarm.SecretReference{
+			SecretID:   secretID(t, env, name),
+			SecretName: name,
+			File: &swarm.SecretReferenceFileTarget{
+				Name: name,
+				UID:  "0",
+				GID:  "0",
+				Mode: 0o400,
+			},
+		}
+	}
+
+	mounts := make([]mount.Mount, len(spec.Mounts))
+	for i, m := range spec.Mounts {
+		mounts[i] = mount.Mount{Type: mount.TypeVolume, Source: m.Volume, Target: m.Target}
+	}
+
+	networks := make([]swarm.NetworkAttachmentConfig, len(spec.Networks))
+	for i, name := range spec.Networks {
+		networks[i] = swarm.NetworkAttachmentConfig{Target: name}
+	}
+
 	_, err := env.Docker.ServiceCreate(t.Context(), swarm.ServiceSpec{
 		Annotations: swarm.Annotations{Name: spec.Name, Labels: spec.Labels},
 		Mode:        mode,
@@ -326,7 +400,11 @@ func createService(t *testing.T, env *harness.Env, spec ServiceSpec) {
 				Image:   fixtureImage,
 				Command: []string{"/bin/sh", "-c"},
 				Args:    spec.Command,
+				Configs: configRefs,
+				Secrets: secretRefs,
+				Mounts:  mounts,
 			},
+			Networks: networks,
 			RestartPolicy: &swarm.RestartPolicy{
 				Condition: swarm.RestartPolicyConditionAny,
 				Delay:     new(2 * time.Second),
@@ -336,6 +414,52 @@ func createService(t *testing.T, env *harness.Env, spec ServiceSpec) {
 	if err != nil && !cerrdefs.IsConflict(err) {
 		t.Fatalf("ServiceCreate %s: %v", spec.Name, err)
 	}
+}
+
+// configID resolves a config's name to the ID the SDK requires for a
+// ContainerSpec reference; the daemon rejects a reference carrying only a
+// name.
+func configID(t *testing.T, env *harness.Env, name string) string {
+	t.Helper()
+
+	configs, err := env.Docker.ConfigList(t.Context(), swarm.ConfigListOptions{
+		Filters: filters.NewArgs(filters.Arg("name", name)),
+	})
+	if err != nil {
+		t.Fatalf("ConfigList %s: %v", name, err)
+	}
+
+	for _, cfg := range configs {
+		if cfg.Spec.Name == name {
+			return cfg.ID
+		}
+	}
+
+	t.Fatalf("config %s not found", name)
+
+	return ""
+}
+
+// secretID is configID's counterpart for secrets.
+func secretID(t *testing.T, env *harness.Env, name string) string {
+	t.Helper()
+
+	secrets, err := env.Docker.SecretList(t.Context(), swarm.SecretListOptions{
+		Filters: filters.NewArgs(filters.Arg("name", name)),
+	})
+	if err != nil {
+		t.Fatalf("SecretList %s: %v", name, err)
+	}
+
+	for _, sec := range secrets {
+		if sec.Spec.Name == name {
+			return sec.ID
+		}
+	}
+
+	t.Fatalf("secret %s not found", name)
+
+	return ""
 }
 
 // waitConverged blocks until the service settles, using the product's own
