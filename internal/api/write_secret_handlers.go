@@ -58,15 +58,19 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request) {
-	handleGetLabels(w, r, h.acl, getLabelsSpec[swarm.Secret]{
+func (h *Handlers) secretLabelsSpec() getLabelsSpec[swarm.Secret] {
+	return getLabelsSpec[swarm.Secret]{
 		resource:    "secret",
 		pathKey:     "id",
 		typeName:    "SecretLabels",
 		getter:      h.cache.GetSecret,
 		aclResource: func(s swarm.Secret) string { return "secret:" + s.Spec.Name },
 		getLabels:   func(s swarm.Secret) map[string]string { return s.Spec.Labels },
-	})
+	}
+}
+
+func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request) {
+	handleGetLabels(w, r, h.acl, h.secretLabelsSpec())
 }
 
 func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Request) {

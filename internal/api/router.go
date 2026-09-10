@@ -244,7 +244,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.Handle("POST /plugins", pluginWildTier3.ThenFunc(h.HandleInstallPlugin))
 	mux.Handle("POST /plugins/{name}/enable", pluginTier2.ThenFunc(h.HandleEnablePlugin))
 	mux.Handle("POST /plugins/{name}/disable", pluginTier2.ThenFunc(h.HandleDisablePlugin))
-	mux.Handle("DELETE /plugins/{name}", pluginTier3.ThenFunc(h.HandleRemovePlugin))
+	mux.Handle("DELETE /plugins/{name}",
+		pluginTier3.Append(h.precond(h.pluginRepresentation)).
+			ThenFunc(h.HandleRemovePlugin))
 	mux.Handle("POST /plugins/{name}/upgrade", pluginTier3.ThenFunc(h.HandleUpgradePlugin))
 	mux.Handle("PATCH /plugins/{name}/settings", pluginTier2.ThenFunc(h.HandleConfigurePlugin))
 
@@ -329,13 +331,19 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		"GET /nodes/{id}/labels",
 		contentNegotiated(h.HandleGetNodeLabels, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /nodes/{id}/labels", nodeTier3.ThenFunc(h.HandlePatchNodeLabels))
+	mux.Handle("PATCH /nodes/{id}/labels",
+		nodeTier3.Append(h.precond(h.nodeLabelsSpec().representation)).
+			ThenFunc(h.HandlePatchNodeLabels))
 	mux.HandleFunc(
 		"GET /nodes/{id}/role",
 		contentNegotiated(h.HandleGetNodeRole, feedHandlers{}, spa),
 	)
-	mux.Handle("PUT /nodes/{id}/role", nodeTier3.ThenFunc(h.HandleUpdateNodeRole))
-	mux.Handle("DELETE /nodes/{id}", nodeTier3.ThenFunc(h.HandleRemoveNode))
+	mux.Handle("PUT /nodes/{id}/role",
+		nodeTier3.Append(h.precond(h.nodeRoleRepresentation)).
+			ThenFunc(h.HandleUpdateNodeRole))
+	mux.Handle("DELETE /nodes/{id}",
+		nodeTier3.Append(h.precond(h.nodeRepresentation)).
+			ThenFunc(h.HandleRemoveNode))
 
 	// Service write operations — tier 1 (operational)
 	mux.Handle("PUT /services/{id}/scale", svcTier1.ThenFunc(h.HandleScaleService))
@@ -355,38 +363,53 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		"GET /services/{id}/labels",
 		contentNegotiated(h.HandleGetServiceLabels, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /services/{id}/labels", svcTier2.ThenFunc(h.HandlePatchServiceLabels))
+	mux.Handle("PATCH /services/{id}/labels",
+		svcTier2.Append(h.precond(h.serviceLabelsSpec().representation)).
+			ThenFunc(h.HandlePatchServiceLabels))
 	mux.HandleFunc(
 		"GET /services/{id}/resources",
 		contentNegotiated(h.HandleGetServiceResources, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /services/{id}/resources", svcTier2.ThenFunc(h.HandlePatchServiceResources))
+	mux.Handle("PATCH /services/{id}/resources",
+		svcTier2.Append(h.precond(h.serviceResourcesRepresentation)).
+			ThenFunc(h.HandlePatchServiceResources))
 	mux.HandleFunc(
 		"GET /services/{id}/healthcheck",
 		contentNegotiated(h.HandleGetServiceHealthcheck, feedHandlers{}, spa),
 	)
-	mux.Handle("PUT /services/{id}/healthcheck", svcTier2.ThenFunc(h.HandlePutServiceHealthcheck))
+	// One representation, two methods: PUT replaces the healthcheck and PATCH
+	// merges into it, but both are conditioned on the same current state.
+	svcHealthcheckTier2 := svcTier2.Append(h.precond(h.serviceHealthcheckRepresentation))
+	mux.Handle(
+		"PUT /services/{id}/healthcheck",
+		svcHealthcheckTier2.ThenFunc(h.HandlePutServiceHealthcheck),
+	)
 	mux.Handle(
 		"PATCH /services/{id}/healthcheck",
-		svcTier2.ThenFunc(h.HandlePatchServiceHealthcheck),
+		svcHealthcheckTier2.ThenFunc(h.HandlePatchServiceHealthcheck),
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/placement",
 		contentNegotiated(h.HandleGetServicePlacement, feedHandlers{}, spa),
 	)
-	mux.Handle("PUT /services/{id}/placement", svcTier2.ThenFunc(h.HandlePutServicePlacement))
+	mux.Handle("PUT /services/{id}/placement",
+		svcTier2.Append(h.precond(h.servicePlacementRepresentation)).
+			ThenFunc(h.HandlePutServicePlacement))
 	mux.HandleFunc(
 		"GET /services/{id}/ports",
 		contentNegotiated(h.HandleGetServicePorts, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /services/{id}/ports", svcTier2.ThenFunc(h.HandlePatchServicePorts))
+	mux.Handle("PATCH /services/{id}/ports",
+		svcTier2.Append(h.precond(h.servicePortsRepresentation)).
+			ThenFunc(h.HandlePatchServicePorts))
 	mux.HandleFunc(
 		"GET /services/{id}/update-policy",
 		contentNegotiated(h.HandleGetServiceUpdatePolicy, feedHandlers{}, spa),
 	)
 	mux.Handle(
 		"PATCH /services/{id}/update-policy",
-		svcTier2.ThenFunc(h.HandlePatchServiceUpdatePolicy),
+		svcTier2.Append(h.precond(h.serviceUpdatePolicyRepresentation)).
+			ThenFunc(h.HandlePatchServiceUpdatePolicy),
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/rollback-policy",
@@ -394,33 +417,44 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	)
 	mux.Handle(
 		"PATCH /services/{id}/rollback-policy",
-		svcTier2.ThenFunc(h.HandlePatchServiceRollbackPolicy),
+		svcTier2.Append(h.precond(h.serviceRollbackPolicyRepresentation)).
+			ThenFunc(h.HandlePatchServiceRollbackPolicy),
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/log-driver",
 		contentNegotiated(h.HandleGetServiceLogDriver, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /services/{id}/log-driver", svcTier2.ThenFunc(h.HandlePatchServiceLogDriver))
+	mux.Handle("PATCH /services/{id}/log-driver",
+		svcTier2.Append(h.precond(h.serviceLogDriverRepresentation)).
+			ThenFunc(h.HandlePatchServiceLogDriver))
 	mux.HandleFunc(
 		"GET /services/{id}/configs",
 		contentNegotiated(h.HandleGetServiceConfigs, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /services/{id}/configs", svcTier2.ThenFunc(h.HandlePatchServiceConfigs))
+	mux.Handle("PATCH /services/{id}/configs",
+		svcTier2.Append(h.precond(h.serviceConfigsRepresentation)).
+			ThenFunc(h.HandlePatchServiceConfigs))
 	mux.HandleFunc(
 		"GET /services/{id}/secrets",
 		contentNegotiated(h.HandleGetServiceSecrets, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /services/{id}/secrets", svcTier2.ThenFunc(h.HandlePatchServiceSecrets))
+	mux.Handle("PATCH /services/{id}/secrets",
+		svcTier2.Append(h.precond(h.serviceSecretsRepresentation)).
+			ThenFunc(h.HandlePatchServiceSecrets))
 	mux.HandleFunc(
 		"GET /services/{id}/networks",
 		contentNegotiated(h.HandleGetServiceNetworks, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /services/{id}/networks", svcTier2.ThenFunc(h.HandlePatchServiceNetworks))
+	mux.Handle("PATCH /services/{id}/networks",
+		svcTier2.Append(h.precond(h.serviceNetworksRepresentation)).
+			ThenFunc(h.HandlePatchServiceNetworks))
 	mux.HandleFunc(
 		"GET /services/{id}/mounts",
 		contentNegotiated(h.HandleGetServiceMounts, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /services/{id}/mounts", svcTier2.ThenFunc(h.HandlePatchServiceMounts))
+	mux.Handle("PATCH /services/{id}/mounts",
+		svcTier2.Append(h.precond(h.serviceMountsRepresentation)).
+			ThenFunc(h.HandlePatchServiceMounts))
 
 	mux.HandleFunc(
 		"GET /services/{id}/container-config",
@@ -428,7 +462,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	)
 	mux.Handle(
 		"PATCH /services/{id}/container-config",
-		svcTier2.ThenFunc(h.HandlePatchServiceContainerConfig),
+		svcTier2.Append(h.precond(h.serviceContainerConfigRepresentation)).
+			ThenFunc(h.HandlePatchServiceContainerConfig),
 	)
 
 	// Service write operations — tier 3 (impactful)
@@ -436,16 +471,21 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		"GET /services/{id}/mode",
 		contentNegotiated(h.HandleGetServiceMode, feedHandlers{}, spa),
 	)
-	mux.Handle("PUT /services/{id}/mode", svcTier3.ThenFunc(h.HandleUpdateServiceMode))
+	mux.Handle("PUT /services/{id}/mode",
+		svcTier3.Append(h.precond(h.serviceModeRepresentation)).
+			ThenFunc(h.HandleUpdateServiceMode))
 	mux.HandleFunc(
 		"GET /services/{id}/endpoint-mode",
 		contentNegotiated(h.HandleGetServiceEndpointMode, feedHandlers{}, spa),
 	)
 	mux.Handle(
 		"PUT /services/{id}/endpoint-mode",
-		svcTier3.ThenFunc(h.HandleUpdateServiceEndpointMode),
+		svcTier3.Append(h.precond(h.serviceEndpointModeRepresentation)).
+			ThenFunc(h.HandleUpdateServiceEndpointMode),
 	)
-	mux.Handle("DELETE /services/{id}", svcTier3.ThenFunc(h.HandleRemoveService))
+	mux.Handle("DELETE /services/{id}",
+		svcTier3.Append(h.precond(h.serviceRepresentation)).
+			ThenFunc(h.HandleRemoveService))
 
 	// Tasks
 	mux.HandleFunc(
@@ -474,7 +514,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		"GET /tasks/{id}/logs",
 		contentNegotiatedWithSSE(h.HandleTaskLogs, h.HandleTaskLogs, feedHandlers{}, spa),
 	)
-	mux.Handle("DELETE /tasks/{id}", taskTier3.ThenFunc(h.HandleRemoveTask))
+	mux.Handle("DELETE /tasks/{id}",
+		taskTier3.Append(h.precond(h.taskRepresentation)).
+			ThenFunc(h.HandleRemoveTask))
 
 	// History
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
@@ -505,7 +547,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			return name
 		}), spa),
 	)
-	mux.Handle("DELETE /stacks/{name}", stackTier3.ThenFunc(h.HandleRemoveStack))
+	mux.Handle("DELETE /stacks/{name}",
+		stackTier3.Append(h.precond(h.stackRepresentation)).
+			ThenFunc(h.HandleRemoveStack))
 
 	// Configs
 	mux.HandleFunc(
@@ -533,13 +577,17 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			spa,
 		),
 	)
-	mux.Handle("DELETE /configs/{id}", cfgTier3.ThenFunc(h.HandleRemoveConfig))
+	mux.Handle("DELETE /configs/{id}",
+		cfgTier3.Append(h.precond(h.configRepresentation)).
+			ThenFunc(h.HandleRemoveConfig))
 	mux.Handle("POST /configs", cfgWildTier2.ThenFunc(h.HandleCreateConfig))
 	mux.HandleFunc(
 		"GET /configs/{id}/labels",
 		contentNegotiated(h.HandleGetConfigLabels, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /configs/{id}/labels", cfgTier2.ThenFunc(h.HandlePatchConfigLabels))
+	mux.Handle("PATCH /configs/{id}/labels",
+		cfgTier2.Append(h.precond(h.configLabelsSpec().representation)).
+			ThenFunc(h.HandlePatchConfigLabels))
 
 	// Secrets
 	mux.HandleFunc(
@@ -567,13 +615,17 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			spa,
 		),
 	)
-	mux.Handle("DELETE /secrets/{id}", secTier3.ThenFunc(h.HandleRemoveSecret))
+	mux.Handle("DELETE /secrets/{id}",
+		secTier3.Append(h.precond(h.secretRepresentation)).
+			ThenFunc(h.HandleRemoveSecret))
 	mux.Handle("POST /secrets", secWildTier2.ThenFunc(h.HandleCreateSecret))
 	mux.HandleFunc(
 		"GET /secrets/{id}/labels",
 		contentNegotiated(h.HandleGetSecretLabels, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /secrets/{id}/labels", secTier2.ThenFunc(h.HandlePatchSecretLabels))
+	mux.Handle("PATCH /secrets/{id}/labels",
+		secTier2.Append(h.precond(h.secretLabelsSpec().representation)).
+			ThenFunc(h.HandlePatchSecretLabels))
 
 	// Networks
 	mux.HandleFunc(
@@ -601,7 +653,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			spa,
 		),
 	)
-	mux.Handle("DELETE /networks/{id}", netTier3.ThenFunc(h.HandleRemoveNetwork))
+	mux.Handle("DELETE /networks/{id}",
+		netTier3.Append(h.precond(h.networkRepresentation)).
+			ThenFunc(h.HandleRemoveNetwork))
 
 	// Volumes
 	mux.HandleFunc(
@@ -626,7 +680,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			spa,
 		),
 	)
-	mux.Handle("DELETE /volumes/{name}", volTier3.ThenFunc(h.HandleRemoveVolume))
+	mux.Handle("DELETE /volumes/{name}",
+		volTier3.Append(h.precond(h.volumeRepresentation)).
+			ThenFunc(h.HandleRemoveVolume))
 
 	// Search
 	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, feedHandlers{

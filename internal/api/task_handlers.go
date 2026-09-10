@@ -81,13 +81,14 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	et := cluster.EnrichTask(h.cache, task)
 	h.setAllow(w, r, "task", id)
-	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/tasks/"+id, "Task", TaskResponse{
-		Task:    et,
-		Service: TaskServiceRef{AtID: "/services/" + et.ServiceID, Name: et.ServiceName},
-		Node:    TaskNodeRef{AtID: "/nodes/" + et.NodeID, Hostname: et.NodeHostname},
-	}), task.UpdatedAt)
+
+	rep, ok := representationOr404(w, r, "task", id, h.taskRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSONTimed(w, r, rep, task.UpdatedAt)
 }
 
 func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {

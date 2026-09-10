@@ -47,23 +47,12 @@ func (h *Handlers) HandleGetServiceMode(w http.ResponseWriter, r *http.Request) 
 	}
 	h.setAllowSubResource(w, r, "PUT", config.OpsImpactful, "service:"+svc.Spec.Name)
 
-	mode := "replicated"
-	var replicas *uint64
-	if svc.Spec.Mode.Global != nil {
-		mode = "global"
-	} else if svc.Spec.Mode.Replicated != nil {
-		replicas = svc.Spec.Mode.Replicated.Replicas
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceModeRepresentation)
+	if !ok {
+		return
 	}
 
-	writeCachedJSON(w, r, NewDetailResponse(
-		r.Context(),
-		"/services/"+svc.ID+"/mode",
-		"ServiceMode",
-		map[string]any{
-			"mode":     mode,
-			"replicas": replicas,
-		},
-	))
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.Request) {
@@ -73,19 +62,12 @@ func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.R
 	}
 	h.setAllowSubResource(w, r, "PUT", config.OpsImpactful, "service:"+svc.Spec.Name)
 
-	endpointMode := ""
-	if svc.Spec.EndpointSpec != nil {
-		endpointMode = string(svc.Spec.EndpointSpec.Mode)
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceEndpointModeRepresentation)
+	if !ok {
+		return
 	}
 
-	writeCachedJSON(w, r, NewDetailResponse(
-		r.Context(),
-		"/services/"+svc.ID+"/endpoint-mode",
-		"ServiceEndpointMode",
-		map[string]any{
-			"endpointMode": endpointMode,
-		},
-	))
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Request) {
@@ -239,17 +221,13 @@ func envSliceToMap(env []string) map[string]string {
 }
 
 func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
-	// Two lookups, deliberately: lookupServiceACL writes its own 403/404 on
-	// denial, while serviceEnvRepresentation must stay silent so precond can
-	// answer a miss with 412 instead — they cannot be merged into one call.
-	if _, ok := h.lookupServiceACL(w, r); !ok {
+	svc, ok := h.lookupServiceACL(w, r)
+	if !ok {
 		return
 	}
 
-	rep, ok := h.serviceEnvRepresentation(r)
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceEnvRepresentation)
 	if !ok {
-		writeErrorCode(w, r, notFoundCodes["service"],
-			"service "+r.PathValue("id")+" not found")
 		return
 	}
 
@@ -297,15 +275,19 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	))
 }
 
-func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request) {
-	handleGetLabels(w, r, h.acl, getLabelsSpec[swarm.Service]{
+func (h *Handlers) serviceLabelsSpec() getLabelsSpec[swarm.Service] {
+	return getLabelsSpec[swarm.Service]{
 		resource:    "service",
 		pathKey:     "id",
 		typeName:    "ServiceLabels",
 		getter:      h.cache.GetService,
 		aclResource: func(s swarm.Service) string { return "service:" + s.Spec.Name },
 		getLabels:   func(s swarm.Service) map[string]string { return s.Spec.Labels },
-	})
+	}
+}
+
+func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request) {
+	handleGetLabels(w, r, h.acl, h.serviceLabelsSpec())
 }
 
 func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Request) {
@@ -325,22 +307,12 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	resources := svc.Spec.TaskTemplate.Resources
-	if resources == nil {
-		resources = &swarm.ResourceRequirements{}
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceResourcesRepresentation)
+	if !ok {
+		return
 	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/resources",
-			"ServiceResources",
-			map[string]any{
-				"resources": resources,
-			},
-		),
-	)
+
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Request) {
@@ -402,20 +374,12 @@ func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	var ports []swarm.PortConfig
-	if svc.Spec.EndpointSpec != nil {
-		ports = svc.Spec.EndpointSpec.Ports
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.servicePortsRepresentation)
+	if !ok {
+		return
 	}
-	if ports == nil {
-		ports = []swarm.PortConfig{}
-	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/services/"+svc.ID+"/ports", "ServicePorts", map[string]any{
-			"ports": ports,
-		}),
-	)
+
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Request) {
@@ -468,23 +432,12 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var hc *container.HealthConfig
-	if svc.Spec.TaskTemplate.ContainerSpec != nil {
-		hc = svc.Spec.TaskTemplate.ContainerSpec.Healthcheck
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceHealthcheckRepresentation)
+	if !ok {
+		return
 	}
 
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/healthcheck",
-			"ServiceHealthcheck",
-			map[string]any{
-				"healthcheck": hc,
-			},
-		),
-	)
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -528,23 +481,12 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	placement := svc.Spec.TaskTemplate.Placement
-	if placement == nil {
-		placement = &swarm.Placement{}
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.servicePlacementRepresentation)
+	if !ok {
+		return
 	}
 
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/placement",
-			"ServicePlacement",
-			map[string]any{
-				"placement": placement,
-			},
-		),
-	)
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Request) {
@@ -587,22 +529,12 @@ func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
-	policy := svc.Spec.UpdateConfig
-	if policy == nil {
-		policy = &swarm.UpdateConfig{}
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceUpdatePolicyRepresentation)
+	if !ok {
+		return
 	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/update-policy",
-			"ServiceUpdatePolicy",
-			map[string]any{
-				"updatePolicy": policy,
-			},
-		),
-	)
+
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http.Request) {
@@ -658,21 +590,12 @@ func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http
 	if !ok {
 		return
 	}
-	policy := svc.Spec.RollbackConfig
-	if policy == nil {
-		policy = &swarm.UpdateConfig{}
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceRollbackPolicyRepresentation)
+	if !ok {
+		return
 	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(r.Context(),
-			"/services/"+svc.ID+"/rollback-policy",
-			"ServiceRollbackPolicy",
-			map[string]any{
-				"rollbackPolicy": policy,
-			},
-		),
-	)
+
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
@@ -727,18 +650,12 @@ func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/log-driver",
-			"ServiceLogDriver",
-			map[string]any{
-				"logDriver": svc.Spec.TaskTemplate.LogDriver,
-			},
-		),
-	)
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceLogDriverRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Request) {
@@ -898,17 +815,12 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 		return
 	}
 
-	resp := containerConfigFromSpec(svc.Spec.TaskTemplate.ContainerSpec)
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/container-config",
-			"ServiceContainerConfig",
-			map[string]any{"containerConfig": resp},
-		),
-	)
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceContainerConfigRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *http.Request) {
@@ -1032,18 +944,12 @@ func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/configs",
-			"ServiceConfigs",
-			map[string]any{
-				"configs": extractConfigRefs(svc.Spec.TaskTemplate.ContainerSpec),
-			},
-		),
-	)
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceConfigsRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Request) {
@@ -1116,18 +1022,12 @@ func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/secrets",
-			"ServiceSecrets",
-			map[string]any{
-				"secrets": extractSecretRefs(svc.Spec.TaskTemplate.ContainerSpec),
-			},
-		),
-	)
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceSecretsRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Request) {
@@ -1200,18 +1100,12 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/networks",
-			"ServiceNetworks",
-			map[string]any{
-				"networks": extractNetworkRefs(svc.Spec.TaskTemplate.Networks),
-			},
-		),
-	)
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceNetworksRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Request) {
@@ -1270,26 +1164,12 @@ func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var mounts []mount.Mount
-	if svc.Spec.TaskTemplate.ContainerSpec != nil {
-		mounts = svc.Spec.TaskTemplate.ContainerSpec.Mounts
-	}
-	if mounts == nil {
-		mounts = []mount.Mount{}
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceMountsRepresentation)
+	if !ok {
+		return
 	}
 
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/mounts",
-			"ServiceMounts",
-			map[string]any{
-				"mounts": mounts,
-			},
-		),
-	)
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Request) {

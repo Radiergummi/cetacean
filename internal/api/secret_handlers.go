@@ -19,18 +19,15 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// Never expose secret data — clear it before responding.
-	sec = cluster.RedactSecret(sec)
 	h.setAllow(w, r, "secret", sec.Spec.Name)
-	writeCachedJSONTimed(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
-			Secret:   sec,
-			Services: h.filterServiceRefs(r, h.cache.ServicesUsingSecret(id)),
-		}),
-		sec.UpdatedAt,
-	)
+
+	// The representation redacts the secret's data before serializing it.
+	rep, ok := representationOr404(w, r, "secret", id, h.secretRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSONTimed(w, r, rep, sec.UpdatedAt)
 }
 
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
