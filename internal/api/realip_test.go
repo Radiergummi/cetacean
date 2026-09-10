@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 func TestRealIP_NoTrustedProxies(t *testing.T) {
@@ -119,4 +121,57 @@ func TestRealIP_IPv6(t *testing.T) {
 	r.RemoteAddr = "[fd00::1]:443"
 	r.Header.Set("X-Forwarded-For", "2001:db8::1")
 	handler.ServeHTTP(httptest.NewRecorder(), r)
+}
+
+// TestRealIP_RecordsVerdictOnOriginalPeer: the verdict describes the peer the
+// connection came from, not the client address the same middleware then
+// writes into RemoteAddr.
+func TestRealIP_RecordsVerdictOnOriginalPeer(t *testing.T) {
+	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
+	handler := realIP(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		peer, ok := auth.PeerFromContext(r.Context())
+		if !ok {
+			t.Fatal("no peer recorded in context")
+		}
+		if peer.Addr.String() != "10.0.0.1" {
+			t.Errorf("peer address = %s, want the original peer 10.0.0.1", peer.Addr)
+		}
+		if !peer.Trusted {
+			t.Error("peer not marked trusted")
+		}
+		if r.RemoteAddr != "203.0.113.1:54321" {
+			t.Errorf("RemoteAddr = %s, want the client address", r.RemoteAddr)
+		}
+	}))
+
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.RemoteAddr = "10.0.0.1:54321"
+	r.Header.Set("X-Forwarded-For", "203.0.113.1")
+	handler.ServeHTTP(httptest.NewRecorder(), r)
+}
+
+// TestRealIP_RecordsUntrustedVerdict: both ways of failing the check still
+// record a verdict, so downstream code can tell "untrusted" from "undecided".
+func TestRealIP_RecordsUntrustedVerdict(t *testing.T) {
+	for name, trusted := range map[string][]netip.Prefix{
+		"none configured":  nil,
+		"peer outside set": {netip.MustParsePrefix("10.0.0.0/8")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				peer, ok := auth.PeerFromContext(r.Context())
+				if !ok {
+					t.Fatal("no peer recorded in context")
+				}
+				if peer.Trusted {
+					t.Errorf("peer %s marked trusted", peer.Addr)
+				}
+			})
+
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.RemoteAddr = "203.0.113.1:12345"
+			r.Header.Set("X-Forwarded-For", "198.51.100.1")
+			realIP(trusted)(inner).ServeHTTP(httptest.NewRecorder(), r)
+		})
+	}
 }

@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The dashboard loads about three times less over the wire on a first visit. Built assets are now precompressed at build time and served as zstd or gzip, taking the entry set from roughly 1046 KB to 326 KB, and hashed asset filenames are cached permanently instead of being revalidated on every load. `index.html` is still checked each time, so a new release is picked up immediately
 
 ### Fixed
+- Header-based authentication works behind a reverse proxy again. Cetacean rewrites the client address out of `X-Forwarded-For` before authentication runs, and the headers provider then checked *that* address against the trusted-proxy allowlist — asking whether the visitor was the proxy, which it never is. Every request was answered with a 401, in the one authentication mode that cannot be configured without an allowlist. Whether a request arrived through a trusted proxy is now decided once, at the edge, on the address the connection actually came from, and carried forward from there
 - Documentation pages name themselves consistently. Each page's canonical URL carried a `.html` extension that no link, and no sitemap entry, ever used — nominating a second address for every page on the site
 
 ## [0.14.0] - 2026-09-10

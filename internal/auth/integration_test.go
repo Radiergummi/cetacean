@@ -16,7 +16,13 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-var anyProxy = []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}
+// fromTrustedProxy attaches the trust verdict realIP records at the edge.
+func fromTrustedProxy(r *http.Request) *http.Request {
+	return r.WithContext(auth.ContextWithPeer(r.Context(), auth.Peer{
+		Addr:    netip.MustParseAddr("10.0.0.5"),
+		Trusted: true,
+	}))
+}
 
 func TestIntegration_NoneMode(t *testing.T) {
 	provider := &auth.NoneProvider{}
@@ -70,11 +76,10 @@ func TestIntegration_NoneMode(t *testing.T) {
 
 func TestIntegration_HeadersMode_ValidHeaders(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject:        "X-User",
-		Name:           "X-User-Name",
-		Email:          "X-User-Email",
-		Groups:         "X-User-Groups",
-		TrustedProxies: anyProxy,
+		Subject: "X-User",
+		Name:    "X-User-Name",
+		Email:   "X-User-Email",
+		Groups:  "X-User-Groups",
 	})
 	mw := auth.Middleware(provider)
 
@@ -110,7 +115,7 @@ func TestIntegration_HeadersMode_ValidHeaders(t *testing.T) {
 	req.Header.Set("X-User-Groups", "admin, dev")
 
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, fromTrustedProxy(req))
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
@@ -118,8 +123,7 @@ func TestIntegration_HeadersMode_ValidHeaders(t *testing.T) {
 
 func TestIntegration_HeadersMode_MissingHeaders(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject:        "X-User",
-		TrustedProxies: anyProxy,
+		Subject: "X-User",
 	})
 	mw := auth.Middleware(provider)
 
@@ -134,7 +138,7 @@ func TestIntegration_HeadersMode_MissingHeaders(t *testing.T) {
 	// No X-User header set.
 
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, fromTrustedProxy(req))
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
@@ -142,10 +146,9 @@ func TestIntegration_HeadersMode_MissingHeaders(t *testing.T) {
 
 func TestIntegration_HeadersMode_ValidSecret(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject:        "X-User",
-		SecretHeader:   "X-Proxy-Secret",
-		SecretValue:    "s3cret",
-		TrustedProxies: anyProxy,
+		Subject:      "X-User",
+		SecretHeader: "X-Proxy-Secret",
+		SecretValue:  "s3cret",
 	})
 	mw := auth.Middleware(provider)
 
@@ -167,7 +170,7 @@ func TestIntegration_HeadersMode_ValidSecret(t *testing.T) {
 	req.Header.Set("X-Proxy-Secret", "s3cret")
 
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, fromTrustedProxy(req))
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
@@ -175,10 +178,9 @@ func TestIntegration_HeadersMode_ValidSecret(t *testing.T) {
 
 func TestIntegration_HeadersMode_InvalidSecret(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject:        "X-User",
-		SecretHeader:   "X-Proxy-Secret",
-		SecretValue:    "s3cret",
-		TrustedProxies: anyProxy,
+		Subject:      "X-User",
+		SecretHeader: "X-Proxy-Secret",
+		SecretValue:  "s3cret",
 	})
 	mw := auth.Middleware(provider)
 
@@ -193,7 +195,7 @@ func TestIntegration_HeadersMode_InvalidSecret(t *testing.T) {
 	req.Header.Set("X-Proxy-Secret", "wrong")
 
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, fromTrustedProxy(req))
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
@@ -201,10 +203,9 @@ func TestIntegration_HeadersMode_InvalidSecret(t *testing.T) {
 
 func TestIntegration_HeadersMode_MissingSecretHeader(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject:        "X-User",
-		SecretHeader:   "X-Proxy-Secret",
-		SecretValue:    "s3cret",
-		TrustedProxies: anyProxy,
+		Subject:      "X-User",
+		SecretHeader: "X-Proxy-Secret",
+		SecretValue:  "s3cret",
 	})
 	mw := auth.Middleware(provider)
 
@@ -219,7 +220,7 @@ func TestIntegration_HeadersMode_MissingSecretHeader(t *testing.T) {
 	// X-Proxy-Secret not set.
 
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, fromTrustedProxy(req))
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
@@ -227,9 +228,8 @@ func TestIntegration_HeadersMode_MissingSecretHeader(t *testing.T) {
 
 func TestIntegration_HeadersMode_GroupsParsing(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject:        "X-User",
-		Groups:         "X-Groups",
-		TrustedProxies: anyProxy,
+		Subject: "X-User",
+		Groups:  "X-Groups",
 	})
 	mw := auth.Middleware(provider)
 
@@ -278,7 +278,7 @@ func TestIntegration_HeadersMode_GroupsParsing(t *testing.T) {
 			}
 
 			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, req)
+			handler.ServeHTTP(rec, fromTrustedProxy(req))
 			if rec.Code != http.StatusOK {
 				t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 			}
