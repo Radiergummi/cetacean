@@ -4883,6 +4883,71 @@ func TestPreferWaitOnScale(t *testing.T) {
 				applied, "wait=5", "return=minimal")
 		}
 	})
+
+	// The whole point of holding the connection open is to answer with the
+	// settled service. Docker's own result describes the moment it accepted
+	// the write — a mid-rollout UpdateStatus, and the version the wait was
+	// measured against — so rendering that would report the state the wait
+	// existed to move past, and hand back a Version that collides on the
+	// caller's next write.
+	t.Run("a honoured wait answers with the settled service", func(t *testing.T) {
+		c := cache.New(nil)
+
+		settled := preferTestService()
+		settled.Version.Index = 6
+		settled.UpdateStatus = &swarm.UpdateStatus{State: swarm.UpdateStateCompleted}
+		c.SetService(settled)
+
+		for i := range 2 {
+			c.SetTask(swarm.Task{
+				ID:           fmt.Sprintf("task%d", i),
+				ServiceID:    "svc1",
+				DesiredState: swarm.TaskStateRunning,
+				Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+			})
+		}
+
+		accepted := preferTestService()
+		accepted.UpdateStatus = &swarm.UpdateStatus{State: swarm.UpdateStateUpdating}
+
+		wc := &mockWriteClient{
+			mockServiceLifecycleWriter: mockServiceLifecycleWriter{
+				scaleServiceFn: func(context.Context, string, uint64) (swarm.Service, error) {
+					return accepted, nil
+				},
+			},
+		}
+
+		rec := httptest.NewRecorder()
+		newTestRouterWithCache(t, c, withWriteClient(wc)).
+			ServeHTTP(rec, scaleWithPrefer("wait=5"))
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+		}
+
+		var body struct {
+			Service swarm.Service `json:"service"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decoding body: %v", err)
+		}
+
+		if body.Service.Version.Index != 6 {
+			t.Errorf(
+				"version = %d, want 6 — the settled service, not the one Docker accepted",
+				body.Service.Version.Index,
+			)
+		}
+
+		if body.Service.UpdateStatus == nil ||
+			body.Service.UpdateStatus.State != swarm.UpdateStateCompleted {
+			t.Errorf(
+				"UpdateStatus = %+v, want completed after a wait that settled",
+				body.Service.UpdateStatus,
+			)
+		}
+	})
 }
 
 // TestPreferWaitWithIfMatch pins the one seam where preconditions and

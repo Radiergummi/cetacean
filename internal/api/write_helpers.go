@@ -195,7 +195,8 @@ func (h *Handlers) writeServiceMutation(
 		return
 	}
 
-	if h.awaitPreferred(w, r, id, svc) {
+	svc, handled := h.awaitPreferred(w, r, id, svc)
+	if handled {
 		return
 	}
 
@@ -205,8 +206,8 @@ func (h *Handlers) writeServiceMutation(
 }
 
 // awaitPreferred applies the RFC 7240 wait and respond-async preferences to a
-// service mutation Docker has already accepted, and reports whether it wrote
-// the response itself.
+// service mutation Docker has already accepted. It returns the service the
+// caller should render, and reports whether it wrote the response itself.
 //
 // The version to converge to comes from the service the write returned, not
 // from the cache: docker.Client ends every service write with a fresh
@@ -222,7 +223,7 @@ func (h *Handlers) awaitPreferred(
 	r *http.Request,
 	id string,
 	svc swarm.Service,
-) bool {
+) (swarm.Service, bool) {
 	// id addresses the response — the same path the 200 identifies itself
 	// by, so the two cannot name one service differently. svc.ID addresses
 	// the cache, which is keyed by ID and by nothing else.
@@ -230,7 +231,7 @@ func (h *Handlers) awaitPreferred(
 	async := preferRespondAsync(r)
 
 	if !wanted && !async {
-		return false
+		return svc, false
 	}
 
 	var (
@@ -255,7 +256,19 @@ func (h *Handlers) awaitPreferred(
 			"wait="+strconv.FormatInt(int64(wait/time.Second), 10),
 		)
 
-		return false
+		// The service Docker returned describes the moment it accepted the
+		// write: a mid-rollout UpdateStatus, and the version the wait was
+		// measured against. Having held the connection open until the
+		// cluster settled, answering with that snapshot would report the
+		// state the wait existed to move past. AwaitService only succeeds
+		// once the cache holds a version at or beyond that one, so the
+		// cached copy is the settled service — unless it has since been
+		// removed, and the write's own result is then the best answer left.
+		if settled, ok := h.cache.GetService(svc.ID); ok {
+			return settled, false
+		}
+
+		return svc, false
 	}
 
 	// Location points at the service itself rather than at a task resource:
@@ -278,7 +291,7 @@ func (h *Handlers) awaitPreferred(
 		},
 	))
 
-	return true
+	return svc, true
 }
 
 // writeNodeMutation calls a node writer function and writes the standard

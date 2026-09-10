@@ -325,17 +325,24 @@ curl -X PUT http://localhost:9000/services/abc123/scale \
 | Request | Response |
 |---|---|
 | no `Prefer` | unchanged |
-| `wait=30`, service settles in time | `200` with the service, plus `Preference-Applied: wait=30` |
+| `wait=30`, service settles in time | `200` with the settled service, plus `Preference-Applied: wait=30` |
 | `wait=30`, service does not settle | `202` with the last progress line, and no `Preference-Applied` |
 | `wait=600` | clamped to the 300 second ceiling; `Preference-Applied: wait=300` reports the wait applied |
 | `respond-async` | `202` straight away, plus `Location` and `Preference-Applied: respond-async` |
 | `respond-async, wait=10` | waits up to 10 seconds, then `202` with `Location` |
 | `return=minimal, wait=30` | waits, then `204`; `Preference-Applied` names both preferences |
 
+A `200` from a honoured wait describes the service as it settled, read back after convergence — not the snapshot Docker
+returned when it accepted the write, whose `UpdateStatus` is still mid-rollout and whose `Version` a follow-up write
+would collide on.
+
 A `202` carries `Location` pointing at the service itself, which is where the rollout can be followed: its
 `UpdateStatus` reports convergence, and the same URL opens a [live stream](#real-time-events) with
 `Accept: text/event-stream`. The body is the service as Docker returned it, plus a `progress` field holding the last
-convergence line observed — `waiting: 2/5 replicas running`. A client that hangs up cancels its own wait.
+convergence line observed — `waiting: 2/5 replicas running`. `return=minimal` does not apply on this path: there is a
+progress line to deliver, so the `202` carries a body and does not name `return=minimal` in `Preference-Applied`.
+Whether that preference is honoured therefore depends on how quickly the cluster settles. A client that hangs up
+cancels its own wait.
 
 The preferences apply to the six service endpoints that change what the cluster has to schedule: `scale`, `image`,
 `mode`, `endpoint-mode`, `rollback` and `restart`. Node availability takes no `wait` — draining is a different rule,
