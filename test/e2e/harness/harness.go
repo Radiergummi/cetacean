@@ -52,7 +52,7 @@ var (
 func Up(t *testing.T) *Env {
 	t.Helper()
 
-	once.Do(func() { shared, upErr = up() })
+	once.Do(func() { shared, upErr = UpCLI() })
 
 	if upErr != nil {
 		t.Fatalf("bring up environment: %v", upErr)
@@ -61,7 +61,10 @@ func Up(t *testing.T) *Env {
 	return shared
 }
 
-func up() (*Env, error) {
+// UpCLI is Up's non-test entry point, for callers that have no *testing.T —
+// e.g. cmd/e2eenv. It does not share Up's sync.Once: a CLI invocation brings
+// up its own environment rather than joining a test run's shared one.
+func UpCLI() (*Env, error) {
 	root, err := repoRoot()
 	if err != nil {
 		return nil, err
@@ -152,21 +155,32 @@ func waitForEngine(docker *client.Client) error {
 func (e *Env) SwarmInit(t *testing.T) {
 	t.Helper()
 
-	info, err := e.Docker.Info(t.Context())
+	if err := e.SwarmInitCLI(); err != nil {
+		t.Fatalf("%v", err)
+	}
+}
+
+// SwarmInitCLI is SwarmInit's non-test entry point.
+func (e *Env) SwarmInitCLI() error {
+	ctx := context.Background()
+
+	info, err := e.Docker.Info(ctx)
 	if err != nil {
-		t.Fatalf("Info: %v", err)
+		return fmt.Errorf("info: %w", err)
 	}
 
 	if info.Swarm.ControlAvailable {
-		return
+		return nil
 	}
 
-	if _, err := e.Docker.SwarmInit(t.Context(), swarm.InitRequest{
+	if _, err := e.Docker.SwarmInit(ctx, swarm.InitRequest{
 		ListenAddr:    "0.0.0.0:2377",
 		AdvertiseAddr: "127.0.0.1",
 	}); err != nil {
-		t.Fatalf("SwarmInit: %v", err)
+		return fmt.Errorf("SwarmInit: %w", err)
 	}
+
+	return nil
 }
 
 // repoRoot walks up from this source file to the module root, so the harness

@@ -82,32 +82,84 @@ type MountSpec struct {
 func DeployBaseline(t *testing.T, env *harness.Env) {
 	t.Helper()
 
-	ensureImage(t, env)
+	if err := DeployBaselineCLI(env); err != nil {
+		t.Fatalf("%v", err)
+	}
+}
 
-	if baselinePresent(t, env) {
-		return
+// DeployBaselineCLI is DeployBaseline's non-test entry point, for callers
+// that have no *testing.T — e.g. cmd/e2eenv. It returns the first error
+// rather than failing a test, so it shares the same deployment logic instead
+// of a second copy of it.
+func DeployBaselineCLI(env *harness.Env) error {
+	ctx := context.Background()
+
+	if err := ensureImage(ctx, env); err != nil {
+		return err
 	}
 
-	createNetwork(t, env, "shop-net", map[string]string{stackLabel: StackShop})
-	createNetwork(t, env, OrphanNetwork, nil)
-	createVolume(t, env, UsedVolume, map[string]string{stackLabel: StackShop})
-	createVolume(t, env, OrphanVolume, nil)
-	createConfig(
-		t,
+	present, err := baselinePresent(ctx, env)
+	if err != nil {
+		return err
+	}
+
+	if present {
+		return nil
+	}
+
+	if err := createNetwork(
+		ctx,
+		env,
+		"shop-net",
+		map[string]string{stackLabel: StackShop},
+	); err != nil {
+		return err
+	}
+
+	if err := createNetwork(ctx, env, OrphanNetwork, nil); err != nil {
+		return err
+	}
+
+	if err := createVolume(
+		ctx,
+		env,
+		UsedVolume,
+		map[string]string{stackLabel: StackShop},
+	); err != nil {
+		return err
+	}
+
+	if err := createVolume(ctx, env, OrphanVolume, nil); err != nil {
+		return err
+	}
+
+	if err := createConfig(
+		ctx,
 		env,
 		"shop-config",
 		[]byte("greeting=hello\n"),
 		map[string]string{stackLabel: StackShop},
-	)
-	createConfig(t, env, OrphanConfig, []byte("unused\n"), nil)
-	createSecret(
-		t,
+	); err != nil {
+		return err
+	}
+
+	if err := createConfig(ctx, env, OrphanConfig, []byte("unused\n"), nil); err != nil {
+		return err
+	}
+
+	if err := createSecret(
+		ctx,
 		env,
 		"shop-secret",
 		[]byte("s3cr3t\n"),
 		map[string]string{stackLabel: StackShop},
-	)
-	createSecret(t, env, OrphanSecret, []byte("unused\n"), nil)
+	); err != nil {
+		return err
+	}
+
+	if err := createSecret(ctx, env, OrphanSecret, []byte("unused\n"), nil); err != nil {
+		return err
+	}
 
 	specs := []ServiceSpec{
 		{
@@ -153,7 +205,9 @@ func DeployBaseline(t *testing.T, env *harness.Env) {
 	}
 
 	for _, spec := range specs {
-		createService(t, env, spec)
+		if err := createService(ctx, env, spec); err != nil {
+			return err
+		}
 	}
 
 	// The crash-looping service never converges by design; wait on the rest.
@@ -162,20 +216,26 @@ func DeployBaseline(t *testing.T, env *harness.Env) {
 			continue
 		}
 
-		waitConverged(t, env, spec.Name)
+		if err := waitConverged(ctx, env, spec.Name); err != nil {
+			return err
+		}
 	}
 
 	// Last step, deliberately: its presence is what DeployBaseline's
 	// idempotency check relies on, so a run that failed earlier leaves no
 	// sentinel and gets re-driven rather than adopted half-built.
-	createConfig(t, env, baselineSentinel, []byte("ok\n"), nil)
+	return createConfig(ctx, env, baselineSentinel, []byte("ok\n"), nil)
 }
 
 // DeployStack deploys a throwaway stack and removes it in cleanup.
 func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpec) string {
 	t.Helper()
 
-	ensureImage(t, env)
+	ctx := t.Context()
+
+	if err := ensureImage(ctx, env); err != nil {
+		t.Fatalf("%v", err)
+	}
 
 	stack := fmt.Sprintf("%s-%d", name, time.Now().UnixNano())
 
@@ -193,11 +253,15 @@ func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpe
 
 		spec.Labels[stackLabel] = stack
 
-		createService(t, env, spec)
+		if err := createService(ctx, env, spec); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}
 
 	for _, spec := range specs {
-		waitConverged(t, env, stack+"_"+spec.Name)
+		if err := waitConverged(ctx, env, stack+"_"+spec.Name); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}
 
 	return stack
@@ -206,23 +270,24 @@ func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpe
 // ensureImage builds the fixture image on the host and loads it into the DinD
 // engine. Pulling inside DinD on every run would make the suite slow and
 // network-dependent.
-func ensureImage(t *testing.T, env *harness.Env) {
-	t.Helper()
-
-	images, err := env.Docker.ImageList(t.Context(), image.ListOptions{})
+func ensureImage(ctx context.Context, env *harness.Env) error {
+	images, err := env.Docker.ImageList(ctx, image.ListOptions{})
 	if err != nil {
-		t.Fatalf("ImageList: %v", err)
+		return fmt.Errorf("ImageList: %w", err)
 	}
 
 	for _, img := range images {
 		if slices.Contains(img.RepoTags, fixtureImage) {
-			return
+			return nil
 		}
 	}
 
-	root := repoRoot(t)
+	root, err := repoRoot()
+	if err != nil {
+		return err
+	}
 
-	buildCtx, cancel := context.WithTimeout(t.Context(), imageBuildTimeout)
+	buildCtx, cancel := context.WithTimeout(ctx, imageBuildTimeout)
 	defer cancel()
 
 	// fixtureImage is a package constant and root resolves from the source
@@ -236,10 +301,10 @@ func ensureImage(t *testing.T, env *harness.Env) {
 		root+"/test/e2e/fixtures/image",
 	)
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build fixture image: %v\n%s", err, out)
+		return fmt.Errorf("build fixture image: %w\n%s", err, out)
 	}
 
-	saveCtx, cancel := context.WithTimeout(t.Context(), imageBuildTimeout)
+	saveCtx, cancel := context.WithTimeout(ctx, imageBuildTimeout)
 	defer cancel()
 
 	save := exec.CommandContext(saveCtx, "docker", "save", fixtureImage)
@@ -248,41 +313,41 @@ func ensureImage(t *testing.T, env *harness.Env) {
 	save.Stdout = &tar
 
 	if err := save.Run(); err != nil {
-		t.Fatalf("save fixture image: %v", err)
+		return fmt.Errorf("save fixture image: %w", err)
 	}
 
-	resp, err := env.Docker.ImageLoad(t.Context(), &tar, client.ImageLoadWithQuiet(true))
+	resp, err := env.Docker.ImageLoad(ctx, &tar, client.ImageLoadWithQuiet(true))
 	if err != nil {
-		t.Fatalf("ImageLoad: %v", err)
+		return fmt.Errorf("ImageLoad: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
-		t.Fatalf("drain ImageLoad: %v", err)
+		return fmt.Errorf("drain ImageLoad: %w", err)
 	}
+
+	return nil
 }
 
 // baselinePresent reports whether a previous DeployBaseline call ran to
 // completion. It tests only for baselineSentinel — not for any individual
 // resource — so a run that failed partway through (leaving no sentinel) is
 // re-driven rather than mistaken for a finished baseline.
-func baselinePresent(t *testing.T, env *harness.Env) bool {
-	t.Helper()
-
-	configs, err := env.Docker.ConfigList(t.Context(), swarm.ConfigListOptions{
+func baselinePresent(ctx context.Context, env *harness.Env) (bool, error) {
+	configs, err := env.Docker.ConfigList(ctx, swarm.ConfigListOptions{
 		Filters: filters.NewArgs(filters.Arg("name", baselineSentinel)),
 	})
 	if err != nil {
-		t.Fatalf("ConfigList: %v", err)
+		return false, fmt.Errorf("ConfigList: %w", err)
 	}
 
 	for _, cfg := range configs {
 		if cfg.Spec.Name == baselineSentinel {
-			return true
+			return true, nil
 		}
 	}
 
-	return false
+	return false, nil
 }
 
 // isConflict tolerates a resource that already exists. cerrdefs.IsConflict
@@ -298,69 +363,77 @@ func isConflict(err error) bool {
 		strings.Contains(err.Error(), "name conflicts with an existing object")
 }
 
-func createNetwork(t *testing.T, env *harness.Env, name string, labels map[string]string) {
-	t.Helper()
-
-	_, err := env.Docker.NetworkCreate(t.Context(), name, network.CreateOptions{
+func createNetwork(
+	ctx context.Context,
+	env *harness.Env,
+	name string,
+	labels map[string]string,
+) error {
+	_, err := env.Docker.NetworkCreate(ctx, name, network.CreateOptions{
 		Driver:     "overlay",
 		Attachable: true,
 		Labels:     labels,
 	})
 	if err != nil && !isConflict(err) {
-		t.Fatalf("NetworkCreate %s: %v", name, err)
+		return fmt.Errorf("NetworkCreate %s: %w", name, err)
 	}
+
+	return nil
 }
 
-func createVolume(t *testing.T, env *harness.Env, name string, labels map[string]string) {
-	t.Helper()
-
-	if _, err := env.Docker.VolumeCreate(t.Context(), volume.CreateOptions{
+func createVolume(
+	ctx context.Context,
+	env *harness.Env,
+	name string,
+	labels map[string]string,
+) error {
+	if _, err := env.Docker.VolumeCreate(ctx, volume.CreateOptions{
 		Name:   name,
 		Labels: labels,
 	}); err != nil {
-		t.Fatalf("VolumeCreate %s: %v", name, err)
+		return fmt.Errorf("VolumeCreate %s: %w", name, err)
 	}
+
+	return nil
 }
 
 func createConfig(
-	t *testing.T,
+	ctx context.Context,
 	env *harness.Env,
 	name string,
 	data []byte,
 	labels map[string]string,
-) {
-	t.Helper()
-
-	_, err := env.Docker.ConfigCreate(t.Context(), swarm.ConfigSpec{
+) error {
+	_, err := env.Docker.ConfigCreate(ctx, swarm.ConfigSpec{
 		Annotations: swarm.Annotations{Name: name, Labels: labels},
 		Data:        data,
 	})
 	if err != nil && !isConflict(err) {
-		t.Fatalf("ConfigCreate %s: %v", name, err)
+		return fmt.Errorf("ConfigCreate %s: %w", name, err)
 	}
+
+	return nil
 }
 
 func createSecret(
-	t *testing.T,
+	ctx context.Context,
 	env *harness.Env,
 	name string,
 	data []byte,
 	labels map[string]string,
-) {
-	t.Helper()
-
-	_, err := env.Docker.SecretCreate(t.Context(), swarm.SecretSpec{
+) error {
+	_, err := env.Docker.SecretCreate(ctx, swarm.SecretSpec{
 		Annotations: swarm.Annotations{Name: name, Labels: labels},
 		Data:        data,
 	})
 	if err != nil && !isConflict(err) {
-		t.Fatalf("SecretCreate %s: %v", name, err)
+		return fmt.Errorf("SecretCreate %s: %w", name, err)
 	}
+
+	return nil
 }
 
-func createService(t *testing.T, env *harness.Env, spec ServiceSpec) {
-	t.Helper()
-
+func createService(ctx context.Context, env *harness.Env, spec ServiceSpec) error {
 	mode := swarm.ServiceMode{}
 	if spec.Global {
 		mode.Global = &swarm.GlobalService{}
@@ -370,9 +443,15 @@ func createService(t *testing.T, env *harness.Env, spec ServiceSpec) {
 	}
 
 	configRefs := make([]*swarm.ConfigReference, len(spec.Configs))
+
 	for i, name := range spec.Configs {
+		id, err := configID(ctx, env, name)
+		if err != nil {
+			return err
+		}
+
 		configRefs[i] = &swarm.ConfigReference{
-			ConfigID:   configID(t, env, name),
+			ConfigID:   id,
 			ConfigName: name,
 			File: &swarm.ConfigReferenceFileTarget{
 				Name: name,
@@ -384,9 +463,15 @@ func createService(t *testing.T, env *harness.Env, spec ServiceSpec) {
 	}
 
 	secretRefs := make([]*swarm.SecretReference, len(spec.Secrets))
+
 	for i, name := range spec.Secrets {
+		id, err := secretID(ctx, env, name)
+		if err != nil {
+			return err
+		}
+
 		secretRefs[i] = &swarm.SecretReference{
-			SecretID:   secretID(t, env, name),
+			SecretID:   id,
 			SecretName: name,
 			File: &swarm.SecretReferenceFileTarget{
 				Name: name,
@@ -407,7 +492,7 @@ func createService(t *testing.T, env *harness.Env, spec ServiceSpec) {
 		networks[i] = swarm.NetworkAttachmentConfig{Target: name}
 	}
 
-	_, err := env.Docker.ServiceCreate(t.Context(), swarm.ServiceSpec{
+	_, err := env.Docker.ServiceCreate(ctx, swarm.ServiceSpec{
 		Annotations: swarm.Annotations{Name: spec.Name, Labels: spec.Labels},
 		Mode:        mode,
 		TaskTemplate: swarm.TaskSpec{
@@ -427,67 +512,59 @@ func createService(t *testing.T, env *harness.Env, spec ServiceSpec) {
 		},
 	}, swarm.ServiceCreateOptions{})
 	if err != nil && !isConflict(err) {
-		t.Fatalf("ServiceCreate %s: %v", spec.Name, err)
+		return fmt.Errorf("ServiceCreate %s: %w", spec.Name, err)
 	}
+
+	return nil
 }
 
 // configID resolves a config's name to the ID the SDK requires for a
 // ContainerSpec reference; the daemon rejects a reference carrying only a
 // name.
-func configID(t *testing.T, env *harness.Env, name string) string {
-	t.Helper()
-
-	configs, err := env.Docker.ConfigList(t.Context(), swarm.ConfigListOptions{
+func configID(ctx context.Context, env *harness.Env, name string) (string, error) {
+	configs, err := env.Docker.ConfigList(ctx, swarm.ConfigListOptions{
 		Filters: filters.NewArgs(filters.Arg("name", name)),
 	})
 	if err != nil {
-		t.Fatalf("ConfigList %s: %v", name, err)
+		return "", fmt.Errorf("ConfigList %s: %w", name, err)
 	}
 
 	for _, cfg := range configs {
 		if cfg.Spec.Name == name {
-			return cfg.ID
+			return cfg.ID, nil
 		}
 	}
 
-	t.Fatalf("config %s not found", name)
-
-	return ""
+	return "", fmt.Errorf("config %s not found", name)
 }
 
 // secretID is configID's counterpart for secrets.
-func secretID(t *testing.T, env *harness.Env, name string) string {
-	t.Helper()
-
-	secrets, err := env.Docker.SecretList(t.Context(), swarm.SecretListOptions{
+func secretID(ctx context.Context, env *harness.Env, name string) (string, error) {
+	secrets, err := env.Docker.SecretList(ctx, swarm.SecretListOptions{
 		Filters: filters.NewArgs(filters.Arg("name", name)),
 	})
 	if err != nil {
-		t.Fatalf("SecretList %s: %v", name, err)
+		return "", fmt.Errorf("SecretList %s: %w", name, err)
 	}
 
 	for _, sec := range secrets {
 		if sec.Spec.Name == name {
-			return sec.ID
+			return sec.ID, nil
 		}
 	}
 
-	t.Fatalf("secret %s not found", name)
-
-	return ""
+	return "", fmt.Errorf("secret %s not found", name)
 }
 
 // waitConverged blocks until the service settles, using the product's own
 // rule so the harness and Cetacean cannot disagree about what settled means.
-func waitConverged(t *testing.T, env *harness.Env, name string) {
-	t.Helper()
-
+func waitConverged(ctx context.Context, env *harness.Env, name string) error {
 	deadline := time.Now().Add(convergeTimeout)
 	last := "no observation yet"
 
 	for time.Now().Before(deadline) {
 		svc, _, err := env.Docker.ServiceInspectWithRaw(
-			t.Context(),
+			ctx,
 			name,
 			swarm.ServiceInspectOptions{},
 		)
@@ -498,27 +575,28 @@ func waitConverged(t *testing.T, env *harness.Env, name string) {
 			continue
 		}
 
-		running := runningTasks(t, env, svc.ID)
+		running, err := runningTasks(ctx, env, svc.ID)
+		if err != nil {
+			return err
+		}
 
 		converged, msg := cluster.ServiceConverged(svc, running)
 		last = msg
 
 		if converged {
-			return
+			return nil
 		}
 
 		time.Sleep(convergePollEvery)
 	}
 
-	t.Fatalf("service %s did not converge within %s: %s", name, convergeTimeout, last)
+	return fmt.Errorf("service %s did not converge within %s: %s", name, convergeTimeout, last)
 }
 
-func runningTasks(t *testing.T, env *harness.Env, serviceID string) int {
-	t.Helper()
-
-	tasks, err := env.Docker.TaskList(t.Context(), swarm.TaskListOptions{})
+func runningTasks(ctx context.Context, env *harness.Env, serviceID string) (int, error) {
+	tasks, err := env.Docker.TaskList(ctx, swarm.TaskListOptions{})
 	if err != nil {
-		t.Fatalf("TaskList: %v", err)
+		return 0, fmt.Errorf("TaskList: %w", err)
 	}
 
 	count := 0
@@ -528,7 +606,7 @@ func runningTasks(t *testing.T, env *harness.Env, serviceID string) int {
 		}
 	}
 
-	return count
+	return count, nil
 }
 
 // removeStack removes every service and network carrying the stack's label.
@@ -646,14 +724,12 @@ func removeNetworkWithRetry(
 
 // repoRoot walks up from this source file to the module root, mirroring
 // harness.go's own resolution — this package sits at the same depth.
-func repoRoot(t *testing.T) string {
-	t.Helper()
-
+func repoRoot() (string, error) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
-		t.Fatalf("cannot locate fixtures source")
+		return "", fmt.Errorf("cannot locate fixtures source")
 	}
 
 	// .../test/e2e/fixtures/fixtures.go -> repo root is three levels up.
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", ".."))
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..")), nil
 }

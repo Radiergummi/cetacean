@@ -67,12 +67,38 @@ test-stack: build
 	fi; \
 	exit $$status
 
-## Bring the end-to-end environment up and leave it running
-e2e-up:
-	docker compose -f test/e2e/compose.e2e.yaml up -d
+## Bring the end-to-end environment up with fixtures, and run cetacean against it
+# CETACEAN_CONFIG=/dev/null blocks the config-file autodiscovery a plain
+# `./cetacean` invocation would otherwise do (./cetacean.toml in the repo
+# root, then the user's own ~/.cetacean.toml) -- a developer's own local
+# config silently changing this environment is exactly what the harness
+# exists to rule out. CETACEAN_OPERATIONS_LEVEL=3 is set because
+# frontend/e2e's specs assert write affordances (Remove buttons, editors) are
+# present unconditionally, not gated on CETACEAN_E2E_WRITE -- at the default
+# level 1 those assertions fail not because anything is broken, but because
+# the Allow-header-gated buttons the specs look for are correctly absent.
+e2e-up: build
+	go run -tags e2e ./test/e2e/cmd/e2eenv
+	CETACEAN_CONFIG=/dev/null \
+	CETACEAN_AUTH_MODE=none \
+	CETACEAN_OPERATIONS_LEVEL=3 \
+	CETACEAN_LISTEN_ADDR=:19001 \
+	CETACEAN_DOCKER_HOST=tcp://127.0.0.1:12375 \
+	CETACEAN_SNAPSHOT=false \
+	./cetacean & echo $$! > test/e2e/.sut.pid
+	@echo "Cetacean running at http://localhost:19001"
+	@echo "Run the browser suite with:"
+	@echo "  CETACEAN_E2E_URL=http://localhost:19001 make test-e2e"
 
 ## Tear the end-to-end environment down, including volumes
+# Tolerates a stale pidfile (process already exited) or none at all (e.g.
+# torn down after test-stack, which never wrote one) — the pidfile is always
+# removed once a kill has been attempted, so a dead PID cannot wedge teardown.
 e2e-down:
+	-@if [ -f test/e2e/.sut.pid ]; then \
+		kill $$(cat test/e2e/.sut.pid) 2>/dev/null || true; \
+		rm -f test/e2e/.sut.pid; \
+	fi
 	docker compose -f test/e2e/compose.e2e.yaml down -v
 	rm -rf test/e2e/certs
 
