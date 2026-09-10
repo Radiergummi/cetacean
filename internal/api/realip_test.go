@@ -175,3 +175,93 @@ func TestRealIP_RecordsUntrustedVerdict(t *testing.T) {
 		})
 	}
 }
+
+// TestRealIP_ClientResolution covers what the peer's RemoteAddr is rewritten
+// to across both forwarding headers. The peer is always the trusted proxy
+// 10.0.0.1:9999, so the port stays 9999 throughout; an empty want means
+// RemoteAddr is left as it arrived.
+func TestRealIP_ClientResolution(t *testing.T) {
+	trusted := []netip.Prefix{
+		netip.MustParsePrefix("10.0.0.0/8"),
+		netip.MustParsePrefix("172.16.0.0/12"),
+	}
+
+	tests := []struct {
+		name      string
+		forwarded []string
+		xff       string
+		want      string
+	}{
+		{
+			name:      "Forwarded names the client",
+			forwarded: []string{"for=203.0.113.50"},
+			want:      "203.0.113.50:9999",
+		},
+		{
+			name:      "Forwarded is preferred over X-Forwarded-For",
+			forwarded: []string{"for=203.0.113.50"},
+			xff:       "198.51.100.7",
+			want:      "203.0.113.50:9999",
+		},
+		{
+			name: "Forwarded chain walks right to left past trusted hops",
+			forwarded: []string{
+				`for=203.0.113.50;proto=https, for="172.16.0.5:4711", for=10.0.0.2`,
+			},
+			want: "203.0.113.50:9999",
+		},
+		{
+			name:      "quoted IPv6 with port",
+			forwarded: []string{`for="[2001:db8::1]:8080", for=10.0.0.2`},
+			want:      "[2001:db8::1]:9999",
+		},
+		{
+			name:      "an anonymised hop is read past",
+			forwarded: []string{"for=203.0.113.50, for=unknown, for=_hidden"},
+			want:      "203.0.113.50:9999",
+		},
+		{
+			name:      "Forwarded carrying no for parameter falls back to X-Forwarded-For",
+			forwarded: []string{"proto=https;host=example.com"},
+			xff:       "198.51.100.7",
+			want:      "198.51.100.7:9999",
+		},
+		{
+			name:      "every Forwarded node trusted leaves the peer alone",
+			forwarded: []string{"for=10.0.0.2, for=172.16.0.5"},
+			want:      "",
+		},
+		{
+			name: "no forwarding header leaves the peer alone",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const peer = "10.0.0.1:9999"
+
+			want := tt.want
+			if want == "" {
+				want = peer
+			}
+
+			inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				if r.RemoteAddr != want {
+					t.Errorf("RemoteAddr = %s, want %s", r.RemoteAddr, want)
+				}
+			})
+
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.RemoteAddr = peer
+			for _, v := range tt.forwarded {
+				r.Header.Add("Forwarded", v)
+			}
+			if tt.xff != "" {
+				r.Header.Set("X-Forwarded-For", tt.xff)
+			}
+
+			realIP(trusted)(inner).ServeHTTP(httptest.NewRecorder(), r)
+		})
+	}
+}

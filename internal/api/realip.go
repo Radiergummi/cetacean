@@ -46,27 +46,56 @@ func realIP(trusted []netip.Prefix) func(http.Handler) http.Handler {
 	}
 }
 
-// resolveClientIP returns the rightmost X-Forwarded-For entry that is not a
-// trusted proxy, joined with the peer's port. The caller has already
-// established that the peer itself is trusted.
+// resolveClientIP walks the forwarding chain right-to-left, returning the
+// first (rightmost) node that is NOT a trusted proxy, joined with the peer's
+// port. This is the standard algorithm for extracting the real client IP
+// behind a chain of trusted proxies. The caller has already established that
+// the peer itself is trusted.
+//
+// RFC 7239's Forwarded is preferred over the de-facto X-Forwarded-For, and
+// both are walked the same way — the two order their nodes identically, first
+// proxy first. A Forwarded header naming no node at all (carrying only proto
+// or host, say) leaves X-Forwarded-For as the only statement about the client,
+// so the fallback is on the absence of nodes rather than of the header.
 func resolveClientIP(r *http.Request, peerPort string, trusted []netip.Prefix) (string, bool) {
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff == "" {
-		return "", false
+	nodes := forwardedNodes(r.Header.Values("Forwarded"))
+	if len(nodes) == 0 {
+		nodes = forwardedForNodes(r.Header.Values("X-Forwarded-For"))
 	}
 
-	parts := strings.Split(xff, ",")
-	for _, part := range slices.Backward(parts) {
-		ip, err := netip.ParseAddr(strings.TrimSpace(part))
-		if err != nil {
+	// Walk right-to-left: the rightmost node that is not a trusted proxy is
+	// the client. A node naming no address — "unknown", an obfuscated
+	// identifier, a malformed entry — is read past rather than treated as the
+	// boundary. RemoteAddr is informational once realIP has recorded the trust
+	// verdict, and naming the client behind an anonymised hop serves a log
+	// better than naming the proxy.
+	for _, node := range slices.Backward(nodes) {
+		addr, ok := nodeAddr(node)
+		if !ok || isTrusted(addr, trusted) {
 			continue
 		}
-		if !isTrusted(ip, trusted) {
-			return net.JoinHostPort(ip.String(), peerPort), true
-		}
+
+		return net.JoinHostPort(addr.String(), peerPort), true
 	}
 
 	return "", false
+}
+
+// forwardedForNodes splits X-Forwarded-For's comma-separated list into node
+// identifiers, in the header's own order. Repeated header lines are one list,
+// per RFC 9110 §5.3.
+func forwardedForNodes(values []string) []string {
+	var nodes []string
+
+	for _, value := range values {
+		for part := range strings.SplitSeq(value, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				nodes = append(nodes, part)
+			}
+		}
+	}
+
+	return nodes
 }
 
 func isTrusted(addr netip.Addr, trusted []netip.Prefix) bool {
