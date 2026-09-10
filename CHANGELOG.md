@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - The Cetacean API specification the documentation site publishes moved from `/openapi.yaml` to `/api/openapi.yaml`, beside the API reference, the schema reference and the error reference. The site's own OpenAPI description now occupies the root, where a tool probing an origin looks for it — so `/openapi.json` describes the documentation site and `/api/openapi.yaml` describes Cetacean, with neither standing in for the other
+- The interactive API reference at `/api` moves six months forward, picking up everything Scalar has fixed and reworked since. It will keep up from now on: the playground is an ordinary dependency of the build rather than a copy of the bundle kept by hand, so it is upgraded, licensed and watched for advisories along with everything else
 
 ### Fixed
 - Documentation pages name themselves consistently. Each page's canonical URL carried a `.html` extension that no link, and no sitemap entry, ever used — nominating a second address for every page on the site
