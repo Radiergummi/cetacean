@@ -1,19 +1,44 @@
 ---
 import { ClientRouter } from "astro:transitions";
 
+/**
+ * The machine-readable representation of this page — the Markdown route for a
+ * doc, the OpenAPI specification for the API explorer — which the page points
+ * at with `rel="alternate"` and which points back with a canonical URL of its
+ * own.
+ *
+ * There is deliberately no matching `Link` header. This site is served by
+ * GitHub Pages, which has no mechanism for custom response headers at all, so
+ * `Link: <…>; rel="alternate"` cannot be delivered from here. The `<link>`
+ * element is what an agent reading the HTML finds either way.
+ */
+interface Alternate {
+  href: string;
+  type?: string;
+  title?: string;
+}
+
 interface Props {
   title: string;
   description: string;
   isHome?: boolean;
   lastModified?: Date | null;
+  alternate?: Alternate;
 }
 
-const { title, description, isHome = false, lastModified } = Astro.props;
+const { title, description, isHome = false, lastModified, alternate } = Astro.props;
 
 const siteName = "Cetacean";
 const fullTitle = isHome ? `${siteName} — ${description}` : `${title} — ${siteName}`;
-const pathname = Astro.url.pathname.replace(/\/index\.html$/, "/");
+
+// `build.format` is `file`, so at build time the pathname carries the `.html`
+// the published URL does not: `/getting-started.html` for a page every link,
+// and every `<loc>` in the sitemap, calls `/getting-started`. Stripping it is
+// what makes the canonical agree with them instead of nominating a second URL
+// for the same page.
+const pathname = Astro.url.pathname.replace(/(?:\/index)?\.html$/, "") || "/";
 const canonicalUrl = new URL(pathname, Astro.site).href;
+const alternateUrl = alternate && new URL(alternate.href, Astro.site).href;
 
 const jsonLd: Record<string, unknown> = isHome
   ? {
@@ -52,6 +77,14 @@ const ldScripts = [jsonLd, breadcrumbLd].filter(Boolean).map(
 <title>{fullTitle}</title>
 <meta name="description" content={description} />
 <link rel="canonical" href={canonicalUrl} />
+{alternateUrl && (
+  <link
+    rel="alternate"
+    type={alternate?.type ?? "text/markdown"}
+    title={alternate?.title ?? "Markdown"}
+    href={alternateUrl}
+  />
+)}
 <link rel="alternate" type="application/atom+xml" title="Cetacean Releases" href="/changelog.atom" />
 
 <meta property="og:type" content={isHome ? "website" : "article"} />

@@ -6,7 +6,7 @@
   "repository": "https://github.com/Radiergummi/cetacean",
   "type": "module",
   "scripts": {
-    "sync-assets": "mkdir -p public/dist src/data && cp ../api/openapi.yaml public/openapi.yaml && cp node_modules/@scalar/api-reference/dist/browser/standalone.js public/scalar.js && cp ../compose.yaml ../compose.monitoring.yaml ../compose.prometheus.yaml ../prometheus.yml public/dist/ && (cd .. && go run ./scripts/dump-errors) > src/data/errors.json",
+    "sync-assets": "mkdir -p public/api public/dist src/data && cp ../api/openapi.yaml public/api/openapi.yaml && cp node_modules/@scalar/api-reference/dist/browser/standalone.js public/scalar.js && cp ../compose.yaml ../compose.monitoring.yaml ../compose.prometheus.yaml ../prometheus.yml public/dist/ && (cd .. && go run ./scripts/dump-errors) > src/data/errors.json",
     "prebuild": "npm run sync-assets",
     "predev": "npm run sync-assets",
     "dev": "astro dev",
@@ -36,7 +36,8 @@
     "playwright": "^1.63.0",
     "sirv": "^3.0.2",
     "tailwindcss": "^4.3.3",
-    "unist-util-visit": "^5.1.0"
+    "unist-util-visit": "^5.1.0",
+    "yaml": "^2.8.1"
   },
   "devDependencies": {
     "oxfmt": "^0.67.0",

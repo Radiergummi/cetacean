@@ -37,3 +37,36 @@ export const errorDefs: ErrorDef[] = catalog.errors;
 export function errorsInDomain(prefix: string): ErrorDef[] {
   return errorDefs.filter(({ code }) => code.startsWith(prefix));
 }
+
+/**
+ * The error reference as Markdown, for `/api/errors.md`.
+ *
+ * The intro is written again here rather than shared with `api/errors.astro`:
+ * that page's version is JSX carrying two links, and one paragraph in two
+ * hand-written forms is cheaper than a renderer that produces both.
+ */
+export function errorsMarkdown(): string {
+  const sections = errorDomains.map(({ label, prefix }) => {
+    const entries = errorsInDomain(prefix).map(({ code, description, status, suggestion, title }) =>
+      [
+        `### \`${code}\` — ${title}`,
+        `**Status** — ${status}`,
+        description,
+        suggestion && `**Resolution** — ${suggestion}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+    );
+
+    return [`## ${prefix}: ${label}`, ...entries].join("\n\n");
+  });
+
+  return (
+    [
+      "# Error Reference",
+      'A domain-specific error carries a stable code as the last path segment of the `type` field in its [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem document — `"type": "/api/errors/SVC001"` is the entry below. Generic HTTP errors use `about:blank` and have no code.',
+      "A running Cetacean serves the same catalog at `GET /api/errors`, and one entry at `GET /api/errors/{code}`. This page is generated from the same source, so the two cannot disagree.",
+      ...sections,
+    ].join("\n\n") + "\n"
+  );
+}

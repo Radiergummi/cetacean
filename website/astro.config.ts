@@ -5,6 +5,7 @@ import mdx from "@astrojs/mdx";
 import tailwindcss from "@tailwindcss/vite";
 import { visit } from "unist-util-visit";
 import { rehypeMermaid } from "@/lib/mermaid-diagrams.ts";
+import { lastModifiedFor } from "@/lib/pages.ts";
 import { slugify } from "@/lib/slug.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -567,7 +568,14 @@ export default defineConfig({
   trailingSlash: "never",
   build: { format: "file" },
   prefetch: true,
-  integrations: [sitemap(), mdx()],
+  integrations: [
+    // Every entry carries the commit date of the file behind it. `serialize` is
+    // synchronous, so the date is read with `execFileSync`; and an unmapped URL
+    // throws rather than losing its `lastmod`, so a new page cannot ship
+    // looking as though it never changes.
+    sitemap({ serialize: (item) => ({ ...item, lastmod: lastModifiedFor(item.url) }) }),
+    mdx(),
+  ],
   vite: {
     plugins: [tailwindcss(), pagefindDevPlugin()],
     // Fail on a taken port rather than quietly moving to the next one. A stray

@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -37,6 +37,28 @@ export async function getLastModified(relativePath: string): Promise<Date | null
     const trimmed = stdout.trim();
 
     return trimmed ? new Date(trimmed) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The same date as `getLastModified`, read synchronously. The sitemap's
+ * `serialize` hook runs inside `astro.config.ts`, which has no way to await.
+ */
+export function getLastModifiedSync(relativePath: string): Date | null {
+  try {
+    const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
+    const stdout = execFileSync("git", ["log", "-1", "--format=%aI", "--", relativePath], {
+      cwd: root,
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
+
+    return stdout ? new Date(stdout) : null;
   } catch {
     return null;
   }
