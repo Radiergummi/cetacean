@@ -35,24 +35,30 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	detail, ok := lookupACL(
+	if _, ok := lookupACL(
 		h,
 		w,
 		r,
 		"stack",
 		name,
-		h.cache.GetStackDetail,
-		func(s cache.StackDetail) string {
+		// GetStack, not GetStackDetail: this lookup only establishes that the
+		// stack exists and names it for the ACL check. stackRepresentation
+		// builds the detail once, below.
+		h.cache.GetStack,
+		func(s cache.Stack) string {
 			return "stack:" + name
 		},
-	)
-	if !ok {
+	); !ok {
 		return
 	}
 	h.setAllow(w, r, "stack", name)
-	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", StackResponse{
-		Stack: detail,
-	}))
+
+	rep, ok := representationOr404(w, r, "stack", name, h.stackRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSON(w, r, rep)
 }
 
 const stackNamespaceLabel = "container_label_com_docker_stack_namespace"

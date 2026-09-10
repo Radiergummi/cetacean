@@ -20,16 +20,14 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "volume", vol.Name)
+
+	rep, ok := representationOr404(w, r, "volume", name, h.volumeRepresentation)
+	if !ok {
+		return
+	}
+
 	created, _ := time.Parse(time.RFC3339, vol.CreatedAt)
-	writeCachedJSONTimed(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/volumes/"+name, "Volume", VolumeResponse{
-			Volume:   vol,
-			Services: h.filterServiceRefs(r, h.cache.ServicesUsingVolume(name)),
-		}),
-		created,
-	)
+	writeCachedJSONTimed(w, r, rep, created)
 }
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {

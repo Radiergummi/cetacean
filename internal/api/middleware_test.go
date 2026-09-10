@@ -113,9 +113,14 @@ func TestRequestLogger_5xxLevel(t *testing.T) {
 }
 
 func TestSecurityHeaders(t *testing.T) {
-	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}), false, nil)
+	handler := securityHeaders(
+		false,
+		nil,
+	)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
@@ -141,9 +146,14 @@ func TestSecurityHeaders(t *testing.T) {
 }
 
 func TestSecurityHeaders_HSTS(t *testing.T) {
-	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}), true, nil)
+	handler := securityHeaders(
+		true,
+		nil,
+	)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
@@ -359,6 +369,43 @@ func TestRequestID_RejectsUnsafeCharacters(t *testing.T) {
 				t.Errorf("context ID=%q, want it to match the header %q", body, got)
 			}
 		})
+	}
+}
+
+// TestVaryAccumulatesAcrossMiddleware drives the assembled router: cors adds
+// "Vary: Origin" and negotiate runs after it. If negotiate overwrites rather
+// than appends, a shared cache can serve one origin's response to another.
+func TestVaryAccumulatesAcrossMiddleware(t *testing.T) {
+	c := cache.New(nil)
+	h := newTestHandlers(t, withCache(c))
+	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	defer b.Close()
+	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
+	spa := NewSPAHandler(fs.FS(fsys), "")
+
+	router := NewRouter(RouterConfig{
+		Handlers:          h,
+		Broadcaster:       b,
+		SPA:               spa,
+		OpenAPISpec:       []byte("openapi: '3.1.0'"),
+		EnableSelfMetrics: true,
+		AuthProvider:      &auth.NoneProvider{},
+		CORS:              &CORSConfig{AllowedOrigins: []string{"https://example.test"}},
+	})
+
+	req := httptest.NewRequest("GET", "/nodes", nil)
+	req.Header.Set("Origin", "https://example.test")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	vary := rec.Header().Values("Vary")
+	joined := strings.Join(vary, ", ")
+	for _, want := range []string{"Origin", "Accept"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("Vary = %q, missing %q", joined, want)
+		}
 	}
 }
 

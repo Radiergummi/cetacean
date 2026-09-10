@@ -55,9 +55,14 @@ func TestInlineScriptHashesReachTheHeader(t *testing.T) {
 		t.Fatalf("InlineScriptHashes: %v", err)
 	}
 
-	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}), false, hashes)
+	handler := securityHeaders(
+		false,
+		hashes,
+	)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
 
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))

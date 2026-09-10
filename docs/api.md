@@ -52,6 +52,34 @@ Accept: application/json
 curl -H "Accept: application/json" http://localhost:9000/services
 ```
 
+### Compression
+
+JSON, Atom and JSON Feed responses, and the `/topology` graph formats, are compressed when the request offers a
+coding Cetacean serves and the body exceeds 1 KiB. Two codings are served, `zstd` and `gzip`, negotiated from
+`Accept-Encoding` per [RFC 9110 §12.5.3](https://www.rfc-editor.org/rfc/rfc9110#section-12.5.3) — `q` values and
+`*` included, and `zstd` preferred at equal weight. Smaller bodies are sent uncompressed regardless; there is
+nothing to gain and a frame header to pay for.
+
+`Vary: Accept-Encoding` is sent on every one of these responses whether or not anything was compressed, since what
+they return does depend on the header. `Content-Encoding` appears only when a coding was actually applied.
+
+A compressed representation carries its coding on the `ETag`, as a suffix inside the quotes:
+
+```bash
+curl -sD- -H 'Accept-Encoding: zstd' -o/dev/null http://localhost:9000/services/web
+# < Content-Encoding: zstd
+# < Vary: Accept-Encoding
+# < ETag: "a1b2c3d4e5f60718-zstd"
+```
+
+The suffix distinguishes the two representations for caches, which is what
+[RFC 9110 §8.8.3](https://www.rfc-editor.org/rfc/rfc9110#section-8.8.3) requires. It does **not** stop the validator
+being used as [`If-Match`](#preconditions) on a write: the hash is always taken over the uncompressed body, so a
+validator obtained under compression and one obtained without it agree, and either is accepted verbatim.
+
+`/search` and its feeds are never compressed. The response repeats the query you sent back to you alongside content
+the ACL filtered for you, and compressed length would leak whether a guessed query matched something you can see.
+
 ## Feeds
 
 Resource list and detail endpoints, plus `/events`, `/history`, `/search`, and
@@ -281,6 +309,45 @@ resource.
 Every response sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Content-Security-Policy`. HSTS
 is added when TLS is enabled.
 
+## Waiting for a change to take effect
+
+Docker accepts a service change the moment you ask for it, which says nothing about whether it worked — the image may
+still be pulling, or a placement constraint may be unsatisfiable. Send `Prefer: wait=<seconds>` to hold the response
+until the cluster has actually settled on the change:
+
+```bash
+curl -X PUT http://localhost:9000/services/abc123/scale \
+  -H 'Content-Type: application/json' \
+  -H 'Prefer: wait=30' \
+  -d '{"replicas":5}'
+```
+
+| Request | Response |
+|---|---|
+| no `Prefer` | unchanged |
+| `wait=30`, service settles in time | `200` with the settled service, plus `Preference-Applied: wait=30` |
+| `wait=30`, service does not settle | `202` with the last progress line, and no `Preference-Applied` |
+| `wait=600` | clamped to the 300 second ceiling; `Preference-Applied: wait=300` reports the wait applied |
+| `respond-async` | `202` straight away, plus `Location` and `Preference-Applied: respond-async` |
+| `respond-async, wait=10` | waits up to 10 seconds, then `202` with `Location` |
+| `return=minimal, wait=30` | waits, then `204`; `Preference-Applied` names both preferences |
+
+A `200` from a honoured wait describes the service as it settled, read back after convergence — not the snapshot Docker
+returned when it accepted the write, whose `UpdateStatus` is still mid-rollout and whose `Version` a follow-up write
+would collide on.
+
+A `202` carries `Location` pointing at the service itself, which is where the rollout can be followed: its
+`UpdateStatus` reports convergence, and the same URL opens a [live stream](#real-time-events) with
+`Accept: text/event-stream`. The body is the service as Docker returned it, plus a `progress` field holding the last
+convergence line observed — `waiting: 2/5 replicas running`. `return=minimal` does not apply on this path: there is a
+progress line to deliver, so the `202` carries a body and does not name `return=minimal` in `Preference-Applied`.
+Whether that preference is honoured therefore depends on how quickly the cluster settles. A client that hangs up
+cancels its own wait.
+
+The preferences apply to the six service endpoints that change what the cluster has to schedule: `scale`, `image`,
+`mode`, `endpoint-mode`, `rollback` and `restart`. Node availability takes no `wait` — draining is a different rule,
+with a different notion of what "settled" means.
+
 ## Real-time events
 
 Send `Accept: text/event-stream` to any resource list or detail URL to open a stream scoped to that path.
@@ -499,6 +566,44 @@ passes the per-resource [ACL][authorization] write check.
 
 > [!NOTE]
 > `GET /swarm/unlock-key` returns a credential, so it is gated at level 3 like the writes beside it.
+
+### Preconditions
+
+Every write endpoint whose exact path also serves a `GET` accepts an optional `If-Match` request
+header ([RFC 9110 §13.1.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1)). Supply the
+`ETag` a `GET` on that same path returned; if the resource has changed since, the write is
+refused with `412 Precondition Failed` (error code `API013`) instead of being applied. The header
+is always optional — omit it and the write proceeds exactly as it did before this existed.
+
+A `412` always means the resource moved. Where the current representation cannot be read at all —
+`DELETE /plugins/{name}` inspects the daemon rather than the cache — the write answers `503`
+(`ENG001`) or `500` (`ENG004`) instead, so an unreachable daemon is not reported as a stale `ETag`.
+
+30 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
+`PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
+`PUT /services/{id}/placement`, `PATCH /services/{id}/ports`,
+`PATCH /services/{id}/update-policy`, `PATCH /services/{id}/rollback-policy`,
+`PATCH /services/{id}/log-driver`, `PATCH /services/{id}/configs`,
+`PATCH /services/{id}/secrets`, `PATCH /services/{id}/networks`,
+`PATCH /services/{id}/mounts`, `PATCH /services/{id}/container-config`,
+`PUT /services/{id}/mode`, `PUT /services/{id}/endpoint-mode`, `DELETE /services/{id}`,
+`PATCH /nodes/{id}/labels`, `PUT /nodes/{id}/role`, `DELETE /nodes/{id}`,
+`PATCH /configs/{id}/labels`, `DELETE /configs/{id}`, `PATCH /secrets/{id}/labels`,
+`DELETE /secrets/{id}`, `DELETE /networks/{id}`, `DELETE /volumes/{name}`,
+`DELETE /tasks/{id}`, `DELETE /stacks/{name}`, `DELETE /plugins/{name}`.
+
+23 do not. Most of these are action-style endpoints with no `GET` at that exact path to compare
+an `ETag` against: `PUT /services/{id}/scale`, `PUT /services/{id}/image`,
+`POST /services/{id}/restart`, `POST /services/{id}/rollback`, `PUT /nodes/{id}/availability`,
+`POST /plugins/{name}/enable`, `POST /plugins/{name}/disable`, `POST /plugins/{name}/upgrade`,
+`PATCH /plugins/{name}/settings`, `POST /plugins/privileges`, `PATCH /swarm/ca`,
+`PATCH /swarm/dispatcher`, `PATCH /swarm/encryption`, `PATCH /swarm/orchestration`,
+`PATCH /swarm/raft`, `POST /swarm/rotate-token`, `POST /swarm/rotate-unlock-key`,
+`POST /swarm/force-rotate-ca`, `POST /swarm/unlock`, and `POST /auth/logout`. The remaining
+three — `POST /configs`, `POST /secrets`, `POST /plugins` — are deliberately excluded for a
+different reason: their nearest `GET` is the collection listing, and its `ETag` turns over on any
+member change, which would make "create only if the collection is unchanged" a precondition
+almost nothing could ever satisfy.
 
 ## MCP server
 

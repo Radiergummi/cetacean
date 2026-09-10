@@ -4,6 +4,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func TestPreferMinimal(t *testing.T) {
@@ -46,6 +49,25 @@ func TestPreferMinimal(t *testing.T) {
 			header: []string{"respond-async"},
 			want:   false,
 		},
+		{
+			// RFC 7240 §2 draws the line between the two halves: "for both
+			// preference token names and parameter names, comparison is case
+			// insensitive while values are case sensitive".
+			name:   "mixed case name is honoured",
+			header: []string{"Return=minimal"},
+			want:   true,
+		},
+		{
+			name:   "mixed case value is a different preference",
+			header: []string{"return=Minimal"},
+			want:   false,
+		},
+		{
+			// RFC 7240 §2: a preference may carry parameters we ignore.
+			name:   "preference parameter",
+			header: []string{"return=minimal; foo=bar"},
+			want:   true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -76,5 +98,79 @@ func TestWritePreferMinimal(t *testing.T) {
 
 	if w.Body.Len() != 0 {
 		t.Errorf("body = %q, want empty", w.Body.String())
+	}
+}
+
+func TestPreferWait(t *testing.T) {
+	cases := []struct {
+		name   string
+		header []string
+		want   time.Duration
+		ok     bool
+	}{
+		{"absent", nil, 0, false},
+		{"simple", []string{"wait=30"}, 30 * time.Second, true},
+		{"with other tokens", []string{"respond-async, wait=10"}, 10 * time.Second, true},
+		{"separate fields", []string{"return=minimal", "wait=5"}, 5 * time.Second, true},
+		{"spaces around equals", []string{"wait = 7"}, 7 * time.Second, true},
+		{"clamped to the ceiling", []string{"wait=100000"}, cluster.ConvergenceTimeout, true},
+		// Clamped before the multiplication, which would otherwise overflow
+		// int64 and leave a negative duration min() happily keeps.
+		{
+			"clamped before overflowing",
+			[]string{"wait=10000000000"},
+			cluster.ConvergenceTimeout,
+			true,
+		},
+		{
+			"clamped at the int64 boundary",
+			[]string{"wait=9223372036854775807"},
+			cluster.ConvergenceTimeout,
+			true,
+		},
+		{"zero is honoured", []string{"wait=0"}, 0, true},
+		{"non-numeric is ignored", []string{"wait=soon"}, 0, false},
+		{"negative is ignored", []string{"wait=-5"}, 0, false},
+		{"quoted value", []string{`wait="30"`}, 30 * time.Second, true},
+		{"mixed case name", []string{"Wait=30"}, 30 * time.Second, true},
+		{"preference parameter", []string{"wait=30; foo=bar"}, 30 * time.Second, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest("PUT", "/services/svc1/scale", nil)
+			for _, v := range tc.header {
+				r.Header.Add("Prefer", v)
+			}
+
+			got, ok := preferWait(r)
+			if ok != tc.ok || got != tc.want {
+				t.Errorf("preferWait() = (%v, %v), want (%v, %v)", got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}
+
+func TestPreferRespondAsync(t *testing.T) {
+	cases := []struct {
+		header string
+		want   bool
+	}{
+		{"respond-async", true},
+		{"respond-async, wait=10", true},
+		{"Respond-Async", true},
+		{"respond-async; foo=bar", true},
+		{"return=minimal", false},
+		{"", false},
+	}
+
+	for _, tc := range cases {
+		r := httptest.NewRequest("PUT", "/services/svc1/scale", nil)
+		if tc.header != "" {
+			r.Header.Set("Prefer", tc.header)
+		}
+		if got := preferRespondAsync(r); got != tc.want {
+			t.Errorf("preferRespondAsync(%q) = %v, want %v", tc.header, got, tc.want)
+		}
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
-	"github.com/radiergummi/cetacean/internal/integrations"
 )
 
 // --- Services ---
@@ -93,21 +92,14 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id := r.PathValue("id")
-	detail := ServiceResponse{Service: svc}
-	if changes := DiffServiceSpecs(svc.PreviousSpec, &svc.Spec); len(changes) > 0 {
-		detail.Changes = changes
-	}
-	if detected := integrations.Detect(svc.Spec.Labels); len(detected) > 0 {
-		detail.Integrations = detected
-	}
 	h.setAllow(w, r, "service", svc.Spec.Name)
-	writeCachedJSONTimed(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/services/"+id, "Service", detail),
-		svc.UpdatedAt,
-	)
+
+	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSONTimed(w, r, rep, svc.UpdatedAt)
 }
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {

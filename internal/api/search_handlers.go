@@ -114,9 +114,12 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		total += visibleCount
 	}
 
+	// This body echoes ?q= verbatim beside authenticated content, which is
+	// the shape BREACH needs: compressed length would leak whether a guessed
+	// query matched something the caller can see.
 	writeCachedJSON(
 		w,
-		r,
+		disableCompression(r),
 		NewDetailResponse(r.Context(), "/search", "SearchResult", SearchResponse{
 			Query:   q,
 			Results: results,

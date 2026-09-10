@@ -64,7 +64,7 @@ func ContentTypeFromContext(ctx context.Context) ContentType {
 // Accept header and stores it in the request context for downstream handlers.
 func negotiate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Vary", "Accept")
+		w.Header().Add("Vary", "Accept")
 
 		ct := resolveExtension(r)
 		if ct == ContentTypeUnsupported {

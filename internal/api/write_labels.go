@@ -19,6 +19,34 @@ type getLabelsSpec[T any] struct {
 	getLabels   func(T) map[string]string
 }
 
+// detail builds the JSON-LD body a labels GET serializes for an already
+// resolved item. Both the GET handler and the precondition representation go
+// through it, so they cannot describe the same labels differently.
+func (spec getLabelsSpec[T]) detail(r *http.Request, item T) DetailResponse {
+	labels := spec.getLabels(item)
+	if labels == nil {
+		labels = map[string]string{}
+	}
+
+	return NewDetailResponse(
+		r.Context(),
+		"/"+spec.resource+"s/"+r.PathValue(spec.pathKey)+"/labels",
+		spec.typeName,
+		LabelsResponse{Labels: labels},
+	)
+}
+
+// representation is the spec's representationFunc, for wiring an If-Match
+// precondition onto the paired PATCH.
+func (spec getLabelsSpec[T]) representation(r *http.Request) (any, error) {
+	item, ok := spec.getter(r.PathValue(spec.pathKey))
+	if !ok {
+		return nil, errNoRepresentation
+	}
+
+	return spec.detail(r, item), nil
+}
+
 // patchLabelsSpec describes how to patch labels for a resource type.
 type patchLabelsSpec[T any] struct {
 	resource  string // e.g. "node", "service"
@@ -52,21 +80,7 @@ func handleGetLabels[T any](
 		return
 	}
 
-	labels := spec.getLabels(item)
-	if labels == nil {
-		labels = map[string]string{}
-	}
-
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/"+spec.resource+"s/"+key+"/labels",
-			spec.typeName,
-			LabelsResponse{Labels: labels},
-		),
-	)
+	writeCachedJSON(w, r, spec.detail(r, item))
 }
 
 func handlePatchLabels[T any](

@@ -119,29 +119,27 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	managerCount := 0
-	for _, n := range h.cache.ListNodes() {
-		if n.Spec.Role == swarm.NodeRoleManager {
-			managerCount++
-		}
+	rep, ok := representationOr404(w, r, "node", id, h.nodeRoleRepresentation)
+	if !ok {
+		return
 	}
 
-	writeCachedJSON(w, r, NewDetailResponse(r.Context(), r.URL.Path, "NodeRole", NodeRoleResponse{
-		Role:         string(node.Spec.Role),
-		IsLeader:     node.ManagerStatus != nil && node.ManagerStatus.Leader,
-		ManagerCount: managerCount,
-	}))
+	writeCachedJSON(w, r, rep)
 }
 
-func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
-	handleGetLabels(w, r, h.acl, getLabelsSpec[swarm.Node]{
+func (h *Handlers) nodeLabelsSpec() getLabelsSpec[swarm.Node] {
+	return getLabelsSpec[swarm.Node]{
 		resource:    "node",
 		pathKey:     "id",
 		typeName:    "NodeLabels",
 		getter:      h.cache.GetNode,
 		aclResource: nodeResource,
 		getLabels:   func(n swarm.Node) map[string]string { return n.Spec.Labels },
-	})
+	}
+}
+
+func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
+	handleGetLabels(w, r, h.acl, h.nodeLabelsSpec())
 }
 
 func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request) {

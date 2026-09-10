@@ -39,9 +39,13 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "node", node.Description.Hostname)
-	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", NodeResponse{
-		Node: node,
-	}), node.UpdatedAt)
+
+	rep, ok := representationOr404(w, r, "node", id, h.nodeRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSONTimed(w, r, rep, node.UpdatedAt)
 }
 
 func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {

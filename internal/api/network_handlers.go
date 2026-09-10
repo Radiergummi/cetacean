@@ -27,15 +27,13 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "network", net.Name)
-	writeCachedJSONTimed(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/networks/"+id, "Network", NetworkResponse{
-			Network:  net,
-			Services: h.filterServiceRefs(r, h.cache.ServicesUsingNetwork(id)),
-		}),
-		net.Created,
-	)
+
+	rep, ok := representationOr404(w, r, "network", id, h.networkRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSONTimed(w, r, rep, net.Created)
 }
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
