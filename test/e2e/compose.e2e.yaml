@@ -1,0 +1,45 @@
+# End-to-end test environment. Brought up by test/e2e/harness, or by hand:
+#   docker compose -f test/e2e/compose.e2e.yaml up -d
+name: cetacean-e2e
+
+services:
+  dind:
+    image: docker:28-dind
+    privileged: true
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock", "--tls=false"]
+    ports:
+      - "12375:2375"
+    networks:
+      - e2e
+
+  cert-init:
+    image: alpine
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        apk add --no-cache openssl >/dev/null 2>&1
+        cd /certs
+        openssl ecparam -genkey -name prime256v1 -out ca-key.pem
+        openssl req -x509 -new -key ca-key.pem -out ca.pem -days 365 \
+          -subj "/CN=Cetacean E2E CA"
+        openssl ecparam -genkey -name prime256v1 -out server-key.pem
+        openssl req -new -key server-key.pem -out server.csr \
+          -subj "/CN=host.docker.internal"
+        openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem \
+          -CAcreateserial -out server.pem -days 365 \
+          -extfile <(printf "subjectAltName=DNS:host.docker.internal,DNS:localhost,IP:127.0.0.1")
+        openssl ecparam -genkey -name prime256v1 -out client-key.pem
+        openssl req -new -key client-key.pem -out client.csr \
+          -subj "/CN=e2e-client/O=cetacean-e2e"
+        openssl x509 -req -in client.csr -CA ca.pem -CAkey ca-key.pem \
+          -CAcreateserial -out client.pem -days 365
+        rm -f *.csr *.srl
+        chmod 644 *.pem
+        echo "certs ready"
+    volumes:
+      - ./certs:/certs
+
+networks:
+  e2e:

@@ -60,3 +60,4 @@ node_modules/
 cetacean.toml
 .playwright-mcp/
 frontend/test-results/
+test/e2e/certs/

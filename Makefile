@@ -1,4 +1,4 @@
-.PHONY: lint typecheck fmt fmt-check build test test-e2e check sbom sbom-check sbom-verify hooks
+.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack e2e-up e2e-down check sbom sbom-check sbom-verify hooks
 
 ## Lint all code
 lint:
@@ -52,6 +52,21 @@ test:
 ## Run end-to-end tests
 test-e2e:
 	cd frontend && npx playwright test
+
+## Run the end-to-end stack suite (local only; needs Docker)
+## -p 1 serialises packages: each reserves the same lane ports, so parallel
+## packages would fight over them.
+test-stack: build
+	go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...
+
+## Bring the end-to-end environment up and leave it running
+e2e-up:
+	docker compose -f test/e2e/compose.e2e.yaml up -d
+
+## Tear the end-to-end environment down, including volumes
+e2e-down:
+	docker compose -f test/e2e/compose.e2e.yaml down -v
+	rm -rf test/e2e/certs
 
 ## Run all checks (lint + type check + format check + test)
 check: lint typecheck fmt-check test
