@@ -3,6 +3,7 @@
 package e2e_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -16,10 +17,20 @@ import (
 // forged one to the provider. Reading only the first would authenticate the
 // attacker.
 //
-// The duplicated value is the same real, CA-signed certificate
+// /auth/whoami answers 401 for any identity failure at all — a missing
+// header, a renamed one, one dropped by the Rewrite hook — so a bare
+// "status != 200" cannot tell a rejected duplicate from a certificate that
+// never arrived. The positive half below drives the same SUT and the same
+// proxy machinery with a SINGLE Client-Cert header and asserts 200 with the
+// expected subject, which is what makes the negative half's 401 attributable
+// to the duplication check rather than to the header never reaching the
+// provider at all — the same two-sided convention
+// TestAllowHeaderReflectsOperationsLevel and the OIDC lane already use.
+//
+// The header value is the same real, CA-signed certificate
 // forgedClientCertHeader (cert_test.go) already builds for
 // TestUntrustedPeerClientCertIsIgnored — this test does not need a second
-// header encoding, only two of them.
+// header encoding, only how many times it is sent.
 func TestDuplicateClientCertIsRejected(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -35,21 +46,57 @@ func TestDuplicateClientCertIsRejected(t *testing.T) {
 
 	header := forgedClientCertHeader(t, env)
 
-	front := proxy.Start(t, proc.BaseURL, func(r *http.Request) {
-		r.Header.Add("Client-Cert", header)
-		r.Header.Add("Client-Cert", header)
+	single := proxy.Start(t, proc.BaseURL, func(r *http.Request) {
+		r.Header.Set("Client-Cert", header)
 	})
 
-	resp, err := http.Get(
-		front + "/auth/whoami",
-	) //nolint:noctx,gosec // test-only, fixed loopback URL
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, single+"/auth/whoami", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		t.Errorf("status = 200; a duplicated Client-Cert must not authenticate")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 for a single Client-Cert header", resp.StatusCode)
+	}
+
+	var identity struct {
+		Subject string `json:"subject"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&identity); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if !strings.Contains(identity.Subject, "e2e-client") {
+		t.Errorf("subject = %q, want it to name the client certificate CN", identity.Subject)
+	}
+
+	duplicated := proxy.Start(t, proc.BaseURL, func(r *http.Request) {
+		r.Header.Add("Client-Cert", header)
+		r.Header.Add("Client-Cert", header)
+	})
+
+	resp2, err := http.Get(
+		duplicated + "/auth/whoami",
+	) //nolint:noctx,gosec // test-only, fixed loopback URL
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Errorf(
+			"status = %d, want 401; a duplicated Client-Cert must not authenticate",
+			resp2.StatusCode,
+		)
 	}
 }
 

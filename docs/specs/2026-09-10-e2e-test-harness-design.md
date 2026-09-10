@@ -61,8 +61,14 @@ and nothing else:
 | `dind` | `docker:28-dind`, privileged. The engine under observation; the harness runs `swarm init` against it through the SDK |
 | `cert-init` | The openssl one-shot from `compose.dev-auth.yaml`, writing CA, server and client PEMs to a volume that is also bind-mounted to a host path |
 | `dex` | OIDC issuer, config lifted from `compose.dev-auth.yaml` |
-| `caddy` | Two sites: mTLS termination forwarding `Client-Cert` per [rfc9440], and header injection for headers mode |
-| `nginx` | The realistic misconfiguration — `X-Forwarded-For` only, no `Forwarded` |
+| `caddy` | mTLS termination, forwarding `Client-Cert` per [rfc9440] |
+
+A second Caddy site injecting headers for `headers` mode, and an `nginx` service
+reproducing the realistic `X-Forwarded-For`-only misconfiguration, were planned
+here but not built in phase one; the `headers` lane's hostile-input cases run
+against the in-process reverse proxy (`test/e2e/proxy/`) instead — see
+[Coverage](#coverage) and the [README's Deferred section][deferred] for what
+that leaves untested.
 
 The certificate volume is bind-mounted to a host path because the Go side needs
 the same chain the containers use: cert-mode cases dial the SUT's own TLS
@@ -161,16 +167,21 @@ without a restore step that can silently poison later cases.
 
 A case earns a place here only if a unit test cannot honestly assert it.
 
+The table states what the lane is meant to prove; where phase one shipped less
+than that, the cell says so. See the [README's Deferred section][deferred] for
+the full list, including the SSE 429/`Retry-After` case, which no test —
+end-to-end or unit — currently pins.
+
 | Lane | What only end-to-end can prove |
 |---|---|
 | `none` — API surface | Content negotiation through the real router, ETag and 304 round-trips, pagination `Link` headers, `Allow` reflecting the real ops level, and the three `/topology` renderings agreeing on one live graph |
-| SSE | Subscribe to `/services`, then deploy, scale and remove a stack, asserting events arrive carrying full resources. The watcher-to-cache-to-broadcaster chain cannot be tested in-process without reimplementing it. Plus 429 and `Retry-After` at the connection cap |
-| `headers` | Caddy injecting real headers, nginx emitting XFF only, and the hostile proxy for malformed input, all against the real trust decision at the real edge |
-| `cert` | Direct mTLS and Caddy-forwarded `Client-Cert` producing the same identity; duplicate `Client-Cert` rejected; an untrusted peer's `Client-Cert` ignored; both startup outcomes |
+| SSE | Subscribe to `/services`, then deploy, scale and remove a stack, asserting events arrive carrying full resources. The watcher-to-cache-to-broadcaster chain cannot be tested in-process without reimplementing it. (429 and `Retry-After` at the connection cap are deferred — not built here.) |
+| `headers` | The hostile proxy for malformed input (duplicate/absent `Forwarded`, XFF fallback), against the real trust decision at the real edge. (Caddy injecting real headers and an nginx-shaped XFF-only misconfiguration are deferred — not built here.) |
+| `cert` | Direct mTLS and Caddy-forwarded `Client-Cert` producing the same identity; duplicate `Client-Cert` rejected (against the positive case of a single, accepted header); an untrusted peer's `Client-Cert` ignored; both startup outcomes |
 | `oidc` | The authorization-code flow against Dex — redirect, login form, callback, session cookie round-trip — then Bearer validation |
-| ACL | Policy hot reload: rewrite the file mid-run and assert the verdict changes with no restart. `fsnotify` has no other honest test. Plus per-persona filtering, `Allow`, and that a digest never names a resource behind a grant |
-| Writes and ops level | Scale, image, rollback, restart, drain and task removal against a real engine, including the 409 that needs a genuinely concurrent update to produce |
-| MCP | `tools/list` filtered by tier and grants, `find` and `describe` agreeing on one live resource, a task-augmented mutation returning a converged result, and notifications firing from real cache events |
+| ACL | Policy hot reload: rewrite the file mid-run and assert the verdict changes with no restart. `fsnotify` has no other honest test. Plus per-persona filtering and `Allow`. (That a digest never names a resource behind a grant is deferred — not built here.) |
+| Writes and ops level | Scale and restart against a real engine. (Image, rollback, drain, task removal, and the 409 that needs a genuinely concurrent update to produce are deferred — not built here.) |
+| MCP | `tools/list` filtered by tier, and `find` and `describe` agreeing on one live resource. (Grant-based filtering, a task-augmented mutation returning a converged result, and notifications firing from real cache events are deferred — not built here.) |
 
 Metrics get one case in phase one: with Prometheus unconfigured, the nil-receiver
 paths report 503 rather than charting nothing.
@@ -231,3 +242,4 @@ one. It would test a different risk and needs its own design.
 [phase-two]: #phase-two
 [the-browser-suite]: #the-browser-suite
 [rfc9440]: https://www.rfc-editor.org/rfc/rfc9440.html
+[deferred]: ../../test/e2e/README.md#deferred

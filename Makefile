@@ -79,6 +79,9 @@ test-stack: build
 # the Allow-header-gated buttons the specs look for are correctly absent.
 e2e-up: build
 	go run -tags e2e ./test/e2e/cmd/e2eenv
+	env -i \
+	PATH="$$PATH" \
+	HOME="$$HOME" \
 	CETACEAN_CONFIG=/dev/null \
 	CETACEAN_AUTH_MODE=none \
 	CETACEAN_OPERATIONS_LEVEL=3 \
@@ -100,7 +103,8 @@ e2e-down:
 		rm -f test/e2e/.sut.pid; \
 	fi
 	docker compose -f test/e2e/compose.e2e.yaml down -v
-	rm -rf test/e2e/certs
+	-docker run --rm -v $(PWD)/test/e2e/certs:/certs alpine sh -c 'rm -rf /certs/..?* /certs/.[!.]* /certs/*' 2>/dev/null
+	-rm -rf test/e2e/certs
 
 ## Run all checks (lint + type check + format check + test)
 check: lint typecheck fmt-check test

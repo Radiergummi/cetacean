@@ -141,9 +141,10 @@ func TestScaleRefusedAtReadOnlyLevel(t *testing.T) {
 		t.Fatalf("decode problem: %v", err)
 	}
 
-	// requireWriteACL runs outermost (see svcTier1 in router.go) but auth
-	// mode none bypasses ACL entirely, so requireLevel's OPS001 is the one
-	// that actually fires here.
+	// requireWriteACL runs outermost (see svcTier1 in router.go) and does
+	// run here — it is Evaluator.Can that short-circuits, returning true
+	// because no policy is configured, so requireLevel's OPS001 is the code
+	// that actually fires.
 	if !strings.Contains(problem.Type, "OPS001") {
 		t.Errorf("problem type = %q, want it to name OPS001", problem.Type)
 	}

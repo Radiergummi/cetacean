@@ -6,7 +6,7 @@ services:
   dind:
     image: docker:28-dind
     privileged: true
-    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock", "--tls=false"]
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock", "--tls=false", "--label=cetacean-e2e=true"]
     ports:
       - "12375:2375"
     networks:

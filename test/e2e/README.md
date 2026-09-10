@@ -31,12 +31,19 @@ afterwards with `make e2e-down`.
 ### Running one lane
 
 `-p 1` matters (see [Constraints](#constraints) below), but only across packages — a single package
-is already serial. Run one file's tests directly once the environment is up:
+is already serial. `make e2e-up` is **not** a prerequisite here: `harness.Up` brings its own
+environment up on first use, the same way `make test-stack` does. Run one file's tests directly:
 
 ```bash
-make e2e-up   # or just run a test directly — harness.Up brings its own environment up on first use
 go test -tags e2e -run TestDuplicateClientCertIsRejected ./test/e2e/...
 ```
+
+Careful running this against an environment `make e2e-up` already brought up: that command parks
+a SUT on port `19001` (see [Reserved ports](#reserved-ports) below), which `api_test.go`,
+`sse_test.go`, `write_test.go`, `mcp_test.go` and `sut/sut_test.go` all reserve too. A test in one
+of those files will sit in `waitPortFree` and then fail rather than run. Either run a test outside
+that set, as above, or stop the `e2e-up` SUT first (`make e2e-down`, or `kill` the PID in
+`test/e2e/.sut.pid`) before running one that needs `19001`.
 
 Or narrow to a package:
 
@@ -66,10 +73,12 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19104` | Caddy, mTLS termination |
 
 `19003` is reserved in the numbering scheme but the `headers`-mode hostile-input cases run on
-`19009` alongside `cert` instead of a dedicated lane at `19003` — sharper coverage from loopback
-than routing through a real nginx would give, per the design doc's phase-one scope. If a
-documented-nginx-recipe test is wanted later, it's an addition to the hostile-proxy lane, not a
-gap here.
+`19009` alongside `cert` instead of a dedicated lane at `19003`. This is a deviation from the
+design doc, not something it called for: the doc's [topology][topology] names a second Caddy site
+for header injection and an `nginx` service for the realistic XFF-only misconfiguration, and
+neither was built. The hostile-proxy lane's loopback proxy covers the malformed-input cases, but
+Caddy header injection and the nginx misconfiguration remain untested — see
+[Deferred](#deferred).
 
 ## Bringing the environment up by hand
 
@@ -180,6 +189,23 @@ unconfigured Prometheus reports 503 rather than an empty series; a seeded TSDB w
 cAdvisor/node-exporter series is phase two — see the design doc's [Phase two][phase-two] section
 for what that would take and why it's deferred rather than dropped.
 
+Beyond that, this pass shipped less than the design doc's [Coverage][coverage] table describes.
+Nothing below is exercised by this suite, and — except where noted — nothing else pins it either:
+
+- The `headers` lane's Caddy half (real header injection) and its nginx half (an XFF-only
+  misconfiguration, no `Forwarded`) — see [Reserved ports](#reserved-ports) above. The lane's
+  hostile-input cases (malformed/duplicate headers) still run, against the in-process proxy.
+- Write-lane coverage beyond scale and restart: image update, rollback, drain, task removal, and
+  the 409 stale-version conflict.
+- MCP grant-based `tools/list` filtering (only tier gating is covered), a task-augmented mutation
+  polled to convergence, and cache-event notifications.
+- The ACL case that a digest never names a resource behind a grant.
+- SSE 429 and `Retry-After` at the connection cap. No unit test pins this contract either —
+  `internal/api/sse/broadcaster_test.go` substitutes a `noopErrorWriter` rather than driving a
+  real client past the cap — so it is currently untested anywhere in the repository.
+
 [the-browser-suite]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md#the-browser-suite
 [design]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md
+[topology]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md#topology
+[coverage]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md#coverage
 [phase-two]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md#phase-two

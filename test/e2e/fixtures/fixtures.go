@@ -50,12 +50,12 @@ const (
 
 	stackLabel = "com.docker.stack.namespace"
 
-	// baselineSentinel is a config created as the very last step of
+	// BaselineSentinel is a config created as the very last step of
 	// DeployBaseline. baselinePresent tests only for this, not for any
 	// individual resource, so a run that fails partway through leaves no
 	// sentinel and the next call re-drives the whole baseline rather than
 	// silently adopting a half-built one.
-	baselineSentinel = "e2e-baseline-complete"
+	BaselineSentinel = "e2e-baseline-complete"
 )
 
 // ServiceSpec is the subset of a service definition the fixtures need.
@@ -224,7 +224,7 @@ func DeployBaselineCLI(env *harness.Env) error {
 	// Last step, deliberately: its presence is what DeployBaseline's
 	// idempotency check relies on, so a run that failed earlier leaves no
 	// sentinel and gets re-driven rather than adopted half-built.
-	return createConfig(ctx, env, baselineSentinel, []byte("ok\n"), nil)
+	return createConfig(ctx, env, BaselineSentinel, []byte("ok\n"), nil)
 }
 
 // DeployStack deploys a throwaway stack and removes it in cleanup.
@@ -330,19 +330,19 @@ func ensureImage(ctx context.Context, env *harness.Env) error {
 }
 
 // baselinePresent reports whether a previous DeployBaseline call ran to
-// completion. It tests only for baselineSentinel — not for any individual
+// completion. It tests only for BaselineSentinel — not for any individual
 // resource — so a run that failed partway through (leaving no sentinel) is
 // re-driven rather than mistaken for a finished baseline.
 func baselinePresent(ctx context.Context, env *harness.Env) (bool, error) {
 	configs, err := env.Docker.ConfigList(ctx, swarm.ConfigListOptions{
-		Filters: filters.NewArgs(filters.Arg("name", baselineSentinel)),
+		Filters: filters.NewArgs(filters.Arg("name", BaselineSentinel)),
 	})
 	if err != nil {
 		return false, fmt.Errorf("ConfigList: %w", err)
 	}
 
 	for _, cfg := range configs {
-		if cfg.Spec.Name == baselineSentinel {
+		if cfg.Spec.Name == BaselineSentinel {
 			return true, nil
 		}
 	}
@@ -387,10 +387,12 @@ func createVolume(
 	name string,
 	labels map[string]string,
 ) error {
+	// Tolerating a conflict matches the four sibling create helpers: a
+	// re-drive over an existing baseline must converge, not fail.
 	if _, err := env.Docker.VolumeCreate(ctx, volume.CreateOptions{
 		Name:   name,
 		Labels: labels,
-	}); err != nil {
+	}); err != nil && !isConflict(err) {
 		return fmt.Errorf("VolumeCreate %s: %w", name, err)
 	}
 

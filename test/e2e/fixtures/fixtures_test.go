@@ -37,17 +37,30 @@ func TestDeployBaselineConverges(t *testing.T) {
 	}
 }
 
+// TestDeployBaselineIsIdempotent removes the completion sentinel before the
+// second call, which is what makes the test mean anything: with the sentinel
+// in place both calls short-circuit in baselinePresent and the assertion
+// compares two ServiceList calls with no operation between them. Deleting it
+// forces the re-drive over resources that already exist, which is both the
+// recovery path a partially-failed run depends on and the only exercise the
+// create helpers' conflict tolerance gets.
 func TestDeployBaselineIsIdempotent(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
 
 	fixtures.DeployBaseline(t, env)
+
 	before, err := env.Docker.ServiceList(t.Context(), swarm.ServiceListOptions{})
 	if err != nil {
 		t.Fatalf("ServiceList: %v", err)
 	}
 
+	if err := env.Docker.ConfigRemove(t.Context(), fixtures.BaselineSentinel); err != nil {
+		t.Fatalf("remove sentinel %s: %v", fixtures.BaselineSentinel, err)
+	}
+
 	fixtures.DeployBaseline(t, env)
+
 	after, err := env.Docker.ServiceList(t.Context(), swarm.ServiceListOptions{})
 	if err != nil {
 		t.Fatalf("ServiceList: %v", err)

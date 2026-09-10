@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -132,22 +133,45 @@ func waitForCerts(dir string) error {
 	return fmt.Errorf("certificates not written to %s within %s", dir, upTimeout)
 }
 
+// engineLabel is set on the DinD engine's own dockerd (compose.e2e.yaml's
+// `--label` flag) so waitForEngine can tell this engine apart from whatever
+// else might already be listening on dockerHost. Without it, an empty or
+// misconfigured CETACEAN_DOCKER_HOST elsewhere that happened to resolve here
+// — or literally anything else answering Ping on this loopback port — would
+// pass for "our" engine, and the suite's mutations (including
+// removeStack's deletions) would land on a stranger's cluster.
+const engineLabel = "cetacean-e2e=true"
+
 func waitForEngine(docker *client.Client) error {
 	deadline := time.Now().Add(upTimeout)
 
+	var lastErr error
+
 	for time.Now().Before(deadline) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_, err := docker.Ping(ctx)
+		info, err := docker.Info(ctx)
 		cancel()
 
 		if err == nil {
-			return nil
+			if slices.Contains(info.Labels, engineLabel) {
+				return nil
+			}
+
+			lastErr = fmt.Errorf(
+				"engine at %s does not carry the %q label; refusing to run against a Docker "+
+					"daemon this suite did not start (is something else listening on %s?)",
+				dockerHost, engineLabel, dockerHost,
+			)
+
+			break
 		}
+
+		lastErr = err
 
 		time.Sleep(pollInterval)
 	}
 
-	return fmt.Errorf("engine at %s not reachable within %s", dockerHost, upTimeout)
+	return fmt.Errorf("engine at %s not usable within %s: %w", dockerHost, upTimeout, lastErr)
 }
 
 // SwarmInit makes the engine a swarm manager. It is idempotent: an engine

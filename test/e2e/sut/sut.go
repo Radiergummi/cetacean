@@ -166,6 +166,10 @@ func StartExpectingExit(t *testing.T, cfg Config) (int, string) {
 func launch(t *testing.T, cfg Config) *Process {
 	t.Helper()
 
+	if cfg.DockerHost == "" {
+		t.Fatal("sut: Config.DockerHost is empty; refusing to fall back to the host Docker socket")
+	}
+
 	bin := binaryPath(t)
 
 	// Tests in a package reuse one port serially and the previous SUT's
@@ -217,6 +221,11 @@ func buildEnv(cfg Config) []string {
 		"CETACEAN_LOG_FORMAT":  "json",
 		"CETACEAN_LOG_LEVEL":   "debug",
 		"CETACEAN_SNAPSHOT":    "false",
+		// A developer's own cetacean.toml (discovered via
+		// config.DiscoverConfigFile when this is unset) must never leak into
+		// the child: it would silently supply operations_level, acl policy,
+		// prometheus.url and more, out of a case's control.
+		"CETACEAN_CONFIG": "/dev/null",
 	}
 
 	maps.Copy(env, cfg.Env)
