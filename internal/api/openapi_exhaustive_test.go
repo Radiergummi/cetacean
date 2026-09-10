@@ -196,7 +196,13 @@ func resolvePath(template string) (string, bool) {
 		"/secrets/{id}":      "/secrets/sec-1",
 		"/networks/{id}":     "/networks/net-1",
 		"/volumes/{name}":    "/volumes/vol-1",
+		"/plugins/{name}":    "/plugins/plug-1",
 		"/api/errors/{code}": "/api/errors/SVC001",
+
+		// Not cache fixtures: an SPDX identifier the embedded license set
+		// carries, and a label name the Prometheus proxy would forward.
+		"/-/licenses/texts/{id}": "/-/licenses/texts/MIT",
+		"/metrics/labels/{name}": "/metrics/labels/job",
 	}
 
 	for prefix, replacement := range replacements {
