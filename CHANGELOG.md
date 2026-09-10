@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-10
+
 ### Added
 - `server.public_url` sets the canonical external URL once, supplying the OAuth issuer for the MCP server and the OIDC redirect URL instead of configuring each separately
 - The documentation site is now navigable by an agent that arrives without being told how. Every page advertises its Markdown version in the page head, and every Markdown version names the page it belongs to; the home page, the changelog and the schema and error references gained Markdown versions of their own, so nothing is HTML-only. `/llms.txt` lists the whole site with a description per page, `/openapi.json` (and `/openapi.yaml`) describe every URL the site serves and what each returns, and the sitemap now dates every entry
@@ -17,8 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - MCP tools now advertise the values each argument accepts, so a client can offer them and a model no longer has to infer them from prose: the resource types `find` and `describe` take, `get_topology`'s views, `get_metrics`' target, metric, range and ranking key, and `get_logs`' levels — which also gained `fatal`, a level the log filter has always accepted and no description mentioned
 - The MCP tool reference now gives every tool its own entry — what it does, its arguments, and the detail that applies to it — instead of a table per operations level followed by paragraphs describing tools further down the page. Each tool can also be linked to directly
 - Deploying Cetacean as a stack no longer requires creating an overlay network first. `compose.yaml` now stands on its own — `docker stack deploy -c compose.yaml cetacean` and nothing else. Connecting it to the bundled Prometheus is a second file, `compose.prometheus.yaml`, layered on top: `docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean`. That replaces passing `CETACEAN_PROMETHEUS_URL` through the shell on every deploy, where forgetting it once silently disconnected the charts
-
-### Changed
 - The topology view now draws its graph as soon as the page opens rather than waiting for the layout engine to download first — the engine is half a megabyte and everything else was queued behind it
 - A dropped connection or a server restart no longer leaves a page stuck on an error. Requests that fail for transport reasons are retried briefly before the error is shown; a request the server actually refused is still reported straight away
 - Status colours are consistent across the dashboard and adapt to dark mode on their own. Every badge, dot, banner and status figure now draws from one palette of five meanings — healthy, warning, failed, in-progress, inactive — where each screen previously picked its own light and dark shades independently, so the same state could be a different red in two places and a state badge could disagree with the dot beside it. In light mode the palette is deeper than the shades it replaces, so a status badge is legible against its own tint rather than washing into it
