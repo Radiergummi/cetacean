@@ -574,7 +574,7 @@ func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 	}
 }
 
-func newSeededTestRouter(t testing.TB) http.Handler {
+func newSeededTestRouter(t testing.TB, opts ...testHandlersOption) http.Handler {
 	t.Helper()
 
 	stackLabels := map[string]string{"com.docker.stack.namespace": seededStack}
@@ -635,7 +635,9 @@ func newSeededTestRouter(t testing.TB) http.Handler {
 	return newTestRouterWithCache(
 		t,
 		c,
-		withWriteClient(seededWriteClient()),
-		withPluginClient(plugins),
+		append([]testHandlersOption{
+			withWriteClient(seededWriteClient()),
+			withPluginClient(plugins),
+		}, opts...)...,
 	)
 }

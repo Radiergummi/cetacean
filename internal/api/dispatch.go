@@ -13,6 +13,12 @@ import (
 type feedHandlers struct {
 	atom     http.HandlerFunc
 	jsonFeed http.HandlerFunc
+
+	// queryParams names the query parameters these feeds read beyond the
+	// pagination pair — the same declaration feedData.QueryParams carries,
+	// on the registration side, so the alternate Link headers below can
+	// apply feedQuery. Only /search has one.
+	queryParams []string
 }
 
 // hasFeed reports whether any feed handler is configured.
@@ -127,33 +133,32 @@ func (h *Handlers) aclMatchWrap(
 }
 
 // addFeedLinks sets Link headers advertising feed alternates (RFC 8288).
+//
+// The href carries only the parameters the feed it points at actually reads,
+// through the same feedQuery the feed's own links use. Building it from
+// r.URL.RawQuery instead would advertise an alternate that differs from the
+// self link the feed answers with, and would put arbitrary request text in a
+// response header — a second rule for what a feed link may carry, beside the
+// one feedQuery already states.
 func addFeedLinks(w http.ResponseWriter, r *http.Request, feeds feedHandlers) {
 	if !feeds.hasFeed() {
 		return
 	}
 
 	basePath := absPath(r.Context(), r.URL.Path)
-	rq := r.URL.RawQuery
+	query := feedQuery(r, feeds.queryParams)
 
 	if feeds.atom != nil {
-		href := basePath + ".atom"
-		if rq != "" {
-			href += "?" + rq
-		}
 		w.Header().Add("Link", fmt.Sprintf(
 			`<%s>; rel="alternate"; type="application/atom+xml"`,
-			href,
+			feedHref(basePath+".atom", query),
 		))
 	}
 
 	if feeds.jsonFeed != nil {
-		href := basePath + ".feed"
-		if rq != "" {
-			href += "?" + rq
-		}
 		w.Header().Add("Link", fmt.Sprintf(
 			`<%s>; rel="alternate"; type="application/feed+json"`,
-			href,
+			feedHref(basePath+".feed", query),
 		))
 	}
 }

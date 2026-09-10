@@ -512,6 +512,51 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 	}
 }
 
+// update_node_labels sits one tier below update_node, and REST gates
+// PATCH /nodes/{id}/labels at the same tier 2 — so a deployment that lets an
+// agent relabel a node does not also let it demote a manager, and the
+// dashboard does not refuse an edit MCP performs.
+//
+// REST used to gate this at tier 3, which meant the two transports disagreed
+// about the same operation while docs/mcp-tools.mdx stated the intended
+// answer. The reciprocal test is TestPatchNodeLabelsIsAdmittedAtTierTwo in
+// internal/api; the two packages do not import each other, so this is two
+// tests naming one rule rather than one test driving both.
+func TestNodeLabelEditorMatchesTheRESTTier(t *testing.T) {
+	srv := newResourceTestServer(t, cache.New(nil))
+
+	var found bool
+
+	for _, def := range srv.toolCatalog() {
+		switch def.tool.Name {
+		case "update_node_labels":
+			found = true
+
+			if def.tier != config.OpsConfiguration {
+				t.Errorf(
+					"update_node_labels tier = %v, want OpsConfiguration to match "+
+						"the REST route for the same operation",
+					def.tier,
+				)
+			}
+
+		case "update_node":
+			// The split only means anything while update_node stays above it.
+			if def.tier != config.OpsImpactful {
+				t.Errorf(
+					"update_node tier = %v, want OpsImpactful — at the same tier as "+
+						"update_node_labels the separation buys nothing",
+					def.tier,
+				)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("update_node_labels is not registered")
+	}
+}
+
 func TestToolCatalogTierFilter(t *testing.T) {
 	c := cache.New(nil)
 	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsReadOnly)

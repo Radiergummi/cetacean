@@ -30,7 +30,12 @@ func newCSRFTestRouter(t testing.TB, origins ...string) http.Handler {
 		},
 	}
 
-	return newTestRouterWithConfig(t, origins, withCache(c), withWriteClient(wc))
+	return newTestRouterWithConfig(
+		t,
+		[]routerOption{withCORS(origins...)},
+		withCache(c),
+		withWriteClient(wc),
+	)
 }
 
 // restartRequest builds a POST that reaches a real write handler, so a request

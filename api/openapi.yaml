@@ -2132,14 +2132,18 @@ paths:
     patch:
       operationId: patchNodeLabels
       x-badges:
-        - name: "operations-level:3"
+        - name: "operations-level:2"
           position: after
-          color: red
+          color: orange
       tags: [Nodes]
       summary: Patch node labels
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the node labels.
         Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
+
+        Requires operations level 2 — one below the other node writes. Relabelling changes where
+        tasks may be placed; draining a node or demoting it from manager changes whether the swarm
+        stays healthy, so those stay at level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"

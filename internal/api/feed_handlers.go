@@ -453,16 +453,20 @@ func parseFeedPagination(r *http.Request) (beforeID uint64, limit int) {
 // beyond these declares it in feedData.QueryParams.
 var feedPaginationParams = []string{"before", "limit"}
 
-// feedQuery returns the subset of r's query this feed's links may carry: the
-// pagination pair every feed reads, plus whatever else data declared.
+// feedQuery returns the subset of r's query a feed's links may carry: the
+// pagination pair every feed reads, plus whatever else the caller declares.
 //
 // The rest of the raw query is attacker-chosen text, and reflecting it into a
 // compressed feed beside ACL-filtered resource names is the BREACH shape. The
 // set is per-feed rather than global because ?q= is read by handleFeedSearch
 // alone, and echoing it from a compressed feed would rebuild that shape.
-func feedQuery(r *http.Request, data feedData) url.Values {
+//
+// It takes the extra names rather than a feedData because the alternate Link
+// headers in dispatch.go apply the same rule from the registration side,
+// where no feed has been rendered yet — one rule, two callers.
+func feedQuery(r *http.Request, extra []string) url.Values {
 	source := r.URL.Query()
-	kept := make(url.Values, len(feedPaginationParams)+len(data.QueryParams))
+	kept := make(url.Values, len(feedPaginationParams)+len(extra))
 
 	keep := func(names []string) {
 		for _, name := range names {
@@ -473,7 +477,7 @@ func feedQuery(r *http.Request, data feedData) url.Values {
 	}
 
 	keep(feedPaginationParams)
-	keep(data.QueryParams)
+	keep(extra)
 
 	return kept
 }

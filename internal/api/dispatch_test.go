@@ -151,18 +151,29 @@ func TestFeedLinkHeaders(t *testing.T) {
 		}
 	})
 
-	t.Run("feed Links preserve query string", func(t *testing.T) {
-		handler := contentNegotiated(jsonH, feedHandlers{atom: atomH, jsonFeed: feedH}, spa)
+	// The href carries the pagination pair every feed reads plus whatever
+	// the registration declares — here ?q=, as the real /search route
+	// declares it. A parameter no feed reads is dropped; that rule is
+	// covered in dispatch_feedlink_test.go.
+	t.Run("feed Links preserve the parameters the feed reads", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{
+			atom:        atomH,
+			jsonFeed:    feedH,
+			queryParams: []string{"q"},
+		}, spa)
 		req := httptest.NewRequest("GET", "/search?q=web&limit=10", nil)
 		req = withContentType(req, ContentTypeJSON)
 		rec := httptest.NewRecorder()
 		handler(rec, req)
 
+		// Sorted, not in the order they arrived: the href is now built by
+		// url.Values.Encode rather than pasted from RawQuery, so it is the
+		// canonical form the feed's own self link uses.
 		links := strings.Join(rec.Header().Values("Link"), ", ")
-		if !strings.Contains(links, "/search.atom?q=web&limit=10") {
+		if !strings.Contains(links, "/search.atom?limit=10&q=web") {
 			t.Errorf("expected query params preserved in atom Link, got %q", links)
 		}
-		if !strings.Contains(links, "/search.feed?q=web&limit=10") {
+		if !strings.Contains(links, "/search.feed?limit=10&q=web") {
 			t.Errorf("expected query params preserved in feed Link, got %q", links)
 		}
 	})

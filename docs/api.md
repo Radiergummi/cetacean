@@ -533,9 +533,9 @@ passes the per-resource [ACL][authorization] write check.
 | `PUT /services/{id}/mode` | 3 |
 | `PUT /services/{id}/endpoint-mode` | 3 |
 | `DELETE /services/{id}` | 3 |
+| `PATCH /nodes/{id}/labels` | 2 |
 | `PUT /nodes/{id}/availability` | 3 |
 | `PUT /nodes/{id}/role` | 3 |
-| `PATCH /nodes/{id}/labels` | 3 |
 | `DELETE /nodes/{id}` | 3 |
 | `DELETE /tasks/{id}` | 3 |
 | `DELETE /stacks/{name}` | 3 |
@@ -567,6 +567,12 @@ passes the per-resource [ACL][authorization] write check.
 
 > [!NOTE]
 > `GET /swarm/unlock-key` returns a credential, so it is gated at level 3 like the writes beside it.
+
+> [!NOTE]
+> `PATCH /nodes/{id}/labels` sits a level below the other node writes. Relabelling a node changes where
+> tasks may be placed; draining it or demoting it from manager changes whether the swarm stays healthy.
+> A deployment can therefore allow relabelling without also allowing a manager to be demoted — the same
+> split [MCP][mcp] makes between `update_node_labels` and `update_node`.
 
 ### Preconditions
 

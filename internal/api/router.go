@@ -136,6 +136,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	svcTier1 := NewChain(svcACL, tier1)
 	svcTier2 := NewChain(svcACL, tier2)
 	svcTier3 := NewChain(svcACL, tier3)
+	// Node labels sit a tier below the rest of a node's writes: relabelling
+	// is a placement-configuration edit, while availability and role can
+	// destabilise the swarm. MCP splits update_node_labels from update_node
+	// for exactly that reason, and REST has to agree — see
+	// TestPatchNodeLabelsIsAdmittedAtTierTwo.
+	nodeTier2 := NewChain(nodeACL, tier2)
 	nodeTier3 := NewChain(nodeACL, tier3)
 	taskTier3 := NewChain(taskACL, tier3)
 	stackTier3 := NewChain(stackACL, tier3)
@@ -332,7 +338,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiated(h.HandleGetNodeLabels, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /nodes/{id}/labels",
-		nodeTier3.Append(h.precond(h.nodeLabelsSpec().representation)).
+		nodeTier2.Append(h.precond(h.nodeLabelsSpec().representation)).
 			ThenFunc(h.HandlePatchNodeLabels))
 	mux.HandleFunc(
 		"GET /nodes/{id}/role",
@@ -688,6 +694,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, feedHandlers{
 		atom:     h.feedSearchHandler(renderAtom),
 		jsonFeed: h.feedSearchHandler(renderJSONFeed),
+
+		// The one feed that reads ?q=, and so the only one whose alternate
+		// links may carry it. searchFeedData says the same on the render
+		// side; TestSearchFeedDeclaresItsQueryOnBothSides holds them together.
+		queryParams: []string{"q"},
 	}, spa))
 
 	// Profile

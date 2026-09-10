@@ -30,6 +30,12 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 		panic("openapi spec could not be converted to JSON: " + err.Error())
 	}
 
+	// Both bodies are fixed for the life of the process, so their validators
+	// are hashed once here rather than on every request.
+	playground := []byte(apiPlaygroundHTML)
+	playgroundETag := computeETag(playground)
+	specETag := computeETag(specJSON)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		ct := ContentTypeFromContext(r.Context())
 		w.Header().Set("Cache-Control", "public, max-age=3600")
@@ -38,21 +44,25 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 			w.Header().Set("Content-Type", "text/html")
 			w.Header().
 				Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
-			w.Write([]byte(apiPlaygroundHTML)) //nolint:errcheck
+			writeRawWithPrecomputedETag(w, r, playground, playgroundETag)
 		default:
 			// JSON is the default for content negotiation (including */*).
 			w.Header().Set("Content-Type", "application/json")
-			w.Write(specJSON) //nolint:errcheck
+			writeRawWithPrecomputedETag(w, r, specJSON, specETag)
 		}
 	}
 }
 
 // HandleScalarJS serves the embedded Scalar API reference JavaScript bundle.
+// Like the spec beside it, the bundle is fixed at build time, so its
+// validator is hashed once rather than per request.
 func HandleScalarJS(js []byte) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
+	etag := computeETag(js)
+
+	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
-		w.Write(js) //nolint:errcheck
+		writeRawWithPrecomputedETag(w, r, js, etag)
 	}
 }
 

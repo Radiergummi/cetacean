@@ -39,8 +39,11 @@ var resourceWriteMethods = map[string][]methodSpec{
 		{"DELETE", config.OpsImpactful},    // remove
 	},
 	"node": {
-		{"PUT", config.OpsImpactful},    // availability, role
-		{"PATCH", config.OpsImpactful},  // labels
+		{"PUT", config.OpsImpactful}, // availability, role
+		// Labels are a placement edit, a tier below the writes that decide
+		// whether the swarm stays healthy — matching the route's own gate
+		// and MCP's update_node_labels.
+		{"PATCH", config.OpsConfiguration},
 		{"DELETE", config.OpsImpactful}, // remove
 	},
 	"task": {
