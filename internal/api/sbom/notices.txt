@@ -12551,6 +12551,21 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
+@replit/codemirror-css-color-picker 6.3.0
+https://github.com/replit/Codemirror-CSS-color-picker#readme
+License: MIT
+
+No license text is published for this package.
+
+Its package.json and the npm registry both declare MIT, and its
+repository, github.com/replit/Codemirror-CSS-color-picker, carries no
+license file on its default branch. The declared license stands; only
+its text is missing, and none is reproduced here because writing one
+would assert a copyright holder and year the authors never stated.
+
+
+------------------------------------------------------------------------------
+
 @scalar/agent-chat 0.12.30
 https://github.com/scalar/scalar
 License: MIT
