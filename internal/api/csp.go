@@ -12,6 +12,9 @@ import (
 // scriptTag matches a <script> element and captures its attributes and body.
 var scriptTag = regexp.MustCompile(`(?is)<script([^>]*)>(.*?)</script>`)
 
+// srcAttr matches a `src` attribute on its own, so that `data-src` is not one.
+var srcAttr = regexp.MustCompile(`(?i)(^|[\s/])src\s*=`)
+
 // InlineScriptHashes returns a CSP source token per inline <script> in the
 // SPA's index.html, as `'sha256-<base64>'`.
 //
@@ -32,8 +35,8 @@ func InlineScriptHashes(fsys fs.FS) ([]string, error) {
 
 	var hashes []string
 	for _, match := range scriptTag.FindAllSubmatch(index, -1) {
-		attrs, body := string(match[1]), match[2]
-		if strings.Contains(strings.ToLower(attrs), "src=") || len(body) == 0 {
+		attrs, body := match[1], match[2]
+		if srcAttr.Match(attrs) || len(body) == 0 {
 			continue
 		}
 

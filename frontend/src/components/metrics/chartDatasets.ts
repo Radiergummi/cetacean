@@ -103,13 +103,11 @@ export function computeSuggestedMax(
     return undefined;
   }
 
-  let high = Math.max(...metrics.series.flatMap(({ data }) => data));
+  const points = metrics.series.flatMap(({ data }) => data);
+  const thresholdValues = thresholds.map(({ value }) => value);
 
-  for (const threshold of thresholds) {
-    high = Math.max(high, threshold.value);
-  }
-
-  const low = yMin ?? Math.min(...metrics.series.flatMap(({ data }) => data));
+  const high = Math.max(...thresholdValues, ...points);
+  const low = yMin ?? (points.length > 0 ? Math.min(...points) : Math.min(...thresholdValues));
 
   return high + (high - low) * 0.1 || high + 1;
 }

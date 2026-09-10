@@ -6,8 +6,15 @@ import type {HTMLAttributes} from "astro/types";
  * muted until it is hovered, when it takes the accent ground. Buttons no longer
  * get a pointer cursor from Tailwind's preflight, so the treatment carries one.
  */
-/** Anchor attributes: `href` is what decides the tag, and is optional there. */
-type Props = HTMLAttributes<"a">;
+/**
+ * Anchor attributes: `href` is what decides the tag, and is optional there.
+ *
+ * Minus `type`, which the two tags disagree about — on an anchor it is the
+ * link target's MIME type, on a button it is the button's behaviour, and this
+ * component sets the latter itself. Plus `disabled`, which only the button
+ * half has and a diagram's toolbar needs.
+ */
+type Props = Omit<HTMLAttributes<"a">, "type"> & Pick<HTMLAttributes<"button">, "disabled">;
 
 const {href, class: className, ...rest} = Astro.props;
 

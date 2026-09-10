@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Commits regenerated SBOM artifacts to a pull request branch, signed.
+# Commits regenerated SBOM artifacts to a pull request branch, signed, and asks
+# for the CI run that commit cannot start on its own.
 #
 # Uses the createCommitOnBranch GraphQL mutation rather than `git commit && git
 # push`, for two reasons: GitHub GPG-signs commits authored through the API, so
@@ -135,3 +136,21 @@ if [ $status -ne 0 ]; then
 fi
 
 echo "Committed regenerated SBOM to $branch." >&2
+
+# That commit was authored with GITHUB_TOKEN, and GitHub raises no event for
+# those — so the run that would put this branch's required checks on the new
+# head never starts. The pull request is then blocked on checks that passed on
+# the commit before it and can never appear on this one, until someone asks for
+# a run by hand. workflow_dispatch is the documented exception to that
+# suppression, the same one open-sbom-pr.sh relies on.
+#
+# This cannot recur: the dispatched run reports event_name workflow_dispatch,
+# and the step that calls this script is gated on pull_request, so it commits
+# nothing and dispatches nothing.
+#
+# Best effort, like the auto-merge in open-sbom-pr.sh. The commit is the job and
+# it succeeded; a run that has to be started by hand is a worse outcome than
+# this warning, not a reason to report the SBOM as uncommitted.
+if ! gh workflow run ci.yml --repo "$repository" --ref "$branch"; then
+  echo "::warning::Committed the SBOM to $branch but could not dispatch a run for it. Its required checks will stay on the previous commit; re-run CI on the branch to clear them."
+fi

@@ -247,11 +247,7 @@ export default function PluginDetail() {
         <InfoCard
           label="Status"
           value={
-            <span
-              className={
-                plugin.Enabled ? "text-status-ok dark:text-status-ok" : "text-muted-foreground"
-              }
-            >
+            <span className={plugin.Enabled ? "text-status-ok" : "text-muted-foreground"}>
               {plugin.Enabled ? "Enabled" : "Disabled"}
             </span>
           }

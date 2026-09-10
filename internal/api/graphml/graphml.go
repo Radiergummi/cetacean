@@ -184,7 +184,6 @@ func Render(g jgf.Graph) ([]byte, error) {
 	return append([]byte(xml.Header), xmlBytes...), nil
 }
 
-// buildNodeElem constructs a <node> element from a JGF node.
 // intData renders one integer-typed metadata value. A JGF document built in
 // this process carries Go ints; one decoded from JSON carries float64, and both
 // reach here.
@@ -201,6 +200,7 @@ func intData(key string, value any) (dataElem, bool) {
 	}
 }
 
+// buildNodeElem constructs a <node> element from a JGF node.
 func buildNodeElem(urn string, node jgf.Node) nodeElem {
 	elem := nodeElem{ID: urn}
 

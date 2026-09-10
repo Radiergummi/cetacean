@@ -6,6 +6,11 @@ public/demo/index.html
 public/demo/404.html
 
 # Copied at build time (the sync-assets script)
+public/api/openapi.yaml
+# Where sync-assets used to copy it; a checkout that ran the old script
+# still has the file, and left untracked it would shadow the /openapi.yaml
+# route with the product's spec. sync-assets deletes it; this keeps a copy
+# that predates the next sync-assets run out of a commit.
 public/openapi.yaml
 public/scalar.js
 public/dist/

@@ -26,16 +26,33 @@ npm run build:widgets                     # Build the MCP Apps widgets to fronte
 npm run lint                              # oxlint
 npm run fmt                               # oxfmt (write)
 npm run fmt:check                         # oxfmt (check only)
-npx tsc -b --noEmit                       # Type check only (faster than full build)
+npm run check                             # Type check only (tsc -b --noEmit; faster than a full build)
 npx vitest run                            # Run all frontend tests
 ```
+
+### Website
+```bash
+cd website
+npm install                               # Install dependencies
+npm run sync-assets                       # Copy/generate the build inputs (needs the Go toolchain)
+npm run dev                               # Astro dev server on :4321
+npm run build                             # Build to website/dist/
+npm run lint                              # oxlint
+npm run fmt:check                         # oxfmt (check only)
+npm run check                             # Type check (astro check; covers .astro templates as well as .ts)
+```
+
+`npm run check` needs `src/data/errors.json`, which `sync-assets` generates from `internal/api` — run
+`sync-assets` first in a clean checkout. `tsconfig.json` excludes `public/`: Astro's base config enables
+`allowJs` over `**/*`, and type-checking the bundled Scalar and demo-SPA assets there exhausts the heap.
 
 ### Lint & Format (Makefile)
 ```bash
 make lint                                 # golangci-lint + oxlint
+make typecheck                            # tsc (frontend) + astro check (website)
 make fmt                                  # gofmt + oxfmt (write)
 make fmt-check                            # Check formatting without modifying
-make check                                # lint + fmt-check + test
+make check                                # lint + typecheck + fmt-check + test
 make test                                 # go test ./...
 make build                                # frontend build + go build
 make sbom                                 # regenerate the committed SBOM + attribution
@@ -45,7 +62,11 @@ make sbom-verify                          # check the committed SBOM against the
 The SBOM (`internal/api/sbom/*`, `THIRD_PARTY_LICENSES`) is committed and embedded in the binary. You rarely need to
 regenerate it by hand: the `pre-commit` hook does it when a dependency manifest is staged (skipping when it cannot —
 a linked worktree, or a missing toolchain), and CI's `sbom-sync` job regenerates it on every pull request and
-**commits the result back to the branch**, signed, via `createCommitOnBranch`.
+**commits the result back to the branch**, signed, via `createCommitOnBranch`, then dispatches `ci.yml` on that branch.
+The dispatch is not optional: a commit authored with `GITHUB_TOKEN` raises no event, so the run that would put the
+branch's required checks on the new head never starts, and the pull request sits blocked on checks that passed one
+commit earlier and can never appear on this one. The dispatched run commits nothing — the commit step is gated on
+`pull_request` — so it cannot recur.
 
 Two kinds of pull request are reported on rather than written to. A fork PR cannot be written to at all — its token is
 read-only. A **Dependabot** PR could be, but must not: Dependabot stops updating any branch carrying a commit it did
@@ -243,6 +264,13 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 
 ### Embedding
 `main.go` uses `//go:embed frontend/dist/*` to embed the built frontend into the Go binary. The frontend must be built before `go build`.
+
+The Scalar bundle served at `/api/scalar.js` is embedded from `frontend/dist/scalar.js`, which the frontend
+build's `postbuild` step copies out of `node_modules/@scalar/api-reference`. It used to be a copy committed at
+`api/scalar/standalone.js`, which nothing watched: it sat six months and 613 releases behind, absent from
+Dependabot, the SBOM and `THIRD_PARTY_LICENSES` alike. As an ordinary production dependency of `frontend` it is
+covered by all three. Its own `//go:embed` directive is deliberate — a missing file fails `go build` rather than
+serving an empty script.
 
 ## Releases
 - **Always sign release tags** with `git tag -s` (never `git tag -a`). Unsigned tags show as "unverified" on GitHub and immutable releases prevent fixing this after the fact.

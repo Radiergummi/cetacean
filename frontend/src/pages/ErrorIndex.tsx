@@ -26,7 +26,7 @@ export default function ErrorIndex() {
         return res.json();
       })
       .then(setErrors)
-      .catch((definition) => setError(definition.message));
+      .catch((caught) => setError(caught.message));
   }, []);
 
   if (error) {

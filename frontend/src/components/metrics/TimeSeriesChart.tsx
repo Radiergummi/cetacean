@@ -143,6 +143,15 @@ export default function TimeSeriesChart({
   const syncIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     return sync.subscribe(chartId, (timestamp) => {
       const current = dataRef.current;
 

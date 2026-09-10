@@ -3,8 +3,10 @@ import Heading from "@/components/Heading.astro";
 import SchemaDefinition from "@/components/SchemaDefinition.astro";
 import SchemaLinks from "@/components/SchemaLinks.astro";
 import DocsLayout from "../../layouts/DocsLayout.astro";
+import {generatedPage} from "@/lib/pages.ts";
 import {properties, rfc9457Properties, types} from "@/lib/schema.ts";
 
+const {description, markdown, title} = generatedPage("/api/schema");
 const allProperties = [
     ...properties,
     ...rfc9457Properties,
@@ -18,10 +20,11 @@ const headings = [
 ];
 ---
 <DocsLayout
-    title="Schema Reference"
-    description="JSON-LD vocabulary for the Cetacean API: types, properties, and their IRIs."
+    title={title}
+    description={description}
     slug="api/schema"
     headings={headings}
+    markdownUrl={markdown}
 >
     <p>
         Cetacean API responses include <a href="https://json-ld.org/">JSON-LD</a> metadata

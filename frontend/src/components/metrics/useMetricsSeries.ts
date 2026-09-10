@@ -189,6 +189,13 @@ export function useMetricsSeries({
     pendingFetchCancel.current = fetchDataRef.current();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      pendingFetchCancel.current?.();
+      pendingFetchCancel.current = null;
+    };
+  }, []);
+
   const live = loadedKey === key && from == null && to == null && streaming;
 
   useEffect(() => {
