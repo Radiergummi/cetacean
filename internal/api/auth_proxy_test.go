@@ -96,7 +96,7 @@ func TestHeadersAuthFromUntrustedPeer(t *testing.T) {
 
 // certRequest builds a GET /nodes carrying an RFC 9440 Client-Cert header, as
 // a TLS-terminating proxy would forward it. r.TLS stays nil: the connection
-// reaching us is plain HTTP from the proxy.
+// from the proxy is plain HTTP.
 func certRequest(t *testing.T, peer string) *http.Request {
 	t.Helper()
 
@@ -126,9 +126,8 @@ func certRequest(t *testing.T, peer string) *http.Request {
 }
 
 // TestClientCertBehindTrustedProxy drives the assembled router in cert mode
-// with no TLS of its own — the deployment RFC 9440 exists for — and asserts
-// both directions of the rule it states: a certificate forwarded by a trusted
-// proxy authenticates, and the same header from anyone else does not.
+// with no TLS of its own, asserting both directions: a certificate forwarded
+// by a trusted proxy authenticates, the same header from anyone else does not.
 func TestClientCertBehindTrustedProxy(t *testing.T) {
 	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
 	router := newProxyRouter(t, &auth.CertProvider{}, trusted)

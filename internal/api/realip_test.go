@@ -128,7 +128,10 @@ func TestRealIP_IPv6(t *testing.T) {
 // writes into RemoteAddr.
 func TestRealIP_RecordsVerdictOnOriginalPeer(t *testing.T) {
 	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
+	called := false
 	handler := realIP(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		called = true
+
 		peer, ok := auth.PeerFromContext(r.Context())
 		if !ok {
 			t.Fatal("no peer recorded in context")
@@ -148,38 +151,64 @@ func TestRealIP_RecordsVerdictOnOriginalPeer(t *testing.T) {
 	r.RemoteAddr = "10.0.0.1:54321"
 	r.Header.Set("X-Forwarded-For", "203.0.113.1")
 	handler.ServeHTTP(httptest.NewRecorder(), r)
+
+	if !called {
+		t.Fatal("the wrapped handler never ran, so nothing was asserted")
+	}
 }
 
-// TestRealIP_RecordsUntrustedVerdict: both ways of failing the check still
-// record a verdict, so downstream code can tell "untrusted" from "undecided".
+// TestRealIP_RecordsUntrustedVerdict: every way of failing the check — none
+// configured, peer outside the set, unparseable peer — still records a
+// verdict, so downstream code can tell "untrusted" from "undecided" and refuse
+// the latter.
 func TestRealIP_RecordsUntrustedVerdict(t *testing.T) {
-	for name, trusted := range map[string][]netip.Prefix{
-		"none configured":  nil,
-		"peer outside set": {netip.MustParsePrefix("10.0.0.0/8")},
-	} {
+	tests := map[string]struct {
+		trusted    []netip.Prefix
+		remoteAddr string
+	}{
+		"none configured": {remoteAddr: "203.0.113.1:12345"},
+		"peer outside set": {
+			trusted:    []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
+			remoteAddr: "203.0.113.1:12345",
+		},
+		"unparseable peer": {
+			trusted:    []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
+			remoteAddr: "@",
+		},
+	}
+
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
+			called := false
 			inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				called = true
+
 				peer, ok := auth.PeerFromContext(r.Context())
 				if !ok {
 					t.Fatal("no peer recorded in context")
 				}
+
 				if peer.Trusted {
 					t.Errorf("peer %s marked trusted", peer.Addr)
 				}
 			})
 
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
-			r.RemoteAddr = "203.0.113.1:12345"
+			r.RemoteAddr = tt.remoteAddr
 			r.Header.Set("X-Forwarded-For", "198.51.100.1")
-			realIP(trusted)(inner).ServeHTTP(httptest.NewRecorder(), r)
+			realIP(tt.trusted)(inner).ServeHTTP(httptest.NewRecorder(), r)
+
+			if !called {
+				t.Fatal("the wrapped handler never ran, so nothing was asserted")
+			}
 		})
 	}
 }
 
-// TestRealIP_ClientResolution covers what the peer's RemoteAddr is rewritten
-// to across both forwarding headers. The peer is always the trusted proxy
-// 10.0.0.1:9999, so the port stays 9999 throughout; an empty want means
-// RemoteAddr is left as it arrived.
+// TestRealIP_ClientResolution covers what RemoteAddr is rewritten to across
+// both forwarding headers. The peer is always the trusted proxy 10.0.0.1:9999,
+// so the port stays 9999; an empty want means RemoteAddr is left as it
+// arrived.
 func TestRealIP_ClientResolution(t *testing.T) {
 	trusted := []netip.Prefix{
 		netip.MustParsePrefix("10.0.0.0/8"),
@@ -225,6 +254,17 @@ func TestRealIP_ClientResolution(t *testing.T) {
 			forwarded: []string{"proto=https;host=example.com"},
 			xff:       "198.51.100.7",
 			want:      "198.51.100.7:9999",
+		},
+		{
+			name:      "Forwarded naming no address falls back to X-Forwarded-For",
+			forwarded: []string{"for=unknown, for=_hidden"},
+			xff:       "198.51.100.7",
+			want:      "198.51.100.7:9999",
+		},
+		{
+			name:      "an IPv4-mapped hop is recognised as the trusted proxy it is",
+			forwarded: []string{"for=203.0.113.50, for=\"[::ffff:10.0.0.2]\""},
+			want:      "203.0.113.50:9999",
 		},
 		{
 			name:      "every Forwarded node trusted leaves the peer alone",

@@ -9,19 +9,6 @@ import (
 // each RFC 7239 Forwarded element, in the order the elements appear:
 // left-to-right, first proxy first, the same ordering X-Forwarded-For uses.
 //
-// The grammar (RFC 7239 §4) is
-//
-//	Forwarded         = 1#forwarded-element
-//	forwarded-element = [ forwarded-pair ] *( ";" [ forwarded-pair ] )
-//	forwarded-pair    = token "=" value
-//	value             = token / quoted-string
-//
-// so a comma separates elements and a semicolon separates the pairs within
-// one — but only outside a quoted-string, which is the part hand-rolled
-// parsers get wrong. Any node carrying a port, and every IPv6 address, must be
-// quoted, because ":" and "[]" are not token characters:
-// for="[2001:db8::1]:8080". Parameter names are case-insensitive.
-//
 // Nodes are returned as they stand, "unknown" and obfuscated identifiers
 // included; nodeAddr decides which of them name an address.
 func forwardedNodes(values []string) []string {
@@ -48,6 +35,9 @@ func forwardedNodes(values []string) []string {
 // IPv6 address, the literal "unknown", and an obfuscated identifier beginning
 // with "_" — each with an optional ":port". Only the first two name an
 // address; the other two deliberately do not, and report false.
+//
+// An IPv4-mapped address is unmapped, so a proxy naming a hop as
+// ::ffff:10.0.0.2 is still matched against an IPv4 trusted-proxy prefix.
 func nodeAddr(node string) (netip.Addr, bool) {
 	host := node
 
@@ -72,7 +62,7 @@ func nodeAddr(node string) (netip.Addr, bool) {
 		return netip.Addr{}, false
 	}
 
-	return addr, true
+	return addr.Unmap(), true
 }
 
 // splitOutsideQuotes splits s on sep, ignoring separators inside a

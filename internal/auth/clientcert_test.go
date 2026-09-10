@@ -68,9 +68,8 @@ func spiffeURI(t *testing.T, raw string) []*url.URL {
 }
 
 // TestCertProvider_HeaderFromTrustedProxy covers RFC 9440's whole point: a
-// TLS-terminating proxy forwards the certificate it verified, and identity is
-// built from it by the same path a directly-presented certificate takes —
-// SPIFFE URI SAN included.
+// forwarded certificate builds identity by the same path a directly-presented
+// one takes, SPIFFE URI SAN included.
 func TestCertProvider_HeaderFromTrustedProxy(t *testing.T) {
 	_, der := newClientCert(t, "alice", spiffeURI(t, "spiffe://example.org/workload/api"))
 
@@ -96,10 +95,9 @@ func TestCertProvider_HeaderFromTrustedProxy(t *testing.T) {
 	}
 }
 
-// TestCertProvider_HeaderFromUntrustedPeerRejected is the security property.
-// RFC 9440 §3: an origin server "MUST only accept the Client-Cert and
-// Client-Cert-Chain header fields from a trusted TTRP". Anyone can send the
-// header; only a trusted proxy may be believed.
+// TestCertProvider_HeaderFromUntrustedPeerRejected is the security property:
+// anyone can send the header, and RFC 9440 §3 allows believing it only from a
+// trusted TTRP.
 func TestCertProvider_HeaderFromUntrustedPeerRejected(t *testing.T) {
 	_, der := newClientCert(t, "mallory", nil)
 
@@ -122,8 +120,7 @@ func TestCertProvider_HeaderFromUntrustedPeerRejected(t *testing.T) {
 }
 
 // TestCertProvider_PeerCertificateWinsOverHeader pins the precedence: a
-// certificate presented on this connection was verified by us, and no header
-// may displace it.
+// certificate we verified ourselves cannot be displaced by a header.
 func TestCertProvider_PeerCertificateWinsOverHeader(t *testing.T) {
 	peerCert, _ := newClientCert(t, "alice", nil)
 	_, headerDER := newClientCert(t, "mallory", nil)
@@ -139,6 +136,23 @@ func TestCertProvider_PeerCertificateWinsOverHeader(t *testing.T) {
 
 	if id.Subject != "alice" {
 		t.Errorf("Subject = %q, want the peer certificate's subject", id.Subject)
+	}
+}
+
+// TestCertProvider_DuplicateHeaderRejected covers a proxy that adds the header
+// instead of replacing it: the client's own value arrives first, and taking it
+// would let anyone reaching the proxy pick their identity.
+func TestCertProvider_DuplicateHeaderRejected(t *testing.T) {
+	_, mallory := newClientCert(t, "mallory", nil)
+	_, alice := newClientCert(t, "alice", nil)
+
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Add("Client-Cert", clientCertHeader(mallory))
+	r.Header.Add("Client-Cert", clientCertHeader(alice))
+
+	id, err := (&CertProvider{}).Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
+	if err == nil {
+		t.Fatalf("duplicate Client-Cert accepted: %+v", id)
 	}
 }
 

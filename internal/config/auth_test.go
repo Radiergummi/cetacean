@@ -188,11 +188,17 @@ func TestLoadAuth_TailscaleTsnetHappyPath(t *testing.T) {
 	}
 }
 
-func TestLoadAuth_CertRequiresCA(t *testing.T) {
+func TestLoadAuth_CertWithoutCA(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "cert")
-	_, err := LoadAuth(nil, nil, "", "")
-	if err == nil {
-		t.Fatal("expected error for missing CA")
+
+	// Whether a missing CA is fatal depends on TLS config LoadAuth cannot see;
+	// ValidateCertMode decides, and TestValidateCertMode covers it.
+	cfg, err := LoadAuth(nil, nil, "", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Cert.CA != "" {
+		t.Errorf("CA = %q, want empty", cfg.Cert.CA)
 	}
 }
 
@@ -659,21 +665,23 @@ func TestValidateCertMode(t *testing.T) {
 	tests := []struct {
 		name           string
 		tlsEnabled     bool
+		certCA         string
 		trustedProxies []netip.Prefix
 		wantErr        bool
 	}{
-		{"TLS terminated here", true, nil, false},
-		{"TLS terminated by a trusted proxy", false, proxies, false},
-		{"both", true, proxies, false},
-		{"neither, so no certificate can ever arrive", false, nil, true},
+		{"TLS terminated here", true, "/ca.pem", nil, false},
+		{"TLS terminated here without a CA", true, "", nil, true},
+		{"TLS terminated by a trusted proxy", false, "", proxies, false},
+		{"both", true, "/ca.pem", proxies, false},
+		{"neither, so no certificate can ever arrive", false, "", nil, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateCertMode(tt.tlsEnabled, tt.trustedProxies)
+			err := ValidateCertMode(tt.tlsEnabled, tt.certCA, tt.trustedProxies)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateCertMode(%v, %v) = %v, wantErr = %v",
-					tt.tlsEnabled, tt.trustedProxies, err, tt.wantErr)
+				t.Errorf("ValidateCertMode(%v, %q, %v) = %v, wantErr = %v",
+					tt.tlsEnabled, tt.certCA, tt.trustedProxies, err, tt.wantErr)
 			}
 		})
 	}

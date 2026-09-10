@@ -73,9 +73,8 @@ func (p *CertProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Id
 func (p *CertProvider) RegisterRoutes(_ *http.ServeMux) {}
 
 // clientCertificate returns the certificate identifying the client: the one
-// presented on this connection, or — when TLS was terminated by a trusted
-// proxy in front of us — the one that proxy forwarded in the RFC 9440
-// Client-Cert header.
+// presented on this connection, or — when a trusted proxy terminated TLS
+// instead — the one it forwarded in the RFC 9440 Client-Cert header.
 //
 // A certificate presented here was verified here, so it always wins. A
 // forwarded one is believed only because the proxy that verified it is
@@ -84,23 +83,32 @@ func (p *CertProvider) RegisterRoutes(_ *http.ServeMux) {}
 // Client-Cert-Chain header fields from a trusted TTRP". Anyone can set a
 // header.
 //
-// Client-Cert-Chain is deliberately not read. It carries the issuer chain for
-// a relying party that wants to validate the certificate itself, and the
-// terminating proxy has already done that; nothing here would consume it.
+// Client-Cert-Chain is deliberately not read: it carries the issuer chain for
+// a party doing its own validation, which the proxy has already done.
 func clientCertificate(r *http.Request) (*x509.Certificate, error) {
 	if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
 		return r.TLS.PeerCertificates[0], nil
 	}
 
-	header := r.Header.Get("Client-Cert")
-	if header == "" || !FromTrustedProxy(r.Context()) {
+	headers := r.Header.Values("Client-Cert")
+	if len(headers) == 0 || !FromTrustedProxy(r.Context()) {
 		return nil, &AuthError{
 			Msg:             "client certificate required",
 			WWWAuthenticate: "mutual-tls",
 		}
 	}
 
-	der, err := decodeClientCert(header)
+	// A TTRP replaces the field rather than appending to it, so a second value
+	// means one of the two came from the client — and picking either would be
+	// a guess at which.
+	if len(headers) > 1 {
+		return nil, &AuthError{
+			Msg:             "Client-Cert appears more than once; the proxy must replace any header its client sent",
+			WWWAuthenticate: "mutual-tls",
+		}
+	}
+
+	der, err := decodeClientCert(headers[0])
 	if err != nil {
 		return nil, &AuthError{Msg: err.Error(), WWWAuthenticate: "mutual-tls"}
 	}
@@ -118,11 +126,10 @@ func clientCertificate(r *http.Request) (*x509.Certificate, error) {
 
 // decodeClientCert decodes an RFC 9440 Client-Cert value. It is an RFC 8941
 // Byte Sequence: the DER certificate in base64 with no line breaks, delimited
-// by a colon at each end.
+// by a colon at each end. An empty one ("::") is well-formed and carries no
+// certificate, which x509.ParseCertificate reports better than this can.
 func decodeClientCert(value string) ([]byte, error) {
 	value = strings.TrimSpace(value)
-	// An empty byte sequence ("::") is well-formed; it simply carries no
-	// certificate, which x509.ParseCertificate reports better than this can.
 	if len(value) < 2 || value[0] != ':' || value[len(value)-1] != ':' {
 		return nil, fmt.Errorf(
 			"Client-Cert is not a byte sequence; expected :base64:, got %q",
