@@ -19,6 +19,13 @@ interface Props {
     slug: string;
     headings: Heading[];
     markdownUrl?: string;
+
+    /**
+     * Overrides the `rel="alternate"` this page advertises, which otherwise
+     * names `markdownUrl`. Only the API explorer needs it: the machine-readable
+     * form of a specification playground is the specification.
+     */
+    alternate?: { href: string; type?: string; title?: string };
     category?: string;
     tags?: string[];
 
@@ -36,15 +43,25 @@ const {
     slug,
     headings,
     markdownUrl,
+    alternate,
     category,
     tags,
     sourcePath,
 } = Astro.props;
-const lastModified = sourcePath ? await getLastModified(sourcePath) : null;
-const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : null;
+// `undefined` rather than `null`: every component below models an absent date
+// or edit link as an omitted prop, and a page generated from Go source has
+// neither.
+const lastModified = (sourcePath ? await getLastModified(sourcePath) : null) ?? undefined;
+const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : undefined;
 ---
 
-<BaseLayout title={title} description={description} slug={slug} lastModified={lastModified}>
+<BaseLayout
+    title={title}
+    description={description}
+    slug={slug}
+    lastModified={lastModified}
+    alternate={alternate ?? (markdownUrl ? {href: markdownUrl} : undefined)}
+>
     <main
         id="main-content"
         class="flex-1 min-w-0 py-10 px-8 md:px-12 lg:px-16"

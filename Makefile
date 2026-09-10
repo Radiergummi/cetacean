@@ -1,10 +1,18 @@
-.PHONY: lint fmt fmt-check build test test-e2e check sbom sbom-check sbom-verify hooks
+.PHONY: lint typecheck fmt fmt-check build test test-e2e check sbom sbom-check sbom-verify hooks
 
 ## Lint all code
 lint:
 	golangci-lint run ./...
 	cd frontend && npx oxlint
 	cd website && npx oxlint
+
+## Type-check the frontend and the website
+# The website's error reference is generated from Go source, and `astro check`
+# type-checks the module that imports it, so the generated file has to exist
+# before the check runs.
+typecheck:
+	cd frontend && npm run check
+	cd website && npm run sync-assets && npm run check
 
 ## Format all code in place
 fmt:
@@ -45,8 +53,8 @@ test:
 test-e2e:
 	cd frontend && npx playwright test
 
-## Run all checks (lint + format check + test)
-check: lint fmt-check test
+## Run all checks (lint + type check + format check + test)
+check: lint typecheck fmt-check test
 
 ## Generate the CycloneDX SBOM (Go + frontend npm) embedded into the binary
 # The artifacts build-sbom.sh produces. Listed explicitly because

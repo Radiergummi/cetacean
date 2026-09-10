@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The documentation site is now navigable by an agent that arrives without being told how. Every page advertises its Markdown version in the page head, and every Markdown version opens with frontmatter giving its title, its description and the page it belongs to; the home page, the changelog and the schema and error references gained Markdown versions of their own, so nothing is HTML-only. `/llms.txt` lists the whole site with a description per page, `/openapi.json` (and `/openapi.yaml`) describe every URL the site serves and what each returns, and the sitemap now dates every entry
+
+### Changed
+- The Cetacean API specification the documentation site publishes moved from `/openapi.yaml` to `/api/openapi.yaml`, beside the API reference, the schema reference and the error reference. The site's own OpenAPI description now occupies the root, where a tool probing an origin looks for it — so `/openapi.json` describes the documentation site and `/api/openapi.yaml` describes Cetacean, with neither standing in for the other
+
+### Fixed
+- Documentation pages name themselves consistently. Each page's canonical URL carried a `.html` extension that no link, and no sitemap entry, ever used — nominating a second address for every page on the site
+
 ## [0.14.0] - 2026-09-10
 
 ### Added

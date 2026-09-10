@@ -6,7 +6,7 @@
   "repository": "https://github.com/Radiergummi/cetacean",
   "type": "module",
   "scripts": {
-    "sync-assets": "mkdir -p public/dist src/data && cp ../api/openapi.yaml public/openapi.yaml && cp node_modules/@scalar/api-reference/dist/browser/standalone.js public/scalar.js && cp ../compose.yaml ../compose.monitoring.yaml ../compose.prometheus.yaml ../prometheus.yml public/dist/ && (cd .. && go run ./scripts/dump-errors) > src/data/errors.json",
+    "sync-assets": "rm -f public/openapi.yaml && mkdir -p public/api public/dist src/data && cp ../api/openapi.yaml public/api/openapi.yaml && cp node_modules/@scalar/api-reference/dist/browser/standalone.js public/scalar.js && cp ../compose.yaml ../compose.monitoring.yaml ../compose.prometheus.yaml ../prometheus.yml public/dist/ && (cd .. && go run ./scripts/dump-errors) > src/data/errors.json",
     "prebuild": "npm run sync-assets",
     "predev": "npm run sync-assets",
     "dev": "astro dev",
@@ -14,6 +14,7 @@
     "build": "astro build",
     "postbuild": "pagefind --site dist",
     "preview": "astro preview",
+    "check": "astro check",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
     "lint": "oxlint"
@@ -36,11 +37,14 @@
     "playwright": "^1.63.0",
     "sirv": "^3.0.2",
     "tailwindcss": "^4.3.3",
-    "unist-util-visit": "^5.1.0"
+    "unist-util-visit": "^5.1.0",
+    "yaml": "^2.8.1"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.10",
     "oxfmt": "^0.67.0",
-    "oxlint": "^1.82.0"
+    "oxlint": "^1.82.0",
+    "typescript": "^6.0.3"
   },
   "overrides": {
     "vite": "^8.0.0"

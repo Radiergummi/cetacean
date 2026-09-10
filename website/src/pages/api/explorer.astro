@@ -1,10 +1,18 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import {generatedPage} from "@/lib/pages.ts";
+
+const {description, title} = generatedPage("/api/explorer");
 ---
 <BaseLayout
-    title="API Reference"
-    description="Interactive API reference for the Cetacean REST API."
+    title={title}
+    description={description}
     slug="api/explorer"
+    alternate={{
+        href: "/api/openapi.yaml",
+        type: "application/yaml",
+        title: "OpenAPI specification",
+    }}
 >
     <style slot="head">
         .scalar-container {
@@ -32,7 +40,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
             function init() {
                 Scalar.createApiReference("#scalar-root", {
-                    url: "/openapi.yaml",
+                    url: "/api/openapi.yaml",
                     hideDarkModeToggle: true,
                     hideSearch: true,
                     showOperationId: true,

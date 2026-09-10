@@ -5,6 +5,7 @@ import mdx from "@astrojs/mdx";
 import tailwindcss from "@tailwindcss/vite";
 import { visit } from "unist-util-visit";
 import { rehypeMermaid } from "@/lib/mermaid-diagrams.ts";
+import { lastModifiedFor } from "@/lib/pages.ts";
 import { slugify } from "@/lib/slug.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -20,9 +21,37 @@ import type {
   TableCell,
   TableRow,
 } from "mdast";
+import type { Node } from "unist";
+import type { AstroIntegration } from "astro";
 import type { Plugin as VitePlugin } from "vite";
 
 const sseGrammar = JSON.parse(readFileSync(resolve("src/lib/sse.tmLanguage.json"), "utf-8"));
+
+/**
+ * Fails the build if no sitemap was written.
+ *
+ * `@astrojs/sitemap` wraps the whole `serialize` pass in a try/catch: a throw
+ * from `lastModifiedFor` is handed to `logger.error` and the hook returns
+ * early, so `astro build` still exits 0 with no `sitemap-index.xml` in `dist/`
+ * — while `robots.txt`, `/llms.txt` and `/openapi.json` all keep advertising a
+ * URL that now 404s. The throw over an undateable page is only an invariant if
+ * something outside that catch notices, which is this. It runs after the
+ * sitemap integration because integration hooks run in declaration order.
+ */
+function sitemapRequired(): AstroIntegration {
+  return {
+    name: "cetacean:sitemap-required",
+    hooks: {
+      "astro:build:done": ({ dir }) => {
+        if (!existsSync(new URL("sitemap-index.xml", dir))) {
+          throw new Error(
+            "no sitemap was written; @astrojs/sitemap logged the reason above and swallowed it",
+          );
+        }
+      },
+    },
+  };
+}
 
 /** Serve dist/pagefind/ during dev so search works after a build. */
 function pagefindDevPlugin(): VitePlugin {
@@ -425,7 +454,7 @@ function definitionList(rows: TableRow[], compact: boolean): Paragraph {
  */
 function remarkCardTables() {
   return (tree: Root) => {
-    visit(tree, isCardsMarker, (node, index, parent) => {
+    visit(tree, isCardsMarker, (_node, index, parent) => {
       if (!parent || index === undefined) {
         return;
       }
@@ -460,13 +489,18 @@ function remarkCardTables() {
  * The marker in the only form each format has for it: an HTML comment in
  * Markdown, and the expression an MDX doc's comment parses to. Both node types
  * carry their source in `value`, so the value is the whole of the test.
+ *
+ * The parameter is a bare unist `Node` rather than an mdast `RootContent`
+ * because `mdxFlowExpression` is not one — it comes from `mdast-util-mdx`, and
+ * against `RootContent` the check for it is a comparison with no overlap. It is
+ * also what `visit` wants: a `Test` takes a `Node`.
  */
-function isCardsMarker(node: RootContent): boolean {
+function isCardsMarker(node: Node): boolean {
   if (node.type !== "html" && node.type !== "mdxFlowExpression") {
     return false;
   }
 
-  const value = "value" in node ? node.value.trim() : "";
+  const value = "value" in node ? String(node.value).trim() : "";
 
   return value === "<!-- cards -->" || value === "/* cards */";
 }
@@ -567,7 +601,16 @@ export default defineConfig({
   trailingSlash: "never",
   build: { format: "file" },
   prefetch: true,
-  integrations: [sitemap(), mdx()],
+  integrations: [
+    // Every entry carries the commit date of the file behind it. `serialize` is
+    // synchronous, so the date is read with `execFileSync`; and an unmapped URL
+    // throws rather than losing its `lastmod`, so a new page cannot ship
+    // looking as though it never changes. `sitemapRequired` is what turns that
+    // throw into a failed build, and has to follow this entry to see its work.
+    sitemap({ serialize: (item) => ({ ...item, lastmod: lastModifiedFor(item.url) }) }),
+    sitemapRequired(),
+    mdx(),
+  ],
   vite: {
     plugins: [tailwindcss(), pagefindDevPlugin()],
     // Fail on a taken port rather than quietly moving to the next one. A stray

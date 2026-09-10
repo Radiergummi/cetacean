@@ -92,7 +92,7 @@ jobs:
       - run: cd frontend && npm ci
       - run: cd frontend && npx oxlint
       - run: cd frontend && npx oxfmt --check .
-      - run: cd frontend && npx tsc -b --noEmit
+      - run: cd frontend && npm run check
 
   lint-website:
     runs-on: ubuntu-latest
@@ -103,9 +103,19 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: website/package-lock.json
+
+      # `astro check` type-checks `src/lib/errors.ts`, which imports the error
+      # reference generated from internal/api; see website/package.json's
+      # sync-assets script.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
       - run: cd website && npm ci
       - run: cd website && npx oxlint
       - run: cd website && npx oxfmt --check .
+      - run: cd website && npm run sync-assets
+      - run: cd website && npm run check
 
   test-frontend:
     runs-on: ubuntu-latest

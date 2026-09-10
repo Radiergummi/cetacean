@@ -3,13 +3,20 @@ import {getEntry} from "astro:content";
 import Head from "../components/Head.astro";
 import Header from "../components/Header.astro";
 import Hero from "../components/Hero.astro";
+import {markdownFor} from "../lib/pages";
 import "../styles/global.css";
 
 const home = await getEntry("docs", "index");
+
+if (!home) {
+    throw new Error("no docs/index entry; the home page takes its description from it");
+}
+
+const markdownUrl = markdownFor("/");
 ---
 <html lang="en">
 <head>
-    <Head title="Cetacean" description={home.data.description} isHome />
+    <Head title="Cetacean" description={home.data.description} isHome alternate={{href: markdownUrl}} />
 </head>
 <body class="min-h-screen">
 <Header currentPath="/" />

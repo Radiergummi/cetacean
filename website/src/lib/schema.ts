@@ -880,3 +880,52 @@ export function buildContext(): Record<string, unknown> {
 
   return { "@context": context };
 }
+
+/**
+ * The schema reference as Markdown, for `/api/schema.md`. Mirrors
+ * `api/schema.astro`: types first, then every property — the vocabulary's own
+ * and RFC 9457's — in one alphabetical run.
+ */
+export function schemaMarkdown(): string {
+  const allProperties = [...properties, ...rfc9457Properties].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+
+  const typeEntries = types.map(({ description, endpoint, name, properties: names }) =>
+    [
+      `### ${name}`,
+      description,
+      `- endpoint: \`${endpoint}\``,
+      names.length > 0 && `- properties: ${names.map((property) => `\`${property}\``).join(", ")}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+
+  const propertyEntries = allProperties.map(
+    ({ container, description, expectedType, iri, name, usedOn }) =>
+      [
+        `### ${name}`,
+        description,
+        `- iri: \`${iri}\``,
+        `- type: \`${expectedType}\``,
+        container && `- container: \`${container}\``,
+        usedOn.length > 0 && `- used on: ${usedOn.map((type) => `\`${type}\``).join(", ")}`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+  );
+
+  return (
+    [
+      "# Schema Reference",
+      "Cetacean API responses include [JSON-LD](https://json-ld.org/) metadata (`@context`, `@id`, `@type`) for self-description. This page documents the vocabulary. The machine-readable context document is available at [/api/schema.jsonld](/api/schema.jsonld).",
+      "## Types",
+      "Each API response includes an `@type` value identifying the resource kind.",
+      ...typeEntries,
+      "## Properties",
+      "Properties are mapped to IRIs via the `@context`. The `urn:cetacean:` namespace is the default vocabulary; [RFC 9457](https://www.rfc-editor.org/info/rfc9457/) problem detail fields use `urn:ietf:rfc:9457#`.",
+      ...propertyEntries,
+    ].join("\n\n") + "\n"
+  );
+}
