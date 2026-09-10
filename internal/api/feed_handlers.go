@@ -162,7 +162,7 @@ func searchFeedData(
 	limit int,
 ) feedData {
 	data := historyFeedData(r, title, entries, beforeID, limit)
-	data.QueryParams = []string{"q"}
+	data.QueryParams = searchFeedParams
 
 	return data
 }
@@ -452,6 +452,12 @@ func parseFeedPagination(r *http.Request) (beforeID uint64, limit int) {
 // cursor and its page size (parseFeedPagination). A feed reading anything
 // beyond these declares it in feedData.QueryParams.
 var feedPaginationParams = []string{"before", "limit"}
+
+// searchFeedParams names the parameter only the search feed reads. It is one
+// variable because two code paths need it — the route registration, for the
+// alternate Link header, and searchFeedData, for the links inside the feed —
+// and two literals would be a drift a test could only catch after the fact.
+var searchFeedParams = []string{"q"}
 
 // feedQuery returns the subset of r's query a feed's links may carry: the
 // pagination pair every feed reads, plus whatever else the caller declares.

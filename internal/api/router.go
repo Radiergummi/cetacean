@@ -66,6 +66,18 @@ func (h *Handlers) listFeeds(title string, eventType cache.EventType) feedHandle
 	}
 }
 
+// searchFeeds builds feedHandlers for the search endpoint, the one feed that
+// reads a query parameter beyond the pagination pair. It is a constructor
+// like listFeeds and detailFeeds so the declaration sits where every other
+// feed's does, rather than inline at the single route that needs it.
+func (h *Handlers) searchFeeds() feedHandlers {
+	return feedHandlers{
+		atom:        h.feedSearchHandler(renderAtom),
+		jsonFeed:    h.feedSearchHandler(renderJSONFeed),
+		queryParams: searchFeedParams,
+	}
+}
+
 // detailFeeds builds feedHandlers for a resource detail endpoint.
 func (h *Handlers) detailFeeds(
 	eventType cache.EventType,
@@ -691,15 +703,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			ThenFunc(h.HandleRemoveVolume))
 
 	// Search
-	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, feedHandlers{
-		atom:     h.feedSearchHandler(renderAtom),
-		jsonFeed: h.feedSearchHandler(renderJSONFeed),
-
-		// The one feed that reads ?q=, and so the only one whose alternate
-		// links may carry it. searchFeedData says the same on the render
-		// side; TestSearchFeedDeclaresItsQueryOnBothSides holds them together.
-		queryParams: []string{"q"},
-	}, spa))
+	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, h.searchFeeds(), spa))
 
 	// Profile
 	mux.HandleFunc("GET /profile", contentNegotiated(h.HandleProfile, feedHandlers{}, spa))

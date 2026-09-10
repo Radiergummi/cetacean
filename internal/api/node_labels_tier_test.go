@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -72,20 +74,27 @@ func TestPatchNodeLabelsIsRefusedBelowTierTwo(t *testing.T) {
 // node PATCH impactful: the Allow header is what the dashboard gates its
 // affordances on, so an out-of-date entry hides the labels editor on an API
 // that would now accept the edit. The tier is stated in two places — the
-// route's chain and this table — and only a test spanning both catches one
-// moving without the other.
+// route's chain and resourceWriteMethods — and only a test spanning both
+// catches one moving without the other.
+//
+// It calls setAllow directly, as the rest of allow_test.go does: the table
+// is all that decides this header, so a seeded router would add a cache, a
+// write client and a plugin client that no assertion here reads.
 func TestAllowHeaderOffersNodePatchAtTierTwo(t *testing.T) {
-	router := newSeededTestRouter(t, withOpsLevel(config.OpsConfiguration))
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"*"}, Audience: []string{"*"}, Permissions: []string{"write"}},
+	}})
 
-	// The node detail endpoint, not the labels sub-path: that is where the
-	// resourceWriteMethods table is consulted, and what the dashboard reads
-	// before it offers the labels editor.
-	req := httptest.NewRequest("GET", "/nodes/node1", nil)
-	req.Header.Set("Accept", "application/json")
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	h := newTestHandlers(t, withACL(evaluator), withOpsLevel(config.OpsConfiguration))
 
-	if allow := rec.Header().Get("Allow"); !strings.Contains(allow, "PATCH") {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/nodes/node1", nil)
+	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
+
+	h.setAllow(w, r, "node", "node1")
+
+	if allow := w.Header().Get("Allow"); !strings.Contains(allow, "PATCH") {
 		t.Errorf("Allow = %q at operations level 2, want PATCH offered — "+
 			"the route admits it", allow)
 	}

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
-	"github.com/klauspost/compress/zstd"
 
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -354,16 +353,7 @@ func TestCompressedResponsesKeepConditionalCaching(t *testing.T) {
 	// The body really is a zstd frame, and it decodes to the JSON an
 	// identity read would have returned — trailing newline included, since
 	// that byte has to live inside the frame rather than after it.
-	decoded, err := zstd.NewReader(nil)
-	if err != nil {
-		t.Fatalf("zstd reader: %v", err)
-	}
-	defer decoded.Close()
-
-	plain, err := decoded.DecodeAll(firstRec.Body.Bytes(), nil)
-	if err != nil {
-		t.Fatalf("response body is not a valid zstd frame: %v", err)
-	}
+	plain := decodeZstd(t, firstRec.Body.Bytes())
 
 	identity := httptest.NewRequest("GET", "/services", nil)
 	identity.Header.Set("Accept", "application/json")

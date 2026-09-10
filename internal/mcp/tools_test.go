@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"testing"
 
@@ -512,48 +513,61 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 	}
 }
 
-// update_node_labels sits one tier below update_node, and REST gates
-// PATCH /nodes/{id}/labels at the same tier 2 — so a deployment that lets an
-// agent relabel a node does not also let it demote a manager, and the
-// dashboard does not refuse an edit MCP performs.
+// restTierParity names every tool whose operation REST also exposes, with
+// the tier both transports must gate it at. The operations level has to mean
+// one thing whichever transport an operator reaches for, and this is the
+// list of places that has been checked.
 //
-// REST used to gate this at tier 3, which meant the two transports disagreed
-// about the same operation while docs/mcp-tools.mdx stated the intended
-// answer. The reciprocal test is TestPatchNodeLabelsIsAdmittedAtTierTwo in
-// internal/api; the two packages do not import each other, so this is two
-// tests naming one rule rather than one test driving both.
-func TestNodeLabelEditorMatchesTheRESTTier(t *testing.T) {
+// It exists because the rule kept being restated one tool at a time, each
+// row added after someone noticed a mismatch — three separate tests before
+// this one. A table makes the next mismatch a row rather than a function,
+// and makes the set of checked tools readable in one place.
+//
+// update_node is here without a REST counterpart of its own: it is the
+// reason update_node_labels is separate, and the split buys nothing if the
+// two ever meet at the same tier.
+var restTierParity = map[string]config.OperationsLevel{
+	"create_secret":          config.OpsConfiguration,
+	"create_config":          config.OpsConfiguration,
+	"update_service_secrets": config.OpsConfiguration,
+	"update_service_configs": config.OpsConfiguration,
+	"update_service_mounts":  config.OpsConfiguration,
+	"update_node_labels":     config.OpsConfiguration,
+	"update_node":            config.OpsImpactful,
+}
+
+// TestToolTiersMatchTheRESTRoutes fails when a tool drifts from the tier its
+// REST equivalent is gated at. update_node_labels is the case that prompted
+// the table: REST gated PATCH /nodes/{id}/labels at tier 3 while this sat at
+// tier 2, so at level 2 an agent could relabel a node while the dashboard
+// refused the same edit.
+//
+// The REST side is pinned separately — TestPatchNodeLabelsIsAdmittedAtTierTwo
+// in internal/api — because the two packages deliberately do not import each
+// other, so this is two tests naming one rule rather than one driving both.
+func TestToolTiersMatchTheRESTRoutes(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil))
 
-	var found bool
+	unseen := maps.Clone(restTierParity)
 
 	for _, def := range srv.toolCatalog() {
-		switch def.tool.Name {
-		case "update_node_labels":
-			found = true
+		want, checked := restTierParity[def.tool.Name]
+		if !checked {
+			continue
+		}
 
-			if def.tier != config.OpsConfiguration {
-				t.Errorf(
-					"update_node_labels tier = %v, want OpsConfiguration to match "+
-						"the REST route for the same operation",
-					def.tier,
-				)
-			}
+		delete(unseen, def.tool.Name)
 
-		case "update_node":
-			// The split only means anything while update_node stays above it.
-			if def.tier != config.OpsImpactful {
-				t.Errorf(
-					"update_node tier = %v, want OpsImpactful — at the same tier as "+
-						"update_node_labels the separation buys nothing",
-					def.tier,
-				)
-			}
+		if def.tier != want {
+			t.Errorf(
+				"%s tier = %v, want %v to match the REST route for the same operation",
+				def.tool.Name, def.tier, want,
+			)
 		}
 	}
 
-	if !found {
-		t.Error("update_node_labels is not registered")
+	for name := range unseen {
+		t.Errorf("%s is named in restTierParity but is not registered", name)
 	}
 }
 

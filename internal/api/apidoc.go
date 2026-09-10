@@ -30,11 +30,10 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 		panic("openapi spec could not be converted to JSON: " + err.Error())
 	}
 
-	// Both bodies are fixed for the life of the process, so their validators
-	// are hashed once here rather than on every request.
-	playground := []byte(apiPlaygroundHTML)
-	playgroundETag := computeETag(playground)
-	specETag := computeETag(specJSON)
+	// Both bodies are fixed for the life of the process, so each is hashed
+	// once and compressed at most once per coding.
+	playground := newStaticBody([]byte(apiPlaygroundHTML))
+	spec := newStaticBody(specJSON)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		ct := ContentTypeFromContext(r.Context())
@@ -44,25 +43,26 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 			w.Header().Set("Content-Type", "text/html")
 			w.Header().
 				Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
-			writeRawWithPrecomputedETag(w, r, playground, playgroundETag)
+			playground.serve(w, r)
 		default:
 			// JSON is the default for content negotiation (including */*).
 			w.Header().Set("Content-Type", "application/json")
-			writeRawWithPrecomputedETag(w, r, specJSON, specETag)
+			spec.serve(w, r)
 		}
 	}
 }
 
 // HandleScalarJS serves the embedded Scalar API reference JavaScript bundle.
-// Like the spec beside it, the bundle is fixed at build time, so its
-// validator is hashed once rather than per request.
+// At 3.7 MB it is the response that most needs staticBody: the route skips
+// authentication, so compressing it per request would let anyone spend ~68ms
+// of server CPU on a 100-byte GET.
 func HandleScalarJS(js []byte) http.HandlerFunc {
-	etag := computeETag(js)
+	bundle := newStaticBody(js)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
-		writeRawWithPrecomputedETag(w, r, js, etag)
+		bundle.serve(w, r)
 	}
 }
 

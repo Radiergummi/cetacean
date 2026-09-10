@@ -6,6 +6,8 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/klauspost/compress/zstd"
+
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -104,6 +106,26 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		cfg.recEngine,
 		cfg.aclEval,
 	)
+}
+
+// decodeZstd decompresses a zstd response body, failing the test if it is
+// not a valid frame. Three tests decode a compressed response by hand;
+// this is that block.
+func decodeZstd(t testing.TB, body []byte) []byte {
+	t.Helper()
+
+	decoder, err := zstd.NewReader(nil)
+	if err != nil {
+		t.Fatalf("zstd reader: %v", err)
+	}
+	defer decoder.Close()
+
+	plain, err := decoder.DecodeAll(body, nil)
+	if err != nil {
+		t.Fatalf("response body is not a valid zstd frame: %v", err)
+	}
+
+	return plain
 }
 
 // routerOption adjusts the RouterConfig newTestRouterWithCache assembles, for

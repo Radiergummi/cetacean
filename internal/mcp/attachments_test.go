@@ -241,56 +241,19 @@ func TestUpdateServiceConfigsDefaultsToTheRESTPath(t *testing.T) {
 	}
 }
 
-// Both editors sit at the configuration level, matching the REST route for the
-// same operation. This is a decision that was deliberately taken against the
-// spec, so it is guarded rather than left to drift back.
-func TestAttachmentEditorsMatchTheRESTTier(t *testing.T) {
-	srv := newResourceTestServer(t, cache.New(nil))
-
-	found := map[string]bool{}
-
-	for _, def := range srv.toolCatalog() {
-		switch def.tool.Name {
-		case "update_service_secrets", "update_service_configs":
-			found[def.tool.Name] = true
-
-			if def.tier != config.OpsConfiguration {
-				t.Errorf(
-					"%s tier = %v, want OpsConfiguration to match the REST route for the same operation",
-					def.tool.Name,
-					def.tier,
-				)
-			}
-		}
-	}
-
-	for _, name := range []string{"update_service_secrets", "update_service_configs"} {
-		if !found[name] {
-			t.Errorf("%s is not registered", name)
-		}
-	}
-}
-
-// update_service_mounts sits at the configuration level, matching the REST
-// route, and the tier is therefore *not* where the danger of a host bind is
-// communicated. Binding /var/run/docker.sock into a container is a root shell
+// The tier is *not* where the danger of a host bind is communicated —
+// update_service_mounts sits at the configuration level like the REST route,
+// which restTierParity in tools_test.go pins. Binding /var/run/docker.sock into a container is a root shell
 // on the host and control of the whole cluster; the tool does not refuse it —
 // an operator at this level may legitimately want it, and Cetacean does not
 // decide for the caller — so the description is the only place a model reads
 // what it is about to do.
-func TestUpdateServiceMountsMatchesTheRESTTier(t *testing.T) {
+func TestUpdateServiceMountsWarnsAboutHostBinds(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil))
 
 	for _, def := range srv.toolCatalog() {
 		if def.tool.Name != "update_service_mounts" {
 			continue
-		}
-
-		if def.tier != config.OpsConfiguration {
-			t.Errorf(
-				"tier = %v, want OpsConfiguration to match the REST route for the same operation",
-				def.tier,
-			)
 		}
 
 		description := strings.ToLower(def.tool.Description)

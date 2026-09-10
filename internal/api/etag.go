@@ -111,7 +111,29 @@ func writeRawWithPrecomputedETag(
 	data []byte,
 	etag string,
 ) {
-	coding := negotiateCoding(w, r, data)
+	writeRawNegotiated(w, r, data, etag, func(coding Encoding) []byte {
+		body, _ := encodeBody(data, coding)
+
+		return body
+	})
+}
+
+// writeRawNegotiated is the shared body of the precomputed-ETag writers: it
+// negotiates a coding, answers a matching precondition with 304 before
+// touching the body at all, and otherwise writes whatever encode returns for
+// the negotiated coding.
+//
+// encode is a function rather than bytes because a body fixed for the life of
+// the process can cache its codings, and one that is not must compress per
+// response — see staticBody.
+func writeRawNegotiated(
+	w http.ResponseWriter,
+	r *http.Request,
+	identity []byte,
+	etag string,
+	encode func(Encoding) []byte,
+) {
+	coding := negotiateCoding(w, r, identity)
 	etag = codedETag(etag, coding)
 
 	w.Header().Set("ETag", etag)
@@ -125,10 +147,8 @@ func writeRawWithPrecomputedETag(
 		return
 	}
 
-	body, _ := encodeBody(data, coding)
-
 	w.WriteHeader(http.StatusOK)
-	w.Write(body) //nolint:errcheck
+	w.Write(encode(coding)) //nolint:errcheck
 }
 
 // writeCachedJSON marshals v to JSON with ETag-based conditional caching.

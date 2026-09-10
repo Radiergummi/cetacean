@@ -6,8 +6,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/klauspost/compress/zstd"
 )
 
 // The API documentation endpoints serve two bodies fixed at startup — the
@@ -71,16 +69,7 @@ func TestAPIDocsAreCompressed(t *testing.T) {
 				t.Fatalf("Content-Encoding = %q, want zstd", got)
 			}
 
-			decoder, err := zstd.NewReader(nil)
-			if err != nil {
-				t.Fatalf("zstd reader: %v", err)
-			}
-			defer decoder.Close()
-
-			plain, err := decoder.DecodeAll(rec.Body.Bytes(), nil)
-			if err != nil {
-				t.Fatalf("body is not a valid zstd frame: %v", err)
-			}
+			plain := decodeZstd(t, rec.Body.Bytes())
 			if !strings.Contains(string(plain), route.contains) {
 				t.Errorf("decompressed body does not contain %q", route.contains)
 			}
