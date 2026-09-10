@@ -327,9 +327,8 @@ more than one SPIFFE SAN. Groups come from Organizational Unit (OU) fields.
 
 ### Behind a TLS-terminating proxy
 
-Cetacean does not have to terminate TLS itself. A proxy that does can forward the certificate it verified in the
-[`Client-Cert`](https://www.rfc-editor.org/rfc/rfc9440) header, and identity is built from it exactly as it would
-be from a directly presented one:
+A proxy that terminates TLS forwards the certificate it verified in the [`Client-Cert`][rfc9440] header, and
+identity is built from it exactly as from a directly presented one:
 
 ```yaml
 environment:
@@ -337,15 +336,13 @@ environment:
   CETACEAN_TRUSTED_PROXIES: "10.0.0.0/8"
 ```
 
-> [!WARNING]
-> The header is accepted **only** from an address in [`server.trusted_proxies`][server.trusted_proxies], and one
-> of the two—TLS here, or a trusted proxy—is required for cert mode to start. Anyone able to reach Cetacean
-> directly can set the header, so the proxy must also strip any `Client-Cert` arriving from its own clients.
+The proxy verifies the certificate against its own CA; [`auth.cert.ca`][auth.cert.ca] configures Cetacean's own
+TLS listener and is not consulted here. A certificate presented directly always wins over the header, and
+`Client-Cert-Chain` is ignored. One of the two—TLS here, or a trusted proxy—is required for cert mode to start.
 
-The proxy is responsible for verifying the certificate against a CA:
-[`auth.cert.ca`][auth.cert.ca] configures Cetacean's own TLS listener and is not consulted for a forwarded
-certificate. A certificate presented directly to Cetacean always wins over the header.
-`Client-Cert-Chain` is ignored—it carries the issuer chain for a party doing its own validation.
+> [!WARNING]
+> The header is honoured **only** from an address in [`server.trusted_proxies`][server.trusted_proxies], so the
+> proxy must strip any `Client-Cert` its own clients send.
 
 ## Trusted proxy headers
 
@@ -537,12 +534,12 @@ response schemas.
 
 [acl.oidc_claim]: configuration#acl.oidc_claim
 [api]: api
+[auth.cert.ca]: configuration#auth.cert.ca
 [auth.headers.subject]: configuration#auth.headers.subject
 [auth.headers.trusted_proxies]: configuration#auth.headers.trusted_proxies
 [auth.mode]: configuration#auth.mode
 [auth.oidc.client_id]: configuration#auth.oidc.client_id
 [auth.oidc.client_secret]: configuration#auth.oidc.client_secret
-[auth.cert.ca]: configuration#auth.cert.ca
 [auth.oidc.issuer]: configuration#auth.oidc.issuer
 [auth.oidc.redirect_url]: configuration#auth.oidc.redirect_url
 [auth.oidc.session_key]: configuration#auth.oidc.session_key
@@ -554,6 +551,7 @@ response schemas.
 [getting-started]: getting-started
 [mcp]: mcp
 [oidc]: configuration#oidc
+[rfc9440]: https://www.rfc-editor.org/rfc/rfc9440
 [server.listen_addr]: configuration#server.listen_addr
 [server.public_url]: configuration#server.public_url
 [server.trusted_proxies]: configuration#server.trusted_proxies

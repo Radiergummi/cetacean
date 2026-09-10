@@ -130,7 +130,8 @@ func main() {
 		os.Exit(1)
 	}
 	if authCfg.Mode == "cert" {
-		if err := config.ValidateCertMode(tlsCfg.Enabled(), cfg.TrustedProxies); err != nil {
+		err := config.ValidateCertMode(tlsCfg.Enabled(), authCfg.Cert.CA, cfg.TrustedProxies)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
@@ -491,7 +492,10 @@ func main() {
 	})
 
 	var serverTLSConfig *tls.Config
-	if authCfg.Mode == "cert" {
+	// Only where we terminate TLS ourselves: behind a TLS-terminating proxy
+	// the client certificate arrives in a header the proxy already verified,
+	// and this config would never be consulted.
+	if authCfg.Mode == "cert" && tlsCfg.Enabled() {
 		caCert, err := os.ReadFile(filepath.Clean(authCfg.Cert.CA))
 		if err != nil {
 			slog.Error("failed to read CA cert", "error", err)
