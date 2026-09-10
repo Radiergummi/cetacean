@@ -9,13 +9,14 @@ interface Props {
   description: string;
   slug: string;
   lastModified?: Date;
+  alternate?: { href: string; type?: string; title?: string };
 }
 
-const { title, description, slug, lastModified } = Astro.props;
+const { title, description, slug, lastModified, alternate } = Astro.props;
 ---
 <html lang="en">
   <head>
-    <Head title={title} description={description} lastModified={lastModified} />
+    <Head title={title} description={description} lastModified={lastModified} alternate={alternate} />
     <slot name="head" />
   </head>
 

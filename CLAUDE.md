@@ -26,16 +26,33 @@ npm run build:widgets                     # Build the MCP Apps widgets to fronte
 npm run lint                              # oxlint
 npm run fmt                               # oxfmt (write)
 npm run fmt:check                         # oxfmt (check only)
-npx tsc -b --noEmit                       # Type check only (faster than full build)
+npm run check                             # Type check only (tsc -b --noEmit; faster than a full build)
 npx vitest run                            # Run all frontend tests
 ```
+
+### Website
+```bash
+cd website
+npm install                               # Install dependencies
+npm run sync-assets                       # Copy/generate the build inputs (needs the Go toolchain)
+npm run dev                               # Astro dev server on :4321
+npm run build                             # Build to website/dist/
+npm run lint                              # oxlint
+npm run fmt:check                         # oxfmt (check only)
+npm run check                             # Type check (astro check; covers .astro templates as well as .ts)
+```
+
+`npm run check` needs `src/data/errors.json`, which `sync-assets` generates from `internal/api` — run
+`sync-assets` first in a clean checkout. `tsconfig.json` excludes `public/`: Astro's base config enables
+`allowJs` over `**/*`, and type-checking the bundled Scalar and demo-SPA assets there exhausts the heap.
 
 ### Lint & Format (Makefile)
 ```bash
 make lint                                 # golangci-lint + oxlint
+make typecheck                            # tsc (frontend) + astro check (website)
 make fmt                                  # gofmt + oxfmt (write)
 make fmt-check                            # Check formatting without modifying
-make check                                # lint + fmt-check + test
+make check                                # lint + typecheck + fmt-check + test
 make test                                 # go test ./...
 make build                                # frontend build + go build
 make sbom                                 # regenerate the committed SBOM + attribution

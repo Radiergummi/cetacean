@@ -1,3 +1,8 @@
 User-agent: *
 Allow: /
-Sitemap: /sitemap-index.xml
+
+Sitemap: https://cetacean.mazetti.me/sitemap-index.xml
+
+# Every page is also served as Markdown at the same path with `.md` appended.
+# https://cetacean.mazetti.me/llms.txt lists them all.
+# https://cetacean.mazetti.me/openapi.json describes every URL this site serves.
