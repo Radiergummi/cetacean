@@ -31,7 +31,7 @@ func renderJSONFeed(w http.ResponseWriter, r *http.Request, data feedData) {
 	}
 
 	if data.LastItemID > 0 && len(data.Entries) == data.Limit {
-		nextQuery := feedQuery(r)
+		nextQuery := feedQuery(r, data)
 		nextQuery.Set("before", fmt.Sprintf("%d", data.LastItemID))
 		nextQuery.Set("limit", fmt.Sprintf("%d", data.Limit))
 

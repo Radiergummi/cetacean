@@ -300,6 +300,17 @@ func testFeedData(
 	return historyFeedData(r, "test", entries, beforeID, limit)
 }
 
+// testSearchFeedData is the search feed's own shape, which differs from every
+// other feed's in exactly one way: it reads ?q=, so its links may carry it.
+func testSearchFeedData(
+	r *http.Request,
+	entries []cache.HistoryEntry,
+	beforeID uint64,
+	limit int,
+) feedData {
+	return searchFeedData(r, "test", entries, beforeID, limit)
+}
+
 func TestPaginationLinks(t *testing.T) {
 	t.Run("self and alternate only when not full page", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
@@ -367,19 +378,50 @@ func TestPaginationLinks(t *testing.T) {
 	// there into a compressed body, beside ACL-filtered resource names — the
 	// BREACH shape the search endpoints refuse to compress at all. Only the
 	// parameters a feed actually reads may appear in one.
-	t.Run("links carry only the params the feed reads", func(t *testing.T) {
+	//
+	// "Actually reads" is per-feed, not global: ?q= is read by the search
+	// feed alone, and /history is compressed, so echoing q there would
+	// rebuild the same shape one parameter wide. Both directions are
+	// asserted — a fix that simply dropped q everywhere would pass the
+	// refusal below while silently breaking the search feed's own links.
+	t.Run("a feed that does not read a param never echoes it", func(t *testing.T) {
 		req := httptest.NewRequest(
 			"GET",
-			"/history?before=100&limit=50&canary=BREACH&q=web",
+			"/history?before=100&limit=50&canary=BREACH&q=BREACHCANARY",
 			nil,
 		)
 		entries := make([]cache.HistoryEntry, 50)
 		entries[49].ID = 42
 
 		for _, l := range atomPaginationLinks(req, testFeedData(req, entries, 100, 50)) {
-			if strings.Contains(l.Href, "canary") || strings.Contains(l.Href, "BREACH") {
-				t.Errorf("%s href %q reflects an unread query parameter", l.Rel, l.Href)
+			for _, forbidden := range []string{"canary", "BREACH", "q="} {
+				if strings.Contains(l.Href, forbidden) {
+					t.Errorf(
+						"%s href %q reflects %q, which /history never reads",
+						l.Rel, l.Href, forbidden,
+					)
+				}
 			}
+		}
+	})
+
+	t.Run("the search feed still carries the q it reads", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/search?q=myservice&canary=BREACH", nil)
+		entries := make([]cache.HistoryEntry, 50)
+		entries[49].ID = 42
+
+		var sawQ bool
+		for _, l := range atomPaginationLinks(req, testSearchFeedData(req, entries, 0, 50)) {
+			if strings.Contains(l.Href, "q=myservice") {
+				sawQ = true
+			}
+			if strings.Contains(l.Href, "canary") {
+				t.Errorf("%s href %q reflects a param no feed reads", l.Rel, l.Href)
+			}
+		}
+
+		if !sawQ {
+			t.Error("no link carried q=myservice; the search feed reads it and must keep it")
 		}
 	})
 
@@ -423,11 +465,11 @@ func TestPaginationLinks(t *testing.T) {
 		}
 	})
 
-	t.Run("next link preserves existing query params", func(t *testing.T) {
+	t.Run("next link preserves the search feed's own query params", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/search?q=myservice", nil)
 		entries := make([]cache.HistoryEntry, 50)
 		entries[49].ID = 42
-		links := atomPaginationLinks(req, testFeedData(req, entries, 0, 50))
+		links := atomPaginationLinks(req, testSearchFeedData(req, entries, 0, 50))
 
 		var nextHref string
 		for _, l := range links {
@@ -483,7 +525,7 @@ func TestPaginationLinks_StaleCursorPreservesQueryParams(t *testing.T) {
 	req := httptest.NewRequest("GET", "/search?q=myservice&before=9999&limit=50", nil)
 	entries := []cache.HistoryEntry{} // empty — cursor was evicted
 
-	links := atomPaginationLinks(req, testFeedData(req, entries, 9999, 50))
+	links := atomPaginationLinks(req, testSearchFeedData(req, entries, 9999, 50))
 
 	var currentHref string
 	for _, l := range links {

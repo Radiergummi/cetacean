@@ -33,6 +33,11 @@ type feedData struct {
 	BeforeID   uint64
 	Limit      int
 	LastItemID uint64 // numeric ID of last entry for pagination cursors
+
+	// QueryParams names the query parameters this particular feed reads
+	// beyond the pagination pair, and so the only ones its links may echo
+	// back. Only the search feed has any — see feedQuery.
+	QueryParams []string
 }
 
 // feedRenderer writes a feed in a specific format (Atom, JSON Feed, etc.).
@@ -142,9 +147,26 @@ func (h *Handlers) handleFeedSearch(
 
 	// This feed titles itself with ?q= verbatim beside ACL-filtered entries,
 	// the same BREACH shape HandleSearch opts out of, so it opts out too.
-	render(w, disableCompression(r), historyFeedData(
+	render(w, disableCompression(r), searchFeedData(
 		r, fmt.Sprintf("Cetacean — Search: %s", q), entries, beforeID, limit,
 	))
+}
+
+// searchFeedData is historyFeedData for the search feed, the one feed that
+// reads ?q= and so the only one whose links may carry it back. That it is
+// also the one feed served uncompressed is what makes echoing it safe;
+// handleFeedSearch pairs this with disableCompression for that reason.
+func searchFeedData(
+	r *http.Request,
+	title string,
+	entries []cache.HistoryEntry,
+	beforeID uint64,
+	limit int,
+) feedData {
+	data := historyFeedData(r, title, entries, beforeID, limit)
+	data.QueryParams = []string{"q"}
+
+	return data
 }
 
 // handleFeedRecommendations queries recommendations and renders them using the
@@ -428,14 +450,13 @@ func parseFeedPagination(r *http.Request) (beforeID uint64, limit int) {
 	return beforeID, limit
 }
 
-// feedQueryParams names every query parameter a feed handler actually reads:
-// the pagination cursor and its page size (parseFeedPagination), plus the
-// search feed's term (handleFeedSearch). Nothing else in a request's query
-// changes what a feed contains.
-var feedQueryParams = []string{"q", "before", "limit"}
+// feedPaginationParams names the query parameters every feed reads: the
+// cursor and its page size (parseFeedPagination). A feed reading anything
+// beyond these declares it in feedData.QueryParams.
+var feedPaginationParams = []string{"before", "limit"}
 
-// feedQuery returns the subset of r's query named by feedQueryParams, for a
-// caller to adjust and encode into a feed link.
+// feedQuery returns the subset of r's query this feed's links may carry: the
+// pagination pair every feed reads, plus whatever else data declared.
 //
 // Feed links are built from this rather than from the request's raw query
 // because the rest of it is attacker-chosen text: reflected verbatim into a
@@ -443,15 +464,26 @@ var feedQueryParams = []string{"q", "before", "limit"}
 // which is the BREACH shape HandleSearch and handleFeedSearch already refuse
 // to compress at all. Dropping what the feed never read costs nothing and
 // leaves no reflection to reason about.
-func feedQuery(r *http.Request) url.Values {
+//
+// The set is per-feed rather than global because "what a feed reads" is not
+// one answer: ?q= is read by handleFeedSearch alone, and echoing it from
+// /history — which is compressed — would rebuild that same shape one
+// parameter wide. The one feed allowed to echo it is also the one served
+// uncompressed.
+func feedQuery(r *http.Request, data feedData) url.Values {
 	source := r.URL.Query()
-	kept := make(url.Values, len(feedQueryParams))
+	kept := make(url.Values, len(feedPaginationParams)+len(data.QueryParams))
 
-	for _, name := range feedQueryParams {
-		if values, ok := source[name]; ok {
-			kept[name] = values
+	keep := func(names []string) {
+		for _, name := range names {
+			if values, ok := source[name]; ok {
+				kept[name] = values
+			}
 		}
 	}
+
+	keep(feedPaginationParams)
+	keep(data.QueryParams)
 
 	return kept
 }
