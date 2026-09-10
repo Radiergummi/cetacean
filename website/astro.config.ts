@@ -21,9 +21,36 @@ import type {
   TableCell,
   TableRow,
 } from "mdast";
+import type { AstroIntegration } from "astro";
 import type { Plugin as VitePlugin } from "vite";
 
 const sseGrammar = JSON.parse(readFileSync(resolve("src/lib/sse.tmLanguage.json"), "utf-8"));
+
+/**
+ * Fails the build if no sitemap was written.
+ *
+ * `@astrojs/sitemap` wraps the whole `serialize` pass in a try/catch: a throw
+ * from `lastModifiedFor` is handed to `logger.error` and the hook returns
+ * early, so `astro build` still exits 0 with no `sitemap-index.xml` in `dist/`
+ * — while `robots.txt`, `/llms.txt` and `/openapi.json` all keep advertising a
+ * URL that now 404s. The throw over an undateable page is only an invariant if
+ * something outside that catch notices, which is this. It runs after the
+ * sitemap integration because integration hooks run in declaration order.
+ */
+function sitemapRequired(): AstroIntegration {
+  return {
+    name: "cetacean:sitemap-required",
+    hooks: {
+      "astro:build:done": ({ dir }) => {
+        if (!existsSync(new URL("sitemap-index.xml", dir))) {
+          throw new Error(
+            "no sitemap was written; @astrojs/sitemap logged the reason above and swallowed it",
+          );
+        }
+      },
+    },
+  };
+}
 
 /** Serve dist/pagefind/ during dev so search works after a build. */
 function pagefindDevPlugin(): VitePlugin {
@@ -572,8 +599,10 @@ export default defineConfig({
     // Every entry carries the commit date of the file behind it. `serialize` is
     // synchronous, so the date is read with `execFileSync`; and an unmapped URL
     // throws rather than losing its `lastmod`, so a new page cannot ship
-    // looking as though it never changes.
+    // looking as though it never changes. `sitemapRequired` is what turns that
+    // throw into a failed build, and has to follow this entry to see its work.
     sitemap({ serialize: (item) => ({ ...item, lastmod: lastModifiedFor(item.url) }) }),
+    sitemapRequired(),
     mdx(),
   ],
   vite: {

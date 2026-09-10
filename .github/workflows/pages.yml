@@ -34,9 +34,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The sitemap's `lastmod` and every page's modified date come from the
-          # last commit that touched the file. A shallow clone holds one commit,
-          # so `git log -1 -- <path>` answers for almost nothing and the build
-          # fails rather than publishing dateless entries.
+          # last commit that touched the file. A shallow clone holds one commit
+          # with no parent, so `git log -1 -- <path>` reports *its* date for
+          # every path — every page would carry the date of the deploy. The
+          # build refuses a shallow clone rather than publish that.
           fetch-depth: 0
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

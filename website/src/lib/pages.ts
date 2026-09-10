@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { getLastModifiedSync } from "./git";
+import { getLastModifiedSync, isShallowSync } from "./git";
 
 /**
  * A page this site serves that is not a doc in the content collection: the home
@@ -133,17 +133,23 @@ export function sourceForPath(pathname: string): string {
 /**
  * The `lastmod` for one sitemap entry. Throwing rather than omitting the date is
  * the point: a page added without a source mapping fails `astro build` instead
- * of shipping a sitemap entry that never appears to change.
+ * of shipping a sitemap entry that never appears to change. `sitemapRequired`
+ * in `astro.config.ts` is what makes a throw here fail the build — the sitemap
+ * integration itself catches and logs whatever `serialize` raises.
  */
 export function lastModifiedFor(url: string): string {
+  if (isShallowSync()) {
+    throw new Error(
+      "a shallow clone dates every page from its one commit; check out with fetch-depth: 0",
+    );
+  }
+
   const { pathname } = new URL(url);
   const source = sourceForPath(pathname === "/" ? "/" : pathname.replace(/\/$/, ""));
   const modified = getLastModifiedSync(source);
 
   if (!modified) {
-    throw new Error(
-      `no commit dates ${source}; a shallow clone cannot date it — set fetch-depth: 0`,
-    );
+    throw new Error(`no commit in this clone touches ${source}; commit it before building`);
   }
 
   return modified.toISOString();
