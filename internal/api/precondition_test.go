@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -533,6 +535,45 @@ func seededWriteClient() *mockWriteClient {
 // resource type the paired endpoints address, plus write and plugin clients
 // that accept every write in pairedEndpoints. Each subtest gets its own, so a
 // row that removes a resource cannot affect the next.
+// TestPreconditionDistinguishesAnUnreachableBackend covers the one builder that
+// reads the daemon rather than the cache. A plugin that is genuinely gone has
+// no current representation and is a 412; a daemon that could not be reached
+// leaves the condition unevaluable, and answering 412 there would tell the
+// caller its validator is stale when nothing about the resource has changed.
+func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
+	cases := []struct {
+		name       string
+		inspectErr error
+		wantStatus int
+	}{
+		{"missing plugin", cerrdefs.ErrNotFound, http.StatusPreconditionFailed},
+		{"daemon unavailable", cerrdefs.ErrUnavailable, http.StatusServiceUnavailable},
+		{"unexpected failure", errors.New("boom"), http.StatusInternalServerError},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := cache.New(nil)
+			router := newTestRouterWithCache(t, c, withPluginClient(&mockPluginClient{
+				pluginInspectFn: func(context.Context, string) (*types.Plugin, error) {
+					return nil, tc.inspectErr
+				},
+				pluginRemoveFn: func(context.Context, string, bool) error { return nil },
+			}))
+
+			req := httptest.NewRequest("DELETE", "/plugins/plug1", nil)
+			req.Header.Set("If-Match", `"whatever"`)
+
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Errorf("DELETE /plugins/plug1 = %d, want %d", rec.Code, tc.wantStatus)
+			}
+		})
+	}
+}
+
 func newSeededTestRouter(t testing.TB) http.Handler {
 	t.Helper()
 

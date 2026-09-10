@@ -575,6 +575,10 @@ header ([RFC 9110 §13.1.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.1.
 refused with `412 Precondition Failed` (error code `API013`) instead of being applied. The header
 is always optional — omit it and the write proceeds exactly as it did before this existed.
 
+A `412` always means the resource moved. Where the current representation cannot be read at all —
+`DELETE /plugins/{name}` inspects the daemon rather than the cache — the write answers `503`
+(`ENG001`) or `500` (`ENG004`) instead, so an unreachable daemon is not reported as a stale `ETag`.
+
 30 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
 `PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
 `PUT /services/{id}/placement`, `PATCH /services/{id}/ports`,

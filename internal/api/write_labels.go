@@ -38,13 +38,13 @@ func (spec getLabelsSpec[T]) detail(r *http.Request, item T) DetailResponse {
 
 // representation is the spec's representationFunc, for wiring an If-Match
 // precondition onto the paired PATCH.
-func (spec getLabelsSpec[T]) representation(r *http.Request) (any, bool) {
+func (spec getLabelsSpec[T]) representation(r *http.Request) (any, error) {
 	item, ok := spec.getter(r.PathValue(spec.pathKey))
 	if !ok {
-		return nil, false
+		return nil, errNoRepresentation
 	}
 
-	return spec.detail(r, item), true
+	return spec.detail(r, item), nil
 }
 
 // patchLabelsSpec describes how to patch labels for a resource type.

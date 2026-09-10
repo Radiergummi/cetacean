@@ -1,8 +1,11 @@
 package api
 
 import (
+	"errors"
+	"log/slog"
 	"net/http"
 
+	cerrdefs "github.com/containerd/errdefs"
 	json "github.com/goccy/go-json"
 )
 
@@ -20,13 +23,29 @@ func (h *Handlers) precond(rep representationFunc) Constructor {
 				return
 			}
 
-			value, ok := rep(r)
-			if !ok {
+			value, err := rep(r)
+			switch {
+			case errors.Is(err, errNoRepresentation):
 				// RFC 9110 §13.2.2: no current representation means the
 				// precondition fails. 412, not 404 — evaluating the condition
 				// comes first.
 				writeErrorCode(w, r, "API013",
 					"the resource has no current representation")
+				return
+			case err != nil:
+				// The condition could not be evaluated at all. Reporting 412
+				// here would tell the caller its validator is stale, which is
+				// a different problem with a different fix.
+				slog.Error("failed to build a precondition representation",
+					"path", r.URL.Path, "error", err)
+
+				if cerrdefs.IsUnavailable(err) {
+					writeErrorCode(w, r, "ENG001", err.Error())
+					return
+				}
+
+				writeErrorCode(w, r, "ENG004",
+					"failed to read the current representation")
 				return
 			}
 

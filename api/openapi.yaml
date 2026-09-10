@@ -1665,6 +1665,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "503":
+          $ref: "#/components/responses/BackendUnavailable"
 
   /plugins/{name}/enable:
     post:
@@ -5936,6 +5938,20 @@ components:
             instance: /services/r8m2x5nk3p7q/env
             requestId: req_a1b2c3d4e5f6
 
+    BackendUnavailable:
+      description: The Docker Engine could not be reached, so the request could not be evaluated
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            "@context": /api/context.jsonld
+            type: /api/errors/ENG001
+            title: Docker Engine Unavailable
+            status: 503
+            detail: "error during connect: Get \"http://docker/v1.51/plugins/vieux/sshfs:latest/json\": EOF"
+            instance: /plugins/vieux/sshfs:latest
+            requestId: req_a1b2c3d4e5f6
     Forbidden:
       description: Access denied by operations level or ACL
       content:

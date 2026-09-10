@@ -2,10 +2,12 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -15,18 +17,22 @@ import (
 	"github.com/radiergummi/cetacean/internal/integrations"
 )
 
+// errNoRepresentation reports that the resource has no current representation,
+// as distinct from one that could not be determined. Only the first is a
+// precondition failure; a backend that could not be reached leaves the
+// condition unevaluable, and saying "your validator is stale" would be a lie.
+var errNoRepresentation = errors.New("api: no current representation")
+
 // representationFunc builds the value a GET at this URI would serialize, so a
 // precondition can be compared against the exact ETag that GET emits.
 //
-// It reports false when the resource does not exist and must never write to the
-// response: the precondition middleware answers that with 412 and the GET
-// handler with 404. That is why a paired handler looks its resource up twice —
-// once for its ACL check, which writes its own 403/404, and once here.
-type representationFunc func(*http.Request) (any, bool)
+// It returns errNoRepresentation when the resource does not exist, and must
+// never write to the response: the precondition middleware answers that with
+// 412 and the GET handler with 404. That is why a paired handler looks its
+// resource up twice — once for its ACL check, which writes its own 403/404,
+// and once here.
+type representationFunc func(*http.Request) (any, error)
 
-// representationOr404 evaluates a paired GET's representation builder and,
-// when the resource is gone, answers with that resource's own not-found code.
-// The builder cannot write the 404 itself without breaking the 412-vs-404 rule.
 // writeServiceRepresentation is the tail every service sub-resource GET shares:
 // build the representation, answer 404 if the service vanished since the ACL
 // check, and write it with its ETag.
@@ -44,23 +50,33 @@ func (h *Handlers) writeServiceRepresentation(
 	writeCachedJSON(w, r, value)
 }
 
+// representationOr404 evaluates a paired GET's representation builder and, when
+// the resource is gone, answers with that resource's own not-found code. The
+// builder cannot write the 404 itself without breaking the 412-vs-404 rule.
 func representationOr404(
 	w http.ResponseWriter,
 	r *http.Request,
 	resource, key string,
 	rep representationFunc,
 ) (any, bool) {
-	value, ok := rep(r)
-	if !ok {
+	value, err := rep(r)
+	switch {
+	case errors.Is(err, errNoRepresentation):
 		writeErrorCode(
 			w,
 			r,
 			notFoundCodes[resource],
 			fmt.Sprintf("%s %q not found", resource, key),
 		)
+
+		return nil, false
+	case err != nil:
+		writeDockerError(w, r, err, resource, key)
+
+		return nil, false
 	}
 
-	return value, ok
+	return value, true
 }
 
 // serviceSubResource builds the representation of a service sub-resource:
@@ -71,10 +87,10 @@ func (h *Handlers) serviceSubResource(
 	suffix string,
 	typeName string,
 	body func(swarm.Service) any,
-) (any, bool) {
+) (any, error) {
 	svc, ok := h.cache.GetService(r.PathValue("id"))
 	if !ok {
-		return nil, false
+		return nil, errNoRepresentation
 	}
 
 	return NewDetailResponse(
@@ -82,12 +98,12 @@ func (h *Handlers) serviceSubResource(
 		"/services/"+svc.ID+suffix,
 		typeName,
 		body(svc),
-	), true
+	), nil
 }
 
 // --- Service sub-resources ---
 
-func (h *Handlers) serviceEnvRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceEnvRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(r, "/env", "ServiceEnv", func(svc swarm.Service) any {
 		var env []string
 		if svc.Spec.TaskTemplate.ContainerSpec != nil {
@@ -98,7 +114,7 @@ func (h *Handlers) serviceEnvRepresentation(r *http.Request) (any, bool) {
 	})
 }
 
-func (h *Handlers) serviceResourcesRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceResourcesRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(r, "/resources", "ServiceResources", func(svc swarm.Service) any {
 		resources := svc.Spec.TaskTemplate.Resources
 		if resources == nil {
@@ -109,7 +125,7 @@ func (h *Handlers) serviceResourcesRepresentation(r *http.Request) (any, bool) {
 	})
 }
 
-func (h *Handlers) servicePortsRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) servicePortsRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(r, "/ports", "ServicePorts", func(svc swarm.Service) any {
 		var ports []swarm.PortConfig
 		if svc.Spec.EndpointSpec != nil {
@@ -123,7 +139,7 @@ func (h *Handlers) servicePortsRepresentation(r *http.Request) (any, bool) {
 	})
 }
 
-func (h *Handlers) serviceHealthcheckRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceHealthcheckRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(
 		r,
 		"/healthcheck",
@@ -139,7 +155,7 @@ func (h *Handlers) serviceHealthcheckRepresentation(r *http.Request) (any, bool)
 	)
 }
 
-func (h *Handlers) servicePlacementRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) servicePlacementRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(r, "/placement", "ServicePlacement", func(svc swarm.Service) any {
 		placement := svc.Spec.TaskTemplate.Placement
 		if placement == nil {
@@ -150,7 +166,7 @@ func (h *Handlers) servicePlacementRepresentation(r *http.Request) (any, bool) {
 	})
 }
 
-func (h *Handlers) serviceUpdatePolicyRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceUpdatePolicyRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(
 		r,
 		"/update-policy",
@@ -166,7 +182,7 @@ func (h *Handlers) serviceUpdatePolicyRepresentation(r *http.Request) (any, bool
 	)
 }
 
-func (h *Handlers) serviceRollbackPolicyRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceRollbackPolicyRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(
 		r,
 		"/rollback-policy",
@@ -182,13 +198,13 @@ func (h *Handlers) serviceRollbackPolicyRepresentation(r *http.Request) (any, bo
 	)
 }
 
-func (h *Handlers) serviceLogDriverRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceLogDriverRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(r, "/log-driver", "ServiceLogDriver", func(svc swarm.Service) any {
 		return map[string]any{"logDriver": svc.Spec.TaskTemplate.LogDriver}
 	})
 }
 
-func (h *Handlers) serviceContainerConfigRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceContainerConfigRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(
 		r,
 		"/container-config",
@@ -201,7 +217,7 @@ func (h *Handlers) serviceContainerConfigRepresentation(r *http.Request) (any, b
 	)
 }
 
-func (h *Handlers) serviceConfigsRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceConfigsRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(r, "/configs", "ServiceConfigs", func(svc swarm.Service) any {
 		return map[string]any{
 			"configs": extractConfigRefs(svc.Spec.TaskTemplate.ContainerSpec),
@@ -209,7 +225,7 @@ func (h *Handlers) serviceConfigsRepresentation(r *http.Request) (any, bool) {
 	})
 }
 
-func (h *Handlers) serviceSecretsRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceSecretsRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(r, "/secrets", "ServiceSecrets", func(svc swarm.Service) any {
 		return map[string]any{
 			"secrets": extractSecretRefs(svc.Spec.TaskTemplate.ContainerSpec),
@@ -217,7 +233,7 @@ func (h *Handlers) serviceSecretsRepresentation(r *http.Request) (any, bool) {
 	})
 }
 
-func (h *Handlers) serviceNetworksRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceNetworksRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(r, "/networks", "ServiceNetworks", func(svc swarm.Service) any {
 		return map[string]any{
 			"networks": extractNetworkRefs(svc.Spec.TaskTemplate.Networks),
@@ -225,7 +241,7 @@ func (h *Handlers) serviceNetworksRepresentation(r *http.Request) (any, bool) {
 	})
 }
 
-func (h *Handlers) serviceMountsRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceMountsRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(r, "/mounts", "ServiceMounts", func(svc swarm.Service) any {
 		var mounts []mount.Mount
 		if svc.Spec.TaskTemplate.ContainerSpec != nil {
@@ -239,7 +255,7 @@ func (h *Handlers) serviceMountsRepresentation(r *http.Request) (any, bool) {
 	})
 }
 
-func (h *Handlers) serviceModeRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceModeRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(r, "/mode", "ServiceMode", func(svc swarm.Service) any {
 		mode := "replicated"
 		var replicas *uint64
@@ -256,7 +272,7 @@ func (h *Handlers) serviceModeRepresentation(r *http.Request) (any, bool) {
 	})
 }
 
-func (h *Handlers) serviceEndpointModeRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceEndpointModeRepresentation(r *http.Request) (any, error) {
 	return h.serviceSubResource(
 		r,
 		"/endpoint-mode",
@@ -274,10 +290,10 @@ func (h *Handlers) serviceEndpointModeRepresentation(r *http.Request) (any, bool
 
 // --- Node sub-resources ---
 
-func (h *Handlers) nodeRoleRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) nodeRoleRepresentation(r *http.Request) (any, error) {
 	node, ok := h.cache.GetNode(r.PathValue("id"))
 	if !ok {
-		return nil, false
+		return nil, errNoRepresentation
 	}
 
 	return NewDetailResponse(
@@ -289,7 +305,7 @@ func (h *Handlers) nodeRoleRepresentation(r *http.Request) (any, bool) {
 			IsLeader:     node.ManagerStatus != nil && node.ManagerStatus.Leader,
 			ManagerCount: h.managerCount(),
 		},
-	), true
+	), nil
 }
 
 // managerCount counts the manager nodes in the cluster, the peer context the
@@ -307,12 +323,12 @@ func (h *Handlers) managerCount() int {
 
 // --- Resource roots ---
 
-func (h *Handlers) serviceRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) serviceRepresentation(r *http.Request) (any, error) {
 	id := r.PathValue("id")
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		return nil, false
+		return nil, errNoRepresentation
 	}
 
 	detail := ServiceResponse{Service: svc}
@@ -323,42 +339,42 @@ func (h *Handlers) serviceRepresentation(r *http.Request) (any, bool) {
 		detail.Integrations = detected
 	}
 
-	return NewDetailResponse(r.Context(), "/services/"+id, "Service", detail), true
+	return NewDetailResponse(r.Context(), "/services/"+id, "Service", detail), nil
 }
 
-func (h *Handlers) nodeRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) nodeRepresentation(r *http.Request) (any, error) {
 	id := r.PathValue("id")
 
 	node, ok := h.cache.GetNode(id)
 	if !ok {
-		return nil, false
+		return nil, errNoRepresentation
 	}
 
 	return NewDetailResponse(r.Context(), "/nodes/"+id, "Node", NodeResponse{
 		Node: node,
-	}), true
+	}), nil
 }
 
-func (h *Handlers) configRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) configRepresentation(r *http.Request) (any, error) {
 	id := r.PathValue("id")
 
 	cfg, ok := h.cache.GetConfig(id)
 	if !ok {
-		return nil, false
+		return nil, errNoRepresentation
 	}
 
 	return NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
 		Config:   cfg,
 		Services: h.filterServiceRefs(r, h.cache.ServicesUsingConfig(id)),
-	}), true
+	}), nil
 }
 
-func (h *Handlers) secretRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) secretRepresentation(r *http.Request) (any, error) {
 	id := r.PathValue("id")
 
 	sec, ok := h.cache.GetSecret(id)
 	if !ok {
-		return nil, false
+		return nil, errNoRepresentation
 	}
 
 	// Never expose secret data — clear it before responding.
@@ -367,43 +383,43 @@ func (h *Handlers) secretRepresentation(r *http.Request) (any, bool) {
 	return NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
 		Secret:   sec,
 		Services: h.filterServiceRefs(r, h.cache.ServicesUsingSecret(id)),
-	}), true
+	}), nil
 }
 
-func (h *Handlers) networkRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) networkRepresentation(r *http.Request) (any, error) {
 	id := r.PathValue("id")
 
 	net, ok := h.cache.GetNetwork(id)
 	if !ok {
-		return nil, false
+		return nil, errNoRepresentation
 	}
 
 	return NewDetailResponse(r.Context(), "/networks/"+id, "Network", NetworkResponse{
 		Network:  net,
 		Services: h.filterServiceRefs(r, h.cache.ServicesUsingNetwork(id)),
-	}), true
+	}), nil
 }
 
-func (h *Handlers) volumeRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) volumeRepresentation(r *http.Request) (any, error) {
 	name := r.PathValue("name")
 
 	vol, ok := h.cache.GetVolume(name)
 	if !ok {
-		return nil, false
+		return nil, errNoRepresentation
 	}
 
 	return NewDetailResponse(r.Context(), "/volumes/"+name, "Volume", VolumeResponse{
 		Volume:   vol,
 		Services: h.filterServiceRefs(r, h.cache.ServicesUsingVolume(name)),
-	}), true
+	}), nil
 }
 
-func (h *Handlers) taskRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) taskRepresentation(r *http.Request) (any, error) {
 	id := r.PathValue("id")
 
 	task, ok := h.cache.GetTask(id)
 	if !ok {
-		return nil, false
+		return nil, errNoRepresentation
 	}
 
 	et := cluster.EnrichTask(h.cache, task)
@@ -412,20 +428,20 @@ func (h *Handlers) taskRepresentation(r *http.Request) (any, bool) {
 		Task:    et,
 		Service: TaskServiceRef{AtID: "/services/" + et.ServiceID, Name: et.ServiceName},
 		Node:    TaskNodeRef{AtID: "/nodes/" + et.NodeID, Hostname: et.NodeHostname},
-	}), true
+	}), nil
 }
 
-func (h *Handlers) stackRepresentation(r *http.Request) (any, bool) {
+func (h *Handlers) stackRepresentation(r *http.Request) (any, error) {
 	name := r.PathValue("name")
 
 	detail, ok := h.cache.GetStackDetail(name)
 	if !ok {
-		return nil, false
+		return nil, errNoRepresentation
 	}
 
 	return NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", StackResponse{
 		Stack: detail,
-	}), true
+	}), nil
 }
 
 // pluginDetail is the body both the plugin GET and its precondition
@@ -437,10 +453,11 @@ func pluginDetail(r *http.Request, name string, plugin types.Plugin) DetailRespo
 	})
 }
 
-// pluginRepresentation is the one builder that does not read the cache:
-// plugins are inspected from the daemon on demand, as the GET does. An inspect
-// failure reports "no current representation".
-func (h *Handlers) pluginRepresentation(r *http.Request) (any, bool) {
+// pluginRepresentation is the one builder that does not read the cache: plugins
+// are inspected from the daemon on demand, as the GET does. Only a not-found
+// inspect is "no current representation" — every other failure is reported as
+// itself, so a daemon blip cannot be mistaken for a stale validator.
+func (h *Handlers) pluginRepresentation(r *http.Request) (any, error) {
 	name := r.PathValue("name")
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -448,8 +465,12 @@ func (h *Handlers) pluginRepresentation(r *http.Request) (any, bool) {
 
 	plugin, err := h.pluginClient.PluginInspect(ctx, name)
 	if err != nil {
-		return nil, false
+		if cerrdefs.IsNotFound(err) {
+			return nil, errNoRepresentation
+		}
+
+		return nil, err
 	}
 
-	return pluginDetail(r, name, *plugin), true
+	return pluginDetail(r, name, *plugin), nil
 }
