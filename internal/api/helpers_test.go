@@ -106,18 +106,6 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 	)
 }
 
-// routerOption adjusts the RouterConfig newTestRouterWithCache assembles, for
-// the router-level settings no testHandlersOption can reach.
-type routerOption func(*RouterConfig)
-
-// withCORS configures the router's CORS allowlist, which also decides which
-// origins cross-origin protection trusts.
-func withCORS(origins ...string) routerOption {
-	return func(cfg *RouterConfig) {
-		cfg.CORS = &CORSConfig{AllowedOrigins: origins}
-	}
-}
-
 // newTestRouterWithCache builds a fully wired router around a caller-seeded
 // cache, for tests that exercise real routes rather than call a handler
 // directly. Further testHandlersOption values are applied on top of the cache.
@@ -131,12 +119,12 @@ func newTestRouterWithCache(
 	return newTestRouterWithConfig(t, nil, append([]testHandlersOption{withCache(c)}, opts...)...)
 }
 
-// newTestRouterWithConfig is newTestRouterWithCache plus the router-level
-// settings, so the RouterConfig every assembled-router test drives is written
-// once.
+// newTestRouterWithConfig is newTestRouterWithCache plus the CORS allowlist —
+// which also decides which origins cross-origin protection trusts — so the
+// RouterConfig every assembled-router test drives is written once.
 func newTestRouterWithConfig(
 	t testing.TB,
-	routerOpts []routerOption,
+	corsOrigins []string,
 	opts ...testHandlersOption,
 ) http.Handler {
 	t.Helper()
@@ -156,8 +144,8 @@ func newTestRouterWithConfig(
 		AuthProvider:      &auth.NoneProvider{},
 	}
 
-	for _, opt := range routerOpts {
-		opt(&cfg)
+	if len(corsOrigins) > 0 {
+		cfg.CORS = &CORSConfig{AllowedOrigins: corsOrigins}
 	}
 
 	return NewRouter(cfg)

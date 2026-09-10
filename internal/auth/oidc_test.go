@@ -838,41 +838,21 @@ func TestCallback_TokenExchangeFails_ClearsCookies(t *testing.T) {
 }
 
 // TestLogout_ThroughRegisteredRoute pins that RegisterRoutes reaches the
-// logout handler. What the handler itself does is covered directly by
-// TestLogout_ClearsSession in oidc_callback_test.go; this drives the mux, so
-// it fails if the route is dropped or registered under another method.
-//
-// It used to set Sec-Fetch-Site to get past a cross-origin check on this
-// route. That check now lives in the router, where the whole chain can be
-// driven — see TestCrossSiteRequestToAuthRouteIsRefused in internal/api.
+// logout handler, so it fails if the route is dropped or registered under
+// another method. What the handler does is TestLogout_ClearsSession's
+// business, in oidc_callback_test.go; the cross-origin check this route used
+// to carry is TestCrossOriginProtection's, in internal/api.
 func TestLogout_ThroughRegisteredRoute(t *testing.T) {
 	server := newMockOIDCServer(t)
 	p := newTestOIDCProvider(t, server.URL)
 	mux := http.NewServeMux()
 	p.RegisterRoutes(mux)
 
-	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
 	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/logout", nil))
 
-	mux.ServeHTTP(w, r)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
-	}
-	if loc := resp.Header.Get("Location"); loc != "/" {
-		t.Errorf("Location = %q, want %q", loc, "/")
-	}
-
-	// Session cookie should be cleared.
-	var sessionCleared bool
-	for _, c := range resp.Cookies() {
-		if c.Name == cookieName && c.MaxAge == -1 {
-			sessionCleared = true
-		}
-	}
-	if !sessionCleared {
-		t.Error("session cookie was not cleared")
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusSeeOther)
 	}
 }
 

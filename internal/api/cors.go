@@ -20,10 +20,10 @@ func (c *CORSConfig) Enabled() bool {
 }
 
 // Wildcard reports whether the allowlist is the single entry "*", meaning any
-// origin. It lives here because two subsystems read this one setting — the
-// CORS middleware below and crossOriginProtection — and each deciding for
-// itself what a wildcard is would let them answer differently for the same
-// configuration, which is the disagreement the mirroring exists to prevent.
+// origin. Every reader of the setting asks here rather than deciding for
+// itself, so they cannot answer differently for one configuration. The
+// exception is internal/mcp's Origin guard, which keeps its own list and reads
+// a "*" anywhere in it as a wildcard.
 //
 // A "*" alongside real origins is deliberately not a wildcard: the list is
 // then matched literally, so the "*" entry matches nothing and the named
