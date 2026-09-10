@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -10,28 +9,8 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
-
-const (
-	// convergencePollInterval is how often a running task re-checks the cache.
-	// The cache is in-memory and the predicate is a cheap read, so this is
-	// bounded by how quickly we want to notice convergence, not by cost.
-	convergencePollInterval = 500 * time.Millisecond
-
-	// convergenceTimeout bounds how long a task waits for the cluster to reach
-	// the requested state before failing. A mutation that has not converged by
-	// then is not going to on its own — an unsatisfiable placement constraint,
-	// an image that will not pull — and an agent is better told so than left
-	// polling a task that never finishes.
-	convergenceTimeout = 5 * time.Minute
-)
-
-// convergenceFunc reports whether the cluster has reached the state a mutation
-// asked for. status is a human-readable progress line describing what is still
-// outstanding; it becomes the failure message when the wait times out.
-type convergenceFunc func() (done bool, status string)
 
 // taskSupportOptional marks a service mutation as pollable. Convergence takes
 // far longer than the Docker call that starts it, so a client may ask for the
@@ -45,34 +24,6 @@ func taskSupportOptional() mcplib.ToolOption {
 	return mcplib.WithTaskSupport(mcplib.TaskSupportOptional)
 }
 
-// awaitConvergence blocks until fn reports done or ctx expires. Docker's write
-// APIs return as soon as the swarm accepts a spec change, long before the new
-// state is real; this is what turns "accepted" into "actually running".
-//
-// The predicate runs before the first tick, so an already-satisfied mutation
-// returns without waiting.
-func (s *Server) awaitConvergence(ctx context.Context, fn convergenceFunc) error {
-	ticker := time.NewTicker(convergencePollInterval)
-	defer ticker.Stop()
-
-	for {
-		done, status := fn()
-		if done {
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			// Report what was still outstanding rather than a bare deadline:
-			// "waiting: 2/5 replicas running" tells an agent why its task
-			// failed, where "context deadline exceeded" does not.
-			return fmt.Errorf("service did not converge (%s): %w", status, ctx.Err())
-
-		case <-ticker.C:
-		}
-	}
-}
-
 // awaitServiceConvergence waits for a mutated service to actually reach the
 // state it was asked for, but only when the caller issued the mutation as a
 // task. A plain tools/call keeps returning the moment Docker accepts the
@@ -83,7 +34,8 @@ func (s *Server) awaitConvergence(ctx context.Context, fn convergenceFunc) error
 // on a goroutine holding the *HTTP request* context, and net/http cancels that
 // as soon as the create-task response is written — so by the time this runs,
 // ctx is almost always already cancelled. Honouring it would fail every task
-// within microseconds of starting it. convergenceTimeout is the real bound.
+// within microseconds of starting it. cluster.ConvergenceTimeout is the real
+// bound.
 //
 // The cost is that tasks/cancel cannot interrupt the wait: mcp-go cancels the
 // same context the transport does, so the two are indistinguishable here. A
@@ -105,7 +57,7 @@ func (s *Server) awaitServiceConvergence(
 		ctx,
 		svc.ID,
 		svc.Version.Index,
-		convergenceTimeout,
+		cluster.ConvergenceTimeout,
 		nil,
 	)
 }
@@ -116,14 +68,9 @@ func (s *Server) awaitServiceConvergence(
 // task-augmentation early return, and one wait rather than two is what keeps
 // the two from drifting on the detachment above.
 //
-// minVersion is the service version the mutation produced, and the wait
-// refuses to judge anything older. The cache is filled asynchronously by the
-// event watcher, so at the moment a write returns it still holds the spec and
-// the tasks from *before* it: a scale from two to five asks five running
-// against a desired two and settles instantly, and a scale from five to two
-// asks two against a desired five and does the same. Neither is a convergence,
-// and no predicate over those numbers could tell. Zero disables the gate, for
-// watch, which follows no write of its own.
+// The convergence wait itself lives in internal/cluster so the REST and MCP
+// transports cannot drift on what "settled" means — see cluster.AwaitService
+// for the minVersion gate this relies on.
 func (s *Server) awaitServiceConvergenceFor(
 	ctx context.Context,
 	svcID string,
@@ -131,44 +78,21 @@ func (s *Server) awaitServiceConvergenceFor(
 	timeout time.Duration,
 	observed *string,
 ) error {
-	detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
-	defer cancel()
-
-	converged := serviceConverged(s.cache, svcID, minVersion)
-
-	return s.awaitConvergence(detached, func() (bool, string) {
-		done, progress := converged()
-		if observed != nil {
-			*observed = progress
-		}
-
-		return done, progress
-	})
-}
-
-// serviceConverged watches one service by ID. The convergence rule itself lives
-// in internal/cluster so the REST and MCP transports cannot drift on what
-// "settled" means; this only supplies the cache reads.
-func serviceConverged(
-	c *cache.Cache,
-	serviceID string,
-	minVersion uint64,
-) convergenceFunc {
-	return func() (bool, string) {
-		svc, ok := c.GetService(serviceID)
-		if !ok {
-			return false, "service not in the cache yet"
-		}
-
-		if svc.Version.Index < minVersion {
-			return false, fmt.Sprintf(
-				"waiting: the mutation is not visible yet (cache at version %d, wrote %d)",
-				svc.Version.Index, minVersion,
-			)
-		}
-
-		return cluster.ServiceConverged(svc, c.RunningTaskCount(svc.ID))
+	progress, err := cluster.AwaitService(
+		// Detached because mcp-go runs the task on a goroutine holding an
+		// already-cancelled HTTP request context.
+		context.WithoutCancel(ctx),
+		s.cache,
+		svcID,
+		minVersion,
+		cluster.ConvergencePollInterval,
+		timeout,
+	)
+	if observed != nil {
+		*observed = progress
 	}
+
+	return err
 }
 
 // boundTaskTTL fills in and caps how long mcp-go retains a task's result,
