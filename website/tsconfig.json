@@ -5,5 +5,12 @@
     "paths": {
       "@/*": ["src/*"]
     }
-  }
+  },
+  // Astro's base config enables `allowJs` and includes `**/*`, excluding only
+  // `dist`. That pulls every JavaScript file under `public/` into the program —
+  // the 3.7MB Scalar bundle and the built demo SPA, none of it ours and none of
+  // it source — and the checker runs out of memory before it reaches a real
+  // file. Listing `dist` again is not redundant: `exclude` replaces the
+  // inherited value rather than extending it.
+  "exclude": ["dist", "public"]
 }

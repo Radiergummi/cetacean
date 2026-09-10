@@ -48,8 +48,11 @@ const {
     tags,
     sourcePath,
 } = Astro.props;
-const lastModified = sourcePath ? await getLastModified(sourcePath) : null;
-const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : null;
+// `undefined` rather than `null`: every component below models an absent date
+// or edit link as an omitted prop, and a page generated from Go source has
+// neither.
+const lastModified = (sourcePath ? await getLastModified(sourcePath) : null) ?? undefined;
+const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : undefined;
 ---
 
 <BaseLayout

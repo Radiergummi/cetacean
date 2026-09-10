@@ -21,6 +21,7 @@ import type {
   TableCell,
   TableRow,
 } from "mdast";
+import type { Node } from "unist";
 import type { AstroIntegration } from "astro";
 import type { Plugin as VitePlugin } from "vite";
 
@@ -453,7 +454,7 @@ function definitionList(rows: TableRow[], compact: boolean): Paragraph {
  */
 function remarkCardTables() {
   return (tree: Root) => {
-    visit(tree, isCardsMarker, (node, index, parent) => {
+    visit(tree, isCardsMarker, (_node, index, parent) => {
       if (!parent || index === undefined) {
         return;
       }
@@ -488,13 +489,18 @@ function remarkCardTables() {
  * The marker in the only form each format has for it: an HTML comment in
  * Markdown, and the expression an MDX doc's comment parses to. Both node types
  * carry their source in `value`, so the value is the whole of the test.
+ *
+ * The parameter is a bare unist `Node` rather than an mdast `RootContent`
+ * because `mdxFlowExpression` is not one — it comes from `mdast-util-mdx`, and
+ * against `RootContent` the check for it is a comparison with no overlap. It is
+ * also what `visit` wants: a `Test` takes a `Node`.
  */
-function isCardsMarker(node: RootContent): boolean {
+function isCardsMarker(node: Node): boolean {
   if (node.type !== "html" && node.type !== "mdxFlowExpression") {
     return false;
   }
 
-  const value = "value" in node ? node.value.trim() : "";
+  const value = "value" in node ? String(node.value).trim() : "";
 
   return value === "<!-- cards -->" || value === "/* cards */";
 }
