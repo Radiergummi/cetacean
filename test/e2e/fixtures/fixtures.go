@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -284,6 +285,19 @@ func baselinePresent(t *testing.T, env *harness.Env) bool {
 	return false
 }
 
+// isConflict tolerates a resource that already exists. cerrdefs.IsConflict
+// covers the Docker daemon's own conflict response, but the swarm raft
+// allocator raises a differently-shaped error for the same situation ("rpc
+// error: code = Unknown desc = name conflicts with an existing object") when
+// two callers race to create the same object -- e.g. two test packages
+// running DeployBaseline's check-then-act sentinel guard concurrently,
+// without -p 1. Recognizing both keeps that race a harness constraint rather
+// than a false failure.
+func isConflict(err error) bool {
+	return cerrdefs.IsConflict(err) ||
+		strings.Contains(err.Error(), "name conflicts with an existing object")
+}
+
 func createNetwork(t *testing.T, env *harness.Env, name string, labels map[string]string) {
 	t.Helper()
 
@@ -292,7 +306,7 @@ func createNetwork(t *testing.T, env *harness.Env, name string, labels map[strin
 		Attachable: true,
 		Labels:     labels,
 	})
-	if err != nil && !cerrdefs.IsConflict(err) {
+	if err != nil && !isConflict(err) {
 		t.Fatalf("NetworkCreate %s: %v", name, err)
 	}
 }
@@ -321,7 +335,7 @@ func createConfig(
 		Annotations: swarm.Annotations{Name: name, Labels: labels},
 		Data:        data,
 	})
-	if err != nil && !cerrdefs.IsConflict(err) {
+	if err != nil && !isConflict(err) {
 		t.Fatalf("ConfigCreate %s: %v", name, err)
 	}
 }
@@ -339,7 +353,7 @@ func createSecret(
 		Annotations: swarm.Annotations{Name: name, Labels: labels},
 		Data:        data,
 	})
-	if err != nil && !cerrdefs.IsConflict(err) {
+	if err != nil && !isConflict(err) {
 		t.Fatalf("SecretCreate %s: %v", name, err)
 	}
 }
@@ -412,7 +426,7 @@ func createService(t *testing.T, env *harness.Env, spec ServiceSpec) {
 			},
 		},
 	}, swarm.ServiceCreateOptions{})
-	if err != nil && !cerrdefs.IsConflict(err) {
+	if err != nil && !isConflict(err) {
 		t.Fatalf("ServiceCreate %s: %v", spec.Name, err)
 	}
 }
