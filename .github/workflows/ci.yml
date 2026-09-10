@@ -150,10 +150,12 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      # open-sbom-pr.sh dispatches ci.yml on the branch it opens, because a
-      # pull request created with GITHUB_TOKEN raises no pull_request event and
-      # its required checks would never report. Dispatching needs actions:write,
-      # and a job-level block replaces the default rather than adding to it.
+      # Both write paths dispatch ci.yml afterwards, because nothing authored
+      # with GITHUB_TOKEN raises an event of its own: open-sbom-pr.sh for the
+      # pull request it opens, commit-sbom.sh for the commit it lands on a
+      # branch. Either way the required checks would otherwise never report.
+      # Dispatching needs actions:write, and a job-level block replaces the
+      # default rather than adding to it.
       actions: write
     # One sync per branch: two concurrent runs would race the same commit.
     concurrency:
@@ -188,6 +190,11 @@ jobs:
       # API, so the result is Verified with no signing key in CI secrets, and
       # because expectedHeadOid makes the write fail rather than clobber a
       # branch that moved since checkout.
+      #
+      # The script also dispatches a run for the branch afterwards. A commit
+      # authored with GITHUB_TOKEN raises no event, so without that the pull
+      # request sits blocked on required checks that passed one commit earlier
+      # and can never appear on the new head.
       - name: Commit regenerated SBOM
         if: >-
           github.event_name == 'pull_request' &&
