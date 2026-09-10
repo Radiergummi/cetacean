@@ -289,14 +289,23 @@ var pairedEndpoints = []preconditionEndpoint{
 }
 
 // TestPreconditionRoundTripsForEveryPairedEndpoint reads each endpoint that
-// declares a precondition, then feeds that exact ETag back as If-Match on its
-// write. A representation builder that does not reproduce the GET's bytes
-// fails here rather than in production.
+// declares a precondition, then drives its write twice: once with the ETag the
+// read just returned, and once with a strong tag that cannot match.
 //
-// The second row per endpoint sends a syntactically valid strong tag that
-// cannot match and requires 412. Without it a route that simply never got its
-// precond wrapper would pass the first row: an unconditioned write admits
-// every If-Match, including the right one.
+// The mismatched row is what catches a route that never got its precond
+// wrapper — an unconditioned write admits every If-Match, the right one
+// included, so the matching row alone would pass. The matching row proves the
+// write is reachable and that the route is conditioned on *this* URI's
+// representation: point it at another builder and the two validators come from
+// different resources, so the round trip breaks. It also holds
+// writeCachedJSON's ETag derivation and precond's together.
+//
+// What neither row can prove is that a builder still renders what its GET
+// rendered before the body moved out of the handler. The handler now calls the
+// builder, so a corrupted builder corrupts both validators identically and the
+// round trip still matches. That fidelity rests on the extraction being
+// verbatim and on the GET tests elsewhere in this package; do not read a green
+// run here as covering it.
 func TestPreconditionRoundTripsForEveryPairedEndpoint(t *testing.T) {
 	write := func(t *testing.T, router http.Handler, tc preconditionEndpoint, ifMatch string) int {
 		t.Helper()
