@@ -6,53 +6,55 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
-// realIP returns middleware that resolves the client IP from X-Forwarded-For
-// when the direct peer is a trusted proxy. It rewrites r.RemoteAddr so all
-// downstream code (logging, auth, etc.) sees the real client address.
+// realIP returns middleware that records the request's peer and — when that
+// peer is a trusted proxy — rewrites r.RemoteAddr to the client address the
+// proxy reported.
 //
-// If trusted is empty the middleware is a no-op.
+// The verdict is recorded on the original peer address, before the rewrite,
+// and recorded always, so downstream code can tell "untrusted" from "nobody
+// decided". Readers use auth.FromTrustedProxy, never RemoteAddr.
 func realIP(trusted []netip.Prefix) func(http.Handler) http.Handler {
-	if len(trusted) == 0 {
-		return func(next http.Handler) http.Handler { return next }
-	}
-
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if clientIP, ok := resolveClientIP(r, trusted); ok {
-				r.RemoteAddr = clientIP
+			peerHost, peerPort, err := net.SplitHostPort(r.RemoteAddr)
+			if err != nil {
+				next.ServeHTTP(w, r)
+				return
 			}
+
+			peerIP, err := netip.ParseAddr(peerHost)
+			if err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			peer := auth.Peer{Addr: peerIP, Trusted: isTrusted(peerIP, trusted)}
+			r = r.WithContext(auth.ContextWithPeer(r.Context(), peer))
+
+			if peer.Trusted {
+				if clientIP, ok := resolveClientIP(r, peerPort, trusted); ok {
+					r.RemoteAddr = clientIP
+				}
+			}
+
 			next.ServeHTTP(w, r)
 		})
 	}
 }
 
-// resolveClientIP walks X-Forwarded-For right-to-left, returning the
-// first (rightmost) entry that is NOT a trusted proxy. This is the
-// standard algorithm for extracting the real client IP behind a chain
-// of trusted proxies.
-func resolveClientIP(r *http.Request, trusted []netip.Prefix) (string, bool) {
-	peerHost, peerPort, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return "", false
-	}
-
-	peerIP, err := netip.ParseAddr(peerHost)
-	if err != nil {
-		return "", false
-	}
-
-	if !isTrusted(peerIP, trusted) {
-		return "", false
-	}
-
+// resolveClientIP returns the rightmost X-Forwarded-For entry that is not a
+// trusted proxy, joined with the peer's port. The caller has already
+// established that the peer itself is trusted.
+func resolveClientIP(r *http.Request, peerPort string, trusted []netip.Prefix) (string, bool) {
 	xff := r.Header.Get("X-Forwarded-For")
 	if xff == "" {
 		return "", false
 	}
 
-	// Walk right-to-left: the rightmost non-trusted entry is the client.
 	parts := strings.Split(xff, ",")
 	for _, part := range slices.Backward(parts) {
 		ip, err := netip.ParseAddr(strings.TrimSpace(part))
