@@ -202,6 +202,16 @@ func TestEmbeddedManifestMatchesEmbeddedFiles(t *testing.T) {
 			)
 		}
 
+		// The build's own threshold (frontend/plugins/precompress.ts) and the
+		// server's (compressionThreshold) are two constants that have to agree.
+		// A variant below the server's threshold would never be served.
+		if info, err := os.Stat(identityPath); err == nil && info.Size() < compressionThreshold {
+			t.Errorf(
+				"manifest names %s at %d bytes, under the server's %d-byte threshold",
+				assetPath, info.Size(), compressionThreshold,
+			)
+		}
+
 		for coding, variant := range entry.Variants {
 			suffix, known := suffixByCoding[coding]
 			if !known {

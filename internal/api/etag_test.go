@@ -527,6 +527,11 @@ func TestSSEStillStreamsUnderCompression(t *testing.T) {
 	defer cancel()
 	router.ServeHTTP(rec, req.WithContext(ctx))
 
+	// Guard the premise: without this, a negotiation that fell through to the
+	// SPA shell would satisfy every assertion below.
+	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/event-stream") {
+		t.Fatalf("Content-Type = %q, want text/event-stream — the SSE path was not taken", got)
+	}
 	if got := rec.Header().Get("Content-Encoding"); got != "" {
 		t.Errorf("Content-Encoding = %q, want empty — SSE must not be compressed", got)
 	}

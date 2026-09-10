@@ -21,6 +21,10 @@ const (
 	EncodingIdentity Encoding = iota
 	EncodingGzip
 	EncodingZstd
+
+	// encodingCount bounds the enum so a test can walk every member. Keep it
+	// last.
+	encodingCount
 )
 
 // String returns the content-coding token as it appears in a

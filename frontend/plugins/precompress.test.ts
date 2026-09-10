@@ -133,10 +133,14 @@ describe("precompress", () => {
     // go:embed frontend/dist/* excludes dot-prefixed directories with no
     // error at any stage, so the manifest must not live under .vite/.
     const outDir = runPrecompress(fakeFiles());
-    const manifest = readManifest(outDir);
 
     expect(existsSync(join(outDir, "assets-manifest.json"))).toBe(true);
-    expect(Object.keys(manifest).every((fileName) => !fileName.startsWith("."))).toBe(true);
+    expect(existsSync(join(outDir, ".vite/assets-manifest.json"))).toBe(false);
+  });
+
+  it("records which chunks are entries", () => {
+    const manifest = readManifest(runPrecompress(fakeFiles()));
+
     expect(manifest["assets/app.js"]).toMatchObject({ entry: true });
   });
 
@@ -166,17 +170,12 @@ describe("precompress ETag and size correctness", () => {
     const gzipBytes = gzipSync(originalSource);
     const zstdBytes = zstdCompressSync(originalSource);
 
-    // A format check would pass with the gzip and zstd digests swapped, or with
-    // a variant's ETag computed over the original bytes; recomputing each digest
-    // independently is what catches that.
+    // Each digest is recomputed independently, so a swap between the two
+    // variants, or an ETag taken over the original bytes, fails here where a
+    // format check would not.
     expect(entry.etag).toBe(digest(originalSource));
     expect(entry.variants.gzip.etag).toBe(digest(gzipBytes));
     expect(entry.variants.zstd.etag).toBe(digest(zstdBytes));
-
-    // The three digests must be pairwise distinct, so a swap between them
-    // cannot still satisfy the equality checks above.
-    const etags = [entry.etag, entry.variants.gzip.etag, entry.variants.zstd.etag];
-    expect(new Set(etags).size).toBe(3);
 
     expect(entry.size).toBe(originalSource.byteLength);
     expect(entry.variants.gzip.size).toBe(gzipBytes.byteLength);

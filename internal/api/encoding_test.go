@@ -67,8 +67,6 @@ func TestEncodeBodyRoundTrips(t *testing.T) {
 
 			var decoded []byte
 			switch e {
-			case EncodingIdentity:
-				t.Fatal("unreachable: not exercised by this table")
 			case EncodingGzip:
 				gr, err := gzip.NewReader(bytes.NewReader(encoded))
 				if err != nil {
@@ -88,6 +86,8 @@ func TestEncodeBodyRoundTrips(t *testing.T) {
 				if err != nil {
 					t.Fatalf("zstd read: %v", err)
 				}
+			default:
+				t.Fatalf("no decoder for %v", e)
 			}
 
 			if !bytes.Equal(decoded, body) {
@@ -155,8 +155,9 @@ func TestCompressionDisabled(t *testing.T) {
 // TestCompressibleEncodingsCoversTheEnum keeps compressibleEncodings from
 // falling behind the Encoding enum: a coding added to the enum and not the list
 // would quietly narrow every test that iterates it to claim coverage of "all
-// codings". The enum has no sentinel, so the scan leans on String() naming
-// every real coding and falling through to "identity" for everything else.
+// codings". It walks the enum by its encodingCount sentinel rather than by what
+// String() answers, so a member added to neither String() nor the list still
+// fails here.
 func TestCompressibleEncodingsCoversTheEnum(t *testing.T) {
 	listed := make(map[Encoding]bool, len(compressibleEncodings))
 
@@ -170,14 +171,18 @@ func TestCompressibleEncodingsCoversTheEnum(t *testing.T) {
 		listed[coding] = true
 	}
 
-	for candidate := EncodingIdentity + 1; candidate < EncodingIdentity+64; candidate++ {
-		if candidate.String() == EncodingIdentity.String() {
-			continue
-		}
+	for candidate := EncodingIdentity + 1; candidate < encodingCount; candidate++ {
 		if !listed[candidate] {
 			t.Errorf(
-				"Encoding %q is in the enum but missing from compressibleEncodings",
-				candidate.String(),
+				"Encoding %d is in the enum but missing from compressibleEncodings",
+				candidate,
+			)
+		}
+		if candidate.String() == EncodingIdentity.String() {
+			t.Errorf(
+				"Encoding %d has no token of its own in String(); it would be sent "+
+					"as Content-Encoding: identity",
+				candidate,
 			)
 		}
 	}

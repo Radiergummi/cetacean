@@ -323,8 +323,9 @@ var unpreconditionedWriteEndpointChecks = []writeEndpointCheck{
 }
 
 // writeEndpointChecksExcluded lists spec operations the behavioural pass cannot
-// drive, with the reason. Nothing here carries a precondition; the coverage
-// assertion below fails if that changes without a driver being added.
+// drive, with the reason. An entry may only cover an endpoint with no
+// precondition; the coverage assertion below fails outright if one of these
+// grows a documented If-Match.
 var writeEndpointChecksExcluded = map[string]string{
 	"POST /auth/logout": "session endpoint, not a cluster resource with " +
 		"a representation for If-Match to compare against. The NoneProvider " +
@@ -424,7 +425,21 @@ func TestEveryWriteEndpointDocumentsPreconditions(t *testing.T) {
 			continue
 		}
 		if reason, ok := writeEndpointChecksExcluded[key]; ok {
+			// An exclusion may only cover an endpoint with no precondition to
+			// prove. One that grows a documented If-Match needs a driver, not
+			// a skip.
+			if hasPrecond {
+				t.Errorf(
+					"%s: excluded from the behavioural pass but documents an If-Match "+
+						"precondition — add a driver row instead of excluding it",
+					key,
+				)
+
+				continue
+			}
+
 			t.Logf("skipping %s: %s", key, reason)
+
 			continue
 		}
 		t.Errorf(
