@@ -182,3 +182,48 @@ func TestCrossSiteRefusalIsProblemDetails(t *testing.T) {
 		t.Errorf("status = %d, want 403", problem.Status)
 	}
 }
+
+// TestPublicURLIsTrusted covers the fallback path a pre-2023 browser takes:
+// no Sec-Fetch-Site, so the stdlib compares Origin against r.Host. Behind a
+// proxy that rewrites Host, the dashboard's own writes reach us with the
+// public origin and an internal Host, and only server.public_url can tell
+// those apart from a stranger's.
+func TestPublicURLIsTrusted(t *testing.T) {
+	handler := crossOriginProtection(nil, "https://cetacean.example")(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	)
+
+	tests := []struct {
+		name   string
+		origin string
+		want   int
+	}{
+		{
+			name:   "the public origin is trusted",
+			origin: "https://cetacean.example",
+			want:   http.StatusNoContent,
+		},
+		{
+			name:   "any other origin is still refused",
+			origin: "https://evil.test",
+			want:   http.StatusForbidden,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/services/svc1/restart", nil)
+			req.Host = "cetacean.internal:9000"
+			req.Header.Set("Origin", tt.origin)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != tt.want {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tt.want, rec.Body.String())
+			}
+		})
+	}
+}

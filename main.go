@@ -806,6 +806,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		Recommendations: d.rec,
 		Prometheus:      metricsQuerier,
 		AllowedOrigins:  d.cfg.CORSOrigins,
+		AllowAnyOrigin:  d.cors.Wildcard(),
 		IconBaseURL:     issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 	})

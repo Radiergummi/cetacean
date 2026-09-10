@@ -93,8 +93,9 @@ type Server struct {
 
 	// allowedOrigins is the set of Origin header values the streamable HTTP
 	// endpoint accepts. originGuard rejects any other non-empty Origin with
-	// 403 (DNS-rebinding defense). "*" disables the check.
+	// 403 (DNS-rebinding defense). allowAnyOrigin disables the check.
 	allowedOrigins []string
+	allowAnyOrigin bool
 
 	// iconBaseURL is the canonical external base (issuer + base path) that tool
 	// icon `src` values are built from, e.g. "https://cetacean.example.com".
@@ -142,6 +143,12 @@ type Options struct {
 	AuthProvider    auth.Provider
 	Recommendations RecommendationEngine
 	AllowedOrigins  []string
+
+	// AllowAnyOrigin disables the Origin check. It is the caller's reading of
+	// server.cors.origins — api.CORSConfig.Wildcard() — rather than a "*" this
+	// package looks for itself, so one setting cannot mean a wildcard here and
+	// a literal list to cross-origin protection.
+	AllowAnyOrigin bool
 
 	// Prometheus backs the get_metrics tool. Nil when CETACEAN_PROMETHEUS_URL
 	// is unset, and the tool then says metrics are unavailable rather than
@@ -192,6 +199,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		recEngine:      opts.Recommendations,
 		prom:           opts.Prometheus,
 		allowedOrigins: opts.AllowedOrigins,
+		allowAnyOrigin: opts.AllowAnyOrigin,
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
 		watches:        make(chan struct{}, maxConcurrentWatches),
@@ -371,21 +379,19 @@ func (s *Server) Handler() http.Handler {
 // originGuard rejects requests bearing a forged Origin header with 403, a
 // DNS-rebinding defense the MCP Streamable HTTP transport requires (mcp-go
 // does not enforce it). Requests with no Origin (non-browser agents) pass
-// through unaffected, as does any Origin when AllowedOrigins contains "*".
-// Kept self-contained (exact match + wildcard) to avoid importing internal/api.
+// through unaffected, as does every Origin when AllowAnyOrigin is set.
+//
+// Matching is exact, to avoid importing internal/api for it; what a wildcard
+// is stays that package's ruling, arriving as AllowAnyOrigin.
 func (s *Server) originGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin == "" {
+
+		if s.allowAnyOrigin || origin == "" || slices.Contains(s.allowedOrigins, origin) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		for _, allowed := range s.allowedOrigins {
-			if allowed == "*" || allowed == origin {
-				next.ServeHTTP(w, r)
-				return
-			}
-		}
+
 		http.Error(w, "forbidden origin", http.StatusForbidden)
 	})
 }

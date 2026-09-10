@@ -21,9 +21,9 @@ func (c *CORSConfig) Enabled() bool {
 
 // Wildcard reports whether the allowlist is the single entry "*", meaning any
 // origin. Every reader of the setting asks here rather than deciding for
-// itself, so they cannot answer differently for one configuration. The
-// exception is internal/mcp's Origin guard, which keeps its own list and reads
-// a "*" anywhere in it as a wildcard.
+// itself, so they cannot answer differently for one configuration —
+// internal/mcp's Origin guard used to look for a "*" itself, and took this
+// answer as Options.AllowAnyOrigin once the two were caught disagreeing.
 //
 // A "*" alongside real origins is deliberately not a wildcard: the list is
 // then matched literally, so the "*" entry matches nothing and the named
