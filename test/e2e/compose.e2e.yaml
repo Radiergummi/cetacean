@@ -19,8 +19,19 @@ services:
       - -c
       - |
         set -e
-        apk add --no-cache openssl >/dev/null 2>&1
         cd /certs
+        # Idempotent: a restart of this one-shot (any `docker compose up -d`
+        # against an already-running project, e.g. a second `go test`
+        # invocation) must not regenerate the chain. Caddy loads its cert and
+        # trust pool once at its own startup and never restarts alongside
+        # this container, so a regenerated CA here would leave Caddy serving
+        # a certificate the newly written ca.pem can no longer verify.
+        if [ -f ca.pem ] && [ -f server.pem ] && [ -f server-key.pem ] && \
+           [ -f client.pem ] && [ -f client-key.pem ]; then
+          echo "certs already present, skipping generation"
+          exit 0
+        fi
+        apk add --no-cache openssl >/dev/null 2>&1
         openssl ecparam -genkey -name prime256v1 -out ca-key.pem
         openssl req -x509 -new -key ca-key.pem -out ca.pem -days 365 \
           -subj "/CN=Cetacean E2E CA"
@@ -41,5 +52,42 @@ services:
     volumes:
       - ./certs:/certs
 
+  caddy:
+    image: caddy:2
+    ports:
+      - "19104:19104"
+    configs:
+      - source: caddyfile-cert
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - ./certs:/certs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      cert-init:
+        condition: service_completed_successfully
+    networks:
+      - e2e
+
 networks:
   e2e:
+
+configs:
+  caddyfile-cert:
+    content: |
+      :19104 {
+        tls /certs/server.pem /certs/server-key.pem {
+          client_auth {
+            mode require_and_verify
+            trust_pool file /certs/ca.pem
+          }
+        }
+
+        reverse_proxy http://host.docker.internal:19004 {
+          # RFC 9440 requires the certificate as an RFC 8941 Byte Sequence:
+          # base64 DER wrapped in colons. Caddy's placeholder yields bare
+          # base64, so the colons are added here.
+          header_up Client-Cert ":{http.request.tls.client.certificate_der_base64}:"
+          header_up -Client-Cert-Chain
+        }
+      }
