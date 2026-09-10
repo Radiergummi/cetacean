@@ -363,6 +363,42 @@ func TestPaginationLinks(t *testing.T) {
 		}
 	})
 
+	// A feed link built from the raw query reflects whatever the caller put
+	// there into a compressed body, beside ACL-filtered resource names — the
+	// BREACH shape the search endpoints refuse to compress at all. Only the
+	// parameters a feed actually reads may appear in one.
+	t.Run("links carry only the params the feed reads", func(t *testing.T) {
+		req := httptest.NewRequest(
+			"GET",
+			"/history?before=100&limit=50&canary=BREACH&q=web",
+			nil,
+		)
+		entries := make([]cache.HistoryEntry, 50)
+		entries[49].ID = 42
+
+		for _, l := range atomPaginationLinks(req, testFeedData(req, entries, 100, 50)) {
+			if strings.Contains(l.Href, "canary") || strings.Contains(l.Href, "BREACH") {
+				t.Errorf("%s href %q reflects an unread query parameter", l.Rel, l.Href)
+			}
+		}
+	})
+
+	t.Run("self link keeps the pagination cursor", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/history?before=100&limit=25", nil)
+		entries := make([]cache.HistoryEntry, 3)
+
+		var selfHref string
+		for _, l := range atomPaginationLinks(req, testFeedData(req, entries, 100, 25)) {
+			if l.Rel == "self" {
+				selfHref = l.Href
+			}
+		}
+
+		if selfHref != "http://example.com/history.atom?before=100&limit=25" {
+			t.Errorf("self href = %q, want the page it identifies", selfHref)
+		}
+	})
+
 	t.Run("includes previous link on non-first page", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history?before=100&limit=25", nil)
 		entries := make([]cache.HistoryEntry, 3)

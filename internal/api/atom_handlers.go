@@ -93,20 +93,14 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 func atomPaginationLinks(r *http.Request, data feedData) []atomxml.Link {
 	atomPath := r.URL.Path + ".atom"
 
-	selfHref := absURL(r, atomPath)
-	if r.URL.RawQuery != "" {
-		selfHref += "?" + r.URL.RawQuery
-	}
+	selfHref := feedHref(absURL(r, atomPath), feedQuery(r))
 
-	alternateHref := absURL(r, r.URL.Path)
-	if aq := r.URL.Query(); len(aq) > 0 {
-		aq.Del("before")
-		aq.Del("limit")
+	alternateQuery := feedQuery(r)
+	alternateQuery.Del("before")
+	alternateQuery.Del("limit")
 
-		if encoded := aq.Encode(); encoded != "" {
-			alternateHref += "?" + encoded
-		}
-	}
+	alternateHref := feedHref(absURL(r, r.URL.Path), alternateQuery)
+
 	links := []atomxml.Link{
 		{Rel: "self", Href: selfHref, Type: "application/atom+xml"},
 		{Rel: "alternate", Href: alternateHref, Type: "text/html"},
@@ -135,10 +129,11 @@ func atomPaginationLinks(r *http.Request, data feedData) []atomxml.Link {
 	}
 
 	if data.LastItemID > 0 && len(data.Entries) == data.Limit {
-		q := r.URL.Query()
-		q.Set("before", strconv.FormatUint(data.LastItemID, 10))
-		q.Set("limit", strconv.Itoa(data.Limit))
-		nextHref := absURL(r, atomPath) + "?" + q.Encode()
+		nextQuery := feedQuery(r)
+		nextQuery.Set("before", strconv.FormatUint(data.LastItemID, 10))
+		nextQuery.Set("limit", strconv.Itoa(data.Limit))
+
+		nextHref := feedHref(absURL(r, atomPath), nextQuery)
 
 		links = append(links, atomxml.Link{
 			Rel:  "next",
@@ -151,16 +146,11 @@ func atomPaginationLinks(r *http.Request, data feedData) []atomxml.Link {
 }
 
 // atomBaseHref builds the Atom feed URL without pagination params,
-// preserving other query params (e.g., ?q= for search).
+// preserving the search feed's ?q=.
 func atomBaseHref(r *http.Request, atomPath string) string {
-	href := absURL(r, atomPath)
-	if aq := r.URL.Query(); len(aq) > 0 {
-		aq.Del("before")
-		aq.Del("limit")
+	query := feedQuery(r)
+	query.Del("before")
+	query.Del("limit")
 
-		if encoded := aq.Encode(); encoded != "" {
-			href += "?" + encoded
-		}
-	}
-	return href
+	return feedHref(absURL(r, atomPath), query)
 }

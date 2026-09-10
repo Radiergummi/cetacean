@@ -428,6 +428,44 @@ func parseFeedPagination(r *http.Request) (beforeID uint64, limit int) {
 	return beforeID, limit
 }
 
+// feedQueryParams names every query parameter a feed handler actually reads:
+// the pagination cursor and its page size (parseFeedPagination), plus the
+// search feed's term (handleFeedSearch). Nothing else in a request's query
+// changes what a feed contains.
+var feedQueryParams = []string{"q", "before", "limit"}
+
+// feedQuery returns the subset of r's query named by feedQueryParams, for a
+// caller to adjust and encode into a feed link.
+//
+// Feed links are built from this rather than from the request's raw query
+// because the rest of it is attacker-chosen text: reflected verbatim into a
+// feed, it would sit in a compressed body beside ACL-filtered resource names,
+// which is the BREACH shape HandleSearch and handleFeedSearch already refuse
+// to compress at all. Dropping what the feed never read costs nothing and
+// leaves no reflection to reason about.
+func feedQuery(r *http.Request) url.Values {
+	source := r.URL.Query()
+	kept := make(url.Values, len(feedQueryParams))
+
+	for _, name := range feedQueryParams {
+		if values, ok := source[name]; ok {
+			kept[name] = values
+		}
+	}
+
+	return kept
+}
+
+// feedHref joins a base URL and a feed query, omitting the "?" for an empty
+// one.
+func feedHref(base string, query url.Values) string {
+	if encoded := query.Encode(); encoded != "" {
+		return base + "?" + encoded
+	}
+
+	return base
+}
+
 // emptyFeedEpoch is a stable timestamp for empty feeds so the ETag is
 // deterministic (time.Now would produce a different ETag every request).
 var emptyFeedEpoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
