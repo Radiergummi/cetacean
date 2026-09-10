@@ -21,11 +21,27 @@ var (
 	ErrIssuerMismatch   = errors.New("issuer mismatch")
 	ErrAudienceMismatch = errors.New("audience mismatch")
 	ErrMissingKey       = errors.New("signing key is empty")
+	ErrIncompleteClaims = errors.New("claims incomplete")
 )
 
-// jwtHeader is the base64url-encoded fixed header {"alg":"HS256","typ":"JWT"},
-// precomputed once at package init.
-var jwtHeader = base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
+// accessTokenType is the JWT header type RFC 9068 §2.1 gives an OAuth 2.0
+// access token, and accessTokenTypeFull the same media type spelled with the
+// prefix §2.1 recommends omitting. We mint the short form and accept both on
+// verification, because §4 requires a resource server to accept either.
+//
+// The type is what lets a resource server refuse an ID token where an access
+// token belongs — the two are otherwise indistinguishable to anything but
+// their claim set.
+const (
+	accessTokenType     = "at+jwt"
+	accessTokenTypeFull = "application/at+jwt"
+)
+
+// jwtHeader is the base64url-encoded fixed header, precomputed once at package
+// init.
+var jwtHeader = base64.RawURLEncoding.EncodeToString(
+	[]byte(`{"alg":"HS256","typ":"` + accessTokenType + `"}`),
+)
 
 // jwtHeaderClaims is the minimal subset of a JWT header we inspect on verify.
 // alg=none / alg=RS256 substitution attacks are blocked by recomputing HMAC
@@ -53,7 +69,11 @@ type jwtPayload struct {
 	JTIID     string   `json:"jti"`
 	Subject   string   `json:"sub"`
 	Groups    []string `json:"groups,omitempty"`
-	ClientID  string   `json:"client_id,omitempty"`
+
+	// ClientID carries no omitempty: RFC 9068 §2.2 requires the claim, so a
+	// token without it is one no resource server may accept. IssueAccessToken
+	// refuses to mint an empty one rather than leaving the tag to elide it.
+	ClientID string `json:"client_id"`
 }
 
 // TokenIssuer issues and verifies HMAC-SHA256 JWTs.
@@ -71,6 +91,17 @@ func (t *TokenIssuer) IssueAccessToken(
 ) (string, error) {
 	if len(t.SigningKey) == 0 {
 		return "", ErrMissingKey
+	}
+
+	// iss, aud, exp, iat and jti are the issuer's to fill in below. sub and
+	// client_id are the caller's, so they are the two of RFC 9068 §2.2's
+	// seven required claims that can arrive missing.
+	if claims.Subject == "" {
+		return "", fmt.Errorf("%w: sub is required (RFC 9068 §2.2)", ErrIncompleteClaims)
+	}
+
+	if claims.ClientID == "" {
+		return "", fmt.Errorf("%w: client_id is required (RFC 9068 §2.2)", ErrIncompleteClaims)
 	}
 
 	jtiBytes := make([]byte, 16)
@@ -126,7 +157,13 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 	if hdr.Alg != "HS256" {
 		return nil, fmt.Errorf("%w: unexpected alg %q", ErrMalformedToken, hdr.Alg)
 	}
-	if hdr.Typ != "" && hdr.Typ != "JWT" {
+	// RFC 9068 §4: reject a token whose typ is anything but the access token
+	// type. An absent typ is rejected with the rest — before this profile the
+	// server minted "JWT" and waved absence through, and both now fail, which
+	// costs a client holding one an extra refresh and nothing more: access
+	// tokens are the only JWTs here, they are never persisted, and the
+	// refresh token that replaces them is opaque.
+	if hdr.Typ != accessTokenType && hdr.Typ != accessTokenTypeFull {
 		return nil, fmt.Errorf("%w: unexpected typ %q", ErrMalformedToken, hdr.Typ)
 	}
 
