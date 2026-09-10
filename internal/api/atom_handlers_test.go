@@ -37,8 +37,14 @@ func TestWriteCachedAtom(t *testing.T) {
 			t.Errorf("Cache-Control = %q, want no-cache", cc)
 		}
 
-		if vary := rec.Header().Get("Vary"); vary != "Authorization, Cookie" {
-			t.Errorf("Vary = %q, want %q", vary, "Authorization, Cookie")
+		// Vary is accumulated with Add across layers, so assert membership
+		// rather than a single value: the feed varies by who is asking and
+		// by what content-coding they accept.
+		vary := strings.Join(rec.Header().Values("Vary"), ", ")
+		for _, want := range []string{"Authorization, Cookie", "Accept-Encoding"} {
+			if !strings.Contains(vary, want) {
+				t.Errorf("Vary = %q, want it to include %q", vary, want)
+			}
 		}
 
 		if rec.Code != http.StatusOK {

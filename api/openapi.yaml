@@ -18,6 +18,13 @@ info:
     - `Link: </api/context.jsonld>; rel="describedby"` — JSON-LD context
     - `Vary: Accept` — content negotiation indicator
 
+    JSON, Atom and graph responses over 1 KiB honour `Accept-Encoding: zstd`
+    and `gzip`, answering with `Content-Encoding` and `Vary: Accept-Encoding`.
+    A compressed representation carries its coding as an ETag suffix inside
+    the quotes (`"abc123-zstd"`); the hash itself is always of the
+    uncompressed body, so such a validator can be sent back as `If-Match`
+    unchanged. `/search` is never compressed.
+
 servers:
   - url: /
 

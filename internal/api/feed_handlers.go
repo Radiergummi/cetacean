@@ -140,7 +140,9 @@ func (h *Handlers) handleFeedSearch(
 	})
 	entries = h.filterHistoryACL(r, entries)
 
-	render(w, r, historyFeedData(
+	// This feed titles itself with ?q= verbatim beside ACL-filtered entries,
+	// the same BREACH shape HandleSearch opts out of, so it opts out too.
+	render(w, disableCompression(r), historyFeedData(
 		r, fmt.Sprintf("Cetacean — Search: %s", q), entries, beforeID, limit,
 	))
 }

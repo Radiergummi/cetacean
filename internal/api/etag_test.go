@@ -1,10 +1,19 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/docker/docker/api/types/swarm"
+	"github.com/klauspost/compress/zstd"
+
+	"github.com/radiergummi/cetacean/internal/api/sse"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func TestETagGeneration(t *testing.T) {
@@ -316,5 +325,265 @@ func TestEtagMatchStrongIgnoresCodingSuffix(t *testing.T) {
 	}
 	if !etagMatchStrong(`"abc123"`, `"abc123-gzip"`) {
 		t.Error("base validator did not match a coding-suffixed current tag")
+	}
+}
+
+func TestCompressedResponsesKeepConditionalCaching(t *testing.T) {
+	router := newSeededTestRouter(t)
+
+	first := httptest.NewRequest("GET", "/services", nil)
+	first.Header.Set("Accept", "application/json")
+	first.Header.Set("Accept-Encoding", "zstd")
+	firstRec := httptest.NewRecorder()
+	router.ServeHTTP(firstRec, first)
+
+	if got := firstRec.Header().Get("Content-Encoding"); got != "zstd" {
+		t.Fatalf("Content-Encoding = %q, want zstd", got)
+	}
+
+	etag := firstRec.Header().Get("ETag")
+	if !strings.HasSuffix(strings.Trim(etag, `"`), "-zstd") {
+		t.Errorf("ETag = %q, want a -zstd suffix", etag)
+	}
+
+	if !strings.Contains(strings.Join(firstRec.Header().Values("Vary"), ", "),
+		"Accept-Encoding") {
+		t.Error("Vary does not include Accept-Encoding")
+	}
+
+	// The body really is a zstd frame, and it decodes to the JSON an
+	// identity read would have returned — trailing newline included, since
+	// that byte has to live inside the frame rather than after it.
+	decoded, err := zstd.NewReader(nil)
+	if err != nil {
+		t.Fatalf("zstd reader: %v", err)
+	}
+	defer decoded.Close()
+
+	plain, err := decoded.DecodeAll(firstRec.Body.Bytes(), nil)
+	if err != nil {
+		t.Fatalf("response body is not a valid zstd frame: %v", err)
+	}
+
+	identity := httptest.NewRequest("GET", "/services", nil)
+	identity.Header.Set("Accept", "application/json")
+	identityRec := httptest.NewRecorder()
+	router.ServeHTTP(identityRec, identity)
+
+	if string(plain) != identityRec.Body.String() {
+		t.Error("decompressed body differs from the identity representation")
+	}
+
+	second := httptest.NewRequest("GET", "/services", nil)
+	second.Header.Set("Accept", "application/json")
+	second.Header.Set("Accept-Encoding", "zstd")
+	second.Header.Set("If-None-Match", etag)
+	secondRec := httptest.NewRecorder()
+	router.ServeHTTP(secondRec, second)
+
+	if secondRec.Code != http.StatusNotModified {
+		t.Errorf("status = %d, want 304 — compression must not cost us caching",
+			secondRec.Code)
+	}
+	if secondRec.Body.Len() != 0 {
+		t.Errorf("304 carried a %d-byte body", secondRec.Body.Len())
+	}
+}
+
+// TestCompressedETagStillSatisfiesIfMatch is the regression this task exists
+// to avoid. precond hashes the identity representation and never compresses,
+// so an ETag hashed over compressed bytes could never match one — and since
+// every browser sends Accept-Encoding, every conditional write from a browser
+// would 412. The base hash must be coding-independent, with the coding only
+// ever appended as a suffix stripCodingSuffix knows how to remove.
+func TestCompressedETagStillSatisfiesIfMatch(t *testing.T) {
+	router := newSeededTestRouter(t)
+
+	read := httptest.NewRequest("GET", "/services/svc1", nil)
+	read.Header.Set("Accept", "application/json")
+	read.Header.Set("Accept-Encoding", "zstd")
+	readRec := httptest.NewRecorder()
+	router.ServeHTTP(readRec, read)
+
+	if readRec.Code != http.StatusOK {
+		t.Fatalf("GET status = %d, want 200", readRec.Code)
+	}
+	// Guard the premise: an uncompressed read would make the rest of this
+	// test pass for the wrong reason.
+	if got := readRec.Header().Get("Content-Encoding"); got != "zstd" {
+		t.Fatalf("Content-Encoding = %q, want zstd — fixture body too small to compress", got)
+	}
+
+	etag := readRec.Header().Get("ETag")
+	if !strings.HasSuffix(strings.Trim(etag, `"`), "-zstd") {
+		t.Fatalf("ETag = %q, want a -zstd suffix", etag)
+	}
+
+	write := httptest.NewRequest("DELETE", "/services/svc1", nil)
+	write.Header.Set("Accept", "application/json")
+	write.Header.Set("If-Match", etag)
+	writeRec := httptest.NewRecorder()
+	router.ServeHTTP(writeRec, write)
+
+	if writeRec.Code != http.StatusNoContent {
+		t.Errorf(
+			"DELETE /services/svc1 = %d, want 204 with the ETag its own compressed GET returned",
+			writeRec.Code,
+		)
+	}
+}
+
+// TestSearchIsNeverCompressed covers both search representations: the JSON
+// handler echoes ?q= verbatim into the body, and the feed titles itself with
+// it, in both cases beside ACL-filtered content. That is the BREACH shape, so
+// both opt out.
+//
+// The cache is seeded until each response clears compressionThreshold on its
+// own — the seeded fixture's search answers in a few hundred bytes, which
+// would make either assertion pass whether the opt-out were wired or not.
+func TestSearchIsNeverCompressed(t *testing.T) {
+	c := cache.New(nil)
+	for i := range 60 {
+		id := "web-" + strconv.Itoa(i)
+		c.SetService(swarm.Service{
+			ID:   id,
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: id}},
+		})
+	}
+
+	router := newTestRouterWithCache(t, c)
+
+	cases := []struct {
+		name   string
+		path   string
+		accept string
+	}{
+		{"json", "/search?q=web&limit=0", "application/json"},
+		{"atom", "/search?q=web", "application/atom+xml"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", tc.path, nil)
+			req.Header.Set("Accept", tc.accept)
+			req.Header.Set("Accept-Encoding", "zstd")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+			}
+			if got := rec.Header().Get("Content-Encoding"); got != "" {
+				t.Errorf("Content-Encoding = %q, want empty for %s", got, tc.path)
+			}
+			if rec.Body.Len() <= compressionThreshold {
+				t.Errorf(
+					"body is %d bytes, under the %d-byte threshold — this case proves nothing",
+					rec.Body.Len(), compressionThreshold,
+				)
+			}
+		})
+	}
+}
+
+func TestSSEStillStreamsUnderCompression(t *testing.T) {
+	// No ResponseWriter is wrapped anywhere in this design, so the
+	// w.(http.Flusher) assertions in sse/broadcaster.go, log_handlers.go and
+	// metricsstream.go keep working. This asserts that structurally.
+	//
+	// The broadcaster is wired onto the handlers rather than left to
+	// newTestRouterWithCache's own: streamList reads the handlers' one, and a
+	// nil there panics before the stream is ever opened.
+	broadcaster := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	t.Cleanup(broadcaster.Close)
+
+	router := newTestRouterWithCache(t, cache.New(nil), withBroadcaster(broadcaster))
+	req := httptest.NewRequest("GET", "/nodes", nil)
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Accept-Encoding", "zstd")
+	rec := httptest.NewRecorder()
+
+	ctx, cancel := context.WithTimeout(req.Context(), 200*time.Millisecond)
+	defer cancel()
+	router.ServeHTTP(rec, req.WithContext(ctx))
+
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Errorf("Content-Encoding = %q, want empty — SSE must not be compressed", got)
+	}
+	if rec.Code == http.StatusInternalServerError {
+		t.Error("SSE returned 500 — a ResponseWriter wrapper broke http.Flusher")
+	}
+}
+
+// TestAtomFeedsAreCompressed covers the other body-producing ETag helper:
+// writeCachedAtom renders XML, which compresses better than anything else
+// the API serves, and it accumulates its coding onto the Vary it already
+// writes rather than replacing it.
+func TestAtomFeedsAreCompressed(t *testing.T) {
+	c := cache.New(nil)
+	for i := range 60 {
+		id := "web-" + strconv.Itoa(i)
+		c.SetService(swarm.Service{
+			ID:   id,
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: id}},
+		})
+	}
+
+	router := newTestRouterWithCache(t, c)
+
+	req := httptest.NewRequest("GET", "/history", nil)
+	req.Header.Set("Accept", "application/atom+xml")
+	req.Header.Set("Accept-Encoding", "zstd")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "zstd" {
+		t.Fatalf("Content-Encoding = %q, want zstd", got)
+	}
+	if etag := rec.Header().Get("ETag"); !strings.HasSuffix(strings.Trim(etag, `"`), "-zstd") {
+		t.Errorf("ETag = %q, want a -zstd suffix", etag)
+	}
+
+	vary := strings.Join(rec.Header().Values("Vary"), ", ")
+	for _, want := range []string{"Authorization, Cookie", "Accept-Encoding"} {
+		if !strings.Contains(vary, want) {
+			t.Errorf("Vary = %q, want it to include %q", vary, want)
+		}
+	}
+}
+
+// TestCodedETagSuffixesAreStrippable holds codedETag and knownCodingSuffixes
+// together. The precondition path works only because stripCodingSuffix can
+// undo exactly what codedETag did; a coding added to one and not the other
+// would leave every conditional write from a client using it failing with a
+// 412 nothing in the test suite would otherwise notice.
+func TestCodedETagSuffixesAreStrippable(t *testing.T) {
+	base := computeETag([]byte("a representation"))
+
+	for _, coding := range []Encoding{EncodingGzip, EncodingZstd} {
+		t.Run(coding.String(), func(t *testing.T) {
+			tagged := codedETag(base, coding)
+
+			if tagged == base {
+				t.Fatalf("codedETag(%q, %v) left the tag unchanged", base, coding)
+			}
+			if !strings.HasPrefix(tagged, `"`) || !strings.HasSuffix(tagged, `"`) {
+				t.Errorf("tag %q is not quoted — the suffix belongs inside the quotes", tagged)
+			}
+			if got := stripCodingSuffix(strings.Trim(tagged, `"`)); got != strings.Trim(base, `"`) {
+				t.Errorf("stripCodingSuffix(%q) = %q, want %q",
+					tagged, got, strings.Trim(base, `"`))
+			}
+			if !etagMatchStrong(tagged, base) {
+				t.Error("a coding-suffixed validator no longer satisfies If-Match on its base")
+			}
+		})
+	}
+
+	if got := codedETag(base, EncodingIdentity); got != base {
+		t.Errorf("codedETag(%q, identity) = %q, want it untouched", base, got)
 	}
 }

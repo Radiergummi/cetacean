@@ -69,7 +69,8 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 	}
 
 	body := buf.Bytes()
-	etag := computeETag(body)
+	coding := negotiateCoding(w, r, body)
+	etag := codedETag(computeETag(body), coding)
 
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/atom+xml;charset=utf-8")
@@ -80,6 +81,8 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
+
+	body, _ = encodeBody(body, coding)
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(body) //nolint:errcheck

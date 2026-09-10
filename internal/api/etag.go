@@ -45,6 +45,51 @@ func etagMatch(header, etag string) bool {
 	return false
 }
 
+// negotiateCoding picks the content-coding this response body will be served
+// under and stamps the headers describing it. It returns the coding rather
+// than encoding anything, so a caller can suffix its ETag and evaluate
+// If-None-Match first: a 304 needs the validator but has no body to spend a
+// compression pass on, and on a dashboard that polls, the 304 is the common
+// path.
+//
+// Vary is added whether or not anything was compressed — the response varies
+// by Accept-Encoding either way — and with Add rather than Set, so it extends
+// the Vary another layer already wrote instead of replacing it.
+func negotiateCoding(w http.ResponseWriter, r *http.Request, body []byte) Encoding {
+	w.Header().Add("Vary", "Accept-Encoding")
+
+	if compressionDisabled(r) {
+		return EncodingIdentity
+	}
+
+	coding := appliedEncoding(resolveEncoding(r), len(body))
+	if coding == EncodingIdentity {
+		return EncodingIdentity
+	}
+
+	w.Header().Set("Content-Encoding", coding.String())
+
+	return coding
+}
+
+// codedETag marks a validator with the content-coding its representation was
+// served under, per RFC 9110 §8.8.3: two codings of one resource are two
+// representations and cannot share a strong validator.
+//
+// The suffix goes inside the quotes and is appended to a hash of the
+// *identity* bytes, never of the encoded ones. That is what lets
+// stripCodingSuffix recover the underlying validator, and so what lets a
+// client hand back an If-Match it obtained under compression on a request
+// precond evaluates without any — which, since every browser sends
+// Accept-Encoding, is every conditional write a browser makes.
+func codedETag(etag string, coding Encoding) string {
+	if coding == EncodingIdentity {
+		return etag
+	}
+
+	return `"` + strings.Trim(etag, `"`) + "-" + coding.String() + `"`
+}
+
 // writeRawWithETag sets an ETag on pre-rendered bytes and returns 304 Not
 // Modified if the client's If-None-Match header matches. The caller must set
 // Content-Type before calling this function. If the caller has already set
@@ -56,12 +101,19 @@ func writeRawWithETag(w http.ResponseWriter, r *http.Request, data []byte) {
 // writeRawWithPrecomputedETag is writeRawWithETag for bodies fixed at build
 // time, whose ETag the caller hashed once at startup rather than on every
 // request — including the 304s, which never touch the body at all.
+//
+// The precomputed tag is the identity validator, so compression suffixes it
+// and hashes nothing: there is no hash step here to redirect at the encoded
+// bytes, and there must not be one.
 func writeRawWithPrecomputedETag(
 	w http.ResponseWriter,
 	r *http.Request,
 	data []byte,
 	etag string,
 ) {
+	coding := negotiateCoding(w, r, data)
+	etag = codedETag(etag, coding)
+
 	w.Header().Set("ETag", etag)
 
 	if w.Header().Get("Cache-Control") == "" {
@@ -73,8 +125,10 @@ func writeRawWithPrecomputedETag(
 		return
 	}
 
+	body, _ := encodeBody(data, coding)
+
 	w.WriteHeader(http.StatusOK)
-	w.Write(data) //nolint:errcheck
+	w.Write(body) //nolint:errcheck
 }
 
 // writeCachedJSON marshals v to JSON with ETag-based conditional caching.
@@ -97,7 +151,9 @@ func writeCachedJSONStatus(w http.ResponseWriter, r *http.Request, status int, v
 		return
 	}
 
-	etag := computeETag(body)
+	coding := negotiateCoding(w, r, body)
+	etag := codedETag(computeETag(body), coding)
+
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/json")
 	if w.Header().Get("Cache-Control") == "" {
@@ -109,9 +165,21 @@ func writeCachedJSONStatus(w http.ResponseWriter, r *http.Request, status int, v
 		return
 	}
 
+	writeEncodedJSON(w, status, body, coding)
+}
+
+// writeEncodedJSON sends a JSON body and its trailing newline under coding.
+// The newline is compressed together with the body rather than written after
+// it — a client decoding the frame would otherwise find a stray byte past its
+// end.
+func writeEncodedJSON(w http.ResponseWriter, status int, body []byte, coding Encoding) {
+	// The coding is the one appliedEncoding already settled on, and adding a
+	// byte cannot push a body back under the threshold, so the coding
+	// encodeBody applies here is the coding the ETag was suffixed with.
+	payload, _ := encodeBody(append(body, '\n'), coding)
+
 	w.WriteHeader(status)
-	w.Write(body)         //nolint:errcheck
-	w.Write([]byte{'\n'}) //nolint:errcheck
+	w.Write(payload) //nolint:errcheck
 }
 
 // writeCachedJSONTimed is like writeCachedJSON but also sets a Last-Modified
@@ -129,7 +197,9 @@ func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastMod
 		return
 	}
 
-	etag := computeETag(body)
+	coding := negotiateCoding(w, r, body)
+	etag := codedETag(computeETag(body), coding)
+
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -156,9 +226,7 @@ func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastMod
 		}
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write(body)         //nolint:errcheck
-	w.Write([]byte{'\n'}) //nolint:errcheck
+	writeEncodedJSON(w, http.StatusOK, body, coding)
 }
 
 // knownCodingSuffixes are the content-coding markers writeCachedJSON appends

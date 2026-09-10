@@ -65,16 +65,28 @@ var gzipWriterPool = sync.Pool{
 	},
 }
 
+// appliedEncoding reports the coding encodeBody will actually apply to a body
+// of bodyLen bytes when asked for e — anything under compressionThreshold
+// stays identity, however good the client's Accept-Encoding was.
+//
+// It is separate from encodeBody because a caller has to know the coding
+// before it knows whether it needs a body at all: the coding goes into the
+// ETag suffix and Content-Encoding, both of which a 304 carries even though
+// it sends no bytes to compress.
+func appliedEncoding(e Encoding, bodyLen int) Encoding {
+	if bodyLen < compressionThreshold {
+		return EncodingIdentity
+	}
+
+	return e
+}
+
 // encodeBody compresses body with the given coding, returning the encoded
 // bytes and the coding actually applied. Callers can use the return value
 // unconditionally: bodies under compressionThreshold, and requests for
 // EncodingIdentity, come back as the original bytes with EncodingIdentity.
 func encodeBody(body []byte, e Encoding) ([]byte, Encoding) {
-	if e == EncodingIdentity || len(body) < compressionThreshold {
-		return body, EncodingIdentity
-	}
-
-	switch e {
+	switch appliedEncoding(e, len(body)) {
 	case EncodingGzip:
 		return gzipEncode(body), EncodingGzip
 	case EncodingZstd:
