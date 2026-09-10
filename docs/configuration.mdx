@@ -76,6 +76,8 @@ the config file.
 
 <ConfigParam name="server.cors.origins" flag="-cors-origins" env="CETACEAN_CORS_ORIGINS">
   Origins allowed to make cross-origin requests to the API, as a comma-separated list, e.g. `https://admin.example.com`, or `*` for any. When unset, no CORS headers are sent and browsers block cross-origin requests.
+
+  These origins are also the ones [cross-site request forgery protection][csrf] trusts, so a browser client listed here can both read the API and write to it. A wildcard cannot be: `*` is not an origin, so browsers may read the API from anywhere while cross-origin writes are still refused. List the origins explicitly if a browser client on another origin has to write.
 </ConfigParam>
 
 <ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">
@@ -408,6 +410,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [choosing-a-mode]: authentication#choosing-a-mode
 [client-certificates]: #client-certificates
 [config-file]: #config-file
+[csrf]: api#cross-origin-requests
 [dashboard]: dashboard
 [interaction-with-operations-level]: authorization#interaction-with-operations-level
 [mcp]: mcp

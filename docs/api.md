@@ -272,6 +272,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 | Resource changed between your read and your write | 409 | [`SVC001`](api/errors#SVC001), [`NOD002`](api/errors#NOD002), [`CFG005`](api/errors#CFG005), [`SEC005`](api/errors#SEC005) | Re-read the resource and retry |
 | Endpoint above the configured [operations level][operations-level] | 403 | [`OPS001`](api/errors#OPS001) | Raise the operations level |
 | [ACL][authorization] denies read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
+| Cross-origin write from an origin that is not allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] — see [cross-origin requests][cross-origin] |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
 
@@ -308,6 +309,27 @@ resource.
 
 Every response sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Content-Security-Policy`. HSTS
 is added when TLS is enabled.
+
+## Cross-origin requests
+
+Two settings govern browser access from another origin, and they read the same value.
+
+[`server.cors.origins`][server.cors.origins] decides which origins may *read* the API: a browser is allowed to see the
+response only for an origin on that list. The same list decides which origins may *write* it. Every request that
+changes state — `POST`, `PUT`, `PATCH`, `DELETE` — is checked against
+[Fetch Metadata](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Sec-Fetch-Site): one that a
+browser reports as cross-site, from an origin not on the list, is refused with
+[`CSR001`](api/errors#CSR001) before it reaches a handler. This is cross-site request forgery protection, and it
+matters in every authentication mode whose credential the browser attaches by itself — a session cookie, a Tailscale
+identity, a client certificate, or a header a proxy adds.
+
+Two kinds of client are never affected. Safe methods — `GET`, `HEAD`, `OPTIONS` — always pass, so a cross-origin read
+behaves exactly as CORS allows. So does any client that sends neither `Sec-Fetch-Site` nor `Origin`, which is every
+non-browser client: `curl`, a script, or an [MCP][mcp] host outside the browser.
+
+A wildcard is the one configuration where the two halves cannot agree. `*` is not an origin, so it cannot be trusted
+for writes: browsers may read the API from anywhere while cross-origin writes are still refused. List the origins
+explicitly if a browser client on another origin has to write.
 
 ## Waiting for a change to take effect
 
@@ -631,10 +653,12 @@ characters) or the server generates one. The value appears in error responses as
 [auth.mode]: configuration#auth.mode
 [authentication]: authentication
 [authorization]: authorization
+[cross-origin]: #cross-origin-requests
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools
 [mcp.enabled]: configuration#mcp.enabled
 [mcp]: mcp
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
+[server.cors.origins]: configuration#server.cors.origins
 [server.sse.batch_interval]: configuration#server.sse.batch_interval

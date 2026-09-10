@@ -762,6 +762,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		recovery,
 		securityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),
 		cors(cfg.CORS),
+		crossOriginProtection(cfg.CORS),
 		auth.Middleware(authProvider),
 		negotiate,
 		requireReady(h),
