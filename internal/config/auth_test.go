@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -187,11 +188,17 @@ func TestLoadAuth_TailscaleTsnetHappyPath(t *testing.T) {
 	}
 }
 
-func TestLoadAuth_CertRequiresCA(t *testing.T) {
+func TestLoadAuth_CertWithoutCA(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "cert")
-	_, err := LoadAuth(nil, nil, "", "")
-	if err == nil {
-		t.Fatal("expected error for missing CA")
+
+	// Whether a missing CA is fatal depends on TLS config LoadAuth cannot see;
+	// ValidateCertMode decides, and TestValidateCertMode covers it.
+	cfg, err := LoadAuth(nil, nil, "", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Cert.CA != "" {
+		t.Errorf("CA = %q, want empty", cfg.Cert.CA)
 	}
 }
 
@@ -255,9 +262,8 @@ func TestLoadAuth_HeadersNoTrustedProxies(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Proxy-Secret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
 
-	// LoadAuth no longer rejects missing trusted proxies — that check
-	// moved to main.go where the general CETACEAN_TRUSTED_PROXIES is
-	// resolved and can provide the value.
+	// The check moved to main.go, where the general CETACEAN_TRUSTED_PROXIES
+	// is resolved and can supply the value.
 	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -649,5 +655,33 @@ func TestOIDCStillRequiresRedirectURLWithoutPublicURL(t *testing.T) {
 
 	if _, err := LoadAuth(nil, nil, "", ""); err == nil {
 		t.Fatal("LoadAuth = nil error, want the existing 'oidc mode requires' rejection")
+	}
+}
+
+func TestValidateCertMode(t *testing.T) {
+	proxies := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
+
+	tests := []struct {
+		name           string
+		tlsEnabled     bool
+		certCA         string
+		trustedProxies []netip.Prefix
+		wantErr        bool
+	}{
+		{"TLS terminated here", true, "/ca.pem", nil, false},
+		{"TLS terminated here without a CA", true, "", nil, true},
+		{"TLS terminated by a trusted proxy", false, "", proxies, false},
+		{"both", true, "/ca.pem", proxies, false},
+		{"neither, so no certificate can ever arrive", false, "", nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateCertMode(tt.tlsEnabled, tt.certCA, tt.trustedProxies)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateCertMode(%v, %q, %v) = %v, wantErr = %v",
+					tt.tlsEnabled, tt.certCA, tt.trustedProxies, err, tt.wantErr)
+			}
+		})
 	}
 }

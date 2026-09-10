@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -10,19 +11,35 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// anyProxy matches all IPv4 addresses. Used in tests that aren't testing
-// proxy validation specifically, to satisfy the mandatory TrustedProxies
-// requirement without affecting test semantics.
-var anyProxy = []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}
+// fromTrustedProxy attaches the trust verdict realIP records at the edge.
+func fromTrustedProxy(r *http.Request) *http.Request {
+	return withPeer(r, true)
+}
+
+// fromUntrustedPeer attaches the opposite verdict.
+func fromUntrustedPeer(r *http.Request) *http.Request {
+	return withPeer(r, false)
+}
+
+func withPeer(r *http.Request, trusted bool) *http.Request {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		panic("test request has no host:port RemoteAddr: " + r.RemoteAddr)
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		panic("test request has an unparseable peer address: " + host)
+	}
+	return r.WithContext(ContextWithPeer(r.Context(), Peer{Addr: addr, Trusted: trusted}))
+}
 
 func TestHeadersProvider_Authenticate(t *testing.T) {
 	t.Run("all headers", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			Name:           "X-Name",
-			Email:          "X-Email",
-			Groups:         "X-Groups",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
+			Name:    "X-Name",
+			Email:   "X-Email",
+			Groups:  "X-Groups",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -31,7 +48,7 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 		r.Header.Set("X-Email", "alice@example.com")
 		r.Header.Set("X-Groups", "admin, editors, ")
 
-		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		id, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -58,13 +75,12 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("missing subject header", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
+		_, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err == nil {
 			t.Fatal("expected error for missing subject header")
 		}
@@ -72,17 +88,16 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("valid shared secret", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			SecretHeader:   "X-Proxy-Secret",
-			SecretValue:    "s3cret",
-			TrustedProxies: anyProxy,
+			Subject:      "X-User",
+			SecretHeader: "X-Proxy-Secret",
+			SecretValue:  "s3cret",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", "bob")
 		r.Header.Set("X-Proxy-Secret", "s3cret")
 
-		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		id, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -93,17 +108,16 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("invalid shared secret", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			SecretHeader:   "X-Proxy-Secret",
-			SecretValue:    "s3cret",
-			TrustedProxies: anyProxy,
+			Subject:      "X-User",
+			SecretHeader: "X-Proxy-Secret",
+			SecretValue:  "s3cret",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", "bob")
 		r.Header.Set("X-Proxy-Secret", "wrong")
 
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
+		_, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err == nil {
 			t.Fatal("expected error for invalid secret")
 		}
@@ -111,17 +125,16 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("missing secret header entirely", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			SecretHeader:   "X-Proxy-Secret",
-			SecretValue:    "s3cret",
-			TrustedProxies: anyProxy,
+			Subject:      "X-User",
+			SecretHeader: "X-Proxy-Secret",
+			SecretValue:  "s3cret",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", "bob")
 		// X-Proxy-Secret not set at all.
 
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
+		_, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err == nil {
 			t.Fatal("expected error for missing secret header")
 		}
@@ -129,14 +142,13 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("empty subject header value", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", "")
 
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
+		_, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err == nil {
 			t.Fatal("expected error for empty subject header")
 		}
@@ -144,14 +156,13 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("subject with leading and trailing whitespace", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", "  alice  ")
 
-		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		id, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -163,16 +174,15 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("groups with only commas", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			Groups:         "X-Groups",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
+			Groups:  "X-Groups",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", "alice")
 		r.Header.Set("X-Groups", ",,,")
 
-		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		id, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -183,16 +193,15 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("groups with single value", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			Groups:         "X-Groups",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
+			Groups:  "X-Groups",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", "alice")
 		r.Header.Set("X-Groups", "admin")
 
-		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		id, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -203,8 +212,7 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("header name case insensitivity", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -213,7 +221,7 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 			"alice",
 		) // Go canonicalizes headers; case insensitivity is guaranteed by net/http
 
-		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		id, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -224,14 +232,13 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("only subject header", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-Remote-User",
-			TrustedProxies: anyProxy,
+			Subject: "X-Remote-User",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-Remote-User", "charlie")
 
-		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		id, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -255,14 +262,13 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("subject with control characters rejected", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header["X-User"] = []string{"alice\x00bob"}
 
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
+		_, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err == nil {
 			t.Fatal("expected error for subject with control characters")
 		}
@@ -273,14 +279,13 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("subject with newline rejected", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header["X-User"] = []string{"alice\nbob"}
 
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
+		_, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err == nil {
 			t.Fatal("expected error for subject with newline")
 		}
@@ -288,14 +293,13 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("subject exceeding max length rejected", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", strings.Repeat("a", maxSubjectLen+1))
 
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
+		_, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err == nil {
 			t.Fatal("expected error for subject exceeding max length")
 		}
@@ -306,14 +310,13 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("subject at max length accepted", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", strings.Repeat("a", maxSubjectLen))
 
-		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		id, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -324,15 +327,14 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("extra headers captured in Raw", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
 		}, "X-ACL")
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", "alice")
 		r.Header.Set("X-Acl", `[{"resources":["service:*"],"permissions":["read"]}]`)
 
-		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		id, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -348,14 +350,13 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("missing extra header not stored in Raw", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: anyProxy,
+			Subject: "X-User",
 		}, "X-ACL")
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", "alice")
 
-		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		id, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -366,21 +367,23 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 	})
 }
 
-func TestHeadersProvider_TrustedProxies(t *testing.T) {
-	trustedCIDR := netip.MustParsePrefix("10.0.0.0/8")
-	trustedIP := netip.MustParsePrefix("192.168.1.1/32")
+// TestHeadersProvider_RequiresTrustedProxyVerdict: identity headers are
+// believed only when the edge recorded a trusted-proxy arrival. Which
+// addresses count as one is decided and covered in internal/api/realip.go.
+func TestHeadersProvider_RequiresTrustedProxyVerdict(t *testing.T) {
+	newProvider := func() *HeadersProvider {
+		return NewHeadersProvider(config.HeadersConfig{Subject: "X-User"})
+	}
 
-	t.Run("trusted proxy accepted", func(t *testing.T) {
-		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: []netip.Prefix{trustedCIDR},
-		})
-
+	newRequest := func() *http.Request {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.RemoteAddr = "10.0.0.5:12345"
 		r.Header.Set("X-User", "alice")
+		return r
+	}
 
-		id, err := p.Authenticate(httptest.NewRecorder(), r)
+	t.Run("trusted peer accepted", func(t *testing.T) {
+		id, err := newProvider().Authenticate(httptest.NewRecorder(), fromTrustedProxy(newRequest()))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -389,138 +392,40 @@ func TestHeadersProvider_TrustedProxies(t *testing.T) {
 		}
 	})
 
-	t.Run("untrusted proxy rejected", func(t *testing.T) {
-		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: []netip.Prefix{trustedCIDR},
-		})
-
-		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		r.RemoteAddr = "172.16.0.1:12345"
-		r.Header.Set("X-User", "alice")
-
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
+	t.Run("untrusted peer rejected", func(t *testing.T) {
+		_, err := newProvider().Authenticate(httptest.NewRecorder(), fromUntrustedPeer(newRequest()))
 		if err == nil {
-			t.Fatal("expected error for untrusted proxy")
+			t.Fatal("expected error for untrusted peer")
 		}
-		if !strings.Contains(err.Error(), "not a trusted proxy") {
+		if !strings.Contains(err.Error(), "trusted proxy") {
 			t.Errorf("error = %q, want mention of trusted proxy", err.Error())
 		}
 	})
 
-	t.Run("exact IP match", func(t *testing.T) {
-		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: []netip.Prefix{trustedIP},
-		})
-
-		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		r.RemoteAddr = "192.168.1.1:443"
-		r.Header.Set("X-User", "alice")
-
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("exact IP mismatch", func(t *testing.T) {
-		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: []netip.Prefix{trustedIP},
-		})
-
-		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		r.RemoteAddr = "192.168.1.2:443"
-		r.Header.Set("X-User", "alice")
-
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
+	t.Run("no verdict rejected", func(t *testing.T) {
+		// The edge middleware did not run; absence is not a favourable verdict.
+		_, err := newProvider().Authenticate(httptest.NewRecorder(), newRequest())
 		if err == nil {
-			t.Fatal("expected error for non-matching IP")
+			t.Fatal("expected error when no trust verdict was recorded")
 		}
 	})
 
-	t.Run("multiple trusted prefixes", func(t *testing.T) {
+	t.Run("trust checked before secret", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: []netip.Prefix{trustedCIDR, trustedIP},
+			Subject:      "X-User",
+			SecretHeader: "X-Secret",
+			SecretValue:  "s3cret",
 		})
 
-		// First prefix matches.
-		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		r.RemoteAddr = "10.0.0.1:80"
-		r.Header.Set("X-User", "alice")
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
-		if err != nil {
-			t.Fatalf("first prefix: unexpected error: %v", err)
-		}
+		r := newRequest()
+		r.Header.Set("X-Secret", "s3cret") // correct secret, untrusted peer
 
-		// Second prefix matches.
-		r = httptest.NewRequest(http.MethodGet, "/", nil)
-		r.RemoteAddr = "192.168.1.1:80"
-		r.Header.Set("X-User", "alice")
-		_, err = p.Authenticate(httptest.NewRecorder(), r)
-		if err != nil {
-			t.Fatalf("second prefix: unexpected error: %v", err)
-		}
-	})
-
-	t.Run("IPv6 trusted proxy", func(t *testing.T) {
-		ipv6Prefix := netip.MustParsePrefix("fd00::/8")
-		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			TrustedProxies: []netip.Prefix{ipv6Prefix},
-		})
-
-		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		r.RemoteAddr = "[fd00::1]:443"
-		r.Header.Set("X-User", "alice")
-
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("trusted proxy checked before secret", func(t *testing.T) {
-		// Both configured — untrusted IP should fail before secret check.
-		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:        "X-User",
-			SecretHeader:   "X-Secret",
-			SecretValue:    "s3cret",
-			TrustedProxies: []netip.Prefix{trustedCIDR},
-		})
-
-		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		r.RemoteAddr = "172.16.0.1:12345"
-		r.Header.Set("X-User", "alice")
-		r.Header.Set("X-Secret", "s3cret") // correct secret, but untrusted IP
-
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
+		_, err := p.Authenticate(httptest.NewRecorder(), fromUntrustedPeer(r))
 		if err == nil {
-			t.Fatal("expected error for untrusted proxy despite valid secret")
+			t.Fatal("expected error for untrusted peer despite valid secret")
 		}
-		if !strings.Contains(err.Error(), "not a trusted proxy") {
+		if !strings.Contains(err.Error(), "trusted proxy") {
 			t.Errorf("error = %q, want trusted proxy error (not secret error)", err.Error())
-		}
-	})
-
-	t.Run("no trusted proxies configured rejects all", func(t *testing.T) {
-		// No TrustedProxies — proxy check always runs and rejects.
-		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
-		})
-
-		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		r.RemoteAddr = "1.2.3.4:80"
-		r.Header.Set("X-User", "alice")
-
-		_, err := p.Authenticate(httptest.NewRecorder(), r)
-		if err == nil {
-			t.Fatal("expected error for missing trusted proxies")
-		}
-		if !strings.Contains(err.Error(), "not a trusted proxy") {
-			t.Errorf("error = %q, want mention of trusted proxy", err.Error())
 		}
 	})
 }

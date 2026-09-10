@@ -79,7 +79,7 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">
-  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose `X-Forwarded-For` header is trusted for the real client IP, e.g. `10.0.0.0/8,172.16.0.0/12`. Required for [header-based authentication][trusted-proxy-headers]. When unset, every request counts as a direct connection.
+  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose forwarding headers are trusted, e.g. `10.0.0.0/8,172.16.0.0/12`. Both [`Forwarded`][rfc7239] and `X-Forwarded-For` are read for the real client IP, the standard header first. Required for [header-based authentication][trusted-proxy-headers], and for `cert` mode behind a [TLS-terminating proxy][cert-behind-proxy]. When unset, every request counts as a direct connection.
 </ConfigParam>
 
 <ConfigParam name="storage.snapshot" flag="-snapshot" env="CETACEAN_SNAPSHOT" default="true">
@@ -91,7 +91,7 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="tls.cert" flag="-tls-cert" env="CETACEAN_TLS_CERT">
-  Path to the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail)-encoded server certificate for TLS termination. Set it together with [`tls.key`][tls.key] or not at all. Required for [client certificate authentication][client-certificates], optional otherwise.
+  Path to the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail)-encoded server certificate for TLS termination. Set it together with [`tls.key`][tls.key] or not at all. Required for [client certificate authentication][client-certificates] unless a [TLS-terminating proxy][cert-behind-proxy] forwards the certificate instead; optional in every other mode.
 </ConfigParam>
 
 <ConfigParam name="tls.key" flag="-tls-key" env="CETACEAN_TLS_KEY">
@@ -145,7 +145,7 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="auth.tailscale.hostname" flag="-auth-tailscale-hostname" env="CETACEAN_AUTH_TAILSCALE_HOSTNAME" default="cetacean">
-  Hostname the embedded Tailscale node registers as (`tsnet` mode only). The dashboard is then reachable at `http://cetacean.<tailnet-name>.ts.net`.
+  Hostname the embedded Tailscale node registers as (`tsnet` mode only). The dashboard is then reachable at `http://cetacean.[[tailnet-name]].ts.net`.
 </ConfigParam>
 
 <ConfigParam name="auth.tailscale.state_dir" flag="-auth-tailscale-state-dir" env="CETACEAN_AUTH_TAILSCALE_STATE_DIR">
@@ -159,7 +159,7 @@ the config file.
 ### Client certificates
 
 <ConfigParam name="auth.cert.ca" flag="-auth-cert-ca" env="CETACEAN_AUTH_CERT_CA" required>
-  Path to a PEM-encoded CA certificate bundle. Client certificates must be signed by one of its CAs. Supports certificate chains and multiple CAs in one file. Requires `tls.cert` and `tls.key`, since mTLS needs TLS terminated at Cetacean.
+  Path to a PEM-encoded CA certificate bundle. Client certificates must be signed by one of its CAs. Supports certificate chains and multiple CAs in one file. Configures Cetacean's own TLS listener, so it requires `tls.cert` and `tls.key` and is required with them. Behind a [TLS-terminating proxy][cert-behind-proxy] the proxy verifies the certificate against its own CA instead, and this setting is not consulted.
 </ConfigParam>
 
 ### Trusted proxy headers
@@ -403,6 +403,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [auth.headers.secret_header]: #auth.headers.secret_header
 [auth.oidc.redirect_url]: #auth.oidc.redirect_url
 [authentication]: authentication
+[cert-behind-proxy]: authentication#behind-a-tls-terminating-proxy
 [authorization]: authorization
 [choosing-a-mode]: authentication#choosing-a-mode
 [client-certificates]: #client-certificates
@@ -419,6 +420,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [oidc]: #oidc
 [operations-level]: #operations-level
 [recommendations]: recommendations
+[rfc7239]: https://www.rfc-editor.org/rfc/rfc7239
 [server.base_path]: #server.base_path
 [server.operations_level]: #server.operations_level
 [server.pprof]: #server.pprof
