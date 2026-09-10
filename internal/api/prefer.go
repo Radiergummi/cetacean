@@ -22,13 +22,10 @@ func preferTokens(r *http.Request) []string {
 	return tokens
 }
 
-// preference splits one Prefer token into its name and its value.
-//
-// Preference names are case-insensitive (RFC 7240 §2), so the name comes back
-// lowercased. Anything after the first ";" is a preference-parameter, which
-// §2 allows on any preference and this server understands none of — dropping
-// it here is what keeps `wait=30; foo=bar` a wait rather than a malformed
-// token. A value given as a quoted-string loses its surrounding quotes.
+// preference splits one Prefer token into its name and its value. Names are
+// case-insensitive (RFC 7240 §2) and come back lowercased; the
+// preference-parameters after the first ";" are dropped, since this server
+// understands none of them, and a quoted-string value loses its quotes.
 func preference(token string) (name, value string) {
 	token, _, _ = strings.Cut(token, ";")
 
@@ -47,11 +44,8 @@ func preference(token string) (name, value string) {
 // containing the "return=minimal" preference token (RFC 7240 §4.2).
 func preferMinimal(r *http.Request) bool {
 	for _, token := range preferTokens(r) {
-		// The name matches case-insensitively and the value does not: RFC 7240
-		// §2 draws the line exactly there — "for both preference token names
-		// and parameter names, comparison is case insensitive while values are
-		// case sensitive". So "Return=minimal" is this preference and
-		// "return=MINIMAL" is a different, unrecognised one.
+		// RFC 7240 §2: names compare case-insensitively, values case-sensitively.
+		// So "Return=minimal" is this preference and "return=MINIMAL" is not.
 		if name, value := preference(token); name == "return" && value == "minimal" {
 			return true
 		}
@@ -75,9 +69,11 @@ func preferWait(r *http.Request) (time.Duration, bool) {
 			return 0, false
 		}
 
-		wait := min(time.Duration(seconds)*time.Second, cluster.ConvergenceTimeout)
+		// Clamp before multiplying: a large enough second count overflows
+		// int64 and comes back negative, which min would then keep.
+		capped := min(seconds, int(cluster.ConvergenceTimeout/time.Second))
 
-		return wait, true
+		return time.Duration(capped) * time.Second, true
 	}
 
 	return 0, false
@@ -95,14 +91,9 @@ func preferRespondAsync(r *http.Request) bool {
 }
 
 // applyPreference records one preference the server honoured (RFC 7240 §3).
-//
-// Every site that reports a preference goes through here, and it always adds
-// rather than sets. Preference-Applied is a list-valued field, so repeated
-// field lines are equivalent to one comma-joined value, and a single response
-// may honour more than one preference: a service mutation carrying
-// "return=minimal, wait=30" waits, then answers 204, and both are true of it.
-// Setting would make the result depend on which site ran last — an ordering
-// invariant no type enforces — so no caller may set this header directly.
+// It adds rather than sets, because one response may honour several: a mutation
+// carrying "return=minimal, wait=30" waits and then answers 204. No caller may
+// set Preference-Applied directly, or the result would depend on ordering.
 func applyPreference(w http.ResponseWriter, token string) {
 	w.Header().Add("Preference-Applied", token)
 }

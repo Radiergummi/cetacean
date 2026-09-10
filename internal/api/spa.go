@@ -32,28 +32,18 @@ type assetVariant struct {
 	ETag string `json:"etag"`
 }
 
-// assetEntry is one manifest record. The ETag here is bare hex — the plugin
-// deliberately stores it unquoted, matching computeETag's derivation before
-// it wraps the result in quotes — so serveAsset adds the quotes itself when
-// writing the header.
-//
-// A variant's ETag hashes the *compressed* bytes, where the API's codedETag
-// suffixes a hash of the identity ones. Both are correct for what they serve:
-// stripCodingSuffix exists so a validator handed back as If-Match can be
-// reduced to the representation-independent one, and no asset is ever an
-// If-Match target — so nothing here needs the base hash to be recoverable,
-// and hashing what is actually sent is the simpler rule.
+// assetEntry is one manifest record. The plugin stores ETags as bare hex, so
+// serveAsset adds the quotes itself. A variant's ETag hashes the compressed
+// bytes, unlike codedETag's suffixed hash of the identity ones: no asset is
+// ever an If-Match target, so nothing here needs the base hash back.
 type assetEntry struct {
 	ETag     string                  `json:"etag"`
 	Variants map[string]assetVariant `json:"variants"`
 }
 
-// loadAssetManifest reads assets-manifest.json from fsys, keyed by asset
-// path relative to fsys with no leading slash. A missing or unparsable
-// manifest yields a nil map rather than an error: a dist built without the
-// precompress plugin (or before Task 14) has no manifest, and every asset is
-// then served as identity, exactly as before this handler learned to read
-// one.
+// loadAssetManifest reads assets-manifest.json from fsys, keyed by asset path
+// relative to fsys with no leading slash. A missing or unparsable manifest
+// yields a nil map, and every asset is then served as identity.
 func loadAssetManifest(fsys fs.FS) map[string]assetEntry {
 	data, err := fs.ReadFile(fsys, "assets-manifest.json")
 	if err != nil {
@@ -69,10 +59,8 @@ func loadAssetManifest(fsys fs.FS) map[string]assetEntry {
 }
 
 // variantSuffix is the file suffix precompress.ts emits for a coding, e.g.
-// "assets/app-abc.js.zst" beside "assets/app-abc.js". The manifest's own
-// variant keys ("gzip"/"zstd", from Encoding.String()) differ from these
-// suffixes on purpose — see precompress.ts — so this mapping is not derived
-// from String().
+// "assets/app-abc.js.zst". The manifest's variant keys ("gzip"/"zstd", from
+// Encoding.String()) differ from these suffixes, so this is not derived from it.
 func variantSuffix(e Encoding) string {
 	switch e {
 	case EncodingGzip:
@@ -84,10 +72,9 @@ func variantSuffix(e Encoding) string {
 	}
 }
 
-// assetCacheControl returns the Cache-Control value for a non-index asset
-// path. Hashed filenames under assets/ never change once built, so they are
-// cached immutably; everything else keeps the server's default (no
-// override).
+// assetCacheControl returns the Cache-Control value for a non-index asset path.
+// Hashed filenames under assets/ never change, so they are cached immutably;
+// everything else keeps the server's default.
 func assetCacheControl(path string) string {
 	if strings.HasPrefix(path, "assets/") {
 		return "public, max-age=31536000, immutable"
@@ -136,15 +123,10 @@ func serveAsset(
 		return
 	}
 
-	// Set Content-Type from the original path's extension: http.ServeContent
-	// would otherwise sniff the compressed variant's bytes when the manifest
-	// isn't around to tell it otherwise, and get it wrong.
-	//
-	// An extension with no mapping needs an answer all the same once a
-	// variant is in play, because sniffing a gzip or zstd frame reliably
-	// yields application/gzip — a plausible-looking Content-Type that is a
-	// statement about the coding, not about the resource. Identity is left to
-	// sniff: there the bytes are the resource, and sniffing them is right.
+	// Set Content-Type from the original path's extension, or http.ServeContent
+	// sniffs the compressed variant's bytes and reports application/gzip — a
+	// statement about the coding, not the resource. Identity is left to sniff,
+	// where the bytes are the resource.
 	contentType := mime.TypeByExtension(filepath.Ext(path))
 	if contentType == "" && coding != EncodingIdentity {
 		contentType = "application/octet-stream"
@@ -208,8 +190,10 @@ func NewSPAHandler(fsys fs.FS, basePath string) http.Handler {
 			path = "index.html"
 		}
 
-		f, err := fsys.Open(path)
-		if err != nil {
+		// A directory is not an asset: serveAsset cannot seek one, and the
+		// path is treated as a client-side route, exactly as "/assets/" is.
+		info, err := fs.Stat(fsys, path)
+		if err != nil || info.IsDir() {
 			// Reject paths that look like subpaths of an extension
 			// (e.g., /nodes.atom/feed/, /data.json/foo). These are feed
 			// reader discovery probes, not client-side routes. Returning
@@ -223,7 +207,6 @@ func NewSPAHandler(fsys fs.FS, basePath string) http.Handler {
 			writeIndex(w)
 			return
 		}
-		_ = f.Close()
 
 		// For index.html itself, serve the prepared version.
 		if path == "index.html" {

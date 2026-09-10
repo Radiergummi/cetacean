@@ -43,19 +43,13 @@ func (e Encoding) String() string {
 // what the client accepts.
 const compressionThreshold = 1024
 
-// compressibleEncodings is every coding this server will ever apply — the
-// Encoding enum minus identity. It exists so that anything having to reason
-// about "all the codings" reads one list instead of repeating a literal:
-// notably the tests holding codedETag's suffixes against the ones
-// stripCodingSuffix removes, which would otherwise assert coverage they do
-// not have. knownCodingSuffixes is deliberately *not* derived from it — a
-// list checked against itself can never catch drift.
+// compressibleEncodings is every coding this server applies. knownCodingSuffixes
+// is deliberately not derived from it: a list checked against itself cannot
+// catch drift.
 var compressibleEncodings = []Encoding{EncodingGzip, EncodingZstd}
 
-// zstdEncoder is a single package-level encoder shared by all requests.
-// zstd.Encoder.EncodeAll is documented safe for concurrent use — each call
-// checks out one of the encoder's internal workers for the duration of the
-// call — so, unlike gzip.Writer, it needs no pool.
+// zstdEncoder is shared by all requests: zstd.Encoder.EncodeAll is documented
+// safe for concurrent use, so unlike gzip.Writer it needs no pool.
 var zstdEncoder = mustZstdEncoder()
 
 func mustZstdEncoder() *zstd.Encoder {
@@ -66,22 +60,17 @@ func mustZstdEncoder() *zstd.Encoder {
 	return enc
 }
 
-// gzipWriterPool recycles gzip.Writers. Unlike the zstd encoder, gzip.Writer
-// is not safe for concurrent use, so each caller must check one out.
+// gzipWriterPool recycles gzip.Writers, which are not safe for concurrent use.
 var gzipWriterPool = sync.Pool{
 	New: func() any {
 		return gzip.NewWriter(io.Discard)
 	},
 }
 
-// appliedEncoding reports the coding encodeBody will actually apply to a body
-// of bodyLen bytes when asked for e — anything under compressionThreshold
-// stays identity, however good the client's Accept-Encoding was.
-//
-// It is separate from encodeBody because a caller has to know the coding
-// before it knows whether it needs a body at all: the coding goes into the
-// ETag suffix and Content-Encoding, both of which a 304 carries even though
-// it sends no bytes to compress.
+// appliedEncoding reports the coding encodeBody will apply to a body of
+// bodyLen bytes when asked for e; anything under compressionThreshold stays
+// identity. It is separate from encodeBody because a 304 carries the coding on
+// its ETag and Content-Encoding without having a body to compress.
 func appliedEncoding(e Encoding, bodyLen int) Encoding {
 	if bodyLen < compressionThreshold {
 		return EncodingIdentity
@@ -91,9 +80,8 @@ func appliedEncoding(e Encoding, bodyLen int) Encoding {
 }
 
 // encodeBody compresses body with the given coding, returning the encoded
-// bytes and the coding actually applied. Callers can use the return value
-// unconditionally: bodies under compressionThreshold, and requests for
-// EncodingIdentity, come back as the original bytes with EncodingIdentity.
+// bytes and the coding actually applied. A body under compressionThreshold
+// comes back unchanged as EncodingIdentity.
 func encodeBody(body []byte, e Encoding) ([]byte, Encoding) {
 	switch appliedEncoding(e, len(body)) {
 	case EncodingGzip:
@@ -112,30 +100,20 @@ func gzipEncode(body []byte) []byte {
 	gw.Reset(&buf)
 	gw.Write(body) //nolint:errcheck // writing into a bytes.Buffer cannot fail
 	gw.Close()     //nolint:errcheck // flushing into a bytes.Buffer cannot fail
+
+	// Reset off buf before pooling, or the writer pins this response's bytes
+	// until it is checked out again.
+	gw.Reset(io.Discard)
 	gzipWriterPool.Put(gw)
 
 	return buf.Bytes()
 }
 
-// resolveEncoding picks the content-coding to serve for r, per the
-// Accept-Encoding negotiation rules of RFC 9110 §12.5.3.
-//
-// A coding's weight is its explicit q-value, falling back to the "*"
-// entry's q-value when the coding isn't listed explicitly, falling back to
-// 0 (unlisted, no wildcard) otherwise. A weight of 0 is refused. zstd and
-// gzip are only ever chosen when their resolved weight is positive — an
-// unlisted, non-wildcarded coding never outranks identity, which is why
-// "gzip;q=0.5, zstd;q=0.9" prefers zstd (0.9) over an implicit identity
-// weight rather than the reverse: identity is a fallback of last resort
-// here, not a default q=1 competitor. Between two acceptable codings with
-// equal weight, zstd wins (it compresses better); between zstd/gzip and
-// identity at equal weight, the compressed coding wins.
-//
-// An absent Accept-Encoding header and an explicit "identity;q=0" both
-// leave identity's own weight in play (0 for absent-and-unmentioned would
-// still lose to any accepted zstd/gzip; 0 for an explicit refusal is
-// identical) — the two cases are distinguished by whatever coding, if any,
-// zstd/gzip end up resolving to, not by special-casing identity.
+// resolveEncoding picks the content-coding to serve for r, per RFC 9110
+// §12.5.3. A coding's weight is its q-value, else the "*" entry's, else 0;
+// zstd and gzip need a positive weight to be chosen at all, so identity is a
+// fallback of last resort rather than a q=1 competitor. At equal weight a
+// compressed coding beats identity and zstd beats gzip.
 func resolveEncoding(r *http.Request) Encoding {
 	header := r.Header.Get("Accept-Encoding")
 	if header == "" {
@@ -155,10 +133,7 @@ func resolveEncoding(r *http.Request) Encoding {
 		return 0
 	}
 
-	// gzip is considered before zstd so that, at equal weight, zstd's own
-	// ">=" overrides it — which is what makes zstd the tie-break winner. Both
-	// require a positive weight, so a coding the client never accepted cannot
-	// be chosen just because identity's weight came back lower.
+	// gzip is considered first so zstd's ">=" overrides it at equal weight.
 	best, bestQ := EncodingIdentity, weightOf("identity")
 
 	if q := weightOf("gzip"); q > 0 && q >= bestQ {
@@ -172,13 +147,9 @@ func resolveEncoding(r *http.Request) Encoding {
 }
 
 // parseAcceptEncoding parses an Accept-Encoding field value into a map of
-// lowercased coding token (including the literal "*") to its q-value,
-// defaulting to 1 when a listed coding carries no q parameter.
-//
-// A weight outside RFC 9110 §12.4.2's 0–1 range is clamped into it rather
-// than taken at face value: "gzip;q=5" is not a stronger preference than
-// q=1, it is a malformed one, and letting it through would put an
-// out-of-range number into a comparison the spec defines over that range.
+// lowercased coding token (including "*") to q-value, defaulting to 1 when a
+// coding carries no q parameter. A weight outside RFC 9110 §12.4.2's 0–1 range
+// is clamped into it: "gzip;q=5" is malformed, not a stronger preference.
 func parseAcceptEncoding(header string) map[string]float64 {
 	weights := make(map[string]float64)
 
@@ -208,9 +179,7 @@ func parseAcceptEncoding(header string) map[string]float64 {
 	return weights
 }
 
-// compressionDisabledKey is the context key disableCompression/
-// compressionDisabled use to mark a request as ineligible for response
-// compression regardless of what it accepts.
+// compressionDisabledKey marks a request as ineligible for compression.
 type compressionDisabledKey struct{}
 
 // disableCompression returns a copy of r whose context marks it as

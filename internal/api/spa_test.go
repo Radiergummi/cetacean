@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -37,9 +38,8 @@ func TestSPAServesPrecompressedVariants(t *testing.T) {
 	if got := rec.Body.String(); got != "fake-zstd" {
 		t.Errorf("body = %q, want the .zst variant", got)
 	}
-	// The manifest stores the bare hex digest ("bbbb"); the ETag header must
-	// carry it quoted, per RFC 9110 - this is the seam most likely to ship a
-	// validator that silently never matches an If-Match/If-None-Match.
+	// The manifest stores the bare hex digest; the ETag header must carry it
+	// quoted, per RFC 9110, or the validator never matches.
 	if got := rec.Header().Get("ETag"); got != `"bbbb"` {
 		t.Errorf("ETag = %q, want %q", got, `"bbbb"`)
 	}
@@ -89,10 +89,33 @@ func TestSPACacheHeaders(t *testing.T) {
 	}
 }
 
-// TestSPAToleratesAbsentManifest covers the handler's documented fallback
-// for a dist built without the precompress plugin (or before Task 14 added
-// it): every asset is served as identity, and nothing about the response
-// depends on a manifest that was never read.
+// TestSPADirectoryPathIsNotAnAsset guards the seam between the existence check
+// and serveAsset: a directory opens, but cannot be seeked, so probing /assets
+// used to answer 500 instead of the SPA shell that /assets/ already answers.
+func TestSPADirectoryPathIsNotAnAsset(t *testing.T) {
+	fsys := fstest.MapFS{
+		"index.html":        {Data: []byte("<html><head></head></html>")},
+		"assets/app-abc.js": {Data: []byte("content")},
+	}
+	handler := NewSPAHandler(fsys, "")
+
+	for _, path := range []string{"/assets", "/assets/"} {
+		t.Run(path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("GET %s = %d, want %d", path, rec.Code, http.StatusOK)
+			}
+			if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/html") {
+				t.Errorf("GET %s Content-Type = %q, want the SPA shell", path, got)
+			}
+		})
+	}
+}
+
+// TestSPAToleratesAbsentManifest covers the fallback for a dist built without
+// the precompress plugin: every asset is served as identity.
 func TestSPAToleratesAbsentManifest(t *testing.T) {
 	fsys := fstest.MapFS{
 		"index.html":        {Data: []byte("<html><head></head></html>")},
@@ -120,29 +143,15 @@ func TestSPAToleratesAbsentManifest(t *testing.T) {
 	}
 }
 
-// TestEmbeddedManifestMatchesEmbeddedFiles catches a manifest that names
-// files go:embed would not include - which is exactly what happens if
-// assets-manifest.json, or the variant files it names, are ever produced
-// under a dot- or underscore-prefixed path (go:embed skips those silently).
+// TestEmbeddedManifestMatchesEmbeddedFiles catches a manifest naming files the
+// embed directive would not include, which is what happens if the manifest or
+// its variants are produced under a dot- or underscore-prefixed path.
 //
-// This asserts against frontend/dist *on disk* rather than the FS main.go
-// actually embeds: reaching the embedded FS from here would require main.go
-// to export it for tests, which is invasive for a value that exists mainly
-// to be embedded. A disk-vs-manifest comparison still catches what this test
-// exists to catch, since go:embed's own inclusion rule (skip dot/underscore
-// paths) is a property of the path, not of the embed step itself - so it
-// fails identically whether checked on disk or against the embedded copy.
-//
-// It fails outright, rather than skipping, when the manifest is missing:
-// this repo's real build already leaves one on disk (Task 14), so a missing
-// manifest here means the frontend hasn't been built for this checkout, and
-// the fix is `npm run build`, not a silently vacuous pass.
-//
-// It hashes every file it names rather than merely stat-ing it, because the
-// manifest's whole purpose is to describe content: an existence check passes
-// for a variant compressed from a snapshot taken mid-build, which is exactly
-// how a dist shipping `__VITE_PRELOAD__` in its .gz and .zst - and nothing
-// but a ReferenceError in the browser - once got past this test.
+// It asserts against frontend/dist on disk rather than main.go's embedded FS,
+// since the inclusion rule is a property of the path and so fails identically
+// either way. It hashes every file rather than stat-ing it, because a manifest
+// describes content — an existence check once let through variants compressed
+// from a mid-build snapshot, which threw ReferenceError in the browser.
 func TestEmbeddedManifestMatchesEmbeddedFiles(t *testing.T) {
 	distDir := filepath.Join("..", "..", "frontend", "dist")
 	manifestPath := filepath.Join(distDir, "assets-manifest.json")
@@ -227,11 +236,8 @@ func TestEmbeddedManifestMatchesEmbeddedFiles(t *testing.T) {
 }
 
 // TestEmbeddedManifestOmitsIndexHTML holds the build to the one file the SPA
-// handler never routes through serveAsset: NewSPAHandler intercepts
-// index.html and serves a copy with <base href> injected, so a build-time
-// variant of it could never match the bytes served - and /index.html.gz,
-// absent from the manifest, would fall through to serveAsset and hand out the
-// un-injected shell.
+// handler never routes through serveAsset: NewSPAHandler serves index.html with
+// <base href> injected, so /index.html.gz would hand out the un-injected shell.
 func TestEmbeddedManifestOmitsIndexHTML(t *testing.T) {
 	distDir := filepath.Join("..", "..", "frontend", "dist")
 

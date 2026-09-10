@@ -114,6 +114,20 @@ func TestPreferWait(t *testing.T) {
 		{"separate fields", []string{"return=minimal", "wait=5"}, 5 * time.Second, true},
 		{"spaces around equals", []string{"wait = 7"}, 7 * time.Second, true},
 		{"clamped to the ceiling", []string{"wait=100000"}, cluster.ConvergenceTimeout, true},
+		// Clamped before the multiplication, which would otherwise overflow
+		// int64 and leave a negative duration min() happily keeps.
+		{
+			"clamped before overflowing",
+			[]string{"wait=10000000000"},
+			cluster.ConvergenceTimeout,
+			true,
+		},
+		{
+			"clamped at the int64 boundary",
+			[]string{"wait=9223372036854775807"},
+			cluster.ConvergenceTimeout,
+			true,
+		},
 		{"zero is honoured", []string{"wait=0"}, 0, true},
 		{"non-numeric is ignored", []string{"wait=soon"}, 0, false},
 		{"negative is ignored", []string{"wait=-5"}, 0, false},
