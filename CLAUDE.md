@@ -62,7 +62,11 @@ make sbom-verify                          # check the committed SBOM against the
 The SBOM (`internal/api/sbom/*`, `THIRD_PARTY_LICENSES`) is committed and embedded in the binary. You rarely need to
 regenerate it by hand: the `pre-commit` hook does it when a dependency manifest is staged (skipping when it cannot —
 a linked worktree, or a missing toolchain), and CI's `sbom-sync` job regenerates it on every pull request and
-**commits the result back to the branch**, signed, via `createCommitOnBranch`.
+**commits the result back to the branch**, signed, via `createCommitOnBranch`, then dispatches `ci.yml` on that branch.
+The dispatch is not optional: a commit authored with `GITHUB_TOKEN` raises no event, so the run that would put the
+branch's required checks on the new head never starts, and the pull request sits blocked on checks that passed one
+commit earlier and can never appear on this one. The dispatched run commits nothing — the commit step is gated on
+`pull_request` — so it cannot recur.
 
 Two kinds of pull request are reported on rather than written to. A fork PR cannot be written to at all — its token is
 read-only. A **Dependabot** PR could be, but must not: Dependabot stops updating any branch carrying a commit it did
