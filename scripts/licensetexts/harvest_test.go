@@ -281,3 +281,73 @@ func TestHarvestCollapsesDuplicateLicenseFiles(t *testing.T) {
 		t.Errorf("text = %q, want the license once and unlabelled", text)
 	}
 }
+
+func TestHarvestStandsInASiblingLicenseForAPackageShippingNone(t *testing.T) {
+	// Four @scalar packages omit the license from their published tarballs
+	// while their siblings ship it, so licenseSurrogates points them at one.
+	// The fixtures carry the real package names: the mapping that ships is
+	// what this has to hold, not a synthetic stand-in for it.
+	doc := sbom.Document{Components: []sbom.Component{
+		{Name: "@scalar/api-reference", Version: "1.0.0", Ecosystem: "npm"},
+		{Name: "@scalar/components", Version: "1.0.0", Ecosystem: "npm"},
+	}}
+
+	artifact, err := Harvest(doc, testRoots())
+	if err != nil {
+		t.Fatalf("Harvest: %v", err)
+	}
+
+	borrowed, ok := artifact.Components["npm:@scalar/api-reference@1.0.0"]
+	if !ok {
+		t.Fatalf("component missing from artifact: %+v", artifact.Components)
+	}
+
+	// The same text, so also the same pool entry: a surrogate must not double
+	// the stored copies of a license two components now share.
+	if own := artifact.Components["npm:@scalar/components@1.0.0"]; borrowed.License != own.License {
+		t.Errorf("surrogate text %q is not pooled with %q", borrowed.License, own.License)
+	}
+
+	if text := artifact.Texts[borrowed.License]; !strings.Contains(
+		text,
+		"Copyright (c) 2023-present Scalar",
+	) {
+		t.Errorf("license text = %q", text)
+	}
+}
+
+func TestHarvestFailsWhenTheSurrogateIsAbsent(t *testing.T) {
+	// A sibling is only a surrogate while it is installed and inventoried.
+	// Losing it must fail the harvest rather than quietly attribute nothing.
+	doc := sbom.Document{Components: []sbom.Component{
+		{Name: "@scalar/api-reference", Version: "1.0.0", Ecosystem: "npm"},
+	}}
+
+	_, err := Harvest(doc, testRoots())
+	if err == nil {
+		t.Fatal("expected an error naming the missing surrogate")
+	}
+
+	if !strings.Contains(err.Error(), "@scalar/components") {
+		t.Errorf("error %q does not name the surrogate", err)
+	}
+}
+
+func TestHarvestKeepsAPackageThatPublishesNoLicenseAnywhere(t *testing.T) {
+	// @replit/codemirror-css-color-picker declares MIT and ships no text, and
+	// neither does its repository — there is nothing to attribute and nothing
+	// to borrow. It keeps its inventory entry and gains no text, the way an
+	// ecosystem with no package store does.
+	doc := sbom.Document{Components: []sbom.Component{
+		{Name: "@replit/codemirror-css-color-picker", Version: "1.0.0", Ecosystem: "npm"},
+	}}
+
+	artifact, err := Harvest(doc, testRoots())
+	if err != nil {
+		t.Fatalf("Harvest: %v", err)
+	}
+
+	if len(artifact.Components) != 0 {
+		t.Errorf("got %+v, want no text entry", artifact.Components)
+	}
+}

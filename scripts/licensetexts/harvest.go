@@ -56,6 +56,48 @@ type Roots struct {
 	NodeModules string
 }
 
+// licenseSurrogates names, for a package that publishes no license file of its
+// own, a package that does and is covered by the same one. Every entry must be
+// a sibling from the same repository under the same license: the text is then
+// the one upstream actually ships for the version installed, which is why this
+// maps to a sibling rather than vendoring a copy here — a copy is a second
+// thing to keep in step, and going stale unnoticed is the failure this whole
+// mechanism exists to catch.
+//
+// A surrogate that is not itself installed fails the harvest like any other
+// missing text, rather than quietly attributing nothing.
+var licenseSurrogates = map[string]string{
+	// The scalar/scalar monorepo publishes one MIT license, and 19 of its
+	// packages ship it byte-identically. These four omit it from their
+	// published tarballs.
+	"@scalar/api-reference":   "@scalar/components",
+	"@scalar/schemas":         "@scalar/components",
+	"@scalar/workspace-store": "@scalar/components",
+	"@scalar/openapi-types":   "@scalar/components",
+
+	// Likewise tailwindlabs/headlessui, whose Tailwind package ships the text
+	// its Vue package leaves out.
+	"@headlessui/vue": "@headlessui/tailwindcss",
+}
+
+// licenseTextless names packages that publish no license text anywhere — not
+// in the tarball, and not in the upstream repository either — so there is
+// nothing to attribute and nothing a surrogate could stand in for. They keep
+// their inventory entry and the license they declare; only the text is absent.
+//
+// Writing the text ourselves is the one thing not to do here: MIT names a
+// copyright holder and a year, and inventing those asserts something the
+// authors never wrote.
+//
+// Each entry records what was checked, so a later reader can tell a package
+// upstream never licensed in writing from one this list has simply outgrown.
+var licenseTextless = map[string]string{
+	// github.com/replit/Codemirror-CSS-color-picker holds no license file on
+	// its default branch (GitHub's license API reports none), and the tarball
+	// carries none. package.json and the npm registry both declare MIT.
+	"@replit/codemirror-css-color-picker": "MIT declared in package.json; no text upstream (checked 2026-09-10)",
+}
+
 // Harvest resolves every Go and npm component to its source directory and
 // collects its license and notice text into a deduplicated pool.
 func Harvest(doc sbom.Document, roots Roots) (sbom.Artifact, error) {
@@ -90,9 +132,22 @@ func Harvest(doc sbom.Document, roots Roots) (sbom.Artifact, error) {
 		}
 
 		if len(licenses) == 0 {
+			licenses, err = surrogateTexts(component, doc, roots)
+			if err != nil {
+				return sbom.Artifact{}, err
+			}
+		}
+
+		if len(licenses) == 0 {
+			if _, known := licenseTextless[component.Name]; known {
+				// Nothing to attach, and deliberately so — see licenseTextless.
+				continue
+			}
+
 			return sbom.Artifact{}, fmt.Errorf(
 				"no license file for %s %s (looked in %s for %s) — "+
-					"add a mapping or vendor the text before shipping it",
+					"add a licenseSurrogates entry naming a sibling that ships the "+
+					"text, or a licenseTextless entry if upstream publishes none",
 				component.Name, component.Version, dir, strings.Join(licenseStems, ", "),
 			)
 		}
@@ -112,6 +167,51 @@ func Harvest(doc sbom.Document, roots Roots) (sbom.Artifact, error) {
 	}
 
 	return artifact, nil
+}
+
+// surrogateTexts reads the license text of the sibling standing in for a
+// component that ships none, or returns nothing when the component has no
+// surrogate declared.
+//
+// The surrogate is resolved at the version the same SBOM lists, not whatever
+// happens to be hoisted in node_modules: the two are the same package store
+// this run is already describing, and taking the version from the document
+// keeps the text attributable to a component the inventory actually names.
+func surrogateTexts(component sbom.Component, doc sbom.Document, roots Roots) ([]namedText, error) {
+	name, ok := licenseSurrogates[component.Name]
+	if !ok {
+		return nil, nil
+	}
+
+	for _, candidate := range doc.Components {
+		if candidate.Name != name || candidate.Ecosystem != component.Ecosystem {
+			continue
+		}
+
+		dir, ok, err := componentDir(candidate, roots)
+		if err != nil || !ok {
+			return nil, err
+		}
+
+		texts, err := readTexts(dir, licenseStems)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(texts) == 0 {
+			return nil, fmt.Errorf(
+				"surrogate %s %s for %s ships no license text of its own",
+				candidate.Name, candidate.Version, component.Name,
+			)
+		}
+
+		return texts, nil
+	}
+
+	return nil, fmt.Errorf(
+		"surrogate %s for %s is not in the SBOM — name one that is, or drop the mapping",
+		name, component.Name,
+	)
 }
 
 // componentDir maps a component to the directory its sources were unpacked
