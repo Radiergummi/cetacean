@@ -288,3 +288,66 @@ func TestSplitResourcePath(t *testing.T) {
 		})
 	}
 }
+
+// The 409 names every candidate ID, so it discloses both the existence of the
+// name and the IDs behind it. A caller who could read none of that type must be
+// told nothing — they get the handler's ordinary 404 for an unresolved name.
+func TestCanonicalIdentifierAmbiguityIsNotReportedWithoutAGrant(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	router := newTestRouterWithCache(t, canonicalTestCache(), withACL(evaluator))
+
+	req := httptest.NewRequest(http.MethodGet, "/nodes/twin", nil)
+	req.Header.Set("Accept", "application/json")
+	req = req.WithContext(
+		auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "alice"}),
+	)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code == http.StatusConflict {
+		t.Fatalf("ambiguity reported to an identity with no node grant: %s", w.Body.String())
+	}
+
+	for _, id := range []string{"nodeaaaaaaaaaa", "nodebbbbbbbbbb"} {
+		if strings.Contains(w.Body.String(), id) {
+			t.Errorf("response names candidate %s: %s", id, w.Body.String())
+		}
+	}
+}
+
+// The converse, so the test above cannot pass merely because the report is
+// broken for everyone.
+func TestCanonicalIdentifierAmbiguityIsReportedWithANodeGrant(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"node:*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	router := newTestRouterWithCache(t, canonicalTestCache(), withACL(evaluator))
+
+	req := httptest.NewRequest(http.MethodGet, "/nodes/twin", nil)
+	req.Header.Set("Accept", "application/json")
+	req = req.WithContext(
+		auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "alice"}),
+	)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body: %s", w.Code, w.Body.String())
+	}
+}

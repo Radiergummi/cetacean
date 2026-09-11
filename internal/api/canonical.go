@@ -20,6 +20,17 @@ type canonicalResolver func(
 	identifier string,
 ) (id string, aclResource string, found bool, err error)
 
+// singularType maps a collection segment to the ACL resource type its members
+// carry, for the coarse "could this identity read anything of this type?"
+// question an ambiguity report has to answer before it names candidates.
+var singularType = map[string]string{
+	"services": "service",
+	"nodes":    "node",
+	"configs":  "config",
+	"secrets":  "secret",
+	"networks": "network",
+}
+
 // canonicalResolvers lists the resource collections whose detail paths accept
 // a name as well as an ID.
 //
@@ -119,6 +130,20 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 
 		var ambiguous *cache.AmbiguousNameError
 		if errors.As(err, &ambiguous) {
+			// The report names every candidate ID, so it is a disclosure in
+			// its own right. A caller who could not read any resource of this
+			// type is told nothing and falls through to the handler, which
+			// answers the unresolved name with its ordinary 404. The question
+			// is type-level because an ambiguous name resolves to no single
+			// resource to check, and acl.TypeGrants answers it from one policy
+			// read.
+			access := h.acl.TypeGrants(auth.IdentityFromContext(r.Context()))
+			if !access.Can("read", singularType[collection]) {
+				next.ServeHTTP(w, r)
+
+				return
+			}
+
 			writeErrorCode(w, r, "API014", ambiguous.Error())
 
 			return
