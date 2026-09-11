@@ -747,7 +747,9 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 
 	var oauthSrv *oauth.Server
 	if d.authMode != "none" {
-		signingKey, decoded := config.SigningKeyBytes(d.cfg.MCP.SigningKey)
+		// A configured key has already been rejected unless it decodes, so it
+		// arrives here as key material or not at all.
+		signingKey, _ := config.SigningKeyBytes(d.cfg.MCP.SigningKey)
 		if len(signingKey) == 0 {
 			signingKey = make([]byte, 32)
 			if _, err := rand.Read(signingKey); err != nil {
@@ -756,10 +758,6 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 			}
 			slog.Warn(
 				"MCP signing key auto-generated; tokens won't survive restarts. Set CETACEAN_MCP_SIGNING_KEY, or CETACEAN_MCP_SIGNING_KEY_FILE to read it from a file, for stable tokens.",
-			)
-		} else if !decoded {
-			slog.Warn(
-				"mcp.signing_key is not 32 bytes of key material and is being used verbatim; generate one with `openssl rand -hex 32`.",
 			)
 		}
 		// Refresh tokens outlive the process only if the data directory is

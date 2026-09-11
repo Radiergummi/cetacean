@@ -286,7 +286,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 	if err != nil {
 		return MCPConfig{}, err
 	}
-	if err := checkSigningKeyLength(signingKey); err != nil {
+	if err := checkSigningKey(signingKey); err != nil {
 		return MCPConfig{}, err
 	}
 
@@ -325,29 +325,30 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 	}, nil
 }
 
-// The published public key is a deterministic function of the root and needs
-// no authentication to fetch, so a weak root can be ground offline from it.
-const minSigningKeyBytes = 32
+const signingKeyBytes = 32
 
-// An empty key is not too short: it means none was configured, and one is
-// generated instead.
-func checkSigningKeyLength(key string) error {
-	if key == "" || len(key) >= minSigningKeyBytes {
+// The published public key is a deterministic function of the root and needs no
+// authentication to fetch, so anything but real key material can be ground
+// offline from it. An empty key is not a failure: it means none was configured,
+// and one is generated instead.
+func checkSigningKey(key string) error {
+	if key == "" {
+		return nil
+	}
+
+	if _, decoded := SigningKeyBytes(key); decoded {
 		return nil
 	}
 
 	return fmt.Errorf(
-		"MCP signing key is %d bytes; it must be at least %d "+
-			"(set CETACEAN_MCP_SIGNING_KEY, CETACEAN_MCP_SIGNING_KEY_FILE or "+
-			"mcp.signing_key to a longer value, or leave it unset to have one "+
-			"generated)",
-		len(key), minSigningKeyBytes,
+		"mcp.signing_key must be %d bytes of hex or base64 — generate one with "+
+			"`openssl rand -hex 32`, or leave it unset to have one generated",
+		signingKeyBytes,
 	)
 }
 
-// A value that decodes as hex or base64 to exactly minSigningKeyBytes is key
-// material; anything else is a passphrase and stands for its own bytes.
-// decoded reports which, so a caller can warn about the weaker one.
+// A value that decodes as hex or base64 to exactly signingKeyBytes is key
+// material; anything else is not, and decoded reports which.
 func SigningKeyBytes(key string) (root []byte, decoded bool) {
 	decoders := []func(string) ([]byte, error){
 		hex.DecodeString,
@@ -356,7 +357,7 @@ func SigningKeyBytes(key string) (root []byte, decoded bool) {
 	}
 
 	for _, decode := range decoders {
-		if b, err := decode(key); err == nil && len(b) == minSigningKeyBytes {
+		if b, err := decode(key); err == nil && len(b) == signingKeyBytes {
 			return b, true
 		}
 	}
