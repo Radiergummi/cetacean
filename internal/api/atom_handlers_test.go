@@ -121,11 +121,10 @@ func TestFeedID(t *testing.T) {
 	})
 }
 
-// TestFeedIdentifiesOneHostBehindAProxy: with server.public_url unset, the
-// feed's tag URI and the links inside it both derive their host from the
-// request, and a trusted proxy is where those two derivations used to part
-// company — feedID read r.Host while absURL read the forwarded host. The
-// assertion is that one document names one host, not which host it names.
+// TestFeedIdentifiesOneHostBehindAProxy: with server.public_url unset, a
+// trusted proxy is where the feed's tag URI and the links inside it can part
+// company. The assertion is that one document names one host, not which host
+// it names.
 func TestFeedIdentifiesOneHostBehindAProxy(t *testing.T) {
 	router := newProxyRouter(
 		t,
@@ -146,14 +145,7 @@ func TestFeedIdentifiesOneHostBehindAProxy(t *testing.T) {
 		t.Fatalf("status=%d, want 200; body=%s", w.Code, w.Body.String())
 	}
 
-	var feed struct {
-		ID    string `xml:"id"`
-		Links []struct {
-			Rel  string `xml:"rel,attr"`
-			Href string `xml:"href,attr"`
-		} `xml:"link"`
-	}
-
+	var feed atomxml.Feed
 	if err := xml.Unmarshal(w.Body.Bytes(), &feed); err != nil {
 		t.Fatalf("parse feed: %v", err)
 	}
@@ -175,20 +167,10 @@ func TestFeedIdentifiesOneHostBehindAProxy(t *testing.T) {
 	}
 
 	// tag:{host},{year}:{path}
-	_, rest, ok := strings.Cut(feed.ID, ":")
-	if !ok {
-		t.Fatalf("feed id %q is not a tag URI", feed.ID)
-	}
-
-	idHost, _, ok := strings.Cut(rest, ",")
-	if !ok {
-		t.Fatalf("feed id %q is not a tag URI", feed.ID)
-	}
-
-	if idHost != selfURL.Host {
+	if want := "tag:" + selfURL.Host + ","; !strings.HasPrefix(feed.ID, want) {
 		t.Errorf(
-			"feed id host = %q, self link host = %q; one document, two hosts",
-			idHost, selfURL.Host,
+			"feed id = %q, want it to name the self link's host (%q); one document, two hosts",
+			feed.ID, selfURL.Host,
 		)
 	}
 }

@@ -64,6 +64,21 @@ func originOf(r *http.Request) string {
 	return scheme + "://" + host
 }
 
+// originHostOf is originOf's authority alone, for a document that names a host
+// rather than a URL. Both resolve the same way, so a document using each
+// cannot name two hosts.
+func originHostOf(r *http.Request) string {
+	if base := PublicURLFromContext(r.Context()); base != "" {
+		if u, err := url.Parse(base); err == nil {
+			return u.Host
+		}
+	}
+
+	_, host := requestOrigin(r)
+
+	return host
+}
+
 // requestOrigin resolves the origin a client reached this request on, when
 // server.public_url is unset.
 //
