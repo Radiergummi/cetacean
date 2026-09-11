@@ -2,6 +2,7 @@ package recommendations
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -74,5 +75,84 @@ func TestNewEngine_NilForNoCheckers(t *testing.T) {
 	e := NewEngine()
 	if e != nil {
 		t.Error("expected nil engine with no checkers")
+	}
+}
+
+// countingChecker records how many times the engine has run it.
+type countingChecker struct {
+	interval time.Duration
+	runs     atomic.Int64
+}
+
+func (c *countingChecker) Name() string            { return "counting" }
+func (c *countingChecker) Interval() time.Duration { return c.interval }
+
+func (c *countingChecker) Check(_ context.Context) []Recommendation {
+	c.runs.Add(1)
+
+	return nil
+}
+
+// TestRunAfterHoldsTheStartupTick pins the ordering the recommendations page
+// depends on at boot. The startup tick is forced and a checker that has just
+// run does not run again until its own interval elapses, which for the sizing
+// and operational checkers is five minutes — so a tick taken before the cache
+// has been filled from Docker reports an empty cluster for five minutes, not
+// for an instant.
+func TestRunAfterHoldsTheStartupTick(t *testing.T) {
+	checker := &countingChecker{interval: time.Minute}
+	engine := NewEngine(checker)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	ready := make(chan struct{})
+	go engine.RunAfter(ctx, ready)
+
+	time.Sleep(50 * time.Millisecond)
+
+	if runs := checker.runs.Load(); runs != 0 {
+		t.Fatalf("the checker ran %d times before the signal, want 0", runs)
+	}
+
+	close(ready)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if checker.runs.Load() > 0 {
+			return
+		}
+
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	t.Fatal("the checker never ran after the signal closed")
+}
+
+// TestRunAfterGivesUpOnACancelledContext covers the shutdown path: a signal
+// that never arrives must not hold the goroutine open past the context.
+func TestRunAfterGivesUpOnACancelledContext(t *testing.T) {
+	checker := &countingChecker{interval: time.Minute}
+	engine := NewEngine(checker)
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		engine.RunAfter(ctx, make(chan struct{})) // never closed
+	}()
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("RunAfter did not return when the context was cancelled")
+	}
+
+	if runs := checker.runs.Load(); runs != 0 {
+		t.Errorf("the checker ran %d times, want 0 — the signal never arrived", runs)
 	}
 }

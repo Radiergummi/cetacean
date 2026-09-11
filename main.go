@@ -306,7 +306,7 @@ func main() {
 		}
 		recEngine = recommendations.NewEngine(checkers...)
 		if recEngine != nil {
-			go recEngine.Run(ctx)
+			go recEngine.RunAfter(ctx, watcher.Ready())
 			slog.Info("recommendation engine started", "checkers", len(checkers))
 		}
 	} else {
