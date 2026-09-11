@@ -113,6 +113,26 @@ func TestJWKSDocumentShape(t *testing.T) {
 	if key.Kid != km.kid {
 		t.Errorf("kid = %q, want %q", key.Kid, km.kid)
 	}
+
+	// go-jose's JSONWebKey.MarshalJSON has a *ecdsa.PrivateKey branch that
+	// emits "d"; nothing else in this test would notice if HandleJWKS passed
+	// the private key instead of its public half.
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+
+	rawKeys, _ := raw["keys"].([]any)
+	if len(rawKeys) != 1 {
+		t.Fatalf("raw keys = %d, want 1", len(rawKeys))
+	}
+
+	rawKey, _ := rawKeys[0].(map[string]any)
+	for _, private := range []string{"d", "p", "q", "dp", "dq", "qi", "k"} {
+		if _, ok := rawKey[private]; ok {
+			t.Errorf("published key carries private member %q", private)
+		}
+	}
 }
 
 // TestPublishedKeyVerifiesAToken is the load-bearing check: an implementation

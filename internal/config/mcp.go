@@ -28,11 +28,12 @@ type MCPConfig struct {
 	// public URL (e.g. "https://cetacean.example.com").
 	Issuer string
 
-	// SigningKey is the HMAC key used to sign MCP tokens. If empty, main.go
-	// auto-generates an ephemeral key on startup — which invalidates every
-	// issued token on restart, so a deployment that persists refresh tokens
-	// wants this set. CETACEAN_MCP_SIGNING_KEY_FILE reads it from a file, so
-	// it can arrive as a Docker secret rather than through the environment.
+	// SigningKey is the root from which the token and CSRF keys are derived.
+	// If empty, main.go auto-generates an ephemeral root on startup — which
+	// invalidates every issued token on restart, so a deployment that persists
+	// refresh tokens wants this set. CETACEAN_MCP_SIGNING_KEY_FILE reads it
+	// from a file, so it can arrive as a Docker secret rather than through the
+	// environment.
 	SigningKey string
 
 	// AccessTokenTTL is how long MCP access tokens remain valid.
@@ -328,11 +329,10 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 	}, nil
 }
 
-// minSigningKeyBytes is the HS256 key length RFC 7518 section 3.2 requires: "A
-// key of the same size as the hash output or larger MUST be used", which for
-// SHA-256 is 32 bytes. Shorter keys are accepted by the HMAC itself, so nothing
-// downstream would complain — a one-character key would sign every MCP token
-// and be trivially forgeable.
+// minSigningKeyBytes floors the root at the derived key size. The published
+// public key is a deterministic function of this root and is reachable by an
+// anonymous GET, so a weak root can be ground offline from it — recovering
+// the root also yields the CSRF key, since both derive from it.
 const minSigningKeyBytes = 32
 
 // checkSigningKeyLength rejects a configured key that is too short to sign

@@ -78,6 +78,8 @@ func TestAdvertisedJWKSURIServesAKeySet(t *testing.T) {
 				t.Fatalf("jwks_uri does not parse: %v", err)
 			}
 
+			// Errorf, not Fatalf: the follow-up request below still runs and
+			// reports on the fetched document independently of this mismatch.
 			if want := basePath + "/oauth/jwks"; target.Path != want {
 				t.Errorf("jwks_uri path = %q, want %q", target.Path, want)
 			}

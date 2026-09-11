@@ -3,6 +3,7 @@ package oauth
 import (
 	"bytes"
 	"crypto/elliptic"
+	"encoding/base64"
 	"errors"
 	"testing"
 )
@@ -161,5 +162,21 @@ func TestGoldenKID(t *testing.T) {
 
 	if km.kid != want {
 		t.Errorf("kid = %q, want %q", km.kid, want)
+	}
+}
+
+// TestGoldenCSRFKey pins the CSRF key a fixed root produces, so csrfKeyInfo
+// can drift without TestGoldenKID noticing. Produced by running deriveKeys
+// against testRoot and asserting the output.
+func TestGoldenCSRFKey(t *testing.T) {
+	km, err := deriveKeys(testRoot)
+	if err != nil {
+		t.Fatalf("deriveKeys: %v", err)
+	}
+
+	const want = "dgol-oeS1eCZrySpXv5JNXv-JWv8cSPkTHHxwCIZR-E"
+
+	if got := base64.RawURLEncoding.EncodeToString(km.csrf); got != want {
+		t.Errorf("csrf = %q, want %q", got, want)
 	}
 }

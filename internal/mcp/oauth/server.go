@@ -38,8 +38,9 @@ type ServerConfig struct {
 	// MCP holds DCR knobs and the require_resource_indicator flag.
 	MCP config.MCPConfig
 
-	// SigningKey is the HMAC-SHA256 key for JWTs and CSRF tokens. If
-	// MCPConfig.SigningKey is empty, main.go auto-generates an ephemeral key.
+	// SigningKey is the root from which the token and CSRF keys are derived.
+	// If MCPConfig.SigningKey is empty, main.go auto-generates an ephemeral
+	// root.
 	SigningKey []byte
 
 	// HTTPClient is an optional HTTP client for CIMD fetches.
@@ -645,7 +646,9 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 }
 
 // csrfKey is the derived HMAC key for consent CSRF tokens. Nil when no root
-// was configured, which makes every token fail to verify.
+// was configured; hmac.New accepts a nil key, so tokens would still verify —
+// forgeably — rather than fail. Unreachable in production: main.go always
+// supplies a root.
 func (s *Server) csrfKey() []byte {
 	if s.keys == nil {
 		return nil

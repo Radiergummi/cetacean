@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	jose "github.com/go-jose/go-jose/v4"
 )
 
 const testKey = "test-secret-key-32-bytes-long!!!"
@@ -428,6 +430,65 @@ func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
 
 	if _, err := issuer.VerifyAccessToken(forged); !errors.Is(err, ErrInvalidSig) {
 		t.Errorf("error = %v, want ErrInvalidSig", err)
+	}
+}
+
+// TestPackedSignatureWithALeadingZeroInRVerifies drives the R||S packing on
+// a signature the length check in TestVerifyRefusesASignatureThatIsNotSixtyFourBytes
+// cannot distinguish from a correctly padded one: an R whose top byte is zero.
+// FillBytes pads correctly regardless, but an unpadded encoding would produce
+// a 63-byte R here that this test can catch and that length check cannot.
+// A leading zero byte occurs in about 1 signature in 256, so this mints
+// tokens until one turns up rather than asserting on a single one.
+func TestPackedSignatureWithALeadingZeroInRVerifies(t *testing.T) {
+	const maxAttempts = 4096
+
+	s := newJWKSTestServer(t)
+
+	var token string
+
+	for range maxAttempts {
+		candidate, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
+			Subject:  "alice",
+			ClientID: "https://client.example/id.json",
+		}, time.Hour)
+		if err != nil {
+			t.Fatalf("IssueAccessToken: %v", err)
+		}
+
+		sig, err := base64.RawURLEncoding.DecodeString(strings.Split(candidate, ".")[2])
+		if err != nil {
+			t.Fatalf("decode signature: %v", err)
+		}
+
+		if sig[0] == 0 {
+			token = candidate
+
+			break
+		}
+	}
+
+	if token == "" {
+		t.Skip("no signature with a leading zero byte in R turned up within the attempt bound")
+	}
+
+	var set jose.JSONWebKeySet
+	if err := json.Unmarshal(fetchJWKS(t, s).Body.Bytes(), &set); err != nil {
+		t.Fatalf("unmarshal key set: %v", err)
+	}
+
+	signature, err := jose.ParseSigned(token, []jose.SignatureAlgorithm{jose.ES256})
+	if err != nil {
+		t.Fatalf("go-jose could not parse the token: %v", err)
+	}
+
+	matching := set.Key(signature.Signatures[0].Header.KeyID)
+	if len(matching) != 1 {
+		t.Fatalf("published set has %d keys for the token's kid, want 1", len(matching))
+	}
+
+	if _, err := signature.Verify(matching[0].Key); err != nil {
+		t.Fatalf("go-jose rejected a token with a leading zero byte in R: %v", err)
 	}
 }
 
