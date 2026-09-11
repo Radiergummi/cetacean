@@ -745,15 +745,11 @@ func requireTokens(t *testing.T, outcome httpOutcome) tokenSet {
 	return tokens
 }
 
-// The two refusal wordings handleRefreshTokenGrant distinguishes its paths
-// with. Both are `invalid_grant` on the wire — RFC 6749 §5.2 forbids telling
-// the caller it was theft — so the description is the only thing that says
-// which branch answered, and it is what separates finding D-5's short-circuit
-// from a genuine theft detection.
-const (
-	theftRefreshTokenDescription   = "refresh token is invalid"
-	unknownRefreshTokenDescription = "refresh token is invalid or expired"
-)
+// theftRefreshTokenDescription is the wording handleRefreshTokenGrant's theft
+// branch answers with. It is `invalid_grant` on the wire like every other
+// refusal — RFC 6749 §5.2 forbids telling the caller it was theft — so the
+// description is the only thing that says which branch answered.
+const theftRefreshTokenDescription = "refresh token is invalid"
 
 // refreshReplayOutcome records what replaying a consumed refresh token did.
 type refreshReplayOutcome struct {
@@ -1679,50 +1675,24 @@ func TestMCPOAuthFlow(t *testing.T) {
 		// The security property with no other coverage anywhere, driven the
 		// way a conforming client drives it: with the RFC 8707 `resource`
 		// parameter, which mcp.require_resource_indicator makes mandatory by
-		// default.
+		// default. Replaying a consumed refresh token must burn the whole
+		// grant family, or a stolen token keeps working alongside the
+		// legitimate one and the user is never re-prompted.
 		//
-		// QUARANTINED — finding D-5. Replaying a consumed refresh token must
-		// burn the whole grant family, or a stolen token keeps working
-		// alongside the legitimate one and the user is never re-prompted.
-		// Against a default-configured server it does not: handleRefreshTokenGrant
-		// calls RefreshTokenStore.Validate before Rotate whenever `resource`
-		// is present, a consumed token is not live, so the request is refused
-		// as unknown and Rotate's theft branch — the only thing that burns the
-		// family and calls consent.Forget — is never reached.
-		//
-		// This case therefore asserts the correct behaviour and tolerates
-		// exactly that one wrong outcome, identified by the refusal wording
-		// the short-circuit produces. It turns into an ordinary pass the
-		// moment the ordering is fixed, and fails on any other outcome.
 		// TestMCPOAuthTheftDetectionWithoutTheResourceIndicator drives the
-		// same sequence on the path that still reaches Rotate, which is what
-		// establishes that the detection logic itself is live.
+		// same sequence with the indicator off, so the two paths into
+		// RefreshTokenStore.Rotate are covered rather than one.
 		replay := driveRefreshReplay(
 			t, proc, discovery, oauthGranted, "e2e-theft", discovery.resource,
 		)
 
-		if replay.familyBurned {
-			return
-		}
-
-		if replay.replayDescription != unknownRefreshTokenDescription {
+		if !replay.familyBurned {
 			t.Fatalf(
-				"a replayed refresh token left its grant family live, and the refusal "+
-					"wording (%q) is not the known D-5 short-circuit (%q); this is a "+
-					"different failure than the quarantined one",
-				replay.replayDescription, unknownRefreshTokenDescription,
+				"a replayed refresh token left its grant family live; the replay was "+
+					"refused with %q, and the legitimate token kept rotating",
+				replay.replayDescription,
 			)
 		}
-
-		t.Logf(
-			"D-5 still open: replaying a consumed refresh token did not burn its grant "+
-				"family. The live token kept rotating and the refusal was %q — the "+
-				"Validate-before-Rotate short-circuit in handleRefreshTokenGrant, which "+
-				"runs whenever `resource` is sent. With mcp.require_resource_indicator "+
-				"at its default, `resource` is mandatory, so theft detection is "+
-				"unreachable on every conforming refresh.",
-			replay.replayDescription,
-		)
 	})
 
 	t.Run("refusing_a_foreign_resource_does_not_burn_the_grant", func(t *testing.T) {

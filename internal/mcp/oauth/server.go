@@ -386,18 +386,16 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 
 	// Confirm the bound resource matches BEFORE rotation, again so a client
 	// typo doesn't revoke the entire family.
+	//
+	// A token that does not validate is deliberately *not* refused here. It
+	// may be a replay of one already rotated, and only Rotate can tell that
+	// from a token nobody ever issued — refusing early made theft detection
+	// unreachable on every conforming refresh, since the default
+	// configuration makes `resource` mandatory. Rotate answers an unknown
+	// token with the same invalid_grant below.
 	if resourceForm != "" {
-		bound, ok := s.refreshTokens.Validate(refreshTokenRaw)
-		if !ok {
-			writeTokenError(
-				w,
-				http.StatusBadRequest,
-				"invalid_grant",
-				"refresh token is invalid or expired",
-			)
-			return
-		}
-		if resourceForm != bound.Resource {
+		if bound, live := s.refreshTokens.Validate(refreshTokenRaw); live &&
+			resourceForm != bound.Resource {
 			writeTokenError(
 				w,
 				http.StatusBadRequest,
