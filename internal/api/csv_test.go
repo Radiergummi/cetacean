@@ -75,6 +75,13 @@ func TestCSVFilename(t *testing.T) {
 	if got := csvFilename("services", at); got != "services-2026-09-11.csv" {
 		t.Errorf("csvFilename = %q, want %q", got, "services-2026-09-11.csv")
 	}
+
+	// A task export carries its parent's name, and a hostname is neither ASCII
+	// nor quote-free by construction.
+	const want = `tasks-b-cker-01--2026-09-11.csv`
+	if got := csvFilename(`tasks-bäcker-01"`, at); got != want {
+		t.Errorf("csvFilename = %q, want %q", got, want)
+	}
 }
 
 func TestWriteCSV(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -78,8 +79,23 @@ func csvRowsInOrder[T any](items []T, build func([]T) []cluster.Row) []cluster.R
 	return rows
 }
 
-// csvFilename dates the file so a directory of exports stays apart. ASCII
-// throughout, so RFC 6266 needs no filename* leg.
+// csvFilename dates the file so a directory of exports stays apart.
 func csvFilename(name string, at time.Time) string {
-	return name + "-" + at.UTC().Format(time.DateOnly) + ".csv"
+	return filenamePart(name) + "-" + at.UTC().Format(time.DateOnly) + ".csv"
+}
+
+// filenamePart reduces a name to what an RFC 6266 quoted-string holds
+// literally, so no filename* leg is needed. A task export carries its parent's
+// name, and neither a hostname nor a quote is guaranteed ASCII.
+func filenamePart(name string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			return r
+		case r == '-', r == '_', r == '.':
+			return r
+		default:
+			return '-'
+		}
+	}, name)
 }
