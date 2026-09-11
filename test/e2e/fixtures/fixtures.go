@@ -75,6 +75,20 @@ type ServiceSpec struct {
 	Secrets  []string    // secret names to mount
 	Networks []string    // network names to attach
 	Mounts   []MountSpec // volumes to mount
+
+	// Resources sets the service's limits and reservations. Left nil, the
+	// service gets neither, which is what the baseline wants; the sizing
+	// recommendations are only computed for a service that has them.
+	Resources *ResourceSpec
+}
+
+// ResourceSpec is a service's CPU and memory limits and reservations. CPU is
+// in NanoCPUs (1e9 per core) and memory in bytes, as the Swarm API takes them.
+type ResourceSpec struct {
+	CPULimit          int64
+	MemoryLimit       int64
+	CPUReservation    int64
+	MemoryReservation int64
 }
 
 // MountSpec attaches a named volume at a path in the container.
@@ -500,6 +514,20 @@ func createService(ctx context.Context, env *harness.Env, spec ServiceSpec) erro
 		networks[i] = swarm.NetworkAttachmentConfig{Target: name}
 	}
 
+	var resources *swarm.ResourceRequirements
+	if spec.Resources != nil {
+		resources = &swarm.ResourceRequirements{
+			Limits: &swarm.Limit{
+				NanoCPUs:    spec.Resources.CPULimit,
+				MemoryBytes: spec.Resources.MemoryLimit,
+			},
+			Reservations: &swarm.Resources{
+				NanoCPUs:    spec.Resources.CPUReservation,
+				MemoryBytes: spec.Resources.MemoryReservation,
+			},
+		}
+	}
+
 	_, err := env.Docker.ServiceCreate(ctx, swarm.ServiceSpec{
 		Annotations: swarm.Annotations{Name: spec.Name, Labels: spec.Labels},
 		Mode:        mode,
@@ -512,7 +540,8 @@ func createService(ctx context.Context, env *harness.Env, spec ServiceSpec) erro
 				Secrets: secretRefs,
 				Mounts:  mounts,
 			},
-			Networks: networks,
+			Networks:  networks,
+			Resources: resources,
 			RestartPolicy: &swarm.RestartPolicy{
 				Condition: swarm.RestartPolicyConditionAny,
 				Delay:     new(2 * time.Second),

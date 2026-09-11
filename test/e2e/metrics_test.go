@@ -168,18 +168,11 @@ func withLabels(base, extra map[string]string) map[string]string {
 	return out
 }
 
-// startMetricsLane brings the environment up, seeds Prometheus against the
-// node the swarm actually assigned, and points a SUT at it.
-func startMetricsLane(t *testing.T) (*sut.Process, time.Time) {
-	t.Helper()
-
-	return startMetricsLaneWith(t, nil)
-}
-
-// startMetricsLaneWith seeds only the series `keep` accepts, for a case about
-// what Cetacean reports when an exporter is missing. Each case seeds its own
-// Prometheus, so a reduced seed cannot reach the case after it.
-func startMetricsLaneWith(t *testing.T, keep func(harness.Series) bool) (*sut.Process, time.Time) {
+// metricsCluster brings the environment up with the baseline deployed and
+// reports the node's address, which is the half of node-exporter's `instance`
+// label instanceSelector matches on — Docker assigns it, so no series can be
+// written down ahead of it.
+func metricsCluster(t *testing.T) (*harness.Env, string, string) {
 	t.Helper()
 
 	env := harness.Up(t)
@@ -202,7 +195,50 @@ func startMetricsLaneWith(t *testing.T, keep func(harness.Series) bool) (*sut.Pr
 		)
 	}
 
-	series := seededMetrics(address, nodes[0].Description.Hostname)
+	return env, address, nodes[0].Description.Hostname
+}
+
+// seedAndStart writes the series and points a SUT at the Prometheus holding
+// them. Each case seeds its own, so one case's series cannot reach the next.
+func seedAndStart(
+	t *testing.T,
+	env *harness.Env,
+	series []harness.Series,
+	extraEnv map[string]string,
+) (*sut.Process, time.Time) {
+	t.Helper()
+
+	seededAt := harness.SeedPrometheus(t, series)
+
+	vars := map[string]string{
+		"CETACEAN_AUTH_MODE":      "none",
+		"CETACEAN_PROMETHEUS_URL": harness.PrometheusURL,
+	}
+	maps.Copy(vars, extraEnv)
+
+	proc := sut.Start(t, sut.Config{
+		Port:       metricsPort,
+		DockerHost: env.DockerHost,
+		Env:        vars,
+	})
+
+	return proc, seededAt
+}
+
+// startMetricsLane is the whole seed against the baseline cluster.
+func startMetricsLane(t *testing.T) (*sut.Process, time.Time) {
+	t.Helper()
+
+	return startMetricsLaneWith(t, nil)
+}
+
+// startMetricsLaneWith seeds only the series `keep` accepts, for a case about
+// what Cetacean reports when an exporter is missing.
+func startMetricsLaneWith(t *testing.T, keep func(harness.Series) bool) (*sut.Process, time.Time) {
+	t.Helper()
+
+	env, address, hostname := metricsCluster(t)
+	series := seededMetrics(address, hostname)
 
 	if keep != nil {
 		kept := make([]harness.Series, 0, len(series))
@@ -215,18 +251,7 @@ func startMetricsLaneWith(t *testing.T, keep func(harness.Series) bool) (*sut.Pr
 		series = kept
 	}
 
-	seededAt := harness.SeedPrometheus(t, series)
-
-	proc := sut.Start(t, sut.Config{
-		Port:       metricsPort,
-		DockerHost: env.DockerHost,
-		Env: map[string]string{
-			"CETACEAN_AUTH_MODE":      "none",
-			"CETACEAN_PROMETHEUS_URL": harness.PrometheusURL,
-		},
-	})
-
-	return proc, seededAt
+	return seedAndStart(t, env, series, nil)
 }
 
 // ─── the tests ──────────────────────────────────────────────────────────
@@ -592,4 +617,177 @@ func closeTo(t *testing.T, what string, got, want float64) {
 	if math.Abs(got-want) > math.Max(1, math.Abs(want)*1e-6) {
 		t.Errorf("%s = %v, want %v", what, got, want)
 	}
+}
+
+// ─── sizing recommendations ─────────────────────────────────────────────
+
+// The two throwaway services the sizing cases are seeded against, and the
+// numbers the checker is expected to derive from them. CPU is a percentage of
+// one core, which is the unit Prometheus reports and the checker converts from.
+const (
+	hotCPULimit    = 100_000_000 // 0.1 cores, so a 10% limit
+	hotCPUUsage    = 9.7         // 97% of that limit: at-limit, critical
+	hotMemoryLimit = 128 * 1024 * 1024
+	hotMemoryUsage = 126 * 1024 * 1024 // 98% of the limit
+
+	roomyCPULimit          = 2_000_000_000
+	roomyCPUReservation    = 1_000_000_000 // a whole core reserved
+	roomyCPUUsage          = 5.0           // 5% of it: over-provisioned
+	roomyMemoryLimit       = 1024 * 1024 * 1024
+	roomyMemoryReservation = 512 * 1024 * 1024
+	roomyMemoryUsage       = 32 * 1024 * 1024 // 6% of the reservation
+)
+
+// TestSizingRecommendationsReadTheSeededUsage drives the recommendation engine's
+// only Prometheus-dependent checker end to end. It is the reason the metrics
+// domain is worth seeding at all: the sizing rules turn measured usage into
+// advice a user is invited to apply with one click, and nothing had ever run
+// them against a Prometheus.
+//
+// Two services, chosen to reach both halves of the rules: one pinned just under
+// its limits, one given far more than it uses.
+func TestSizingRecommendationsReadTheSeededUsage(t *testing.T) {
+	env, address, hostname := metricsCluster(t)
+
+	stack := fixtures.DeployStack(t, env, "sizing", []fixtures.ServiceSpec{
+		{
+			Name:     "hot",
+			Replicas: 1,
+			Command:  []string{"sleep infinity"},
+			Resources: &fixtures.ResourceSpec{
+				CPULimit:    hotCPULimit,
+				MemoryLimit: hotMemoryLimit,
+			},
+		},
+		{
+			Name:     "roomy",
+			Replicas: 1,
+			Command:  []string{"sleep infinity"},
+			Resources: &fixtures.ResourceSpec{
+				CPULimit:          roomyCPULimit,
+				MemoryLimit:       roomyMemoryLimit,
+				CPUReservation:    roomyCPUReservation,
+				MemoryReservation: roomyMemoryReservation,
+			},
+		},
+	})
+
+	hot := stack + "_hot"
+	roomy := stack + "_roomy"
+
+	series := append(
+		seededMetrics(address, hostname),
+		serviceSeries(address, hot, stack, hotCPUUsage, hotMemoryUsage)...,
+	)
+	series = append(
+		series,
+		serviceSeries(address, roomy, stack, roomyCPUUsage, roomyMemoryUsage)...)
+
+	proc, _ := seedAndStart(t, env, series, nil)
+
+	// The engine forces every checker once at startup and then leaves the
+	// sizing checker alone for five minutes, so the bound below is what makes
+	// this a test rather than a wait: findings that are not here within it are
+	// not coming until long after, and the startup tick is held behind the
+	// first cache sync precisely so they are here.
+	want := map[string]string{
+		hot + "/cpu":      "at-limit",
+		hot + "/memory":   "at-limit",
+		roomy + "/cpu":    "over-provisioned",
+		roomy + "/memory": "over-provisioned",
+	}
+
+	var last []recommendation
+
+	started := time.Now()
+	deadline := started.Add(7 * time.Minute)
+	for time.Now().Before(deadline) {
+		last = sizingRecommendations(t, proc)
+
+		if covers(last, want) {
+			t.Logf(
+				"DIAGNOSTIC: sizing recommendations appeared after %s",
+				time.Since(started).Round(time.Second),
+			)
+			return
+		}
+
+		time.Sleep(2 * time.Second)
+	}
+
+	for key, category := range want {
+		if !hasRecommendation(last, key, category) {
+			t.Errorf("no %s recommendation for %s", category, key)
+		}
+	}
+
+	t.Logf("recommendations seen: %+v", last)
+}
+
+// serviceSeries is the cAdvisor half of the seed for one service: the three
+// labels every container query in the product selects on, a CPU counter rising
+// at the given percentage of a core, and a flat memory gauge.
+func serviceSeries(
+	address, service, stack string,
+	cpuPercent, memoryBytes float64,
+) []harness.Series {
+	labels := map[string]string{
+		"instance": address + ":8080",
+		"job":      "cadvisor",
+		"container_label_com_docker_swarm_service_name": service,
+		"container_label_com_docker_swarm_service_id":   "seeded-" + service,
+		"container_label_com_docker_stack_namespace":    stack,
+	}
+
+	return []harness.Series{
+		{
+			Name:   "container_cpu_usage_seconds_total",
+			Labels: labels,
+			Step:   cpuPercent / 100 * harness.SeedInterval.Seconds(),
+		},
+		{Name: "container_memory_usage_bytes", Labels: labels, Start: memoryBytes},
+	}
+}
+
+type recommendation struct {
+	Category   string  `json:"category"`
+	Severity   string  `json:"severity"`
+	TargetName string  `json:"targetName"`
+	Resource   string  `json:"resource"`
+	Current    float64 `json:"current"`
+	Configured float64 `json:"configured"`
+	Suggested  float64 `json:"suggested"`
+	Message    string  `json:"message"`
+}
+
+func sizingRecommendations(t *testing.T, proc *sut.Process) []recommendation {
+	t.Helper()
+
+	var body struct {
+		Items []recommendation `json:"items"`
+	}
+
+	metricsGet(t, proc, "/recommendations?limit=200", &body)
+
+	return body.Items
+}
+
+func hasRecommendation(recs []recommendation, key, category string) bool {
+	for _, rec := range recs {
+		if rec.TargetName+"/"+rec.Resource == key && rec.Category == category {
+			return true
+		}
+	}
+
+	return false
+}
+
+func covers(recs []recommendation, want map[string]string) bool {
+	for key, category := range want {
+		if !hasRecommendation(recs, key, category) {
+			return false
+		}
+	}
+
+	return true
 }
