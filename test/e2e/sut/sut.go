@@ -228,6 +228,15 @@ func buildEnv(cfg Config) []string {
 		"CETACEAN_CONFIG": "/dev/null",
 	}
 
+	// A `go build -cover` binary writes its profile to GOCOVERDIR when it
+	// exits. This environment is total — nothing is inherited — so the
+	// variable has to be carried explicitly or the SUT contributes nothing to
+	// the measured coverage. Absent when the parent does not set it: an
+	// uninstrumented binary would otherwise try to write a profile.
+	if dir := os.Getenv("GOCOVERDIR"); dir != "" {
+		env["GOCOVERDIR"] = dir
+	}
+
 	maps.Copy(env, cfg.Env)
 
 	out := make([]string, 0, len(env))

@@ -1,4 +1,4 @@
-.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack e2e-up e2e-down check sbom sbom-check sbom-verify hooks
+.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack e2e-up e2e-down check sbom sbom-check sbom-verify hooks cover cover-e2e fuzz
 
 ## Lint all code
 lint:
@@ -105,6 +105,31 @@ e2e-down:
 	docker compose -f test/e2e/compose.e2e.yaml down -v
 	-docker run --rm -v $(PWD)/test/e2e/certs:/certs alpine sh -c 'rm -rf /certs/..?* /certs/.[!.]* /certs/*' 2>/dev/null
 	-rm -rf test/e2e/certs
+
+## Measure the repository coverage baseline: what `go test ./...` reaches.
+cover:
+	go test -coverprofile=cover.out -covermode=atomic ./...
+	go tool cover -func=cover.out | tail -1
+	@echo "HTML report: go tool cover -html=cover.out"
+
+## Measure what the e2e harness reaches on top of that, by running an
+## instrumented binary. Leaves ./cetacean instrumented — run `make build` after.
+cover-e2e: frontend/node_modules
+	cd frontend && npm run build
+	cd frontend && npm run build:widgets
+	go build -cover -ldflags "$(LDFLAGS)" -o cetacean .
+	rm -rf coverdata && mkdir -p coverdata
+	@GOCOVERDIR=$(PWD)/coverdata go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...; \
+	status=$$?; \
+	if [ $$status -eq 0 ]; then \
+		$(MAKE) e2e-down; \
+	else \
+		echo "e2e environment left running for inspection; tear down with: make e2e-down"; \
+	fi; \
+	go tool covdata percent -i=coverdata; \
+	echo ""; \
+	echo "NOTE: ./cetacean is coverage-instrumented. Run 'make build' before anything else uses it."; \
+	exit $$status
 
 ## Run all checks (lint + type check + format check + test)
 check: lint typecheck fmt-check test

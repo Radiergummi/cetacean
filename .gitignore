@@ -48,6 +48,7 @@ docs/task-state-timeline-plan.md
 
 # Build output
 cetacean
+coverdata/
 frontend/dist/
 frontend/dist-widgets/
 website/dist/
