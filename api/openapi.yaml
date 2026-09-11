@@ -702,9 +702,8 @@ paths:
       tags: [Documentation]
       summary: OpenSearch description document
       description: |
-        Describes the cluster search as an OpenSearch 1.1 description document,
-        so a browser can offer it from the address bar. Templates are absolute
-        and are built from `server.public_url` when it is set.
+        Describes the cluster search so a browser can offer it from the address
+        bar. Templates are absolute, built from `server.public_url` when set.
       responses:
         "200":
           description: OpenSearch description
@@ -728,12 +727,10 @@ paths:
       summary: API catalog
       description: |
         Lists the APIs this deployment publishes, as an RFC 9264 linkset at the
-        RFC 9727 well-known URI. Each `item` link names one API; the contexts
-        beside it carry that API's description, documentation and status links.
-
-        The MCP server appears only when it is enabled, and its protected
-        resource metadata only when an authorization server is wired for it —
-        the catalog states what the process serves, not what it could serve.
+        RFC 9727 well-known URI. Each `item` names one API; the contexts beside
+        it carry its description, documentation and status links. The MCP server
+        appears only when enabled, and its metadata only when an authorization
+        server is wired for it.
       security: []
       responses:
         "200":

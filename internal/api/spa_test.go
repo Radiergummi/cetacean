@@ -116,12 +116,9 @@ func TestSPADirectoryPathIsNotAnAsset(t *testing.T) {
 	}
 }
 
-// TestSPAServesWebManifestAsJSON pins the media type of the Web App Manifest.
-// Go's mime package knows no type for .webmanifest, so without the extension
-// registered the header goes unset and http.ServeContent sniffs the JSON as
-// text/plain — which the specification requires a browser to reject, silently.
-// A passing install prompt is not something the test suite can see, so this is
-// what stands in for it.
+// TestSPAServesWebManifestAsJSON pins the manifest's media type. Sniffing
+// reports text/plain for JSON, which browsers must reject — silently, so this
+// stands in for an install prompt the suite cannot see.
 func TestSPAServesWebManifestAsJSON(t *testing.T) {
 	fsys := fstest.MapFS{
 		"index.html":           {Data: []byte("<html><head></head></html>")},
@@ -142,8 +139,7 @@ func TestSPAServesWebManifestAsJSON(t *testing.T) {
 	}
 }
 
-// webManifestPath is the shipped manifest, read from source rather than from a
-// build output so these tests run without one.
+// webManifestPath is read from source, so these tests need no build output.
 const webManifestPath = "../../frontend/public/manifest.webmanifest"
 
 type webManifestIcon struct {
@@ -151,8 +147,7 @@ type webManifestIcon struct {
 	Sizes string `json:"sizes"`
 }
 
-// webManifest is the subset of the Web App Manifest these tests claim things
-// about.
+// webManifest is the subset these tests make claims about.
 type webManifest struct {
 	StartURL   string            `json:"start_url"`
 	Scope      string            `json:"scope"`
@@ -176,14 +171,10 @@ func readWebManifest(t *testing.T) webManifest {
 	return manifest
 }
 
-// TestWebManifestIsSelfContainedAndRelative holds the shipped manifest to the
-// one property that makes it work under CETACEAN_BASE_PATH: a manifest
-// resolves its member URLs against its own URL, so every URL in it must be
-// relative. An absolute path would address the origin root, which is not where
-// a base-path deployment lives — the trap frontend-ledger A2 records.
-//
-// It also checks each icon names a file the build will ship, since a manifest
-// naming a missing icon is one a browser discards whole.
+// TestWebManifestIsSelfContainedAndRelative: a manifest resolves member URLs
+// against its own URL, so relative ones work under CETACEAN_BASE_PATH and
+// absolute ones address the origin root. It also checks each icon names a file
+// the build will ship, since a missing one voids the whole manifest.
 func TestWebManifestIsSelfContainedAndRelative(t *testing.T) {
 	manifest := readWebManifest(t)
 
@@ -220,7 +211,7 @@ func TestWebManifestIsSelfContainedAndRelative(t *testing.T) {
 		}
 	}
 
-	// A browser offers to install only with both of these present.
+	// A browser offers to install only with both present.
 	for _, size := range []string{"192x192", "512x512"} {
 		if !slices.ContainsFunc(manifest.Icons, func(i webManifestIcon) bool {
 			return i.Sizes == size
@@ -231,13 +222,8 @@ func TestWebManifestIsSelfContainedAndRelative(t *testing.T) {
 }
 
 // TestWebManifestThemeColorMatchesTheDocument pins two of the three places the
-// theme colour is stated. index.html carries a media-queried pair because a
-// manifest holds only one value, so its light half has to agree with the
-// manifest's or an installed window and a browser tab disagree about the
-// dashboard's own background.
-//
-// The third statement is --background in index.css, which is oklch and stays
-// with the comment in index.html.
+// theme colour is stated — a manifest holds one value, index.html a
+// media-queried pair. The third is --background in index.css.
 func TestWebManifestThemeColorMatchesTheDocument(t *testing.T) {
 	manifest := readWebManifest(t)
 
@@ -257,7 +243,7 @@ func TestWebManifestThemeColorMatchesTheDocument(t *testing.T) {
 		t.Fatal("index.html declares no light-scheme theme-color")
 	}
 
-	// The content attribute follows the media one inside the same tag.
+	// content follows media inside the same tag.
 	tag := document[light:]
 	if end := strings.IndexByte(tag, '>'); end >= 0 {
 		tag = tag[:end]

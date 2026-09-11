@@ -183,16 +183,14 @@ func withCORS(origins ...string) routerOption {
 	}
 }
 
-// withBasePath serves the router under a path prefix, as
-// CETACEAN_BASE_PATH does.
+// withBasePath serves the router under a path prefix, as CETACEAN_BASE_PATH does.
 func withBasePath(basePath string) routerOption {
 	return func(cfg *RouterConfig) {
 		cfg.BasePath = basePath
 	}
 }
 
-// newBasePathTestRouter serves a router under a path prefix, for the documents
-// that publish absolute URLs and must carry it.
+// newBasePathTestRouter serves a router under a path prefix.
 func newBasePathTestRouter(t *testing.T, basePath string) http.Handler {
 	t.Helper()
 

@@ -6,9 +6,7 @@ import (
 )
 
 // forwardedParams returns the value every RFC 7239 Forwarded element gives the
-// named parameter, in the order the elements appear — leftmost, the hop
-// closest to the client, first. Values are returned as they stand; what a
-// given parameter may say is its caller's business.
+// named parameter, leftmost first.
 func forwardedParams(values []string, name string) []string {
 	var found []string
 
@@ -27,22 +25,16 @@ func forwardedParams(values []string, name string) []string {
 	return found
 }
 
-// forwardedNodes returns the node identifier named by each Forwarded element's
-// "for" parameter, first proxy first — the ordering X-Forwarded-For uses.
-// nodeAddr decides which of them name an address.
+// forwardedNodes returns each Forwarded element's "for" node, first proxy
+// first — the ordering X-Forwarded-For uses.
 func forwardedNodes(values []string) []string {
 	return forwardedParams(values, "for")
 }
 
-// forwardedOrigin returns the "proto" and "host" the first Forwarded element
-// names, empty for either the element does not carry. These describe the
-// connection the *client* made, so the leftmost element is the one that saw
-// it — later elements describe hops between proxies.
-//
-// It walks that element itself rather than calling forwardedParams twice.
-// forwardedParams collects every occurrence across every element, which is
-// what forwardedNodes wants and is a different rule from this one: the two
-// agree only when the leftmost element carries both parameters.
+// forwardedOrigin returns the "proto" and "host" of the first Forwarded
+// element, which is the hop that saw the client's connection. This is a
+// different rule from forwardedParams, which collects every occurrence across
+// every element.
 func forwardedOrigin(values []string) (proto, host string) {
 	if len(values) == 0 {
 		return "", ""

@@ -9,8 +9,7 @@ import (
 )
 
 // parsedOpenSearch is the document read back off the wire, declared separately
-// from the type that wrote it so a round-trip through the encoder is not what
-// is being asserted.
+// from the type that wrote it.
 type parsedOpenSearch struct {
 	XMLName       xml.Name `xml:"OpenSearchDescription"`
 	ShortName     string   `xml:"ShortName"`
@@ -58,9 +57,8 @@ func fetchOpenSearch(t *testing.T, router http.Handler, requestPath string) pars
 	return doc
 }
 
-// TestOpenSearchDocumentIsValid holds the document to the constraints the
-// OpenSearch 1.1 specification places on it. A browser that rejects one says
-// nothing about why, so these are worth asserting rather than eyeballing.
+// TestOpenSearchDescriptionIsValid holds the document to the OpenSearch 1.1
+// constraints. A browser that rejects one says nothing about why.
 func TestOpenSearchDescriptionIsValid(t *testing.T) {
 	router := newSeededTestRouter(t)
 
@@ -87,15 +85,12 @@ func TestOpenSearchDescriptionIsValid(t *testing.T) {
 		)
 	}
 
-	// §4.2: InputEncoding names the character encoding the search accepts.
-	// The templates below carry {searchTerms} unescaped, so a client needs to
-	// be told how to encode what it substitutes.
+	// §4.2: the encoding a client should use for {searchTerms}.
 	if doc.InputEncoding != "UTF-8" {
 		t.Errorf("InputEncoding = %q, want UTF-8", doc.InputEncoding)
 	}
 
-	// A browser renders Image at its declared size; wrong dimensions show as a
-	// blurred or clipped icon rather than an error.
+	// A browser renders Image at its declared size.
 	if doc.Image.Width != 32 || doc.Image.Height != 32 {
 		t.Errorf("Image is %dx%d, want the 32x32 favicon it points at",
 			doc.Image.Width, doc.Image.Height)
@@ -135,8 +130,7 @@ func TestOpenSearchDescriptionIsValid(t *testing.T) {
 }
 
 // TestOpenSearchTemplatesResolve drives each template against the router that
-// published it, with a real search term in place of the placeholder. A
-// description document whose templates 404 is worse than none: the browser
+// published it. A document whose templates 404 is worse than none: the browser
 // offers the search and it fails.
 func TestOpenSearchTemplatesResolve(t *testing.T) {
 	router := newSeededTestRouter(t)
@@ -171,9 +165,8 @@ func TestOpenSearchTemplatesResolve(t *testing.T) {
 	}
 }
 
-// TestOpenSearchIsAbsoluteUnderABasePath is C2's half of the trap D1 avoids by
-// construction: this document is built by the server and its templates must
-// carry the prefix themselves.
+// TestOpenSearchIsAbsoluteUnderABasePath: the templates are built by the
+// server, so they must carry the base path themselves.
 func TestOpenSearchIsAbsoluteUnderABasePath(t *testing.T) {
 	router := newBasePathTestRouter(t, "/cetacean")
 

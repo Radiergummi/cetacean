@@ -8,38 +8,27 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/linkset"
 )
 
-// apiCatalogPath is where RFC 9727 mints the catalog, and the value of the
-// api-catalog link relation discoveryLinks puts on every response.
 const apiCatalogPath = "/.well-known/api-catalog"
 
-// oauthProtectedResourcePath is where internal/mcp/oauth registers the RFC
-// 9728 metadata document. Spelled again here because internal/api and
-// internal/mcp deliberately do not import each other; catalogMounts.oauthMetadata
-// is what keeps this from being claimed when that route is not mounted.
+// oauthProtectedResourcePath is spelled again here because internal/api and
+// internal/mcp deliberately do not import each other.
 const oauthProtectedResourcePath = "/.well-known/oauth-protected-resource"
 
-// catalogMounts is what the router actually mounted, which is what the catalog
-// is allowed to claim. A catalog is a promise that what it lists is there, and
-// both of these are optional at runtime: MCP is off by default, and its OAuth
-// authorization server is wired only when an auth mode other than "none" is
-// configured — so MCP can be reachable while the metadata document describing
-// it does not exist.
+// catalogMounts is what the router mounted, which is what the catalog may
+// claim. MCP is off by default, and its OAuth server is wired only when
+// auth.mode is not "none" — so MCP can be reachable while the metadata
+// document describing it does not exist.
 type catalogMounts struct {
 	mcp           bool
 	oauthMetadata bool
 }
 
 // HandleAPICatalog serves the RFC 9727 API catalog as an RFC 9264 linkset.
+// Cetacean publishes two APIs from one process: the REST API at "/", and the
+// MCP server at /mcp when enabled.
 //
-// Cetacean publishes two APIs from one process: the REST API rooted at "/",
-// described by OpenAPI, and the MCP server at /mcp, which speaks a different
-// protocol behind its own authorization. A catalog is how a client learns that
-// without being told, which is the only reason this document says more than
-// the discovery Link headers already do.
-//
-// The document is unauthenticated — /.well-known/ is exempt from auth — and so
-// may name only resources that are themselves public. Every URI below is a
-// description document or a health probe; none of them is a cluster resource.
+// The document is unauthenticated — /.well-known/ is exempt — so it may name
+// only public resources.
 func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -64,21 +53,13 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 				Title: "Cetacean MCP server",
 			})
 
-			// With no authorization server there is nothing further to say
-			// about /mcp, and a context carrying an anchor and no links says
-			// exactly that at greater length. The item above still announces
-			// the API.
 			if mounts.oauthMetadata {
 				mcpContexts = []linkset.Context{{
 					Anchor: mcpAPI,
 					Relations: map[string][]linkset.Target{
-						// RFC 9728 protected resource metadata is metadata
-						// about the endpoint rather than a description of its
-						// interface, which is service-meta's distinction from
-						// service-desc in RFC 8631. MCP has no served
-						// interface description: this server is stateless and
-						// answers no initialize, so its capabilities are not
-						// discoverable ahead of a call.
+						// service-meta, not service-desc: RFC 9728 metadata
+						// describes the endpoint, not its interface, and MCP
+						// serves no interface description.
 						"service-meta": {{
 							Href:  link(oauthProtectedResourcePath),
 							Type:  "application/json",
@@ -92,17 +73,14 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 		contexts := append([]linkset.Context{
 			{
 				Anchor: link(apiCatalogPath),
-				// item is the one relation RFC 9727 §3.1 requires: each names
-				// an API that is a member of this catalog.
+				// item is RFC 9727 §3.1's only MUST: each names a member API.
 				Relations: map[string][]linkset.Target{"item": items},
 			},
 			{
 				Anchor: restAPI,
 				Relations: map[string][]linkset.Target{
-					// Both relations point at /api: it is one resource that
-					// content-negotiates between the OpenAPI document and the
-					// Scalar playground, and the type attribute is what tells
-					// the two apart.
+					// Both point at /api, which negotiates between the two;
+					// the type attribute tells them apart.
 					"service-desc": {{
 						Href:  link("/api"),
 						Type:  "application/json",

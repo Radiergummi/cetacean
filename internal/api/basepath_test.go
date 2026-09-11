@@ -222,12 +222,9 @@ func TestAbsURLPrefersPublicURLWithBasePath(t *testing.T) {
 }
 
 // TestAbsURLOriginIsProxySupplied covers what absURL may believe about the
-// origin a client reached. Forwarded and X-Forwarded-* are request headers
-// like any other: anyone can send them, and whatever they say ends up in URLs
-// Cetacean publishes in feeds and discovery documents. They are read only when
-// the peer the connection actually arrived from is a configured trusted proxy
-// — auth.Peer, recorded once at the edge by realIP — and only when the value
-// itself can stand where it is going.
+// origin. Forwarded and X-Forwarded-* are ordinary request headers whose
+// values end up in published URLs, so they are read only from a trusted peer
+// and only when the value can stand where it is going.
 func TestAbsURLOriginIsProxySupplied(t *testing.T) {
 	const (
 		trusted   = "203.0.113.7"
@@ -292,9 +289,7 @@ func TestAbsURLOriginIsProxySupplied(t *testing.T) {
 		},
 		{
 			// Distinguishes "the first element" from "the first occurrence
-			// anywhere". The latter is forwardedNodes' rule, not this one: an
-			// inner hop's account of itself is not the client's connection,
-			// and the two rules agree on every case above.
+			// anywhere"; every case above agrees under both rules.
 			name: "a later element does not supply the origin",
 			peer: &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
 			headers: map[string]string{
@@ -304,16 +299,14 @@ func TestAbsURLOriginIsProxySupplied(t *testing.T) {
 		},
 		{
 			// nginx's proxy_set_header X-Forwarded-Host $http_host passes the
-			// client's own Host through: a trusted proxy is not a promise
-			// that the value it forwarded was ever checked.
+			// client's own Host straight through.
 			name:    "a host that would rewrite the link is refused",
 			peer:    &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
 			headers: map[string]string{"X-Forwarded-Host": "evil.example.com/attacker#"},
 			want:    "http://internal:9000/services",
 		},
 		{
-			// Userinfo is part of an authority's grammar but not of a host,
-			// and a link carrying it reads as credentials for somewhere.
+			// Userinfo is part of an authority but not of a host.
 			name:    "a host carrying userinfo is refused",
 			peer:    &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
 			headers: map[string]string{"X-Forwarded-Host": "cetacean.example.com@evil.example.com"},

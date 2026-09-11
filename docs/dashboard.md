@@ -150,18 +150,6 @@ Every resource list and detail page shows a feed icon in the page header. Click 
 or copy the URL into a feed reader. The history, search and recommendations pages have feeds too. See the
 [API guide][feeds] for the supported endpoints and pagination.
 
-## Installing it as an app
-
-The dashboard ships a web app manifest, so a browser can install it: look for the install control in the address
-bar, or "Add to Home Screen" on a phone. It then opens in its own window, with its own icon and no browser tabs,
-which suits a dashboard left open all day. There is no offline mode — a stale view of a live cluster is worse than
-no view — so an installed dashboard needs the server just as a tab does.
-
-The browser chrome takes its colour from the dashboard's background in whichever theme is active.
-
-The same page head advertises an [OpenSearch description][browser-search]: browsers that support it can be taught a
-keyword for the cluster, so the address bar searches it directly.
-
 ## Licenses
 
 The licenses page, linked from the footer, lists every open-source dependency bundled into Cetacean, both Go
@@ -171,7 +159,6 @@ attribution document.
 
 [authentication]: authentication
 [authorization]: authorization
-[browser-search]: api#browser-search
 [feeds]: api#feeds
 [filter-fields-by-resource]: api#filter-fields-by-resource
 [monitoring]: monitoring

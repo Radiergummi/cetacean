@@ -314,11 +314,9 @@ func TestParseAccept_JGF(t *testing.T) {
 	}
 }
 
-// TestParseAccept_StructuredJSONSuffixes covers the +json media types the API
-// actually serves. Asking for the type a document carries and being refused
-// with 406 by the endpoint that carries it is the failure these prevent:
-// every detail response is JSON-LD, and RFC 9727 permits the API catalog to be
-// served as nothing but a linkset.
+// TestParseAccept_StructuredJSONSuffixes covers the +json types the API serves.
+// Without them, asking for the type a document carries is answered 406 by the
+// endpoint that carries it.
 func TestParseAccept_StructuredJSONSuffixes(t *testing.T) {
 	for _, accept := range []string{
 		"application/ld+json",

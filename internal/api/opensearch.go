@@ -5,30 +5,20 @@ import (
 	"net/http"
 )
 
-// openSearchPath is where the description document lives, and the href
-// frontend/index.html advertises it at.
-const openSearchPath = "/opensearch.xml"
+const (
+	openSearchPath      = "/opensearch.xml"
+	openSearchMediaType = "application/opensearchdescription+xml"
 
-// openSearchMediaType is the type registered for an OpenSearch description
-// document. A browser will not adopt one served as anything else.
-const openSearchMediaType = "application/opensearchdescription+xml"
+	// OpenSearch 1.1 is a community spec, not an RFC:
+	// https://github.com/dewitt/opensearch/blob/master/opensearch-1-1-draft-6.md
+	openSearchNamespace = "http://a9.com/-/spec/opensearch/1.1/"
+)
 
-// openSearchNamespace is the OpenSearch 1.1 namespace. The specification is a
-// community document rather than an RFC — there is none to cite, and looking
-// for one is a waste of an afternoon.
-//
-// Specification: https://github.com/dewitt/opensearch/blob/master/opensearch-1-1-draft-6.md
-const openSearchNamespace = "http://a9.com/-/spec/opensearch/1.1/"
-
-// openSearchDescription is the description document. Field order is the
-// document order the encoder emits, and the specification's own examples use
-// it.
 type openSearchDescription struct {
 	XMLName xml.Name `xml:"OpenSearchDescription"`
 	XMLNS   string   `xml:"xmlns,attr"`
 
-	// ShortName is capped at 16 characters by the specification, and a
-	// browser renders it as the name of the search engine.
+	// ShortName is capped at 16 characters by the spec.
 	ShortName string `xml:"ShortName"`
 
 	Description   string          `xml:"Description"`
@@ -49,15 +39,12 @@ type openSearchURL struct {
 	Template string `xml:"template,attr"`
 }
 
-// HandleOpenSearch serves the OpenSearch description document, which is what
-// lets a browser offer the cluster's own search from the address bar.
+// HandleOpenSearch serves the description document that lets a browser search
+// the cluster from the address bar.
 //
-// The templates are absolute because a URL template is used on its own, with
-// no document to resolve against — which is the whole reason this document is
-// served by the server rather than sitting in frontend/public beside the web
-// app manifest. Set server.public_url behind a proxy; without it the origin is
-// taken from the request, and the trusted-proxy rules in requestOrigin decide
-// how much of that is believed.
+// Templates are absolute because a URL template is used with no document to
+// resolve against — which is why this is served by the server while the web
+// app manifest is a static file.
 func HandleOpenSearch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	origin := originOf(r)
@@ -80,10 +67,8 @@ func HandleOpenSearch(w http.ResponseWriter, r *http.Request) {
 		},
 		URLs: []openSearchURL{
 			{Type: "text/html", Template: search + "?q={searchTerms}"},
-			// The machine-readable pair a feed reader or a script can use,
-			// both of which /search already serves — the extension suffix
-			// rather than an Accept header, since a template carries no
-			// headers.
+			// Extension suffixes rather than an Accept header: a template
+			// carries no headers.
 			{
 				Type:     "application/atom+xml",
 				Template: link("/search.atom") + "?q={searchTerms}",

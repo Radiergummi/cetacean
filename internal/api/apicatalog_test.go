@@ -12,10 +12,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/linkset"
 )
 
-// catalogDocument is the wire shape of a linkset, read back rather than
-// reusing linkset.Document: that type marshals but does not unmarshal, and a
-// test that parsed with the same code that wrote would confirm nothing about
-// the bytes on the wire.
+// catalogDocument is the wire shape, declared separately from linkset.Document
+// so parsing does not go through the code that wrote it.
 type catalogDocument struct {
 	Linkset []map[string]json.RawMessage `json:"linkset"`
 }
@@ -26,7 +24,7 @@ type catalogTarget struct {
 	Title string `json:"title"`
 }
 
-// contexts returns each link context keyed by its anchor, with its relations.
+// contexts keys each link context by its anchor.
 func (d catalogDocument) contexts(t *testing.T) map[string]map[string][]catalogTarget {
 	t.Helper()
 
@@ -64,7 +62,7 @@ func (d catalogDocument) contexts(t *testing.T) map[string]map[string][]catalogT
 	return out
 }
 
-// targets returns every link target the document names, in a stable order.
+// targets returns every link target, in a stable order.
 func (d catalogDocument) targets(t *testing.T) []catalogTarget {
 	t.Helper()
 
@@ -87,8 +85,8 @@ func (d catalogDocument) targets(t *testing.T) []catalogTarget {
 	return found
 }
 
-// fetchCatalog drives the catalog route on the given router and parses the
-// response. accept may be empty, for the client that states no preference.
+// fetchCatalog drives the catalog route and parses the response. An empty
+// accept sends no Accept header.
 func fetchCatalog(
 	t *testing.T,
 	router http.Handler,
@@ -111,8 +109,7 @@ func fetchCatalog(
 		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
 	}
 
-	// RFC 9727 §4.2: "The Publisher MUST publish the API catalog document in
-	// the Linkset format application/linkset+json."
+	// RFC 9727 §4.2 permits no other format.
 	if got := rec.Header().Get("Content-Type"); got != linkset.MediaType {
 		t.Errorf("Content-Type = %q, want %q", got, linkset.MediaType)
 	}
@@ -125,20 +122,13 @@ func fetchCatalog(
 	return doc
 }
 
-// TestAPICatalogTargetsAnswerAsAdvertised is what makes the catalog
-// self-checking: every target it publishes is driven against the same router
-// that published it, and must answer with the media type the catalog claimed.
+// TestAPICatalogTargetsAnswerAsAdvertised keeps the catalog honest: every
+// target is driven against the router that published it and must answer with
+// the media type the catalog claimed.
 //
-// A catalog is a promise that what it lists is there. Nothing else in the tree
-// would notice an endpoint being renamed out from under this document, because
-// it is the one place stating a path no route table mentions.
-//
-// The assertion is the media type rather than "not 404", which was the first
-// version of this test and detected nothing: the SPA fallback answers every
-// unrouted path with 200 and an HTML body, so renaming /api/context.jsonld out
-// from under the catalog still passed. A target's own type attribute is the
-// claim worth holding it to, and it catches the fallback for free — HTML is
-// not what any of these advertise.
+// The assertion is the media type, not "not 404" — the SPA fallback answers
+// every unrouted path with 200 and HTML, so a 404 check passes even after a
+// route is renamed out from under the catalog.
 func TestAPICatalogTargetsAnswerAsAdvertised(t *testing.T) {
 	router := newSeededTestRouter(t)
 
@@ -188,7 +178,7 @@ func TestAPICatalogTargetsAnswerAsAdvertised(t *testing.T) {
 				return
 			}
 
-			// A media type may carry parameters the catalog does not state.
+			// The response may carry parameters the catalog does not state.
 			got, _, _ := strings.Cut(rec.Header().Get("Content-Type"), ";")
 			if strings.TrimSpace(got) != target.Type {
 				t.Errorf(
@@ -201,7 +191,7 @@ func TestAPICatalogTargetsAnswerAsAdvertised(t *testing.T) {
 		})
 	}
 
-	// Without a floor, a catalog that stopped declaring types would walk clean
+	// Without a floor, a catalog that stopped declaring types walks clean
 	// while asserting nothing.
 	if typed < 4 {
 		t.Errorf("only %d targets declared a media type; the walk checks little", typed)
@@ -209,19 +199,15 @@ func TestAPICatalogTargetsAnswerAsAdvertised(t *testing.T) {
 }
 
 // TestAPICatalogAnswersItsOwnMediaType drives the request an RFC 9727 client
-// makes. Linkset is the only format the catalog may be published in, so that
-// is what such a client asks for by name — and until application/linkset+json
-// was a media type negotiation recognised, the catalog answered its own
-// audience with 406.
+// makes. Until linkset+json was a type negotiation recognised, the catalog
+// answered its own audience with 406.
 func TestAPICatalogAnswersItsOwnMediaType(t *testing.T) {
 	fetchCatalog(t, newSeededTestRouter(t), apiCatalogPath, linkset.MediaType)
 }
 
-// TestAPICatalogCarriesItemLinks pins the one relation RFC 9727 requires.
-// §3.1: "the 'item' link relation identifies a target resource that represents
-// an API that is a member of the API catalog." A catalog whose entries are all
-// service-desc and describedby is a sitemap of one API's endpoints, which is
-// not what this well-known URI means.
+// TestAPICatalogCarriesItemLinks pins RFC 9727 §3.1's only MUST: item names a
+// member API. A catalog of service-desc and describedby links alone is a
+// sitemap of one API, which is not what this URI means.
 func TestAPICatalogCarriesItemLinks(t *testing.T) {
 	router := newSeededTestRouter(t)
 
@@ -246,8 +232,6 @@ func TestAPICatalogCarriesItemLinks(t *testing.T) {
 			t.Error("an item link carries no href")
 		}
 
-		// A host renders the catalog as a list; an untitled entry is a bare
-		// URI in it.
 		if item.Title == "" {
 			t.Errorf("the item %q carries no title", item.Href)
 		}
@@ -255,10 +239,8 @@ func TestAPICatalogCarriesItemLinks(t *testing.T) {
 }
 
 // TestAPICatalogOmitsUnmountedAPIs holds the catalog to what the process
-// actually serves. MCP is off by default, and its OAuth authorization server
-// is wired only when an auth mode other than "none" is configured — so a
-// catalog built from a single "is MCP on" flag would advertise a metadata
-// document that does not exist in the auth-mode-none deployment.
+// serves. A catalog keyed on "is MCP on" alone would advertise a metadata
+// document that does not exist when auth.mode is "none".
 func TestAPICatalogOmitsUnmountedAPIs(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -309,10 +291,9 @@ func TestAPICatalogOmitsUnmountedAPIs(t *testing.T) {
 	}
 }
 
-// TestAPICatalogIsAbsoluteUnderABasePath covers the trap that bit the
-// frontend's index.html: a document of absolute URIs served under
-// CETACEAN_BASE_PATH must carry the prefix, or every URI in it addresses a
-// path the deployment does not serve.
+// TestAPICatalogIsAbsoluteUnderABasePath: under CETACEAN_BASE_PATH every URI
+// must carry the prefix, or it addresses a path the deployment does not
+// serve.
 func TestAPICatalogIsAbsoluteUnderABasePath(t *testing.T) {
 	router := newBasePathTestRouter(t, "/cetacean")
 
@@ -330,9 +311,8 @@ func TestAPICatalogIsAbsoluteUnderABasePath(t *testing.T) {
 	}
 }
 
-// TestAPICatalogETagIsStable fails if a context's relations are serialized in
-// map order. Go randomizes that, so the body — and the ETag over it — would
-// differ on every request and no conditional GET would ever match.
+// TestAPICatalogETagIsStable fails if relations serialize in map order: Go
+// randomizes it, so no conditional GET would ever match.
 func TestAPICatalogETagIsStable(t *testing.T) {
 	router := newSeededTestRouter(t)
 

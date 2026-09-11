@@ -38,20 +38,14 @@ func loadTestSpec(t *testing.T) ([]byte, *openapi3.T, routers.Router) {
 	t.Helper()
 
 	specOnce.Do(func() {
-		// openapi3filter decodes a response body by exact media type, so a
-		// +json type it does not know is "unsupported content type" rather
-		// than JSON — which would mean skipping the API catalog the way
-		// /topology is skipped, leaving its schema unchecked. Lending it the
-		// library's own JSON decoder validates the document instead.
+		// openapi3filter decodes by exact media type, so these two would be
+		// "unsupported content type" and have to be skipped like /topology,
+		// leaving their schemas unchecked.
 		openapi3filter.RegisterBodyDecoder(
 			linkset.MediaType,
 			openapi3filter.RegisteredBodyDecoder("application/json"),
 		)
 
-		// The OpenSearch document is declared as a string in the spec, which
-		// is what the plain-text decoder produces — the XML has no schema
-		// worth restating in OpenAPI, and the assertions that matter are in
-		// opensearch_test.go, which parses it.
 		openapi3filter.RegisterBodyDecoder(
 			openSearchMediaType,
 			openapi3filter.RegisteredBodyDecoder("text/plain"),

@@ -72,16 +72,10 @@ func variantSuffix(e Encoding) string {
 	}
 }
 
-// assetContentTypes names the types the mime package does not. It is consulted
-// before mime rather than registered into it: mime.AddExtensionType mutates a
-// process-global table from a library package, reaching every consumer in the
-// binary in order to serve one file here.
-//
-// Go knows no type for .webmanifest, and neither does every host's mime.types,
-// so without this the header goes unset and http.ServeContent sniffs the bytes
-// — reporting text/plain for JSON. The Web App Manifest specification requires
-// a JSON MIME type, so a sniffed manifest is discarded and the install prompt
-// never appears, with nothing in the response to say why.
+// assetContentTypes names the types the mime package does not, consulted
+// before it rather than registered into it — mime.AddExtensionType mutates
+// process-global state. Without the .webmanifest entry the header goes unset
+// and http.ServeContent sniffs JSON as text/plain, which browsers must reject.
 var assetContentTypes = map[string]string{
 	".webmanifest": "application/manifest+json",
 }
