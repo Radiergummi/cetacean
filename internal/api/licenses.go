@@ -8,8 +8,7 @@ import (
 
 // The three attribution documents are embedded at build time and never
 // change, so each is hashed once here and compressed at most once per coding
-// rather than on every request. Notices alone is 1.3 MB, on a route that —
-// like the rest of /-/ — skips authentication.
+// rather than on every request.
 var (
 	licensesBody = newStaticBody(sbom.ProjectedJSON())
 	noticesBody  = newStaticBody(sbom.Notices())

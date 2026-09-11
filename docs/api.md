@@ -568,12 +568,6 @@ passes the per-resource [ACL][authorization] write check.
 > [!NOTE]
 > `GET /swarm/unlock-key` returns a credential, so it is gated at level 3 like the writes beside it.
 
-> [!NOTE]
-> `PATCH /nodes/{id}/labels` sits a level below the other node writes. Relabelling a node changes where
-> tasks may be placed; draining it or demoting it from manager changes whether the swarm stays healthy.
-> A deployment can therefore allow relabelling without also allowing a manager to be demoted — the same
-> split [MCP][mcp] makes between `update_node_labels` and `update_node`.
-
 ### Preconditions
 
 Every write endpoint whose exact path also serves a `GET` accepts an optional `If-Match` request

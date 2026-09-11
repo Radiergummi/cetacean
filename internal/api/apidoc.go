@@ -53,9 +53,6 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 }
 
 // HandleScalarJS serves the embedded Scalar API reference JavaScript bundle.
-// At 3.7 MB it is the response that most needs staticBody: the route skips
-// authentication, so compressing it per request would let anyone spend ~68ms
-// of server CPU on a 100-byte GET.
 func HandleScalarJS(js []byte) http.HandlerFunc {
 	bundle := newStaticBody(js)
 

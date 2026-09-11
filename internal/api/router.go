@@ -66,10 +66,7 @@ func (h *Handlers) listFeeds(title string, eventType cache.EventType) feedHandle
 	}
 }
 
-// searchFeeds builds feedHandlers for the search endpoint, the one feed that
-// reads a query parameter beyond the pagination pair. It is a constructor
-// like listFeeds and detailFeeds so the declaration sits where every other
-// feed's does, rather than inline at the single route that needs it.
+// searchFeeds builds feedHandlers for the search endpoint.
 func (h *Handlers) searchFeeds() feedHandlers {
 	return feedHandlers{
 		atom:        h.feedSearchHandler(renderAtom),
@@ -148,11 +145,6 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	svcTier1 := NewChain(svcACL, tier1)
 	svcTier2 := NewChain(svcACL, tier2)
 	svcTier3 := NewChain(svcACL, tier3)
-	// Node labels sit a tier below the rest of a node's writes: relabelling
-	// is a placement-configuration edit, while availability and role can
-	// destabilise the swarm. MCP splits update_node_labels from update_node
-	// for exactly that reason, and REST has to agree — see
-	// TestPatchNodeLabelsIsAdmittedAtTierTwo.
 	nodeTier2 := NewChain(nodeACL, tier2)
 	nodeTier3 := NewChain(nodeACL, tier3)
 	taskTier3 := NewChain(taskACL, tier3)

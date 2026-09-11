@@ -8,12 +8,6 @@ import (
 	"testing"
 )
 
-// The API documentation endpoints serve two bodies fixed at startup — the
-// OpenAPI document, the largest response this API has, and the Scalar bundle.
-// Both used to be written with a bare w.Write, so neither was compressed and
-// neither carried a validator, while every other endpoint had both. These
-// tests pin them onto the same helper the rest of the tree uses.
-
 // apiDocRoutes names the two endpoints and a marker their body must contain,
 // so a test that silently received the SPA or a 404 fails rather than passing
 // on an empty comparison.
@@ -29,10 +23,6 @@ var apiDocRoutes = []struct {
 func newAPIDocRouter(t testing.TB) http.Handler {
 	t.Helper()
 
-	// Both documents are padded past compressionThreshold, because the real
-	// ones are far past it — the OpenAPI document is the largest response
-	// this API serves — and a fixture under it would let an uncompressed
-	// answer look correct.
 	var spec strings.Builder
 	spec.WriteString("openapi: '3.1.0'\ninfo:\n  title: Cetacean\n  version: '1'\npaths:\n")
 	for i := range 200 {

@@ -118,14 +118,9 @@ func writeRawWithPrecomputedETag(
 	})
 }
 
-// writeRawNegotiated is the shared body of the precomputed-ETag writers: it
-// negotiates a coding, answers a matching precondition with 304 before
-// touching the body at all, and otherwise writes whatever encode returns for
+// writeRawNegotiated negotiates a coding, answers a matching precondition with
+// 304 before touching the body, and otherwise writes what encode returns for
 // the negotiated coding.
-//
-// encode is a function rather than bytes because a body fixed for the life of
-// the process can cache its codings, and one that is not must compress per
-// response — see staticBody.
 func writeRawNegotiated(
 	w http.ResponseWriter,
 	r *http.Request,

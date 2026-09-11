@@ -8,17 +8,8 @@ import (
 // staticBody is a response body fixed for the life of the process, served
 // with a validator hashed once and each content coding compressed once.
 //
-// writeRawWithPrecomputedETag compresses on every 200, which is the only
-// option for a body that changes but pure waste for one that cannot. The
-// Scalar bundle is 3.7 MB: gzipping it per request costs ~68ms of CPU and a
-// megabyte of garbage, on a route that skips authentication and so can be
-// asked for it by anyone. The attribution documents behind /-/licenses are
-// the same shape at 1.3 MB.
-//
-// Codings are compressed lazily, so a binary nobody fetches the playground or
-// the licence texts from pays nothing, and retained afterwards. Nothing is
-// precomputed at startup: that would move the cost rather than remove it, and
-// pay it for documents most deployments never request.
+// Codings are compressed lazily and retained, so a deployment that never
+// serves the playground or the licence texts pays nothing for them.
 type staticBody struct {
 	identity []byte
 	etag     string

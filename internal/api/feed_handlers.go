@@ -453,23 +453,14 @@ func parseFeedPagination(r *http.Request) (beforeID uint64, limit int) {
 // beyond these declares it in feedData.QueryParams.
 var feedPaginationParams = []string{"before", "limit"}
 
-// searchFeedParams names the parameter only the search feed reads. It is one
-// variable because two code paths need it — the route registration, for the
-// alternate Link header, and searchFeedData, for the links inside the feed —
-// and two literals would be a drift a test could only catch after the fact.
+// searchFeedParams names the parameter only the search feed reads.
 var searchFeedParams = []string{"q"}
 
 // feedQuery returns the subset of r's query a feed's links may carry: the
 // pagination pair every feed reads, plus whatever else the caller declares.
 //
-// The rest of the raw query is attacker-chosen text, and reflecting it into a
-// compressed feed beside ACL-filtered resource names is the BREACH shape. The
-// set is per-feed rather than global because ?q= is read by handleFeedSearch
-// alone, and echoing it from a compressed feed would rebuild that shape.
-//
-// It takes the extra names rather than a feedData because the alternate Link
-// headers in dispatch.go apply the same rule from the registration side,
-// where no feed has been rendered yet — one rule, two callers.
+// Reflecting the rest of the raw query into a compressed feed beside
+// ACL-filtered resource names is the BREACH shape.
 func feedQuery(r *http.Request, extra []string) url.Values {
 	source := r.URL.Query()
 	kept := make(url.Values, len(feedPaginationParams)+len(extra))

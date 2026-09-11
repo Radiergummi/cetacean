@@ -27,9 +27,7 @@ const (
 
 	// OpsConfiguration allows service definition changes: env, labels,
 	// resources, healthcheck, placement, ports, update-policy, rollback-policy,
-	// log-driver. Node labels sit here too: they are a placement edit, and
-	// requiring OpsImpactful to write the labels an OpsConfiguration placement
-	// constraint matches would gate the two halves of one decision apart.
+	// log-driver.
 	OpsConfiguration OperationsLevel = 2
 
 	// OpsImpactful allows all operations including node availability/role,
