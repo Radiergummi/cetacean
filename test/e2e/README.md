@@ -80,6 +80,7 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19015` | Log reads and the SSE log tail, against containers writing known output |
 | `19016` | MCP streaming: the subscription notification stream, completions, and the tasks extension |
 | `19017` | The representation matrix: every content type each negotiated route declares |
+| `19018` | Deployment shape: base path, TLS in the binary, the MCP Origin guard, cache snapshots |
 | `19104` | Caddy, mTLS termination |
 
 `19003` is reserved in the numbering scheme but the `headers`-mode hostile-input cases run on

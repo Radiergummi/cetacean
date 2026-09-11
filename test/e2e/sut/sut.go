@@ -61,9 +61,18 @@ type Config struct {
 	CACert string
 }
 
+// readyPath is where this configuration's readiness probe lives. Everything
+// the binary serves moves under CETACEAN_BASE_PATH, /-/ready included, so a
+// probe at the root would poll a 404 until it timed out.
+func (c Config) readyPath() string {
+	return c.Env["CETACEAN_BASE_PATH"] + "/-/ready"
+}
+
 // Process is a running binary.
 type Process struct {
 	BaseURL string
+
+	readyPath string
 
 	cmd    *exec.Cmd
 	output *lockedBuffer
@@ -194,11 +203,12 @@ func launch(t *testing.T, cfg Config) *Process {
 	}
 
 	proc := &Process{
-		BaseURL: fmt.Sprintf("%s://127.0.0.1:%d", scheme, cfg.Port),
-		cmd:     cmd,
-		output:  out,
-		client:  buildClient(t, cfg),
-		exited:  make(chan struct{}),
+		BaseURL:   fmt.Sprintf("%s://127.0.0.1:%d", scheme, cfg.Port),
+		readyPath: cfg.readyPath(),
+		cmd:       cmd,
+		output:    out,
+		client:    buildClient(t, cfg),
+		exited:    make(chan struct{}),
 	}
 
 	go func() {
@@ -340,7 +350,7 @@ func (p *Process) waitReady() error {
 	deadline := time.Now().Add(readyTimeout)
 
 	for time.Now().Before(deadline) {
-		resp, err := p.get(p.BaseURL + "/-/ready")
+		resp, err := p.get(p.BaseURL + p.readyPath)
 		if err == nil {
 			resp.Body.Close()
 
@@ -359,7 +369,7 @@ func (p *Process) waitReady() error {
 		}
 	}
 
-	return fmt.Errorf("binary not ready at %s within %s", p.BaseURL, readyTimeout)
+	return fmt.Errorf("binary not ready at %s within %s", p.BaseURL+p.readyPath, readyTimeout)
 }
 
 // waitPortFree blocks until the address the child is about to bind is
