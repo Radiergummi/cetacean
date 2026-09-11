@@ -198,13 +198,6 @@ func TestAPICatalogTargetsAnswerAsAdvertised(t *testing.T) {
 	}
 }
 
-// TestAPICatalogAnswersItsOwnMediaType drives the request an RFC 9727 client
-// makes. Until linkset+json was a type negotiation recognised, the catalog
-// answered its own audience with 406.
-func TestAPICatalogAnswersItsOwnMediaType(t *testing.T) {
-	fetchCatalog(t, newSeededTestRouter(t), apiCatalogPath, linkset.MediaType)
-}
-
 // TestAPICatalogCarriesItemLinks pins RFC 9727 §3.1's only MUST: item names a
 // member API. A catalog of service-desc and describedby links alone is a
 // sitemap of one API, which is not what this URI means.

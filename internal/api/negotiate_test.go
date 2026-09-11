@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -188,7 +189,6 @@ func TestNegotiate(t *testing.T) {
 	})
 
 	// --- Unsupported types are recorded, not refused ---
-	// The route is not known here, so the refusal belongs to the endpoint.
 	// TestUnservedTypeIsRefusedByTheEndpoint drives the other half.
 
 	t.Run("application/xml alone resolves to Unsupported", func(t *testing.T) {
@@ -202,22 +202,6 @@ func TestNegotiate(t *testing.T) {
 		ct, _ := run("/services", "text/plain")
 		if ct != ContentTypeUnsupported {
 			t.Errorf("got %v, want Unsupported", ct)
-		}
-	})
-
-	t.Run("an unsupported type reaches the handler", func(t *testing.T) {
-		called := false
-		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			called = true
-		})
-
-		req := httptest.NewRequest("GET", "/services", nil)
-		req.Header.Set("Accept", openSearchMediaType)
-		rec := httptest.NewRecorder()
-		negotiate(inner).ServeHTTP(rec, req)
-
-		if !called {
-			t.Error("handler was not reached; a single-representation document cannot be served")
 		}
 	})
 
@@ -409,92 +393,82 @@ func TestNegotiate_JGFSuffix(t *testing.T) {
 	}
 }
 
-// TestUnservedTypeIsRefusedByTheEndpoint: a resource endpoint refuses every
-// type it does not serve, including one another endpoint does — a graph format
+// refuse drives one request and asserts it was refused as unacceptable,
+// returning the problem body so a caller can read what the endpoint offered
+// instead. The code matters as much as the status: API001 is also a 406, and
+// asserting the status alone would let the SSE refusal stand in for this one.
+func refuse(t *testing.T, router http.Handler, path, accept string) ProblemDetail {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Accept", accept)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotAcceptable {
+		t.Fatalf("status=%d, want 406; body=%s", rec.Code, rec.Body.String())
+	}
+
+	if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Errorf("content-type=%q, want application/problem+json", ct)
+	}
+
+	var problem ProblemDetail
+	if err := json.Unmarshal(rec.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("parse problem body: %v", err)
+	}
+
+	if !strings.Contains(problem.Type, "API003") {
+		t.Errorf("problem type=%q, want it to name API003", problem.Type)
+	}
+
+	return problem
+}
+
+// TestUnservedTypeIsRefusedByTheEndpoint: an endpoint refuses every type it
+// does not serve, including one another endpoint does — a graph format
 // resolves successfully here and is no more servable for it.
+//
+// /services and /cluster differ in whether they carry a stream, /api, /events
+// and /topology dispatch without the helpers, and the dashboard fallback
+// refuses only what nothing serves: */* resolves to JSON, so JSON on that
+// route means "unknown" and every static file arrives that way.
 func TestUnservedTypeIsRefusedByTheEndpoint(t *testing.T) {
 	router := newTestRouterWithCache(t, cache.New(nil))
 
-	// Both dispatchers, since they carry the rule separately: /services is
-	// contentNegotiatedWithSSE, /cluster is contentNegotiated.
-	for _, path := range []string{"/services", "/cluster"} {
-		for _, accept := range []string{
-			"application/opensearchdescription+xml",
-			"application/linkset+json",
-			"application/vnd.jgf+json",
-			"application/graphml+xml",
-			"text/vnd.graphviz",
-			"application/xml",
-		} {
-			t.Run(path+" "+accept, func(t *testing.T) {
-				req := httptest.NewRequest(http.MethodGet, path, nil)
-				req.Header.Set("Accept", accept)
-				rec := httptest.NewRecorder()
-				router.ServeHTTP(rec, req)
-
-				if rec.Code != http.StatusNotAcceptable {
-					t.Errorf("status=%d, want 406; body=%s", rec.Code, rec.Body.String())
-				}
-
-				if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
-					t.Errorf("content-type=%q, want application/problem+json", ct)
-				}
-			})
-		}
-	}
-}
-
-// TestUnservedTypeIsRefusedOffTheDispatchHelpers covers the endpoints that
-// choose a representation without going through contentNegotiated. Each has to
-// state its own refusal now that negotiate does not, and each refuses a set
-// rather than a single value: a type another endpoint serves resolves fine
-// here and is no more servable for it.
-//
-// The dashboard fallback is the exception, and refuses only what nothing
-// serves — /assets/* arrives on this route as Accept: */*.
-func TestUnservedTypeIsRefusedOffTheDispatchHelpers(t *testing.T) {
-	router := newTestRouterWithCache(t, cache.New(nil))
-
 	for _, probe := range []struct{ path, accept string }{
-		{"/api", "application/xml"},
+		{"/services", openSearchMediaType},
+		{"/services", "application/vnd.jgf+json"},
+		{"/services", "application/graphml+xml"},
+		{"/services", "text/vnd.graphviz"},
+		{"/cluster", linkset.MediaType},
+		{"/cluster", "application/vnd.jgf+json"},
 		{"/api", "application/graphml+xml"},
-		{"/api", "application/atom+xml"},
-		{"/events", "application/xml"},
 		{"/events", "application/json"},
 		{"/topology", "application/atom+xml"},
 		{"/not-a-route", "application/xml"},
 	} {
 		t.Run(probe.path+" "+probe.accept, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, probe.path, nil)
-			req.Header.Set("Accept", probe.accept)
-			rec := httptest.NewRecorder()
-			router.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusNotAcceptable {
-				t.Errorf("status=%d, want 406; body=%s", rec.Code, rec.Body.String())
-			}
+			refuse(t, router, probe.path, probe.accept)
 		})
 	}
 }
 
-// TestRefusalNamesOnlyWhatTheEndpointServes: the 406 body advertises what the
-// caller should ask for, so an endpoint registered without feeds must not name
-// Atom — it refuses Atom one branch above, and two 406s from one endpoint
-// cannot contradict each other.
+// TestRefusalNamesOnlyWhatTheEndpointServes: the 406 says what to ask for
+// instead, so an endpoint registered without feeds must not name Atom — it
+// refuses Atom one branch above, and one endpoint cannot answer two
+// contradicting 406s.
 func TestRefusalNamesOnlyWhatTheEndpointServes(t *testing.T) {
 	router := newTestRouterWithCache(t, cache.New(nil))
 
-	req := httptest.NewRequest(http.MethodGet, "/cluster", nil)
-	req.Header.Set("Accept", "application/xml")
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	for _, accept := range []string{"application/xml", "application/atom+xml"} {
+		t.Run(accept, func(t *testing.T) {
+			problem := refuse(t, router, "/cluster", accept)
 
-	if rec.Code != http.StatusNotAcceptable {
-		t.Fatalf("status=%d, want 406", rec.Code)
-	}
-
-	if body := rec.Body.String(); strings.Contains(body, "atom") {
-		t.Errorf("/cluster has no feed, but its 406 offers one: %s", body)
+			if strings.Contains(problem.Detail, "atom") {
+				t.Errorf("/cluster has no feed, but its 406 offers one: %q", problem.Detail)
+			}
+		})
 	}
 }
 

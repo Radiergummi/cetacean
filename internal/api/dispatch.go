@@ -23,10 +23,8 @@ func (f feedHandlers) hasFeed() bool {
 	return f.atom != nil || f.jsonFeed != nil
 }
 
-// servedTypes names what an endpoint carrying these feeds serves, for the 406
-// it answers when asked for anything else. Derived from the same fields the
-// switch dispatches on: an endpoint registered with no feeds refuses Atom one
-// branch up, and must not advertise it here.
+// servedTypes names what an endpoint carrying these feeds serves, derived from
+// the same handlers the switch dispatches on rather than restated beside it.
 func (f feedHandlers) servedTypes(sse bool) string {
 	types := []string{"application/json", "text/html"}
 
@@ -47,73 +45,63 @@ func (f feedHandlers) servedTypes(sse bool) string {
 
 // contentNegotiated wraps a JSON handler to dispatch based on content type.
 // HTML requests go to the SPA, SSE gets 406 (not supported here).
-// Anything this endpoint does not serve — a graph format, or a type nothing
-// serves — gets 406, since negotiate resolves without refusing.
 func contentNegotiated(
 	jsonHandler http.HandlerFunc,
 	feeds feedHandlers,
 	spa http.Handler,
 ) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		switch ContentTypeFromContext(r.Context()) {
-		case ContentTypeHTML:
-			addFeedLinks(w, r, feeds)
-			spa.ServeHTTP(w, r)
-		case ContentTypeSSE:
-			writeErrorCode(w, r, "API001", "this endpoint does not support text/event-stream")
-		case ContentTypeAtom:
-			dispatchFeed(w, r, feeds.atom, "application/atom+xml")
-		case ContentTypeJSONFeed:
-			dispatchFeed(w, r, feeds.jsonFeed, "application/feed+json")
-		case ContentTypeJSON:
-			addFeedLinks(w, r, feeds)
-			jsonHandler(w, r)
-		default:
-			notAcceptable(w, r, feeds.servedTypes(false))
-		}
-	}
+	return contentNegotiatedWithSSE(jsonHandler, nil, feeds, spa)
 }
 
-// contentNegotiatedWithSSE is like contentNegotiated but allows SSE.
+// contentNegotiatedWithSSE is contentNegotiated with a stream. A nil
+// sseHandler is the endpoint that has none.
+//
+// Anything the endpoint does not serve — a graph format, or a type nothing
+// serves — gets 406, since negotiate resolves without refusing.
 func contentNegotiatedWithSSE(
 	jsonHandler, sseHandler http.HandlerFunc,
 	feeds feedHandlers,
 	spa http.Handler,
 ) http.HandlerFunc {
+	// What this endpoint serves is decided here, once, from the handlers it
+	// was given, so the switch and the 406 that names its arms cannot drift.
+	served := feeds.servedTypes(sseHandler != nil)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch ContentTypeFromContext(r.Context()) {
 		case ContentTypeHTML:
 			addFeedLinks(w, r, feeds)
 			spa.ServeHTTP(w, r)
 		case ContentTypeSSE:
+			if sseHandler == nil {
+				writeErrorCode(w, r, "API001", "this endpoint does not support text/event-stream")
+				return
+			}
+
 			sseHandler(w, r)
 		case ContentTypeAtom:
-			dispatchFeed(w, r, feeds.atom, "application/atom+xml")
+			dispatchFeed(w, r, feeds.atom, served)
 		case ContentTypeJSONFeed:
-			dispatchFeed(w, r, feeds.jsonFeed, "application/feed+json")
+			dispatchFeed(w, r, feeds.jsonFeed, served)
 		case ContentTypeJSON:
 			addFeedLinks(w, r, feeds)
 			jsonHandler(w, r)
 		default:
-			notAcceptable(w, r, feeds.servedTypes(true))
+			notAcceptable(w, r, served)
 		}
 	}
 }
 
-// dispatchFeed calls the given feed handler, or returns 406 if nil.
+// dispatchFeed calls the given feed handler, or refuses as the default arm
+// does: an endpoint with no feed to serve is one that does not serve the type.
 func dispatchFeed(
 	w http.ResponseWriter,
 	r *http.Request,
 	handler http.HandlerFunc,
-	mediaType string,
+	served string,
 ) {
 	if handler == nil {
-		writeErrorCode(
-			w,
-			r,
-			"API003",
-			"this endpoint does not support "+mediaType,
-		)
+		notAcceptable(w, r, served)
 		return
 	}
 	handler(w, r)

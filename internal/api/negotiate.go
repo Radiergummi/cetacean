@@ -20,9 +20,8 @@ const (
 	ContentTypeGraphML
 	ContentTypeDOT
 
-	// ContentTypeUnsupported means the client explicitly asked for a type no
-	// endpoint serves. Dispatch helpers return 406 Not Acceptable; a handler
-	// with a single representation serves it.
+	// ContentTypeUnsupported means no supported media type matched. What to
+	// do about it is the endpoint's to decide.
 	ContentTypeUnsupported ContentType = -1
 )
 

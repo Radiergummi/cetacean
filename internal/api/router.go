@@ -809,9 +809,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	}
 
 	// SPA fallback (must be last). It refuses only a type nothing serves,
-	// rather than everything but text/html: this route also carries
-	// /assets/*, which a browser requests with Accept: */* — resolved as
-	// JSON, and a 406 there is a blank dashboard.
+	// rather than everything but text/html: */* resolves to JSON, so on this
+	// route JSON means "unknown" rather than "a client asked for JSON" — and
+	// every static file the dashboard pulls (/assets/*, the icons,
+	// manifest.webmanifest) arrives that way.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if ContentTypeFromContext(r.Context()) == ContentTypeUnsupported {
 			notAcceptable(w, r, "text/html")
