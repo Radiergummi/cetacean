@@ -27,21 +27,6 @@ var excusedUndocumented = map[string]string{
 		"middleware strips the .json suffix before dispatch, so the mux " +
 		"pattern omits it",
 
-	// DEFECT: HandleResync is a real, unconditionally-wired (main.go always
-	// sets Resyncer) operational endpoint with its own doc comment
-	// explaining what it does and why it needs no operations-level gate, but
-	// api/openapi.yaml never grew an entry for it.
-	"POST /-/resync": "DEFECT: real endpoint (manual cache resync), " +
-		"unconditionally wired from main.go, but api/openapi.yaml does not " +
-		"document it — see the campaign defect list",
-
-	// DEFECT: an alias of GET /plugins (identical handler) used by the
-	// /swarm dashboard page; the spec documents /plugins but never grew an
-	// entry for this alias path.
-	"GET /swarm/plugins": "DEFECT: alias of GET /plugins (same handler) " +
-		"for the swarm page; api/openapi.yaml documents /plugins but not " +
-		"this alias — see the campaign defect list",
-
 	// Both routes are 410 Gone forever — verified against router.go, which
 	// registers them purely to answer API012 for the two projections removed
 	// in 0.13.0. There is no live operation left to document.

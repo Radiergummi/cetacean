@@ -528,7 +528,9 @@ There is no general rate limiting. Concurrent streams are capped, and a request 
 | Meta | `/-/health`, `/-/ready`, `/-/metrics`, `/-/licenses`, `/-/licenses/texts/{id}`, `/-/notices`, `/-/sbom.cdx`, `/-/docker-latest-version` |
 
 `GET /search` takes `q` (required, max 200 characters) and `limit` (per type, default 3; `0` or a value above 1000
-returns up to 1000). `POST /-/resync` forces a full re-fetch from the Docker socket.
+returns up to 1000). `POST /-/resync` forces a full re-fetch from the Docker socket; unlike the other
+`/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API,
+but it is not gated on the operations level — it re-reads the cluster and never changes it.
 
 ### Writes
 
@@ -555,7 +557,6 @@ passes the per-resource [ACL][authorization] write check.
 | `PATCH /services/{id}/networks` | 2 |
 | `PATCH /services/{id}/mounts` | 2 |
 | `PATCH /services/{id}/container-config` | 2 |
-| `PUT /services/{id}/mode` | 3 |
 | `PUT /services/{id}/endpoint-mode` | 3 |
 | `DELETE /services/{id}` | 3 |
 | `PUT /nodes/{id}/availability` | 3 |
@@ -612,14 +613,14 @@ Evaluating the condition therefore also brings the cached copy up to date, which
 `412` be recovered from in a single round trip: re-read the resource and the `GET` answers the
 validator the write was held to.
 
-30 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
+29 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
 `PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
 `PUT /services/{id}/placement`, `PATCH /services/{id}/ports`,
 `PATCH /services/{id}/update-policy`, `PATCH /services/{id}/rollback-policy`,
 `PATCH /services/{id}/log-driver`, `PATCH /services/{id}/configs`,
 `PATCH /services/{id}/secrets`, `PATCH /services/{id}/networks`,
 `PATCH /services/{id}/mounts`, `PATCH /services/{id}/container-config`,
-`PUT /services/{id}/mode`, `PUT /services/{id}/endpoint-mode`, `DELETE /services/{id}`,
+`PUT /services/{id}/endpoint-mode`, `DELETE /services/{id}`,
 `PATCH /nodes/{id}/labels`, `PUT /nodes/{id}/role`, `DELETE /nodes/{id}`,
 `PATCH /configs/{id}/labels`, `DELETE /configs/{id}`, `PATCH /secrets/{id}/labels`,
 `DELETE /secrets/{id}`, `DELETE /networks/{id}`, `DELETE /volumes/{name}`,

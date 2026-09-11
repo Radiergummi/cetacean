@@ -174,6 +174,52 @@ paths:
                     type: string
                     example: not_ready
 
+  /-/resync:
+    post:
+      operationId: resyncCache
+      tags: [Meta]
+      summary: Re-read the whole cluster from Docker
+      description: |
+        Discards nothing, but re-fetches every resource from the Docker Engine
+        and replaces the in-memory cache with the result. Useful when the cache
+        has drifted — an event missed during a rapid stack deploy, say.
+
+        Not gated on the operations level: it re-reads the cluster and never
+        changes it, so a read-only deployment can still use it. It does require
+        authentication and a grant, unlike the other `/-/` endpoints, because
+        each call sweeps the whole Docker API.
+      responses:
+        "200":
+          description: The re-sync completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  durationMs:
+                    type: integer
+                    format: int64
+                    example: 14
+        "401":
+          description: Not authenticated
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "502":
+          description: The re-sync failed; the cache is unchanged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: error
+                  error:
+                    type: string
+
   /-/metrics:
     get:
       operationId: getSelfMetrics
@@ -1301,6 +1347,26 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+
+  /swarm/plugins:
+    get:
+      operationId: getSwarmPlugins
+      tags: [Cluster]
+      summary: Installed Docker plugins, beside the swarm's own configuration
+      description: >
+        An alias of `GET /plugins`, serving the identical response. It exists so
+        the dashboard's swarm page can read the plugin list from the path it
+        already sits under.
+      responses:
+        "200":
+          description: Plugin list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginCollection"
 
   /swarm/unlock-key:
     get:
@@ -3964,61 +4030,6 @@ paths:
           $ref: "#/components/responses/NotModified"
         "404":
           $ref: "#/components/responses/NotFound"
-    put:
-      operationId: updateServiceMode
-      x-badges:
-        - name: "operations-level:3"
-          position: after
-          color: red
-      tags: [Services]
-      summary: Change service mode
-      description: |
-        Changes the service mode between replicated and global.
-        For replicated mode, specify the initial replica count. Requires operations level 3.
-      parameters:
-        - $ref: "#/components/parameters/resourceId"
-        - $ref: "#/components/parameters/IfMatch"
-        - $ref: "#/components/parameters/Prefer"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [mode]
-              properties:
-                mode:
-                  type: string
-                  enum: [replicated, global]
-                  x-enum-descriptions:
-                    - Fixed number of replicas scheduled across the cluster
-                    - One task per node (ignores replica count)
-                replicas:
-                  type: integer
-                  minimum: 0
-                  description: Initial replica count (only for replicated mode)
-            example:
-              mode: replicated
-              replicas: 3
-      responses:
-        "200":
-          description: Updated service
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ServiceDetail"
-        "202":
-          $ref: "#/components/responses/ServiceAccepted"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "412":
-          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/endpoint-mode:
     get:
