@@ -86,3 +86,182 @@ var excusedUnregistered = map[string]string{
 	"GET /auth/callback": "registered by auth.OIDCProvider.RegisterRoutes, not router.go",
 	"POST /auth/logout":  "registered by auth.OIDCProvider.RegisterRoutes, not router.go",
 }
+
+// excusedUncovered holds routes no sweep in this package exercises. Keys are
+// Route.String(). It lives here rather than beside the other two excuse lists
+// because .golangci.yml enables `unused`: a package variable nothing reads
+// fails the lint gate of whichever task declares it.
+//
+// gosec flags this map on the "secrets" substring in its route-pattern keys
+// (e.g. "POST /secrets"); the values are excuse reasons, not credentials.
+//
+//nolint:gosec // G101
+var excusedUncovered = map[string]string{
+	// SPA fallback: also serves /assets/* (which never gets its own mux
+	// pattern; static assets fall through this same catch-all), same as its
+	// treatment in excusedUndocumented above.
+	"/": "serves the embedded SPA",
+
+	// GET /events is deliberately NOT excused here: router.go's handler only
+	// blocks on broadcaster.ServeSSE for an SSE Accept header. Every sweep in
+	// this package (World.REST included) asks for application/json, which
+	// falls into the handler's default branch (serve the SPA) and returns
+	// immediately — TestEventsReturnsImmediatelyForAPlainJSONRequest covers it
+	// and proves the non-blocking claim with a deadline, rather than excusing
+	// it as a stream nothing here ever asks to open.
+
+	// Prometheus-backed: verified against source — each of these hard-errors
+	// (MTR001) when h.promClient or metricsProxy is nil, which it is in this
+	// world. GET /cluster, GET /cluster/capacity, GET /metrics/status and GET
+	// /stacks/summary also read h.promClient but degrade gracefully when it is
+	// nil, so they are genuine gaps below rather than excused here.
+	"GET /cluster/metrics":       "needs a Prometheus; covered by the e2e harness's 503 case and deferred to phase two",
+	"GET /metrics":               "needs a Prometheus; covered by the e2e harness's 503 case and deferred to phase two",
+	"GET /metrics/labels":        "needs a Prometheus; covered by the e2e harness's 503 case and deferred to phase two",
+	"GET /metrics/labels/{name}": "needs a Prometheus; covered by the e2e harness's 503 case and deferred to phase two",
+
+	// Daemon-backed: verified against source — each reaches h.systemClient,
+	// h.pluginClient or h.dockerClient, all nil in this world (world.go calls
+	// api.NewHandlers with nil DockerSystemClient/DockerPluginClient/
+	// DockerLogStreamer), or, for POST /-/resync, the Resyncer interface,
+	// which world.go never sets — router.go does not even register that route
+	// here. The /plugins* handlers call their nil client with no nil check at
+	// all, so driving them in-process would panic the test binary rather than
+	// return an error.
+	"DELETE /plugins/{name}":         "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /disk-usage":                "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /plugins":                   "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /plugins/{name}":            "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /services/{id}/logs":        "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /swarm":                     "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /swarm/plugins":             "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /swarm/unlock-key":          "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /tasks/{id}/logs":           "reads the Docker daemon directly; covered by the e2e harness",
+	"PATCH /plugins/{name}/settings": "reads the Docker daemon directly; covered by the e2e harness",
+	"POST /-/resync":                 "reads the Docker daemon directly; covered by the e2e harness",
+	"POST /plugins":                  "reads the Docker daemon directly; covered by the e2e harness",
+	"POST /plugins/privileges":       "reads the Docker daemon directly; covered by the e2e harness",
+	"POST /plugins/{name}/disable":   "reads the Docker daemon directly; covered by the e2e harness",
+	"POST /plugins/{name}/enable":    "reads the Docker daemon directly; covered by the e2e harness",
+	"POST /plugins/{name}/upgrade":   "reads the Docker daemon directly; covered by the e2e harness",
+
+	// Write endpoints: mutate through h.systemClient, h.pluginClient, or the
+	// DockerWriteClient composite (serviceLifecycle/serviceSpec/
+	// serviceAttachment/nodeWriter/configWriter/secretWriter/resourceRemover) —
+	// all nil in this world (world.go calls api.NewHandlers with a nil
+	// DockerWriteClient).
+	"DELETE /configs/{id}":                  "mutates through the Docker daemon; covered by the e2e write lane",
+	"DELETE /networks/{id}":                 "mutates through the Docker daemon; covered by the e2e write lane",
+	"DELETE /nodes/{id}":                    "mutates through the Docker daemon; covered by the e2e write lane",
+	"DELETE /secrets/{id}":                  "mutates through the Docker daemon; covered by the e2e write lane",
+	"DELETE /services/{id}":                 "mutates through the Docker daemon; covered by the e2e write lane",
+	"DELETE /stacks/{name}":                 "mutates through the Docker daemon; covered by the e2e write lane",
+	"DELETE /tasks/{id}":                    "mutates through the Docker daemon; covered by the e2e write lane",
+	"DELETE /volumes/{name}":                "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /configs/{id}/labels":            "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /nodes/{id}/labels":              "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /secrets/{id}/labels":            "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/configs":          "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/container-config": "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/env":              "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/healthcheck":      "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/labels":           "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/log-driver":       "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/mounts":           "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/networks":         "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/ports":            "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/resources":        "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/rollback-policy":  "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/secrets":          "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /services/{id}/update-policy":    "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /swarm/ca":                       "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /swarm/dispatcher":               "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /swarm/encryption":               "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /swarm/orchestration":            "mutates through the Docker daemon; covered by the e2e write lane",
+	"PATCH /swarm/raft":                     "mutates through the Docker daemon; covered by the e2e write lane",
+	"POST /configs":                         "mutates through the Docker daemon; covered by the e2e write lane",
+	"POST /secrets":                         "mutates through the Docker daemon; covered by the e2e write lane",
+	"POST /services/{id}/restart":           "mutates through the Docker daemon; covered by the e2e write lane",
+	"POST /services/{id}/rollback":          "mutates through the Docker daemon; covered by the e2e write lane",
+	"POST /swarm/force-rotate-ca":           "mutates through the Docker daemon; covered by the e2e write lane",
+	"POST /swarm/rotate-token":              "mutates through the Docker daemon; covered by the e2e write lane",
+	"POST /swarm/rotate-unlock-key":         "mutates through the Docker daemon; covered by the e2e write lane",
+	"POST /swarm/unlock":                    "mutates through the Docker daemon; covered by the e2e write lane",
+	"PUT /nodes/{id}/availability":          "mutates through the Docker daemon; covered by the e2e write lane",
+	"PUT /nodes/{id}/role":                  "mutates through the Docker daemon; covered by the e2e write lane",
+	"PUT /services/{id}/endpoint-mode":      "mutates through the Docker daemon; covered by the e2e write lane",
+	"PUT /services/{id}/healthcheck":        "mutates through the Docker daemon; covered by the e2e write lane",
+	"PUT /services/{id}/image":              "mutates through the Docker daemon; covered by the e2e write lane",
+	"PUT /services/{id}/mode":               "mutates through the Docker daemon; covered by the e2e write lane",
+	"PUT /services/{id}/placement":          "mutates through the Docker daemon; covered by the e2e write lane",
+	"PUT /services/{id}/scale":              "mutates through the Docker daemon; covered by the e2e write lane",
+
+	// Genuine gaps: none of the categories above applies. A later slice adds
+	// the sweep; see the campaign defect list for the count.
+	"/debug/pprof/":                       "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"/debug/pprof/cmdline":                "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"/debug/pprof/profile":                "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"/debug/pprof/symbol":                 "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"/debug/pprof/trace":                  "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /-/docker-latest-version":        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /-/health":                       "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /-/licenses":                     "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /-/licenses/texts/{id}":          "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /-/metrics":                      "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /-/notices":                      "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /-/ready":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /-/sbom.cdx":                     "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /api":                            "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /api/context.jsonld":             "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /api/errors":                     "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /api/errors/{code}":              "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /api/scalar.js":                  "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /auth/whoami":                    "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /cluster":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /cluster/capacity":               "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /configs":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /configs/{id}":                   "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /configs/{id}/labels":            "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /history":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /metrics/status":                 "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /networks":                       "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /networks/{id}":                  "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /nodes":                          "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /nodes/{id}":                     "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /nodes/{id}/labels":              "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /nodes/{id}/role":                "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /nodes/{id}/tasks":               "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /profile":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /recommendations":                "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /search":                         "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /secrets":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /secrets/{id}":                   "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /secrets/{id}/labels":            "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/configs":          "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/container-config": "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/endpoint-mode":    "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/env":              "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/healthcheck":      "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/labels":           "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/log-driver":       "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/mode":             "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/mounts":           "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/networks":         "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/placement":        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/ports":            "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/resources":        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/rollback-policy":  "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/secrets":          "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/tasks":            "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /services/{id}/update-policy":    "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /stacks":                         "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /stacks/summary":                 "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /stacks/{name}":                  "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /tasks":                          "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /tasks/{id}":                     "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /topology":                       "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /topology/networks":              "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /topology/placement":             "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /volumes":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /volumes/{name}":                 "gap: no sweep in the first slice reaches this; see the campaign defect list",
+}
