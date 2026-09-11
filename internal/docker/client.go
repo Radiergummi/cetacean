@@ -844,6 +844,41 @@ func (c *Client) UpdateServiceMode(
 	return c.InspectService(ctx, id)
 }
 
+// UpdateServiceSpec applies mutate to the service spec as the engine currently
+// holds it and writes the result back.
+//
+// It exists for the merge patches. A merge patch's base has to be the live
+// spec: merging into a cached copy the watcher has not yet refreshed silently
+// discards whatever was written in between, and the engine cannot refuse it,
+// because the version this update carries is read in the same breath as the
+// spec (M-42).
+func (c *Client) UpdateServiceSpec(
+	ctx context.Context,
+	id string,
+	mutate func(spec *swarm.ServiceSpec) error,
+) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+
+	if err := mutate(&svc.Spec); err != nil {
+		return swarm.Service{}, err
+	}
+
+	if _, err := c.docker.ServiceUpdate(
+		ctx,
+		svc.ID,
+		svc.Version,
+		svc.Spec,
+		swarm.ServiceUpdateOptions{},
+	); err != nil {
+		return swarm.Service{}, err
+	}
+
+	return c.InspectService(ctx, id)
+}
+
 func (c *Client) UpdateServiceResources(
 	ctx context.Context,
 	id string,

@@ -34,29 +34,27 @@ type mockServiceLifecycleWriter struct {
 }
 
 type mockServiceSpecWriter struct {
-	// simulatedEnv / simulatedLabels stand in for the "fresh inspect" that
-	// the real writer would do against Docker. The mutator passed into
-	// UpdateServiceEnv / UpdateServiceLabels is applied to these so the
-	// resolved map handed to the Fn callback reflects M-42's contract.
-	simulatedEnv                  map[string]string
-	simulatedLabels               map[string]string
-	updateServiceEnvFn            func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
-	updateServiceLabelsFn         func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
-	updateServiceResourcesFn      func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
-	updateServiceHealthcheckFn    func(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error)
-	updateServicePlacementFn      func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error)
-	updateServicePortsFn          func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error)
-	updateServiceUpdatePolicyFn   func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
-	updateServiceRollbackPolicyFn func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
-	updateServiceLogDriverFn      func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error)
+	// simulatedEnv / simulatedLabels / simulatedSpec stand in for the "fresh
+	// inspect" that the real writer would do against Docker. The mutator
+	// passed into UpdateServiceEnv / UpdateServiceLabels / UpdateServiceSpec
+	// is applied to these, so what the Fn callback receives reflects M-42's
+	// contract: the merge ran against the live spec, not the cache.
+	simulatedEnv               map[string]string
+	simulatedLabels            map[string]string
+	simulatedSpec              *swarm.ServiceSpec
+	updateServiceSpecFn        func(ctx context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error)
+	updateServiceEnvFn         func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
+	updateServiceLabelsFn      func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
+	updateServiceHealthcheckFn func(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error)
+	updateServicePlacementFn   func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error)
+	updateServicePortsFn       func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error)
 }
 
 type mockServiceAttachmentWriter struct {
-	updateServiceContainerConfigFn func(ctx context.Context, id string, apply func(spec *swarm.ContainerSpec)) (swarm.Service, error)
-	updateServiceConfigsFn         func(ctx context.Context, id string, configs []*swarm.ConfigReference) (swarm.Service, error)
-	updateServiceSecretsFn         func(ctx context.Context, id string, secrets []*swarm.SecretReference) (swarm.Service, error)
-	updateServiceNetworksFn        func(ctx context.Context, id string, networks []swarm.NetworkAttachmentConfig) (swarm.Service, error)
-	updateServiceMountsFn          func(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
+	updateServiceConfigsFn  func(ctx context.Context, id string, configs []*swarm.ConfigReference) (swarm.Service, error)
+	updateServiceSecretsFn  func(ctx context.Context, id string, secrets []*swarm.SecretReference) (swarm.Service, error)
+	updateServiceNetworksFn func(ctx context.Context, id string, networks []swarm.NetworkAttachmentConfig) (swarm.Service, error)
+	updateServiceMountsFn   func(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
 }
 
 type mockNodeWriter struct {
@@ -318,14 +316,26 @@ func (m *mockServiceSpecWriter) UpdateServiceLabels(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockServiceSpecWriter) UpdateServiceResources(
+func (m *mockServiceSpecWriter) UpdateServiceSpec(
 	ctx context.Context,
 	id string,
-	resources *swarm.ResourceRequirements,
+	mutate func(spec *swarm.ServiceSpec) error,
 ) (swarm.Service, error) {
-	if m.updateServiceResourcesFn != nil {
-		return m.updateServiceResourcesFn(ctx, id, resources)
+	spec := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{},
+	}}
+	if m.simulatedSpec != nil {
+		spec = *m.simulatedSpec
 	}
+
+	if err := mutate(&spec); err != nil {
+		return swarm.Service{}, err
+	}
+
+	if m.updateServiceSpecFn != nil {
+		return m.updateServiceSpecFn(ctx, id, spec)
+	}
+
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
@@ -380,50 +390,6 @@ func (m *mockServiceSpecWriter) UpdateServicePorts(
 ) (swarm.Service, error) {
 	if m.updateServicePortsFn != nil {
 		return m.updateServicePortsFn(ctx, id, ports)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServiceUpdatePolicy(
-	ctx context.Context,
-	id string,
-	policy *swarm.UpdateConfig,
-) (swarm.Service, error) {
-	if m.updateServiceUpdatePolicyFn != nil {
-		return m.updateServiceUpdatePolicyFn(ctx, id, policy)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServiceRollbackPolicy(
-	ctx context.Context,
-	id string,
-	policy *swarm.UpdateConfig,
-) (swarm.Service, error) {
-	if m.updateServiceRollbackPolicyFn != nil {
-		return m.updateServiceRollbackPolicyFn(ctx, id, policy)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServiceLogDriver(
-	ctx context.Context,
-	id string,
-	driver *swarm.Driver,
-) (swarm.Service, error) {
-	if m.updateServiceLogDriverFn != nil {
-		return m.updateServiceLogDriverFn(ctx, id, driver)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceAttachmentWriter) UpdateServiceContainerConfig(
-	ctx context.Context,
-	id string,
-	apply func(spec *swarm.ContainerSpec),
-) (swarm.Service, error) {
-	if m.updateServiceContainerConfigFn != nil {
-		return m.updateServiceContainerConfigFn(ctx, id, apply)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
@@ -1471,11 +1437,22 @@ func TestHandlePatchServiceResources_Merge(t *testing.T) {
 	svc.Spec.TaskTemplate.Resources = &swarm.ResourceRequirements{}
 	c.SetService(svc)
 
+	// The reservation exists only on the writer's spec, never in the cache:
+	// a merge that preserves it proves the base came from the live inspect
+	// rather than from the cached copy (M-42).
+	live := replicatedService("svc1").Spec
+	live.TaskTemplate.Resources = &swarm.ResourceRequirements{
+		Reservations: &swarm.Resources{MemoryBytes: 64 << 20},
+	}
+
+	var captured *swarm.ResourceRequirements
 	wc := &mockWriteClient{
 		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceResourcesFn: func(_ context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error) {
+			simulatedSpec: &live,
+			updateServiceSpecFn: func(_ context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+				captured = spec.TaskTemplate.Resources
 				s := replicatedService(id)
-				s.Spec.TaskTemplate.Resources = resources
+				s.Spec.TaskTemplate.Resources = spec.TaskTemplate.Resources
 				return s, nil
 			},
 		},
@@ -1504,6 +1481,21 @@ func TestHandlePatchServiceResources_Merge(t *testing.T) {
 	}
 	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
 		t.Errorf("expected @context ending in /api/context.jsonld, got %v", resp["@context"])
+	}
+
+	if captured == nil {
+		t.Fatal("the writer was never handed a merged resource requirement")
+	}
+
+	if captured.Limits == nil || captured.Limits.NanoCPUs != 500000000 {
+		t.Errorf("Limits=%+v, want the patched NanoCPUs", captured.Limits)
+	}
+
+	if captured.Reservations == nil || captured.Reservations.MemoryBytes != 64<<20 {
+		t.Errorf(
+			"Reservations=%+v, want the live spec's reservation preserved by the merge",
+			captured.Reservations,
+		)
 	}
 }
 
@@ -1660,12 +1652,21 @@ func TestHandlePatchServiceHealthcheck_Merge(t *testing.T) {
 		Retries:  3,
 	}))
 
+	// The live spec, not the cached one, is what the merge must run against.
+	live := serviceWithHealthcheck("svc1", &container.HealthConfig{
+		Test:     []string{"CMD", "curl", "-f", "http://localhost/"},
+		Interval: 10 * time.Second,
+		Timeout:  3 * time.Second,
+		Retries:  7,
+	}).Spec
+
 	var captured *container.HealthConfig
 	wc := &mockWriteClient{
 		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
-				captured = hc
-				return serviceWithHealthcheck(id, hc), nil
+			simulatedSpec: &live,
+			updateServiceSpecFn: func(_ context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+				captured = spec.TaskTemplate.ContainerSpec.Healthcheck
+				return serviceWithHealthcheck(id, captured), nil
 			},
 		},
 	}
@@ -1987,8 +1988,8 @@ func TestHandlePatchServiceUpdatePolicy(t *testing.T) {
 
 	mock := &mockWriteClient{
 		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceUpdatePolicyFn: func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
-				return swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{UpdateConfig: policy}}, nil
+			updateServiceSpecFn: func(ctx context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+				return swarm.Service{ID: "svc1", Spec: spec}, nil
 			},
 		},
 	}
@@ -2091,11 +2092,8 @@ func TestHandlePatchServiceRollbackPolicy(t *testing.T) {
 
 	mock := &mockWriteClient{
 		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceRollbackPolicyFn: func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
-				return swarm.Service{
-					ID:   "svc1",
-					Spec: swarm.ServiceSpec{RollbackConfig: policy},
-				}, nil
+			updateServiceSpecFn: func(ctx context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+				return swarm.Service{ID: "svc1", Spec: spec}, nil
 			},
 		},
 	}
@@ -2176,11 +2174,8 @@ func TestHandlePatchServiceLogDriver(t *testing.T) {
 
 	mock := &mockWriteClient{
 		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceLogDriverFn: func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error) {
-				return swarm.Service{
-					ID:   "svc1",
-					Spec: swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{LogDriver: driver}},
-				}, nil
+			updateServiceSpecFn: func(ctx context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+				return swarm.Service{ID: "svc1", Spec: spec}, nil
 			},
 		},
 	}
@@ -2747,17 +2742,22 @@ func TestHandlePatchServiceContainerConfig_PartialPatch(t *testing.T) {
 		},
 	})
 
+	// The user exists only on the writer's spec, so a merge that keeps it
+	// proves the base was the live inspect and not the cached copy (M-42).
+	live := swarm.ServiceSpec{
+		TaskTemplate: swarm.TaskSpec{
+			ContainerSpec: &swarm.ContainerSpec{
+				Hostname: "old-host",
+				User:     "app",
+			},
+		},
+	}
+
 	wc := &mockWriteClient{
-		mockServiceAttachmentWriter: mockServiceAttachmentWriter{
-			updateServiceContainerConfigFn: func(_ context.Context, id string, apply func(*swarm.ContainerSpec)) (swarm.Service, error) {
-				cs := &swarm.ContainerSpec{}
-				apply(cs)
-				return swarm.Service{
-					ID: id,
-					Spec: swarm.ServiceSpec{
-						TaskTemplate: swarm.TaskSpec{ContainerSpec: cs},
-					},
-				}, nil
+		mockServiceSpecWriter: mockServiceSpecWriter{
+			simulatedSpec: &live,
+			updateServiceSpecFn: func(_ context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+				return swarm.Service{ID: id, Spec: spec}, nil
 			},
 		},
 	}
@@ -2787,6 +2787,9 @@ func TestHandlePatchServiceContainerConfig_PartialPatch(t *testing.T) {
 	}
 	if cc["tty"] != true {
 		t.Errorf("tty=%v, want true", cc["tty"])
+	}
+	if cc["user"] != "app" {
+		t.Errorf("user=%v, want the live spec's app preserved by the merge", cc["user"])
 	}
 	if resp["@type"] != "ServiceContainerConfig" {
 		t.Errorf("@type=%v, want ServiceContainerConfig", resp["@type"])

@@ -457,13 +457,13 @@ func seededWriteClient() *mockWriteClient {
 			},
 		},
 		mockServiceSpecWriter: mockServiceSpecWriter{
+			updateServiceSpecFn: func(_ context.Context, id string, _ swarm.ServiceSpec) (swarm.Service, error) {
+				return updated(id)
+			},
 			updateServiceEnvFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
 				return updated(id)
 			},
 			updateServiceLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceResourcesFn: func(_ context.Context, id string, _ *swarm.ResourceRequirements) (swarm.Service, error) {
 				return updated(id)
 			},
 			updateServiceHealthcheckFn: func(_ context.Context, id string, _ *container.HealthConfig) (swarm.Service, error) {
@@ -473,15 +473,6 @@ func seededWriteClient() *mockWriteClient {
 				return updated(id)
 			},
 			updateServicePortsFn: func(_ context.Context, id string, _ []swarm.PortConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceUpdatePolicyFn: func(_ context.Context, id string, _ *swarm.UpdateConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceRollbackPolicyFn: func(_ context.Context, id string, _ *swarm.UpdateConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceLogDriverFn: func(_ context.Context, id string, _ *swarm.Driver) (swarm.Service, error) {
 				return updated(id)
 			},
 		},
@@ -496,9 +487,6 @@ func seededWriteClient() *mockWriteClient {
 				return updated(id)
 			},
 			updateServiceMountsFn: func(_ context.Context, id string, _ []mount.Mount) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceContainerConfigFn: func(_ context.Context, id string, _ func(*swarm.ContainerSpec)) (swarm.Service, error) {
 				return updated(id)
 			},
 		},

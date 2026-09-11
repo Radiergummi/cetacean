@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -415,15 +414,6 @@ func driveServiceHealthcheckPatch(t *testing.T, env *harness.Env, proc *sut.Proc
 		t.Fatalf("PUT healthcheck (setup): status = %d, want 200", putStatus)
 	}
 
-	// HandlePatchServiceHealthcheck computes its merge base from the cache,
-	// which the watcher fills asynchronously. Patching before the cache has
-	// seen the PUT merges into a service with no healthcheck at all and
-	// silently discards the probe — that is finding D-7, and
-	// TestWriteSweepMergePatchAgainstStaleCache is where it is pinned. This
-	// case is about the merge itself, so it waits for the base to be current
-	// rather than racing it.
-	awaitHealthcheckCached(t, proc, id, "CMD-SHELL")
-
 	resp := sweepRequest(
 		t, proc, http.MethodPatch, "/services/"+id+"/healthcheck",
 		"application/merge-patch+json", []byte(`{"Retries":5}`),
@@ -508,61 +498,17 @@ func engineNetworkEventuallyRemovable(t *testing.T, env *harness.Env, name strin
 	return created.ID
 }
 
-// awaitHealthcheckCached blocks until Cetacean's own view of a service's
-// healthcheck contains want, which is the cache state every merge-patch
-// handler computes its base from.
-func awaitHealthcheckCached(t *testing.T, proc *sut.Process, id, want string) {
-	t.Helper()
-
-	deadline := time.Now().Add(30 * time.Second)
-
-	for {
-		resp := sweepRequest(
-			t, proc, http.MethodGet, "/services/"+id+"/healthcheck", "", nil,
-		)
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if resp.StatusCode == http.StatusOK && strings.Contains(string(body), want) {
-			return
-		}
-
-		if time.Now().After(deadline) {
-			t.Fatalf(
-				"Cetacean never reported a healthcheck containing %q for service %s "+
-					"(last status %d, body %s)",
-				want, id, resp.StatusCode, body,
-			)
-		}
-
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-// TestWriteSweepMergePatchAgainstStaleCache pins finding D-7: six service
-// merge-patch handlers compute their base from the cache rather than from the
-// service as it currently stands, so a field written moments earlier can be
-// silently discarded by a patch that never mentions it.
+// TestWriteSweepMergePatchMergesAgainstTheLiveSpec drives the merge-patch
+// contract across the write the cache cannot see: a field written moments
+// earlier must survive a patch that never mentions it.
 //
-// The hazard is documented in the codebase itself.
-// HandlePatchServiceEnv carries it as a comment — "the actual merge runs
-// against the freshly-inspected service spec inside the writer (M-42).
-// Pre-merging against the cache would race third-party writers and silently
-// drop concurrent changes to other env keys" — and env was built that way.
-// PATCH resources, update-policy, rollback-policy, log-driver, healthcheck and
-// container-config still pre-merge against `h.cache.GetService`.
-//
-// Nothing catches it downstream. The writer re-inspects the service to get a
-// current version before calling ServiceUpdate, so the engine's own optimistic
-// concurrency — the mechanism for exactly this — sees a fresh version and
-// accepts the write. The If-Match precondition does not close it either: it is
-// optional, and the representation it compares against is built from the same
-// cache, so it can only detect changes the cache has already seen.
-//
-// The result is a lost update reported as 200. This case asserts the
-// merge-patch contract (fields the patch does not mention keep their current
-// value) and tolerates only that one outcome.
-func TestWriteSweepMergePatchAgainstStaleCache(t *testing.T) {
+// A merge base taken from the cache cannot do that. The watcher fills it
+// asynchronously, and nothing downstream catches the staleness — the writer
+// reads the version it writes with in the same breath as the spec, so the
+// engine's own optimistic concurrency sees nothing wrong and accepts the lost
+// update with a 200. Every service merge patch therefore merges inside the
+// writer, against the spec the engine currently holds (M-42).
+func TestWriteSweepMergePatchMergesAgainstTheLiveSpec(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
 
@@ -595,14 +541,8 @@ func TestWriteSweepMergePatchAgainstStaleCache(t *testing.T) {
 	patchBody, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 
-	// A refusal would be a defensible answer: the server cannot merge into a
-	// base it does not have. Only a success that quietly discarded the probe
-	// is the defect.
 	if patchStatus != http.StatusOK {
-		t.Logf("the patch was refused rather than merged (status %d): %s",
-			patchStatus, patchBody)
-
-		return
+		t.Fatalf("PATCH healthcheck: status = %d, want 200; body: %s", patchStatus, patchBody)
 	}
 
 	svc := inspectService(t, env, service)
@@ -624,22 +564,11 @@ func TestWriteSweepMergePatchAgainstStaleCache(t *testing.T) {
 		t.Errorf("engine retries = %d, want the patched 5", health.Retries)
 	}
 
-	preserved := len(health.Test) > 0 && health.Interval == 10*time.Second
-
-	if preserved {
-		// Either the defect is fixed, or the cache happened to be current.
-		// Both are correct outcomes; there is nothing to report.
-		return
+	if len(health.Test) == 0 || health.Interval != 10*time.Second {
+		t.Errorf(
+			"a merge patch naming only Retries left the engine with Test=%v and "+
+				"Interval=%s, discarding what the immediately preceding PUT wrote",
+			health.Test, health.Interval,
+		)
 	}
-
-	t.Logf(
-		"D-7 still open: a merge patch that named only Retries left the engine with "+
-			"Test=%v and Interval=%s, discarding the probe written by the immediately "+
-			"preceding PUT. HandlePatchServiceHealthcheck merged into "+
-			"h.cache.GetService's copy, which the watcher had not yet refreshed, while "+
-			"the writer supplied a freshly inspected version — so the engine could not "+
-			"reject it and the caller was told 200. Same shape in PATCH resources, "+
-			"update-policy, rollback-policy, log-driver and container-config.",
-		health.Test, health.Interval,
-	)
 }

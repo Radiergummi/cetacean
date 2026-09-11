@@ -293,54 +293,97 @@ func writeNodeMutation(
 	}, fn)
 }
 
-// applyStructMergePatch reads a merge-patch body, applies it to current (any
-// JSON-marshalable struct), and unmarshals the result into target. Returns
-// false and writes an error response on failure.
-func applyStructMergePatch(
+// specPatchError is a refusal raised inside a service-spec mutator, carrying
+// the code to answer with. The mutator runs inside the writer (see
+// structMergePatch), so the handler sees only an error and has to be able to
+// tell one of these from a Docker failure.
+type specPatchError struct {
+	code    string
+	message string
+}
+
+func (e *specPatchError) Error() string { return e.message }
+
+// errNoContainerSpec is what a mutator reaching for a service's container spec
+// raises when there is none, matching the code the writers answered with when
+// they made that check themselves.
+var errNoContainerSpec = &specPatchError{"ENG003", "service has no container spec"}
+
+// structMergePatch reads a merge-patch body and returns a function that merges
+// it into a current value (any JSON-marshalable struct) and unmarshals the
+// result into target. Returns false and writes an error response when the
+// request itself is unusable — a wrong Content-Type, an unreadable body,
+// invalid JSON.
+//
+// Parsing and applying are separate so the merge can run inside the writer,
+// against the service as the engine currently holds it. Merging into the
+// asynchronously filled cache would silently discard a field written moments
+// earlier, and nothing downstream could catch it: the writer reads the version
+// it writes with in the same breath as the spec, so the engine's own
+// optimistic concurrency sees nothing stale (M-42).
+func structMergePatch(
 	w http.ResponseWriter,
 	r *http.Request,
-	current any,
-	target any,
 	errCode string,
 	errMsg string,
-) bool {
+) (func(current, target any) error, bool) {
 	if !requireMergePatch(w, r) {
-		return false
-	}
-	base, err := json.Marshal(current)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal current state")
-		return false
-	}
-	var baseMap map[string]any
-	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeErrorCode(w, r, "API009", "failed to unmarshal current state")
-		return false
+		return nil, false
 	}
 
 	patchBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeErrorCode(w, r, "API007", "failed to read request body")
-		return false
+		return nil, false
 	}
+
 	var patchMap map[string]any
 	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
 		writeErrorCode(w, r, "API008", "invalid JSON")
-		return false
+		return nil, false
 	}
 
-	mergePatch(baseMap, patchMap)
+	return func(current, target any) error {
+		base, err := json.Marshal(current)
+		if err != nil {
+			return &specPatchError{"API009", "failed to marshal current state"}
+		}
 
-	merged, err := json.Marshal(baseMap)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal merged state")
-		return false
+		var baseMap map[string]any
+		if err := json.Unmarshal(base, &baseMap); err != nil {
+			return &specPatchError{"API009", "failed to unmarshal current state"}
+		}
+
+		mergePatch(baseMap, patchMap)
+
+		merged, err := json.Marshal(baseMap)
+		if err != nil {
+			return &specPatchError{"API009", "failed to marshal merged state"}
+		}
+
+		if err := json.Unmarshal(merged, target); err != nil {
+			return &specPatchError{errCode, errMsg}
+		}
+
+		return nil
+	}, true
+}
+
+// writeServiceSpecPatch answers a service merge patch: a specPatchError is the
+// request's own fault, anything else is the engine's.
+func writeServiceSpecPatch(
+	w http.ResponseWriter,
+	r *http.Request,
+	id string,
+	err error,
+) {
+	var spe *specPatchError
+	if errors.As(err, &spe) {
+		writeErrorCode(w, r, spe.code, spe.message)
+		return
 	}
-	if err := json.Unmarshal(merged, target); err != nil {
-		writeErrorCode(w, r, errCode, errMsg)
-		return false
-	}
-	return true
+
+	writeResourceError(w, r, err, "service", id, "SVC001")
 }
 
 // requireMergePatch validates Content-Type is application/merge-patch+json.

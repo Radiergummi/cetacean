@@ -86,6 +86,14 @@ type ServiceLifecycleWriter interface {
 }
 
 type ServiceSpecWriter interface {
+	// UpdateServiceSpec is how every merge patch writes: the base it merges
+	// into must be the live spec, so the merge runs inside the writer rather
+	// than against the asynchronously filled cache (M-42).
+	UpdateServiceSpec(
+		ctx context.Context,
+		id string,
+		mutate func(spec *swarm.ServiceSpec) error,
+	) (swarm.Service, error)
 	UpdateServiceEnv(
 		ctx context.Context,
 		id string,
@@ -95,11 +103,6 @@ type ServiceSpecWriter interface {
 		ctx context.Context,
 		id string,
 		mutate func(current map[string]string) (map[string]string, error),
-	) (swarm.Service, error)
-	UpdateServiceResources(
-		ctx context.Context,
-		id string,
-		resources *swarm.ResourceRequirements,
 	) (swarm.Service, error)
 	UpdateServiceHealthcheck(
 		ctx context.Context,
@@ -115,21 +118,6 @@ type ServiceSpecWriter interface {
 		ctx context.Context,
 		id string,
 		ports []swarm.PortConfig,
-	) (swarm.Service, error)
-	UpdateServiceUpdatePolicy(
-		ctx context.Context,
-		id string,
-		policy *swarm.UpdateConfig,
-	) (swarm.Service, error)
-	UpdateServiceRollbackPolicy(
-		ctx context.Context,
-		id string,
-		policy *swarm.UpdateConfig,
-	) (swarm.Service, error)
-	UpdateServiceLogDriver(
-		ctx context.Context,
-		id string,
-		driver *swarm.Driver,
 	) (swarm.Service, error)
 }
 
@@ -150,11 +138,6 @@ type ServiceAttachmentWriter interface {
 		networks []swarm.NetworkAttachmentConfig,
 	) (swarm.Service, error)
 	UpdateServiceMounts(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
-	UpdateServiceContainerConfig(
-		ctx context.Context,
-		id string,
-		apply func(spec *swarm.ContainerSpec),
-	) (swarm.Service, error)
 }
 
 // ServiceWriter composes all service write interfaces.
