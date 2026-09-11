@@ -73,22 +73,80 @@ func TestACLPolicyHotReload(t *testing.T) {
 		t.Fatalf("Allow = %q under a read-only policy, want no PUT", allowBefore)
 	}
 
+	// Written in place, which is what os.WriteFile does: the file keeps its
+	// inode and only its contents change.
 	if err := os.WriteFile(policy, []byte(writePolicy), 0o644); err != nil {
 		t.Fatalf("rewrite policy: %v", err)
 	}
 
+	waitForAllow(
+		t, proc, "/services/"+id,
+		func(allow string) bool {
+			return strings.Contains(allow, "PUT") && strings.Contains(allow, "GET")
+		},
+		"a write grant written in place did not take effect",
+	)
+
+	// The same change again, written the other way: a temporary file renamed
+	// over the top, which replaces the inode. That is how a deployment and
+	// several editors update a file, and a watch on the policy file itself
+	// stayed pointed at the old unlinked inode and stopped reloading here,
+	// permanently and silently. Asserting the reverse direction also proves
+	// the watch survives more than one swap.
+	//
+	// Whether this specific write pattern can distinguish the defect depends
+	// on the platform — fsnotify's kqueue backend watches the parent
+	// directory anyway, so on a macOS host it reloads either way. The
+	// per-platform proof lives in internal/acl's own tests; what this covers
+	// is that the watcher is wired to the evaluator answering real requests.
+	replacePolicyViaRename(t, policy, readOnlyPolicy)
+
+	waitForAllow(
+		t, proc, "/services/"+id,
+		func(allow string) bool {
+			return !strings.Contains(allow, "PUT") && strings.Contains(allow, "GET")
+		},
+		"a read-only grant renamed over the policy did not take effect",
+	)
+}
+
+// waitForAllow polls the Allow header on path until ok accepts it, failing
+// with msg if that never happens. A policy reload is debounced and applied
+// asynchronously, so every assertion about one has to wait for it.
+func waitForAllow(
+	t *testing.T,
+	proc *sut.Process,
+	path string,
+	ok func(string) bool,
+	msg string,
+) {
+	t.Helper()
+
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		allowAfter := viewerAllowHeader(t, proc, "/services/"+id)
-		if strings.Contains(allowAfter, "PUT") && strings.Contains(allowAfter, "GET") {
+		if allow := viewerAllowHeader(t, proc, path); ok(allow) {
 			return
 		}
 
 		time.Sleep(250 * time.Millisecond)
 	}
 
-	t.Errorf("policy change did not take effect within 10s; Allow is still %q",
-		viewerAllowHeader(t, proc, "/services/"+id))
+	t.Errorf("%s within 10s; Allow is still %q", msg, viewerAllowHeader(t, proc, path))
+}
+
+// replacePolicyViaRename writes content beside the policy file and renames it
+// over the top, replacing the inode rather than rewriting it in place.
+func replacePolicyViaRename(t *testing.T, path, content string) {
+	t.Helper()
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
+		t.Fatalf("write temporary policy: %v", err)
+	}
+
+	if err := os.Rename(tmp, path); err != nil {
+		t.Fatalf("rename policy into place: %v", err)
+	}
 }
 
 // A grant limited to one stack must hide the other stack's services from the
