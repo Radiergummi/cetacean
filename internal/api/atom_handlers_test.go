@@ -2,13 +2,17 @@ package api
 
 import (
 	"context"
+	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -115,6 +119,78 @@ func TestFeedID(t *testing.T) {
 			t.Errorf("feedID = %q, want %q", got, want)
 		}
 	})
+}
+
+// TestFeedIdentifiesOneHostBehindAProxy: with server.public_url unset, the
+// feed's tag URI and the links inside it both derive their host from the
+// request, and a trusted proxy is where those two derivations used to part
+// company — feedID read r.Host while absURL read the forwarded host. The
+// assertion is that one document names one host, not which host it names.
+func TestFeedIdentifiesOneHostBehindAProxy(t *testing.T) {
+	router := newProxyRouter(
+		t,
+		&auth.NoneProvider{},
+		[]netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/services.atom", nil)
+	req.Header.Set("X-Forwarded-Host", "cetacean.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.RemoteAddr = "10.0.0.5:1234"
+	req.Host = "internal:9000"
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body=%s", w.Code, w.Body.String())
+	}
+
+	var feed struct {
+		ID    string `xml:"id"`
+		Links []struct {
+			Rel  string `xml:"rel,attr"`
+			Href string `xml:"href,attr"`
+		} `xml:"link"`
+	}
+
+	if err := xml.Unmarshal(w.Body.Bytes(), &feed); err != nil {
+		t.Fatalf("parse feed: %v", err)
+	}
+
+	var self string
+	for _, l := range feed.Links {
+		if l.Rel == "self" {
+			self = l.Href
+		}
+	}
+
+	if self == "" {
+		t.Fatal("feed has no self link")
+	}
+
+	selfURL, err := url.Parse(self)
+	if err != nil {
+		t.Fatalf("parse self link %q: %v", self, err)
+	}
+
+	// tag:{host},{year}:{path}
+	_, rest, ok := strings.Cut(feed.ID, ":")
+	if !ok {
+		t.Fatalf("feed id %q is not a tag URI", feed.ID)
+	}
+
+	idHost, _, ok := strings.Cut(rest, ",")
+	if !ok {
+		t.Fatalf("feed id %q is not a tag URI", feed.ID)
+	}
+
+	if idHost != selfURL.Host {
+		t.Errorf(
+			"feed id host = %q, self link host = %q; one document, two hosts",
+			idHost, selfURL.Host,
+		)
+	}
 }
 
 func TestHistoryToEntries(t *testing.T) {

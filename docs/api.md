@@ -130,6 +130,13 @@ curl "http://localhost:9000/history.atom?before=<cursor-id>&limit=50"
 Feeds carry an `ETag`. Pass `If-None-Match` with a previous value to get `304 Not Modified` when nothing changed.
 Responses add `Vary: Authorization, Cookie` alongside `Vary: Accept` so caches separate formats and users.
 
+### Feed identity
+
+An Atom feed identifies itself with a [tag URI](https://www.rfc-editor.org/rfc/rfc4151) naming the same host its own
+links carry: [`server.public_url`][server.public_url] when set, otherwise the host the request arrived on. A tag URI is
+meant to be permanent, so set `server.public_url` behind a reverse proxy — derived from the request, a feed's identity
+changes with the hostname a reader happened to reach the server by.
+
 ### Feed autodiscovery
 
 JSON responses on feed-capable endpoints carry a `Link` header with `rel="alternate"` for each feed type. The dashboard
