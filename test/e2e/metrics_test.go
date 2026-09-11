@@ -9,6 +9,8 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -58,11 +60,14 @@ var seededServiceCPU = map[string]float64{
 	"platform_agent":          30,
 }
 
+// Memory deliberately ranks the services in the exact reverse of CPU. A
+// ranking that read the wrong metric would otherwise still come back in the
+// right order, and the cases below assert an order.
 var seededServiceMemory = map[string]float64{
-	"shop_web":                512 * 1024 * 1024,
-	"shop_lonely":             128 * 1024 * 1024,
-	fixtures.CrashLoopService: 64 * 1024 * 1024,
-	"platform_agent":          256 * 1024 * 1024,
+	fixtures.CrashLoopService: 512 * 1024 * 1024,
+	"shop_lonely":             256 * 1024 * 1024,
+	"platform_agent":          128 * 1024 * 1024,
+	"shop_web":                64 * 1024 * 1024,
 }
 
 // Which stack each service belongs to, for the per-stack rollup.
@@ -76,6 +81,9 @@ var seededServiceStack = map[string]string{
 const (
 	seededNetworkReceive  = 1000.0 // bytes/second, shop_web
 	seededNetworkTransmit = 500.0
+
+	seededNodeNetworkReceive  = 2000.0 // bytes/second, on eth0
+	seededNodeNetworkTransmit = 750.0
 )
 
 // ─── the seed ───────────────────────────────────────────────────────────
@@ -131,6 +139,18 @@ func seededMetrics(address, hostname string) []harness.Series {
 		gauge("node_filesystem_avail_bytes", withLabels(nodeLabels, map[string]string{
 			"mountpoint": "/", "fstype": "ext4",
 		}), seededDiskAvail),
+
+		counter("node_network_receive_bytes_total", withLabels(nodeLabels, map[string]string{
+			"device": "eth0",
+		}), seededNodeNetworkReceive),
+		counter("node_network_transmit_bytes_total", withLabels(nodeLabels, map[string]string{
+			"device": "eth0",
+		}), seededNodeNetworkTransmit),
+		// Loopback, which every node query excludes with device!="lo". Seeded
+		// large enough that a query forgetting the exclusion reads wrong.
+		counter("node_network_receive_bytes_total", withLabels(nodeLabels, map[string]string{
+			"device": "lo",
+		}), 9_000_000),
 	}
 
 	for name, cpu := range seededServiceCPU {
@@ -959,4 +979,235 @@ func latest(t *testing.T, points []float64) float64 {
 	}
 
 	return points[len(points)-1]
+}
+
+// ─── the ranking form of get_metrics ────────────────────────────────────
+
+// rankedNames is the ranking's members in the order it returned them.
+func rankedNames(t *testing.T, proc *sut.Process, args map[string]any) []string {
+	t.Helper()
+
+	raw := mcpCall(t, proc, "tools/call", map[string]any{
+		"name":      "get_metrics",
+		"arguments": args,
+	})
+
+	var result struct {
+		IsError           bool `json:"isError"`
+		StructuredContent struct {
+			Series []struct {
+				Name   string `json:"name"`
+				Points []struct {
+					Value float64 `json:"value"`
+				} `json:"points"`
+			} `json:"series"`
+		} `json:"structuredContent"`
+	}
+
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("decode get_metrics: %v\n%s", err, raw)
+	}
+
+	if result.IsError {
+		t.Fatalf("get_metrics(%v) failed: %s", args, raw)
+	}
+
+	// Prometheus returns a matrix in no particular order — topk decides
+	// membership, not order — so the ranking is by the value each member
+	// actually reached, which is what a reader of the chart sees.
+	type member struct {
+		name  string
+		value float64
+	}
+
+	members := make([]member, 0, len(result.StructuredContent.Series))
+
+	for _, series := range result.StructuredContent.Series {
+		if len(series.Points) == 0 {
+			t.Errorf("ranked series %q came back with no points", series.Name)
+
+			continue
+		}
+
+		members = append(members, member{
+			name:  series.Name,
+			value: series.Points[len(series.Points)-1].Value,
+		})
+	}
+
+	slices.SortFunc(members, func(a, b member) int {
+		switch {
+		case a.value > b.value:
+			return -1
+		case a.value < b.value:
+			return 1
+		default:
+			return 0
+		}
+	})
+
+	names := make([]string, 0, len(members))
+	for _, m := range members {
+		names = append(names, m.name)
+	}
+
+	return names
+}
+
+// TestMCPRankMetricsOrdersTheSeededMembers drives the ranking form of
+// get_metrics, which has its own PromQL catalog — separate from the charting
+// one because the aggregation differs — and had never been executed against a
+// Prometheus at all.
+//
+// The seed ranks the services in one order by CPU and the exact reverse by
+// memory, so a ranking that read the wrong metric could not come back in the
+// right order by luck.
+func TestMCPRankMetricsOrdersTheSeededMembers(t *testing.T) {
+	env, address, hostname := metricsCluster(t)
+
+	proc, _ := seedAndStart(t, env, seededMetrics(address, hostname), map[string]string{
+		"CETACEAN_MCP": "true",
+	})
+
+	t.Run("services by cpu", func(t *testing.T) {
+		got := rankedNames(t, proc, map[string]any{
+			"target": "cluster", "by": "service", "metric": "cpu", "range": "1h", "top": 3,
+		})
+
+		want := []string{"shop_web", "platform_agent", "shop_lonely"}
+		if !slices.Equal(got, want) {
+			t.Errorf("top 3 services by CPU = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("services by memory", func(t *testing.T) {
+		got := rankedNames(t, proc, map[string]any{
+			"target": "cluster", "by": "service", "metric": "memory", "range": "1h", "top": 3,
+		})
+
+		want := []string{fixtures.CrashLoopService, "shop_lonely", "platform_agent"}
+		if !slices.Equal(got, want) {
+			t.Errorf("top 3 services by memory = %v, want %v", got, want)
+		}
+	})
+
+	// `top` is what bounds the answer, and a ranking that ignored it would
+	// hand a model every service in the cluster.
+	t.Run("top bounds the ranking", func(t *testing.T) {
+		got := rankedNames(t, proc, map[string]any{
+			"target": "cluster", "by": "service", "metric": "cpu", "range": "1h", "top": 1,
+		})
+
+		if !slices.Equal(got, []string{"shop_web"}) {
+			t.Errorf("top 1 by CPU = %v, want [shop_web]", got)
+		}
+	})
+
+	// A node ranks under the name the cluster calls it, not under the
+	// `instance` label Prometheus knows it by — nameRankedSeries resolves the
+	// host half back through the cache, and an unresolved instance would show
+	// up here as "10.0.0.2:9100".
+	t.Run("nodes are named as the cluster names them", func(t *testing.T) {
+		got := rankedNames(t, proc, map[string]any{
+			"target": "cluster", "by": "node", "metric": "cpu", "range": "1h", "top": 5,
+		})
+
+		if !slices.Equal(got, []string{hostname}) {
+			t.Errorf("nodes ranked by CPU = %v, want [%s]", got, hostname)
+		}
+	})
+
+	// The loopback series is seeded far above the real one, so a query that
+	// dropped its device!="lo" exclusion reads several times too high.
+	t.Run("node network excludes loopback", func(t *testing.T) {
+		series := metricsToolSeries(t, proc, map[string]any{
+			"target": "node", "id": hostname, "metric": "network", "range": "1h",
+		})
+
+		closeTo(t, "node receive", latest(t, series["receive"]), seededNodeNetworkReceive)
+		closeTo(t, "node transmit", latest(t, series["transmit"]), seededNodeNetworkTransmit)
+	})
+}
+
+// flakyOnlyPolicy grants one service, and deliberately the one the seed ranks
+// *last* by CPU. A ranking that ranked the cluster and filtered the result
+// afterwards would return the true top N — none of which this caller may read
+// — and hand them an empty answer they could not tell from an idle cluster.
+const flakyOnlyPolicy = `grants:
+  - resources: ["service:shop_flaky", "node:*"]
+    audience: ["group:viewers"]
+    permissions: ["read"]
+`
+
+// TestMCPRankMetricsScopesByGrantBeforeRanking pins the rule rankScope exists
+// for: a caller's grants have to reach the query, not the result.
+//
+// The distinction is invisible for a caller granted the top of the ranking and
+// decisive for one granted the bottom, which is why the grant below is the
+// lowest-CPU service in the seed.
+func TestMCPRankMetricsScopesByGrantBeforeRanking(t *testing.T) {
+	env, address, hostname := metricsCluster(t)
+
+	policy := filepath.Join(t.TempDir(), "acl.yaml")
+	if err := os.WriteFile(policy, []byte(flakyOnlyPolicy), 0o644); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
+
+	proc, _ := seedAndStart(t, env, seededMetrics(address, hostname), map[string]string{
+		"CETACEAN_MCP":                  "true",
+		"CETACEAN_AUTH_MODE":            "headers",
+		"CETACEAN_AUTH_HEADERS_SUBJECT": "X-Auth-User",
+		"CETACEAN_AUTH_HEADERS_GROUPS":  "X-Auth-Groups",
+		"CETACEAN_TRUSTED_PROXIES":      "127.0.0.1/32",
+		"CETACEAN_ACL_POLICY_FILE":      policy,
+		// The lane's port has no host in its listen address, so no OAuth
+		// issuer can be derived; the sweep's own MCP+headers SUT bypasses
+		// OAuth the same way, since the identity is the proxy's header.
+		"CETACEAN_MCP_AUTH_BYPASS": "headers",
+	})
+
+	viewer := readPersona{name: "viewer", user: "viewer", groups: "viewers"}
+
+	envelope, status := mcpAs(t, proc, viewer, "tools/call", map[string]any{
+		"name": "get_metrics",
+		"arguments": map[string]any{
+			"target": "cluster", "by": "service", "metric": "cpu", "range": "1h", "top": 3,
+		},
+	})
+
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+
+	var result struct {
+		IsError           bool `json:"isError"`
+		StructuredContent struct {
+			Series []struct {
+				Name string `json:"name"`
+			} `json:"series"`
+		} `json:"structuredContent"`
+	}
+
+	if err := json.Unmarshal(envelope.Result, &result); err != nil {
+		t.Fatalf("decode: %v\n%s", err, envelope.Result)
+	}
+
+	if result.IsError {
+		t.Fatalf("ranking failed for a caller with one grant: %s", envelope.Result)
+	}
+
+	names := make([]string, 0, len(result.StructuredContent.Series))
+	for _, series := range result.StructuredContent.Series {
+		names = append(names, series.Name)
+	}
+
+	if len(names) == 0 {
+		t.Fatal("the ranking came back empty for a caller who may read one service, " +
+			"which is what ranking the cluster and filtering afterwards produces")
+	}
+
+	if !slices.Equal(names, []string{fixtures.CrashLoopService}) {
+		t.Errorf("ranked services = %v, want only %s — the rest are behind the caller's grants",
+			names, fixtures.CrashLoopService)
+	}
 }
