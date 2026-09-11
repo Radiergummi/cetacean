@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
-- MCP clients that registered dynamically stay registered across a restart. Their registrations were held in memory only, so restarting Cetacean left every such client holding a `client_id` the server no longer recognised—it had to register again before it could sign in, and the approval you had already given it was stranded with the old identity
+- MCP clients that registered dynamically stay registered across a restart. Their registrations were held in memory only, so restarting Cetacean left every such client holding a `client_id` the server no longer recognised—it had to register itself again, and be approved again, before it could reconnect
 
 ## [0.14.0] - 2026-09-10
 

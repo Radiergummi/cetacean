@@ -458,9 +458,11 @@ func TestServerCarriesClientRegistrationsAcrossRestart(t *testing.T) {
 		t.Errorf("redirect uris = %v", restored.RedirectURIs)
 	}
 
-	// The redirect URI and the application type are what the authorize
-	// endpoint checks a request against, so a registration that came back
-	// without them would resolve and then reject every authorization.
+	// The redirect URI is what the authorize endpoint exact-matches a request
+	// against, so a registration that came back without it would resolve and
+	// then reject every authorization. The application type only ever governs
+	// which redirect URIs registration accepts, but it is the rest of the
+	// record: if it survived, nothing was dropped on the way through the file.
 	if restored.ApplicationType != "native" {
 		t.Errorf("application type = %q, want native", restored.ApplicationType)
 	}

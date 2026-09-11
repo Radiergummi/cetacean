@@ -873,8 +873,8 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	clearCSRFCookie(w, secure)
 
 	// Remembering is limited to verified clients. A DCR client's metadata is
-	// self-reported and its client_id does not survive a restart, so a record
-	// keyed on one would be worthless at best.
+	// self-reported, so a record keyed on it would attest to nothing but what
+	// the client claimed about itself.
 	//
 	// The recorded fingerprint is the one the page displayed, proven current
 	// by the comparison above — not a fresh resolution, which could differ
