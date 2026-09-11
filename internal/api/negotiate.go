@@ -90,6 +90,15 @@ var supportedTypes = []struct {
 }{
 	{"application", "json", ContentTypeJSON},
 	{"application", "vnd.cetacean.v1+json", ContentTypeJSON},
+	// The +json structured syntax suffix: these resolve to the JSON branch
+	// because that is the branch that serves them, and each handler sets the
+	// precise type on the way out. Without them a client that asks for the
+	// media type a document actually carries is answered 406 by the endpoint
+	// that carries it — ld+json is what every detail response and the context
+	// document are, and linkset+json is the only type RFC 9727 permits for
+	// the API catalog.
+	{"application", "ld+json", ContentTypeJSON},
+	{"application", "linkset+json", ContentTypeJSON},
 	{"text", "html", ContentTypeHTML},
 	{"application", "xhtml+xml", ContentTypeHTML},
 	{"text", "event-stream", ContentTypeSSE},

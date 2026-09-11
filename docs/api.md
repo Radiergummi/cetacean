@@ -615,10 +615,51 @@ Every response outside the `/-/` meta endpoints carries [RFC 8631](https://www.r
 headers:
 
 ```http
-Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby"
+Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
 ```
 
-`service-desc` points at the OpenAPI spec, `describedby` at the JSON-LD context document.
+`service-desc` points at the OpenAPI spec, `describedby` at the JSON-LD context document, and `api-catalog` at the
+catalogue below.
+
+### API catalogue
+
+`GET /.well-known/api-catalog` lists the APIs this deployment publishes, as an
+[RFC 9264](https://www.rfc-editor.org/rfc/rfc9264) linkset served as `application/linkset+json` — the format
+[RFC 9727](https://www.rfc-editor.org/rfc/rfc9727) requires at this URI. It needs no authentication.
+
+Each `item` link names one API. The contexts beside it carry that API's description (`service-desc`), its
+human-readable reference (`service-doc`), its JSON-LD context (`describedby`) and its health probe (`status`).
+
+```json
+{
+  "linkset": [
+    {
+      "anchor": "https://cetacean.example.com/.well-known/api-catalog",
+      "item": [
+        { "href": "https://cetacean.example.com/", "title": "Cetacean REST API" },
+        { "href": "https://cetacean.example.com/mcp", "title": "Cetacean MCP server" }
+      ]
+    },
+    {
+      "anchor": "https://cetacean.example.com/",
+      "service-desc": [
+        { "href": "https://cetacean.example.com/api", "type": "application/json", "title": "OpenAPI description" }
+      ],
+      "status": [
+        { "href": "https://cetacean.example.com/-/health", "type": "application/json", "title": "Health" }
+      ]
+    }
+  ]
+}
+```
+
+The MCP entry appears only when [`mcp.enabled`][mcp.enabled] is set, and its authorization metadata only when an
+authorization server is wired for it — which needs an [`auth.mode`][auth.mode] other than `none`. The catalogue
+states what the process serves, so it never names an endpoint that would answer 404.
+
+URIs in the catalogue are absolute. Set [`server.public_url`][server.public_url] behind a reverse proxy, or they are
+built from the request's own `Forwarded` / `X-Forwarded-*` headers, which are read only when the request arrives
+from an address in [`server.trusted_proxies`][server.trusted_proxies].
 
 ## Request ID
 
@@ -632,6 +673,8 @@ characters) or the server generates one. The value appears in error responses as
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools
 [mcp.enabled]: configuration#mcp.enabled
+[server.public_url]: configuration#server.public_url
+[server.trusted_proxies]: configuration#server.trusted_proxies
 [mcp]: mcp
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations

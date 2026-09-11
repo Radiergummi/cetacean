@@ -104,6 +104,11 @@ func discoveryLinks(next http.Handler) http.Handler {
 			w.Header().Add("Link", fmt.Sprintf(
 				`<%s>; rel="describedby"`, absPath(ctx, "/api/context.jsonld"),
 			))
+			// RFC 9727 §3.2 registers api-catalog so a client that holds any
+			// URI of an API can reach the catalog the publisher offers.
+			w.Header().Add("Link", fmt.Sprintf(
+				`<%s>; rel="api-catalog"`, absPath(ctx, apiCatalogPath),
+			))
 		}
 		next.ServeHTTP(w, r)
 	})

@@ -10,9 +10,11 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
 
+	"github.com/radiergummi/cetacean/internal/api/linkset"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -36,6 +38,16 @@ func loadTestSpec(t *testing.T) ([]byte, *openapi3.T, routers.Router) {
 	t.Helper()
 
 	specOnce.Do(func() {
+		// openapi3filter decodes a response body by exact media type, so a
+		// +json type it does not know is "unsupported content type" rather
+		// than JSON — which would mean skipping the API catalog the way
+		// /topology is skipped, leaving its schema unchecked. Lending it the
+		// library's own JSON decoder validates the document instead.
+		openapi3filter.RegisterBodyDecoder(
+			linkset.MediaType,
+			openapi3filter.RegisteredBodyDecoder("application/json"),
+		)
+
 		const specPath = "../../api/openapi.yaml"
 
 		bytes, err := os.ReadFile(specPath)

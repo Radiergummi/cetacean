@@ -696,6 +696,71 @@ paths:
                   limit: "urn:cetacean:limit"
                   offset: "urn:cetacean:offset"
 
+  /.well-known/api-catalog:
+    get:
+      operationId: getAPICatalog
+      tags: [Documentation]
+      summary: API catalog
+      description: |
+        Lists the APIs this deployment publishes, as an RFC 9264 linkset at the
+        RFC 9727 well-known URI. Each `item` link names one API; the contexts
+        beside it carry that API's description, documentation and status links.
+
+        The MCP server appears only when it is enabled, and its protected
+        resource metadata only when an authorization server is wired for it —
+        the catalog states what the process serves, not what it could serve.
+      security: []
+      responses:
+        "200":
+          description: API catalog
+          content:
+            application/linkset+json:
+              schema:
+                type: object
+                required: [linkset]
+                properties:
+                  linkset:
+                    type: array
+                    items:
+                      type: object
+                      required: [anchor]
+                      properties:
+                        anchor:
+                          type: string
+                          format: uri
+                      additionalProperties:
+                        type: array
+                        items:
+                          type: object
+                          required: [href]
+                          properties:
+                            href:
+                              type: string
+                              format: uri
+                            type:
+                              type: string
+                            title:
+                              type: string
+              example:
+                linkset:
+                  - anchor: "https://cetacean.example.com/.well-known/api-catalog"
+                    item:
+                      - href: "https://cetacean.example.com/"
+                        title: "Cetacean REST API"
+                  - anchor: "https://cetacean.example.com/"
+                    service-desc:
+                      - href: "https://cetacean.example.com/api"
+                        type: "application/json"
+                        title: "OpenAPI description"
+                    describedby:
+                      - href: "https://cetacean.example.com/api/context.jsonld"
+                        type: "application/ld+json"
+                        title: "JSON-LD context"
+                    status:
+                      - href: "https://cetacean.example.com/-/health"
+                        type: "application/json"
+                        title: "Health"
+
   /api/errors:
     get:
       operationId: listErrorCodes
