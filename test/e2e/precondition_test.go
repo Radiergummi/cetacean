@@ -372,6 +372,22 @@ func TestPreconditionSweep(t *testing.T) {
 				return
 			}
 
+			// RFC 9110 §13.1.1: a validator that is not the current one does
+			// not satisfy If-Match.
+			//
+			// Driven ahead of the baseline because evaluating a precondition
+			// refreshes its subject from the engine: the cache is filled
+			// asynchronously, so a validator read before any precondition had
+			// run could describe a moment the engine has already left, and
+			// would then move under the sweep without anything being written.
+			// That is also what lets a client recover from a 412 in one round
+			// trip — the GET it re-reads afterwards answers the fresh
+			// validator.
+			assertPreconditionFailed(t, "stale validator", precondRequest(
+				t, proc, target.method, target.uri,
+				map[string]string{"If-Match": staleValidator}, "", "",
+			))
+
 			current := representationETag(t, proc, target.uri)
 
 			// RFC 9110 §13.1.2: a matching validator means the client already
@@ -402,13 +418,6 @@ func TestPreconditionSweep(t *testing.T) {
 					target.uri, modified.status,
 				)
 			}
-
-			// RFC 9110 §13.1.1: a validator that is not the current one does
-			// not satisfy If-Match.
-			assertPreconditionFailed(t, "stale validator", precondRequest(
-				t, proc, target.method, target.uri,
-				map[string]string{"If-Match": staleValidator}, "", "",
-			))
 
 			// §13.1.1 again: If-Match uses strong comparison, so a weak
 			// validator never matches — not even the resource's own.
@@ -735,27 +744,23 @@ func TestIfMatchAcceptsAValidatorObtainedUnderContentEncoding(t *testing.T) {
 	}
 }
 
-// TestConditionalWriteIsEvaluatedAgainstTheCache drives the case If-Match
+// TestConditionalWriteIsEvaluatedAgainstTheEngine drives the case If-Match
 // exists to refuse, with no third party involved: a validator the server
 // itself superseded, replayed on the next write. RFC 9110 §13.1.1 makes that a
 // 412 — the representation changed, so the validator is no longer current.
 //
-// It cannot be, as the source stands. internal/api/precondition.go builds the
-// representation it compares against from the in-memory cache, which the
-// watcher fills asynchronously from the Docker event stream, while every
-// writer in internal/docker/client.go re-inspects the engine for a fresh
-// Version immediately before ServiceUpdate. The validator a client is held to
-// therefore describes a moment the server has already moved past, and that
-// window is precisely the one the precondition is for.
+// The window is the one the cache cannot see. Every representation is built
+// from the in-memory cache, which the watcher fills asynchronously from the
+// Docker event stream, while every writer in internal/docker/client.go
+// re-inspects the engine for a fresh Version immediately before
+// ServiceUpdate — so the precondition refreshes its subject from the engine
+// before evaluating, and the replay below is refused even though a GET issued
+// in the same instant still answers the superseded validator.
 //
 // The replay is sent as the sweep's probe — a Content-Type the handler
-// refuses — so the outcome reports the precondition's verdict alone. A real
-// second write would land on the engine mid-update and answer D-1's
-// mismapped 500, which says nothing either way about If-Match.
-//
-// Quarantined per finding D-10: a probe refusal is tolerated only while the
-// validator is demonstrably unchanged, and nothing else is.
-func TestConditionalWriteIsEvaluatedAgainstTheCache(t *testing.T) {
+// refuses — so the outcome reports the precondition's verdict alone and not
+// the handler's.
+func TestConditionalWriteIsEvaluatedAgainstTheEngine(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
 
@@ -789,7 +794,6 @@ func TestConditionalWriteIsEvaluatedAgainstTheCache(t *testing.T) {
 		t.Fatalf("the first write answered 200 without reaching the engine: %v", applying)
 	}
 
-	mid := representationETag(t, proc, uri)
 	probe := patchProbe()
 
 	replayed := precondRequest(
@@ -797,44 +801,17 @@ func TestConditionalWriteIsEvaluatedAgainstTheCache(t *testing.T) {
 		map[string]string{"If-Match": before}, probe.contentType, probe.body,
 	)
 
-	if replayed.status == http.StatusPreconditionFailed {
-		if !strings.Contains(replayed.body, "API013") {
-			t.Errorf("412 body does not name API013: %s", replayed.body)
-		}
-
-		t.Logf(
-			"the superseded validator was refused; the cache had caught up (%s -> %s)",
-			before, mid,
-		)
-
-		return
-	}
-
-	if mid != before {
+	if replayed.status != http.StatusPreconditionFailed {
 		t.Fatalf(
-			"the validator moved to %s, yet the superseded %s was still accepted "+
-				"(status %d): that is not the staleness D-10 describes",
-			mid, before, replayed.status,
+			"the superseded validator %s was admitted (status %d): the engine already "+
+				"held PRECOND_FIRST=1, so If-Match had to refuse it; body: %s",
+			before, replayed.status, replayed.body,
 		)
 	}
 
-	if !strings.Contains(replayed.body, probe.problem) {
-		t.Fatalf(
-			"the replay reached neither the precondition nor the handler's own "+
-				"validation: status = %d (body: %s)",
-			replayed.status, replayed.body,
-		)
+	if !strings.Contains(replayed.body, "API013") {
+		t.Errorf("412 body does not name API013: %s", replayed.body)
 	}
-
-	t.Logf(
-		"FINDING D-10: a write conditioned on a validator the server itself "+
-			"superseded was admitted. The engine already held PRECOND_FIRST=1, yet "+
-			"GET %s still answered %s, because internal/api/precondition.go compares "+
-			"against the cache the watcher has not filled while the writer inspects "+
-			"the engine. If-Match cannot refuse a lost update in the window it "+
-			"exists for.",
-		uri, before,
-	)
 }
 
 // ─── the gate ───────────────────────────────────────────────────────────

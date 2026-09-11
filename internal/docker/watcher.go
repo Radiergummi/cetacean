@@ -540,6 +540,12 @@ func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
 
 		return
 	}
+
+	w.apply(resource)
+}
+
+// apply writes an inspected resource into the store under its own type.
+func (w *Watcher) apply(resource any) {
 	switch v := resource.(type) {
 	case swarm.Node:
 		w.store.SetNode(v)
@@ -556,6 +562,31 @@ func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
 	case volume.Volume:
 		w.store.SetVolume(v)
 	}
+}
+
+// Refresh re-reads one resource from the engine and applies it to the cache,
+// so a caller that must not act on a stale record can make that record current
+// without waiting for the event stream. A resource the engine no longer has is
+// dropped, which is the same answer the event stream would eventually give.
+//
+// Unlike the event-driven path, an inspect failure is returned rather than
+// logged: the caller asked precisely because it cannot tolerate a stale
+// answer, so it has to be told the refresh did not happen.
+func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
+	resource, err := w.client.Inspect(ctx, events.Type(kind), id)
+	if err != nil {
+		if cerrdefs.IsNotFound(err) {
+			w.applyRemove(eventKey{resourceType: events.Type(kind), id: id})
+
+			return nil
+		}
+
+		return err
+	}
+
+	w.apply(resource)
+
+	return nil
 }
 
 // inspectWithRetry retries transient inspect failures with capped exponential

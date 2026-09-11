@@ -245,6 +245,7 @@ type Handlers struct {
 	operationsLevel     config.OperationsLevel
 	recEngine           *recommendations.Engine
 	acl                 *acl.Evaluator
+	refresher           ResourceRefresher
 	localNodeMu         sync.Mutex
 	localNodeID         string
 	localNodeDone       bool

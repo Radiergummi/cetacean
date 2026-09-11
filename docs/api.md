@@ -605,6 +605,13 @@ A `412` always means the resource moved. Where the current representation cannot
 `DELETE /plugins/{name}` inspects the daemon rather than the cache — the write answers `503`
 (`ENG001`) or `500` (`ENG004`) instead, so an unreachable daemon is not reported as a stale `ETag`.
 
+The comparison is made against the Docker engine, not against the cached copy a `GET` is served
+from: the cache is filled asynchronously, so a validator compared against it could only ever
+refuse a change the cache had already seen — never the lost update the header exists to prevent.
+Evaluating the condition therefore also brings the cached copy up to date, which is what lets a
+`412` be recovered from in a single round trip: re-read the resource and the `GET` answers the
+validator the write was held to.
+
 30 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
 `PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
 `PUT /services/{id}/placement`, `PATCH /services/{id}/ports`,

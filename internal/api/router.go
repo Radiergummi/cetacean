@@ -25,6 +25,18 @@ type Resyncer interface {
 	Resync(ctx context.Context) error
 }
 
+// ResourceRefresher re-reads a single resource from the engine into the cache.
+// Backed by the watcher's Refresh method, and decoupled for the same reason
+// Resyncer is.
+//
+// The If-Match precondition needs it: the cache is filled asynchronously from
+// the event stream while every writer applies against the engine, so a
+// validator compared against the cache describes a moment the engine has
+// already moved past — which is exactly the window the header exists to close.
+type ResourceRefresher interface {
+	Refresh(ctx context.Context, kind, id string) error
+}
+
 // RouterConfig holds all dependencies and options for NewRouter.
 type RouterConfig struct {
 	Handlers          *Handlers
@@ -47,6 +59,11 @@ type RouterConfig struct {
 
 	TrustedProxies []netip.Prefix
 	Resyncer       Resyncer
+
+	// Refresher makes one resource current before its If-Match precondition is
+	// evaluated. Leaving it nil evaluates against the cache as it stands, which
+	// is what a test with no engine behind it wants.
+	Refresher ResourceRefresher
 
 	// MCPHandler, when non-nil, is mounted at {BasePath}/mcp. main.go builds
 	// it from internal/mcp; the api package stays decoupled from mcp-go.
@@ -82,6 +99,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	auth.SetErrorWriter(WriteErrorCode)
 
 	h := cfg.Handlers
+	h.refresher = cfg.Refresher
 	b := cfg.Broadcaster
 	metricsProxy := cfg.MetricsProxy
 	spa := cfg.SPA
