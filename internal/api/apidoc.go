@@ -44,10 +44,12 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 			w.Header().
 				Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
 			playground.serve(w, r)
-		default:
-			// JSON is the default for content negotiation (including */*).
+		case ContentTypeJSON:
+			// The default for content negotiation, including */*.
 			w.Header().Set("Content-Type", "application/json")
 			spec.serve(w, r)
+		default:
+			notAcceptable(w, r, "application/json, text/html")
 		}
 	}
 }

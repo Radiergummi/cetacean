@@ -261,8 +261,13 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			h.handleFeedHistory(w, r, renderAtom)
 		case ContentTypeJSONFeed:
 			h.handleFeedHistory(w, r, renderJSONFeed)
-		default:
+		case ContentTypeHTML:
 			spa.ServeHTTP(w, r)
+		default:
+			notAcceptable(
+				w, r,
+				"text/event-stream, text/html, application/atom+xml, application/feed+json",
+			)
 		}
 	})
 
@@ -757,11 +762,9 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		case ContentTypeDOT:
 			h.HandleTopologyDOT(w, r)
 		default:
-			writeErrorCode(
-				w,
-				r,
-				"API003",
-				"this endpoint supports application/vnd.jgf+json, application/graphml+xml, and text/vnd.graphviz",
+			notAcceptable(
+				w, r,
+				"application/vnd.jgf+json, application/graphml+xml, text/vnd.graphviz",
 			)
 		}
 	})
@@ -805,8 +808,19 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		cfg.OAuthRoutes(mux.mux, "")
 	}
 
-	// SPA fallback (must be last)
-	mux.Handle("/", spa)
+	// SPA fallback (must be last). It refuses only a type nothing serves,
+	// rather than everything but text/html: */* resolves to JSON, so on this
+	// route JSON means "unknown" rather than "a client asked for JSON" — and
+	// every static file the dashboard pulls (/assets/*, the icons,
+	// manifest.webmanifest) arrives that way.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if ContentTypeFromContext(r.Context()) == ContentTypeUnsupported {
+			notAcceptable(w, r, "text/html")
+			return
+		}
+
+		spa.ServeHTTP(w, r)
+	})
 
 	stack := NewChain(
 		requestID,

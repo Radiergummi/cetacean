@@ -31,6 +31,7 @@ the client asks for. There is no `/api/v1/` prefix; versioning lives in the medi
 |------------------------------------|-------------|----------------------------------------------|
 | `application/json`                 | `.json`     | JSON                                         |
 | `application/vnd.cetacean.v1+json` |             | JSON, versioned alias of `application/json`  |
+| `application/ld+json`              |             | JSON — every JSON response is a JSON-LD document |
 | `text/html`, `application/xhtml+xml` | `.html`   | The dashboard                                |
 | `text/event-stream`                |             | SSE, on endpoints that support it            |
 | `application/atom+xml`             | `.atom`     | Atom feed                                    |
@@ -41,7 +42,12 @@ the client asks for. There is no `/api/v1/` prefix; versioning lives in the medi
 
 All negotiated responses include `Vary: Accept`. Requesting a type an endpoint cannot produce returns
 `406 Not Acceptable` with code [`API003`](api/errors#API003); asking for SSE on an endpoint without a stream
-returns `406` with [`API001`](api/errors#API001).
+returns `406` with [`API001`](api/errors#API001). A graph format asked of a resource endpoint is refused the same
+way — the table says which endpoints serve one.
+
+The refusal is each endpoint's own. A document with a single representation — the
+[OpenSearch description](#browser-search), the [API catalogue](#api-catalogue), the JSON-LD context — answers a client
+asking for exactly the type it serves, whether or not that type appears above.
 
 ```http tab
 GET /services HTTP/1.1
