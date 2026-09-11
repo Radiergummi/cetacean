@@ -72,7 +72,7 @@ segment; `sub` is anything else.
 | 1 | `/services` | collection listing — untouched |
 | 2 | `/services/web` | one pair |
 | 3 | `/services/web/env` | one pair + suffix `env` |
-| 4 | `/services/web/configs/smtp` | two pairs |
+| 4 | `/services/web/configs/smtp`, `/services/web/tasks/3` | two pairs |
 | 5 | `/stacks/shop/services/web/logs` | two pairs + suffix `logs` |
 | 6 | `/stacks/shop/services/web/configs/smtp` | three pairs |
 | 7 | `/stacks/shop/services/web/configs/smtp/labels` | three pairs + suffix |
@@ -104,12 +104,12 @@ candidate set for its `via` segment.
 | service | `secrets` | secret | `…ContainerSpec.Secrets` |
 | service | `networks` | network | `cluster.ServiceAttachments` |
 | service | `volumes` | volume | `…ContainerSpec.Mounts`, volume mounts only |
-| service | `tasks` | task | `Cache.ListTasksByService` |
+| service | `tasks` | task | `Cache.ListTasksByService`, by ID or slot |
 | config | `services` | service | `Cache.ServicesUsingConfig` |
 | secret | `services` | service | `Cache.ServicesUsingSecret` |
 | network | `services` | service | `Cache.ServicesUsingNetwork` |
 | volume | `services` | service | `Cache.ServicesUsingVolume` |
-| node | `tasks` | task | `Cache.ListTasksByNode` |
+| node | `tasks` | task | `Cache.ListTasksByNode`, by ID |
 | task | `services` | service | `task.ServiceID` |
 | task | `nodes` | node | `task.NodeID` |
 | stack | `services` | service | `Cache.Stack.Services` |
@@ -144,6 +144,43 @@ name, so a `shop` stack may hold both `web` and `shop_web`, where the identifier
 `web` matches the first exactly and the second stripped. Without the precedence
 rule that is an ambiguity report for a path that has an obvious reading.
 
+### Addressing a task
+
+A task is the one type with no identifier of its own beyond a 25-character ID,
+and the one place the traversal form buys something a flat URL cannot: inside a
+service's task set, `/services/web/tasks/3` names slot 3, and
+`/nodes/worker-2/tasks/<id>` scopes a task to the node holding it.
+
+Slot addressing needs a disambiguation rule, because a slot is not unique.
+Swarm keeps a task record for every replica it has replaced, so slot 3 of any
+service that has been updated — or that restarts in a loop — names several
+records, all but one of them history. **The live task wins**, where live is
+`cache.TaskIsLive` (`DesiredState` is neither `shutdown` nor `remove`), which is
+already the shared predicate behind every replica count and both placement
+views. A slot with no live task resolves to nothing rather than to its most
+recent corpse: a caller addressing `tasks/3` means the replica running there,
+and there isn't one.
+
+Global services have no slots. Their tasks render as `<service>.<node>`, so the
+identifier in the traversal form is the node ID or hostname, and an unplaced
+global task is addressable only by its own ID.
+
+That rule cannot be written here alone. `internal/mcp`'s `resolveTask` already
+resolves `<service>.<slot>` for `describe`, `get_logs` and `remove_task`, and it
+currently returns the **first** name match in `(slot, ID)` order — the dead
+record, deterministically, whenever a slot has been replaced. So it is a live
+defect on its own terms, and fixing it in place would leave the two transports
+disagreeing about what `web.3` means, which is the failure
+`internal/api/canonical.go` exists to have ended.
+
+Task resolution therefore moves to `internal/cluster` — `ResolveTask(c
+*cache.Cache, identifier string)` — which is where `CLAUDE.md`'s own reasoning
+already puts it: the name is derived by `cluster.TaskName`, and the cache cannot
+own a rule that depends on a package importing it. `internal/mcp`'s
+`resolveTask` delegates, REST's traversal calls the same function, and the
+live-task preference is applied once. It is worth doing whether or not the
+traversal forms are ever built, because the MCP defect is shipped today.
+
 ## Resolution
 
 Each pair resolves **within its context**, not globally:
@@ -157,17 +194,17 @@ makes `/stacks/shop/services/web` work at all, since `web` is not a service name
 anywhere in the cluster. It also means the relationship is verified by
 construction: there is no way to resolve a pair whose edge does not exist.
 
+That verification is deliberate. A path that reads "the `smtp-password` config
+used by `shop_web`" must not answer when `shop_web` does not use it — otherwise
+the form degrades into decoration that dresses up any pair of identifiers, and a
+link that should tell you a relationship is gone tells you nothing.
+
 The single-pair form has a shortcut the traversal forms must not inherit: an
 identifier that is already the canonical ID falls through untouched, because the
 request is already addressed at the canonical URL. A traversal is never at its
 target's canonical URL however its identifiers are spelled, so it always
 redirects — `/services/web/volumes/shop-data` redirects to `/volumes/shop-data`
 even though a volume's name *is* its canonical identifier.
-
-That verification is deliberate. A path that reads "the `smtp-password` config
-used by `shop_web`" must not answer when `shop_web` does not use it — otherwise
-the form degrades into decoration that dresses up any pair of identifiers, and a
-link that should tell you a relationship is gone tells you nothing.
 
 ### Cost
 
@@ -208,6 +245,11 @@ codes, because the reader's situation is the same — this path leads nowhere �
 and only the reason differs: `"service shop_web does not use config smtp"` is
 the useful half, not the code.
 
+`API015` belongs to 2b and should not be registered before it: an error code in
+the catalog that nothing can produce is a promise to a reader of
+`/api/errors`. 2a's own failures are all covered by `API014` and the handlers'
+existing 404s.
+
 `API014` already exists and already lists every candidate ID. Because that list
 is itself a disclosure, it is gated on a type-level read grant
 (`acl.Evaluator.TypeGrants`), which an identity with no grant on the type fails
@@ -220,10 +262,11 @@ resource by a name that can move.
 
 ## HTML: which forms serve the dashboard
 
-This is the one open decision, because it is the only part that costs frontend
-work rather than backend work. The API behaviour above is the same either way.
+Decided: the two shallow human forms serve the dashboard, everything deeper
+redirects. The API behaviour above is the same either way — this is the only
+part that costs frontend work rather than backend work.
 
-**Recommended — serve the SPA for the two shallow human forms only:**
+**Serve the SPA for the two shallow human forms:**
 
 - `/{collection}/{name}` — `/services/shop_web`
 - `/stacks/{stack}/services/{name}` — `/stacks/shop/services/web`
@@ -234,47 +277,61 @@ or pastes into a chat. The dashboard gains two route shapes; nobody hand-writes
 `307` to the config's page is a perfectly good answer when they follow such a
 link from elsewhere.
 
-**As originally proposed — serve the SPA for every friendly form.** Achievable,
-and cheaper than it first looks, but only one implementation of it is sane: a
-single catch-all route whose component asks the server where the path points
+**The alternative, held in reserve — serve the SPA for every friendly form.**
+Achievable, and cheaper than it first looks, but only one implementation of it
+is sane: a single catch-all route whose component asks the server where the path
+points
 (`fetch(path, { headers: { Accept: "application/json" }, redirect: "manual" })`
 and read `Location`) and then renders the matching detail page. Enumerating a
 route per edge — roughly seventeen, doubled by the stack depth — would put the
 grammar in TypeScript as well as Go, which is the two-places-one-rule shape
 `CLAUDE.md` keeps recording as the cause of real drift.
 
-The recommendation is therefore to build the shallow forms now and keep the
-catch-all in reserve: asking the server where a path points means adopting it
-later costs one component and one request, with no grammar duplicated. There is
-no SEO consideration either way — Cetacean is not indexed.
+So: the shallow forms now, the catch-all in reserve. Asking the server where a
+path points means adopting it later costs one component and one request, with no
+grammar duplicated. There is no SEO consideration either way — Cetacean is not
+indexed.
 
-## Frontend
+## Delivery
 
-### Phase 1 — accept names
+The three slices are separable, and only the first two are committed work. The
+split is deliberate: the stack-scoped form and the traversal forms have very
+different value-to-cost ratios, and shipping them together would have hidden
+that.
 
-Nothing in the dashboard has to change for a name-addressed URL to work. A
+### Phase 1 — accept a name in place of an ID (shipped)
+
+`internal/api/canonical.go`, already in the tree: the single-pair form, the
+`API014` ambiguity report, the read-grant gate, and the HTML exemption.
+
+Nothing in the dashboard had to change for a name-addressed URL to render. A
 detail route's parameter is handed straight to `api.service(param)`, and `fetch`
-follows the `307` transparently, so `/services/shop_web` already renders. Phase
-1 is therefore the API grammar plus two verifications:
+follows the `307` transparently, so `/services/shop_web` already works. What is
+still unverified, and belongs to this phase rather than the next:
 
-- An SSE subscription through the redirect. `EventSource` follows redirects per
-  spec, but the per-resource streams are the one consumer that opens a
-  long-lived request through this middleware, and it is untested.
-- `useSwarmQuery`'s optimistic updates key on resource ID. A name route must
-  resolve to the ID once on mount and use the ID internally from there, or an
+- **An SSE subscription through the redirect.** `EventSource` follows redirects
+  per spec, but the per-resource streams are the only long-lived request passing
+  through this middleware and nothing has tested it.
+- **`useSwarmQuery` keys optimistic updates on resource ID.** A name route has
+  to resolve to the ID once on mount and use the ID internally from there, or an
   SSE event will not match the row it should replace.
 
-### Phase 2 — generate names
+### Phase 2a — stack-scoped names
 
-Switch link generation to names for the types whose names are stable and unique:
-services, configs, secrets, networks, volumes, stacks. Add the
-`/stacks/:stack/services/:name` route, which is the form that makes breadcrumbs
-mean something.
+The `stack → services` edge, the compose-name matching and its exact-match
+precedence, and the `/stacks/:stack/services/:name` route in the dashboard.
 
-**Nodes and tasks keep ID URLs.** A node hostname can collide — that is what
-`API014` exists for — and can change; a task has no name of its own. Keeping them
-on IDs means the dashboard never has to render a disambiguation page, which is
-the only expensive piece of UI this design could otherwise require.
+This is where the value is. `/stacks/shop/services/web` is the name in the file
+the reader wrote, which is what makes it the form people type and paste, and it
+is also what makes a breadcrumb mean something. It needs one edge — no adjacency
+table, no reverse direction, no cross-reference scans.
+
+Link generation switches to names for the types whose names are stable and
+unique: services, configs, secrets, networks, volumes, stacks. **Nodes and tasks
+keep ID URLs.** A node hostname can both collide — that is what `API014` is for
+— and change, and a task has no name of its own, so keeping them on IDs means
+the dashboard never has to render a disambiguation page, which is the only
+expensive UI this design could otherwise force.
 
 Docker's name charset (`[a-zA-Z0-9][a-zA-Z0-9_.-]*`) is URL-safe, so there is no
 encoding work.
@@ -283,6 +340,34 @@ One accepted consequence: a name URL bookmarked today can point at a different
 resource tomorrow, if a service is removed and recreated under the same name.
 That is what addressing by name means, and it is why the canonical form stays
 the ID.
+
+### Phase 2b — relationship traversals (deferred)
+
+The full adjacency table, both directions, the two-level stack depth, per-pair
+authorization and the shadowing invariant.
+
+Deferred, not cancelled, and the reason is worth recording. The reverse forms
+read backwards, nobody types them, and their only real use is making generated
+links self-describing — which the dashboard does not need, because it links by
+ID and already ACL-filters those lists. Against that: seventeen edges to
+declare and keep in step with their resolvers, relationship verification,
+authorization on every pair, and the O(services) cost of the reverse scans. The
+grammar is specified so this is cheap to pick up, and the trigger for picking it
+up is a concrete consumer that wants to *address* a relationship — a link in
+documentation, an MCP resource URI, an export format — rather than the symmetry
+being tidy.
+
+Two pieces of 2b are worth extracting and landing with 2a instead, because
+neither depends on a traversal URL ever being served:
+
+- **`cluster.ResolveTask`,** because MCP resolves `<service>.<slot>` to a dead
+  record today (see "Addressing a task"). That is a shipped defect, independent
+  of whether any traversal URL is ever served.
+- **The shadowing invariant test.** It costs nothing now and it is the thing
+  that will silently break: adding `GET /services/{id}/networks/{x}` in a year
+  would lose to the grammar with no failing test, and today the router has
+  exactly one four-segment route (`/-/licenses/texts/{id}`), under a prefix no
+  collection claims.
 
 ## Discoverability
 
@@ -302,26 +387,55 @@ Advertising traversal templates on detail responses — extending
 
 ## Testing
 
-The adjacency table is the single source of truth, so the tests walk it rather
-than restating it:
+Phase 1's tests are in `internal/api/canonical_test.go` already, including the
+two the implementation got wrong first time: the ambiguity report is withheld
+without a type-level read grant, and the redirect is visible to `requestLogger`
+and the self-metrics. Both were written by breaking the fix and watching them
+fail, which is the standard the rest of this should meet.
+
+**Phase 2a:**
+
+- The compose name and the Docker name resolve to the same service, and an
+  exact match beats a prefix-stripped one on a stack holding both `web` and
+  `shop_web`.
+- A service whose stack label names a different stack is not reachable through
+  this stack's path.
+- The shadowing invariant, brought forward from 2b because it costs nothing and
+  is the thing that breaks silently: walk the router's registered patterns and
+  assert none of them would parse as a pair chain.
+
+**`cluster.ResolveTask`, extracted from 2b:**
+
+- A slot holding a live task and one or more replaced records resolves to the
+  live one. This fails against the current `internal/mcp` implementation, which
+  is the point of writing it.
+- A slot holding only terminal records resolves to nothing rather than to the
+  most recent of them.
+- A global service's task resolves by node, and an unplaced one only by ID.
+- The MCP and REST paths resolve one identifier identically, driven through both
+  transports rather than through the shared function alone — that is the
+  disagreement this whole design exists to have ended, and a test on the shared
+  function cannot observe it.
+
+**Phase 2b,** if it happens. The adjacency table is the single source of truth,
+so the tests walk it rather than restating it:
 
 - Every declared edge resolves, from a fixture holding one resource of every
   type wired to every other. This is the `TestTypeGrantsAgreesWithCan` pattern
   `CLAUDE.md` records for exactly this hazard: a table and the resolvers that
   read it drifting apart silently.
 - Every reverse edge declared as reverse resolves in that direction too.
-- No registered mux route is shadowed by the grammar. Walk the router's patterns
-  and assert none of them would parse as a pair chain.
 - An edge that does not hold answers `404` `API015`, naming both resources.
 - Every pair's ACL is enforced independently: a grant on the target but not the
   context must not redirect, and vice versa.
-- Ambiguity answers `409` only with a type-level read grant.
-- Depth beyond the cap is not matched.
+- A traversal whose target identifier is already canonical still redirects
+  (`/services/web/volumes/shop-data`), since the shortcut belongs to the
+  single-pair form alone.
 
 Two e2e lanes through the real binary, since the middleware sits in the chain and
-the unit tests exercise it through a test router: one stack-scoped service read,
-one stack-scoped traversal to a config, both asserting the `Location` and the
-followed response.
+the unit tests exercise it through a test router: one stack-scoped service read
+in 2a, and one stack-scoped traversal to a config if 2b lands, both asserting the
+`Location` and the followed response.
 
 ## Out of scope
 
