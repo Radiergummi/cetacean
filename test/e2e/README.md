@@ -75,6 +75,7 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19010` | Dex (OIDC provider) |
 | `19011` | MCP OAuth lane (five consecutive SUTs: the flow, theft detection without the resource indicator, the DCR rate limit, the restart, and DCR/CIMD disabled) |
 | `19012` | `tailscale` auth mode (local-mode address boundary, plus tsnet startup validation) |
+| `19013` | SSE ACL filtering on `GET /events`, and the broadcaster's connection cap |
 | `19104` | Caddy, mTLS termination |
 
 `19003` is reserved in the numbering scheme but the `headers`-mode hostile-input cases run on
@@ -215,9 +216,11 @@ Nothing below is exercised by this suite, and — except where noted — nothing
   `oauth_test.go` does cover is that an `https://` client_id takes the CIMD path and that the guard is
   live in the shipped binary.
 - The ACL case that a digest never names a resource behind a grant.
-- SSE 429 and `Retry-After` at the connection cap. No unit test pins this contract either —
-  `internal/api/sse/broadcaster_test.go` substitutes a `noopErrorWriter` rather than driving a
-  real client past the cap — so it is currently untested anywhere in the repository.
+- ~~SSE 429 and `Retry-After` at the connection cap.~~ Covered by
+  `TestSSEConnectionCapRefusesWithRetryAfter` in `sse_acl_test.go`, which opens `sse.MaxClients`
+  real subscribers and asserts the next one is refused with 429, `Retry-After: 5` and an RFC 9457
+  `SSE001` body. `internal/api/sse/broadcaster_test.go` still substitutes a `noopErrorWriter`
+  rather than driving a real client past the cap, so this lane remains the only thing pinning it.
 
 [the-browser-suite]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md#the-browser-suite
 [design]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md

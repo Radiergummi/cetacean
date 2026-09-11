@@ -910,9 +910,11 @@ var excusedReadRoutes = map[string]string{
 		"the whole /plugins family for the same reason",
 
 	// Genuinely out of scope for a request/response sweep.
-	"GET /events": "gap: SSE-only ACL filtering (aclMatchWrap) needs a streaming client to observe, not a " +
+	"GET /events": "SSE-only ACL filtering (aclMatchWrap) needs a streaming client to observe, not a " +
 		"plain GET — a JSON Accept header hits the switch's default case and serves the SPA regardless of " +
-		"persona; out of scope for this request/response sweep",
+		"persona. Out of scope for this request/response sweep, and driven instead by " +
+		"TestEventsStreamAppliesTheACL in sse_acl_test.go, which holds two subscribers open while the " +
+		"cluster changes underneath them",
 }
 
 // TestReadSweepEnforcesTheACLBoundary drives every route in
