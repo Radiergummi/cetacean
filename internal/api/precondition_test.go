@@ -225,10 +225,6 @@ var pairedEndpoints = []preconditionEndpoint{
 		`{"user":"nobody"}`, "application/merge-patch+json", http.StatusOK,
 	},
 	{
-		"service mode", "/services/svc1/mode", "PUT", "/services/svc1/mode",
-		`{"mode":"replicated","replicas":3}`, "application/json", http.StatusOK,
-	},
-	{
 		"service endpoint mode", "/services/svc1/endpoint-mode",
 		"PUT", "/services/svc1/endpoint-mode",
 		`{"mode":"dnsrr"}`, "application/json", http.StatusOK,
@@ -449,9 +445,6 @@ func seededWriteClient() *mockWriteClient {
 	return &mockWriteClient{
 		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
 			removeServiceFn: func(context.Context, string) error { return nil },
-			updateServiceModeFn: func(_ context.Context, id string, _ swarm.ServiceMode) (swarm.Service, error) {
-				return updated(id)
-			},
 			updateServiceEndpointModeFn: func(_ context.Context, id string, _ swarm.ResolutionMode) (swarm.Service, error) {
 				return updated(id)
 			},

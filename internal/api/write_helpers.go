@@ -502,11 +502,6 @@ func writePatchError(w http.ResponseWriter, r *http.Request, err error) {
 	writeErrorCode(w, r, "API011", err.Error())
 }
 
-type updateModeRequest struct {
-	Mode     string  `json:"mode"`
-	Replicas *uint64 `json:"replicas,omitempty"`
-}
-
 type updateImageRequest struct {
 	Image string `json:"image"`
 }

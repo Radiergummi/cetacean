@@ -77,7 +77,6 @@ type ServiceLifecycleWriter interface {
 	RollbackService(ctx context.Context, id string) (swarm.Service, error)
 	RestartService(ctx context.Context, id string) (swarm.Service, error)
 	RemoveService(ctx context.Context, id string) error
-	UpdateServiceMode(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
 	UpdateServiceEndpointMode(
 		ctx context.Context,
 		id string,

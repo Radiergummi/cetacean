@@ -821,29 +821,6 @@ func (c *Client) UpdateServiceEndpointMode(
 	return c.InspectService(ctx, id)
 }
 
-func (c *Client) UpdateServiceMode(
-	ctx context.Context,
-	id string,
-	mode swarm.ServiceMode,
-) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	svc.Spec.Mode = mode
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		svc.Version,
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
-}
-
 // UpdateServiceSpec applies mutate to the service spec as the engine currently
 // holds it and writes the result back.
 //

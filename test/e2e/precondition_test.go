@@ -202,7 +202,6 @@ func preconditionTargets(f preconditionFixture) map[string]precondTarget {
 		{"/update-policy", http.MethodPatch, patchProbe()},
 		{"/endpoint-mode", http.MethodPut, putProbe()},
 		{"/healthcheck", http.MethodPut, putProbe()},
-		{"/mode", http.MethodPut, putProbe()},
 		{"/placement", http.MethodPut, putProbe()},
 	} {
 		targets[section.method+" /services/{id}"+section.suffix] = precondTarget{

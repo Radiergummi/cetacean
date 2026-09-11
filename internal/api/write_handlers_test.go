@@ -29,7 +29,6 @@ type mockServiceLifecycleWriter struct {
 	rollbackServiceFn           func(ctx context.Context, id string) (swarm.Service, error)
 	restartServiceFn            func(ctx context.Context, id string) (swarm.Service, error)
 	removeServiceFn             func(ctx context.Context, id string) error
-	updateServiceModeFn         func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
 	updateServiceEndpointModeFn func(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error)
 }
 
@@ -350,17 +349,6 @@ func (m *mockServiceLifecycleWriter) UpdateServiceEndpointMode(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockServiceLifecycleWriter) UpdateServiceMode(
-	ctx context.Context,
-	id string,
-	mode swarm.ServiceMode,
-) (swarm.Service, error) {
-	if m.updateServiceModeFn != nil {
-		return m.updateServiceModeFn(ctx, id, mode)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
 func (m *mockServiceSpecWriter) UpdateServiceHealthcheck(
 	ctx context.Context,
 	id string,
@@ -572,118 +560,6 @@ func TestHandleScaleService_InvalidBody(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("status=%d, want 400", w.Code)
-	}
-}
-
-func TestHandleUpdateServiceMode_ToGlobal(t *testing.T) {
-	c := cache.New(nil)
-	c.SetService(replicatedService("svc1"))
-
-	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			updateServiceModeFn: func(_ context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
-				return swarm.Service{
-					ID:   id,
-					Spec: swarm.ServiceSpec{Mode: mode},
-				}, nil
-			},
-		},
-	}
-	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
-
-	body := `{"mode":"global"}`
-	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
-	req.SetPathValue("id", "svc1")
-	w := httptest.NewRecorder()
-	h.HandleUpdateServiceMode(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestHandleUpdateServiceMode_ToReplicated(t *testing.T) {
-	c := cache.New(nil)
-	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}}},
-	})
-
-	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			updateServiceModeFn: func(_ context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
-				return swarm.Service{
-					ID:   id,
-					Spec: swarm.ServiceSpec{Mode: mode},
-				}, nil
-			},
-		},
-	}
-	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
-
-	body := `{"mode":"replicated","replicas":3}`
-	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
-	req.SetPathValue("id", "svc1")
-	w := httptest.NewRecorder()
-	h.HandleUpdateServiceMode(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestHandleUpdateServiceMode_ReplicatedWithoutCount(t *testing.T) {
-	c := cache.New(nil)
-	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}}},
-	})
-
-	wc := &mockWriteClient{}
-	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
-
-	body := `{"mode":"replicated"}`
-	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
-	req.SetPathValue("id", "svc1")
-	w := httptest.NewRecorder()
-	h.HandleUpdateServiceMode(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("status=%d, want 400", w.Code)
-	}
-}
-
-func TestHandleUpdateServiceMode_InvalidMode(t *testing.T) {
-	c := cache.New(nil)
-	c.SetService(replicatedService("svc1"))
-
-	wc := &mockWriteClient{}
-	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
-
-	body := `{"mode":"invalid"}`
-	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
-	req.SetPathValue("id", "svc1")
-	w := httptest.NewRecorder()
-	h.HandleUpdateServiceMode(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("status=%d, want 400", w.Code)
-	}
-}
-
-func TestHandleUpdateServiceMode_NotFound(t *testing.T) {
-	c := cache.New(nil)
-	wc := &mockWriteClient{}
-	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
-
-	body := `{"mode":"global"}`
-	req := httptest.NewRequest("PUT", "/services/missing/mode", strings.NewReader(body))
-	req.SetPathValue("id", "missing")
-	w := httptest.NewRecorder()
-	h.HandleUpdateServiceMode(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("status=%d, want 404", w.Code)
 	}
 }
 
@@ -4738,8 +4614,8 @@ func newPreferTestRouter(t testing.TB, converged bool) http.Handler {
 			scaleServiceFn: func(context.Context, string, uint64) (swarm.Service, error) {
 				return preferTestService(), nil
 			},
-			updateServiceModeFn: func(
-				context.Context, string, swarm.ServiceMode,
+			updateServiceEndpointModeFn: func(
+				context.Context, string, swarm.ResolutionMode,
 			) (swarm.Service, error) {
 				return preferTestService(), nil
 			},
@@ -4948,27 +4824,27 @@ func TestPreferWaitOnScale(t *testing.T) {
 }
 
 // TestPreferWaitWithIfMatch pins the one seam where preconditions and
-// preferences meet: PUT /services/{id}/mode and /endpoint-mode carry both. The
+// preferences meet: PUT /services/{id}/endpoint-mode carries both. The
 // precondition runs first, so a matching If-Match should change nothing.
 func TestPreferWaitWithIfMatch(t *testing.T) {
 	router := newPreferTestRouter(t, true)
 
-	read := httptest.NewRequest("GET", "/services/svc1/mode", nil)
+	read := httptest.NewRequest("GET", "/services/svc1/endpoint-mode", nil)
 	read.Header.Set("Accept", "application/json")
 	readRec := httptest.NewRecorder()
 	router.ServeHTTP(readRec, read)
 
 	if readRec.Code != http.StatusOK {
-		t.Fatalf("reading the mode: status = %d, want 200", readRec.Code)
+		t.Fatalf("reading the endpoint mode: status = %d, want 200", readRec.Code)
 	}
 
 	etag := readRec.Header().Get("ETag")
 	if etag == "" {
-		t.Fatal("reading the mode: no ETag to precondition on")
+		t.Fatal("reading the endpoint mode: no ETag to precondition on")
 	}
 
 	write := httptest.NewRequest(
-		"PUT", "/services/svc1/mode", strings.NewReader(`{"mode":"replicated","replicas":2}`),
+		"PUT", "/services/svc1/endpoint-mode", strings.NewReader(`{"mode":"dnsrr"}`),
 	)
 	write.Header.Set("Accept", "application/json")
 	write.Header.Set("Content-Type", "application/json")

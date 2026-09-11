@@ -60,44 +60,6 @@ func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.R
 	h.writeServiceRepresentation(w, r, svc.ID, h.serviceEndpointModeRepresentation)
 }
 
-func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	req, ok := decodeJSON[updateModeRequest](w, r)
-	if !ok {
-		return
-	}
-
-	var mode swarm.ServiceMode
-	switch req.Mode {
-	case "replicated":
-		if req.Replicas == nil {
-			writeErrorCode(
-				w,
-				r,
-				"SVC009",
-				"replicas is required when switching to replicated mode",
-			)
-			return
-		}
-		mode.Replicated = &swarm.ReplicatedService{Replicas: req.Replicas}
-	case "global":
-		mode.Global = &swarm.GlobalService{}
-	default:
-		writeErrorCode(w, r, "SVC008", "mode must be one of: replicated, global")
-		return
-	}
-
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
-		return
-	}
-
-	slog.Info("updating service mode", "service", id, "mode", req.Mode)
-
-	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
-		return h.serviceLifecycle.UpdateServiceMode(r.Context(), id, mode)
-	})
-}
-
 type updateEndpointModeRequest struct {
 	Mode string `json:"mode"`
 }

@@ -271,74 +271,6 @@ func driveServicePlacement(t *testing.T, env *harness.Env, proc *sut.Process) {
 	}
 }
 
-func driveServiceMode(t *testing.T, env *harness.Env, proc *sut.Process) {
-	service := deployThrowawayService(t, env, "svcmode")
-	id := serviceID(t, proc, service)
-
-	before := inspectService(t, env, service)
-	if before.Spec.Mode.Replicated == nil {
-		t.Fatalf("the throwaway fixture is not replicated to begin with: %+v", before.Spec.Mode)
-	}
-
-	mark := len(proc.Logs())
-
-	resp := sweepRequest(
-		t, proc, http.MethodPut, "/services/"+id+"/mode",
-		"application/json", []byte(`{"mode":"global"}`),
-	)
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusOK {
-		svc := inspectService(t, env, service)
-
-		// Both halves matter: a switch that set Global without clearing
-		// Replicated would answer 200 and leave the engine with a spec it
-		// will reject on the next write.
-		if svc.Spec.Mode.Global == nil {
-			t.Errorf("engine mode = %+v, want global", svc.Spec.Mode)
-		}
-
-		if svc.Spec.Mode.Replicated != nil {
-			t.Errorf("engine mode = %+v, still carries the replicated half", svc.Spec.Mode)
-		}
-
-		return
-	}
-
-	// QUARANTINED — finding D-8. Swarmkit refuses every service mode change,
-	// in either direction, with gRPC Unimplemented "service mode change is
-	// not allowed"; there is no Docker CLI flag for it either. So this
-	// endpoint — documented in api/openapi.yaml as "Changes the service mode
-	// between replicated and global" with a 200 response, and listed in
-	// docs/api.md as a tier-3 operation — cannot succeed against any Docker
-	// version. The refusal is then reported as a generic 500 ENG004 "Docker
-	// Engine Error", which is indistinguishable from the engine being broken.
-	//
-	// The case asserts the documented outcome, and tolerates only the one
-	// refusal the engine actually gives, identified from the SUT's own log
-	// rather than from the response — the response says nothing about the
-	// cause.
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusInternalServerError {
-		t.Fatalf(
-			"PUT mode: status = %d, want 200; this is neither the documented outcome "+
-				"nor the quarantined D-8 refusal; body: %s",
-			resp.StatusCode, body,
-		)
-	}
-
-	awaitLog(t, proc, mark, "service mode change is not allowed")
-
-	t.Logf(
-		"D-8 still open: PUT /services/{id}/mode answered 500/ENG004. The engine "+
-			"refused with Unimplemented \"service mode change is not allowed\" — Swarmkit "+
-			"forbids every mode change, so this endpoint can never succeed, and the "+
-			"refusal reaches the client as a generic engine error. Response: %s",
-		body,
-	)
-}
-
 func driveServiceEndpointMode(t *testing.T, env *harness.Env, proc *sut.Process) {
 	service := deployThrowawayService(t, env, "svcendpoint")
 	id := serviceID(t, proc, service)
@@ -414,7 +346,7 @@ func driveServiceHealthcheckPatch(t *testing.T, env *harness.Env, proc *sut.Proc
 		t.Fatalf("PUT healthcheck (setup): status = %d, want 200", putStatus)
 	}
 
-	resp := sweepRequest(
+	resp := sweepWriteAfterWrite(
 		t, proc, http.MethodPatch, "/services/"+id+"/healthcheck",
 		"application/merge-patch+json", []byte(`{"Retries":5}`),
 	)
@@ -533,7 +465,7 @@ func TestWriteSweepMergePatchMergesAgainstTheLiveSpec(t *testing.T) {
 		t.Fatalf("PUT healthcheck: status = %d, want 200", putStatus)
 	}
 
-	resp := sweepRequest(
+	resp := sweepWriteAfterWrite(
 		t, proc, http.MethodPatch, "/services/"+id+"/healthcheck",
 		"application/merge-patch+json", []byte(`{"Retries":5}`),
 	)
