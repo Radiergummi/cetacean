@@ -50,6 +50,20 @@ func (ct ContentType) String() string {
 	}
 }
 
+// mediaType names the media type this ContentType was negotiated from, for
+// error messages. It is the canonical spelling, not necessarily the one the
+// client wrote: a request may have arrived through an extension suffix or a
+// wildcard.
+func (ct ContentType) mediaType() string {
+	for _, sup := range supportedTypes {
+		if sup.ct == ct {
+			return sup.typ + "/" + sup.subtype
+		}
+	}
+
+	return ct.String()
+}
+
 type contentTypeKey struct{}
 
 // ContentTypeFromContext returns the negotiated content type, defaulting to JSON.

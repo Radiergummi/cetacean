@@ -216,16 +216,19 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	// SSE events
 	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
-		ct := ContentTypeFromContext(r.Context())
-		switch ct {
+		switch ct := ContentTypeFromContext(r.Context()); ct {
 		case ContentTypeSSE:
 			b.ServeSSE(w, r, h.aclMatchWrap(r, nil), "")
 		case ContentTypeAtom:
 			h.handleFeedHistory(w, r, renderAtom)
 		case ContentTypeJSONFeed:
 			h.handleFeedHistory(w, r, renderJSONFeed)
-		default:
+		case ContentTypeHTML:
 			spa.ServeHTTP(w, r)
+		default:
+			// This route streams; there is no JSON snapshot of it. Falling
+			// back to the SPA answered a JSON client with the dashboard.
+			refuseRepresentation(w, r, ct)
 		}
 	})
 

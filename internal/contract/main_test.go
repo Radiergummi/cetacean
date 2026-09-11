@@ -132,8 +132,8 @@ func TestRecorderObservesRequests(t *testing.T) {
 // negotiated content type, and only the ContentTypeSSE branch calls
 // broadcaster.ServeSSE (which blocks). Every other sweep in this package,
 // including World.REST, sends Accept: application/json, which resolves to
-// ContentTypeJSON — not one of the SSE/Atom/JSONFeed cases — and falls into
-// the handler's default branch, serving the SPA immediately. So a plain JSON
+// ContentTypeJSON — a type this route cannot produce, since there is no JSON
+// snapshot of a stream — and is refused 406 immediately. So a plain JSON
 // request is not a workaround; it is the same request every other route in
 // this package already exercises, and it is genuinely non-blocking here.
 //
@@ -160,17 +160,17 @@ func TestEventsReturnsImmediatelyForAPlainJSONRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf(
 			"GET /events with Accept: application/json did not return within "+
-				"2s: %v. It should hit the handler's default branch (serve the "+
-				"SPA) rather than the SSE branch, which holds the connection "+
-				"open indefinitely.",
+				"2s: %v. It should be refused as a type this route cannot "+
+				"produce, rather than taken to the SSE branch, which holds the "+
+				"connection open indefinitely.",
 			err,
 		)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusNotAcceptable {
 		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("GET /events = %d, body: %s", resp.StatusCode, body)
+		t.Fatalf("GET /events = %d, want 406; body: %s", resp.StatusCode, body)
 	}
 
 	if !slices.Contains(exercisedRoutes(), "GET /events") {

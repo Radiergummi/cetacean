@@ -22,14 +22,19 @@ func (f feedHandlers) hasFeed() bool {
 
 // contentNegotiated wraps a JSON handler to dispatch based on content type.
 // HTML requests go to the SPA, SSE gets 406 (not supported here).
-// Unsupported types are already rejected by the negotiate middleware.
+//
+// A type this route cannot produce is refused rather than answered with
+// another one. The negotiate middleware can only rule out a type *no* route
+// serves — the graph formats are supported globally because /topology serves
+// them — so what a particular route can produce is decided here, where its
+// handlers are, and nowhere else knows it.
 func contentNegotiated(
 	jsonHandler http.HandlerFunc,
 	feeds feedHandlers,
 	spa http.Handler,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		switch ContentTypeFromContext(r.Context()) {
+		switch ct := ContentTypeFromContext(r.Context()); ct {
 		case ContentTypeHTML:
 			addFeedLinks(w, r, feeds)
 			spa.ServeHTTP(w, r)
@@ -39,9 +44,11 @@ func contentNegotiated(
 			dispatchFeed(w, r, feeds.atom, "application/atom+xml")
 		case ContentTypeJSONFeed:
 			dispatchFeed(w, r, feeds.jsonFeed, "application/feed+json")
-		default:
+		case ContentTypeJSON:
 			addFeedLinks(w, r, feeds)
 			jsonHandler(w, r)
+		default:
+			refuseRepresentation(w, r, ct)
 		}
 	}
 }
@@ -53,7 +60,7 @@ func contentNegotiatedWithSSE(
 	spa http.Handler,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		switch ContentTypeFromContext(r.Context()) {
+		switch ct := ContentTypeFromContext(r.Context()); ct {
 		case ContentTypeHTML:
 			addFeedLinks(w, r, feeds)
 			spa.ServeHTTP(w, r)
@@ -63,11 +70,20 @@ func contentNegotiatedWithSSE(
 			dispatchFeed(w, r, feeds.atom, "application/atom+xml")
 		case ContentTypeJSONFeed:
 			dispatchFeed(w, r, feeds.jsonFeed, "application/feed+json")
-		default:
+		case ContentTypeJSON:
 			addFeedLinks(w, r, feeds)
 			jsonHandler(w, r)
+		default:
+			refuseRepresentation(w, r, ct)
 		}
 	}
+}
+
+// refuseRepresentation answers RFC 9110 §12.5.1's 406 for a media type this
+// route has no handler for, naming the type so the client can tell which of
+// the ones it offered was the problem.
+func refuseRepresentation(w http.ResponseWriter, r *http.Request, ct ContentType) {
+	writeErrorCode(w, r, "API003", "this endpoint does not support "+ct.mediaType())
 }
 
 // dispatchFeed calls the given feed handler, or returns 406 if nil.

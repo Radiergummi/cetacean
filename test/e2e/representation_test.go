@@ -383,6 +383,15 @@ var excusedRepresentationRoutes = map[string]string{
 	"GET /cluster/metrics": "same as /metrics: Prometheus is not configured here",
 }
 
+// unnegotiatedRoutes names routes the undeclared-type rule does not reach,
+// because they are not content-negotiated resources at all.
+var unnegotiatedRoutes = map[string]string{
+	"/": "the SPA catch-all is the dashboard's static file server as well as its " +
+		"HTML fallback, and every built asset is fetched with Accept: */*, which " +
+		"resolves to the first supported type — so refusing a non-HTML Accept here " +
+		"would refuse every script, stylesheet and font the dashboard loads",
+}
+
 // excusedRoutePairs excuses one representation of one route, where the route
 // as a whole is driven.
 var excusedRoutePairs = map[string]string{
@@ -581,13 +590,14 @@ func TestUndeclaredRepresentationsAreRefused(t *testing.T) {
 	proc := startRepresentationLane(t, env)
 	fixture := newRepresentationFixture(t, env, proc)
 
-	var (
-		asJSON []string
-		asHTML []string
-	)
-
 	for route, declared := range negotiatedRoutes(t) {
 		if _, excused := excusedRepresentationRoutes[route]; excused {
+			continue
+		}
+
+		if reason, exempt := unnegotiatedRoutes[route]; exempt {
+			t.Logf("%s: not subject to the rule — %s", route, reason)
+
 			continue
 		}
 
@@ -608,67 +618,26 @@ func TestUndeclaredRepresentationsAreRefused(t *testing.T) {
 						map[string]string{"Accept": form.accept}, "", "",
 					)
 
-					if out.status == http.StatusNotAcceptable {
-						// API001 is the SSE-specific spelling of the same
-						// refusal; either is the documented answer.
-						if !strings.Contains(out.body, "API001") &&
-							!strings.Contains(out.body, "API003") {
-							t.Errorf("the 406 names neither API001 nor API003: %.200s", out.body)
-						}
-
-						return
+					if out.status != http.StatusNotAcceptable {
+						t.Fatalf(
+							"Accept: %s → status = %d, Content-Type = %q; a route "+
+								"that cannot produce this type must answer 406, not "+
+								"hand back another one correctly labelled as the one "+
+								"the client did not ask for",
+							form.accept, out.status, out.header.Get("Content-Type"),
+						)
 					}
 
-					pair := pairKey(route, representation)
-					served := out.header.Get("Content-Type")
-
-					if out.status == http.StatusOK {
-						switch {
-						case strings.HasPrefix(served, "application/json"):
-							asJSON = append(asJSON, pair)
-
-							return
-						case strings.HasPrefix(served, "text/html"):
-							asHTML = append(asHTML, pair)
-
-							return
-						}
+					// API001 is the SSE-specific spelling of the same
+					// refusal; either is the documented answer.
+					if !strings.Contains(out.body, "API001") &&
+						!strings.Contains(out.body, "API003") {
+						t.Errorf("the 406 names neither API001 nor API003: %.200s", out.body)
 					}
-
-					t.Errorf(
-						"Accept: %s → status = %d, Content-Type = %q; a route that "+
-							"cannot produce this type must answer 406",
-						form.accept, out.status, served,
-					)
 				})
 			}
 		})
 	}
-
-	if len(asJSON) == 0 && len(asHTML) == 0 {
-		return
-	}
-
-	slices.Sort(asJSON)
-	slices.Sort(asHTML)
-
-	t.Logf(
-		"FINDING D-13: a media type a route cannot produce is not refused. %d "+
-			"route/type pairs were answered 200 with application/json and %d with "+
-			"text/html. internal/api/negotiate.go admits every globally supported "+
-			"type on every route, so the graph formats reach routes that serve no "+
-			"graph; internal/api/dispatch.go's default branch then hands them to the "+
-			"JSON handler, and its own comment (\"Unsupported types are already "+
-			"rejected by the negotiate middleware\") holds only for types no route "+
-			"serves at all. The HTML shape is the same gap at the routes that "+
-			"negotiate by hand and fall back to the SPA. Either way a client asking "+
-			"for one format and nothing else is handed another, correctly labelled "+
-			"as the one it did not ask for, so it cannot even tell.\nJSON:\n  %s\n"+
-			"HTML:\n  %s",
-		len(asJSON), len(asHTML),
-		strings.Join(asJSON[:min(len(asJSON), 4)], "\n  "),
-		strings.Join(asHTML[:min(len(asHTML), 4)], "\n  "),
-	)
 }
 
 // etagless names the routes that serve JSON without a validator, which is
