@@ -72,8 +72,16 @@ var canonicalResolvers = map[string]canonicalResolver{
 // splitResourcePath splits a request path into its collection segment, the
 // identifier addressing one member of it, and whatever follows. The remainder
 // keeps its leading slash so it can be concatenated back on unchanged.
+// A single trailing slash is dropped rather than carried into the redirect:
+// `/services/shop_web/` used to produce `Location: /services/<id>/`, which
+// matches no registered pattern — Go's ServeMux treats the trailing slash as
+// part of the path — so it fell to the SPA handler and answered a JSON client
+// with index.html.
 func splitResourcePath(path string) (collection, identifier, rest string) {
 	trimmed := strings.TrimPrefix(path, "/")
+	if trimmed != "" {
+		trimmed = strings.TrimSuffix(trimmed, "/")
+	}
 
 	collection, remainder, _ := strings.Cut(trimmed, "/")
 	if remainder == "" {

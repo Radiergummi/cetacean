@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
 // canonicalTestCache holds one service, one config and two nodes sharing a
@@ -350,4 +352,100 @@ func TestCanonicalIdentifierAmbiguityIsReportedWithANodeGrant(t *testing.T) {
 	if w.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409; body: %s", w.Code, w.Body.String())
 	}
+}
+
+// A trailing slash must not reach Location. Go's ServeMux counts it as part of
+// the path, so `/services/<id>/` matches no pattern and falls to the SPA — a
+// JSON client following the redirect would be handed index.html.
+func TestCanonicalIdentifierDropsTrailingSlash(t *testing.T) {
+	router := newTestRouterWithCache(t, canonicalTestCache())
+
+	req := httptest.NewRequest(http.MethodGet, "/services/shop_web/", nil)
+	req.Header.Set("Accept", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Location"); got != "/services/svc1234567890" {
+		t.Errorf("Location = %q, want %q", got, "/services/svc1234567890")
+	}
+}
+
+// A bare collection with a trailing slash is still a listing, not a detail
+// path with an empty identifier.
+func TestCanonicalIdentifierIgnoresBareCollection(t *testing.T) {
+	router := newTestRouterWithCache(t, canonicalTestCache())
+
+	for _, path := range []string{"/services", "/services/"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Accept", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code == http.StatusTemporaryRedirect {
+			t.Errorf("%s was redirected to %q", path, w.Header().Get("Location"))
+		}
+	}
+}
+
+// The redirect has to be visible to the request log and the self-metrics, which
+// means the middleware must sit inside requestLogger rather than outside it.
+// Asserted through the metric recorder, because it is the one of the two that
+// can be read back in-process.
+func TestCanonicalRedirectIsRecordedAsARequest(t *testing.T) {
+	router := newTestRouterWithCache(t, canonicalTestCache())
+
+	before := countHTTPRequests(t, http.StatusTemporaryRedirect)
+
+	req := httptest.NewRequest(http.MethodGet, "/services/shop_web", nil)
+	req.Header.Set("Accept", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want 307", w.Code)
+	}
+
+	if after := countHTTPRequests(t, http.StatusTemporaryRedirect); after <= before {
+		t.Errorf(
+			"cetacean_http_requests_total for 307 did not increase (%v -> %v); "+
+				"the redirect is outside requestLogger",
+			before, after,
+		)
+	}
+}
+
+// countHTTPRequests sums cetacean_http_requests_total across every series
+// carrying this status. The handler label is deliberately ignored: a redirect
+// is answered before the mux resolves a pattern, so it records as "unknown",
+// and asserting on that would pin an implementation detail rather than the
+// behaviour under test.
+func countHTTPRequests(t *testing.T, status int) float64 {
+	t.Helper()
+
+	families, err := metrics.Registry.Gather()
+	if err != nil {
+		t.Fatalf("gather metrics: %v", err)
+	}
+
+	want := strconv.Itoa(status)
+	total := 0.0
+
+	for _, family := range families {
+		if family.GetName() != "cetacean_http_requests_total" {
+			continue
+		}
+
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "status" && label.GetValue() == want {
+					total += metric.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+
+	return total
 }

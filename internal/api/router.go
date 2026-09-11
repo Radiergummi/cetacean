@@ -765,13 +765,18 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		auth.Middleware(authProvider),
 		negotiate,
 		requireReady(h),
-		// After requireReady: a server whose cache is not filled yet would
-		// resolve every name to nothing, and answering a name-addressed
-		// request with the handler's 404 rather than ENG001 would report a
-		// missing resource for an unreachable daemon.
-		h.canonicalIdentifier,
 		discoveryLinks,
 		requestLogger,
+		// Innermost, so requestLogger wraps it: this middleware answers a
+		// name-addressed request itself instead of calling through, and
+		// anything it sits outside of therefore never runs for a redirect.
+		// Placed outside requestLogger, every 307 was missing from the request
+		// log and from the cetacean_http_* metrics alike — invisible exactly
+		// when a client is looping on one. It stays after requireReady for the
+		// opposite reason: a server whose cache is not filled yet resolves
+		// every name to nothing, and answering ENG001 is more honest than
+		// reporting the resource missing.
+		h.canonicalIdentifier,
 	)
 
 	return publicURLMiddleware(
