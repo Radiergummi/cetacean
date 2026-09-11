@@ -562,9 +562,9 @@ var restTierMismatches = map[string]config.OperationsLevel{
 // tier 2, so at level 2 an agent could relabel a node while the dashboard
 // refused the same edit.
 //
-// The REST side is pinned separately — TestPatchNodeLabelsIsAdmittedAtTierTwo
-// in internal/api — because the two packages deliberately do not import each
-// other, so this is two tests naming one rule rather than one driving both.
+// The REST side is pinned by TestEveryOperationIsGatedAtItsDeclaredTier in
+// internal/api. The two packages deliberately do not import each other, so
+// this is two tests naming one rule rather than one driving both.
 //
 // A tool in restTierMismatches is held to the opposite assertion: the gap is
 // recorded, so closing it has to delete the entry rather than silently drift
