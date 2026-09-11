@@ -261,6 +261,11 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			h.handleFeedHistory(w, r, renderAtom)
 		case ContentTypeJSONFeed:
 			h.handleFeedHistory(w, r, renderJSONFeed)
+		case ContentTypeUnsupported:
+			notAcceptable(
+				w, r,
+				"text/event-stream, application/atom+xml and application/feed+json",
+			)
 		default:
 			spa.ServeHTTP(w, r)
 		}
@@ -805,8 +810,18 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		cfg.OAuthRoutes(mux.mux, "")
 	}
 
-	// SPA fallback (must be last)
-	mux.Handle("/", spa)
+	// SPA fallback (must be last). It serves one representation, so it reads
+	// the negotiated type only to refuse a client that asked for something
+	// else — which is what an unrouted path answered while negotiate refused
+	// for every route at once.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if ContentTypeFromContext(r.Context()) == ContentTypeUnsupported {
+			notAcceptable(w, r, "text/html")
+			return
+		}
+
+		spa.ServeHTTP(w, r)
+	})
 
 	stack := NewChain(
 		requestID,

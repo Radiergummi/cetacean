@@ -22,9 +22,15 @@ func (f feedHandlers) hasFeed() bool {
 	return f.atom != nil || f.jsonFeed != nil
 }
 
+// resourceTypes names what a resource endpoint serves, for the 406 it answers
+// when asked for anything else.
+const resourceTypes = "application/json, text/html, " +
+	"application/atom+xml and application/feed+json"
+
 // contentNegotiated wraps a JSON handler to dispatch based on content type.
 // HTML requests go to the SPA, SSE gets 406 (not supported here).
-// Unsupported types are already rejected by the negotiate middleware.
+// Anything this endpoint does not serve — a graph format, or a type nothing
+// serves — gets 406, since negotiate resolves without refusing.
 func contentNegotiated(
 	jsonHandler http.HandlerFunc,
 	feeds feedHandlers,
@@ -41,9 +47,11 @@ func contentNegotiated(
 			dispatchFeed(w, r, feeds.atom, "application/atom+xml")
 		case ContentTypeJSONFeed:
 			dispatchFeed(w, r, feeds.jsonFeed, "application/feed+json")
-		default:
+		case ContentTypeJSON:
 			addFeedLinks(w, r, feeds)
 			jsonHandler(w, r)
+		default:
+			notAcceptable(w, r, resourceTypes)
 		}
 	}
 }
@@ -65,9 +73,11 @@ func contentNegotiatedWithSSE(
 			dispatchFeed(w, r, feeds.atom, "application/atom+xml")
 		case ContentTypeJSONFeed:
 			dispatchFeed(w, r, feeds.jsonFeed, "application/feed+json")
-		default:
+		case ContentTypeJSON:
 			addFeedLinks(w, r, feeds)
 			jsonHandler(w, r)
+		default:
+			notAcceptable(w, r, resourceTypes+", text/event-stream")
 		}
 	}
 }
