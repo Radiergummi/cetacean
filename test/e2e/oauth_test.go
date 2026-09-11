@@ -1992,46 +1992,23 @@ func TestMCPOAuthWithoutDCROrCIMD(t *testing.T) {
 	})
 
 	t.Run("the_registration_endpoint_is_gone", func(t *testing.T) {
-		// QUARANTINED — finding D-6. RegisterRoutes attaches /oauth/register
-		// only when DCR is enabled, so with it off the request falls through
-		// to the SPA fallback the router registers on "/" — and
-		// NewSPAHandler never looks at the method, so a POST is answered
-		// 200 with index.html. HandleRegister's own `s.clients == nil` branch
-		// returns 404 "DCR not enabled" and is unreachable, which is where
-		// the intended contract is written down.
-		//
-		// What must hold either way is that no client is registered. This
-		// case asserts a refusal, tolerates exactly the one wrong shape, and
-		// fails on anything else — including a 201.
+		// RegisterRoutes attaches /oauth/register only when DCR is enabled,
+		// so with it off the request reaches the mux's catch-all, which
+		// answers a write to an unregistered path 404 rather than serving the
+		// dashboard's HTML with a 200 that reads as a successful
+		// registration.
 		outcome := oauthPostJSON(t, proc, oauthIssuer+"/oauth/register", map[string]any{
 			"client_name":   "e2e-disabled-dcr",
 			"redirect_uris": []string{oauthRedirectURI},
 		})
 
-		if outcome.status == http.StatusNotFound || outcome.status == http.StatusMethodNotAllowed {
-			return
-		}
-
-		servedSPA := outcome.status == http.StatusOK &&
-			strings.Contains(outcome.body, "<!doctype html>")
-
-		if !servedSPA {
+		if outcome.status != http.StatusNotFound &&
+			outcome.status != http.StatusMethodNotAllowed {
 			t.Fatalf(
-				"POST /oauth/register with DCR disabled: status = %d, want 404; this is "+
-					"neither the documented refusal nor the quarantined D-6 SPA "+
-					"fallback; body: %s",
+				"POST /oauth/register with DCR disabled: status = %d, want 404; body: %s",
 				outcome.status, outcome.body,
 			)
 		}
-
-		t.Log(
-			"D-6 still open: POST /oauth/register with DCR disabled answered 200 and the " +
-				"SPA's index.html. The route is not registered, so it reaches the " +
-				"catch-all SPA handler, which ignores the request method — any POST, PUT " +
-				"or DELETE to an unregistered path is answered 200 with HTML rather than " +
-				"404. A client checking only the status treats a failed write as a " +
-				"success.",
-		)
 	})
 
 	t.Run("an_https_client_id_is_refused_without_fetching", func(t *testing.T) {
