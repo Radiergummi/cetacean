@@ -61,6 +61,7 @@ type Server struct {
 	refreshTokens *RefreshTokenStore
 	consent       *ConsentStore
 	clients       *ClientRegistry // nil when DCREnabled is false
+	keys          *keyMaterial    // nil when no root was configured
 }
 
 // issuerID is the external base URL clients discover this authorization server
@@ -76,10 +77,19 @@ func (c ServerConfig) issuerID() string {
 // NewServer constructs a fully wired Server from cfg. No separate init step
 // is required; call RegisterRoutes to attach handlers to a mux.
 func NewServer(cfg ServerConfig) *Server {
-	issuer := &TokenIssuer{
-		SigningKey: cfg.SigningKey,
-		Issuer:     cfg.issuerID(),
-		Audience:   cfg.MCPResource,
+	// A root is absent only when nothing configured one and main.go did not
+	// generate one, which is the ErrMissingKey path IssueAccessToken and
+	// VerifyAccessToken already answer with.
+	km, err := deriveKeys(cfg.SigningKey)
+	if err != nil {
+		slog.Warn("MCP OAuth has no signing key; tokens cannot be issued", "error", err)
+	}
+
+	var issuer *TokenIssuer
+	if km != nil {
+		issuer = newTokenIssuer(km, cfg.issuerID(), cfg.MCPResource)
+	} else {
+		issuer = &TokenIssuer{Issuer: cfg.issuerID(), Audience: cfg.MCPResource}
 	}
 
 	cimd := &CIMDFetcher{
@@ -134,6 +144,7 @@ func NewServer(cfg ServerConfig) *Server {
 		refreshTokens: refreshTokens,
 		consent:       consent,
 		clients:       clients,
+		keys:          km,
 	}
 }
 
@@ -616,13 +627,23 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 
 	data.CSRFToken, _ = issueCSRFNonce(
 		w,
-		s.cfg.SigningKey,
+		s.csrfKey(),
 		data.State,
 		data.Fingerprint,
 		strings.HasPrefix(s.cfg.Issuer, "https://"),
 	)
 
 	renderConsent(w, data)
+}
+
+// csrfKey is the derived HMAC key for consent CSRF tokens. Nil when no root
+// was configured, which makes every token fail to verify.
+func (s *Server) csrfKey() []byte {
+	if s.keys == nil {
+		return nil
+	}
+
+	return s.keys.csrf
 }
 
 func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
@@ -782,7 +803,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	secure := strings.HasPrefix(s.cfg.Issuer, "https://")
 
 	// Validate CSRF.
-	if !verifyCSRFToken(r, s.cfg.SigningKey) {
+	if !verifyCSRFToken(r, s.csrfKey()) {
 		renderErrorPage(w, http.StatusBadRequest, "invalid or missing CSRF token")
 		return
 	}

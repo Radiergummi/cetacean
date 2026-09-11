@@ -244,10 +244,13 @@ func newOAuthIntegrationServer(
 	}
 	t.Cleanup(srv.Close)
 
-	issuer := &oauth.TokenIssuer{
-		SigningKey: key,
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "https://cetacean.example.com/mcp",
+	issuer, err := oauth.NewTokenIssuer(
+		key,
+		"https://cetacean.example.com",
+		"https://cetacean.example.com/mcp",
+	)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 	return srv.Handler(), issuer
 }

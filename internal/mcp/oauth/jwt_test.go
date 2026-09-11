@@ -1,6 +1,9 @@
 package oauth
 
 import (
+	"crypto/ecdsa"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -12,10 +15,13 @@ import (
 const testKey = "test-secret-key-32-bytes-long!!!"
 
 func TestJWTSignAndVerify(t *testing.T) {
-	issuer := &TokenIssuer{
-		SigningKey: []byte(testKey),
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "https://cetacean.example.com/mcp",
+	issuer, err := NewTokenIssuer(
+		[]byte(testKey),
+		"https://cetacean.example.com",
+		"https://cetacean.example.com/mcp",
+	)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 	claims := AccessTokenClaims{
 		Subject:  "user@example.com",
@@ -47,10 +53,9 @@ func TestJWTSignAndVerify(t *testing.T) {
 }
 
 func TestJWTExpiredToken(t *testing.T) {
-	issuer := &TokenIssuer{
-		SigningKey: []byte(testKey),
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "mcp",
+	issuer, err := NewTokenIssuer([]byte(testKey), "https://cetacean.example.com", "mcp")
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 	token, err := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "user@example.com", ClientID: "c1"},
@@ -65,15 +70,21 @@ func TestJWTExpiredToken(t *testing.T) {
 }
 
 func TestJWTWrongSigningKey(t *testing.T) {
-	issuer1 := &TokenIssuer{
-		SigningKey: []byte("key-one-32-bytes-long-padding!!!"),
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "mcp",
+	issuer1, err := NewTokenIssuer(
+		[]byte("key-one-32-bytes-long-padding!!!"),
+		"https://cetacean.example.com",
+		"mcp",
+	)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
-	issuer2 := &TokenIssuer{
-		SigningKey: []byte("key-two-32-bytes-long-padding!!!"),
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "mcp",
+	issuer2, err := NewTokenIssuer(
+		[]byte("key-two-32-bytes-long-padding!!!"),
+		"https://cetacean.example.com",
+		"mcp",
+	)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 	token, _ := issuer1.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
@@ -85,10 +96,9 @@ func TestJWTWrongSigningKey(t *testing.T) {
 }
 
 func TestJWTWrongAudience(t *testing.T) {
-	issuer := &TokenIssuer{
-		SigningKey: []byte(testKey),
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "mcp",
+	issuer, err := NewTokenIssuer([]byte(testKey), "https://cetacean.example.com", "mcp")
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 	token, _ := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
@@ -102,10 +112,9 @@ func TestJWTWrongAudience(t *testing.T) {
 }
 
 func TestJWTWrongIssuer(t *testing.T) {
-	issuer := &TokenIssuer{
-		SigningKey: []byte(testKey),
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "mcp",
+	issuer, err := NewTokenIssuer([]byte(testKey), "https://cetacean.example.com", "mcp")
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 	token, _ := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
@@ -119,10 +128,9 @@ func TestJWTWrongIssuer(t *testing.T) {
 }
 
 func TestJWTMalformedToken(t *testing.T) {
-	issuer := &TokenIssuer{
-		SigningKey: []byte(testKey),
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "mcp",
+	issuer, err := NewTokenIssuer([]byte(testKey), "https://cetacean.example.com", "mcp")
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 	// Each case is paired with the sentinel error it must surface so callers
 	// (the WWW-Authenticate mapping in Task 5) get the right error code.
@@ -152,7 +160,7 @@ func TestJWTMissingSigningKey(t *testing.T) {
 	issuer := &TokenIssuer{
 		Issuer:   "https://cetacean.example.com",
 		Audience: "mcp",
-		// SigningKey deliberately zero
+		// signer deliberately zero
 	}
 	if _, err := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e"},
@@ -169,10 +177,9 @@ func TestJWTMissingSigningKey(t *testing.T) {
 }
 
 func TestJWTReusedJTIsAreDistinct(t *testing.T) {
-	issuer := &TokenIssuer{
-		SigningKey: []byte(testKey),
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "mcp",
+	issuer, err := NewTokenIssuer([]byte(testKey), "https://cetacean.example.com", "mcp")
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 	t1, _ := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e", ClientID: "c1"}, time.Hour)
 	t2, _ := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e", ClientID: "c1"}, time.Hour)
@@ -182,8 +189,9 @@ func TestJWTReusedJTIsAreDistinct(t *testing.T) {
 }
 
 // reheader re-signs a token under a different JWT header, keeping the payload
-// and the key intact, so a rejection can only be attributable to the header.
-func reheader(t *testing.T, token, header string) string {
+// and the issuer's key intact, so a rejection can only be attributable to the
+// header.
+func reheader(t *testing.T, issuer *TokenIssuer, token, header string) string {
 	t.Helper()
 
 	parts := strings.Split(token, ".")
@@ -193,7 +201,12 @@ func reheader(t *testing.T, token, header string) string {
 
 	signingInput := base64.RawURLEncoding.EncodeToString([]byte(header)) + "." + parts[1]
 
-	return signingInput + "." + sign([]byte(testKey), signingInput)
+	sig, err := signES256(issuer.signer, signingInput)
+	if err != nil {
+		t.Fatalf("signES256: %v", err)
+	}
+
+	return signingInput + "." + sig
 }
 
 // requiredClaims is the claim set RFC 9068 §2.2 requires an access token to
@@ -204,10 +217,13 @@ func reheader(t *testing.T, token, header string) string {
 var requiredClaims = []string{"iss", "exp", "aud", "sub", "client_id", "iat", "jti"}
 
 func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
-	issuer := &TokenIssuer{
-		SigningKey: []byte(testKey),
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "https://cetacean.example.com/mcp",
+	issuer, err := NewTokenIssuer(
+		[]byte(testKey),
+		"https://cetacean.example.com",
+		"https://cetacean.example.com/mcp",
+	)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
@@ -237,10 +253,6 @@ func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
 		t.Errorf("typ = %q, want at+jwt", hdr.Typ)
 	}
 
-	if hdr.Alg != "HS256" {
-		t.Errorf("alg = %q, want HS256", hdr.Alg)
-	}
-
 	payloadJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
 		t.Fatalf("decode payload: %v", err)
@@ -266,10 +278,9 @@ func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
 }
 
 func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
-	issuer := &TokenIssuer{
-		SigningKey: []byte(testKey),
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "mcp",
+	issuer, err := NewTokenIssuer([]byte(testKey), "https://cetacean.example.com", "mcp")
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
@@ -288,15 +299,15 @@ func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
 		name   string
 		header string
 	}{
-		{"the type this server used to mint", `{"alg":"HS256","typ":"JWT"}`},
-		{"no type at all", `{"alg":"HS256"}`},
-		{"an ID token", `{"alg":"HS256","typ":"id_token+jwt"}`},
-		{"an empty type", `{"alg":"HS256","typ":""}`},
+		{"the type this server used to mint", `{"alg":"ES256","typ":"JWT"}`},
+		{"no type at all", `{"alg":"ES256"}`},
+		{"an ID token", `{"alg":"ES256","typ":"id_token+jwt"}`},
+		{"an empty type", `{"alg":"ES256","typ":""}`},
 	}
 
 	for _, c := range refused {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := issuer.VerifyAccessToken(reheader(t, token, c.header))
+			_, err := issuer.VerifyAccessToken(reheader(t, issuer, token, c.header))
 			if !errors.Is(err, ErrMalformedToken) {
 				t.Errorf("got %v, want errors.Is(ErrMalformedToken)", err)
 			}
@@ -304,18 +315,17 @@ func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
 	}
 
 	t.Run("the media type spelled in full is accepted", func(t *testing.T) {
-		full := `{"alg":"HS256","typ":"application/at+jwt"}`
-		if _, err := issuer.VerifyAccessToken(reheader(t, token, full)); err != nil {
+		full := `{"alg":"ES256","typ":"application/at+jwt"}`
+		if _, err := issuer.VerifyAccessToken(reheader(t, issuer, token, full)); err != nil {
 			t.Errorf("application/at+jwt: %v, want accepted (RFC 9068 §4)", err)
 		}
 	})
 }
 
 func TestJWTRefusesToMintWithoutARequiredClaim(t *testing.T) {
-	issuer := &TokenIssuer{
-		SigningKey: []byte(testKey),
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "mcp",
+	issuer, err := NewTokenIssuer([]byte(testKey), "https://cetacean.example.com", "mcp")
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 
 	// sub and client_id are the two required claims that come from the caller
@@ -339,5 +349,100 @@ func TestJWTRefusesToMintWithoutARequiredClaim(t *testing.T) {
 				t.Errorf("got %v, want errors.Is(ErrIncompleteClaims)", err)
 			}
 		})
+	}
+}
+
+func TestTokenIsES256WithAKeyID(t *testing.T) {
+	issuer, err := NewTokenIssuer(testRoot, "https://swarm.example", "https://swarm.example/mcp")
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
+	}
+
+	token, err := issuer.IssueAccessToken(AccessTokenClaims{
+		Subject:  "alice",
+		ClientID: "https://client.example/id.json",
+	}, time.Hour)
+	if err != nil {
+		t.Fatalf("IssueAccessToken: %v", err)
+	}
+
+	headerJSON, err := base64.RawURLEncoding.DecodeString(strings.Split(token, ".")[0])
+	if err != nil {
+		t.Fatalf("decode header: %v", err)
+	}
+
+	var hdr struct {
+		Alg string `json:"alg"`
+		Typ string `json:"typ"`
+		Kid string `json:"kid"`
+	}
+	if err := json.Unmarshal(headerJSON, &hdr); err != nil {
+		t.Fatalf("unmarshal header: %v", err)
+	}
+
+	if hdr.Alg != "ES256" {
+		t.Errorf("alg = %q, want ES256", hdr.Alg)
+	}
+
+	if hdr.Typ != accessTokenType {
+		t.Errorf("typ = %q, want %q", hdr.Typ, accessTokenType)
+	}
+
+	km, err := deriveKeys(testRoot)
+	if err != nil {
+		t.Fatalf("deriveKeys: %v", err)
+	}
+
+	if hdr.Kid != km.kid {
+		t.Errorf("kid = %q, want %q", hdr.Kid, km.kid)
+	}
+}
+
+func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
+	issuer, err := NewTokenIssuer(testRoot, "https://swarm.example", "https://swarm.example/mcp")
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
+	}
+
+	token, err := issuer.IssueAccessToken(AccessTokenClaims{
+		Subject:  "alice",
+		ClientID: "https://client.example/id.json",
+	}, time.Hour)
+	if err != nil {
+		t.Fatalf("IssueAccessToken: %v", err)
+	}
+
+	parts := strings.Split(token, ".")
+	signingInput := parts[0] + "." + parts[1]
+	digest := sha256.Sum256([]byte(signingInput))
+
+	// The same signature over the same input, ASN.1-encoded. RFC 7518 §3.4
+	// requires raw R||S, so this must be refused even though it is valid
+	// ECDSA over the right message.
+	der, err := ecdsa.SignASN1(rand.Reader, issuer.signer, digest[:])
+	if err != nil {
+		t.Fatalf("SignASN1: %v", err)
+	}
+
+	forged := signingInput + "." + base64.RawURLEncoding.EncodeToString(der)
+
+	if _, err := issuer.VerifyAccessToken(forged); !errors.Is(err, ErrInvalidSig) {
+		t.Errorf("error = %v, want ErrInvalidSig", err)
+	}
+}
+
+func TestVerifyRefusesHS256(t *testing.T) {
+	issuer, err := NewTokenIssuer(testRoot, "https://swarm.example", "https://swarm.example/mcp")
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
+	}
+
+	header := base64.RawURLEncoding.EncodeToString(
+		[]byte(`{"alg":"HS256","typ":"at+jwt"}`),
+	)
+
+	_, err = issuer.VerifyAccessToken(header + ".e30.c2ln")
+	if !errors.Is(err, ErrMalformedToken) {
+		t.Errorf("error = %v, want ErrMalformedToken", err)
 	}
 }

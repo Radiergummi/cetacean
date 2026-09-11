@@ -1,13 +1,14 @@
 package oauth
 
 import (
-	"crypto/hmac"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 )
@@ -37,16 +38,10 @@ const (
 	accessTokenTypeFull = "application/at+jwt"
 )
 
-// jwtHeader is the base64url-encoded fixed header, precomputed once at package
-// init.
-var jwtHeader = base64.RawURLEncoding.EncodeToString(
-	[]byte(`{"alg":"HS256","typ":"` + accessTokenType + `"}`),
-)
-
 // jwtHeaderClaims is the minimal subset of a JWT header we inspect on verify.
-// alg=none / alg=RS256 substitution attacks are blocked by recomputing HMAC
-// with our key; this extra check provides defence-in-depth and a clearer
-// contract for future maintainers.
+// alg=none / alg=HS256 substitution attacks are blocked by verifying with a
+// public key of a fixed algorithm (ES256): a token minted for any other alg
+// cannot produce a signature that verifies against it.
 type jwtHeaderClaims struct {
 	Alg string `json:"alg"`
 	Typ string `json:"typ"`
@@ -76,11 +71,78 @@ type jwtPayload struct {
 	ClientID string `json:"client_id"`
 }
 
-// TokenIssuer issues and verifies HMAC-SHA256 JWTs.
+// TokenIssuer issues and verifies ES256 JWTs. Build one with NewTokenIssuer,
+// which derives the key from a root secret.
 type TokenIssuer struct {
-	SigningKey []byte
-	Issuer     string
-	Audience   string
+	signer   *ecdsa.PrivateKey
+	header   string
+	Issuer   string
+	Audience string
+}
+
+// NewTokenIssuer derives the signing key from root and returns an issuer bound
+// to it.
+func NewTokenIssuer(root []byte, issuer, audience string) (*TokenIssuer, error) {
+	km, err := deriveKeys(root)
+	if err != nil {
+		return nil, err
+	}
+
+	return newTokenIssuer(km, issuer, audience), nil
+}
+
+// newTokenIssuer builds an issuer from already-derived key material, so a
+// caller that derives once does not derive again.
+func newTokenIssuer(km *keyMaterial, issuer, audience string) *TokenIssuer {
+	return &TokenIssuer{
+		signer: km.signer,
+		// kid is base64url of a hash, so it needs no JSON escaping.
+		header: base64.RawURLEncoding.EncodeToString([]byte(
+			`{"alg":"ES256","kid":"` + km.kid + `","typ":"` + accessTokenType + `"}`,
+		)),
+		Issuer:   issuer,
+		Audience: audience,
+	}
+}
+
+// es256SigBytes is the fixed length RFC 7518 §3.4 gives an ES256 signature:
+// R and S as 32-byte big-endian integers, concatenated.
+const es256SigBytes = 64
+
+// signES256 signs the JWS signing input. R and S are written at fixed width —
+// a short R left unpadded produces a signature this package would accept and
+// every other implementation would reject.
+func signES256(key *ecdsa.PrivateKey, input string) (string, error) {
+	digest := sha256.Sum256([]byte(input))
+
+	r, s, err := ecdsa.Sign(rand.Reader, key, digest[:])
+	if err != nil {
+		return "", fmt.Errorf("jwt: sign: %w", err)
+	}
+
+	sig := make([]byte, es256SigBytes)
+	r.FillBytes(sig[:es256SigBytes/2])
+	s.FillBytes(sig[es256SigBytes/2:])
+
+	return base64.RawURLEncoding.EncodeToString(sig), nil
+}
+
+// verifyES256 checks a signature that must be exactly es256SigBytes raw bytes,
+// so an ASN.1-encoded one is refused rather than parsed.
+func verifyES256(pub *ecdsa.PublicKey, input, sig string) bool {
+	raw, err := base64.RawURLEncoding.DecodeString(sig)
+	if err != nil || len(raw) != es256SigBytes {
+		return false
+	}
+
+	digest := sha256.Sum256([]byte(input))
+
+	return ecdsa.Verify(
+		pub,
+		digest[:],
+		new(big.Int).SetBytes(raw[:es256SigBytes/2]),
+		new(big.Int).SetBytes(raw[es256SigBytes/2:]),
+	)
 }
 
 // IssueAccessToken mints a signed compact JWT for the given claims with the
@@ -89,7 +151,7 @@ func (t *TokenIssuer) IssueAccessToken(
 	claims AccessTokenClaims,
 	ttl time.Duration,
 ) (string, error) {
-	if len(t.SigningKey) == 0 {
+	if t.signer == nil {
 		return "", ErrMissingKey
 	}
 
@@ -127,8 +189,12 @@ func (t *TokenIssuer) IssueAccessToken(
 	}
 
 	payloadEncoded := base64.RawURLEncoding.EncodeToString(payloadJSON)
-	signingInput := jwtHeader + "." + payloadEncoded
-	sig := sign(t.SigningKey, signingInput)
+	signingInput := t.header + "." + payloadEncoded
+
+	sig, err := signES256(t.signer, signingInput)
+	if err != nil {
+		return "", err
+	}
 
 	return signingInput + "." + sig, nil
 }
@@ -137,7 +203,7 @@ func (t *TokenIssuer) IssueAccessToken(
 // application claims on success. Returns a wrapped sentinel error on failure
 // so callers can distinguish expiry from signature failures.
 func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
-	if len(t.SigningKey) == 0 {
+	if t.signer == nil {
 		return nil, ErrMissingKey
 	}
 
@@ -154,7 +220,7 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 	if err := json.Unmarshal(headerJSON, &hdr); err != nil {
 		return nil, fmt.Errorf("%w: JSON decode header: %w", ErrMalformedToken, err)
 	}
-	if hdr.Alg != "HS256" {
+	if hdr.Alg != "ES256" {
 		return nil, fmt.Errorf("%w: unexpected alg %q", ErrMalformedToken, hdr.Alg)
 	}
 	// RFC 9068 §4: reject a token whose typ is anything but the access token
@@ -167,11 +233,8 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 		return nil, fmt.Errorf("%w: unexpected typ %q", ErrMalformedToken, hdr.Typ)
 	}
 
-	signingInput := parts[0] + "." + parts[1]
-	expectedSig := sign(t.SigningKey, signingInput)
-
-	if !hmac.Equal([]byte(parts[2]), []byte(expectedSig)) {
-		return nil, fmt.Errorf("%w: HMAC-SHA256 mismatch", ErrInvalidSig)
+	if !verifyES256(&t.signer.PublicKey, parts[0]+"."+parts[1], parts[2]) {
+		return nil, fmt.Errorf("%w: ES256 verification failed", ErrInvalidSig)
 	}
 
 	payloadJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
@@ -210,11 +273,4 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 		Groups:   payload.Groups,
 		ClientID: payload.ClientID,
 	}, nil
-}
-
-// sign computes the base64url-encoded HMAC-SHA256 of input using key.
-func sign(key []byte, input string) string {
-	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte(input))
-	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
