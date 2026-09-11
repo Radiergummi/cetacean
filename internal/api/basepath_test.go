@@ -4,7 +4,10 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 func TestBasePathFromContext(t *testing.T) {
@@ -218,26 +221,133 @@ func TestAbsURLPrefersPublicURLWithBasePath(t *testing.T) {
 	}
 }
 
-func TestAbsURLFallsBackToForwardedHeaders(t *testing.T) {
-	called := false
-	handler := publicURLMiddleware(
-		"",
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			called = true
-			if got := absURL(r, "/services"); got != "https://proxy.example.com/services" {
-				t.Errorf("absURL = %q, want %q", got, "https://proxy.example.com/services")
-			}
-		}),
+// TestAbsURLOriginIsProxySupplied covers what absURL may believe about the
+// origin a client reached. Forwarded and X-Forwarded-* are request headers
+// like any other: anyone can send them, and whatever they say ends up in URLs
+// Cetacean publishes in feeds and discovery documents. They are read only when
+// the peer the connection actually arrived from is a configured trusted proxy
+// — auth.Peer, recorded once at the edge by realIP — and only when the value
+// itself can stand where it is going.
+func TestAbsURLOriginIsProxySupplied(t *testing.T) {
+	const (
+		trusted   = "203.0.113.7"
+		publicURL = "https://cetacean.example.com"
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/services", nil)
-	req.Host = "internal:9000"
-	req.Header.Set("X-Forwarded-Host", "proxy.example.com")
-	req.Header.Set("X-Forwarded-Proto", "https")
+	tests := []struct {
+		name      string
+		publicURL string
+		peer      *auth.Peer
+		headers   map[string]string
+		want      string
+	}{
+		{
+			name:    "no verdict recorded believes nothing",
+			headers: map[string]string{"X-Forwarded-Host": "proxy.example.com"},
+			want:    "http://internal:9000/services",
+		},
+		{
+			name: "untrusted peer believes nothing",
+			peer: &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: false},
+			headers: map[string]string{
+				"X-Forwarded-Host":  "proxy.example.com",
+				"X-Forwarded-Proto": "https",
+			},
+			want: "http://internal:9000/services",
+		},
+		{
+			name: "trusted peer is read from X-Forwarded-*",
+			peer: &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
+			headers: map[string]string{
+				"X-Forwarded-Host":  "proxy.example.com",
+				"X-Forwarded-Proto": "https",
+			},
+			want: "https://proxy.example.com/services",
+		},
+		{
+			name: "trusted peer is read from Forwarded",
+			peer: &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
+			headers: map[string]string{
+				"Forwarded": `for=192.0.2.9;host=proxy.example.com;proto=https`,
+			},
+			want: "https://proxy.example.com/services",
+		},
+		{
+			name: "Forwarded wins over the pair it standardizes",
+			peer: &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
+			headers: map[string]string{
+				"Forwarded":         `host=rfc7239.example.com;proto=https`,
+				"X-Forwarded-Host":  "defacto.example.com",
+				"X-Forwarded-Proto": "http",
+			},
+			want: "https://rfc7239.example.com/services",
+		},
+		{
+			name: "the leftmost element saw the client",
+			peer: &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
+			headers: map[string]string{
+				"Forwarded": `host=edge.example.com;proto=https, host=inner:9000;proto=http`,
+			},
+			want: "https://edge.example.com/services",
+		},
+		{
+			// nginx's proxy_set_header X-Forwarded-Host $http_host passes the
+			// client's own Host through: a trusted proxy is not a promise
+			// that the value it forwarded was ever checked.
+			name:    "a host that would rewrite the link is refused",
+			peer:    &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
+			headers: map[string]string{"X-Forwarded-Host": "evil.example.com/attacker#"},
+			want:    "http://internal:9000/services",
+		},
+		{
+			name:    "a scheme that is not http(s) is refused",
+			peer:    &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
+			headers: map[string]string{"X-Forwarded-Proto": "javascript"},
+			want:    "http://internal:9000/services",
+		},
+		{
+			name:      "server.public_url outranks any of it",
+			publicURL: publicURL,
+			peer:      &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
+			headers: map[string]string{
+				"X-Forwarded-Host":  "proxy.example.com",
+				"X-Forwarded-Proto": "http",
+			},
+			want: publicURL + "/services",
+		},
+	}
 
-	handler.ServeHTTP(httptest.NewRecorder(), req)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var called bool
 
-	if !called {
-		t.Fatal("handler was never invoked")
+			handler := publicURLMiddleware(
+				tt.publicURL,
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					called = true
+
+					if got := absURL(r, "/services"); got != tt.want {
+						t.Errorf("absURL = %q, want %q", got, tt.want)
+					}
+				}),
+			)
+
+			req := httptest.NewRequest(http.MethodGet, "/services", nil)
+			req.Host = "internal:9000"
+
+			for name, value := range tt.headers {
+				req.Header.Set(name, value)
+			}
+
+			if tt.peer != nil {
+				req = req.WithContext(auth.ContextWithPeer(req.Context(), *tt.peer))
+			}
+
+			handler.ServeHTTP(httptest.NewRecorder(), req)
+
+			if !called {
+				t.Fatal("handler was never invoked")
+			}
+		})
 	}
 }

@@ -5,26 +5,49 @@ import (
 	"strings"
 )
 
-// forwardedNodes returns the node identifier named by each RFC 7239 Forwarded
-// element's "for" parameter, first proxy first — the ordering X-Forwarded-For
-// uses. Nodes are returned as they stand; nodeAddr decides which name an
-// address.
-func forwardedNodes(values []string) []string {
-	var nodes []string
+// forwardedParams returns the value every RFC 7239 Forwarded element gives the
+// named parameter, in the order the elements appear — leftmost, the hop
+// closest to the client, first. Values are returned as they stand; what a
+// given parameter may say is its caller's business.
+func forwardedParams(values []string, name string) []string {
+	var found []string
 
 	for _, value := range values {
 		for _, element := range splitOutsideQuotes(value, ',') {
 			for _, pair := range splitOutsideQuotes(element, ';') {
-				name, node, ok := strings.Cut(pair, "=")
-				if !ok || !strings.EqualFold(strings.TrimSpace(name), "for") {
+				key, param, ok := strings.Cut(pair, "=")
+				if !ok || !strings.EqualFold(strings.TrimSpace(key), name) {
 					continue
 				}
-				nodes = append(nodes, unquote(strings.TrimSpace(node)))
+				found = append(found, unquote(strings.TrimSpace(param)))
 			}
 		}
 	}
 
-	return nodes
+	return found
+}
+
+// forwardedNodes returns the node identifier named by each Forwarded element's
+// "for" parameter, first proxy first — the ordering X-Forwarded-For uses.
+// nodeAddr decides which of them name an address.
+func forwardedNodes(values []string) []string {
+	return forwardedParams(values, "for")
+}
+
+// forwardedOrigin returns the "proto" and "host" the first Forwarded element
+// names, empty for either the header does not carry. These describe the
+// connection the *client* made, so the leftmost element is the one that saw
+// it — later elements describe hops between proxies.
+func forwardedOrigin(values []string) (proto, host string) {
+	if protos := forwardedParams(values, "proto"); len(protos) > 0 {
+		proto = protos[0]
+	}
+
+	if hosts := forwardedParams(values, "host"); len(hosts) > 0 {
+		host = hosts[0]
+	}
+
+	return proto, host
 }
 
 // nodeAddr returns the IP address a Forwarded node identifier names. Of RFC
