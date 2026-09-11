@@ -5,6 +5,7 @@ package e2e_test
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
 	"math"
 	"net/http"
@@ -1344,4 +1345,180 @@ func findCategory(recs []recommendation, category string) (recommendation, bool)
 	}
 
 	return recommendation{}, false
+}
+
+// ─── the SSE form of GET /metrics ───────────────────────────────────────
+
+// TestMetricsStreamPushesTheSeededValue drives `GET /metrics` with
+// `Accept: text/event-stream`, which every live chart in the dashboard opens
+// after its first JSON fetch. It is a different handler from the proxy the
+// same URL serves to a JSON client — content negotiation picks between them —
+// and it had never been driven.
+//
+// The two events it emits answer different questions and are asserted apart:
+// `initial` carries the whole range as a matrix, and each `point` carries one
+// instant value.
+func TestMetricsStreamPushesTheSeededValue(t *testing.T) {
+	proc, _ := startMetricsLane(t)
+
+	query := fmt.Sprintf(
+		`sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name=%q}[5m])) * 100`,
+		"shop_web",
+	)
+
+	// The smallest step the handler accepts, so a point arrives well inside
+	// the read deadline below.
+	path := "/metrics?" + url.Values{
+		"query": {query},
+		"step":  {"5"},
+		"range": {"600"},
+	}.Encode()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, proc.BaseURL+path, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+
+	req.Header.Set("Accept", "text/event-stream")
+
+	resp, err := proc.Client().Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", path, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	if got := resp.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/event-stream") {
+		t.Fatalf("Content-Type = %q, want text/event-stream", got)
+	}
+
+	frames := make(chan sseFrame, 16)
+	done := make(chan struct{})
+	defer close(done)
+
+	go readSSEFrames(resp.Body, frames, done)
+
+	var sawInitial, sawPoint bool
+
+	deadline := time.After(30 * time.Second)
+
+	for !sawInitial || !sawPoint {
+		select {
+		case frame, ok := <-frames:
+			if !ok {
+				t.Fatal("the stream ended before both an initial and a point event arrived")
+			}
+
+			switch frame.event {
+			case "initial":
+				sawInitial = true
+
+				closeTo(t, "initial matrix value",
+					streamedValue(t, frame.data, "matrix"), seededServiceCPU["shop_web"])
+			case "point":
+				sawPoint = true
+
+				closeTo(t, "streamed point value",
+					streamedValue(t, frame.data, "vector"), seededServiceCPU["shop_web"])
+			case "query_error":
+				t.Fatalf("the stream reported a query error: %s", frame.data)
+			}
+		case <-deadline:
+			t.Fatalf("timed out waiting for events (initial: %v, point: %v)", sawInitial, sawPoint)
+		}
+	}
+}
+
+// streamedValue reads the last value out of a Prometheus response carried on
+// the stream, asserting the result type on the way — an `initial` event is the
+// whole range and a `point` is one instant, and serving one where the other
+// belongs would leave a chart either empty or frozen.
+func streamedValue(t *testing.T, data, wantType string) float64 {
+	t.Helper()
+
+	var body promResponse
+	if err := json.Unmarshal([]byte(data), &body); err != nil {
+		t.Fatalf("decode stream payload: %v\n%s", err, data)
+	}
+
+	if body.Status != "success" {
+		t.Fatalf("payload status = %q, want success: %s", body.Status, data)
+	}
+
+	if body.Data.ResultType != wantType {
+		t.Fatalf("resultType = %q, want %q", body.Data.ResultType, wantType)
+	}
+
+	if len(body.Data.Result) != 1 {
+		t.Fatalf("got %d series, want 1: %s", len(body.Data.Result), data)
+	}
+
+	if wantType == "matrix" {
+		values := body.Data.Result[0].Values
+		if len(values) == 0 {
+			t.Fatalf("the matrix carried no points: %s", data)
+		}
+
+		return sampleValue(t, values[len(values)-1])
+	}
+
+	return sampleValue(t, body.Data.Result[0].Value)
+}
+
+// TestMetricsStreamRefusesAMalformedRequest drives the two parameter errors
+// the stream declares. Both are documented codes a client is told to expect,
+// and both were reachable only through a unit test.
+func TestMetricsStreamRefusesAMalformedRequest(t *testing.T) {
+	proc, _ := startMetricsLane(t)
+
+	cases := []struct {
+		name  string
+		query url.Values
+		code  string
+	}{
+		{"no query", url.Values{"step": {"15"}}, "MTR003"},
+		{"step below the floor", url.Values{"query": {"up"}, "step": {"1"}}, "MTR004"},
+		{"step above the ceiling", url.Values{"query": {"up"}, "step": {"3600"}}, "MTR004"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(
+				t.Context(), http.MethodGet, proc.BaseURL+"/metrics?"+c.query.Encode(), nil)
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+
+			req.Header.Set("Accept", "text/event-stream")
+
+			resp, err := proc.Client().Do(req)
+			if err != nil {
+				t.Fatalf("GET: %v", err)
+			}
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("read: %v", err)
+			}
+
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400\n%s", resp.StatusCode, body)
+			}
+
+			var problem struct {
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal(body, &problem); err != nil {
+				t.Fatalf("decode problem: %v\n%s", err, body)
+			}
+
+			if want := "/api/errors/" + c.code; problem.Type != want {
+				t.Errorf("type = %q, want %q", problem.Type, want)
+			}
+		})
+	}
 }
