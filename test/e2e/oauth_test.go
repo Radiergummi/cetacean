@@ -1780,6 +1780,7 @@ func TestMCPOAuthFlow(t *testing.T) {
 			discovery, "https://127.0.0.1:9/cetacean-e2e-client.json", challenge, "state-cimd",
 		)
 
+		mark := len(proc.Logs())
 		page := requestConsent(t, proc, discovery, oauthGranted, request)
 
 		if page.outcome.status != http.StatusBadRequest {
@@ -1793,12 +1794,11 @@ func TestMCPOAuthFlow(t *testing.T) {
 			t.Errorf("the error page leaks fetch details: %s", page.outcome.body)
 		}
 
-		logs := proc.Logs()
-
-		if !strings.Contains(logs, "MCP CIMD fetch failed") {
-			t.Error("no CIMD fetch failure was logged; the https:// client_id may not " +
-				"have taken the CIMD path at all")
-		}
+		// Waited for rather than read once: the child's log reaches the
+		// harness through a pipe a goroutine copies, so a record written
+		// before the response was flushed can still arrive after the client
+		// has read it.
+		logs := awaitLog(t, proc, mark, "MCP CIMD fetch failed")
 
 		if !strings.Contains(logs, "SSRF protection blocked request") {
 			t.Error("the CIMD fetch failed for some reason other than the SSRF guard; " +
@@ -2071,15 +2071,23 @@ func TestMCPOAuthWithoutDCROrCIMD(t *testing.T) {
 			discovery, "https://example.com/cetacean-client.json", challenge, "state-no-cimd",
 		)
 
+		mark := len(proc.Logs())
 		page := requestConsent(t, proc, discovery, oauthGranted, request)
 
 		if page.outcome.status != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400; body: %s", page.outcome.status, page.outcome.body)
 		}
 
+		// An absence is only meaningful once the log this request produced has
+		// actually arrived. The request logger runs after the handler returns
+		// and writes through the same stream, so this request's own record
+		// being present proves any CIMD warning it would have emitted is
+		// already in the buffer.
+		written := awaitLog(t, proc, mark, page.outcome.header.Get("Request-Id"))
+
 		// Refused *before* the fetch: the point of disabling CIMD is that the
 		// server stops making outbound requests to URLs a client chose.
-		if strings.Contains(proc.Logs(), "MCP CIMD fetch failed") {
+		if strings.Contains(written, "MCP CIMD fetch failed") {
 			t.Error("the server attempted a CIMD fetch with CIMD disabled")
 		}
 	})
