@@ -196,6 +196,23 @@ type asMetadata struct {
 	RevocationEndpointAuthMethodsSupported []string `json:"revocation_endpoint_auth_methods_supported"`
 }
 
+// writeDiscoveryDoc serves one of the server's discovery documents. It marshals
+// before touching the response, so an encoding failure cannot leave partial
+// headers in front of a 500. The cache lifetime is shared: all three documents
+// change only when the server is reconfigured.
+func writeDiscoveryDoc(w http.ResponseWriter, doc any, contentType string) {
+	body, err := json.Marshal(doc)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "max-age=3600")
+	_, _ = w.Write(body)
+}
+
 // HandleMetadata serves the RFC 8414 AS metadata document.
 func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 	base := s.cfg.issuerID()
@@ -219,16 +236,7 @@ func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 
 	doc.ClientIDMetadataDocumentSupported = s.cfg.MCP.CIMDEnabled
 
-	// Marshal first so an encoding failure doesn't write partial headers
-	// followed by a 500 status (which would corrupt the response).
-	body, err := json.Marshal(doc)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "max-age=3600")
-	_, _ = w.Write(body)
+	writeDiscoveryDoc(w, doc, "application/json")
 }
 
 // ---------------------------------------------------------------------------

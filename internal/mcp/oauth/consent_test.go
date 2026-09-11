@@ -260,10 +260,7 @@ func submitConsent(
 // The consent page must not accept a token signed with the root itself, which
 // is what it did before the keys were derived.
 func TestConsentRefusesACSRFTokenSignedWithTheRoot(t *testing.T) {
-	km, err := deriveKeys(testRoot)
-	if err != nil {
-		t.Fatalf("deriveKeys: %v", err)
-	}
+	km := mustDeriveKeys(t, testRoot)
 
 	if bytes.Equal(km.csrf, testRoot) {
 		t.Fatal("derived CSRF key is the root; the split did not happen")

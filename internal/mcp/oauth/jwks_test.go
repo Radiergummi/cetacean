@@ -105,10 +105,7 @@ func TestJWKSDocumentShape(t *testing.T) {
 		}
 	}
 
-	km, err := deriveKeys(testRoot)
-	if err != nil {
-		t.Fatalf("deriveKeys: %v", err)
-	}
+	km := mustDeriveKeys(t, testRoot)
 
 	if key.Kid != km.kid {
 		t.Errorf("kid = %q, want %q", key.Kid, km.kid)

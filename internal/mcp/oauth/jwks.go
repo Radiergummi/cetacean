@@ -1,7 +1,6 @@
 package oauth
 
 import (
-	"encoding/json"
 	"net/http"
 
 	jose "github.com/go-jose/go-jose/v4"
@@ -31,16 +30,5 @@ func (s *Server) HandleJWKS(w http.ResponseWriter, r *http.Request) {
 		Use:       "sig",
 	}}}
 
-	// Marshal first so an encoding failure doesn't write partial headers
-	// followed by a 500 status.
-	body, err := json.Marshal(doc)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-
-		return
-	}
-
-	w.Header().Set("Content-Type", jwksMediaType)
-	w.Header().Set("Cache-Control", "max-age=3600")
-	_, _ = w.Write(body)
+	writeDiscoveryDoc(w, doc, jwksMediaType)
 }

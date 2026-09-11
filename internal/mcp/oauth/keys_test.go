@@ -10,16 +10,23 @@ import (
 
 var testRoot = []byte("cetacean-test-root-32-bytes-ok!!")
 
-func TestDeriveKeysIsDeterministic(t *testing.T) {
-	first, err := deriveKeys(testRoot)
+// mustDeriveKeys derives from a root, failing the test if it cannot. The tests
+// that exercise derivation failure call deriveKeys directly.
+func mustDeriveKeys(t *testing.T, root []byte) *keyMaterial {
+	t.Helper()
+
+	km, err := deriveKeys(root)
 	if err != nil {
 		t.Fatalf("deriveKeys: %v", err)
 	}
 
-	second, err := deriveKeys(testRoot)
-	if err != nil {
-		t.Fatalf("deriveKeys: %v", err)
-	}
+	return km
+}
+
+func TestDeriveKeysIsDeterministic(t *testing.T) {
+	first := mustDeriveKeys(t, testRoot)
+
+	second := mustDeriveKeys(t, testRoot)
 
 	if !bytes.Equal(first.csrf, second.csrf) {
 		t.Error("CSRF key differs between derivations of the same root")
@@ -45,15 +52,9 @@ func TestDeriveKeysIsDeterministic(t *testing.T) {
 }
 
 func TestDeriveKeysSeparatesRootsAndPurposes(t *testing.T) {
-	a, err := deriveKeys(testRoot)
-	if err != nil {
-		t.Fatalf("deriveKeys: %v", err)
-	}
+	a := mustDeriveKeys(t, testRoot)
 
-	b, err := deriveKeys([]byte("a different root, 32 bytes long!"))
-	if err != nil {
-		t.Fatalf("deriveKeys: %v", err)
-	}
+	b := mustDeriveKeys(t, []byte("a different root, 32 bytes long!"))
 
 	if a.kid == b.kid {
 		t.Error("two roots produced the same key")
@@ -78,10 +79,7 @@ func TestDeriveKeysSeparatesRootsAndPurposes(t *testing.T) {
 func TestDeriveSignerRetriesPastAnInvalidScalar(t *testing.T) {
 	// A scalar of zero is not in [1, n-1]; ParseRawPrivateKey rejects it, and
 	// derivation must move to the next counter rather than fail.
-	valid, err := deriveKeys(testRoot)
-	if err != nil {
-		t.Fatalf("deriveKeys: %v", err)
-	}
+	valid := mustDeriveKeys(t, testRoot)
 
 	var sawInfo []string
 
@@ -139,10 +137,7 @@ func TestDeriveKeysRefusesAnEmptyRoot(t *testing.T) {
 }
 
 func TestDerivedKeyIsOnTheCurve(t *testing.T) {
-	km, err := deriveKeys(testRoot)
-	if err != nil {
-		t.Fatalf("deriveKeys: %v", err)
-	}
+	km := mustDeriveKeys(t, testRoot)
 
 	if km.signer.Curve != elliptic.P256() {
 		t.Errorf("curve = %v, want P-256", km.signer.Curve)
@@ -153,10 +148,7 @@ func TestDerivedKeyIsOnTheCurve(t *testing.T) {
 // detector for the JWK encoding go-jose does on our behalf; the independent
 // check that the encoding is right lives in TestPublishedKeyVerifiesAToken.
 func TestGoldenKID(t *testing.T) {
-	km, err := deriveKeys(testRoot)
-	if err != nil {
-		t.Fatalf("deriveKeys: %v", err)
-	}
+	km := mustDeriveKeys(t, testRoot)
 
 	const want = "QAn0z6mB6vabOhSWFAGGkDsTDlNWpGM2lAV-uFBl6u8"
 
@@ -169,10 +161,7 @@ func TestGoldenKID(t *testing.T) {
 // can drift without TestGoldenKID noticing. Produced by running deriveKeys
 // against testRoot and asserting the output.
 func TestGoldenCSRFKey(t *testing.T) {
-	km, err := deriveKeys(testRoot)
-	if err != nil {
-		t.Fatalf("deriveKeys: %v", err)
-	}
+	km := mustDeriveKeys(t, testRoot)
 
 	const want = "dgol-oeS1eCZrySpXv5JNXv-JWv8cSPkTHHxwCIZR-E"
 
