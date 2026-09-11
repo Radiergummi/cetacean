@@ -101,7 +101,7 @@ test.describe("Infinite Scroll (UI)", () => {
     test.skip(body.total <= 50, "Not enough tasks to trigger pagination");
 
     await page.goto("/tasks");
-    await expect(page.getByRole("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 10_000 });
 
     // The sentinel row should be present when there are more items to load
     await expect(page.getByTestId("load-more-sentinel")).toBeVisible({ timeout: 5_000 });

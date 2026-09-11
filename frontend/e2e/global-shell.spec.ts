@@ -154,8 +154,10 @@ test.describe("Search", () => {
     const input = dialog.locator("input");
     await input.fill("ingress");
 
-    // Wait for at least one group header to appear
-    await expect(dialog.locator("section header").first()).toBeVisible({ timeout: 5_000 });
+    // Wait for at least one result group to appear. The palette's results are
+    // a listbox of options grouped by resource type, so a group is an ARIA
+    // role rather than a section/header pair.
+    await expect(dialog.getByRole("group").first()).toBeVisible({ timeout: 5_000 });
   });
 
   test("Esc closes palette", async ({ page }) => {

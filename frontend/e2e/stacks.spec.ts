@@ -1,4 +1,4 @@
-import { test, expect, navigateToFirst } from "./fixtures";
+import { test, expect, navigateToFirst, clickRow } from "./fixtures";
 
 test.describe("Stack List (/stacks)", () => {
   test("renders heading and table", async ({ page }) => {
@@ -6,7 +6,7 @@ test.describe("Stack List (/stacks)", () => {
 
     await expect(page.getByRole("heading", { name: "Stacks" })).toBeVisible({ timeout: 10_000 });
 
-    const table = page.getByRole("table");
+    const table = page.getByRole("grid");
     await expect(table).toBeVisible({ timeout: 10_000 });
   });
 
@@ -15,7 +15,7 @@ test.describe("Stack List (/stacks)", () => {
 
     await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
 
-    await page.locator("table tbody tr").first().click();
+    await clickRow(page.locator("table tbody tr").first());
     await expect(page).toHaveURL(/\/stacks\/.+/);
   });
 });

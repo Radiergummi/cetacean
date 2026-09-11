@@ -1,10 +1,10 @@
-import { test, expect, navigateToFirst } from "./fixtures";
+import { test, expect, navigateToFirst, clickRow } from "./fixtures";
 
 test.describe("Service List (/services)", () => {
   test("renders table with expected columns", async ({ page }) => {
     await page.goto("/services");
 
-    const table = page.getByRole("table");
+    const table = page.getByRole("grid");
     await expect(table).toBeVisible({ timeout: 10_000 });
 
     const header = page.getByRole("row").first();
@@ -30,7 +30,7 @@ test.describe("Service List (/services)", () => {
     await searchInput.fill(firstName);
 
     // Row with that name should remain visible
-    await expect(page.getByRole("cell", { name: firstName }).first()).toBeVisible({
+    await expect(page.getByRole("gridcell", { name: firstName }).first()).toBeVisible({
       timeout: 5_000,
     });
 
@@ -53,7 +53,7 @@ test.describe("Service List (/services)", () => {
 
     // Switch back to table view
     await page.getByRole("button", { name: "Table view" }).click();
-    await expect(page.getByRole("table")).toBeVisible();
+    await expect(page.getByRole("grid")).toBeVisible();
   });
 
   test("row click navigates to service detail", async ({ page }) => {
@@ -61,7 +61,7 @@ test.describe("Service List (/services)", () => {
 
     await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
 
-    await page.locator("table tbody tr").first().click();
+    await clickRow(page.locator("table tbody tr").first());
     await expect(page).toHaveURL(/\/services\/.+/);
   });
 });
@@ -111,7 +111,11 @@ test.describe("Service Detail (/services/:id)", () => {
     // KeyValueEditor with title "Labels"
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
 
-    await expect(page.getByRole("button", { name: /^Labels$/i })).toBeVisible({
+    // Matched on the disclosure state, not the name alone: a service with a
+    // detected integration (the fixtures carry Traefik labels) renders an
+    // IntegrationSection per integration, each with a "Labels" view toggle, so
+    // the name resolves to those as well as to the section itself.
+    await expect(page.getByRole("button", { name: /^Labels$/i, expanded: true })).toBeVisible({
       timeout: 10_000,
     });
   });

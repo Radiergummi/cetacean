@@ -1,10 +1,10 @@
-import { test, expect, navigateToFirst } from "./fixtures";
+import { test, expect, navigateToFirst, clickRow } from "./fixtures";
 
 test.describe("Node List (/nodes)", () => {
   test("renders table with expected columns", async ({ page }) => {
     await page.goto("/nodes");
 
-    const table = page.getByRole("table");
+    const table = page.getByRole("grid");
     await expect(table).toBeVisible({ timeout: 10_000 });
 
     const header = page.getByRole("row").first();
@@ -25,7 +25,7 @@ test.describe("Node List (/nodes)", () => {
 
     await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
 
-    await page.locator("table tbody tr").first().click();
+    await clickRow(page.locator("table tbody tr").first());
     await expect(page).toHaveURL(/\/nodes\/.+/);
   });
 
@@ -40,7 +40,9 @@ test.describe("Node List (/nodes)", () => {
     await searchInput.fill(firstHostname);
 
     // Row with that hostname should remain visible
-    await expect(page.getByRole("cell", { name: firstHostname })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("gridcell", { name: firstHostname })).toBeVisible({
+      timeout: 5_000,
+    });
 
     // Searching for something that won't match should show empty state
     await searchInput.fill("zzznomatch");
