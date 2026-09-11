@@ -45,6 +45,12 @@ is the one context that is itself a grouping rather than a resource, so
 `/stacks/shop/services/web/configs/smtp-password` needs the extra level to be
 expressible at all.
 
+The cap stops pair consumption; it does not reject the request. A path with more
+`(collection, identifier)`-shaped segments than the cap allows has the excess
+treated as suffix and carried over — `/services/web/configs/smtp/labels/x`
+redirects to `/configs/<id>/labels/x`, where the target's own routes decide
+whether `labels/x` means anything. There is no "too deep" failure mode.
+
 ### Why redirect rather than serve
 
 Serving the resource under the friendly name would give it two URLs, and the
@@ -131,6 +137,13 @@ an identifier matches an entry if it equals the entry or equals it with the
 `<stack>_` prefix removed. The compose name is the whole point of the form: it
 is what the reader has in their `compose.yaml`.
 
+An exact match wins over a prefix-stripped one, mirroring ID-over-name in
+`cache.resolveIn`. The two can genuinely collide: `docker stack deploy` always
+prefixes, but a service created by hand can carry the stack label under any
+name, so a `shop` stack may hold both `web` and `shop_web`, where the identifier
+`web` matches the first exactly and the second stripped. Without the precedence
+rule that is an ambiguity report for a path that has an obvious reading.
+
 ## Resolution
 
 Each pair resolves **within its context**, not globally:
@@ -144,10 +157,28 @@ makes `/stacks/shop/services/web` work at all, since `web` is not a service name
 anywhere in the cluster. It also means the relationship is verified by
 construction: there is no way to resolve a pair whose edge does not exist.
 
+The single-pair form has a shortcut the traversal forms must not inherit: an
+identifier that is already the canonical ID falls through untouched, because the
+request is already addressed at the canonical URL. A traversal is never at its
+target's canonical URL however its identifiers are spelled, so it always
+redirects — `/services/web/volumes/shop-data` redirects to `/volumes/shop-data`
+even though a volume's name *is* its canonical identifier.
+
 That verification is deliberate. A path that reads "the `smtp-password` config
 used by `shop_web`" must not answer when `shop_web` does not use it — otherwise
 the form degrades into decoration that dresses up any pair of identifiers, and a
 link that should tell you a relationship is gone tells you nothing.
+
+### Cost
+
+The single-pair form is a map lookup, or a scan of one type on a name. A
+traversal is more expensive in the reverse direction: `ServicesUsingConfig` and
+its siblings scan every service to find the edge, so `/configs/x/services/y`
+costs O(services) per request where `/services/<id>` costs nothing. That is
+acceptable on a dashboard and it only runs on paths of four segments or more, so
+the overwhelmingly common request is untouched — but it is worth knowing before
+a dashboard starts generating the reverse form on every config page, which is
+the one plausible way to make it hot.
 
 ### Authorization
 
@@ -171,7 +202,6 @@ must not answer differently for "forbidden" than for "absent".
 | Any pair resolves to nothing, or to something unreadable | 404 | `API015` |
 | The edge does not hold between two named resources | 404 | `API015` |
 | A name matches more than one readable resource | 409 | `API014` |
-| Depth beyond the cap | — | falls through, unmatched |
 
 `API015` ("Unresolvable Path") is one code with a precise detail rather than two
 codes, because the reader's situation is the same — this path leads nowhere —
