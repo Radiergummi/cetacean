@@ -77,6 +77,7 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19012` | `tailscale` auth mode (local-mode address boundary, plus tsnet startup validation) |
 | `19013` | SSE ACL filtering on `GET /events`, and the broadcaster's connection cap |
 | `19014` | Conditional requests: `If-Match` on every preconditioned route, `If-None-Match` on the representation it compares against |
+| `19015` | Log reads and the SSE log tail, against containers writing known output |
 | `19104` | Caddy, mTLS termination |
 
 `19003` is reserved in the numbering scheme but the `headers`-mode hostile-input cases run on

@@ -23,6 +23,11 @@ import (
 type sseFrame struct {
 	event string
 	data  string
+
+	// id is the last id: field seen on the stream, sticky across frames the
+	// way EventSource's Last-Event-ID is: a server that repeats a value omits
+	// the field rather than resending it.
+	id string
 }
 
 // readSSEFrames scans r for blank-line-terminated SSE frames and sends each
@@ -41,7 +46,7 @@ func readSSEFrames(r io.Reader, frames chan<- sseFrame, done <-chan struct{}) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
-	var event string
+	var event, id string
 
 	var data strings.Builder
 
@@ -52,7 +57,7 @@ func readSSEFrames(r io.Reader, frames chan<- sseFrame, done <-chan struct{}) {
 		case line == "":
 			if event != "" || data.Len() > 0 {
 				select {
-				case frames <- sseFrame{event: event, data: data.String()}:
+				case frames <- sseFrame{event: event, data: data.String(), id: id}:
 				case <-done:
 					return
 				}
@@ -63,6 +68,8 @@ func readSSEFrames(r io.Reader, frames chan<- sseFrame, done <-chan struct{}) {
 			data.Reset()
 		case strings.HasPrefix(line, "event:"):
 			event = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		case strings.HasPrefix(line, "id:"):
+			id = strings.TrimSpace(strings.TrimPrefix(line, "id:"))
 		case strings.HasPrefix(line, "data:"):
 			if data.Len() > 0 {
 				data.WriteByte('\n')
