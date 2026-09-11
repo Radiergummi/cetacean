@@ -54,6 +54,26 @@ func WatchPolicyFile(e *Evaluator, path string) (func(), error) {
 	stop := make(chan struct{})
 	go func() {
 		var debounce *time.Timer
+
+		// Debounce: editors often write multiple times in quick succession.
+		schedule := func() {
+			if debounce != nil {
+				debounce.Stop()
+			}
+			debounce = time.AfterFunc(200*time.Millisecond, func() {
+				reloadPolicy(e, path)
+			})
+		}
+
+		// kqueue (macOS, the BSDs) delivers nothing at all for the swap above:
+		// it reports a directory by diffing its listing, which a replaced name
+		// does not change, and the per-entry watch it keeps for a symlink is
+		// opened on the symlink's target, which the swap does not touch. So the
+		// resolved path is re-read on a tick as well. inotify reports the swap
+		// and reloads long before the first one arrives.
+		poll := time.NewTicker(2 * time.Second)
+		defer poll.Stop()
+
 		for {
 			select {
 			case event, ok := <-watcher.Events:
@@ -78,14 +98,15 @@ func WatchPolicyFile(e *Evaluator, path string) (func(), error) {
 				}
 
 				linkTarget = resolved
-
-				// Debounce: editors often write multiple times in quick succession.
-				if debounce != nil {
-					debounce.Stop()
+				schedule()
+			case <-poll.C:
+				resolved, _ := filepath.EvalSymlinks(target)
+				if resolved == "" || resolved == linkTarget {
+					continue
 				}
-				debounce = time.AfterFunc(200*time.Millisecond, func() {
-					reloadPolicy(e, path)
-				})
+
+				linkTarget = resolved
+				schedule()
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return

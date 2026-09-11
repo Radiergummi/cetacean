@@ -321,6 +321,13 @@ func TestWatchPolicyFile_ReloadsAfterSymlinkSwap(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Creating the version directory and the temporary symlink are themselves
+	// events in the watched directory, and on kqueue they are the only ones the
+	// swap produces. Letting them drain first is what holds the watcher to
+	// noticing the swap rather than to being woken near it: without it this
+	// passed or failed on the order two goroutines happened to run in.
+	time.Sleep(300 * time.Millisecond)
+
 	if err := os.Rename(tmp, data); err != nil {
 		t.Fatal(err)
 	}
