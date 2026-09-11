@@ -306,15 +306,17 @@ that.
 
 Nothing in the dashboard had to change for a name-addressed URL to render. A
 detail route's parameter is handed straight to `api.service(param)`, and `fetch`
-follows the `307` transparently, so `/services/shop_web` already works. What is
-still unverified, and belongs to this phase rather than the next:
+follows the `307` transparently, so `/services/shop_web` already fetches the
+right resource.
 
-- **An SSE subscription through the redirect.** `EventSource` follows redirects
-  per spec, but the per-resource streams are the only long-lived request passing
-  through this middleware and nothing has tested it.
-- **`useSwarmQuery` keys optimistic updates on resource ID.** A name route has
-  to resolve to the ID once on mount and use the ID internally from there, or an
-  SSE event will not match the row it should replace.
+It does not yet render *correctly*, though, and the two items this phase left
+open — whether an SSE subscription survives the redirect, and where the
+canonical ID has to be substituted — turn out to be one question with one
+answer, given under 2a: the route parameter is resolved to the canonical ID
+exactly once, and everything downstream of the first fetch uses the ID. Until
+that lands, a name-addressed detail page is a page whose activity feed is
+silently empty. Phase 1 is therefore complete as an *API* capability and
+incomplete as a dashboard one, which is the honest way to describe it.
 
 ### Phase 2a — stack-scoped names
 
@@ -340,6 +342,77 @@ One accepted consequence: a name URL bookmarked today can point at a different
 resource tomorrow, if a service is removed and recreated under the same name.
 That is what addressing by name means, and it is why the canonical form stays
 the ID.
+
+#### Server
+
+Build the **pair-chain parser** in 2a, with an edge table holding one row —
+`stack → services`. 2b then adds rows rather than restructuring, which is what
+makes "2b is cheap to pick up" true rather than aspirational. The single-pair
+fast path must stay a map lookup: a path of two or three segments never
+consults the edge table.
+
+#### One link builder
+
+`lib/searchConstants.ts`'s `resourcePath(type, id, name?)` already takes both an
+ID and a name, and already returns name paths for volumes and stacks. It has
+three consumers — `ActivityFeed`, `SearchPalette`, `SearchPage` — so teaching it
+to prefer the name fixes those at once.
+
+The other ~92 literal `` `/services/${id}` ``-shaped sites across `pages/` and
+`hooks/` should migrate to it. That is the bulk of 2a's frontend diff; it is
+mechanical, and it is worth doing on its own terms, because a single link
+builder is how the stack-scoped form ends up consistent rather than appearing on
+three pages out of twelve.
+
+`resourcePath` needs the stack name to build the scoped form and does not
+currently receive it. Search results and history entries carry a resource's name
+but not its stack label, so either the signature grows a `stack?` parameter that
+callers holding one supply, or the scoped form is reserved for pages that
+already know the stack. The former is preferable; the latter is the fallback
+where a caller cannot obtain it cheaply.
+
+List pages need nothing: `useSwarmQuery` subscribes to the collection path
+(`/services`), which carries no identifier and is never redirected.
+
+#### Breadcrumbs already model this
+
+`lib/resourceBreadcrumbs.ts` presents a stacked resource as
+`Stacks › shop › web`, computing both the stack and the stripped leaf name
+through `stripStackPrefix`, and `resourceParentPath` already sends the
+post-removal redirect to `/stacks/<stack>`. The information architecture is
+already stack-first — only the URL is not. The leaf's `to` becomes the
+stack-scoped form and the trail needs no other change.
+
+#### The route param resolves to the canonical ID exactly once
+
+This is the rule that closes both of Phase 1's unverified items, and there are
+three independent reasons for it rather than the one I first wrote down:
+
+- The per-resource SSE subscription would otherwise depend on `EventSource`
+  following a `307`. That is specified behaviour, but it is untested here and
+  needing it at all is avoidable.
+- `api.history({ resourceId })` is keyed by resource **ID**. A name returns an
+  empty list, so a name-addressed detail page would silently show no activity —
+  and `useDetailResource` passes its `key` straight through to that call today.
+- `useDetailResource`'s React Query key *is* the `ssePath` string, so a name URL
+  and an ID URL for one resource would occupy two cache entries and never share
+  a fetch.
+
+Concretely: `useDetailResource` keeps the route parameter as its query key — it
+is stable and unique per URL — and takes the canonical ID from the **fetched
+resource** for the SSE subscription and the history query, both of which then
+enable only once the first fetch resolves. A detail page has nothing to render
+before then in any case.
+
+#### Docs
+
+`docs/api.md`'s "Resource identifiers" section gains the stack-scoped form and
+the compose-name rule.
+
+#### What 2a does not need
+
+The adjacency table beyond its one row, `API015`, relationship verification in
+the reverse direction, and the O(services) cross-reference scans.
 
 ### Phase 2b — relationship traversals (deferred)
 
@@ -393,16 +466,30 @@ without a type-level read grant, and the redirect is visible to `requestLogger`
 and the self-metrics. Both were written by breaking the fix and watching them
 fail, which is the standard the rest of this should meet.
 
-**Phase 2a:**
+**Phase 2a, server:**
 
 - The compose name and the Docker name resolve to the same service, and an
   exact match beats a prefix-stripped one on a stack holding both `web` and
   `shop_web`.
 - A service whose stack label names a different stack is not reachable through
   this stack's path.
+- A two- or three-segment path never consults the edge table, so the common
+  request keeps costing one map lookup.
 - The shadowing invariant, brought forward from 2b because it costs nothing and
   is the thing that breaks silently: walk the router's registered patterns and
   assert none of them would parse as a pair chain.
+
+**Phase 2a, dashboard:**
+
+- `resourcePath` returns the stack-scoped form when it knows the stack and the
+  flat name form when it does not, for every type it handles — a table test, so
+  a type added later has to decide.
+- A name-addressed detail page subscribes to the SSE path of the resolved **ID**
+  and requests history for the resolved **ID**. Both are assertions about what
+  the page asks for rather than what it renders, because the failure they guard
+  is silent: an activity feed that is empty rather than wrong.
+- The same resource reached by name and by ID produces one React Query cache
+  entry, not two.
 
 **`cluster.ResolveTask`, extracted from 2b:**
 
