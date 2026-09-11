@@ -248,7 +248,7 @@ already has.
 </ConfigParam>
 
 <ConfigParam name="mcp.signing_key" env="CETACEAN_MCP_SIGNING_KEY">
-  HMAC-SHA256 key signing the JWTs Cetacean issues. When unset, a fresh key is generated at startup and every existing token becomes invalid, so set it for any deployment that should survive a restart. Accepts the `_FILE` suffix.
+  Root secret the token-signing key and the consent page's CSRF key are each derived from. When unset, a fresh key is generated at startup and every existing token becomes invalid, so set it for any deployment that should survive a restart. Generate one with `openssl rand -hex 32`. A value that isn't 32 bytes of hex or base64 is still used, verbatim, but Cetacean warns about it at startup. Accepts the `_FILE` suffix.
 </ConfigParam>
 
 <ConfigParam name="mcp.access_token_ttl" env="CETACEAN_MCP_ACCESS_TOKEN_TTL" default="1h">

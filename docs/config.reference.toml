@@ -107,7 +107,8 @@
 # enabled = false                           # Enable MCP server
 # operations_level = -1                     # Tier for MCP tools (0=read, 1=ops, 2=config, 3=impactful); -1 inherits CETACEAN_OPERATIONS_LEVEL
 # issuer = ""                               # Canonical external base URL (e.g. "https://cetacean.example.com"); required behind a reverse proxy
-# signing_key = ""                          # JWT signing key (HMAC-SHA256); auto-generated if unset
+# signing_key = ""                          # Root secret; the token and CSRF keys derive from it
+#                                           # Generate with `openssl rand -hex 32`; auto-generated if unset
 #                                           # CETACEAN_MCP_SIGNING_KEY_FILE reads it from a file (Docker secret)
 # access_token_ttl = "1h"                   # Access token lifetime
 # refresh_token_ttl = "720h"                # Refresh token lifetime (30 days)

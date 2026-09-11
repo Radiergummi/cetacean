@@ -30,7 +30,24 @@ environment:
 > whenever MCP OAuth is in use.
 
 Also set [`mcp.signing_key`][mcp.signing_key]. Without it Cetacean generates a new key on every restart, and every agent
-has to sign in again after a redeployment.
+has to sign in again after a redeployment. Generate one with `openssl rand -hex 32`.
+
+## Token signing
+
+Access tokens are ES256 JWTs. The public half of the signing key is published
+as a JWK Set at `/oauth/jwks`, named by `jwks_uri` in the authorization server
+metadata, so anything that needs to verify a token Cetacean issued can fetch it
+without being able to issue one.
+
+The key is derived from [`mcp.signing_key`][mcp.signing_key], so it is stable
+exactly when that setting is. Leave it unset and both the key and its `kid`
+change on every restart.
+
+**Upgrading from a release that signed with HS256:** stop every replica before
+starting the new one. Tokens issued by one algorithm are refused by the other,
+and a client that refreshes twice against a mixed pair can trip the
+refresh-token theft check and have to authorize again from scratch. A single
+replica is unaffected beyond one refresh per client.
 
 ## Connect a client
 
