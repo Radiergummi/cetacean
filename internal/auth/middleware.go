@@ -100,11 +100,13 @@ func isExempt(path string) bool {
 		return true
 	case path == "/oauth/token" ||
 		path == "/oauth/revoke" ||
-		path == "/oauth/register":
+		path == "/oauth/register" ||
+		path == "/oauth/jwks":
 		// OAuth machine endpoints: PKCE / DCR / refresh-token grants carry
 		// their own auth proof in the request body. Consent (/oauth/authorize)
 		// is intentionally NOT exempt — the user must be authenticated before
-		// granting access.
+		// granting access. The key set is a public discovery document, like
+		// the /.well-known/ ones above.
 		return true
 	default:
 		return false

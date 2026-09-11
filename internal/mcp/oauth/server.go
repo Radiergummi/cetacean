@@ -156,6 +156,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
 		"GET "+basePath+"/.well-known/oauth-protected-resource",
 		s.HandleProtectedResourceMetadata,
 	)
+	mux.HandleFunc("GET "+basePath+jwksPath, s.HandleJWKS)
 	mux.HandleFunc("GET "+basePath+"/oauth/authorize", s.HandleAuthorize)
 	mux.HandleFunc("POST "+basePath+"/oauth/authorize", s.HandleAuthorize)
 	mux.HandleFunc("POST "+basePath+"/oauth/token", s.HandleToken)
@@ -176,6 +177,10 @@ type asMetadata struct {
 	TokenEndpoint         string `json:"token_endpoint"`
 	RevocationEndpoint    string `json:"revocation_endpoint"`
 	RegistrationEndpoint  string `json:"registration_endpoint,omitempty"`
+
+	// JWKSURI is omitted with no key to serve, so the document never names an
+	// endpoint this server would refuse.
+	JWKSURI string `json:"jwks_uri,omitempty"`
 
 	// ClientIDMetadataDocumentSupported advertises CIMD, which 2026-07-28
 	// prefers over RFC 7591 DCR. A client has no other way to learn that an
@@ -206,6 +211,9 @@ func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.cfg.MCP.DCREnabled {
 		doc.RegistrationEndpoint = base + "/oauth/register"
+	}
+	if s.keys != nil {
+		doc.JWKSURI = base + jwksPath
 	}
 
 	doc.ClientIDMetadataDocumentSupported = s.cfg.MCP.CIMDEnabled
