@@ -102,11 +102,9 @@ func isExempt(path string) bool {
 		path == "/oauth/revoke" ||
 		path == "/oauth/register" ||
 		path == "/oauth/jwks":
-		// OAuth machine endpoints: PKCE / DCR / refresh-token grants carry
-		// their own auth proof in the request body. Consent (/oauth/authorize)
-		// is intentionally NOT exempt — the user must be authenticated before
-		// granting access. The key set is a public discovery document, like
-		// the /.well-known/ ones above.
+		// Machine endpoints: the grants carry their own proof in the body, and
+		// the key set is public. Consent (/oauth/authorize) is deliberately
+		// absent — the user must be authenticated before granting access.
 		return true
 	default:
 		return false

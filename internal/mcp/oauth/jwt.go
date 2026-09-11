@@ -13,8 +13,7 @@ import (
 	"time"
 )
 
-// Sentinel errors returned by VerifyAccessToken. Callers can use errors.Is to
-// distinguish them when building WWW-Authenticate responses.
+// Callers distinguish these with errors.Is to build WWW-Authenticate responses.
 var (
 	ErrMalformedToken   = errors.New("malformed token")
 	ErrInvalidSig       = errors.New("invalid signature")
@@ -25,23 +24,16 @@ var (
 	ErrIncompleteClaims = errors.New("claims incomplete")
 )
 
-// accessTokenType is the JWT header type RFC 9068 §2.1 gives an OAuth 2.0
-// access token, and accessTokenTypeFull the same media type spelled with the
-// prefix §2.1 recommends omitting. We mint the short form and accept both on
-// verification, because §4 requires a resource server to accept either.
-//
+// RFC 9068 §2.1 prefers the unprefixed spelling and §4 requires accepting both.
 // The type is what lets a resource server refuse an ID token where an access
-// token belongs — the two are otherwise indistinguishable to anything but
-// their claim set.
+// token belongs.
 const (
 	accessTokenType     = "at+jwt"
 	accessTokenTypeFull = "application/at+jwt"
 )
 
-// jwtHeaderClaims is the minimal subset of a JWT header we inspect on verify.
-// alg=none / alg=HS256 substitution attacks are blocked by verifying with a
-// public key of a fixed algorithm (ES256): a token minted for any other alg
-// cannot produce a signature that verifies against it.
+// Verifying against a fixed-algorithm public key is what defeats alg
+// substitution; checking the header too is belt and braces.
 type jwtHeaderClaims struct {
 	Alg string `json:"alg"`
 	Typ string `json:"typ"`
@@ -55,7 +47,6 @@ type AccessTokenClaims struct {
 	ClientID string   `json:"client_id,omitempty"`
 }
 
-// jwtPayload is the full JWT payload, including standard claims. Not exported.
 type jwtPayload struct {
 	Issuer    string   `json:"iss"`
 	Audience  string   `json:"aud"`
@@ -65,14 +56,11 @@ type jwtPayload struct {
 	Subject   string   `json:"sub"`
 	Groups    []string `json:"groups,omitempty"`
 
-	// ClientID carries no omitempty: RFC 9068 §2.2 requires the claim, so a
-	// token without it is one no resource server may accept. IssueAccessToken
-	// refuses to mint an empty one rather than leaving the tag to elide it.
+	// No omitempty: RFC 9068 §2.2 requires the claim, and an empty one is
+	// refused at mint time rather than elided here.
 	ClientID string `json:"client_id"`
 }
 
-// TokenIssuer issues and verifies ES256 JWTs. Build one with NewTokenIssuer,
-// which derives the key from a root secret.
 type TokenIssuer struct {
 	signer   *ecdsa.PrivateKey
 	header   string
@@ -80,8 +68,6 @@ type TokenIssuer struct {
 	Audience string
 }
 
-// NewTokenIssuer derives the signing key from root and returns an issuer bound
-// to it.
 func NewTokenIssuer(root []byte, issuer, audience string) (*TokenIssuer, error) {
 	km, err := deriveKeys(root)
 	if err != nil {
@@ -91,8 +77,7 @@ func NewTokenIssuer(root []byte, issuer, audience string) (*TokenIssuer, error) 
 	return newTokenIssuer(km, issuer, audience), nil
 }
 
-// newTokenIssuer builds an issuer from already-derived key material, so a
-// caller that derives once does not derive again.
+// For a caller that has already derived, so it does not derive twice.
 func newTokenIssuer(km *keyMaterial, issuer, audience string) *TokenIssuer {
 	return &TokenIssuer{
 		signer: km.signer,
@@ -105,13 +90,10 @@ func newTokenIssuer(km *keyMaterial, issuer, audience string) *TokenIssuer {
 	}
 }
 
-// es256SigBytes is the fixed length RFC 7518 §3.4 gives an ES256 signature:
-// R and S as 32-byte big-endian integers, concatenated.
+// RFC 7518 §3.4: R and S as fixed-width 32-byte integers, concatenated.
 const es256SigBytes = 64
 
-// signES256 signs the JWS signing input. R and S are written at fixed width —
-// a short R left unpadded produces a signature this package would accept and
-// every other implementation would reject.
+// Fixed width matters: a short R left unpadded verifies here and nowhere else.
 func signES256(key *ecdsa.PrivateKey, input string) (string, error) {
 	digest := sha256.Sum256([]byte(input))
 
@@ -127,8 +109,8 @@ func signES256(key *ecdsa.PrivateKey, input string) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
-// verifyES256 checks a signature that must be exactly es256SigBytes raw bytes,
-// so an ASN.1-encoded one is refused rather than parsed.
+// Anything but es256SigBytes raw bytes is refused, so a DER signature cannot
+// be presented as one.
 func verifyES256(pub *ecdsa.PublicKey, input, sig string) bool {
 	raw, err := base64.RawURLEncoding.DecodeString(sig)
 	if err != nil || len(raw) != es256SigBytes {
@@ -145,8 +127,6 @@ func verifyES256(pub *ecdsa.PublicKey, input, sig string) bool {
 	)
 }
 
-// IssueAccessToken mints a signed compact JWT for the given claims with the
-// specified TTL. A unique 128-bit jti is generated for each token.
 func (t *TokenIssuer) IssueAccessToken(
 	claims AccessTokenClaims,
 	ttl time.Duration,
@@ -155,9 +135,8 @@ func (t *TokenIssuer) IssueAccessToken(
 		return "", ErrMissingKey
 	}
 
-	// iss, aud, exp, iat and jti are the issuer's to fill in below. sub and
-	// client_id are the caller's, so they are the two of RFC 9068 §2.2's
-	// seven required claims that can arrive missing.
+	// sub and client_id are the caller's; every other required claim is filled
+	// in below and cannot arrive missing.
 	if claims.Subject == "" {
 		return "", fmt.Errorf("%w: sub is required (RFC 9068 §2.2)", ErrIncompleteClaims)
 	}
@@ -199,9 +178,6 @@ func (t *TokenIssuer) IssueAccessToken(
 	return signingInput + "." + sig, nil
 }
 
-// VerifyAccessToken parses and validates a compact JWT, returning the
-// application claims on success. Returns a wrapped sentinel error on failure
-// so callers can distinguish expiry from signature failures.
 func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
 	if t.signer == nil {
 		return nil, ErrMissingKey
@@ -223,12 +199,7 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 	if hdr.Alg != "ES256" {
 		return nil, fmt.Errorf("%w: unexpected alg %q", ErrMalformedToken, hdr.Alg)
 	}
-	// RFC 9068 §4: reject a token whose typ is anything but the access token
-	// type. An absent typ is rejected with the rest — before this profile the
-	// server minted "JWT" and waved absence through, and both now fail, which
-	// costs a client holding one an extra refresh and nothing more: access
-	// tokens are the only JWTs here, they are never persisted, and the
-	// refresh token that replaces them is opaque.
+	// RFC 9068 §4: any other typ, an absent one included, is refused.
 	if hdr.Typ != accessTokenType && hdr.Typ != accessTokenTypeFull {
 		return nil, fmt.Errorf("%w: unexpected typ %q", ErrMalformedToken, hdr.Typ)
 	}

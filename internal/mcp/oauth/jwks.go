@@ -6,16 +6,13 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 )
 
-// jwksPath is where the key set is served. Not under /.well-known/: jwks.json
-// is not a registered suffix (RFC 8615 §3), and a path ending in .json never
-// reaches the mux — the negotiation middleware strips the extension first, so
-// the SPA fallback would answer it.
+// Not /.well-known/jwks.json: that suffix is unregistered, and content
+// negotiation strips a .json extension before routing, so such a path never
+// reaches the mux.
 const jwksPath = "/oauth/jwks"
 
-// jwksMediaType is the media type RFC 7517 registers for a JWK Set.
 const jwksMediaType = "application/jwk-set+json"
 
-// HandleJWKS serves the public half of the access token signing key.
 func (s *Server) HandleJWKS(w http.ResponseWriter, r *http.Request) {
 	if s.keys == nil {
 		http.Error(w, "no signing key", http.StatusServiceUnavailable)

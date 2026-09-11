@@ -10,8 +10,7 @@ import (
 
 var testRoot = []byte("cetacean-test-root-32-bytes-ok!!")
 
-// mustDeriveKeys derives from a root, failing the test if it cannot. The tests
-// that exercise derivation failure call deriveKeys directly.
+// The tests that exercise derivation failure call deriveKeys directly.
 func mustDeriveKeys(t *testing.T, root []byte) *keyMaterial {
 	t.Helper()
 
@@ -77,8 +76,8 @@ func TestDeriveKeysSeparatesRootsAndPurposes(t *testing.T) {
 }
 
 func TestDeriveSignerRetriesPastAnInvalidScalar(t *testing.T) {
-	// A scalar of zero is not in [1, n-1]; ParseRawPrivateKey rejects it, and
-	// derivation must move to the next counter rather than fail.
+	// Zero is not in [1, n-1], so derivation must move to the next counter
+	// rather than fail.
 	valid := mustDeriveKeys(t, testRoot)
 
 	var sawInfo []string
@@ -144,9 +143,8 @@ func TestDerivedKeyIsOnTheCurve(t *testing.T) {
 	}
 }
 
-// TestGoldenKID pins the thumbprint a fixed root produces. It is a drift
-// detector for the JWK encoding go-jose does on our behalf; the independent
-// check that the encoding is right lives in TestPublishedKeyVerifiesAToken.
+// A drift detector for the JWK encoding go-jose does on our behalf. Whether
+// that encoding is right is checked against an independent implementation.
 func TestGoldenKID(t *testing.T) {
 	km := mustDeriveKeys(t, testRoot)
 
@@ -157,9 +155,8 @@ func TestGoldenKID(t *testing.T) {
 	}
 }
 
-// TestGoldenCSRFKey pins the CSRF key a fixed root produces, so csrfKeyInfo
-// can drift without TestGoldenKID noticing. Produced by running deriveKeys
-// against testRoot and asserting the output.
+// The kid does not depend on csrfKeyInfo, so that constant would otherwise
+// drift unnoticed.
 func TestGoldenCSRFKey(t *testing.T) {
 	km := mustDeriveKeys(t, testRoot)
 

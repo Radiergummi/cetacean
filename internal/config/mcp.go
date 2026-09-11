@@ -28,12 +28,8 @@ type MCPConfig struct {
 	// public URL (e.g. "https://cetacean.example.com").
 	Issuer string
 
-	// SigningKey is the root from which the token and CSRF keys are derived.
-	// If empty, main.go auto-generates an ephemeral root on startup — which
-	// invalidates every issued token on restart, so a deployment that persists
-	// refresh tokens wants this set. CETACEAN_MCP_SIGNING_KEY_FILE reads it
-	// from a file, so it can arrive as a Docker secret rather than through the
-	// environment.
+	// SigningKey is the root the token and CSRF keys derive from. Empty means
+	// a fresh root each start, which invalidates every issued token.
 	SigningKey string
 
 	// AccessTokenTTL is how long MCP access tokens remain valid.
@@ -329,15 +325,12 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 	}, nil
 }
 
-// minSigningKeyBytes floors the root at the derived key size. The published
-// public key is a deterministic function of this root and is reachable by an
-// anonymous GET, so a weak root can be ground offline from it — recovering
-// the root also yields the CSRF key, since both derive from it.
+// The published public key is a deterministic function of the root and needs
+// no authentication to fetch, so a weak root can be ground offline from it.
 const minSigningKeyBytes = 32
 
-// checkSigningKeyLength rejects a configured key that is too short to sign
-// with. An empty key is not too short: it means "none configured", and main.go
-// generates a random one.
+// An empty key is not too short: it means none was configured, and one is
+// generated instead.
 func checkSigningKeyLength(key string) error {
 	if key == "" || len(key) >= minSigningKeyBytes {
 		return nil
@@ -352,11 +345,9 @@ func checkSigningKeyLength(key string) error {
 	)
 }
 
-// SigningKeyBytes turns the configured MCP signing key into the root key
-// material every other key derives from. A value that decodes as hex or
-// base64 to exactly minSigningKeyBytes is key material; anything else is used
-// as its own bytes, which is what a passphrase gets. decoded reports which
-// happened, so a caller can say so.
+// A value that decodes as hex or base64 to exactly minSigningKeyBytes is key
+// material; anything else is a passphrase and stands for its own bytes.
+// decoded reports which, so a caller can warn about the weaker one.
 func SigningKeyBytes(key string) (root []byte, decoded bool) {
 	decoders := []func(string) ([]byte, error){
 		hex.DecodeString,

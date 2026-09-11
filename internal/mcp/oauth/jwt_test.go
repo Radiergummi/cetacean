@@ -16,8 +16,7 @@ import (
 
 const testKey = "test-secret-key-32-bytes-long!!!"
 
-// mustTokenIssuer builds an issuer from a root, failing the test if derivation
-// does. Every test here needs one, and none of them is testing the error.
+// None of these tests is testing the constructor's error.
 func mustTokenIssuer(t *testing.T, root []byte, issuer, audience string) *TokenIssuer {
 	t.Helper()
 
@@ -126,8 +125,8 @@ func TestJWTWrongIssuer(t *testing.T) {
 
 func TestJWTMalformedToken(t *testing.T) {
 	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com", "mcp")
-	// Each case is paired with the sentinel error it must surface so callers
-	// (the WWW-Authenticate mapping in Task 5) get the right error code.
+	// Each case names the sentinel it must surface, since callers map those to
+	// WWW-Authenticate error codes.
 	cases := []struct {
 		token string
 		want  error
@@ -179,9 +178,7 @@ func TestJWTReusedJTIsAreDistinct(t *testing.T) {
 	}
 }
 
-// reheader re-signs a token under a different JWT header, keeping the payload
-// and the issuer's key intact, so a rejection can only be attributable to the
-// header.
+// Payload and key stay intact, so a rejection is attributable to the header.
 func reheader(t *testing.T, issuer *TokenIssuer, token, header string) string {
 	t.Helper()
 
@@ -200,11 +197,8 @@ func reheader(t *testing.T, issuer *TokenIssuer, token, header string) string {
 	return signingInput + "." + sig
 }
 
-// requiredClaims is the claim set RFC 9068 §2.2 requires an access token to
-// carry. The test below reads them off the wire as raw JSON rather than
-// unmarshalling into jwtPayload, because a struct field zeroes out silently
-// when its key is absent — which is exactly what an `omitempty` on a required
-// claim produces.
+// RFC 9068 §2.2. Read off the wire as raw JSON: a struct field zeroes out
+// silently when its key is absent, which is what an omitempty would cause.
 var requiredClaims = []string{"iss", "exp", "aud", "sub", "client_id", "iat", "jti"}
 
 func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
@@ -234,9 +228,7 @@ func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
 		t.Fatalf("unmarshal header: %v", err)
 	}
 
-	// RFC 9068 §2.1: typ SHOULD be at+jwt, with the application/ prefix
-	// omitted. It is what lets a resource server refuse an ID token where an
-	// access token belongs.
+	// RFC 9068 §2.1 prefers the unprefixed spelling.
 	if hdr.Typ != "at+jwt" {
 		t.Errorf("typ = %q, want at+jwt", hdr.Typ)
 	}
@@ -276,15 +268,13 @@ func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
 		t.Fatalf("issue: %v", err)
 	}
 
-	// RFC 9068 §4: a resource server MUST verify that typ is at+jwt or
-	// application/at+jwt, and reject any other value. The bare JWT case is
-	// what this server used to mint; the absent one is what it used to wave
-	// through.
+	// RFC 9068 §4: a resource server must reject any other value, an absent
+	// one included.
 	refused := []struct {
 		name   string
 		header string
 	}{
-		{"the type this server used to mint", `{"alg":"ES256","typ":"JWT"}`},
+		{"a bare JWT type", `{"alg":"ES256","typ":"JWT"}`},
 		{"no type at all", `{"alg":"ES256"}`},
 		{"an ID token", `{"alg":"ES256","typ":"id_token+jwt"}`},
 		{"an empty type", `{"alg":"ES256","typ":""}`},
@@ -310,10 +300,8 @@ func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
 func TestJWTRefusesToMintWithoutARequiredClaim(t *testing.T) {
 	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com", "mcp")
 
-	// sub and client_id are the two required claims that come from the caller
-	// rather than from the issuer, so they are the two it can get wrong. A
-	// token missing either is one no resource server may accept, which makes
-	// minting it worse than failing.
+	// sub and client_id come from the caller, so they are the two that can
+	// arrive missing. No resource server may accept a token without them.
 	cases := []struct {
 		name   string
 		claims AccessTokenClaims
@@ -389,9 +377,8 @@ func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
 	signingInput := parts[0] + "." + parts[1]
 	digest := sha256.Sum256([]byte(signingInput))
 
-	// The same signature over the same input, ASN.1-encoded. RFC 7518 §3.4
-	// requires raw R||S, so this must be refused even though it is valid
-	// ECDSA over the right message.
+	// Valid ECDSA over the right message, but DER-encoded where RFC 7518 §3.4
+	// requires raw R||S.
 	der, err := ecdsa.SignASN1(rand.Reader, issuer.signer, digest[:])
 	if err != nil {
 		t.Fatalf("SignASN1: %v", err)
@@ -404,13 +391,9 @@ func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
 	}
 }
 
-// TestPackedSignatureWithALeadingZeroInRVerifies drives the R||S packing on
-// a signature the length check in TestVerifyRefusesASignatureThatIsNotSixtyFourBytes
-// cannot distinguish from a correctly padded one: an R whose top byte is zero.
-// FillBytes pads correctly regardless, but an unpadded encoding would produce
-// a 63-byte R here that this test can catch and that length check cannot.
-// A leading zero byte occurs in about 1 signature in 256, so this mints
-// tokens until one turns up rather than asserting on a single one.
+// An R whose top byte is zero is the only case where unpadded packing differs
+// from correct packing, and it occurs in about one signature in 256 — hence the
+// loop rather than a single assertion.
 func TestPackedSignatureWithALeadingZeroInRVerifies(t *testing.T) {
 	const maxAttempts = 4096
 

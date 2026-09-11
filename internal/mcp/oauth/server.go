@@ -38,9 +38,8 @@ type ServerConfig struct {
 	// MCP holds DCR knobs and the require_resource_indicator flag.
 	MCP config.MCPConfig
 
-	// SigningKey is the root from which the token and CSRF keys are derived.
-	// If MCPConfig.SigningKey is empty, main.go auto-generates an ephemeral
-	// root.
+	// SigningKey is the root the token and CSRF keys derive from. An empty one
+	// leaves the server unable to issue tokens.
 	SigningKey []byte
 
 	// HTTPClient is an optional HTTP client for CIMD fetches.
@@ -78,9 +77,7 @@ func (c ServerConfig) issuerID() string {
 // NewServer constructs a fully wired Server from cfg. No separate init step
 // is required; call RegisterRoutes to attach handlers to a mux.
 func NewServer(cfg ServerConfig) *Server {
-	// A root is absent only when nothing configured one and main.go did not
-	// generate one, which is the ErrMissingKey path IssueAccessToken and
-	// VerifyAccessToken already answer with.
+	// Without a root, issuing and verifying answer ErrMissingKey.
 	km, err := deriveKeys(cfg.SigningKey)
 	if err != nil {
 		slog.Warn("MCP OAuth has no signing key; tokens cannot be issued", "error", err)
@@ -179,8 +176,8 @@ type asMetadata struct {
 	RevocationEndpoint    string `json:"revocation_endpoint"`
 	RegistrationEndpoint  string `json:"registration_endpoint,omitempty"`
 
-	// JWKSURI is omitted with no key to serve, so the document never names an
-	// endpoint this server would refuse.
+	// Omitted with no key to serve, so the document never names an endpoint
+	// that would refuse.
 	JWKSURI string `json:"jwks_uri,omitempty"`
 
 	// ClientIDMetadataDocumentSupported advertises CIMD, which 2026-07-28
@@ -196,10 +193,8 @@ type asMetadata struct {
 	RevocationEndpointAuthMethodsSupported []string `json:"revocation_endpoint_auth_methods_supported"`
 }
 
-// writeDiscoveryDoc serves one of the server's discovery documents. It marshals
-// before touching the response, so an encoding failure cannot leave partial
-// headers in front of a 500. The cache lifetime is shared: all three documents
-// change only when the server is reconfigured.
+// Marshals before touching the response, so an encoding failure cannot leave
+// partial headers in front of a 500.
 func writeDiscoveryDoc(w http.ResponseWriter, doc any, contentType string) {
 	body, err := json.Marshal(doc)
 	if err != nil {
@@ -653,10 +648,8 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 	renderConsent(w, data)
 }
 
-// csrfKey is the derived HMAC key for consent CSRF tokens. Nil when no root
-// was configured; hmac.New accepts a nil key, so tokens would still verify —
-// forgeably — rather than fail. Unreachable in production: main.go always
-// supplies a root.
+// Nil without a root, which hmac.New accepts: tokens would verify, forgeably,
+// rather than fail.
 func (s *Server) csrfKey() []byte {
 	if s.keys == nil {
 		return nil

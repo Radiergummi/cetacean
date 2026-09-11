@@ -56,9 +56,8 @@ func TestJWKSDocumentShape(t *testing.T) {
 		t.Errorf("Cache-Control = %q, want max-age=3600", got)
 	}
 
-	// Assert the coordinates literally. go-jose both writes and reads them, so
-	// parsing the document back with go-jose would not catch an encoding that
-	// every other implementation rejects.
+	// go-jose both writes and reads these, so parsing the document back with it
+	// would not catch an encoding every other implementation rejects.
 	var doc struct {
 		Keys []struct {
 			Kty string `json:"kty"`
@@ -111,9 +110,8 @@ func TestJWKSDocumentShape(t *testing.T) {
 		t.Errorf("kid = %q, want %q", key.Kid, km.kid)
 	}
 
-	// go-jose's JSONWebKey.MarshalJSON has a *ecdsa.PrivateKey branch that
-	// emits "d"; nothing else in this test would notice if HandleJWKS passed
-	// the private key instead of its public half.
+	// go-jose emits "d" for a private key, and nothing else here would notice
+	// if the public half were not the thing published.
 	var raw map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
 		t.Fatalf("unmarshal raw: %v", err)
@@ -132,8 +130,8 @@ func TestJWKSDocumentShape(t *testing.T) {
 	}
 }
 
-// TestPublishedKeyVerifiesAToken is the load-bearing check: an implementation
-// that is not ours verifies a token we minted, using only what we published.
+// An implementation that is not ours verifies a token we minted, using only
+// what we published.
 func TestPublishedKeyVerifiesAToken(t *testing.T) {
 	s := newJWKSTestServer(t)
 

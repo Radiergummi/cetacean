@@ -15,9 +15,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/mcp/oauth"
 )
 
-// withOAuthRoutes mounts the real authorization server the way main.go does:
-// the server knows the base path for the URLs it publishes, and registers its
-// routes under the empty prefix because basePathMiddleware strips first.
+// The base path reaches the published URLs, not the routes: the prefix is
+// already stripped by the time the mux sees a request.
 func withOAuthRoutes(basePath string) routerOption {
 	srv := oauth.NewServer(oauth.ServerConfig{
 		Issuer:      "https://swarm.example",
@@ -38,10 +37,8 @@ func withOAuthRoutes(basePath string) routerOption {
 	}
 }
 
-// TestAdvertisedJWKSURIServesAKeySet follows jwks_uri out of the metadata over
-// the middleware stack a client actually meets. A route the mux never matches
-// is answered by the SPA with 200 text/html, so a non-404 assertion would pass
-// against an HTML page.
+// A route the mux never matches is answered by the SPA with 200 text/html, so
+// anything weaker than a content-type assertion passes against an HTML page.
 func TestAdvertisedJWKSURIServesAKeySet(t *testing.T) {
 	for _, basePath := range []string{"", "/cetacean"} {
 		t.Run("basePath="+basePath, func(t *testing.T) {
@@ -78,8 +75,7 @@ func TestAdvertisedJWKSURIServesAKeySet(t *testing.T) {
 				t.Fatalf("jwks_uri does not parse: %v", err)
 			}
 
-			// Errorf, not Fatalf: the follow-up request below still runs and
-			// reports on the fetched document independently of this mismatch.
+			// Errorf, not Fatalf: the fetch below still reports on its own.
 			if want := basePath + "/oauth/jwks"; target.Path != want {
 				t.Errorf("jwks_uri path = %q, want %q", target.Path, want)
 			}
