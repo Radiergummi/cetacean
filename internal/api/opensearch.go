@@ -33,7 +33,7 @@ type openSearchDescription struct {
 
 	Description   string          `xml:"Description"`
 	InputEncoding string          `xml:"InputEncoding"`
-	Image         *openSearchIcon `xml:"Image,omitempty"`
+	Image         openSearchIcon  `xml:"Image"`
 	URLs          []openSearchURL `xml:"Url"`
 }
 
@@ -59,7 +59,12 @@ type openSearchURL struct {
 // taken from the request, and the trusted-proxy rules in requestOrigin decide
 // how much of that is believed.
 func HandleOpenSearch(w http.ResponseWriter, r *http.Request) {
-	search := absURL(r, "/search")
+	ctx := r.Context()
+	origin := originOf(r)
+
+	link := func(path string) string { return origin + absPath(ctx, path) }
+
+	search := link("/search")
 
 	doc := openSearchDescription{
 		XMLNS:     openSearchNamespace,
@@ -67,11 +72,11 @@ func HandleOpenSearch(w http.ResponseWriter, r *http.Request) {
 		Description: "Search services, stacks, nodes, tasks, configs, secrets, " +
 			"networks and volumes in the Swarm cluster",
 		InputEncoding: "UTF-8",
-		Image: &openSearchIcon{
+		Image: openSearchIcon{
 			Width:  32,
 			Height: 32,
 			Type:   "image/png",
-			URL:    absURL(r, "/favicon-32x32.png"),
+			URL:    link("/favicon-32x32.png"),
 		},
 		URLs: []openSearchURL{
 			{Type: "text/html", Template: search + "?q={searchTerms}"},
@@ -81,19 +86,18 @@ func HandleOpenSearch(w http.ResponseWriter, r *http.Request) {
 			// headers.
 			{
 				Type:     "application/atom+xml",
-				Template: absURL(r, "/search.atom") + "?q={searchTerms}",
+				Template: link("/search.atom") + "?q={searchTerms}",
 			},
 			{
 				Type:     "application/json",
-				Template: absURL(r, "/search.json") + "?q={searchTerms}",
+				Template: link("/search.json") + "?q={searchTerms}",
 			},
 		},
 	}
 
 	body, err := xml.MarshalIndent(doc, "", "  ")
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError,
-			"could not build the OpenSearch description")
+		writeErrorCode(w, r, "API009", "failed to serialize response")
 
 		return
 	}

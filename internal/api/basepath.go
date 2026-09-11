@@ -51,13 +51,21 @@ func absPath(ctx context.Context, path string) string {
 // URLs — Atom feeds, where RFC 4287 requires IRIs, and the discovery documents
 // under /.well-known.
 func absURL(r *http.Request, path string) string {
+	return originOf(r) + absPath(r.Context(), path)
+}
+
+// originOf returns the scheme and authority absURL builds its URLs on, without
+// a path. A document naming many URIs resolves this once and appends absPath
+// itself, rather than paying the context lookups and the Forwarded parse below
+// per URI — the answer is the same for every one of them.
+func originOf(r *http.Request) string {
 	if base := PublicURLFromContext(r.Context()); base != "" {
-		return base + absPath(r.Context(), path)
+		return base
 	}
 
 	scheme, host := requestOrigin(r)
 
-	return scheme + "://" + host + absPath(r.Context(), path)
+	return scheme + "://" + host
 }
 
 // requestOrigin resolves the scheme and authority a client reached this
@@ -113,15 +121,21 @@ func requestOrigin(r *http.Request) (scheme, host string) {
 	return scheme, host
 }
 
-// isAuthority reports whether s can stand as the authority of a URL: non-empty
-// and free of the delimiters that would end it early, which is what separates
-// a hostname from a string that rewrites the rest of the link.
+// isAuthority reports whether s can stand as the authority of a URL, which is
+// what separates a hostname from a string that rewrites the rest of the link.
+//
+// The test is a round-trip through the parser that owns the grammar rather
+// than a list of delimiters someone thought of: anything s carries beyond an
+// authority — a path, a query, a fragment, userinfo, a control character —
+// lands somewhere other than Host, and the comparison fails.
 func isAuthority(s string) bool {
 	if s == "" {
 		return false
 	}
 
-	return !strings.ContainsAny(s, "/?#\\ \t\r\n\v\f\x00@")
+	parsed, err := url.Parse("//" + s)
+
+	return err == nil && parsed.Host == s && parsed.User == nil
 }
 
 // publicURLMiddleware stores server.public_url in the request context so

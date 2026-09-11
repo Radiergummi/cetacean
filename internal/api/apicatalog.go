@@ -12,6 +12,12 @@ import (
 // api-catalog link relation discoveryLinks puts on every response.
 const apiCatalogPath = "/.well-known/api-catalog"
 
+// oauthProtectedResourcePath is where internal/mcp/oauth registers the RFC
+// 9728 metadata document. Spelled again here because internal/api and
+// internal/mcp deliberately do not import each other; catalogMounts.oauthMetadata
+// is what keeps this from being claimed when that route is not mounted.
+const oauthProtectedResourcePath = "/.well-known/oauth-protected-resource"
+
 // catalogMounts is what the router actually mounted, which is what the catalog
 // is allowed to claim. A catalog is a promise that what it lists is there, and
 // both of these are optional at runtime: MCP is off by default, and its OAuth
@@ -36,50 +42,22 @@ type catalogMounts struct {
 // description document or a health probe; none of them is a cluster resource.
 func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		restAPI := absURL(r, "/")
+		ctx := r.Context()
+		origin := originOf(r)
+
+		link := func(path string) string { return origin + absPath(ctx, path) }
+
+		restAPI := link("/")
 
 		items := []linkset.Target{{
 			Href:  restAPI,
 			Title: "Cetacean REST API",
 		}}
 
-		contexts := []linkset.Context{
-			{
-				Anchor: absURL(r, apiCatalogPath),
-			},
-			{
-				Anchor: restAPI,
-				Relations: map[string][]linkset.Target{
-					// Both relations point at /api: it is one resource that
-					// content-negotiates between the OpenAPI document and the
-					// Scalar playground, and the type attribute is what tells
-					// the two apart.
-					"service-desc": {{
-						Href:  absURL(r, "/api"),
-						Type:  "application/json",
-						Title: "OpenAPI description",
-					}},
-					"service-doc": {{
-						Href:  absURL(r, "/api"),
-						Type:  "text/html",
-						Title: "API reference",
-					}},
-					"describedby": {{
-						Href:  absURL(r, "/api/context.jsonld"),
-						Type:  "application/ld+json",
-						Title: "JSON-LD context",
-					}},
-					"status": {{
-						Href:  absURL(r, "/-/health"),
-						Type:  "application/json",
-						Title: "Health",
-					}},
-				},
-			},
-		}
+		var mcpContexts []linkset.Context
 
 		if mounts.mcp {
-			mcpAPI := absURL(r, "/mcp")
+			mcpAPI := link("/mcp")
 
 			items = append(items, linkset.Target{
 				Href:  mcpAPI,
@@ -91,7 +69,7 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 			// exactly that at greater length. The item above still announces
 			// the API.
 			if mounts.oauthMetadata {
-				contexts = append(contexts, linkset.Context{
+				mcpContexts = []linkset.Context{{
 					Anchor: mcpAPI,
 					Relations: map[string][]linkset.Target{
 						// RFC 9728 protected resource metadata is metadata
@@ -102,24 +80,56 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 						// answers no initialize, so its capabilities are not
 						// discoverable ahead of a call.
 						"service-meta": {{
-							Href:  absURL(r, "/.well-known/oauth-protected-resource"),
+							Href:  link(oauthProtectedResourcePath),
 							Type:  "application/json",
 							Title: "Protected resource metadata",
 						}},
 					},
-				})
+				}}
 			}
 		}
 
-		// The catalog's own context carries the item links, which is the one
-		// relation RFC 9727 §3.1 requires: each names an API that is a member
-		// of this catalog.
-		contexts[0].Relations = map[string][]linkset.Target{"item": items}
+		contexts := append([]linkset.Context{
+			{
+				Anchor: link(apiCatalogPath),
+				// item is the one relation RFC 9727 §3.1 requires: each names
+				// an API that is a member of this catalog.
+				Relations: map[string][]linkset.Target{"item": items},
+			},
+			{
+				Anchor: restAPI,
+				Relations: map[string][]linkset.Target{
+					// Both relations point at /api: it is one resource that
+					// content-negotiates between the OpenAPI document and the
+					// Scalar playground, and the type attribute is what tells
+					// the two apart.
+					"service-desc": {{
+						Href:  link("/api"),
+						Type:  "application/json",
+						Title: "OpenAPI description",
+					}},
+					"service-doc": {{
+						Href:  link("/api"),
+						Type:  "text/html",
+						Title: "API reference",
+					}},
+					"describedby": {{
+						Href:  link(jsonLDContext),
+						Type:  "application/ld+json",
+						Title: "JSON-LD context",
+					}},
+					"status": {{
+						Href:  link("/-/health"),
+						Type:  "application/json",
+						Title: "Health",
+					}},
+				},
+			},
+		}, mcpContexts...)
 
 		body, err := json.Marshal(linkset.Document{Contexts: contexts})
 		if err != nil {
-			writeProblem(w, r, http.StatusInternalServerError,
-				"could not build the API catalog")
+			writeErrorCode(w, r, "API009", "failed to serialize response")
 
 			return
 		}

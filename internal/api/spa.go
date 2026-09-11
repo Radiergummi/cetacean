@@ -13,17 +13,6 @@ import (
 	"time"
 )
 
-// Go's mime package knows no type for .webmanifest, and neither does every
-// host's mime.types, so serveAsset would leave the header unset and let
-// http.ServeContent sniff the bytes — which reports text/plain for JSON. The
-// Web App Manifest specification requires the response be a JSON MIME type,
-// so a sniffed manifest is discarded and the install prompt never appears,
-// with nothing in the response to say why.
-func init() {
-	//nolint:errcheck // the only error is a malformed type, which this is not
-	mime.AddExtensionType(".webmanifest", "application/manifest+json")
-}
-
 // hasMidPathExtension reports whether the URL path contains a dot-extension
 // in a non-terminal segment, e.g. /foo.atom/feed or /data.json/bar.
 // Such paths are never valid client-side routes.
@@ -83,6 +72,20 @@ func variantSuffix(e Encoding) string {
 	}
 }
 
+// assetContentTypes names the types the mime package does not. It is consulted
+// before mime rather than registered into it: mime.AddExtensionType mutates a
+// process-global table from a library package, reaching every consumer in the
+// binary in order to serve one file here.
+//
+// Go knows no type for .webmanifest, and neither does every host's mime.types,
+// so without this the header goes unset and http.ServeContent sniffs the bytes
+// — reporting text/plain for JSON. The Web App Manifest specification requires
+// a JSON MIME type, so a sniffed manifest is discarded and the install prompt
+// never appears, with nothing in the response to say why.
+var assetContentTypes = map[string]string{
+	".webmanifest": "application/manifest+json",
+}
+
 // assetCacheControl returns the Cache-Control value for a non-index asset path.
 // Hashed filenames under assets/ never change, so they are cached immutably;
 // everything else keeps the server's default.
@@ -138,7 +141,13 @@ func serveAsset(
 	// sniffs the compressed variant's bytes and reports application/gzip — a
 	// statement about the coding, not the resource. Identity is left to sniff,
 	// where the bytes are the resource.
-	contentType := mime.TypeByExtension(filepath.Ext(path))
+	extension := filepath.Ext(path)
+
+	contentType := assetContentTypes[extension]
+	if contentType == "" {
+		contentType = mime.TypeByExtension(extension)
+	}
+
 	if contentType == "" && coding != EncodingIdentity {
 		contentType = "application/octet-stream"
 	}

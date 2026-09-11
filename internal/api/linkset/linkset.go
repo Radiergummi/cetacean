@@ -3,11 +3,7 @@
 // same spirit as api/atom and api/jsonfeed.
 package linkset
 
-import (
-	"bytes"
-	"encoding/json"
-	"sort"
-)
+import "encoding/json"
 
 // MediaType is the content type RFC 9264 §4.2 registers for this
 // serialization, and the one RFC 9727 §4.2 requires an API catalog to be
@@ -17,7 +13,7 @@ const MediaType = "application/linkset+json"
 // Document is a linkset: the set of link contexts, serialized under a single
 // "linkset" member per RFC 9264 §4.2.1.
 type Document struct {
-	Contexts []Context
+	Contexts []Context `json:"linkset"`
 }
 
 // Context is one anchor together with every link that hangs off it, keyed by
@@ -52,71 +48,30 @@ type Target struct {
 	Title string `json:"title,omitempty"`
 }
 
-// MarshalJSON writes the document as {"linkset": [...]}.
-func (d Document) MarshalJSON() ([]byte, error) {
-	contexts := d.Contexts
-	if contexts == nil {
-		contexts = []Context{}
-	}
-
-	return json.Marshal(struct {
-		Linkset []Context `json:"linkset"`
-	}{Linkset: contexts})
-}
-
-// MarshalJSON writes the anchor first and then each relation, in sorted order.
+// MarshalJSON writes the anchor and the relations as members of one object,
+// which is the shape §4.2.1 defines: a relation is named by itself, so no
+// fixed struct can describe a context.
 //
-// The ordering is not cosmetic: these documents are served with an ETag over
-// their bytes, and Go randomizes map iteration, so an unsorted context would
-// hash differently on every request and no conditional GET would ever match.
+// Marshalling a map rather than building the object by hand is what keeps the
+// bytes stable, and stability is the requirement — these documents are served
+// with an ETag over them, and Go randomizes map iteration. encoding/json sorts
+// map keys, so the output is deterministic without a sort here. Members
+// therefore appear in lexical order, which happens to put "anchor" first for
+// every relation Cetacean publishes but would not for one sorting before it.
 func (c Context) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-
-	buf.WriteByte('{')
+	out := make(map[string]any, len(c.Relations)+1)
 
 	if c.Anchor != "" {
-		anchor, err := json.Marshal(c.Anchor)
-		if err != nil {
-			return nil, err
-		}
-
-		buf.WriteString(`"anchor":`)
-		buf.Write(anchor)
+		out["anchor"] = c.Anchor
 	}
-
-	relations := make([]string, 0, len(c.Relations))
 
 	for relation, targets := range c.Relations {
 		if len(targets) == 0 {
 			continue
 		}
 
-		relations = append(relations, relation)
+		out[relation] = targets
 	}
 
-	sort.Strings(relations)
-
-	for _, relation := range relations {
-		if buf.Len() > 1 {
-			buf.WriteByte(',')
-		}
-
-		name, err := json.Marshal(relation)
-		if err != nil {
-			return nil, err
-		}
-
-		targets, err := json.Marshal(c.Relations[relation])
-		if err != nil {
-			return nil, err
-		}
-
-		buf.Write(name)
-		buf.WriteByte(':')
-		buf.Write(targets)
-	}
-
-	buf.WriteByte('}')
-
-	return buf.Bytes(), nil
+	return json.Marshal(out)
 }

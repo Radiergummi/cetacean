@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/api/linkset"
-	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // catalogDocument is the wire shape of a linkset, read back rather than
@@ -89,12 +88,21 @@ func (d catalogDocument) targets(t *testing.T) []catalogTarget {
 }
 
 // fetchCatalog drives the catalog route on the given router and parses the
-// response.
-func fetchCatalog(t *testing.T, router http.Handler, requestPath string) catalogDocument {
+// response. accept may be empty, for the client that states no preference.
+func fetchCatalog(
+	t *testing.T,
+	router http.Handler,
+	requestPath, accept string,
+) catalogDocument {
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodGet, requestPath, nil)
 	req.Host = "cetacean.example.com"
+
+	if accept != "" {
+		req.Header.Set("Accept", accept)
+	}
+
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -134,7 +142,7 @@ func fetchCatalog(t *testing.T, router http.Handler, requestPath string) catalog
 func TestAPICatalogTargetsAnswerAsAdvertised(t *testing.T) {
 	router := newSeededTestRouter(t)
 
-	doc := fetchCatalog(t, router, apiCatalogPath)
+	doc := fetchCatalog(t, router, apiCatalogPath, "")
 
 	targets := doc.targets(t)
 	if len(targets) == 0 {
@@ -206,22 +214,7 @@ func TestAPICatalogTargetsAnswerAsAdvertised(t *testing.T) {
 // was a media type negotiation recognised, the catalog answered its own
 // audience with 406.
 func TestAPICatalogAnswersItsOwnMediaType(t *testing.T) {
-	router := newSeededTestRouter(t)
-
-	req := httptest.NewRequest(http.MethodGet, apiCatalogPath, nil)
-	req.Header.Set("Accept", linkset.MediaType)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d asking for %s, want 200; body: %s",
-			rec.Code, linkset.MediaType, rec.Body.String())
-	}
-
-	if got := rec.Header().Get("Content-Type"); got != linkset.MediaType {
-		t.Errorf("Content-Type = %q, want %q", got, linkset.MediaType)
-	}
+	fetchCatalog(t, newSeededTestRouter(t), apiCatalogPath, linkset.MediaType)
 }
 
 // TestAPICatalogCarriesItemLinks pins the one relation RFC 9727 requires.
@@ -232,7 +225,7 @@ func TestAPICatalogAnswersItsOwnMediaType(t *testing.T) {
 func TestAPICatalogCarriesItemLinks(t *testing.T) {
 	router := newSeededTestRouter(t)
 
-	doc := fetchCatalog(t, router, apiCatalogPath)
+	doc := fetchCatalog(t, router, apiCatalogPath, "")
 	contexts := doc.contexts(t)
 
 	catalogAnchor := "http://cetacean.example.com" + apiCatalogPath
@@ -251,6 +244,12 @@ func TestAPICatalogCarriesItemLinks(t *testing.T) {
 	for _, item := range items {
 		if item.Href == "" {
 			t.Error("an item link carries no href")
+		}
+
+		// A host renders the catalog as a list; an untitled entry is a bare
+		// URI in it.
+		if item.Title == "" {
+			t.Errorf("the item %q carries no title", item.Href)
 		}
 	}
 }
@@ -315,13 +314,9 @@ func TestAPICatalogOmitsUnmountedAPIs(t *testing.T) {
 // CETACEAN_BASE_PATH must carry the prefix, or every URI in it addresses a
 // path the deployment does not serve.
 func TestAPICatalogIsAbsoluteUnderABasePath(t *testing.T) {
-	router := newTestRouterWithConfig(
-		t,
-		[]routerOption{withBasePath("/cetacean")},
-		withCache(cache.New(nil)),
-	)
+	router := newBasePathTestRouter(t, "/cetacean")
 
-	doc := fetchCatalog(t, router, "/cetacean"+apiCatalogPath)
+	doc := fetchCatalog(t, router, "/cetacean"+apiCatalogPath, "")
 
 	targets := doc.targets(t)
 	if len(targets) == 0 {

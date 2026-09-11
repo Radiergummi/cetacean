@@ -35,16 +35,36 @@ func forwardedNodes(values []string) []string {
 }
 
 // forwardedOrigin returns the "proto" and "host" the first Forwarded element
-// names, empty for either the header does not carry. These describe the
+// names, empty for either the element does not carry. These describe the
 // connection the *client* made, so the leftmost element is the one that saw
 // it — later elements describe hops between proxies.
+//
+// It walks that element itself rather than calling forwardedParams twice.
+// forwardedParams collects every occurrence across every element, which is
+// what forwardedNodes wants and is a different rule from this one: the two
+// agree only when the leftmost element carries both parameters.
 func forwardedOrigin(values []string) (proto, host string) {
-	if protos := forwardedParams(values, "proto"); len(protos) > 0 {
-		proto = protos[0]
+	if len(values) == 0 {
+		return "", ""
 	}
 
-	if hosts := forwardedParams(values, "host"); len(hosts) > 0 {
-		host = hosts[0]
+	elements := splitOutsideQuotes(values[0], ',')
+	if len(elements) == 0 {
+		return "", ""
+	}
+
+	for _, pair := range splitOutsideQuotes(elements[0], ';') {
+		key, value, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+
+		switch {
+		case strings.EqualFold(strings.TrimSpace(key), "proto"):
+			proto = unquote(strings.TrimSpace(value))
+		case strings.EqualFold(strings.TrimSpace(key), "host"):
+			host = unquote(strings.TrimSpace(value))
+		}
 	}
 
 	return proto, host

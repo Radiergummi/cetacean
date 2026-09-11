@@ -6,8 +6,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // parsedOpenSearch is the document read back off the wire, declared separately
@@ -89,6 +87,24 @@ func TestOpenSearchDescriptionIsValid(t *testing.T) {
 		)
 	}
 
+	// §4.2: InputEncoding names the character encoding the search accepts.
+	// The templates below carry {searchTerms} unescaped, so a client needs to
+	// be told how to encode what it substitutes.
+	if doc.InputEncoding != "UTF-8" {
+		t.Errorf("InputEncoding = %q, want UTF-8", doc.InputEncoding)
+	}
+
+	// A browser renders Image at its declared size; wrong dimensions show as a
+	// blurred or clipped icon rather than an error.
+	if doc.Image.Width != 32 || doc.Image.Height != 32 {
+		t.Errorf("Image is %dx%d, want the 32x32 favicon it points at",
+			doc.Image.Width, doc.Image.Height)
+	}
+
+	if doc.Image.Type != "image/png" {
+		t.Errorf("Image type = %q, want image/png", doc.Image.Type)
+	}
+
 	if len(doc.URLs) == 0 {
 		t.Fatal("a description document with no Url element describes no search")
 	}
@@ -159,11 +175,7 @@ func TestOpenSearchTemplatesResolve(t *testing.T) {
 // construction: this document is built by the server and its templates must
 // carry the prefix themselves.
 func TestOpenSearchIsAbsoluteUnderABasePath(t *testing.T) {
-	router := newTestRouterWithConfig(
-		t,
-		[]routerOption{withBasePath("/cetacean")},
-		withCache(cache.New(nil)),
-	)
+	router := newBasePathTestRouter(t, "/cetacean")
 
 	doc := fetchOpenSearch(t, router, "/cetacean"+openSearchPath)
 

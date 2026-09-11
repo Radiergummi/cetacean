@@ -291,6 +291,18 @@ func TestAbsURLOriginIsProxySupplied(t *testing.T) {
 			want: "https://edge.example.com/services",
 		},
 		{
+			// Distinguishes "the first element" from "the first occurrence
+			// anywhere". The latter is forwardedNodes' rule, not this one: an
+			// inner hop's account of itself is not the client's connection,
+			// and the two rules agree on every case above.
+			name: "a later element does not supply the origin",
+			peer: &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
+			headers: map[string]string{
+				"Forwarded": `for=192.0.2.9, host=inner.example.com;proto=https`,
+			},
+			want: "http://internal:9000/services",
+		},
+		{
 			// nginx's proxy_set_header X-Forwarded-Host $http_host passes the
 			// client's own Host through: a trusted proxy is not a promise
 			// that the value it forwarded was ever checked.
@@ -298,6 +310,20 @@ func TestAbsURLOriginIsProxySupplied(t *testing.T) {
 			peer:    &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
 			headers: map[string]string{"X-Forwarded-Host": "evil.example.com/attacker#"},
 			want:    "http://internal:9000/services",
+		},
+		{
+			// Userinfo is part of an authority's grammar but not of a host,
+			// and a link carrying it reads as credentials for somewhere.
+			name:    "a host carrying userinfo is refused",
+			peer:    &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
+			headers: map[string]string{"X-Forwarded-Host": "cetacean.example.com@evil.example.com"},
+			want:    "http://internal:9000/services",
+		},
+		{
+			name:    "a host with a port is kept",
+			peer:    &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
+			headers: map[string]string{"X-Forwarded-Host": "proxy.example.com:8443"},
+			want:    "http://proxy.example.com:8443/services",
 		},
 		{
 			name:    "a scheme that is not http(s) is refused",

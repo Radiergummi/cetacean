@@ -191,6 +191,18 @@ func withBasePath(basePath string) routerOption {
 	}
 }
 
+// newBasePathTestRouter serves a router under a path prefix, for the documents
+// that publish absolute URLs and must carry it.
+func newBasePathTestRouter(t *testing.T, basePath string) http.Handler {
+	t.Helper()
+
+	return newTestRouterWithConfig(
+		t,
+		[]routerOption{withBasePath(basePath)},
+		withCache(cache.New(nil)),
+	)
+}
+
 // withAPIDocs configures the two documents the /api endpoints serve, which
 // default to a stub spec and no bundle.
 func withAPIDocs(spec, scalarJS []byte) routerOption {

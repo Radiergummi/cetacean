@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -140,53 +142,58 @@ func TestSPAServesWebManifestAsJSON(t *testing.T) {
 	}
 }
 
+// webManifestPath is the shipped manifest, read from source rather than from a
+// build output so these tests run without one.
+const webManifestPath = "../../frontend/public/manifest.webmanifest"
+
+type webManifestIcon struct {
+	Src   string `json:"src"`
+	Sizes string `json:"sizes"`
+}
+
+// webManifest is the subset of the Web App Manifest these tests claim things
+// about.
+type webManifest struct {
+	StartURL   string            `json:"start_url"`
+	Scope      string            `json:"scope"`
+	ThemeColor string            `json:"theme_color"`
+	Icons      []webManifestIcon `json:"icons"`
+}
+
+func readWebManifest(t *testing.T) webManifest {
+	t.Helper()
+
+	raw, err := os.ReadFile(webManifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+
+	var manifest webManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("manifest is not valid JSON: %v", err)
+	}
+
+	return manifest
+}
+
 // TestWebManifestIsSelfContainedAndRelative holds the shipped manifest to the
 // one property that makes it work under CETACEAN_BASE_PATH: a manifest
 // resolves its member URLs against its own URL, so every URL in it must be
 // relative. An absolute path would address the origin root, which is not where
 // a base-path deployment lives — the trap frontend-ledger A2 records.
+//
+// It also checks each icon names a file the build will ship, since a manifest
+// naming a missing icon is one a browser discards whole.
 func TestWebManifestIsSelfContainedAndRelative(t *testing.T) {
-	raw, err := os.ReadFile("../../frontend/public/manifest.webmanifest")
-	if err != nil {
-		t.Fatalf("read manifest: %v", err)
-	}
+	manifest := readWebManifest(t)
 
-	var manifest struct {
-		StartURL string `json:"start_url"`
-		Scope    string `json:"scope"`
-		Icons    []struct {
-			Src   string `json:"src"`
-			Sizes string `json:"sizes"`
-		} `json:"icons"`
-	}
+	relative := func(name, value string) {
+		t.Helper()
 
-	if err := json.Unmarshal(raw, &manifest); err != nil {
-		t.Fatalf("manifest is not valid JSON: %v", err)
-	}
-
-	urls := map[string]string{
-		"start_url": manifest.StartURL,
-		"scope":     manifest.Scope,
-	}
-
-	if len(manifest.Icons) == 0 {
-		t.Error("the manifest declares no icons, so nothing can install it")
-	}
-
-	for _, icon := range manifest.Icons {
-		urls["icon "+icon.Sizes] = icon.Src
-
-		// An installable manifest needs 192 and 512; the rest are extra.
-		if icon.Src == "" {
-			t.Errorf("icon %q has no src", icon.Sizes)
-		}
-	}
-
-	for name, value := range urls {
 		if value == "" {
 			t.Errorf("%s is empty", name)
 
-			continue
+			return
 		}
 
 		if !strings.HasPrefix(value, "./") {
@@ -198,37 +205,70 @@ func TestWebManifestIsSelfContainedAndRelative(t *testing.T) {
 		}
 	}
 
+	relative("start_url", manifest.StartURL)
+	relative("scope", manifest.Scope)
+
+	if len(manifest.Icons) == 0 {
+		t.Error("the manifest declares no icons, so nothing can install it")
+	}
+
+	for _, icon := range manifest.Icons {
+		relative("icon "+icon.Sizes, icon.Src)
+
+		if _, err := os.Stat(path.Join(path.Dir(webManifestPath), icon.Src)); err != nil {
+			t.Errorf("the manifest names %q but frontend/public holds no such file", icon.Src)
+		}
+	}
+
+	// A browser offers to install only with both of these present.
 	for _, size := range []string{"192x192", "512x512"} {
-		if _, ok := urls["icon "+size]; !ok {
+		if !slices.ContainsFunc(manifest.Icons, func(i webManifestIcon) bool {
+			return i.Sizes == size
+		}) {
 			t.Errorf("no %s icon; a browser will not offer to install this", size)
 		}
 	}
 }
 
-// TestWebManifestIconsExist fails when the manifest names a file the build
-// will not ship, which is a manifest a browser discards whole.
-func TestWebManifestIconsExist(t *testing.T) {
-	raw, err := os.ReadFile("../../frontend/public/manifest.webmanifest")
+// TestWebManifestThemeColorMatchesTheDocument pins two of the three places the
+// theme colour is stated. index.html carries a media-queried pair because a
+// manifest holds only one value, so its light half has to agree with the
+// manifest's or an installed window and a browser tab disagree about the
+// dashboard's own background.
+//
+// The third statement is --background in index.css, which is oklch and stays
+// with the comment in index.html.
+func TestWebManifestThemeColorMatchesTheDocument(t *testing.T) {
+	manifest := readWebManifest(t)
+
+	if manifest.ThemeColor == "" {
+		t.Fatal("the manifest declares no theme_color")
+	}
+
+	raw, err := os.ReadFile("../../frontend/index.html")
 	if err != nil {
-		t.Fatalf("read manifest: %v", err)
+		t.Fatalf("read index.html: %v", err)
 	}
 
-	var manifest struct {
-		Icons []struct {
-			Src string `json:"src"`
-		} `json:"icons"`
+	document := string(raw)
+
+	light := strings.Index(document, `media="(prefers-color-scheme: light)"`)
+	if light < 0 {
+		t.Fatal("index.html declares no light-scheme theme-color")
 	}
 
-	if err := json.Unmarshal(raw, &manifest); err != nil {
-		t.Fatalf("manifest is not valid JSON: %v", err)
+	// The content attribute follows the media one inside the same tag.
+	tag := document[light:]
+	if end := strings.IndexByte(tag, '>'); end >= 0 {
+		tag = tag[:end]
 	}
 
-	for _, icon := range manifest.Icons {
-		name := strings.TrimPrefix(icon.Src, "./")
-
-		if _, err := os.Stat("../../frontend/public/" + name); err != nil {
-			t.Errorf("the manifest names %q but frontend/public holds no such file", name)
-		}
+	if !strings.Contains(tag, `content="`+manifest.ThemeColor+`"`) {
+		t.Errorf(
+			"index.html's light theme-color does not match the manifest's "+
+				"theme_color (%q); the tag reads: %s",
+			manifest.ThemeColor, strings.Join(strings.Fields(tag), " "),
+		)
 	}
 }
 
