@@ -13,6 +13,8 @@ import (
 type feedHandlers struct {
 	atom     http.HandlerFunc
 	jsonFeed http.HandlerFunc
+
+	queryParams []string
 }
 
 // hasFeed reports whether any feed handler is configured.
@@ -126,34 +128,28 @@ func (h *Handlers) aclMatchWrap(
 	}
 }
 
-// addFeedLinks sets Link headers advertising feed alternates (RFC 8288).
+// addFeedLinks sets Link headers advertising feed alternates (RFC 8288). The
+// href carries only the parameters the feed it points at reads, through the
+// same feedQuery the feed's own links use.
 func addFeedLinks(w http.ResponseWriter, r *http.Request, feeds feedHandlers) {
 	if !feeds.hasFeed() {
 		return
 	}
 
 	basePath := absPath(r.Context(), r.URL.Path)
-	rq := r.URL.RawQuery
+	query := feedQuery(r, feeds.queryParams)
 
 	if feeds.atom != nil {
-		href := basePath + ".atom"
-		if rq != "" {
-			href += "?" + rq
-		}
 		w.Header().Add("Link", fmt.Sprintf(
 			`<%s>; rel="alternate"; type="application/atom+xml"`,
-			href,
+			feedHref(basePath+".atom", query),
 		))
 	}
 
 	if feeds.jsonFeed != nil {
-		href := basePath + ".feed"
-		if rq != "" {
-			href += "?" + rq
-		}
 		w.Header().Add("Link", fmt.Sprintf(
 			`<%s>; rel="alternate"; type="application/feed+json"`,
-			href,
+			feedHref(basePath+".feed", query),
 		))
 	}
 }

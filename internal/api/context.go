@@ -31,9 +31,13 @@ const jsonLDContextDoc = `{
   }
 }`
 
+// contextBody is the JSON-LD context document, fixed for the life of the
+// process like the two documents /api serves beside it.
+var contextBody = newStaticBody([]byte(jsonLDContextDoc))
+
 // HandleContext serves the JSON-LD context document.
-func HandleContext(w http.ResponseWriter, _ *http.Request) {
+func HandleContext(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/ld+json")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-	w.Write([]byte(jsonLDContextDoc)) //nolint:errcheck
+	contextBody.serve(w, r)
 }

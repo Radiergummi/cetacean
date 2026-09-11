@@ -93,11 +93,11 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 func atomPaginationLinks(r *http.Request, data feedData) []atomxml.Link {
 	atomPath := r.URL.Path + ".atom"
 
-	selfHref := feedHref(absURL(r, atomPath), feedQuery(r, data))
+	selfHref := feedHref(absURL(r, atomPath), feedQuery(r, data.QueryParams))
 
 	// The HTML alternate and the subscription document are both the feed
 	// without a cursor on it, so they share one query.
-	baseQuery := feedQuery(r, data)
+	baseQuery := feedQuery(r, data.QueryParams)
 	baseQuery.Del("before")
 	baseQuery.Del("limit")
 
@@ -130,7 +130,7 @@ func atomPaginationLinks(r *http.Request, data feedData) []atomxml.Link {
 	}
 
 	if data.LastItemID > 0 && len(data.Entries) == data.Limit {
-		nextQuery := feedQuery(r, data)
+		nextQuery := feedQuery(r, data.QueryParams)
 		nextQuery.Set("before", strconv.FormatUint(data.LastItemID, 10))
 		nextQuery.Set("limit", strconv.Itoa(data.Limit))
 

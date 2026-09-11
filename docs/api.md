@@ -533,9 +533,9 @@ passes the per-resource [ACL][authorization] write check.
 | `PUT /services/{id}/mode` | 3 |
 | `PUT /services/{id}/endpoint-mode` | 3 |
 | `DELETE /services/{id}` | 3 |
+| `PATCH /nodes/{id}/labels` | 2 |
 | `PUT /nodes/{id}/availability` | 3 |
 | `PUT /nodes/{id}/role` | 3 |
-| `PATCH /nodes/{id}/labels` | 3 |
 | `DELETE /nodes/{id}` | 3 |
 | `DELETE /tasks/{id}` | 3 |
 | `DELETE /stacks/{name}` | 3 |
@@ -564,9 +564,6 @@ passes the per-resource [ACL][authorization] write check.
 | `POST /plugins/privileges` | 3 |
 | `POST /plugins/{name}/upgrade` | 3 |
 | `DELETE /plugins/{name}` | 3 |
-
-> [!NOTE]
-> `GET /swarm/unlock-key` returns a credential, so it is gated at level 3 like the writes beside it.
 
 ### Preconditions
 

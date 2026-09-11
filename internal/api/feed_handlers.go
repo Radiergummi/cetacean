@@ -162,7 +162,7 @@ func searchFeedData(
 	limit int,
 ) feedData {
 	data := historyFeedData(r, title, entries, beforeID, limit)
-	data.QueryParams = []string{"q"}
+	data.QueryParams = searchFeedParams
 
 	return data
 }
@@ -453,16 +453,17 @@ func parseFeedPagination(r *http.Request) (beforeID uint64, limit int) {
 // beyond these declares it in feedData.QueryParams.
 var feedPaginationParams = []string{"before", "limit"}
 
-// feedQuery returns the subset of r's query this feed's links may carry: the
-// pagination pair every feed reads, plus whatever else data declared.
+// searchFeedParams names the parameter only the search feed reads.
+var searchFeedParams = []string{"q"}
+
+// feedQuery returns the subset of r's query a feed's links may carry: the
+// pagination pair every feed reads, plus whatever else the caller declares.
 //
-// The rest of the raw query is attacker-chosen text, and reflecting it into a
-// compressed feed beside ACL-filtered resource names is the BREACH shape. The
-// set is per-feed rather than global because ?q= is read by handleFeedSearch
-// alone, and echoing it from a compressed feed would rebuild that shape.
-func feedQuery(r *http.Request, data feedData) url.Values {
+// Reflecting the rest of the raw query into a compressed feed beside
+// ACL-filtered resource names is the BREACH shape.
+func feedQuery(r *http.Request, extra []string) url.Values {
 	source := r.URL.Query()
-	kept := make(url.Values, len(feedPaginationParams)+len(data.QueryParams))
+	kept := make(url.Values, len(feedPaginationParams)+len(extra))
 
 	keep := func(names []string) {
 		for _, name := range names {
@@ -473,7 +474,7 @@ func feedQuery(r *http.Request, data feedData) url.Values {
 	}
 
 	keep(feedPaginationParams)
-	keep(data.QueryParams)
+	keep(extra)
 
 	return kept
 }

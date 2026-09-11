@@ -30,6 +30,11 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 		panic("openapi spec could not be converted to JSON: " + err.Error())
 	}
 
+	// Both bodies are fixed for the life of the process, so each is hashed
+	// once and compressed at most once per coding.
+	playground := newStaticBody([]byte(apiPlaygroundHTML))
+	spec := newStaticBody(specJSON)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		ct := ContentTypeFromContext(r.Context())
 		w.Header().Set("Cache-Control", "public, max-age=3600")
@@ -38,21 +43,23 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 			w.Header().Set("Content-Type", "text/html")
 			w.Header().
 				Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
-			w.Write([]byte(apiPlaygroundHTML)) //nolint:errcheck
+			playground.serve(w, r)
 		default:
 			// JSON is the default for content negotiation (including */*).
 			w.Header().Set("Content-Type", "application/json")
-			w.Write(specJSON) //nolint:errcheck
+			spec.serve(w, r)
 		}
 	}
 }
 
 // HandleScalarJS serves the embedded Scalar API reference JavaScript bundle.
 func HandleScalarJS(js []byte) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
+	bundle := newStaticBody(js)
+
+	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
-		w.Write(js) //nolint:errcheck
+		bundle.serve(w, r)
 	}
 }
 

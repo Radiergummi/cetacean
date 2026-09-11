@@ -66,6 +66,15 @@ func (h *Handlers) listFeeds(title string, eventType cache.EventType) feedHandle
 	}
 }
 
+// searchFeeds builds feedHandlers for the search endpoint.
+func (h *Handlers) searchFeeds() feedHandlers {
+	return feedHandlers{
+		atom:        h.feedSearchHandler(renderAtom),
+		jsonFeed:    h.feedSearchHandler(renderJSONFeed),
+		queryParams: searchFeedParams,
+	}
+}
+
 // detailFeeds builds feedHandlers for a resource detail endpoint.
 func (h *Handlers) detailFeeds(
 	eventType cache.EventType,
@@ -136,6 +145,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	svcTier1 := NewChain(svcACL, tier1)
 	svcTier2 := NewChain(svcACL, tier2)
 	svcTier3 := NewChain(svcACL, tier3)
+	nodeTier2 := NewChain(nodeACL, tier2)
 	nodeTier3 := NewChain(nodeACL, tier3)
 	taskTier3 := NewChain(taskACL, tier3)
 	stackTier3 := NewChain(stackACL, tier3)
@@ -332,7 +342,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiated(h.HandleGetNodeLabels, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /nodes/{id}/labels",
-		nodeTier3.Append(h.precond(h.nodeLabelsSpec().representation)).
+		nodeTier2.Append(h.precond(h.nodeLabelsSpec().representation)).
 			ThenFunc(h.HandlePatchNodeLabels))
 	mux.HandleFunc(
 		"GET /nodes/{id}/role",
@@ -685,10 +695,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			ThenFunc(h.HandleRemoveVolume))
 
 	// Search
-	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, feedHandlers{
-		atom:     h.feedSearchHandler(renderAtom),
-		jsonFeed: h.feedSearchHandler(renderJSONFeed),
-	}, spa))
+	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, h.searchFeeds(), spa))
 
 	// Profile
 	mux.HandleFunc("GET /profile", contentNegotiated(h.HandleProfile, feedHandlers{}, spa))

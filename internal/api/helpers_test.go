@@ -1,10 +1,15 @@
 package api
 
 import (
+	"bytes"
+	"compress/gzip"
+	"io"
 	"io/fs"
 	"net/http"
 	"testing"
 	"testing/fstest"
+
+	"github.com/klauspost/compress/zstd"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/sse"
@@ -106,6 +111,87 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 	)
 }
 
+// decodeZstd decompresses a zstd response body, failing the test if it is
+// not a valid frame. Three tests decode a compressed response by hand;
+// this is that block.
+func decodeZstd(t testing.TB, body []byte) []byte {
+	t.Helper()
+
+	decoder, err := zstd.NewReader(nil)
+	if err != nil {
+		t.Fatalf("zstd reader: %v", err)
+	}
+	defer decoder.Close()
+
+	plain, err := decoder.DecodeAll(body, nil)
+	if err != nil {
+		t.Fatalf("response body is not a valid zstd frame: %v", err)
+	}
+
+	return plain
+}
+
+// decodeGzip decompresses a gzip response body, failing the test if it is not
+// a valid stream.
+func decodeGzip(t testing.TB, body []byte) []byte {
+	t.Helper()
+
+	reader, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("response body is not a valid gzip stream: %v", err)
+	}
+	defer reader.Close()
+
+	plain, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("gzip stream did not decode: %v", err)
+	}
+
+	return plain
+}
+
+// decodeCoding decompresses a body under the coding its Content-Encoding named,
+// so a test can check the bytes against the label rather than trusting it. An
+// unrecognised token fails rather than passing the body through: treating it as
+// identity is exactly how a mislabelled body would look correct.
+func decodeCoding(t testing.TB, encoding string, body []byte) []byte {
+	t.Helper()
+
+	switch encoding {
+	case "gzip":
+		return decodeGzip(t, body)
+	case "zstd":
+		return decodeZstd(t, body)
+	case "", "identity":
+		return body
+	default:
+		t.Fatalf("unexpected Content-Encoding %q", encoding)
+
+		return nil
+	}
+}
+
+// routerOption adjusts the RouterConfig newTestRouterWithCache assembles, for
+// the router-level settings no testHandlersOption can reach.
+type routerOption func(*RouterConfig)
+
+// withCORS configures the router's CORS allowlist, which also decides which
+// origins cross-origin protection trusts.
+func withCORS(origins ...string) routerOption {
+	return func(cfg *RouterConfig) {
+		cfg.CORS = &CORSConfig{AllowedOrigins: origins}
+	}
+}
+
+// withAPIDocs configures the two documents the /api endpoints serve, which
+// default to a stub spec and no bundle.
+func withAPIDocs(spec, scalarJS []byte) routerOption {
+	return func(cfg *RouterConfig) {
+		cfg.OpenAPISpec = spec
+		cfg.ScalarJS = scalarJS
+	}
+}
+
 // newTestRouterWithCache builds a fully wired router around a caller-seeded
 // cache, for tests that exercise real routes rather than call a handler
 // directly. Further testHandlersOption values are applied on top of the cache.
@@ -119,12 +205,12 @@ func newTestRouterWithCache(
 	return newTestRouterWithConfig(t, nil, append([]testHandlersOption{withCache(c)}, opts...)...)
 }
 
-// newTestRouterWithConfig is newTestRouterWithCache plus the CORS allowlist —
-// which also decides which origins cross-origin protection trusts — so the
-// RouterConfig every assembled-router test drives is written once.
+// newTestRouterWithConfig is newTestRouterWithCache plus the router-level
+// settings, so the RouterConfig every assembled-router test drives is written
+// once.
 func newTestRouterWithConfig(
 	t testing.TB,
-	corsOrigins []string,
+	routerOpts []routerOption,
 	opts ...testHandlersOption,
 ) http.Handler {
 	t.Helper()
@@ -144,8 +230,8 @@ func newTestRouterWithConfig(
 		AuthProvider:      &auth.NoneProvider{},
 	}
 
-	if len(corsOrigins) > 0 {
-		cfg.CORS = &CORSConfig{AllowedOrigins: corsOrigins}
+	for _, opt := range routerOpts {
+		opt(&cfg)
 	}
 
 	return NewRouter(cfg)

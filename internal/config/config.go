@@ -30,7 +30,7 @@ const (
 	// log-driver.
 	OpsConfiguration OperationsLevel = 2
 
-	// OpsImpactful allows all operations including node availability/labels,
+	// OpsImpactful allows all operations including node availability/role,
 	// service mode/endpoint mode changes, task removal, and service deletion.
 	OpsImpactful OperationsLevel = 3
 )
