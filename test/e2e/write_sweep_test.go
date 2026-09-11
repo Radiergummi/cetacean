@@ -340,6 +340,18 @@ var drivenWriteRoutes = map[string]driveFunc{
 	"DELETE /services/{id}":      driveServiceRemoval,
 	"DELETE /stacks/{name}":      driveStackRemoval,
 	"PATCH /nodes/{id}/labels":   driveNodeLabels,
+
+	// Service spec editing — see write_sweep_spec_test.go.
+	"PATCH /services/{id}/configs":          driveServiceConfigs,
+	"PATCH /services/{id}/secrets":          driveServiceSecrets,
+	"PATCH /services/{id}/networks":         driveServiceNetworks,
+	"PATCH /services/{id}/mounts":           driveServiceMounts,
+	"PATCH /services/{id}/container-config": driveServiceContainerConfig,
+	"PUT /services/{id}/placement":          driveServicePlacement,
+	"PUT /services/{id}/mode":               driveServiceMode,
+	"PUT /services/{id}/endpoint-mode":      driveServiceEndpointMode,
+	"PUT /services/{id}/healthcheck":        driveServiceHealthcheckPut,
+	"PATCH /services/{id}/healthcheck":      driveServiceHealthcheckPatch,
 }
 
 // excusedWriteRoutes carries a reason for every mutating route this file does
@@ -396,20 +408,10 @@ var excusedWriteRoutes = map[string]string{
 		"only) but out of scope for this slice",
 	"POST /-/resync": "gap: triggers a cache resync rather than a cluster " +
 		"mutation; out of scope for a write sweep that asserts engine-visible change",
-	"PUT /services/{id}/mode":               "gap: replicated<->global mode switch not covered in this slice",
-	"PUT /services/{id}/endpoint-mode":      "gap: vip/dnsrr switch not covered in this slice",
-	"PUT /services/{id}/healthcheck":        "gap: not among the seven service-spec PATCHes this slice covers",
-	"PATCH /services/{id}/healthcheck":      "gap: not among the seven service-spec PATCHes this slice covers",
-	"PATCH /services/{id}/configs":          "gap: attachment PATCHes (configs/secrets/networks/mounts/container-config) not covered in this slice",
-	"PATCH /services/{id}/secrets":          "gap: attachment PATCHes (configs/secrets/networks/mounts/container-config) not covered in this slice",
-	"PATCH /services/{id}/networks":         "gap: attachment PATCHes (configs/secrets/networks/mounts/container-config) not covered in this slice",
-	"PATCH /services/{id}/mounts":           "gap: attachment PATCHes (configs/secrets/networks/mounts/container-config) not covered in this slice",
-	"PATCH /services/{id}/container-config": "gap: attachment PATCHes (configs/secrets/networks/mounts/container-config) not covered in this slice",
-	"PUT /services/{id}/placement":          "gap: placement constraint editing not covered in this slice",
-	"PATCH /swarm/dispatcher":               "gap: cluster-wide dispatcher tuning not covered in this slice",
-	"PATCH /swarm/encryption":               "gap: autolock toggling not covered in this slice",
-	"PATCH /swarm/orchestration":            "gap: task-history retention tuning not covered in this slice",
-	"PATCH /swarm/raft":                     "gap: raft snapshot tuning not covered in this slice",
+	"PATCH /swarm/dispatcher":    "gap: cluster-wide dispatcher tuning not covered in this slice",
+	"PATCH /swarm/encryption":    "gap: autolock toggling not covered in this slice",
+	"PATCH /swarm/orchestration": "gap: task-history retention tuning not covered in this slice",
+	"PATCH /swarm/raft":          "gap: raft snapshot tuning not covered in this slice",
 }
 
 func driveServiceImage(t *testing.T, env *harness.Env, proc *sut.Process) {
