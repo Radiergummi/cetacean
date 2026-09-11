@@ -8,8 +8,8 @@ import (
 // staticBody is a response body fixed for the life of the process, served
 // with a validator hashed once and each content coding compressed once.
 //
-// Codings are compressed lazily and retained, so a deployment that never
-// serves the playground or the licence texts pays nothing for them.
+// Codings are compressed lazily and retained, so a body nobody requests
+// costs nothing.
 type staticBody struct {
 	identity []byte
 	etag     string
