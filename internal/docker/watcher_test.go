@@ -766,9 +766,11 @@ func TestContainerDeathReinspectsUntilSwarmCatchesUp(t *testing.T) {
 	}
 }
 
-// An ordinary container event is not a death and must not pay for a second
-// inspect: a busy cluster produces these constantly, and doubling every one
-// would double the load the watcher puts on the daemon.
+// A container event whose task record has already caught up must not pay for a
+// second inspect: a busy cluster produces these constantly, and doubling every
+// one would double the load the watcher puts on the daemon. The re-read is
+// bought only where it is needed, which is what keeps the direction added by
+// TestContainerStartReinspectsUntilSwarmCatchesUp free on the common path.
 func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
 	var calls atomic.Int32
 
@@ -799,6 +801,114 @@ func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
 
 	if got := calls.Load(); got != 1 {
 		t.Errorf("inspected %d times for a container start; want 1", got)
+	}
+}
+
+// The same race runs at the other end of a container's life, and cost more.
+// Swarm commits a task's running status *after* the container start event that
+// announced it, so the inspect on that event reads the task as still starting.
+// Nothing further arrives, so the cache held "starting" until the five-minutely
+// re-sync: the dashboard showed a task starting for minutes, and every figure
+// built on the running count undercounted — which left cluster.ServiceConverged
+// unable to settle, hanging `Prefer: wait`, the MCP `watch` tool and every
+// task-augmented mutation behind it.
+//
+// Waiting for a terminal state would be wrong here: this direction settles at
+// running, which is precisely the state the dying direction treats as not yet
+// settled. taskCaughtUp is what tells the two apart.
+func TestContainerStartReinspectsUntilSwarmCatchesUp(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		// The first read sees Swarm's pre-reconciliation view, as production
+		// does: the container is up, the task record has not caught up.
+		if calls.Add(1) == 1 {
+			return swarm.Task{
+				ID: id, ServiceID: "svc",
+				DesiredState: swarm.TaskStateRunning,
+				Status:       swarm.TaskStatus{State: swarm.TaskStateStarting},
+			}, nil
+		}
+
+		return swarm.Task{
+			ID: id, ServiceID: "svc",
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+		}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	w.settleDelay = 10 * time.Millisecond
+
+	w.handleEvent(context.Background(), events.Message{
+		Type:   events.ContainerEventType,
+		Action: "start",
+		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
+			"com.docker.swarm.task.id": "t1",
+		}},
+	})
+
+	w.waitForSettles()
+
+	task, ok := c.GetTask("t1")
+	if !ok {
+		t.Fatal("task missing from cache")
+	}
+
+	if task.Status.State != swarm.TaskStateRunning {
+		t.Errorf(
+			"Status.State = %q, want running — the re-inspect did not land",
+			task.Status.State,
+		)
+	}
+
+	// The count is the thing that actually hung: a service cannot converge
+	// while the cache reports fewer replicas running than the engine holds.
+	if got := c.RunningTaskCount("svc"); got != 1 {
+		t.Errorf("RunningTaskCount = %d, want 1 for a task Swarm has started", got)
+	}
+}
+
+// The re-reads stop as soon as the record reads running, rather than running
+// out the bound: this direction is scheduled by every container start on the
+// cluster, so a series that always ran to completion would be four inspects
+// per started container instead of one.
+func TestContainerStartStopsReinspectingOnceRunning(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		state := swarm.TaskStateRunning
+		if calls.Add(1) == 1 {
+			state = swarm.TaskStateStarting
+		}
+
+		return swarm.Task{
+			ID: id, ServiceID: "svc",
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: state},
+		}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	w.settleDelay = time.Millisecond
+
+	w.handleEvent(context.Background(), events.Message{
+		Type:   events.ContainerEventType,
+		Action: "start",
+		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
+			"com.docker.swarm.task.id": "t1",
+		}},
+	})
+
+	w.waitForSettles()
+
+	// The event's own inspect, plus exactly one re-read.
+	if got := calls.Load(); got != 2 {
+		t.Errorf("inspects = %d, want 2 — the series did not stop at running", got)
 	}
 }
 

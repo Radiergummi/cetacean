@@ -190,15 +190,16 @@ const (
 	workerCount    = 4
 
 	// defaultSettleDelay is how long Swarm is given to reconcile a task record
-	// after the container behind it exits. Long enough that the second read
-	// sees the terminal state, short enough that the count is only briefly
-	// wrong — the alternative was waiting out the five-minute re-sync.
+	// after the container behind it starts or exits. Long enough that the
+	// second read sees the state the event announced, short enough that the
+	// count is only briefly wrong — the alternative was waiting out the
+	// five-minute re-sync.
 	defaultSettleDelay = 750 * time.Millisecond
 
-	// settleAttempts bounds how many times a task is re-read while it stays
-	// unsettled. One read is right almost always and wrong exactly when it
+	// settleAttempts bounds how many times a task is re-read while its record
+	// still lags. One read is right almost always and wrong exactly when it
 	// matters: a loaded manager that has not reconciled within the first
-	// delay leaves the overcount standing until the five-minute re-sync, and
+	// delay leaves the miscount standing until the five-minute re-sync, and
 	// nothing re-arms it. In practice a following container event usually
 	// schedules another attempt, but "usually" is what this fix was meant to
 	// stop relying on. Three attempts with the delay doubling covers about
@@ -217,10 +218,15 @@ type coalesced struct {
 	action string
 }
 
-// actionSettle marks a task update triggered by its container ending, which
-// needs a second read once Swarm has caught up. It is internal to the watcher
-// and never reaches applyRemove, which only ever tests for "remove".
-const actionSettle = "settle"
+// actionSettle marks a task update triggered by its container ending, and
+// actionStarted one triggered by its container coming up. Both need a second
+// read once Swarm has caught up — in opposite directions, which is what
+// taskCaughtUp resolves. They are internal to the watcher and never reach
+// applyRemove, which only ever tests for "remove".
+const (
+	actionSettle  = "settle"
+	actionStarted = "started"
+)
 
 // isContainerDeath reports whether a container event means the container has
 // stopped for good. Docker emits "die" for every exit; "kill" and "stop" are
@@ -326,12 +332,15 @@ func (w *Watcher) eventKeyFromMsg(msg events.Message) (eventKey, string) {
 			return eventKey{}, ""
 		}
 
-		// Treat container events as task updates. A container ending is called
-		// out separately: it is the last event the task will ever produce, and
-		// Swarm has not yet reconciled the task record when it arrives — see
-		// scheduleSettle.
+		// Treat container events as task updates. The two that bracket a
+		// container's life are called out separately, because Swarm has not
+		// reconciled the task record when either arrives — see scheduleSettle.
 		if isContainerDeath(msg.Action) {
 			return eventKey{resourceType: "task", id: taskID}, actionSettle
+		}
+
+		if msg.Action == "start" {
+			return eventKey{resourceType: "task", id: taskID}, actionStarted
 		}
 
 		return eventKey{resourceType: "task", id: taskID}, "update"
@@ -392,36 +401,44 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	// already have read the settled record, and checking once here costs one
 	// map lookup instead of a goroutine per event.
 	for key, ev := range batch {
-		if ev.action == actionSettle {
-			w.scheduleSettle(ctx, key)
+		if ev.action == actionSettle || ev.action == actionStarted {
+			w.scheduleSettle(ctx, key, ev.action)
 		}
 	}
 }
 
-// scheduleSettle re-reads a task shortly after the container behind it exited.
+// scheduleSettle re-reads a task shortly after its container started or
+// exited.
 //
-// A container dying is the last event a failed task ever produces, and Swarm
-// reconciles the task record a moment after the container it wraps. Inspecting
-// on the event itself therefore reads the task as still running, desired
-// running, and since nothing further arrives the cache keeps that reading
-// until the five-minutely full re-sync corrects it. Everything derived from it
-// overcounts in the meantime: a service crash-looping every eight seconds
+// Docker emits no task events, so a container event is the only signal a task
+// changed — and Swarm reconciles the task record a moment *after* the
+// container it wraps. Inspecting on the event itself therefore reads a record
+// that has not caught up yet, and since nothing further arrives the cache
+// keeps that reading until the five-minutely full re-sync corrects it.
+//
+// Both ends of a container's life have the hazard, with opposite symptoms.
+// A container dying is read as still running, desired running, so everything
+// derived from it overcounts: a service crash-looping every eight seconds
 // reported four running replicas against a desired one, `find` and the
 // placement view repeated the figure, and the convergence wait behind every
-// deploy could not settle because the count it waited on never fell.
+// deploy could not settle because the count it waited on never fell. A
+// container starting is read as still `starting`, so the same figures
+// *undercount*: the dashboard showed a task starting for minutes, and the
+// convergence wait could not settle because the count it waited on never rose
+// — which hung `Prefer: wait`, the MCP `watch` tool and every task-augmented
+// mutation until the re-sync.
 //
-// A short series of delayed reads closes it, each waiting twice as long as the
-// one before and the series stopping the moment the record settles — so the
-// common case costs exactly one read, and a daemon slow to reconcile still
+// A short series of delayed reads closes both, each waiting twice as long as
+// the one before and the series stopping the moment the record catches up — so
+// the common case costs exactly one read, and a daemon slow to reconcile still
 // gets corrected in seconds rather than at the next full re-sync. It is
-// skipped entirely when the first inspect already saw a terminal state: a task
-// that lost its container long enough ago, or a daemon that reconciled before
-// we asked.
+// skipped entirely when the first inspect already saw the record it was
+// waiting for.
 //
 // A task the daemon has since forgotten is not a failure of this: the inspect
 // 404s, and inspectAndApply drops the record, which settles it just as well.
-func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey) {
-	if task, ok := w.store.GetTask(key.id); !ok || taskSettled(task) {
+func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action string) {
+	if task, ok := w.store.GetTask(key.id); !ok || taskCaughtUp(task, action) {
 		return
 	}
 
@@ -438,7 +455,7 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey) {
 			w.inspectAndApply(ctx, key)
 
 			task, ok := w.store.GetTask(key.id)
-			if !ok || taskSettled(task) {
+			if !ok || taskCaughtUp(task, action) {
 				return
 			}
 
@@ -454,11 +471,21 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey) {
 	})
 }
 
-// taskSettled reports whether Swarm has finished with a task, so there is
-// nothing a second read could learn. DesiredState is the orchestrator's own
-// answer and moves first; Status follows.
-func taskSettled(task swarm.Task) bool {
-	return !cache.TaskIsLive(task) || cache.IsTerminalState(task.Status.State)
+// taskCaughtUp reports whether Swarm's record of a task has caught up with the
+// container event that prompted the re-read, so there is nothing a further
+// read could learn. DesiredState is the orchestrator's own answer and moves
+// first; Status follows.
+//
+// The two directions have opposite resting states, which is why one predicate
+// cannot serve both: a task whose container has just come up is unsettled
+// until its status reads running, while one whose container has just died is
+// unsettled *while* it still reads running.
+func taskCaughtUp(task swarm.Task, action string) bool {
+	if !cache.TaskIsLive(task) || cache.IsTerminalState(task.Status.State) {
+		return true
+	}
+
+	return action == actionStarted && task.Status.State == swarm.TaskStateRunning
 }
 
 func (w *Watcher) applyRemove(key eventKey) {
@@ -495,8 +522,8 @@ func (w *Watcher) handleEvent(ctx context.Context, msg events.Message) {
 
 	w.inspectAndApply(ctx, key)
 
-	if action == actionSettle {
-		w.scheduleSettle(ctx, key)
+	if action == actionSettle || action == actionStarted {
+		w.scheduleSettle(ctx, key, action)
 	}
 }
 
