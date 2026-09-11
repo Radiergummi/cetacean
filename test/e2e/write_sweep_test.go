@@ -274,6 +274,24 @@ func problemType(t *testing.T, resp *http.Response) string {
 func contractRoutes(t *testing.T) []contract.Route {
 	t.Helper()
 
+	var (
+		routes []contract.Route
+		err    error
+	)
+
+	inContractDir(t, func() { routes, err = contract.Routes() })
+
+	if err != nil {
+		t.Fatalf("contract.Routes: %v", err)
+	}
+
+	return routes
+}
+
+// inContractDir runs read with internal/contract as the working directory.
+func inContractDir(t *testing.T, read func()) {
+	t.Helper()
+
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("cannot locate write_sweep_test.go source")
@@ -297,12 +315,7 @@ func contractRoutes(t *testing.T) []contract.Route {
 		}
 	}()
 
-	routes, err := contract.Routes()
-	if err != nil {
-		t.Fatalf("contract.Routes: %v", err)
-	}
-
-	return routes
+	read()
 }
 
 // ─── driven routes ──────────────────────────────────────────────────────

@@ -76,6 +76,7 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19011` | MCP OAuth lane (five consecutive SUTs: the flow, theft detection without the resource indicator, the DCR rate limit, the restart, and DCR/CIMD disabled) |
 | `19012` | `tailscale` auth mode (local-mode address boundary, plus tsnet startup validation) |
 | `19013` | SSE ACL filtering on `GET /events`, and the broadcaster's connection cap |
+| `19014` | Conditional requests: `If-Match` on every preconditioned route, `If-None-Match` on the representation it compares against |
 | `19104` | Caddy, mTLS termination |
 
 `19003` is reserved in the numbering scheme but the `headers`-mode hostile-input cases run on
@@ -216,6 +217,11 @@ Nothing below is exercised by this suite, and — except where noted — nothing
   `oauth_test.go` does cover is that an `https://` client_id takes the CIMD path and that the guard is
   live in the shipped binary.
 - The ACL case that a digest never names a resource behind a grant.
+- Two halves of the `If-Match` lane (`precondition_test.go`). `DELETE /plugins/{name}` is driven
+  only for the no-representation case: there is no installed plugin to read a validator from, and
+  its representation comes from a daemon inspect rather than the cache. `DELETE /nodes/{id}` is
+  driven for every refusal but never for the accepted case, which would remove the swarm's only
+  node. Both are recorded on the route's own entry, so the gate still counts them.
 - ~~SSE 429 and `Retry-After` at the connection cap.~~ Covered by
   `TestSSEConnectionCapRefusesWithRetryAfter` in `sse_acl_test.go`, which opens `sse.MaxClients`
   real subscribers and asserts the next one is refused with 429, `Retry-After: 5` and an RFC 9457
