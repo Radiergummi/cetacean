@@ -352,6 +352,12 @@ var drivenWriteRoutes = map[string]driveFunc{
 	"PUT /services/{id}/endpoint-mode":      driveServiceEndpointMode,
 	"PUT /services/{id}/healthcheck":        driveServiceHealthcheckPut,
 	"PATCH /services/{id}/healthcheck":      driveServiceHealthcheckPatch,
+
+	// Cluster-level tuning — see write_sweep_swarm_test.go.
+	"PATCH /swarm/orchestration": driveSwarmOrchestration,
+	"PATCH /swarm/raft":          driveSwarmRaft,
+	"PATCH /swarm/dispatcher":    driveSwarmDispatcher,
+	"POST /swarm/rotate-token":   driveSwarmRotateToken,
 }
 
 // excusedWriteRoutes carries a reason for every mutating route this file does
@@ -400,18 +406,14 @@ var excusedWriteRoutes = map[string]string{
 	"POST /services/{id}/restart": "driven by " +
 		"TestRestartServiceRecreatesTasksOnTheCluster in write_test.go",
 
-	// gap: out of scope for this slice, which covers image update,
-	// rollback, node drain, task removal, the concurrent-write conflict,
-	// and the seven service-spec PATCHes listed in the task brief (env,
-	// labels, resources, ports, update-policy, rollback-policy, log-driver).
-	"POST /swarm/rotate-token": "gap: low-risk (rotates the join token " +
-		"only) but out of scope for this slice",
-	"POST /-/resync": "gap: triggers a cache resync rather than a cluster " +
-		"mutation; out of scope for a write sweep that asserts engine-visible change",
-	"PATCH /swarm/dispatcher":    "gap: cluster-wide dispatcher tuning not covered in this slice",
-	"PATCH /swarm/encryption":    "gap: autolock toggling not covered in this slice",
-	"PATCH /swarm/orchestration": "gap: task-history retention tuning not covered in this slice",
-	"PATCH /swarm/raft":          "gap: raft snapshot tuning not covered in this slice",
+	"POST /-/resync": "registered under the auth-exempt /-/ prefix with no requireLevel " +
+		"wrapper, so it cannot be replayed at tier 0 the way every other driven entry is; " +
+		"driven instead by TestResyncBypassesAuthenticationAndTheOperationsTier in " +
+		"write_sweep_swarm_test.go, which pins that as finding D-9",
+	"PATCH /swarm/encryption": "enabling autolock means a manager restart needs an unlock " +
+		"key, and this harness restarts SUTs against a shared engine with nowhere to keep " +
+		"one; excused rather than forced, unlike the three reversible /swarm/* patches " +
+		"beside it in write_sweep_swarm_test.go",
 }
 
 func driveServiceImage(t *testing.T, env *harness.Env, proc *sut.Process) {
