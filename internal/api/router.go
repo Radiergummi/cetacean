@@ -87,7 +87,47 @@ func (h *Handlers) detailFeeds(
 	}
 }
 
+// routeRecorder is the mux NewRouter registers on: an http.ServeMux that also
+// remembers the patterns it was handed. The stdlib mux exposes no way to
+// enumerate them, and without the list nothing can hold the routes that exist
+// against the ones api/openapi.yaml documents — a walk that starts from the
+// spec cannot see a route the spec never mentions.
+//
+// Routes another component registers directly on the wrapped mux — the auth
+// provider's, the OAuth server's — are not recorded. Both sit under paths the
+// spec does not describe.
+type routeRecorder struct {
+	mux      *http.ServeMux
+	patterns []string
+}
+
+func (r *routeRecorder) Handle(pattern string, handler http.Handler) {
+	r.patterns = append(r.patterns, pattern)
+	r.mux.Handle(pattern, handler)
+}
+
+func (r *routeRecorder) HandleFunc(
+	pattern string,
+	handler func(http.ResponseWriter, *http.Request),
+) {
+	r.patterns = append(r.patterns, pattern)
+	r.mux.HandleFunc(pattern, handler)
+}
+
+func (r *routeRecorder) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	r.mux.ServeHTTP(w, req)
+}
+
 func NewRouter(cfg RouterConfig) http.Handler {
+	handler, _ := newRouter(cfg)
+
+	return handler
+}
+
+// newRouter assembles the router and returns the patterns it registered beside
+// it. Production calls NewRouter and drops the second value; the spec-parity
+// test reads it.
+func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	auth.SetErrorWriter(WriteErrorCode)
 
 	h := cfg.Handlers
@@ -96,7 +136,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	spa := cfg.SPA
 	authProvider := cfg.AuthProvider
 
-	mux := http.NewServeMux()
+	mux := &routeRecorder{mux: http.NewServeMux()}
 
 	tier1 := requireLevel(config.OpsOperational, h.operationsLevel)
 	tier2 := requireLevel(config.OpsConfiguration, h.operationsLevel)
@@ -163,7 +203,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	swarmTier2 := NewChain(swarmACL, tier2)
 	swarmTier3 := NewChain(swarmACL, tier3)
 
-	authProvider.RegisterRoutes(mux)
+	authProvider.RegisterRoutes(mux.mux)
 	mux.HandleFunc("GET /auth/whoami", auth.WhoamiHandler(authProvider, writeIdentityJSONLD))
 
 	// Meta endpoints (no content negotiation, no discovery links)
@@ -757,7 +797,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	// enabled and an auth provider is configured; the api package itself
 	// doesn't reach into mcp/oauth.
 	if cfg.OAuthRoutes != nil {
-		cfg.OAuthRoutes(mux, "")
+		cfg.OAuthRoutes(mux.mux, "")
 	}
 
 	// SPA fallback (must be last)
@@ -780,7 +820,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	return publicURLMiddleware(
 		cfg.PublicURL,
 		basePathMiddleware(cfg.BasePath, stack.Then(mux)),
-	)
+	), mux.patterns
 }
 
 func requireReady(h *Handlers) func(http.Handler) http.Handler {

@@ -215,6 +215,18 @@ func newTestRouterWithConfig(
 ) http.Handler {
 	t.Helper()
 
+	return NewRouter(testRouterConfig(t, routerOpts, opts...))
+}
+
+// testRouterConfig is the RouterConfig the test routers are built from, so a
+// test that enumerates the routes enumerates the ones it drives.
+func testRouterConfig(
+	t testing.TB,
+	routerOpts []routerOption,
+	opts ...testHandlersOption,
+) RouterConfig {
+	t.Helper()
+
 	h := newTestHandlers(t, opts...)
 	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
 	t.Cleanup(b.Close)
@@ -234,5 +246,16 @@ func newTestRouterWithConfig(
 		opt(&cfg)
 	}
 
-	return NewRouter(cfg)
+	return cfg
+}
+
+// routerPatterns returns every pattern NewRouter registers. Route
+// registration does not vary with the operations level or the cache, so the
+// list holds for any of the routers a test builds.
+func routerPatterns(t testing.TB) []string {
+	t.Helper()
+
+	_, patterns := newRouter(testRouterConfig(t, nil, withCache(cache.New(nil))))
+
+	return patterns
 }
