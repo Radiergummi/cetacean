@@ -565,9 +565,6 @@ passes the per-resource [ACL][authorization] write check.
 | `POST /plugins/{name}/upgrade` | 3 |
 | `DELETE /plugins/{name}` | 3 |
 
-> [!NOTE]
-> `GET /swarm/unlock-key` returns a credential, so it is gated at level 3 like the writes beside it.
-
 ### Preconditions
 
 Every write endpoint whose exact path also serves a `GET` accepts an optional `If-Match` request
