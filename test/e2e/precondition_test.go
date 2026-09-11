@@ -587,8 +587,20 @@ func TestConditionalRemovalRequiresTheCurrentValidator(t *testing.T) {
 func driveConditionalRemoval(t *testing.T, proc *sut.Process, uri string) {
 	t.Helper()
 
+	// One refusal before the baseline is taken, for the reason
+	// TestPreconditionSweep gives: evaluating a precondition refreshes its
+	// subject from the engine, so a validator read before any precondition had
+	// run could move under the refusal below without anything having been
+	// written.
+	assertPreconditionFailed(t, "stale validator on removal", precondRequest(
+		t, proc, http.MethodDelete, uri,
+		map[string]string{"If-Match": staleValidator}, "", "",
+	))
+
 	current := representationETag(t, proc, uri)
 
+	// The same refusal again, now against a baseline the refresh cannot move.
+	// What it must not do is remove anything.
 	assertPreconditionFailed(t, "stale validator on removal", precondRequest(
 		t, proc, http.MethodDelete, uri,
 		map[string]string{"If-Match": staleValidator}, "", "",
