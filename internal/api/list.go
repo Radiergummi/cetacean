@@ -22,7 +22,7 @@ type listSpec[T any] struct {
 	prepare      func([]T) []T                          // optional pre-filter transform (e.g. strip secret data)
 	itemType     string                                 // JSON-LD @type for each item (e.g. "Node")
 	idFunc       func(T) string                         // extracts JSON-LD @id path for each item
-	rows         func([]T) []cluster.Row                // the CSV rendering; nil = no text/csv here
+	rows         func([]T) []cluster.Row                // builds the CSV rendering; required
 }
 
 // handleList runs the full list pipeline and writes the JSON response.

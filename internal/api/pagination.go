@@ -20,10 +20,10 @@ type PageParams struct {
 	Dir      string
 	RangeReq bool
 
-	// Explicit records that the request asked for a page rather than being
-	// handed the default one. Only the CSV rendering reads it: a JSON list is
-	// paged whether or not anybody asked, but a spreadsheet nobody paginated
-	// should not quietly be the first fifty rows.
+	// Explicit records that the query named a page rather than being handed
+	// the default one, which only the CSV rendering reads. A Range request
+	// does not count: CSV answers 200 with no Content-Range, and a partial
+	// body under that status would be a lie.
 	Explicit bool
 }
 
@@ -61,7 +61,7 @@ func parsePagination(r *http.Request) (PageParams, error) {
 		}
 	}
 
-	p.Explicit = hasQueryPagination || p.RangeReq
+	p.Explicit = hasQueryPagination
 
 	if p.Limit > 200 {
 		p.Limit = 200
@@ -119,17 +119,20 @@ func parseItemsRange(header string) (int, int, bool, error) {
 }
 
 func applyPagination[T any](ctx context.Context, items []T, p PageParams) CollectionResponse[T] {
-	total := len(items)
-
-	start := min(p.Offset, total)
-	end := min(start+p.Limit, total)
-
-	result := items[start:end]
+	result := pageOf(items, p)
 	if result == nil {
 		result = []T{}
 	}
 
-	return NewCollectionResponse(ctx, result, total, p.Limit, p.Offset)
+	return NewCollectionResponse(ctx, result, len(items), p.Limit, p.Offset)
+}
+
+// pageOf is the slice the page names, clamped to what there is.
+func pageOf[T any](items []T, p PageParams) []T {
+	start := min(p.Offset, len(items))
+	end := min(start+p.Limit, len(items))
+
+	return items[start:end]
 }
 
 // writeCollectionResponse writes a CollectionResponse with the appropriate

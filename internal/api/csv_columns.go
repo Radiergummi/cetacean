@@ -9,73 +9,66 @@ import (
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
-// csvColumn is one column of a row-based CSV: the header it carries, and what
-// it reads off a cluster.Row.
+// csvColumn is one column: the cluster.Row key it reads, and what to head it.
+// The header is given because one key means different things per type — detail
+// is a service's image, a node's role, a task's node, a network's driver.
 type csvColumn struct {
+	key    string
 	header string
-	value  func(cluster.Row) string
 }
 
-func csvText(header string, read func(cluster.Row) string) csvColumn {
-	return csvColumn{header: header, value: read}
-}
-
-// csvCount renders an integer column. Zero is a number here rather than the
-// blank the JSON omitempty leaves: a service scaled to nothing has zero
-// replicas, and a spreadsheet should say so.
-func csvCount(header string, read func(cluster.Row) int) csvColumn {
-	return csvColumn{
-		header: header,
-		value:  func(row cluster.Row) string { return strconv.Itoa(read(row)) },
+// value reads this column off a row. A count renders its zero, unlike the
+// JSON: a service scaled to nothing has zero replicas, and that is a fact.
+func (c csvColumn) value(row cluster.Row) string {
+	switch c.key {
+	case "name":
+		return row.Name
+	case "stack":
+		return row.Stack
+	case "state":
+		return row.State
+	case "detail":
+		return row.Detail
+	case "id":
+		return row.ID
+	case "desired":
+		return strconv.Itoa(row.Desired)
+	case "running":
+		return strconv.Itoa(row.Running)
+	default:
+		return ""
 	}
 }
 
-var (
-	csvName    = csvText("name", func(row cluster.Row) string { return row.Name })
-	csvStack   = csvText("stack", func(row cluster.Row) string { return row.Stack })
-	csvState   = csvText("state", func(row cluster.Row) string { return row.State })
-	csvID      = csvText("id", func(row cluster.Row) string { return row.ID })
-	csvRunning = csvCount("running", func(row cluster.Row) int { return row.Running })
-)
-
-// csvDetail and csvDesired take their header, because the same Row key means
-// something different per type: detail is a service's image, a node's role, a
-// task's node and a network's driver, and a stack's desired is how many
-// services it holds rather than a replica target.
-func csvDetail(header string) csvColumn {
-	return csvText(header, func(row cluster.Row) string { return row.Detail })
-}
-
-func csvDesired(header string) csvColumn {
-	return csvCount(header, func(row cluster.Row) int { return row.Desired })
-}
-
-// csvRowColumns is what each resource type shows, keyed by the singular type
-// name a Row carries. It is the Go half of frontend/src/widgets/table/
-// columns.ts — both project the same cluster.Row for a reader rather than a
-// program, and TestCSVColumnsMatchTheWidget holds the two together.
+// csvRowColumns is what each type shows, keyed by the singular name a Row
+// carries. TestCSVColumnsMatchTheWidget holds it to the widget's copy.
 var csvRowColumns = map[string][]csvColumn{
 	"service": {
-		csvName,
-		csvStack,
-		csvState,
-		csvDetail("image"),
-		csvDesired("desired"),
-		csvRunning,
-		csvID,
+		{"name", "name"},
+		{"stack", "stack"},
+		{"state", "state"},
+		{"detail", "image"},
+		{"desired", "desired"},
+		{"running", "running"},
+		{"id", "id"},
 	},
-	"node":    {csvName, csvState, csvDetail("role"), csvID},
-	"task":    {csvName, csvState, csvDetail("node"), csvID},
-	"stack":   {csvName, csvDesired("services"), csvID},
-	"config":  {csvName, csvStack, csvID},
-	"secret":  {csvName, csvStack, csvID},
-	"network": {csvName, csvStack, csvDetail("driver"), csvID},
-	"volume":  {csvName, csvStack, csvDetail("driver"), csvID},
+	"node":    {{"name", "name"}, {"state", "state"}, {"detail", "role"}, {"id", "id"}},
+	"task":    {{"name", "name"}, {"state", "state"}, {"detail", "node"}, {"id", "id"}},
+	"stack":   {{"name", "name"}, {"desired", "services"}, {"id", "id"}},
+	"config":  {{"name", "name"}, {"stack", "stack"}, {"id", "id"}},
+	"secret":  {{"name", "name"}, {"stack", "stack"}, {"id", "id"}},
+	"network": {{"name", "name"}, {"stack", "stack"}, {"detail", "driver"}, {"id", "id"}},
+	"volume":  {{"name", "name"}, {"stack", "stack"}, {"detail", "driver"}, {"id", "id"}},
 }
 
 // csvFallbackColumns answers for a type the map has not been taught about: a
 // Row carries these four whatever it describes.
-var csvFallbackColumns = []csvColumn{csvName, csvState, csvDetail("detail"), csvID}
+var csvFallbackColumns = []csvColumn{
+	{"name", "name"},
+	{"state", "state"},
+	{"detail", "detail"},
+	{"id", "id"},
+}
 
 func csvColumnsFor(resourceType string) []csvColumn {
 	if columns, ok := csvRowColumns[resourceType]; ok {
@@ -86,7 +79,7 @@ func csvColumnsFor(resourceType string) []csvColumn {
 }
 
 // csvTableForHistory renders the change feed, which is not a Row: an entry is
-// an event rather than a resource, and what a reader wants from it is when.
+// an event, and what a reader wants from it is when.
 func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 	table := csvTable{
 		header:  []string{"timestamp", "type", "action", "name", "id", "summary"},
@@ -107,7 +100,6 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 	return table
 }
 
-// csvTableForRecommendations renders the findings, which are not Rows either.
 func csvTableForRecommendations(results []recommendations.Recommendation) csvTable {
 	table := csvTable{
 		header: []string{
@@ -139,8 +131,8 @@ func csvTableForRecommendations(results []recommendations.Recommendation) csvTab
 	return table
 }
 
-// csvNumber renders a measurement, leaving an absent one blank: the JSON omits
-// a zero here, and a column of zeroes would read as measured.
+// csvNumber leaves an absent measurement blank: a column of zeroes would read
+// as measured.
 func csvNumber(value float64) string {
 	if value == 0 {
 		return ""
@@ -149,7 +141,6 @@ func csvNumber(value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
-// csvTableForRows projects rows through the columns their type shows.
 func csvTableForRows(resourceType string, rows []cluster.Row) csvTable {
 	columns := csvColumnsFor(resourceType)
 

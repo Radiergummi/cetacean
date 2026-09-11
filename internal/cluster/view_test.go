@@ -94,7 +94,7 @@ func TestBuildersProduceIdentifiableRows(t *testing.T) {
 
 		{
 			"volumes",
-			RowsForVolumes([]*volume.Volume{{Name: "data", Driver: "local"}}),
+			RowsForVolumes([]volume.Volume{{Name: "data", Driver: "local"}}),
 			"volume",
 			func(t *testing.T, row Row) {
 				t.Helper()

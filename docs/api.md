@@ -205,6 +205,9 @@ Naming a page still works, and then means what it means everywhere else:
 curl 'http://localhost:9000/tasks.csv?limit=100&offset=200'
 ```
 
+A [`Range` header](#range-header-pagination) is not honoured for CSV: that exchange answers `206` with a
+`Content-Range`, and a download is always a plain `200`. Ask for a page with `limit` and `offset` instead.
+
 ## Pagination
 
 List endpoints page by query parameter or by HTTP `Range` header.

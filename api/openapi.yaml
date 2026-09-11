@@ -6188,11 +6188,12 @@ components:
         they mean something — rather than the full Docker object. `/history`
         and `/recommendations` carry their own columns.
 
-        Unlike the JSON representation, a request naming no page (`limit`,
-        `offset` or `Range`) renders every row rather than the first 50: a
-        truncated export carries nothing in the file to say it was truncated.
-        `search`, `filter`, `sort` and ACL filtering apply exactly as they do
-        to the JSON.
+        Unlike the JSON representation, a request naming no page (`limit` or
+        `offset`) renders every row rather than the first 50: a truncated
+        export carries nothing in the file to say it was truncated. A `Range`
+        header is not honoured here, since this response is always `200` with
+        no `Content-Range`. `search`, `filter`, `sort` and ACL filtering apply
+        exactly as they do to the JSON.
 
     # ── Error ────────────────────────────────────────────────────────
 

@@ -78,14 +78,12 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
-// taskRows builds the list view of a page of tasks.
 func (h *Handlers) taskRows(tasks []swarm.Task) []cluster.Row {
 	return h.enrichedTaskRows(cluster.EnrichTasks(h.cache, tasks))
 }
 
-// enrichedTaskRows is taskRows for tasks the caller has already enriched. It
-// looks up the parent of each task rather than handing the builder every
-// service in the cluster, which would index the whole service table per page.
+// enrichedTaskRows looks up each task's parent rather than handing the builder
+// every service, which would index the whole service table per page.
 func (h *Handlers) enrichedTaskRows(tasks []cluster.EnrichedTask) []cluster.Row {
 	parents := make([]swarm.Service, 0, len(tasks))
 	for _, task := range tasks {
@@ -95,6 +93,17 @@ func (h *Handlers) enrichedTaskRows(tasks []cluster.EnrichedTask) []cluster.Row 
 	}
 
 	return cluster.RowsForTasks(tasks, parents)
+}
+
+// writeTaskCSV names the file after the parent, so two downloads do not
+// collide.
+func (h *Handlers) writeTaskCSV(
+	w http.ResponseWriter,
+	r *http.Request,
+	parent string,
+	tasks []cluster.EnrichedTask,
+) {
+	writeCSV(w, r, "tasks-"+parent, csvTableForRows("task", h.enrichedTaskRows(tasks)))
 }
 
 func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {

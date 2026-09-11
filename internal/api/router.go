@@ -59,8 +59,7 @@ type RouterConfig struct {
 }
 
 // listFeeds builds feedHandlers for a resource list endpoint. Every one of
-// them renders its rows as CSV, so the flag is set here rather than at the
-// eight call sites.
+// them renders its rows as CSV.
 func (h *Handlers) listFeeds(title string, eventType cache.EventType) feedHandlers {
 	return feedHandlers{
 		atom:     h.feedListHandler(title, eventType, renderAtom),
@@ -850,10 +849,12 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 func requireReady(h *Handlers) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Named as what it is not, so the next representation cannot be
+			// left out: the dashboard renders its own error, a stream says so
+			// by closing.
 			ct := ContentTypeFromContext(r.Context())
 			if !h.isReady() && isResourcePath(r.URL.Path) &&
-				(ct == ContentTypeJSON || ct == ContentTypeAtom || ct == ContentTypeJSONFeed ||
-					ct == ContentTypeJGF || ct == ContentTypeGraphML || ct == ContentTypeDOT) {
+				ct != ContentTypeHTML && ct != ContentTypeSSE {
 				writeErrorCode(w, r, "ENG001", "Docker daemon is not reachable")
 				return
 			}

@@ -223,14 +223,10 @@ func RowsForNetworks(networks []network.Summary) []Row {
 
 // RowsForVolumes builds the list view of volumes. Volumes are keyed by Name
 // rather than ID everywhere in Cetacean, so both fields carry the name.
-func RowsForVolumes(volumes []*volume.Volume) []Row {
+func RowsForVolumes(volumes []volume.Volume) []Row {
 	rows := make([]Row, 0, len(volumes))
 
 	for _, vol := range volumes {
-		if vol == nil {
-			continue
-		}
-
 		rows = append(rows, Row{
 			ID:     vol.Name,
 			Name:   vol.Name,

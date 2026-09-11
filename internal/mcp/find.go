@@ -266,12 +266,7 @@ func (s *Server) rowsFor(
 		return cluster.RowsForNetworks(items), nil
 
 	case []volume.Volume:
-		ptrs := make([]*volume.Volume, len(items))
-		for i := range items {
-			ptrs[i] = &items[i]
-		}
-
-		return cluster.RowsForVolumes(ptrs), nil
+		return cluster.RowsForVolumes(items), nil
 
 	default:
 		// Reached only if listableResourceTypes and the branches above drift,

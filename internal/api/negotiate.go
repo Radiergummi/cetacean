@@ -108,7 +108,7 @@ var supportedTypes = []struct {
 	{"application", "vnd.jgf+json", ContentTypeJGF},
 	{"application", "graphml+xml", ContentTypeGraphML},
 	{"text", "vnd.graphviz", ContentTypeDOT},
-	// Last of the text entries, so a text/* wildcard still resolves to HTML.
+	// After text/html, so a text/* wildcard still resolves to HTML.
 	{"text", "csv", ContentTypeCSV},
 }
 

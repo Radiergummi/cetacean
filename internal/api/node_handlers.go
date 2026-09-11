@@ -66,13 +66,7 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 	enriched := cluster.EnrichTasks(h.cache, tasks)
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
-		writeCSV(
-			w,
-			r,
-			"tasks-"+node.Description.Hostname,
-			csvTableForRows("task", h.enrichedTaskRows(enriched)),
-		)
-
+		h.writeTaskCSV(w, r, node.Description.Hostname, enriched)
 		return
 	}
 

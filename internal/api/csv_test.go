@@ -39,8 +39,6 @@ func TestNegotiateCSV(t *testing.T) {
 		}
 	})
 
-	// text/csv joins a list a text/* wildcard already matched: the entry that
-	// was there first has to keep winning.
 	t.Run("a text wildcard still resolves to HTML", func(t *testing.T) {
 		if got := parseAccept("text/*"); got != ContentTypeHTML {
 			t.Errorf("parseAccept(%q) = %v, want HTML", "text/*", got)
@@ -48,11 +46,7 @@ func TestNegotiateCSV(t *testing.T) {
 	})
 }
 
-// TestRenderCSVEscapes holds the renderer to RFC 4180 §2: records end in CRLF,
-// and a field carrying a comma, a quote or a line break is quoted, with inner
-// quotes doubled. None of the Row columns can hold one, but a history summary
-// and a recommendation message are free text, and a stack label is whatever
-// somebody wrote in a compose file.
+// TestRenderCSVEscapes holds the renderer to RFC 4180 §2.
 func TestRenderCSVEscapes(t *testing.T) {
 	got := string(renderCSV(csvTable{
 		header: []string{"name", "note"},
@@ -95,7 +89,6 @@ func TestWriteCSV(t *testing.T) {
 		t.Errorf("Content-Type = %q, want %q", got, wantType)
 	}
 
-	// RFC 6266: a browser opening /services.csv should save it, not render it.
 	disposition := rec.Header().Get("Content-Disposition")
 	if !strings.HasPrefix(disposition, `attachment; filename="services-`) ||
 		!strings.HasSuffix(disposition, `.csv"`) {
@@ -121,7 +114,6 @@ func TestWriteCSV(t *testing.T) {
 	}
 }
 
-// csvRecords splits a CSV body into its records, header first.
 func csvRecords(t *testing.T, body string) [][]string {
 	t.Helper()
 
@@ -162,22 +154,8 @@ func TestListEndpointCSV(t *testing.T) {
 		return rec
 	}
 
-	t.Run("a csv suffix renders the type's columns", func(t *testing.T) {
-		records := csvRecords(t, get(t, "/nodes.csv").Body.String())
-
-		wantHeader := []string{"name", "state", "role", "id"}
-		if !slices.Equal(records[0], wantHeader) {
-			t.Errorf("header = %v, want %v", records[0], wantHeader)
-		}
-
-		wantFirst := []string{"swarm-1", "ready", "worker", "id-swarm-1"}
-		if !slices.Equal(records[1], wantFirst) {
-			t.Errorf("first record = %v, want %v", records[1], wantFirst)
-		}
-	})
-
-	// Every RowsFor* builder ends in a sort of its own, which would otherwise
-	// throw away the order the endpoint was asked for.
+	// Every row builder sorts by name, which would otherwise throw away the
+	// order the endpoint was asked for.
 	t.Run("the requested sort survives the row conversion", func(t *testing.T) {
 		records := csvRecords(t, get(t, "/nodes.csv?sort=hostname&dir=desc").Body.String())
 
@@ -207,9 +185,8 @@ func TestListEndpointCSV(t *testing.T) {
 	})
 }
 
-// TestEveryListEndpointRendersCSV drives all eight resource lists, because
-// listFeeds marks every one of them as serving text/csv and only the spec
-// beside each handler says how its rows are built.
+// TestEveryListEndpointRendersCSV drives all eight lists: listFeeds offers CSV
+// for every one of them, and only the spec beside each handler builds its rows.
 func TestEveryListEndpointRendersCSV(t *testing.T) {
 	stackLabel := map[string]string{"com.docker.stack.namespace": "shop"}
 
@@ -261,9 +238,8 @@ func TestEveryListEndpointRendersCSV(t *testing.T) {
 
 	router := newTestRouterWithCache(t, c)
 
-	// Header and record are both spelled out rather than read back off
-	// csvRowColumns, which would make the header assertion agree with whatever
-	// the map happens to say.
+	// Spelled out rather than read off csvRowColumns, which would make the
+	// assertion agree with whatever the map says.
 	want := map[string][][]string{
 		"node": {
 			{"name", "state", "role", "id"},
@@ -301,7 +277,7 @@ func TestEveryListEndpointRendersCSV(t *testing.T) {
 
 	for resourceType, want := range want {
 		t.Run(resourceType, func(t *testing.T) {
-			target := "/" + csvPluralize(resourceType) + ".csv"
+			target := "/" + resourceType + "s.csv"
 
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, httptest.NewRequest("GET", target, nil))
@@ -366,11 +342,6 @@ func TestTaskSubListCSV(t *testing.T) {
 
 			records := csvRecords(t, rec.Body.String())
 
-			wantHeader := []string{"name", "state", "node", "id"}
-			if !slices.Equal(records[0], wantHeader) {
-				t.Errorf("header = %v, want %v", records[0], wantHeader)
-			}
-
 			wantRecord := []string{"api.1", "running", "swarm-1", "t1"}
 			if !slices.Equal(records[1], wantRecord) {
 				t.Errorf("record = %v, want %v", records[1], wantRecord)
@@ -388,9 +359,8 @@ func TestTaskSubListCSV(t *testing.T) {
 	}
 }
 
-// TestListCSVPagination pins the one place CSV diverges from the JSON beside
-// it: a request that asked for no page gets every row rather than the first
-// fifty, because a truncated export carries no sign that it was truncated.
+// TestListCSVPagination pins the one place CSV diverges from the JSON: a
+// request that named no page gets every row rather than the first fifty.
 func TestListCSVPagination(t *testing.T) {
 	c := cache.New(nil)
 	for i := range 60 {
@@ -433,11 +403,27 @@ func TestListCSVPagination(t *testing.T) {
 			t.Errorf("first record = %q, want swarm-58", rows[1][0])
 		}
 	})
+
+	// A CSV answers 200 with no Content-Range, so a partial body under it
+	// would be a lie. The header is ignored rather than half-honoured.
+	t.Run("a Range header renders every row", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/nodes.csv", nil)
+		req.Header.Set("Range", "items 0-9")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rec.Code)
+		}
+
+		if got := len(csvRecords(t, rec.Body.String())) - 1; got != 60 {
+			t.Errorf("got %d records, want all 60", got)
+		}
+	})
 }
 
-// TestHistoryCSV covers the change feed, which is not a Row and carries its
-// own columns. A summary is free text, so this is also the escaping rule met
-// through a real endpoint rather than at the renderer.
+// TestHistoryCSV covers the change feed, which is not a Row. Its names are
+// free text, so this is also the escaping rule met through a real endpoint.
 func TestHistoryCSV(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
@@ -473,7 +459,6 @@ func TestHistoryCSV(t *testing.T) {
 		t.Errorf("type/action = %q/%q, want service/create", entry[1], entry[2])
 	}
 
-	// The name survived a comma and a pair of quotes intact.
 	if entry[3] != `we,b "one"` {
 		t.Errorf("name = %q, want the name it was seeded with", entry[3])
 	}
@@ -526,64 +511,17 @@ func TestRecommendationsCSV(t *testing.T) {
 	}
 }
 
-func TestCSVTableForRows(t *testing.T) {
-	t.Run("a service row is headed the way the dashboard heads it", func(t *testing.T) {
-		table := csvTableForRows("service", []cluster.Row{{
-			ID:      "s1",
-			Name:    "api",
-			Type:    "service",
-			Stack:   "shop",
-			State:   "running",
-			Detail:  "nginx:1.27",
-			Desired: 3,
-			Running: 2,
-		}})
+func TestCSVFallbackColumns(t *testing.T) {
+	table := csvTableForRows("kraken", []cluster.Row{{
+		ID:     "k1",
+		Name:   "release",
+		Type:   "kraken",
+		State:  "asleep",
+		Detail: "deep",
+	}})
 
-		wantHeader := []string{"name", "stack", "state", "image", "desired", "running", "id"}
-		if !slices.Equal(table.header, wantHeader) {
-			t.Errorf("header = %v, want %v", table.header, wantHeader)
-		}
-
-		wantRecord := []string{"api", "shop", "running", "nginx:1.27", "3", "2", "s1"}
-		if !slices.Equal(table.records[0], wantRecord) {
-			t.Errorf("record = %v, want %v", table.records[0], wantRecord)
-		}
-	})
-
-	// detail is the image on a service and the role on a node, which is why
-	// the header is per type rather than derived from the key.
-	t.Run("a node row carries only the columns a node has", func(t *testing.T) {
-		table := csvTableForRows("node", []cluster.Row{{
-			ID:     "n1",
-			Name:   "swarm-1",
-			Type:   "node",
-			State:  "ready",
-			Detail: "manager",
-		}})
-
-		wantHeader := []string{"name", "state", "role", "id"}
-		if !slices.Equal(table.header, wantHeader) {
-			t.Errorf("header = %v, want %v", table.header, wantHeader)
-		}
-
-		wantRecord := []string{"swarm-1", "ready", "manager", "n1"}
-		if !slices.Equal(table.records[0], wantRecord) {
-			t.Errorf("record = %v, want %v", table.records[0], wantRecord)
-		}
-	})
-
-	t.Run("a type nothing was taught about still renders", func(t *testing.T) {
-		table := csvTableForRows("kraken", []cluster.Row{{
-			ID:     "k1",
-			Name:   "release",
-			Type:   "kraken",
-			State:  "asleep",
-			Detail: "deep",
-		}})
-
-		wantHeader := []string{"name", "state", "detail", "id"}
-		if !slices.Equal(table.header, wantHeader) {
-			t.Errorf("header = %v, want %v", table.header, wantHeader)
-		}
-	})
+	want := []string{"name", "state", "detail", "id"}
+	if !slices.Equal(table.header, want) {
+		t.Errorf("header = %v, want %v", table.header, want)
+	}
 }

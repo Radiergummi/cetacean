@@ -59,9 +59,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
-		// Counted once for the whole answer: the builder takes the counts
-		// rather than the tasks, and asking per row would walk the task table
-		// once per service.
+		// Counted once: asking per row would walk the task table per service.
 		running := h.cache.RunningTaskCounts()
 
 		writeListCSV(w, r, "service", services, p, func(page []swarm.Service) []cluster.Row {
@@ -123,7 +121,7 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 	tasks := cluster.EnrichTasks(h.cache, h.cache.ListTasksByService(r.PathValue("id")))
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
-		writeCSV(w, r, "tasks-"+svc.Spec.Name, csvTableForRows("task", h.enrichedTaskRows(tasks)))
+		h.writeTaskCSV(w, r, svc.Spec.Name, tasks)
 		return
 	}
 
