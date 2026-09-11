@@ -147,3 +147,48 @@ func TestWorldRecordsTheRouteItReached(t *testing.T) {
 		)
 	}
 }
+
+func TestMCPCatalogEnumeratesTheServer(t *testing.T) {
+	w := NewWorld(t)
+	catalog := MCPCatalog(t, w)
+
+	if len(catalog.Tools) < 20 {
+		t.Errorf(
+			"MCPCatalog found %d tools; the server registers 27 across four "+
+				"tiers. The enumeration is incomplete.",
+			len(catalog.Tools),
+		)
+	}
+
+	if len(catalog.Prompts) == 0 {
+		t.Error("MCPCatalog found no prompts; the server registers six")
+	}
+
+	if len(catalog.ResourceTemplates) == 0 {
+		t.Error("MCPCatalog found no resource templates; the server registers nine")
+	}
+}
+
+func TestMCPCatalogReadsTheTypeEnums(t *testing.T) {
+	w := NewWorld(t)
+	catalog := MCPCatalog(t, w)
+
+	// describe takes singular type names, find takes plural. They are two
+	// readings of one map in the product, so the counts must agree — if they
+	// ever do not, a type is findable under one spelling and describable under
+	// neither, which is the exact failure the product's own comment warns about.
+	if len(catalog.DescribableTypes) != len(catalog.FindableTypes) {
+		t.Errorf(
+			"describe accepts %d types (%v) and find accepts %d (%v); they are "+
+				"derived from one map and must agree",
+			len(catalog.DescribableTypes), catalog.DescribableTypes,
+			len(catalog.FindableTypes), catalog.FindableTypes,
+		)
+	}
+
+	for _, want := range []string{"service", "node", "task", "stack", "config", "secret", "network", "volume"} {
+		if !slices.Contains(catalog.DescribableTypes, want) {
+			t.Errorf("describe does not accept type %q; accepts %v", want, catalog.DescribableTypes)
+		}
+	}
+}
