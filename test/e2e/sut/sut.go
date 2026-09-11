@@ -415,15 +415,23 @@ func addrInUseOutput(output string) bool {
 	return strings.Contains(output, "address already in use")
 }
 
+// binaryPath resolves the binary the harness supervises.
+//
+// CETACEAN_E2E_BINARY overrides it so `make test-stack` can run a
+// coverage-instrumented build without replacing ./cetacean, which `make
+// e2e-up` and the Playwright suite expect to be an ordinary one.
 func binaryPath(t *testing.T) string {
 	t.Helper()
 
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot locate sut source")
-	}
+	bin := os.Getenv("CETACEAN_E2E_BINARY")
+	if bin == "" {
+		_, file, _, ok := runtime.Caller(0)
+		if !ok {
+			t.Fatal("cannot locate sut source")
+		}
 
-	bin := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "cetacean"))
+		bin = filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "cetacean"))
+	}
 
 	if _, err := os.Stat(bin); err != nil {
 		t.Fatalf("binary %s not found — run `make build` first: %v", bin, err)

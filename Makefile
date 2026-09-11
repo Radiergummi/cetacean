@@ -1,4 +1,9 @@
-.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack e2e-up e2e-down check sbom sbom-check sbom-verify hooks cover cover-e2e fuzz
+.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack e2e-up e2e-down check sbom sbom-check sbom-verify hooks cover fuzz
+
+# Where test-stack puts its instrumented binary and the profiles it writes.
+# Both are gitignored, and neither replaces ./cetacean.
+E2E_BINARY   := cetacean.cover
+E2E_COVERDIR := coverdata
 
 ## Lint all code
 lint:
@@ -58,13 +63,24 @@ test-e2e:
 ## packages would fight over them. The environment is torn down on success and
 ## deliberately left running on failure, so a failed case can be inspected.
 test-stack: build
-	@go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...; \
+	go build -cover -coverpkg=./... -ldflags "$(LDFLAGS)" -o $(E2E_BINARY) .
+	rm -rf $(E2E_COVERDIR) && mkdir -p $(E2E_COVERDIR)
+	@GOCOVERDIR=$(PWD)/$(E2E_COVERDIR) CETACEAN_E2E_BINARY=$(PWD)/$(E2E_BINARY) \
+		go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...; \
 	status=$$?; \
 	if [ $$status -eq 0 ]; then \
 		$(MAKE) e2e-down; \
 	else \
 		echo "e2e environment left running for inspection; tear down with: make e2e-down"; \
 	fi; \
+	echo ""; \
+	echo "── what the e2e suite reached ────────────────────────────"; \
+	go tool covdata percent -i=$(E2E_COVERDIR) \
+		| sed 's|github.com/radiergummi/cetacean|@.|g' | tr '@' '\n' \
+		| grep 'coverage:' | sed 's/[[:space:]]*coverage: / /' | sort \
+		| awk '{ printf "  %-28s %s\n", $$1, $$2 }'; \
+	go tool covdata func -i=$(E2E_COVERDIR) \
+		| awk 'END { printf "  %-28s %s\n\n", "TOTAL", $$NF }'; \
 	exit $$status
 
 ## Bring the end-to-end environment up with fixtures, and run cetacean against it
@@ -111,25 +127,6 @@ cover:
 	go test -coverprofile=cover.out -covermode=atomic ./...
 	go tool cover -func=cover.out | tail -1
 	@echo "HTML report: go tool cover -html=cover.out"
-
-## Measure what the e2e harness reaches on top of that, by running an
-## instrumented binary. Leaves ./cetacean instrumented — run `make build` after.
-cover-e2e: frontend/node_modules
-	cd frontend && npm run build
-	cd frontend && npm run build:widgets
-	go build -cover -ldflags "$(LDFLAGS)" -o cetacean .
-	rm -rf coverdata && mkdir -p coverdata
-	@GOCOVERDIR=$(PWD)/coverdata go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...; \
-	status=$$?; \
-	if [ $$status -eq 0 ]; then \
-		$(MAKE) e2e-down; \
-	else \
-		echo "e2e environment left running for inspection; tear down with: make e2e-down"; \
-	fi; \
-	go tool covdata percent -i=coverdata; \
-	echo ""; \
-	echo "NOTE: ./cetacean is coverage-instrumented. Run 'make build' before anything else uses it."; \
-	exit $$status
 
 ## Run all checks (lint + type check + format check + test)
 check: lint typecheck fmt-check test
