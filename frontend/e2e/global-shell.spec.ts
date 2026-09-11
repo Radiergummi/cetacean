@@ -98,20 +98,56 @@ test.describe("Keyboard Shortcuts", () => {
   });
 
   test("j/k navigate list rows and Enter opens", async ({ page }) => {
-    await page.goto("/nodes");
+    // Services rather than nodes: moving between rows needs more than one, and
+    // the fixture cluster is a single node.
+    await page.goto("/services");
 
     const firstRow = page.locator("table tbody tr").first();
     await expect(firstRow).toBeVisible({ timeout: 10_000 });
 
-    await page.locator("main").click();
+    // Focus the grid itself rather than clicking the middle of <main> and
+    // hoping the table is under it. It was, until the page grew a metrics
+    // panel above the list and the click started landing on a chart — at
+    // which point nothing held focus and every keystroke went to <body>.
+    const grid = page.getByRole("grid");
+
+    await grid.focus();
+
+    // j moves the active row, which is what the roving aria-activedescendant
+    // names — assert the move rather than only its consequence, so a broken
+    // j with a working Enter cannot pass.
+    await page.keyboard.press("j");
+
+    const active = await grid.getAttribute("aria-activedescendant");
+    expect(active).toBeTruthy();
 
     await page.keyboard.press("j");
+    await expect(grid).not.toHaveAttribute("aria-activedescendant", active!);
+
+    await page.keyboard.press("k");
+    await expect(grid).toHaveAttribute("aria-activedescendant", active!);
+
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/nodes\/.+/);
+    await expect(page).toHaveURL(/\/services\/.+/);
   });
 });
 
 test.describe("Search", () => {
+  /**
+   * The shell's search trigger. Waiting for it before pressing a global
+   * shortcut is what makes the press land: both shortcuts are registered by an
+   * effect in the component behind this button, so a key pressed between
+   * `goto` resolving and that effect running goes nowhere. It reliably did
+   * land until the overview page grew Prometheus charts and took longer to
+   * mount — a race the spec had always had and had always won.
+   */
+  async function searchTrigger(page: import("@playwright/test").Page) {
+    const trigger = page.locator("button:has(svg)", { hasText: /Search/ });
+    await expect(trigger).toBeVisible({ timeout: 15_000 });
+
+    return trigger;
+  }
+
   /**
    * Helper: open the search palette by clicking the search button.
    * More reliable than keyboard shortcuts for tests that depend on
@@ -120,7 +156,7 @@ test.describe("Search", () => {
   async function openPalette(page: import("@playwright/test").Page) {
     // The search button contains "Search..." text on wide viewports,
     // or just a search icon on narrow ones. Use the visible button.
-    await page.locator("button:has(svg)", { hasText: /Search/ }).click();
+    await (await searchTrigger(page)).click();
     const dialog = page.getByRole("dialog", { name: "Search" });
     await expect(dialog).toBeVisible();
     return dialog;
@@ -128,6 +164,7 @@ test.describe("Search", () => {
 
   test("/ opens search palette and focuses input", async ({ page }) => {
     await page.goto("/");
+    await searchTrigger(page);
     await page.locator("body").click();
 
     await page.keyboard.press("/");
@@ -139,6 +176,7 @@ test.describe("Search", () => {
 
   test("Cmd+K opens search palette", async ({ page }) => {
     await page.goto("/");
+    await searchTrigger(page);
 
     await page.keyboard.press(`${process.platform === "darwin" ? "Meta" : "Control"}+k`);
 

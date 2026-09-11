@@ -103,6 +103,7 @@ e2e-up: build
 	CETACEAN_OPERATIONS_LEVEL=3 \
 	CETACEAN_LISTEN_ADDR=:19001 \
 	CETACEAN_DOCKER_HOST=tcp://127.0.0.1:12375 \
+	CETACEAN_PROMETHEUS_URL=http://127.0.0.1:19090 \
 	CETACEAN_SNAPSHOT=false \
 	./cetacean & echo $$! > test/e2e/.sut.pid
 	@echo "Cetacean running at http://localhost:19001"

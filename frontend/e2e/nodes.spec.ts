@@ -107,8 +107,17 @@ test.describe("Node Detail (/nodes/:id)", () => {
   }) => {
     test.skip(!monitoring?.cadvisor, "cAdvisor not available");
 
-    await expect(page.getByRole("heading", { name: /Resource Usage by Stack/i })).toBeVisible({
-      timeout: 15_000,
-    });
+    // A section header in this app is a disclosure button, not a heading —
+    // every other section spec in this suite addresses one the same way. This
+    // case asserted a heading and never ran to find out, because without a
+    // Prometheus reporting cAdvisor targets it always skipped.
+    const section = page.getByRole("button", { name: /^Resource Usage by Stack$/i });
+
+    await expect(section).toBeVisible({ timeout: 15_000 });
+    await expect(section).toHaveAttribute("aria-expanded", "true");
+
+    // Open, and drawing: the panel renders a chart per metric rather than an
+    // empty section with a header.
+    await expect(page.locator("canvas")).not.toHaveCount(0, { timeout: 15_000 });
   });
 });

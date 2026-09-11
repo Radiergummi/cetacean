@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -27,6 +28,23 @@ func main() {
 
 	if err := fixtures.DeployBaselineCLI(env); err != nil {
 		fmt.Fprintf(os.Stderr, "deploy fixtures: %v\n", err)
+		os.Exit(1)
+	}
+
+	// The browser suite skips every metrics spec when Prometheus reports
+	// nothing, which is most of what the dashboard draws. Seeding here is what
+	// lets those specs run, against the same numbers metrics_test.go asserts.
+	address, hostname, err := fixtures.NodeIdentityCLI(env)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "resolve node: %v\n", err)
+		os.Exit(1)
+	}
+
+	if _, err := harness.SeedPrometheusCLI(
+		context.Background(),
+		fixtures.MetricsSeed(address, hostname),
+	); err != nil {
+		fmt.Fprintf(os.Stderr, "seed prometheus: %v\n", err)
 		os.Exit(1)
 	}
 

@@ -66,35 +66,58 @@ func (s Series) PerSecond() float64 {
 func SeedPrometheus(t *testing.T, series []Series) time.Time {
 	t.Helper()
 
-	end := time.Now().Truncate(time.Second)
-	file := filepath.Join(t.TempDir(), "seed.om")
-
-	if err := os.WriteFile(file, []byte(openMetrics(series, end)), 0o644); err != nil {
-		t.Fatalf("write seed: %v", err)
+	end, err := SeedPrometheusCLI(t.Context(), series)
+	if err != nil {
+		t.Fatalf("seed prometheus: %v", err)
 	}
 
-	compose(t, "cp", file, "prometheus:/tmp/seed.om")
+	return end
+}
 
-	// promtool refuses to write a block that would overlap one already in the
-	// directory, so a second seed in the same run has to start from an empty
-	// one. The lane seeds once; this is what keeps a second call from failing
-	// in a way that reads as a Prometheus problem.
-	compose(
-		t,
+// SeedPrometheusCLI is SeedPrometheus's non-test entry point, for callers with
+// no *testing.T. `make e2e-up` seeds the same series the Go lane does, so the
+// browser suite and metrics_test.go look at one cluster.
+func SeedPrometheusCLI(ctx context.Context, series []Series) (time.Time, error) {
+	end := time.Now().Truncate(time.Second)
+
+	dir, err := os.MkdirTemp("", "cetacean-seed")
+	if err != nil {
+		return end, err
+	}
+	defer os.RemoveAll(dir)
+
+	file := filepath.Join(dir, "seed.om")
+	if err := os.WriteFile(file, []byte(openMetrics(series, end)), 0o644); err != nil {
+		return end, fmt.Errorf("write seed: %w", err)
+	}
+
+	if err := compose(ctx, "cp", file, "prometheus:/tmp/seed.om"); err != nil {
+		return end, err
+	}
+
+	// promtool refuses to write a block overlapping one already in the
+	// directory, so a seed starts from an empty one. That is also what makes
+	// seeding idempotent: `make e2e-up` twice replaces the history rather than
+	// failing on it.
+	if err := compose(
+		ctx,
 		"exec",
 		"-T",
 		"prometheus",
 		"sh",
 		"-c",
 		"rm -rf /prometheus/* && promtool tsdb create-blocks-from openmetrics /tmp/seed.om /prometheus",
-	)
+	); err != nil {
+		return end, err
+	}
 
 	// Blocks on disk are picked up when the database is opened, not while it
 	// is running, so the restart is the load.
-	compose(t, "restart", "prometheus")
-	WaitForPrometheus(t)
+	if err := compose(ctx, "restart", "prometheus"); err != nil {
+		return end, err
+	}
 
-	return end
+	return end, waitForPrometheus(ctx)
 }
 
 // openMetrics renders the series as an OpenMetrics exposition ending at `end`.
@@ -152,16 +175,15 @@ func labelString(labels map[string]string) string {
 	return strings.Join(pairs, ",")
 }
 
-// WaitForPrometheus blocks until the lane's Prometheus answers a query.
-func WaitForPrometheus(t *testing.T) {
-	t.Helper()
-
+// waitForPrometheus blocks until the lane's Prometheus answers a query.
+func waitForPrometheus(ctx context.Context) error {
 	deadline := time.Now().Add(upTimeout)
+
 	var last error
 
 	for time.Now().Before(deadline) {
-		if err := queryOK(t.Context()); err == nil {
-			return
+		if err := queryOK(ctx); err == nil {
+			return nil
 		} else { //nolint:revive // the error is kept for the failure message
 			last = err
 		}
@@ -169,7 +191,7 @@ func WaitForPrometheus(t *testing.T) {
 		time.Sleep(pollInterval)
 	}
 
-	t.Fatalf("prometheus did not become ready at %s: %v", PrometheusURL, last)
+	return fmt.Errorf("prometheus did not become ready at %s: %w", PrometheusURL, last)
 }
 
 func queryOK(ctx context.Context) error {
@@ -207,12 +229,10 @@ func queryOK(ctx context.Context) error {
 	return nil
 }
 
-func compose(t *testing.T, args ...string) {
-	t.Helper()
-
+func compose(ctx context.Context, args ...string) error {
 	root, err := repoRoot()
 	if err != nil {
-		t.Fatalf("repo root: %v", err)
+		return fmt.Errorf("repo root: %w", err)
 	}
 
 	full := append(
@@ -220,10 +240,10 @@ func compose(t *testing.T, args ...string) {
 		args...,
 	)
 
-	cmd := exec.CommandContext(t.Context(), "docker", full...)
-
-	out, err := cmd.CombinedOutput()
+	out, err := exec.CommandContext(ctx, "docker", full...).CombinedOutput()
 	if err != nil {
-		t.Fatalf("docker %s: %v\n%s", strings.Join(full, " "), err, out)
+		return fmt.Errorf("docker %s: %w\n%s", strings.Join(full, " "), err, out)
 	}
+
+	return nil
 }
