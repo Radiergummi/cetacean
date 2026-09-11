@@ -40,6 +40,11 @@ func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 	mux := http.NewServeMux()
 	s.RegisterRoutes(mux, "/cetacean")
 
+	// A bare mux, so this test covers issuerID and nothing about routing: the
+	// negotiation middleware, the base-path strip and the SPA fallback are all
+	// absent. What a client actually receives is covered by
+	// internal/api.TestAdvertisedJWKSURIServesAKeySet.
+
 	asDoc := readJSONDoc(t, mux, "/cetacean/.well-known/oauth-authorization-server")
 	if asDoc["issuer"] != wantBasePathIssuer {
 		t.Errorf("AS metadata issuer = %v, want %q", asDoc["issuer"], wantBasePathIssuer)
