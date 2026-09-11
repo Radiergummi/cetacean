@@ -430,8 +430,10 @@ func binaryPath(t *testing.T) string {
 			t.Fatal("cannot locate sut source")
 		}
 
-		bin = filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "cetacean"))
+		bin = filepath.Join(filepath.Dir(file), "..", "..", "..", "cetacean")
 	}
+
+	bin = filepath.Clean(bin)
 
 	if _, err := os.Stat(bin); err != nil {
 		t.Fatalf("binary %s not found — run `make build` first: %v", bin, err)
