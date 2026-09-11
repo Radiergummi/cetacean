@@ -131,6 +131,16 @@ func writeRawWithPrecomputedETag(
 	w.Write(body) //nolint:errcheck
 }
 
+// setJSONContentType labels the response as JSON unless the caller already
+// named a more specific type built on it. A JSON Feed and a JSON-LD document
+// are both JSON on the wire and both have their own media type; overwriting
+// what the handler set makes every route advertising one deny serving it.
+func setJSONContentType(w http.ResponseWriter) {
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
+	}
+}
+
 // writeCachedJSON marshals v to JSON with ETag-based conditional caching.
 // Returns 304 Not Modified if the client's If-None-Match header matches.
 func writeCachedJSON(w http.ResponseWriter, r *http.Request, v any) {
@@ -155,7 +165,7 @@ func writeCachedJSONStatus(w http.ResponseWriter, r *http.Request, status int, v
 	etag := codedETag(computeETag(body), coding)
 
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Content-Type", "application/json")
+	setJSONContentType(w)
 	if w.Header().Get("Cache-Control") == "" {
 		w.Header().Set("Cache-Control", "no-cache")
 	}
@@ -199,7 +209,7 @@ func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastMod
 	etag := codedETag(computeETag(body), coding)
 
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Content-Type", "application/json")
+	setJSONContentType(w)
 	w.Header().Set("Cache-Control", "no-cache")
 
 	if !lastModified.IsZero() {

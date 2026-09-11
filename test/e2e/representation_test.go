@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"slices"
 	"strings"
-	"sync/atomic"
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/contract"
@@ -239,61 +238,18 @@ type jgfGraph struct {
 	Edges []any          `json:"edges"`
 }
 
-// jsonFeedMislabelled counts the JSON Feed responses served as plain JSON, so
-// finding D-14 is reported once for the lane rather than on every route.
-var jsonFeedMislabelled atomic.Int64
-
 // assertContentType requires the answer to be labelled with the media type
-// that was asked for.
-//
-// The one tolerated exception is finding D-14: every JSON Feed response is
-// labelled application/json. internal/api/jsonfeed_handlers.go sets
-// application/feed+json and then calls writeCachedJSON, whose
-// writeCachedJSONStatus (internal/api/etag.go) does an unconditional
-// Header().Set("Content-Type", "application/json") over it. Atom escapes this
-// because renderAtom writes pre-rendered bytes through writeRawWithETag, which
-// leaves the caller's Content-Type alone.
+// that was asked for. A feed that reports itself as plain JSON, or a graph
+// export that reports itself as XML, is undiscoverable to a client
+// dispatching on the label — which is the whole point of asking for it.
 func assertContentType(t *testing.T, representation contract.Representation, got string) {
 	t.Helper()
 
 	want := mediaForms[representation].contentType
 
-	if strings.HasPrefix(got, want) {
-		return
+	if !strings.HasPrefix(got, want) {
+		t.Errorf("Content-Type = %q, want %s", got, want)
 	}
-
-	if representation == contract.RepresentationJSONFeed &&
-		strings.HasPrefix(got, "application/json") {
-		jsonFeedMislabelled.Add(1)
-
-		return
-	}
-
-	t.Errorf("Content-Type = %q, want %s", got, want)
-}
-
-// reportJSONFeedLabelling logs D-14 once, at the end of a test that drove the
-// JSON Feed representation.
-func reportJSONFeedLabelling(t *testing.T) {
-	t.Helper()
-
-	count := jsonFeedMislabelled.Swap(0)
-	if count == 0 {
-		return
-	}
-
-	t.Logf(
-		"FINDING D-14: %d JSON Feed responses were labelled application/json. "+
-			"internal/api/jsonfeed_handlers.go sets application/feed+json and then "+
-			"calls writeCachedJSON, whose writeCachedJSONStatus "+
-			"(internal/api/etag.go) overwrites it with an unconditional "+
-			"Header().Set. Twenty-one routes declare the format and every one of "+
-			"them denies serving it, including through the "+
-			"Link rel=\"alternate\" type=\"application/feed+json\" headers "+
-			"internal/api/dispatch.go advertises. A reader dispatching on the "+
-			"media type sees plain JSON.",
-		count,
-	)
 }
 
 func verifyJSONObject(t *testing.T, body string) {
@@ -507,8 +463,6 @@ func TestRepresentationMatrix(t *testing.T) {
 	proc := startRepresentationLane(t, env)
 	fixture := newRepresentationFixture(t, env, proc)
 
-	t.Cleanup(func() { reportJSONFeedLabelling(t) })
-
 	for route, forms := range representationTargets(t, fixture) {
 		t.Run(route, func(t *testing.T) {
 			for representation, path := range forms {
@@ -553,8 +507,6 @@ func TestRepresentationSuffixesMatchTheAcceptHeader(t *testing.T) {
 
 	proc := startRepresentationLane(t, env)
 	fixture := newRepresentationFixture(t, env, proc)
-
-	t.Cleanup(func() { reportJSONFeedLabelling(t) })
 
 	for route, forms := range representationTargets(t, fixture) {
 		t.Run(route, func(t *testing.T) {
