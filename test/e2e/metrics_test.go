@@ -1211,3 +1211,137 @@ func TestMCPRankMetricsScopesByGrantBeforeRanking(t *testing.T) {
 			names, fixtures.CrashLoopService)
 	}
 }
+
+// ─── node pressure ──────────────────────────────────────────────────────
+
+// atNodePressure rewrites the node's available-bytes gauges so the two
+// pressure queries read the given percentages. Both are derived from the
+// totals the seed already carries, so the query does the arithmetic and the
+// case asserts the number a user would be shown.
+func atNodePressure(series []harness.Series, diskPercent, memoryPercent float64) []harness.Series {
+	out := make([]harness.Series, len(series))
+	copy(out, series)
+
+	for i := range out {
+		switch out[i].Name {
+		case "node_filesystem_avail_bytes":
+			out[i].Start = seededDiskTotal * (1 - diskPercent/100)
+		case "node_memory_MemAvailable_bytes":
+			out[i].Start = seededMemoryTotal * (1 - memoryPercent/100)
+		}
+	}
+
+	return out
+}
+
+// TestNodePressureRecommendationsRespectTheThreshold drives the operational
+// checker's two Prometheus-dependent findings, which fire above 90% and are
+// the only critical recommendations the engine can raise about a node.
+//
+// The boundary is asserted from both sides, which the seed makes exact: the
+// rule is `usage <= 90` continues, so ninety per cent is deliberately not a
+// finding and the case would fail if the comparison were loosened to `<`.
+func TestNodePressureRecommendationsRespectTheThreshold(t *testing.T) {
+	t.Run("at the threshold, nothing is raised", func(t *testing.T) {
+		env, address, hostname := metricsCluster(t)
+
+		proc, _ := seedAndStart(t, env,
+			atNodePressure(seededMetrics(address, hostname), 90, 90), nil)
+
+		recs := awaitRecommendations(t, proc, func(recs []recommendation) bool {
+			// The sizing findings share the tick, so their arrival is the
+			// signal that the operational checker has also run and said
+			// nothing, rather than that it has not run yet.
+			return hasCategory(recs, "no-limits")
+		})
+
+		for _, category := range []string{"node-disk-full", "node-memory-pressure"} {
+			if hasCategory(recs, category) {
+				t.Errorf("%s was raised at exactly 90%%, which the rule excludes", category)
+			}
+		}
+	})
+
+	t.Run("above it, both are raised against the node", func(t *testing.T) {
+		env, address, hostname := metricsCluster(t)
+
+		proc, _ := seedAndStart(t, env,
+			atNodePressure(seededMetrics(address, hostname), 95, 93), nil)
+
+		recs := awaitRecommendations(t, proc, func(recs []recommendation) bool {
+			return hasCategory(recs, "node-disk-full") && hasCategory(recs, "node-memory-pressure")
+		})
+
+		for category, want := range map[string]string{
+			"node-disk-full":       "Node disk usage is at 95%",
+			"node-memory-pressure": "Node memory usage is at 93%",
+		} {
+			rec, ok := findCategory(recs, category)
+			if !ok {
+				t.Errorf("%s was not raised", category)
+
+				continue
+			}
+
+			if rec.Severity != "critical" {
+				t.Errorf("%s severity = %q, want critical", category, rec.Severity)
+			}
+
+			// Named by the hostname the cluster uses, not by the `instance`
+			// label — the checker resolves one to the other through the cache,
+			// and an unresolved instance would read as "10.0.0.2:9100".
+			if rec.TargetName != hostname {
+				t.Errorf("%s target = %q, want the node's hostname %q",
+					category, rec.TargetName, hostname)
+			}
+
+			if rec.Message != want {
+				t.Errorf("%s message = %q, want %q", category, rec.Message, want)
+			}
+		}
+	})
+}
+
+// awaitRecommendations polls until `done` holds, bounded well under the
+// operational checker's five-minute interval so a finding that is not here
+// within it is not coming.
+func awaitRecommendations(
+	t *testing.T,
+	proc *sut.Process,
+	done func([]recommendation) bool,
+) []recommendation {
+	t.Helper()
+
+	var last []recommendation
+
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		last = sizingRecommendations(t, proc)
+
+		if done(last) {
+			return last
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	t.Fatalf("recommendations did not settle in time; last: %+v", last)
+
+	return nil
+}
+
+func hasCategory(recs []recommendation, category string) bool {
+	_, ok := findCategory(recs, category)
+
+	return ok
+}
+
+func findCategory(recs []recommendation, category string) (recommendation, bool) {
+	for _, rec := range recs {
+		if rec.Category == category {
+			return rec, true
+		}
+	}
+
+	return recommendation{}, false
+}
