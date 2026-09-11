@@ -5953,7 +5953,7 @@ components:
             instance: /plugins/vieux/sshfs:latest
             requestId: req_a1b2c3d4e5f6
     Forbidden:
-      description: Access denied by operations level or ACL
+      description: Access denied by operations level, ACL, or cross-origin protection
       content:
         application/problem+json:
           schema:
@@ -5987,6 +5987,16 @@ components:
                 title: Write Access Denied
                 status: 403
                 detail: "grants for service:webapp permit read but not write"
+                instance: /services/r8m2x5nk3p7q/image
+                requestId: req_a1b2c3d4e5f6
+            crossOriginBlocked:
+              summary: Cross-origin write blocked (CSR001)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/CSR001
+                title: Cross-Origin Request Blocked
+                status: 403
+                detail: "cross-origin request detected from Sec-Fetch-Site header"
                 instance: /services/r8m2x5nk3p7q/image
                 requestId: req_a1b2c3d4e5f6
 

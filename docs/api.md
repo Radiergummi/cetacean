@@ -272,6 +272,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 | Resource changed between your read and your write | 409 | [`SVC001`](api/errors#SVC001), [`NOD002`](api/errors#NOD002), [`CFG005`](api/errors#CFG005), [`SEC005`](api/errors#SEC005) | Re-read the resource and retry |
 | Endpoint above the configured [operations level][operations-level] | 403 | [`OPS001`](api/errors#OPS001) | Raise the operations level |
 | [ACL][authorization] denies read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
+| Cross-origin write from an origin that is not allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
 
@@ -637,4 +638,5 @@ characters) or the server generates one. The value appears in error responses as
 [mcp]: mcp
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
+[server.cors.origins]: configuration#server.cors.origins
 [server.sse.batch_interval]: configuration#server.sse.batch_interval

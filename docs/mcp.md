@@ -114,7 +114,9 @@ Tracing stays off until the endpoint is set. A malformed endpoint stops startup 
 - **Auth mode `none` leaves `/mcp` open.** Anyone who can reach it gets whatever the operations level allows.
   Use it only on a trusted network.
 - **Set [`server.cors.origins`][server.cors.origins] if the consent screen crosses origins.** It also guards
-  `/mcp` itself against DNS rebinding. Non-browser clients are unaffected.
+  `/mcp` itself against DNS rebinding. Name the origins rather than using `*`: a browser-based client's every
+  call is a `POST`, and a wildcard is not trusted for cross-origin writes, so those calls are refused.
+  Non-browser clients send no `Origin` and are unaffected by either check.
 - **Run a single replica.** Sign-in state lives in one process; see [How it works](#how-it-works).
 
 ## Troubleshooting

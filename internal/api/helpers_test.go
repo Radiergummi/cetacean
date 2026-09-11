@@ -116,18 +116,37 @@ func newTestRouterWithCache(
 ) http.Handler {
 	t.Helper()
 
-	h := newTestHandlers(t, append([]testHandlersOption{withCache(c)}, opts...)...)
+	return newTestRouterWithConfig(t, nil, append([]testHandlersOption{withCache(c)}, opts...)...)
+}
+
+// newTestRouterWithConfig is newTestRouterWithCache plus the CORS allowlist —
+// which also decides which origins cross-origin protection trusts — so the
+// RouterConfig every assembled-router test drives is written once.
+func newTestRouterWithConfig(
+	t testing.TB,
+	corsOrigins []string,
+	opts ...testHandlersOption,
+) http.Handler {
+	t.Helper()
+
+	h := newTestHandlers(t, opts...)
 	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
 	t.Cleanup(b.Close)
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys), "")
 
-	return NewRouter(RouterConfig{
+	cfg := RouterConfig{
 		Handlers:          h,
 		Broadcaster:       b,
 		SPA:               spa,
 		OpenAPISpec:       []byte("openapi: '3.1.0'"),
 		EnableSelfMetrics: true,
 		AuthProvider:      &auth.NoneProvider{},
-	})
+	}
+
+	if len(corsOrigins) > 0 {
+		cfg.CORS = &CORSConfig{AllowedOrigins: corsOrigins}
+	}
+
+	return NewRouter(cfg)
 }

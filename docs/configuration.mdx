@@ -76,6 +76,8 @@ the config file.
 
 <ConfigParam name="server.cors.origins" flag="-cors-origins" env="CETACEAN_CORS_ORIGINS">
   Origins allowed to make cross-origin requests to the API, as a comma-separated list, e.g. `https://admin.example.com`, or `*` for any. When unset, no CORS headers are sent and browsers block cross-origin requests.
+
+  The same origins are trusted for cross-origin writes; `*` cannot be, so with a wildcard browsers may read the API from any origin while cross-origin writes are refused.
 </ConfigParam>
 
 <ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">

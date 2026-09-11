@@ -418,6 +418,16 @@ func main() {
 	if len(cfg.CORSOrigins) > 0 {
 		corsConfig = &api.CORSConfig{AllowedOrigins: cfg.CORSOrigins}
 		slog.Info("CORS enabled", "origins", cfg.CORSOrigins)
+
+		// A wildcard can only answer half of what this setting decides: "*" is
+		// not an origin, so it cannot be trusted for cross-origin writes.
+		if corsConfig.Wildcard() {
+			slog.Warn(
+				"server.cors.origins is a wildcard: browsers may read the API " +
+					"from any origin, but cross-origin writes are refused. List " +
+					"the origins explicitly to allow them.",
+			)
+		}
 	}
 
 	// Distributed tracing is opt-in: with no collector configured the MCP
@@ -457,6 +467,7 @@ func main() {
 
 	mcpHandler, oauthRoutes, closeMCP := setupMCP(mcpDeps{
 		cfg:          cfg,
+		cors:         corsConfig,
 		authMode:     authCfg.Mode,
 		authProvider: authProvider,
 		tlsEnabled:   tlsCfg.Enabled(),
@@ -674,6 +685,7 @@ func serveDualListeners(
 // runtime state onto config structs.
 type mcpDeps struct {
 	cfg          *config.Config
+	cors         *api.CORSConfig
 	authMode     string
 	authProvider auth.Provider
 	tlsEnabled   bool
@@ -794,6 +806,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		Recommendations: d.rec,
 		Prometheus:      metricsQuerier,
 		AllowedOrigins:  d.cfg.CORSOrigins,
+		AllowAnyOrigin:  d.cors.Wildcard(),
 		IconBaseURL:     issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 	})
@@ -805,9 +818,17 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		"operations_level", d.cfg.MCP.EffectiveOperationsLevel(d.cfg.OperationsLevel),
 		"protocol_version", mcp.ProtocolVersion)
 
-	if len(d.cfg.CORSOrigins) == 0 {
+	// A browser-based MCP client has to clear two gates: the Origin guard
+	// below, and the cross-origin protection every route carries. The guard
+	// honours a wildcard and the protection cannot, so "*" is no longer the
+	// shortcut it once was here — the origins have to be named.
+	if !d.cors.Enabled() {
 		slog.Warn(
-			"MCP Origin guard active with no allowlist: browser-based MCP clients (e.g. MCP Inspector) will be rejected with 403. Set CETACEAN_CORS_ORIGINS to the allowed origins (or '*' for any). Non-browser MCP clients send no Origin and are unaffected.",
+			"MCP Origin guard active with no allowlist: browser-based MCP clients (e.g. MCP Inspector) will be rejected with 403. Set CETACEAN_CORS_ORIGINS to the origins they run on. Non-browser MCP clients send no Origin and are unaffected.",
+		)
+	} else if d.cors.Wildcard() {
+		slog.Warn(
+			"MCP Origin guard allows any origin, but a wildcard cannot be a trusted origin for cross-origin protection, so browser-based MCP clients (e.g. MCP Inspector) will be rejected with 403 on every call. List the origins they run on instead. Non-browser MCP clients send no Origin and are unaffected.",
 		)
 	}
 

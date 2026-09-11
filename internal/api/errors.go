@@ -34,6 +34,7 @@ var ErrorDomains = []ErrorDomain{
 	{Prefix: "AUT", Label: "Authentication"},
 	{Prefix: "ACL", Label: "Authorization"},
 	{Prefix: "OPS", Label: "Operations level"},
+	{Prefix: "CSR", Label: "Cross-origin protection"},
 	{Prefix: "FLT", Label: "Filter expressions"},
 	{Prefix: "SEA", Label: "Search"},
 	{Prefix: "MTR", Label: "Metrics and Prometheus"},
@@ -159,6 +160,15 @@ var errorRegistry = map[string]ErrorDef{
 		Status:      http.StatusForbidden,
 		Description: "The requested operation requires a higher operations level than the server is configured for.",
 		Suggestion:  "Increase the server.operations_level setting and restart the server.",
+	},
+
+	// ── CSR: cross-origin protection ──────────────────────────────────
+	"CSR001": {
+		Code:        "CSR001",
+		Title:       "Cross-Origin Request Blocked",
+		Status:      http.StatusForbidden,
+		Description: "The request changes state and arrived from another origin, which cross-site request forgery protection refuses.",
+		Suggestion:  "Call the API from an allowed origin, or add yours to the server.cors.origins setting.",
 	},
 
 	// ── FLT: filter expressions ───────────────────────────────────────

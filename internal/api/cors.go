@@ -19,6 +19,19 @@ func (c *CORSConfig) Enabled() bool {
 	return c != nil && len(c.AllowedOrigins) > 0
 }
 
+// Wildcard reports whether the allowlist is the single entry "*", meaning any
+// origin. Every reader of the setting asks here rather than deciding for
+// itself, so they cannot answer differently for one configuration —
+// internal/mcp's Origin guard used to look for a "*" itself, and took this
+// answer as Options.AllowAnyOrigin once the two were caught disagreeing.
+//
+// A "*" alongside real origins is deliberately not a wildcard: the list is
+// then matched literally, so the "*" entry matches nothing and the named
+// origins are the allowlist.
+func (c *CORSConfig) Wildcard() bool {
+	return c.Enabled() && len(c.AllowedOrigins) == 1 && c.AllowedOrigins[0] == "*"
+}
+
 // exposedHeaders lists response headers the browser should expose to
 // JavaScript in cross-origin requests.
 var exposedHeaders = strings.Join([]string{
@@ -61,7 +74,7 @@ func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
 		return func(next http.Handler) http.Handler { return next }
 	}
 
-	wildcard := len(cfg.AllowedOrigins) == 1 && cfg.AllowedOrigins[0] == "*"
+	wildcard := cfg.Wildcard()
 
 	// Build a set for O(1) origin lookup (skip for wildcard).
 	var allowed map[string]struct{}
