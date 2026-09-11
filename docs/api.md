@@ -661,6 +661,22 @@ URIs in the catalogue are absolute. Set [`server.public_url`][server.public_url]
 built from the request's own `Forwarded` / `X-Forwarded-*` headers, which are read only when the request arrives
 from an address in [`server.trusted_proxies`][server.trusted_proxies].
 
+### Browser search
+
+`GET /opensearch.xml` is an [OpenSearch 1.1](https://github.com/dewitt/opensearch/blob/master/opensearch-1-1-draft-6.md)
+description document, and the dashboard advertises it with a `<link rel="search">`. A browser that supports the
+convention can be taught a keyword for the cluster, so typing it in the address bar followed by a service name lands
+on `/search`. The document also offers the Atom and JSON forms of the same search.
+
+Autodiscovery support varies by browser and has narrowed in Chromium over time; Firefox still offers it. The document
+is served whether or not a browser picks it up, so a script can read the templates directly.
+
+Unlike the API catalogue, this endpoint is not exempt from authentication: a browser fetches it with the session it
+already has, and a deployment that requires a login does not publish its search description to anonymous callers.
+
+Its templates are absolute, and are built the same way the catalogue's URIs are — from
+[`server.public_url`][server.public_url] when it is set.
+
 ## Request ID
 
 Every response carries a `Request-Id` header. Send your own in the `Request-Id` request header (max 64 printable ASCII

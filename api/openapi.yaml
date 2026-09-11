@@ -696,6 +696,31 @@ paths:
                   limit: "urn:cetacean:limit"
                   offset: "urn:cetacean:offset"
 
+  /opensearch.xml:
+    get:
+      operationId: getOpenSearchDescription
+      tags: [Documentation]
+      summary: OpenSearch description document
+      description: |
+        Describes the cluster search as an OpenSearch 1.1 description document,
+        so a browser can offer it from the address bar. Templates are absolute
+        and are built from `server.public_url` when it is set.
+      responses:
+        "200":
+          description: OpenSearch description
+          content:
+            application/opensearchdescription+xml:
+              schema:
+                type: string
+              example: |
+                <?xml version="1.0" encoding="UTF-8"?>
+                <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+                  <ShortName>Cetacean</ShortName>
+                  <Description>Search services, stacks, nodes, tasks, configs, secrets, networks and volumes in the Swarm cluster</Description>
+                  <InputEncoding>UTF-8</InputEncoding>
+                  <Url type="text/html" template="https://cetacean.example.com/search?q={searchTerms}"/>
+                </OpenSearchDescription>
+
   /.well-known/api-catalog:
     get:
       operationId: getAPICatalog

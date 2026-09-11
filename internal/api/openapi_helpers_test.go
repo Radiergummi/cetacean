@@ -48,6 +48,15 @@ func loadTestSpec(t *testing.T) ([]byte, *openapi3.T, routers.Router) {
 			openapi3filter.RegisteredBodyDecoder("application/json"),
 		)
 
+		// The OpenSearch document is declared as a string in the spec, which
+		// is what the plain-text decoder produces — the XML has no schema
+		// worth restating in OpenAPI, and the assertions that matter are in
+		// opensearch_test.go, which parses it.
+		openapi3filter.RegisterBodyDecoder(
+			openSearchMediaType,
+			openapi3filter.RegisteredBodyDecoder("text/plain"),
+		)
+
 		const specPath = "../../api/openapi.yaml"
 
 		bytes, err := os.ReadFile(specPath)
