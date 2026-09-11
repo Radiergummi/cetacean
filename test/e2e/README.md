@@ -78,6 +78,7 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19013` | SSE ACL filtering on `GET /events`, and the broadcaster's connection cap |
 | `19014` | Conditional requests: `If-Match` on every preconditioned route, `If-None-Match` on the representation it compares against |
 | `19015` | Log reads and the SSE log tail, against containers writing known output |
+| `19016` | MCP streaming: the subscription notification stream, completions, and the tasks extension |
 | `19104` | Caddy, mTLS termination |
 
 `19003` is reserved in the numbering scheme but the `headers`-mode hostile-input cases run on
@@ -205,8 +206,11 @@ Nothing below is exercised by this suite, and — except where noted — nothing
   hostile-input cases (malformed/duplicate headers) still run, against the in-process proxy.
 - Write-lane coverage beyond scale and restart: image update, rollback, drain, task removal, and
   the 409 stale-version conflict.
-- MCP grant-based `tools/list` filtering (only tier gating is covered), a task-augmented mutation
-  polled to convergence, and cache-event notifications.
+- ~~MCP grant-based `tools/list` filtering (only tier gating is covered), a task-augmented mutation
+  polled to convergence, and cache-event notifications.~~ Covered: `tools/list` filtering by
+  `mcp_sweep_test.go`, and the rest by `mcp_stream_test.go`, which drives the `subscriptions/listen`
+  stream and its ACL filtering, the completions capability, and the tasks extension. What that lane
+  cannot drive is a task-augmented mutation reaching the cluster at all — see finding D-12.
 - A *successful* Tailscale authentication, in either mode. `tailscale_test.go` covers everything
   `TailscaleProvider` decides before it consults the daemon — the CGNAT/ULA address boundary, and that
   forwarding headers cannot forge a tailnet peer unless a trusted proxy is configured — plus tsnet's
