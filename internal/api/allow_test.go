@@ -277,3 +277,36 @@ func TestSetAllow_NilACL(t *testing.T) {
 		}
 	}
 }
+
+// TestAllowHeaderOffersNodePatchAtTierTwo fails while allow.go still calls a
+// node PATCH impactful: the Allow header is what the dashboard gates its
+// affordances on, so an out-of-date entry hides the labels editor on an API
+// that would now accept the edit.
+//
+// TestEveryOperationIsGatedAtItsDeclaredTier holds the route's own gate to the
+// tier the spec badges, but it reads no Allow header — resourceWriteMethods is
+// a second, hand-stated projection of the same tier, and only a test spanning
+// both catches one moving without the other.
+//
+// It calls setAllow directly, as the rest of this file does: the table is all
+// that decides this header, so a seeded router would add a cache, a write
+// client and a plugin client that no assertion here reads.
+func TestAllowHeaderOffersNodePatchAtTierTwo(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"*"}, Audience: []string{"*"}, Permissions: []string{"write"}},
+	}})
+
+	h := newTestHandlers(t, withACL(evaluator), withOpsLevel(config.OpsConfiguration))
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/nodes/node1", nil)
+	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
+
+	h.setAllow(w, r, "node", "node1")
+
+	if allow := w.Header().Get("Allow"); !strings.Contains(allow, "PATCH") {
+		t.Errorf("Allow = %q at operations level 2, want PATCH offered — "+
+			"the route admits it", allow)
+	}
+}
