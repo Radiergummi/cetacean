@@ -89,10 +89,38 @@ services:
     networks:
       - e2e
 
+  # --- Prometheus (metrics lane) ---
+  #
+  # No scrape_configs: the lane writes TSDB blocks into this instance rather
+  # than waiting for real exporters to accumulate series, so a run gets hours
+  # of history immediately and gets the same history every time. `up` is part
+  # of what it writes, since with nothing scraped there is otherwise no `up`
+  # for the cAdvisor detection to find.
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    user: root
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    ports:
+      - "19090:9090"
+    configs:
+      - source: prometheus-config
+        target: /etc/prometheus/prometheus.yml
+    networks:
+      - e2e
+
 networks:
   e2e:
 
 configs:
+  prometheus-config:
+    content: |
+      global:
+        scrape_interval: 15s
+
   dex-config:
     content: |
       issuer: http://localhost:19010/dex

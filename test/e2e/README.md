@@ -82,6 +82,8 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19017` | The representation matrix: every content type each negotiated route declares |
 | `19018` | Deployment shape: base path, TLS in the binary, the MCP Origin guard, cache snapshots |
 | `19019` | `?filter=` on every list endpoint: each env field, the FLT codes, and the pipeline order |
+| `19020` | Metrics, against a real Prometheus seeded with generated TSDB blocks |
+| `19090` | Prometheus (the metrics lane's, published for the host-side SUT) |
 | `19104` | Caddy, mTLS termination |
 
 `19003` is reserved in the numbering scheme but the `headers`-mode hostile-input cases run on
@@ -194,14 +196,23 @@ watching for if the suite is run repeatedly against one long-lived environment.
 - Every file here — and `test/e2e/cmd/e2eenv/main.go` — carries `//go:build e2e`, so `go test ./...`
   and `make check` never touch it.
 
+## Seeded Prometheus
+
+`compose.e2e.yaml` runs a Prometheus with no scrape targets, and `harness.SeedPrometheus` writes
+TSDB blocks into it with `promtool tsdb create-blocks-from openmetrics`, restarting it onto them.
+Real exporters would have to run for hours to produce a history worth querying and would produce a
+different one every run; generated blocks give three hours of history immediately and the same
+history every time.
+
+The point of "the same history every time" is that the assertions are exact. Every seeded counter
+rises by a fixed step per sample, and the step divides the `[5m]` window every query in the product
+uses, so `rate()` yields a number rather than a range — which is why `metrics_test.go` can say the
+CPU panel reads 50% instead of saying it reads something. `up` is seeded too: with nothing scraped
+there is otherwise no `up` for the cAdvisor detection to find.
+
 ## Deferred
 
-Prometheus-backed metrics are not seeded here. The one metrics case this suite covers is that an
-unconfigured Prometheus reports 503 rather than an empty series; a seeded TSDB with realistic
-cAdvisor/node-exporter series is phase two — see the design doc's [Phase two][phase-two] section
-for what that would take and why it's deferred rather than dropped.
-
-Beyond that, this pass shipped less than the design doc's [Coverage][coverage] table describes.
+This pass shipped less than the design doc's [Coverage][coverage] table describes.
 Nothing below is exercised by this suite, and — except where noted — nothing else pins it either:
 
 - The `headers` lane's Caddy half (real header injection) and its nginx half (an XFF-only
@@ -240,4 +251,3 @@ Nothing below is exercised by this suite, and — except where noted — nothing
 [design]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md
 [topology]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md#topology
 [coverage]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md#coverage
-[phase-two]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md#phase-two
