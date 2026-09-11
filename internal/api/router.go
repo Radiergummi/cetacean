@@ -765,6 +765,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		auth.Middleware(authProvider),
 		negotiate,
 		requireReady(h),
+		// After requireReady: a server whose cache is not filled yet would
+		// resolve every name to nothing, and answering a name-addressed
+		// request with the handler's 404 rather than ENG001 would report a
+		// missing resource for an unreachable daemon.
+		h.canonicalIdentifier,
 		discoveryLinks,
 		requestLogger,
 	)

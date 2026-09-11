@@ -121,6 +121,16 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "The If-Match header did not match the current state of the resource.",
 		Suggestion:  "Re-read the resource, take the ETag from that response, and retry with it.",
 	},
+	"API014": {
+		Code:   "API014",
+		Title:  "Ambiguous Identifier",
+		Status: http.StatusConflict,
+		Description: "The name in the path identifies more than one resource, " +
+			"so the server cannot tell which one was meant. " +
+			"Swarm does not require node hostnames to be unique.",
+		Suggestion: "Address the resource by its ID. The detail names every " +
+			"ID the request could have meant.",
+	},
 
 	// ── AUT: authentication ───────────────────────────────────────────
 	"AUT001": {Code: "AUT001", Title: "Not Authenticated", Status: http.StatusUnauthorized,

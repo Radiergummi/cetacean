@@ -225,6 +225,31 @@ wrap items as `{ items, total, limit, offset }` with [RFC 8288](https://www.rfc-
 for pagination. Detail responses wrap the resource with its cross-references, such as the services using a config, or
 the service and node for a task.
 
+## Resource identifiers
+
+Detail paths accept a resource's ID or its name. A name is answered with `307 Temporary Redirect` to the canonical,
+ID-addressed URL, so each resource keeps exactly one URL — the one `@id`, `ETag`, `Link` headers and the
+[history feed](#feeds) all name:
+
+```bash
+curl -i -H 'Accept: application/json' http://localhost:9000/services/shop_web
+# < HTTP/1.1 307 Temporary Redirect
+# < Location: /services/x3k9m2p8q1w7
+```
+
+`307` preserves the method and the body, so writes may be addressed by name too: `PUT /services/shop_web/scale`
+reaches the scale endpoint with its payload intact. Most clients follow the redirect on request (`curl -L`).
+
+Volumes and stacks are keyed by name already, so their paths never redirect. Tasks are addressable by ID only: a
+task's `<service>.<slot>` name is derived from its parent rather than stored on it.
+
+A name matching more than one resource is answered `409 Conflict` with [`API014`](api/errors#API014), whose detail
+lists every ID the request could have meant. Swarm enforces unique names for services, configs, secrets and networks
+but not for node hostnames, so nodes are the type where this arises.
+
+Requests negotiating `text/html` are never redirected — those paths are the [dashboard][dashboard]'s own routing
+surface.
+
 ## Errors
 
 Errors follow [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details, with Content-Type
@@ -274,6 +299,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 | [ACL][authorization] denies read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
+| Name in the path identifies more than one resource | 409 | [`API014`](api/errors#API014) | Address the resource by ID; the detail lists the candidates |
 
 ## Caching
 
