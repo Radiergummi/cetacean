@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"log/slog"
 	"net/http"
 
 	json "github.com/goccy/go-json"
@@ -28,7 +29,17 @@ func WhoamiHandler(p Provider, writeIdentity WriteIdentityFunc) http.HandlerFunc
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := p.Authenticate(w, r)
 		if err != nil {
+			// Mirrors the middleware's own warning. /auth/* is exempt from the
+			// middleware, so this handler is the only place a failure here is
+			// observable — and the AUT001 response deliberately says nothing
+			// about the cause, so without this a diagnostic like "Client-Cert
+			// appears more than once" reached neither the response nor the log.
+			slog.Warn("authentication failed",
+				"path", r.URL.Path,
+				"error", err,
+			)
 			writeError(w, r, http.StatusUnauthorized, "AUT001", "authentication required")
+
 			return
 		}
 		if id == nil {
