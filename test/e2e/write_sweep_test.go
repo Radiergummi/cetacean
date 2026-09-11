@@ -998,43 +998,19 @@ func TestWriteSweepConcurrentScaleProducesAStaleVersionConflict(t *testing.T) {
 		}
 
 		// The race manifested — at least one request lost it. What the loser
-		// got back is the assertion this test exists to make: RFC-wise it
-		// must be a 409 naming SVC001 (see errors.go), not a bare 500. The
-		// specific known-wrong outcome (500/ENG004 — DEFECT-1) is quarantined
-		// with a narrow, named Skip rather than a Fatal, so this test stays
-		// runnable without hiding the defect or masking a *different*
-		// regression: anything else unexpected still fails loudly.
+		// got back is the assertion this test exists to make: docs/api.md
+		// documents a version race as 409 naming SVC001, and Swarmkit raises
+		// it with gRPC code Unknown, which Docker renders as a bare 500 —
+		// so a mapping that goes by error class alone answers ENG004 and a
+		// client cannot tell a lost race from a broken server.
 		for i, status := range statuses {
 			if status == http.StatusOK || status == http.StatusConflict {
 				continue
 			}
 
-			if status == http.StatusInternalServerError && strings.Contains(problems[i], "ENG004") {
-				t.Skipf(
-					"DEFECT-1: a losing concurrent PUT /services/{id}/scale got %d (%s) "+
-						"instead of the documented 409.\n\n"+
-						"docs/api.md:297 documents the contract this test enforces: "+
-						"\"Resource changed between your read and your write | 409 | SVC001, "+
-						"NOD002, CFG005, SEC005 | Re-read the resource and retry\". The real "+
-						"Docker engine answers a genuine service-update version race with a "+
-						"bare HTTP 500 (\"update out of sequence\", gRPC code Unknown), not "+
-						"409. internal/api/write_helpers.go:153's "+
-						"\"cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err)\" "+
-						"check does not match a 5xx-classified error, so control falls "+
-						"through to write_helpers.go:142's generic \"ENG004\" 500 path "+
-						"instead of the conflictCode (SVC001) 409. See write-sweep-report.md "+
-						"for the full reproduction and root cause. This Skip is narrow: only "+
-						"this exact status+code combination is quarantined, so the test "+
-						"starts passing again the moment the product maps this error to 409, "+
-						"and fails instead of skipping on any other unexpected outcome.",
-					status, problems[i],
-				)
-			}
-
 			t.Fatalf(
 				"request %d: a losing concurrent scale got status %d (%s), want 409 "+
-					"naming SVC001 (or the known DEFECT-1 500/ENG004 outcome, which this "+
-					"test skips rather than fails)",
+					"naming SVC001",
 				i, status, problems[i],
 			)
 		}

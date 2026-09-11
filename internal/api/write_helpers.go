@@ -142,6 +142,16 @@ func writeDockerError(
 	writeErrorCode(w, r, "ENG004", "failed to update "+resource)
 }
 
+// sequenceConflict is Swarmkit's optimistic-concurrency refusal: the version
+// the update carried is no longer the object's current one, because something
+// committed in between.
+//
+// It has to be matched on its message. Swarmkit raises it with gRPC code
+// Unknown, which Docker renders as a bare HTTP 500 and cerrdefs classifies as
+// an internal error, so there is no class to test for — and the message is the
+// one `docker service update` prints for the same race.
+const sequenceConflict = "update out of sequence"
+
 // writeResourceError handles Docker API errors for resource mutations,
 // mapping version conflicts to the given conflictCode.
 func writeResourceError(
@@ -150,7 +160,9 @@ func writeResourceError(
 	err error,
 	resource, id, conflictCode string,
 ) {
-	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
+	if cerrdefs.IsConflict(err) ||
+		cerrdefs.IsFailedPrecondition(err) ||
+		strings.Contains(err.Error(), sequenceConflict) {
 		writeErrorCode(w, r, conflictCode, err.Error())
 		return
 	}
