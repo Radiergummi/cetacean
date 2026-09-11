@@ -607,17 +607,15 @@ func TestMCPListChangedIsWithheldFromACallerWithNoGrants(t *testing.T) {
 // fields and nothing couples them, so a client that only wants to know when to
 // refetch is a conforming client.
 //
-// It never hears anything, whenever an ACL policy is configured.
-// internal/mcp/notifications.go records the caller's identity in Subscribe
-// (:75), which runs once per requested URI — and in nothing else. SetFilter
-// (:81), the other half of the same hook, creates the session record without
-// one. So a filter-only stream is left with a nil identity, and
-// listChangedTargets hands that nil to canReadAnyOfType, which under a policy
-// matches no grant and withholds the notification.
+// Both halves of the subscriptions/listen hook therefore have to record the
+// caller's identity: Subscribe runs once per requested URI, so a filter-only
+// stream reaches SetFilter and nothing else, and a session record without an
+// identity hands a nil one to every ACL check at dispatch — which under a
+// policy matches no grant and withholds the notification.
 //
-// Quarantined per finding D-11: the silence is tolerated only while a stream
-// that differs by naming a resource subscription does receive it, which is
-// what shows the event fired and was dispatched.
+// The witness stream holds the same grants and the same opt-in and differs
+// only in naming a URI, so a silence here would be attributable rather than
+// merely observed.
 func TestMCPListChangedReachesAFilterOnlySubscriber(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -644,29 +642,9 @@ func TestMCPListChangedReachesAFilterOnlySubscriber(t *testing.T) {
 		return n.Method == "notifications/resources/list_changed"
 	}
 
-	// The witness holds the same grants and the same list_changed opt-in, and
-	// differs only in naming a URI. Its delivery is what makes the silence
-	// below attributable.
 	witness.await(t, 90*time.Second, isListChanged)
 
-	time.Sleep(time.Second)
-
-	if slices.ContainsFunc(filterOnly.drain(), isListChanged) {
-		return
-	}
-
-	t.Logf(
-		"FINDING D-11: a subscriptions/listen stream opting into " +
-			"resourcesListChanged alone received nothing, while a stream with the " +
-			"same identity and the same opt-in that also named a resource " +
-			"subscription received the notification. internal/mcp/notifications.go " +
-			"records the caller's identity only in Subscribe, which runs per " +
-			"requested URI; SetFilter creates the session record without one, so " +
-			"listChangedTargets hands a nil identity to canReadAnyOfType and a " +
-			"configured policy withholds the notification. The filter's four " +
-			"fields are independent in the revision, so this is a conforming " +
-			"client that is silently never told to refetch.",
-	)
+	filterOnly.await(t, 30*time.Second, isListChanged)
 }
 
 // ─── completions ────────────────────────────────────────────────────────
