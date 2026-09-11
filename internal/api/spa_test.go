@@ -114,6 +114,124 @@ func TestSPADirectoryPathIsNotAnAsset(t *testing.T) {
 	}
 }
 
+// TestSPAServesWebManifestAsJSON pins the media type of the Web App Manifest.
+// Go's mime package knows no type for .webmanifest, so without the extension
+// registered the header goes unset and http.ServeContent sniffs the JSON as
+// text/plain — which the specification requires a browser to reject, silently.
+// A passing install prompt is not something the test suite can see, so this is
+// what stands in for it.
+func TestSPAServesWebManifestAsJSON(t *testing.T) {
+	fsys := fstest.MapFS{
+		"index.html":           {Data: []byte("<html><head></head></html>")},
+		"manifest.webmanifest": {Data: []byte(`{"name":"Cetacean","start_url":"./"}`)},
+	}
+	handler := NewSPAHandler(fsys, "")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest("GET", "/manifest.webmanifest", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	got, _, _ := strings.Cut(rec.Header().Get("Content-Type"), ";")
+	if strings.TrimSpace(got) != "application/manifest+json" {
+		t.Errorf("Content-Type = %q, want application/manifest+json", got)
+	}
+}
+
+// TestWebManifestIsSelfContainedAndRelative holds the shipped manifest to the
+// one property that makes it work under CETACEAN_BASE_PATH: a manifest
+// resolves its member URLs against its own URL, so every URL in it must be
+// relative. An absolute path would address the origin root, which is not where
+// a base-path deployment lives — the trap frontend-ledger A2 records.
+func TestWebManifestIsSelfContainedAndRelative(t *testing.T) {
+	raw, err := os.ReadFile("../../frontend/public/manifest.webmanifest")
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+
+	var manifest struct {
+		StartURL string `json:"start_url"`
+		Scope    string `json:"scope"`
+		Icons    []struct {
+			Src   string `json:"src"`
+			Sizes string `json:"sizes"`
+		} `json:"icons"`
+	}
+
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("manifest is not valid JSON: %v", err)
+	}
+
+	urls := map[string]string{
+		"start_url": manifest.StartURL,
+		"scope":     manifest.Scope,
+	}
+
+	if len(manifest.Icons) == 0 {
+		t.Error("the manifest declares no icons, so nothing can install it")
+	}
+
+	for _, icon := range manifest.Icons {
+		urls["icon "+icon.Sizes] = icon.Src
+
+		// An installable manifest needs 192 and 512; the rest are extra.
+		if icon.Src == "" {
+			t.Errorf("icon %q has no src", icon.Sizes)
+		}
+	}
+
+	for name, value := range urls {
+		if value == "" {
+			t.Errorf("%s is empty", name)
+
+			continue
+		}
+
+		if !strings.HasPrefix(value, "./") {
+			t.Errorf(
+				"%s = %q, want a ./-relative URL — an absolute one addresses the "+
+					"origin root rather than the base path the deployment serves",
+				name, value,
+			)
+		}
+	}
+
+	for _, size := range []string{"192x192", "512x512"} {
+		if _, ok := urls["icon "+size]; !ok {
+			t.Errorf("no %s icon; a browser will not offer to install this", size)
+		}
+	}
+}
+
+// TestWebManifestIconsExist fails when the manifest names a file the build
+// will not ship, which is a manifest a browser discards whole.
+func TestWebManifestIconsExist(t *testing.T) {
+	raw, err := os.ReadFile("../../frontend/public/manifest.webmanifest")
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+
+	var manifest struct {
+		Icons []struct {
+			Src string `json:"src"`
+		} `json:"icons"`
+	}
+
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("manifest is not valid JSON: %v", err)
+	}
+
+	for _, icon := range manifest.Icons {
+		name := strings.TrimPrefix(icon.Src, "./")
+
+		if _, err := os.Stat("../../frontend/public/" + name); err != nil {
+			t.Errorf("the manifest names %q but frontend/public holds no such file", name)
+		}
+	}
+}
+
 // TestSPAToleratesAbsentManifest covers the fallback for a dist built without
 // the precompress plugin: every asset is served as identity.
 func TestSPAToleratesAbsentManifest(t *testing.T) {

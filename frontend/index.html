@@ -13,6 +13,21 @@
       href="./favicon-32x32.png"
     />
     <link
+      rel="apple-touch-icon"
+      href="./apple-touch-icon.png"
+    />
+    <!--
+      Every href here is relative on purpose: the server injects a <base> from
+      CETACEAN_BASE_PATH, so a document-relative URL resolves under whatever
+      prefix the deployment serves. The manifest's own members are relative for
+      the same reason by a different mechanism — a manifest resolves its URLs
+      against the manifest's URL, which already carries the prefix.
+    -->
+    <link
+      rel="manifest"
+      href="./manifest.webmanifest"
+    />
+    <link
       rel="search"
       type="application/opensearchdescription+xml"
       title="Cetacean"
@@ -29,6 +44,22 @@
     <meta
       name="color-scheme"
       content="light dark"
+    />
+    <!--
+      A manifest carries one theme_color; these carry the other. The values are
+      --background from index.css in each scheme, so the browser chrome sits
+      flush with the page rather than framing it in the opposite theme. Keep
+      the three in step.
+    -->
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#ffffff"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#0a0a0a"
     />
     <title>Cetacean</title>
     <!--

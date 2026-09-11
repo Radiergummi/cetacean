@@ -13,6 +13,17 @@ import (
 	"time"
 )
 
+// Go's mime package knows no type for .webmanifest, and neither does every
+// host's mime.types, so serveAsset would leave the header unset and let
+// http.ServeContent sniff the bytes — which reports text/plain for JSON. The
+// Web App Manifest specification requires the response be a JSON MIME type,
+// so a sniffed manifest is discarded and the install prompt never appears,
+// with nothing in the response to say why.
+func init() {
+	//nolint:errcheck // the only error is a malformed type, which this is not
+	mime.AddExtensionType(".webmanifest", "application/manifest+json")
+}
+
 // hasMidPathExtension reports whether the URL path contains a dot-extension
 // in a non-terminal segment, e.g. /foo.atom/feed or /data.json/bar.
 // Such paths are never valid client-side routes.
