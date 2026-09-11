@@ -1985,6 +1985,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -2130,6 +2133,9 @@ paths:
                 total: 2
                 limit: 2
                 offset: 0
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -2440,6 +2446,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -2590,6 +2599,9 @@ paths:
                 total: 3
                 limit: 3
                 offset: 0
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -4253,6 +4265,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -4459,6 +4474,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -4513,6 +4531,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -4727,6 +4748,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -5006,6 +5030,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -5285,6 +5312,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -5418,6 +5448,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -5681,6 +5714,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -6136,6 +6172,27 @@ components:
         `Accept: application/atom+xml` header or `.atom` URL suffix.
 
         Pagination parameters: `?before=<cursor>&limit=<n>` (default 50, max 200).
+
+    # ── CSV ────────────────────────────────────────────────────────────
+
+    CSVDocument:
+      type: string
+      description: |
+        RFC 4180 CSV with a header row, served as
+        `text/csv; charset=utf-8; header=present` under an RFC 6266
+        `Content-Disposition` naming a dated file. Request via
+        `Accept: text/csv` or a `.csv` URL suffix.
+
+        A resource list renders the compact row — name, state, and the one
+        secondary fact that identifies the type, plus replica counts where
+        they mean something — rather than the full Docker object. `/history`
+        and `/recommendations` carry their own columns.
+
+        Unlike the JSON representation, a request naming no page (`limit`,
+        `offset` or `Range`) renders every row rather than the first 50: a
+        truncated export carries nothing in the file to say it was truncated.
+        `search`, `filter`, `sort` and ACL filtering apply exactly as they do
+        to the JSON.
 
     # ── Error ────────────────────────────────────────────────────────
 

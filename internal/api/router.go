@@ -58,11 +58,14 @@ type RouterConfig struct {
 	OAuthRoutes func(mux *http.ServeMux, basePath string)
 }
 
-// listFeeds builds feedHandlers for a resource list endpoint.
+// listFeeds builds feedHandlers for a resource list endpoint. Every one of
+// them renders its rows as CSV, so the flag is set here rather than at the
+// eight call sites.
 func (h *Handlers) listFeeds(title string, eventType cache.EventType) feedHandlers {
 	return feedHandlers{
 		atom:     h.feedListHandler(title, eventType, renderAtom),
 		jsonFeed: h.feedListHandler(title, eventType, renderJSONFeed),
+		csv:      true,
 	}
 }
 
@@ -338,7 +341,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	)
 	mux.HandleFunc(
 		"GET /nodes/{id}/tasks",
-		contentNegotiated(h.HandleNodeTasks, feedHandlers{}, spa),
+		contentNegotiated(h.HandleNodeTasks, feedHandlers{csv: true}, spa),
 	)
 
 	// Recommendations
@@ -347,6 +350,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		contentNegotiated(h.HandleRecommendations, feedHandlers{
 			atom:     h.feedRecommendationsHandler(renderAtom),
 			jsonFeed: h.feedRecommendationsHandler(renderJSONFeed),
+			csv:      true,
 		}, spa),
 	)
 
@@ -378,7 +382,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/tasks",
-		contentNegotiated(h.HandleServiceTasks, feedHandlers{}, spa),
+		contentNegotiated(h.HandleServiceTasks, feedHandlers{csv: true}, spa),
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/logs",
@@ -582,6 +586,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
 		atom:     h.feedHistoryHandler(renderAtom),
 		jsonFeed: h.feedHistoryHandler(renderJSONFeed),
+		csv:      true,
 	}, spa))
 
 	// Stacks

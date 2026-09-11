@@ -19,6 +19,12 @@ type PageParams struct {
 	Sort     string
 	Dir      string
 	RangeReq bool
+
+	// Explicit records that the request asked for a page rather than being
+	// handed the default one. Only the CSV rendering reads it: a JSON list is
+	// paged whether or not anybody asked, but a spreadsheet nobody paginated
+	// should not quietly be the first fifty rows.
+	Explicit bool
 }
 
 func parsePagination(r *http.Request) (PageParams, error) {
@@ -54,6 +60,8 @@ func parsePagination(r *http.Request) (PageParams, error) {
 			p.RangeReq = true
 		}
 	}
+
+	p.Explicit = hasQueryPagination || p.RangeReq
 
 	if p.Limit > 200 {
 		p.Limit = 200

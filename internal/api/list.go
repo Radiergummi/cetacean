@@ -5,6 +5,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // listSpec describes a resource list endpoint. The generic helpers handleList
@@ -21,6 +22,7 @@ type listSpec[T any] struct {
 	prepare      func([]T) []T                          // optional pre-filter transform (e.g. strip secret data)
 	itemType     string                                 // JSON-LD @type for each item (e.g. "Node")
 	idFunc       func(T) string                         // extracts JSON-LD @id path for each item
+	rows         func([]T) []cluster.Row                // the CSV rendering; nil = no text/csv here
 }
 
 // handleList runs the full list pipeline and writes the JSON response.
@@ -30,6 +32,11 @@ type listSpec[T any] struct {
 func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec listSpec[T]) {
 	items, p, ok := prepareList(h, w, r, spec)
 	if !ok {
+		return
+	}
+
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		writeListCSV(w, r, spec.resourceType, items, p, spec.rows)
 		return
 	}
 

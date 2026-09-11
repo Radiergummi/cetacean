@@ -56,6 +56,11 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		writeListCSV(w, r, "task", tasks, p, h.taskRows)
+		return
+	}
+
 	paged := applyPagination(r.Context(), tasks, p)
 	enriched := cluster.EnrichTasks(h.cache, paged.Items)
 	writeLinkTemplate(w, r, "/tasks/{id}")
@@ -71,6 +76,25 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		),
 		p,
 	)
+}
+
+// taskRows builds the list view of a page of tasks.
+func (h *Handlers) taskRows(tasks []swarm.Task) []cluster.Row {
+	return h.enrichedTaskRows(cluster.EnrichTasks(h.cache, tasks))
+}
+
+// enrichedTaskRows is taskRows for tasks the caller has already enriched. It
+// looks up the parent of each task rather than handing the builder every
+// service in the cluster, which would index the whole service table per page.
+func (h *Handlers) enrichedTaskRows(tasks []cluster.EnrichedTask) []cluster.Row {
+	parents := make([]swarm.Service, 0, len(tasks))
+	for _, task := range tasks {
+		if svc, ok := h.cache.GetService(task.ServiceID); ok {
+			parents = append(parents, svc)
+		}
+	}
+
+	return cluster.RowsForTasks(tasks, parents)
 }
 
 func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {

@@ -17,7 +17,13 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
+	csv := ContentTypeFromContext(r.Context()) == ContentTypeCSV
+
 	limit := 50
+	if csv {
+		// A download nobody paginated is the whole log the ring still holds.
+		limit = h.cache.History().Size()
+	}
 	if v := q.Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
 			limit = n
@@ -42,6 +48,11 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	entries = filtered
+
+	if csv {
+		writeCSV(w, r, "history", csvTableForHistory(entries))
+		return
+	}
 
 	writeCachedJSON(
 		w,

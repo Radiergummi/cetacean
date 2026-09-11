@@ -273,3 +273,66 @@ func TestSearchFeedReachesFeedQueryOnBothPaths(t *testing.T) {
 		t.Error("the feed body carries a parameter no feed reads")
 	}
 }
+
+func TestContentNegotiatedCSV(t *testing.T) {
+	jsonH := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("json"))
+	})
+	spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("spa"))
+	})
+
+	// CSV is rendered by the handler that renders the JSON, off the list it
+	// already prepared, rather than by a second handler beside it.
+	t.Run("CSV dispatches to the list handler", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{csv: true}, spa)
+		req := withContentType(httptest.NewRequest("GET", "/services", nil), ContentTypeCSV)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		if rec.Body.String() != "json" {
+			t.Errorf("got %q, want the list handler's answer", rec.Body.String())
+		}
+	})
+
+	t.Run("an endpoint that renders no CSV refuses it", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{}, spa)
+		req := withContentType(httptest.NewRequest("GET", "/swarm", nil), ContentTypeCSV)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		if rec.Code != http.StatusNotAcceptable {
+			t.Errorf("got %d, want 406", rec.Code)
+		}
+		if strings.Contains(rec.Body.String(), "text/csv") {
+			t.Errorf("the refusal names text/csv as served: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("a CSV endpoint names text/csv when it refuses something else", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{csv: true}, spa)
+		req := withContentType(httptest.NewRequest("GET", "/services", nil), ContentTypeJGF)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		if rec.Code != http.StatusNotAcceptable {
+			t.Fatalf("got %d, want 406", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "text/csv") {
+			t.Errorf("the refusal does not name text/csv: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("the JSON response advertises the CSV alternate", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{csv: true}, spa)
+		req := withContentType(httptest.NewRequest("GET", "/services", nil), ContentTypeJSON)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		links := strings.Join(rec.Header().Values("Link"), ", ")
+		if !strings.Contains(links, `type="text/csv"`) ||
+			!strings.Contains(links, "/services.csv") {
+			t.Errorf("expected a text/csv alternate in Link, got %q", links)
+		}
+	})
+}

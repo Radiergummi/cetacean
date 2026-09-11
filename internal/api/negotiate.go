@@ -19,6 +19,7 @@ const (
 	ContentTypeJGF
 	ContentTypeGraphML
 	ContentTypeDOT
+	ContentTypeCSV
 
 	// ContentTypeUnsupported means no supported media type matched. What to
 	// do about it is the endpoint's to decide.
@@ -43,6 +44,8 @@ func (ct ContentType) String() string {
 		return "GraphML"
 	case ContentTypeDOT:
 		return "DOT"
+	case ContentTypeCSV:
+		return "CSV"
 	case ContentTypeUnsupported:
 		return "Unsupported"
 	default:
@@ -105,6 +108,8 @@ var supportedTypes = []struct {
 	{"application", "vnd.jgf+json", ContentTypeJGF},
 	{"application", "graphml+xml", ContentTypeGraphML},
 	{"text", "vnd.graphviz", ContentTypeDOT},
+	// Last of the text entries, so a text/* wildcard still resolves to HTML.
+	{"text", "csv", ContentTypeCSV},
 }
 
 // extensionTypes maps URL extension suffixes to content types.
@@ -120,6 +125,7 @@ var extensionTypes = []struct {
 	{".jgf", ContentTypeJGF},
 	{".graphml", ContentTypeGraphML},
 	{".dot", ContentTypeDOT},
+	{".csv", ContentTypeCSV},
 }
 
 // resolveExtension checks for a known extension suffix on the request path.

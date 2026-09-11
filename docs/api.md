@@ -36,6 +36,7 @@ the client asks for. There is no `/api/v1/` prefix; versioning lives in the medi
 | `text/event-stream`                |             | SSE, on endpoints that support it            |
 | `application/atom+xml`             | `.atom`     | Atom feed                                    |
 | `application/feed+json`            | `.feed`     | JSON Feed 1.1                                |
+| `text/csv`                         | `.csv`      | [CSV](#spreadsheets), on list endpoints      |
 | `application/vnd.jgf+json`         | `.jgf`      | JSON Graph Format, `/topology` only          |
 | `application/graphml+xml`          | `.graphml`  | GraphML, `/topology` only                    |
 | `text/vnd.graphviz`                | `.dot`      | Graphviz DOT, `/topology` only               |
@@ -60,7 +61,7 @@ curl -H "Accept: application/json" http://localhost:9000/services
 
 ### Compression
 
-JSON, Atom and JSON Feed responses, and the `/topology` graph formats, are compressed when the request offers a
+JSON, Atom, JSON Feed and CSV responses, and the `/topology` graph formats, are compressed when the request offers a
 coding Cetacean serves and the body exceeds 1 KiB. Two codings are served, `zstd` and `gzip`, negotiated from
 `Accept-Encoding` per [RFC 9110 §12.5.3](https://www.rfc-editor.org/rfc/rfc9110#section-12.5.3) — `q` values and
 `*` included, and `zstd` preferred at equal weight. Smaller bodies are sent uncompressed regardless; there is
@@ -148,6 +149,61 @@ changes with the hostname a reader happened to reach the server by.
 JSON responses on feed-capable endpoints carry a `Link` header with `rel="alternate"` for each feed type. The dashboard
 injects an Atom `<link rel="alternate">` into the HTML `<head>` on resource, history, search, and recommendations
 pages, so feed readers can find the feed from the page.
+
+## Spreadsheets
+
+List endpoints also serve [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180) CSV, for the one consumer the other
+formats do not serve: a person pasting the cluster into a spreadsheet.
+
+```bash
+curl -o services.csv http://localhost:9000/services.csv
+curl -H 'Accept: text/csv' 'http://localhost:9000/tasks?filter=state == "failed"'
+```
+
+Responses carry `Content-Type: text/csv; charset=utf-8; header=present` and an
+[RFC 6266](https://www.rfc-editor.org/rfc/rfc6266) `Content-Disposition`, so a browser opening `/services.csv` saves
+`services-2026-09-11.csv` rather than rendering it. A task list hanging off a parent names it —
+`/nodes/{id}/tasks.csv` saves `tasks-worker-1-2026-09-11.csv`.
+
+### Supported endpoints
+
+- `/nodes`, `/services`, `/tasks`, `/stacks`, `/configs`, `/secrets`, `/networks`, `/volumes`
+- `/nodes/{id}/tasks`, `/services/{id}/tasks`
+- `/history`, `/recommendations`
+
+Detail endpoints serve no CSV: one resource is not a table. `/search` serves none either — its results are of mixed
+type, and one header row cannot describe them.
+
+### Columns
+
+A resource list renders the compact row the dashboard's own tables and the MCP `find` tool render: the name, the
+state, and the one secondary fact that identifies the type — the image for a service, the role for a node, the node
+for a task, the driver for a network or volume — plus replica counts where a replica count means something. The full
+Docker object is what the JSON representation is for.
+
+| Endpoint | Columns |
+|---|---|
+| `/services` | `name`, `stack`, `state`, `image`, `desired`, `running`, `id` |
+| `/nodes` | `name`, `state`, `role`, `id` |
+| `/tasks` | `name`, `state`, `node`, `id` |
+| `/stacks` | `name`, `services`, `id` |
+| `/configs`, `/secrets` | `name`, `stack`, `id` |
+| `/networks`, `/volumes` | `name`, `stack`, `driver`, `id` |
+| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary` |
+| `/recommendations` | `severity`, `category`, `scope`, `target`, `resource`, `message`, `current`, `configured`, `suggested` |
+
+### Pagination differs
+
+`search`, `filter`, `sort` and [authorization][authorization] filtering apply exactly as they do to the JSON. Paging
+does not: a CSV request that names no page renders **every** row, where the JSON would return the first 50. An export
+truncated at a default carries nothing inside the file to say it was truncated, and the `Link` header that says so for
+JSON is not something a downloaded file keeps.
+
+Naming a page still works, and then means what it means everywhere else:
+
+```bash
+curl 'http://localhost:9000/tasks.csv?limit=100&offset=200'
+```
 
 ## Pagination
 

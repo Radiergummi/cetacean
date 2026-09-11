@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/api/types/volume"
 
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -45,5 +46,15 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 		},
 		itemType: "Volume",
 		idFunc:   func(v volume.Volume) string { return "/volumes/" + v.Name },
+		// The row builder takes pointers, because a cache volume is nilable
+		// where a listed one never is.
+		rows: func(volumes []volume.Volume) []cluster.Row {
+			pointers := make([]*volume.Volume, len(volumes))
+			for i := range volumes {
+				pointers[i] = &volumes[i]
+			}
+
+			return cluster.RowsForVolumes(pointers)
+		},
 	})
 }

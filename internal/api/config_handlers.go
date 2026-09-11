@@ -5,6 +5,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -43,5 +44,6 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 		},
 		itemType: "Config",
 		idFunc:   func(c swarm.Config) string { return "/configs/" + c.ID },
+		rows:     cluster.RowsForConfigs,
 	})
 }
