@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,7 +20,11 @@ import (
 func TestMain(m *testing.M) {
 	code := m.Run()
 
-	if code == 0 {
+	// The gate asks which routes this package's sweeps reached, and that has an
+	// answer only when every sweep ran. Under `go test -run TestX` the rest are
+	// filtered out, so almost nothing is recorded and the gate would fail a run
+	// that never exercised what it measures.
+	if code == 0 && !runFiltered() {
 		routes, err := Routes()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "\nFAIL\tinternal/contract\tRoutes: %v\n", err)
@@ -250,5 +255,21 @@ func TestStaleExcusesIsSilentWhenStillUnreached(t *testing.T) {
 
 	if len(stale) != 0 {
 		t.Errorf("expected no stale excuses for an unreached route, got %v", stale)
+	}
+}
+
+// runFiltered reports whether -run narrowed this invocation to a subset of the
+// package's tests.
+func runFiltered() bool {
+	f := flag.Lookup("test.run")
+	if f == nil {
+		return false
+	}
+
+	switch v := f.Value.String(); v {
+	case "", ".*", "^.*$":
+		return false
+	default:
+		return true
 	}
 }
