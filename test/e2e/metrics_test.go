@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -790,4 +791,172 @@ func covers(recs []recommendation, want map[string]string) bool {
 	}
 
 	return true
+}
+
+// ─── the MCP transport over the same seed ───────────────────────────────
+
+// TestMCPGetMetricsReadsTheSameSeed drives `get_metrics`, the tool behind the
+// metrics widget. Its queries are deliberately a second copy of the ones the
+// dashboard composes in the browser — there is no shared query layer — so the
+// value of driving them here is that a copy which has drifted answers with a
+// different number than the REST side does against the same seed.
+//
+// It also covers what the tool does with an id: the target is resolved against
+// the cache and the *cached name* is what reaches the query, so a service is
+// addressable by either.
+func TestMCPGetMetricsReadsTheSameSeed(t *testing.T) {
+	env, address, hostname := metricsCluster(t)
+
+	proc, _ := seedAndStart(t, env, seededMetrics(address, hostname), map[string]string{
+		"CETACEAN_MCP": "true",
+	})
+
+	t.Run("service cpu", func(t *testing.T) {
+		series := metricsToolSeries(t, proc, map[string]any{
+			"target": "service", "id": "shop_web", "metric": "cpu", "range": "1h",
+		})
+
+		closeTo(t, "shop_web cpu over MCP", latest(t, series["cpu"]), seededServiceCPU["shop_web"])
+	})
+
+	t.Run("service memory", func(t *testing.T) {
+		series := metricsToolSeries(t, proc, map[string]any{
+			"target": "service", "id": "shop_web", "metric": "memory", "range": "1h",
+		})
+
+		closeTo(
+			t,
+			"shop_web memory over MCP",
+			latest(t, series["memory"]),
+			seededServiceMemory["shop_web"],
+		)
+	})
+
+	t.Run("service network", func(t *testing.T) {
+		series := metricsToolSeries(t, proc, map[string]any{
+			"target": "service", "id": "shop_web", "metric": "network", "range": "1h",
+		})
+
+		closeTo(t, "shop_web receive", latest(t, series["receive"]), seededNetworkReceive)
+		closeTo(t, "shop_web transmit", latest(t, series["transmit"]), seededNetworkTransmit)
+	})
+
+	// The node is addressed by ID, and matched to node-exporter's instance
+	// label by the address Docker assigned it — the one piece of this seed
+	// that could not be written down in advance.
+	t.Run("node cpu", func(t *testing.T) {
+		series := metricsToolSeries(t, proc, map[string]any{
+			"target": "node", "id": hostname, "metric": "cpu", "range": "1h",
+		})
+
+		closeTo(t, "node cpu over MCP", latest(t, series["cpu"]), seededNodeCPUPercent)
+	})
+
+	t.Run("node memory", func(t *testing.T) {
+		series := metricsToolSeries(t, proc, map[string]any{
+			"target": "node", "id": hostname, "metric": "memory", "range": "1h",
+		})
+
+		closeTo(t, "node memory over MCP", latest(t, series["memory"]), seededNodeMemoryPercent)
+	})
+}
+
+// TestMCPGetMetricsReportsAMissingExporter covers the answer the tool gives
+// when every series comes back empty. An empty series alone cannot tell an
+// idle resource from a cluster with no cAdvisor, and `right_size_service`
+// instructs the model to stop on exactly that signal — so the tool probes for
+// the exporter rather than charting zeros.
+func TestMCPGetMetricsReportsAMissingExporter(t *testing.T) {
+	env, address, hostname := metricsCluster(t)
+
+	// Every node series, and none of the container ones: node-exporter is
+	// reporting and cAdvisor is not.
+	var series []harness.Series
+	for _, s := range seededMetrics(address, hostname) {
+		if !strings.HasPrefix(s.Name, "container_") {
+			series = append(series, s)
+		}
+	}
+
+	proc, _ := seedAndStart(t, env, series, map[string]string{"CETACEAN_MCP": "true"})
+
+	result := mcpCall(t, proc, "tools/call", map[string]any{
+		"name": "get_metrics",
+		"arguments": map[string]any{
+			"target": "service", "id": "shop_web", "metric": "cpu", "range": "1h",
+		},
+	})
+
+	if !strings.Contains(strings.ToLower(string(result)), "cadvisor") {
+		t.Errorf("get_metrics answered %s, want it to name the missing exporter", result)
+	}
+
+	// The node half still answers, which is what makes the message a report
+	// about cAdvisor rather than about Prometheus.
+	node := metricsToolSeries(t, proc, map[string]any{
+		"target": "node", "id": hostname, "metric": "cpu", "range": "1h",
+	})
+
+	closeTo(t, "node cpu", latest(t, node["cpu"]), seededNodeCPUPercent)
+}
+
+// metricsToolSeries calls get_metrics and returns its points by series name.
+func metricsToolSeries(t *testing.T, proc *sut.Process, args map[string]any) map[string][]float64 {
+	t.Helper()
+
+	raw := mcpCall(t, proc, "tools/call", map[string]any{
+		"name":      "get_metrics",
+		"arguments": args,
+	})
+
+	var result struct {
+		IsError           bool `json:"isError"`
+		StructuredContent struct {
+			Series []struct {
+				Name   string `json:"name"`
+				Points []struct {
+					Value float64 `json:"value"`
+				} `json:"points"`
+			} `json:"series"`
+		} `json:"structuredContent"`
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("decode get_metrics: %v\n%s", err, raw)
+	}
+
+	if result.IsError {
+		t.Fatalf("get_metrics(%v) failed: %s", args, raw)
+	}
+
+	out := map[string][]float64{}
+	for _, series := range result.StructuredContent.Series {
+		values := make([]float64, 0, len(series.Points))
+		for _, point := range series.Points {
+			values = append(values, point.Value)
+		}
+
+		out[series.Name] = values
+	}
+
+	if len(out) == 0 {
+		t.Fatalf("get_metrics(%v) returned no series: %s", args, raw)
+	}
+
+	return out
+}
+
+// latest is the most recent point of a series, which is the number a panel
+// shows as the current value.
+func latest(t *testing.T, points []float64) float64 {
+	t.Helper()
+
+	if len(points) == 0 {
+		t.Fatal("series has no points")
+	}
+
+	return points[len(points)-1]
 }
