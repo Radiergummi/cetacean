@@ -24,7 +24,17 @@ func TestDeriveKeysIsDeterministic(t *testing.T) {
 		t.Error("CSRF key differs between derivations of the same root")
 	}
 
-	if first.signer.D.Cmp(second.signer.D) != 0 {
+	firstScalar, err := first.signer.Bytes()
+	if err != nil {
+		t.Fatalf("first.signer.Bytes: %v", err)
+	}
+
+	secondScalar, err := second.signer.Bytes()
+	if err != nil {
+		t.Fatalf("second.signer.Bytes: %v", err)
+	}
+
+	if !bytes.Equal(firstScalar, secondScalar) {
 		t.Error("signing key differs between derivations of the same root")
 	}
 
@@ -50,7 +60,12 @@ func TestDeriveKeysSeparatesRootsAndPurposes(t *testing.T) {
 
 	// The two derived keys must not be each other, which is what a swapped or
 	// shared info string would produce.
-	if bytes.Equal(a.csrf, a.signer.D.Bytes()) {
+	signerScalar, err := a.signer.Bytes()
+	if err != nil {
+		t.Fatalf("a.signer.Bytes: %v", err)
+	}
+
+	if bytes.Equal(a.csrf, signerScalar) {
 		t.Error("CSRF key and signing scalar are the same bytes")
 	}
 
@@ -76,13 +91,23 @@ func TestDeriveSignerRetriesPastAnInvalidScalar(t *testing.T) {
 			return make([]byte, 32), nil
 		}
 
-		return valid.signer.D.FillBytes(make([]byte, 32)), nil
+		return valid.signer.Bytes()
 	})
 	if err != nil {
 		t.Fatalf("deriveSigner: %v", err)
 	}
 
-	if key.D.Cmp(valid.signer.D) != 0 {
+	keyScalar, err := key.Bytes()
+	if err != nil {
+		t.Fatalf("key.Bytes: %v", err)
+	}
+
+	validScalar, err := valid.signer.Bytes()
+	if err != nil {
+		t.Fatalf("valid.signer.Bytes: %v", err)
+	}
+
+	if !bytes.Equal(keyScalar, validScalar) {
 		t.Error("retry did not return the second, valid scalar")
 	}
 
