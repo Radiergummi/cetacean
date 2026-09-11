@@ -15,12 +15,12 @@ type feedHandlers struct {
 	atom     http.HandlerFunc
 	jsonFeed http.HandlerFunc
 
-	queryParams []string
-}
+	// csv marks an endpoint whose JSON handler also renders text/csv. A flag
+	// rather than a handler, because the CSV comes off the list that handler
+	// has already prepared.
+	csv bool
 
-// hasFeed reports whether any feed handler is configured.
-func (f feedHandlers) hasFeed() bool {
-	return f.atom != nil || f.jsonFeed != nil
+	queryParams []string
 }
 
 // servedTypes names what an endpoint carrying these feeds serves, derived from
@@ -38,6 +38,10 @@ func (f feedHandlers) servedTypes(sse bool) string {
 
 	if f.jsonFeed != nil {
 		types = append(types, "application/feed+json")
+	}
+
+	if f.csv {
+		types = append(types, "text/csv")
 	}
 
 	return strings.Join(types, ", ")
@@ -83,6 +87,13 @@ func contentNegotiatedWithSSE(
 			dispatchFeed(w, r, feeds.atom, served)
 		case ContentTypeJSONFeed:
 			dispatchFeed(w, r, feeds.jsonFeed, served)
+		case ContentTypeCSV:
+			if !feeds.csv {
+				notAcceptable(w, r, served)
+				return
+			}
+
+			jsonHandler(w, r)
 		case ContentTypeJSON:
 			addFeedLinks(w, r, feeds)
 			jsonHandler(w, r)
@@ -148,11 +159,24 @@ func (h *Handlers) aclMatchWrap(
 // href carries only the parameters the feed it points at reads, through the
 // same feedQuery the feed's own links use.
 func addFeedLinks(w http.ResponseWriter, r *http.Request, feeds feedHandlers) {
-	if !feeds.hasFeed() {
+	if feeds.atom == nil && feeds.jsonFeed == nil && !feeds.csv {
 		return
 	}
 
 	basePath := absPath(r.Context(), r.URL.Path)
+
+	if feeds.csv {
+		// No query: the CSV reads the same parameters this request did.
+		w.Header().Add("Link", fmt.Sprintf(
+			`<%s>; rel="alternate"; type="text/csv"`,
+			basePath+".csv",
+		))
+	}
+
+	if feeds.atom == nil && feeds.jsonFeed == nil {
+		return
+	}
+
 	query := feedQuery(r, feeds.queryParams)
 
 	if feeds.atom != nil {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/docker/docker/api/types/network"
 
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -51,5 +52,6 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		},
 		itemType: "Network",
 		idFunc:   func(n network.Summary) string { return "/networks/" + n.ID },
+		rows:     cluster.RowsForNetworks,
 	})
 }

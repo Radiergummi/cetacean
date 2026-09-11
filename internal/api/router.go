@@ -58,11 +58,13 @@ type RouterConfig struct {
 	OAuthRoutes func(mux *http.ServeMux, basePath string)
 }
 
-// listFeeds builds feedHandlers for a resource list endpoint.
+// listFeeds builds feedHandlers for a resource list endpoint. Every one of
+// them renders its rows as CSV.
 func (h *Handlers) listFeeds(title string, eventType cache.EventType) feedHandlers {
 	return feedHandlers{
 		atom:     h.feedListHandler(title, eventType, renderAtom),
 		jsonFeed: h.feedListHandler(title, eventType, renderJSONFeed),
+		csv:      true,
 	}
 }
 
@@ -338,7 +340,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	)
 	mux.HandleFunc(
 		"GET /nodes/{id}/tasks",
-		contentNegotiated(h.HandleNodeTasks, feedHandlers{}, spa),
+		contentNegotiated(h.HandleNodeTasks, feedHandlers{csv: true}, spa),
 	)
 
 	// Recommendations
@@ -347,6 +349,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		contentNegotiated(h.HandleRecommendations, feedHandlers{
 			atom:     h.feedRecommendationsHandler(renderAtom),
 			jsonFeed: h.feedRecommendationsHandler(renderJSONFeed),
+			csv:      true,
 		}, spa),
 	)
 
@@ -378,7 +381,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/tasks",
-		contentNegotiated(h.HandleServiceTasks, feedHandlers{}, spa),
+		contentNegotiated(h.HandleServiceTasks, feedHandlers{csv: true}, spa),
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/logs",
@@ -582,6 +585,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
 		atom:     h.feedHistoryHandler(renderAtom),
 		jsonFeed: h.feedHistoryHandler(renderJSONFeed),
+		csv:      true,
 	}, spa))
 
 	// Stacks
@@ -845,10 +849,14 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 func requireReady(h *Handlers) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Named as what it is not, so the next representation cannot be
+			// left out: the dashboard renders its own error, a stream says so
+			// by closing, and a type nothing serves is the endpoint's 406 to
+			// give whether or not Docker is up.
 			ct := ContentTypeFromContext(r.Context())
 			if !h.isReady() && isResourcePath(r.URL.Path) &&
-				(ct == ContentTypeJSON || ct == ContentTypeAtom || ct == ContentTypeJSONFeed ||
-					ct == ContentTypeJGF || ct == ContentTypeGraphML || ct == ContentTypeDOT) {
+				ct != ContentTypeHTML && ct != ContentTypeSSE &&
+				ct != ContentTypeUnsupported {
 				writeErrorCode(w, r, "ENG001", "Docker daemon is not reachable")
 				return
 			}
