@@ -30,17 +30,10 @@ func taskSupportOptional() mcplib.ToolOption {
 // change, which is what every existing client expects — so the predicate is not
 // even built on that path.
 //
-// The context is deliberately detached first. mcp-go runs a task-augmented tool
-// on a goroutine holding the *HTTP request* context, and net/http cancels that
-// as soon as the create-task response is written — so by the time this runs,
-// ctx is almost always already cancelled. Honouring it would fail every task
-// within microseconds of starting it. cluster.ConvergenceTimeout is the real
-// bound.
-//
-// The cost is that tasks/cancel cannot interrupt the wait: mcp-go cancels the
-// same context the transport does, so the two are indistinguishable here. A
-// cancelled task is still marked cancelled for the client; this goroutine keeps
-// polling an in-memory map until it converges or times out.
+// tasks/cancel cannot interrupt the wait: awaitServiceConvergenceFor detaches
+// the context, so a cancelled task is marked cancelled for the client while
+// this goroutine keeps polling until it converges or times out.
+// cluster.ConvergenceTimeout is the real bound.
 func (s *Server) awaitServiceConvergence(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -79,8 +72,9 @@ func (s *Server) awaitServiceConvergenceFor(
 	observed *string,
 ) error {
 	progress, err := cluster.AwaitService(
-		// Detached because mcp-go runs the task on a goroutine holding an
-		// already-cancelled HTTP request context.
+		// Detached so timeout is the bound rather than the caller's
+		// connection. registerTools already detaches the task path; this is
+		// what makes watch's own non-cancellability true on a plain call.
 		context.WithoutCancel(ctx),
 		s.cache,
 		svcID,

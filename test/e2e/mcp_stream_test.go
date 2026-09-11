@@ -873,10 +873,15 @@ func getTask(
 }
 
 // awaitTerminalTask polls a task record until it reports a terminal status.
+//
+// The deadline sits above cluster.ConvergenceTimeout on purpose: a converging
+// mutation waits up to five minutes for the cluster to settle, so a shorter
+// deadline here would give up while the server was still legitimately working
+// and report a loaded machine as a defect.
 func awaitTerminalTask(t *testing.T, proc *sut.Process, id string) mcpTask {
 	t.Helper()
 
-	deadline := time.Now().Add(3 * time.Minute)
+	deadline := time.Now().Add(6 * time.Minute)
 
 	var last mcpTask
 
@@ -906,19 +911,11 @@ func awaitTerminalTask(t *testing.T, proc *sut.Process, id string) mcpTask {
 // a working task, and the task reaches completed only once the service has
 // actually settled on the cluster.
 //
-// It never does. mcp-go runs a task-augmented tool on a goroutine holding the
-// HTTP request context, which net/http cancels the moment the create-task
-// response is written — so by the time the handler runs, its context is
-// already dead. internal/mcp/tasks.go knows this and detaches the context for
-// the convergence *wait* (awaitServiceConvergence's doc comment says so in as
-// many words), but the Docker call that precedes the wait still takes ctx: the
-// inspect opening internal/docker/client.go's ScaleService fails with
-// "context canceled" before any write is issued.
-//
-// Quarantined per finding D-12: the drop is tolerated only when the task says
-// cancelled for that exact reason and the cluster is provably untouched.
-// Anything else — a failure with a different cause, or a cancellation that did
-// change the cluster — fails.
+// The whole path runs on a goroutine holding the HTTP request context, which
+// net/http cancels the moment the create-task response is written — so
+// registerTools detaches it for a task-augmented call. Without that, the
+// Docker write's opening inspect fails with "context canceled" before any
+// write is issued and the caller is told the task was cancelled.
 func TestMCPTaskAugmentedMutationRunsToConvergence(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -942,57 +939,26 @@ func TestMCPTaskAugmentedMutationRunsToConvergence(t *testing.T) {
 
 	settled := awaitTerminalTask(t, proc, task.TaskID)
 
-	// The cluster decides, not the status: a task reporting completed while
-	// the replicas do not exist is exactly what this extension exists to rule
-	// out, and a task reporting cancelled while they do exist would mean the
-	// mutation landed and the report is wrong.
-	replicas := engineReplicas(t, env, service)
-
-	if settled.Status == "completed" {
-		if replicas != 3 {
-			t.Fatalf(
-				"the task reported convergence with %d replicas on the engine, want 3",
-				replicas,
-			)
-		}
-
-		if tasks := len(serviceTaskIDs(t, env, inspectService(t, env, service).ID)); tasks < 3 {
-			t.Errorf("the task reported convergence with %d tasks on the engine, want 3", tasks)
-		}
-
-		return
-	}
-
-	dropped := settled.Status == "cancelled" &&
-		strings.Contains(settled.StatusMessage, "context canceled")
-
-	if !dropped {
+	if settled.Status != "completed" {
 		t.Fatalf(
 			"the task settled at %q (%s), want completed",
 			settled.Status, settled.StatusMessage,
 		)
 	}
 
-	if replicas != 1 {
+	// The cluster decides, not the status: a task reporting completed while
+	// the replicas do not exist is exactly what this extension exists to rule
+	// out.
+	if replicas := engineReplicas(t, env, service); replicas != 3 {
 		t.Fatalf(
-			"the task reported %q, yet the engine moved to %d replicas; the mutation "+
-				"landed and the report is wrong, which is not the drop D-12 describes",
-			settled.Status, replicas,
+			"the task reported convergence with %d replicas on the engine, want 3",
+			replicas,
 		)
 	}
 
-	t.Logf(
-		"FINDING D-12: a task-augmented scale_service never reached the engine. "+
-			"The task reported %q with %q and the service still holds %d replica(s). "+
-			"mcp-go runs the handler on a goroutine holding the already-cancelled "+
-			"HTTP request context, and internal/mcp/tasks.go detaches it for the "+
-			"convergence wait but not for the Docker call before it, so "+
-			"ScaleService's opening inspect fails outright. Every one of the four "+
-			"converging tools takes this path, and the caller is told \"cancelled\" — "+
-			"which reads as a cancellation they requested, not a mutation that "+
-			"silently did not happen.",
-		settled.Status, settled.StatusMessage, replicas,
-	)
+	if tasks := len(serviceTaskIDs(t, env, inspectService(t, env, service).ID)); tasks < 3 {
+		t.Errorf("the task reported convergence with %d tasks on the engine, want 3", tasks)
+	}
 }
 
 // engineReplicas reads a replicated service's desired replica count straight
@@ -1042,10 +1008,11 @@ func TestMCPTaskRetentionIsBounded(t *testing.T) {
 			t.Errorf("ttl = %dms, want the configured ceiling of 5000ms", *task.TTL)
 		}
 
-		// What the mutation then does is D-12's business, driven by
-		// TestMCPTaskAugmentedMutationRunsToConvergence. The clamp is decided
-		// before the handler runs — installTaskTTLHook fills the field in on
-		// AddBeforeCallTool — so it is observable whatever becomes of the call.
+		// What the mutation then does is
+		// TestMCPTaskAugmentedMutationRunsToConvergence's business. The clamp
+		// is decided before the handler runs — installTaskTTLHook fills the
+		// field in on AddBeforeCallTool — so it is observable whatever becomes
+		// of the call.
 	})
 
 	t.Run("an omitted ttl is filled in and released", func(t *testing.T) {

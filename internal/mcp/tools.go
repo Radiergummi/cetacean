@@ -239,6 +239,18 @@ func (s *Server) registerTools() {
 		s.mcpServer.AddTool(
 			td.tool,
 			func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+				// mcp-go runs a task-augmented tool on a goroutine holding the
+				// HTTP request context, which net/http cancels the moment the
+				// create-task response is written — so the handler starts with
+				// a dead context and its first Docker call fails before any
+				// request is issued. Detaching here rather than per handler
+				// covers every tool, including ones added later. A plain call
+				// keeps its live context, so a disconnecting client still
+				// cancels the work it started.
+				if req.Params.Task != nil {
+					ctx = context.WithoutCancel(ctx)
+				}
+
 				ctx, annotations := withResultAnnotations(ctx)
 
 				text, err := handler(ctx, req)
