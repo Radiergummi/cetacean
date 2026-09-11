@@ -314,6 +314,22 @@ func TestParseAccept_JGF(t *testing.T) {
 	}
 }
 
+// TestParseAccept_StructuredJSONSuffixes covers the +json types the API serves.
+// Without them, asking for the type a document carries is answered 406 by the
+// endpoint that carries it.
+func TestParseAccept_StructuredJSONSuffixes(t *testing.T) {
+	for _, accept := range []string{
+		"application/ld+json",
+		"application/linkset+json",
+	} {
+		t.Run(accept, func(t *testing.T) {
+			if ct := parseAccept(accept); ct != ContentTypeJSON {
+				t.Errorf("got %v, want ContentTypeJSON", ct)
+			}
+		})
+	}
+}
+
 func TestParseAccept_GraphML(t *testing.T) {
 	ct := parseAccept("application/graphml+xml")
 	if ct != ContentTypeGraphML {

@@ -183,6 +183,24 @@ func withCORS(origins ...string) routerOption {
 	}
 }
 
+// withBasePath serves the router under a path prefix, as CETACEAN_BASE_PATH does.
+func withBasePath(basePath string) routerOption {
+	return func(cfg *RouterConfig) {
+		cfg.BasePath = basePath
+	}
+}
+
+// newBasePathTestRouter serves a router under a path prefix.
+func newBasePathTestRouter(t *testing.T, basePath string) http.Handler {
+	t.Helper()
+
+	return newTestRouterWithConfig(
+		t,
+		[]routerOption{withBasePath(basePath)},
+		withCache(cache.New(nil)),
+	)
+}
+
 // withAPIDocs configures the two documents the /api endpoints serve, which
 // default to a stub spec and no bundle.
 func withAPIDocs(spec, scalarJS []byte) routerOption {

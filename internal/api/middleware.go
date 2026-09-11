@@ -104,6 +104,9 @@ func discoveryLinks(next http.Handler) http.Handler {
 			w.Header().Add("Link", fmt.Sprintf(
 				`<%s>; rel="describedby"`, absPath(ctx, "/api/context.jsonld"),
 			))
+			w.Header().Add("Link", fmt.Sprintf(
+				`<%s>; rel="api-catalog"`, absPath(ctx, apiCatalogPath),
+			))
 		}
 		next.ServeHTTP(w, r)
 	})

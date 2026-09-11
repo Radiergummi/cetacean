@@ -10,9 +10,11 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
 
+	"github.com/radiergummi/cetacean/internal/api/linkset"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -36,6 +38,19 @@ func loadTestSpec(t *testing.T) ([]byte, *openapi3.T, routers.Router) {
 	t.Helper()
 
 	specOnce.Do(func() {
+		// openapi3filter decodes by exact media type, so these two would be
+		// "unsupported content type" and have to be skipped like /topology,
+		// leaving their schemas unchecked.
+		openapi3filter.RegisterBodyDecoder(
+			linkset.MediaType,
+			openapi3filter.RegisteredBodyDecoder("application/json"),
+		)
+
+		openapi3filter.RegisterBodyDecoder(
+			openSearchMediaType,
+			openapi3filter.RegisteredBodyDecoder("text/plain"),
+		)
+
 		const specPath = "../../api/openapi.yaml"
 
 		bytes, err := os.ReadFile(specPath)

@@ -19,6 +19,7 @@ const (
 	ContentTypeJGF
 	ContentTypeGraphML
 	ContentTypeDOT
+	ContentTypeOpenSearch
 
 	// ContentTypeUnsupported means the client explicitly asked for a type we
 	// cannot provide. Dispatch helpers should return 406 Not Acceptable.
@@ -43,6 +44,8 @@ func (ct ContentType) String() string {
 		return "GraphML"
 	case ContentTypeDOT:
 		return "DOT"
+	case ContentTypeOpenSearch:
+		return "OpenSearch"
 	case ContentTypeUnsupported:
 		return "Unsupported"
 	default:
@@ -90,6 +93,12 @@ var supportedTypes = []struct {
 }{
 	{"application", "json", ContentTypeJSON},
 	{"application", "vnd.cetacean.v1+json", ContentTypeJSON},
+	// These resolve to the JSON branch because that is what serves them, and
+	// each handler sets the precise type on the way out. Without them, asking
+	// for the type a document carries is answered 406 by the endpoint that
+	// carries it.
+	{"application", "ld+json", ContentTypeJSON},
+	{"application", "linkset+json", ContentTypeJSON},
 	{"text", "html", ContentTypeHTML},
 	{"application", "xhtml+xml", ContentTypeHTML},
 	{"text", "event-stream", ContentTypeSSE},
@@ -98,6 +107,7 @@ var supportedTypes = []struct {
 	{"application", "vnd.jgf+json", ContentTypeJGF},
 	{"application", "graphml+xml", ContentTypeGraphML},
 	{"text", "vnd.graphviz", ContentTypeDOT},
+	{"application", "opensearchdescription+xml", ContentTypeOpenSearch},
 }
 
 // extensionTypes maps URL extension suffixes to content types.

@@ -696,6 +696,93 @@ paths:
                   limit: "urn:cetacean:limit"
                   offset: "urn:cetacean:offset"
 
+  /opensearch.xml:
+    get:
+      operationId: getOpenSearchDescription
+      tags: [Documentation]
+      summary: OpenSearch description document
+      description: |
+        Describes the cluster search so a browser can offer it from the address
+        bar. Templates are absolute, built from `server.public_url` when set.
+      responses:
+        "200":
+          description: OpenSearch description
+          content:
+            application/opensearchdescription+xml:
+              schema:
+                type: string
+              example: |
+                <?xml version="1.0" encoding="UTF-8"?>
+                <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+                  <ShortName>Cetacean</ShortName>
+                  <Description>Search services, stacks, nodes, tasks, configs, secrets, networks and volumes in the Swarm cluster</Description>
+                  <InputEncoding>UTF-8</InputEncoding>
+                  <Url type="text/html" template="https://cetacean.example.com/search?q={searchTerms}"/>
+                </OpenSearchDescription>
+
+  /.well-known/api-catalog:
+    get:
+      operationId: getAPICatalog
+      tags: [Documentation]
+      summary: API catalog
+      description: |
+        Lists the APIs this deployment publishes, as an RFC 9264 linkset at the
+        RFC 9727 well-known URI. Each `item` names one API; the contexts beside
+        it carry its description, documentation and status links. The MCP server
+        appears only when enabled, and its metadata only when an authorization
+        server is wired for it.
+      security: []
+      responses:
+        "200":
+          description: API catalog
+          content:
+            application/linkset+json:
+              schema:
+                type: object
+                required: [linkset]
+                properties:
+                  linkset:
+                    type: array
+                    items:
+                      type: object
+                      required: [anchor]
+                      properties:
+                        anchor:
+                          type: string
+                          format: uri
+                      additionalProperties:
+                        type: array
+                        items:
+                          type: object
+                          required: [href]
+                          properties:
+                            href:
+                              type: string
+                              format: uri
+                            type:
+                              type: string
+                            title:
+                              type: string
+              example:
+                linkset:
+                  - anchor: "https://cetacean.example.com/.well-known/api-catalog"
+                    item:
+                      - href: "https://cetacean.example.com/"
+                        title: "Cetacean REST API"
+                  - anchor: "https://cetacean.example.com/"
+                    service-desc:
+                      - href: "https://cetacean.example.com/api"
+                        type: "application/json"
+                        title: "OpenAPI description"
+                    describedby:
+                      - href: "https://cetacean.example.com/api/context.jsonld"
+                        type: "application/ld+json"
+                        title: "JSON-LD context"
+                    status:
+                      - href: "https://cetacean.example.com/-/health"
+                        type: "application/json"
+                        title: "Health"
+
   /api/errors:
     get:
       operationId: listErrorCodes

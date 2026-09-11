@@ -240,6 +240,11 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET /api", HandleAPIDoc(cfg.OpenAPISpec))
 	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(cfg.ScalarJS))
 	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
+	mux.HandleFunc("GET "+openSearchPath, HandleOpenSearch)
+	mux.HandleFunc("GET "+apiCatalogPath, HandleAPICatalog(catalogMounts{
+		mcp:           cfg.MCPHandler != nil,
+		oauthMetadata: cfg.OAuthRoutes != nil,
+	}))
 	mux.HandleFunc("GET /api/errors", contentNegotiated(HandleErrorIndex, feedHandlers{}, spa))
 	mux.HandleFunc(
 		"GET /api/errors/{code}",

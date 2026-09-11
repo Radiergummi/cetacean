@@ -615,15 +615,36 @@ Every response outside the `/-/` meta endpoints carries [RFC 8631](https://www.r
 headers:
 
 ```http
-Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby"
+Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
 ```
 
-`service-desc` points at the OpenAPI spec, `describedby` at the JSON-LD context document.
+`service-desc` points at the OpenAPI spec, `describedby` at the JSON-LD context document, and `api-catalog` at the
+[API catalogue](#api-catalogue).
+
+### Browser search
+
+`GET /opensearch.xml` is an [OpenSearch 1.1](https://github.com/dewitt/opensearch/blob/master/opensearch-1-1-draft-6.md)
+description document, advertised by the dashboard with a `<link rel="search">`. Browsers that support the convention
+can be taught a keyword, so the address bar searches the cluster directly; Firefox still offers this, Chromium has
+narrowed it. The document also carries Atom and JSON templates for the same search, and requires authentication like
+any other endpoint.
 
 ## Request ID
 
 Every response carries a `Request-Id` header. Send your own in the `Request-Id` request header (max 64 printable ASCII
 characters) or the server generates one. The value appears in error responses as `requestId` and in the server logs.
+
+## API catalogue
+
+`GET /.well-known/api-catalog` lists the APIs this deployment publishes, as an
+[RFC 9264](https://www.rfc-editor.org/rfc/rfc9264) linkset served as `application/linkset+json`
+([RFC 9727](https://www.rfc-editor.org/rfc/rfc9727)). No authentication required.
+
+Each `item` names an API; the contexts beside it carry that API's `service-desc`, `service-doc`, `describedby` and
+`status` links. The MCP server appears only when [`mcp.enabled`][mcp.enabled] is set, and its authorization metadata
+only when [`auth.mode`][auth.mode] is not `none`.
+
+URIs are absolute — set [`server.public_url`][server.public_url] behind a reverse proxy.
 
 [api-explorer]: api/explorer
 [auth.mode]: configuration#auth.mode
@@ -632,6 +653,8 @@ characters) or the server generates one. The value appears in error responses as
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools
 [mcp.enabled]: configuration#mcp.enabled
+[server.public_url]: configuration#server.public_url
+[server.trusted_proxies]: configuration#server.trusted_proxies
 [mcp]: mcp
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
