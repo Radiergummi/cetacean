@@ -68,8 +68,12 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19003` | `headers` auth mode (reserved; not currently exercised as a dedicated lane — see below) |
 | `19004` | `cert` auth mode |
 | `19005` | ACL lane |
+| `19006` | Write sweep (every mutating route, against a real cluster) |
+| `19007` | Read sweep (every GET/HEAD route × five ACL personas) |
+| `19008` | MCP sweep (every tool × five ACL personas) |
 | `19009` | Hostile proxy cases (malformed/duplicate headers, against `cert` and `headers` modes) |
 | `19010` | Dex (OIDC provider) |
+| `19011` | MCP OAuth lane (five consecutive SUTs: the flow, theft detection without the resource indicator, the DCR rate limit, the restart, and DCR/CIMD disabled) |
 | `19104` | Caddy, mTLS termination |
 
 `19003` is reserved in the numbering scheme but the `headers`-mode hostile-input cases run on
