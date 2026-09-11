@@ -408,20 +408,15 @@ func (h *Handlers) filterHistoryACL(
 }
 
 // feedID builds a tag URI (RFC 4151) for the feed: tag:{host},{year}:{path}.
-// {host} is server.public_url's host when configured, otherwise r.Host.
+// The host is the one the feed's own links carry; only server.public_url makes
+// it permanent, which is what RFC 4151 asks of it.
 // The year 2026 is the date the tag namespace was minted and must remain constant.
 func feedID(r *http.Request) string {
-	// RFC 4151 tag URIs are permanent identifiers, so prefer the configured
-	// origin: derived from r.Host, an entry's identity changes with the
-	// hostname a reader happened to reach the server by.
-	host := r.Host
-	if base := PublicURLFromContext(r.Context()); base != "" {
-		if u, err := url.Parse(base); err == nil {
-			host = u.Host
-		}
-	}
-
-	return fmt.Sprintf("tag:%s,2026:%s", host, absPath(r.Context(), r.URL.Path))
+	return fmt.Sprintf(
+		"tag:%s,2026:%s",
+		originHostOf(r),
+		absPath(r.Context(), r.URL.Path),
+	)
 }
 
 // parseFeedPagination reads ?before= and ?limit= from the query string.
