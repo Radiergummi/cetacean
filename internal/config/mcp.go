@@ -1,6 +1,8 @@
 package config
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"os"
@@ -348,6 +350,27 @@ func checkSigningKeyLength(key string) error {
 			"generated)",
 		len(key), minSigningKeyBytes,
 	)
+}
+
+// SigningKeyBytes turns the configured MCP signing key into the root key
+// material every other key derives from. A value that decodes as hex or
+// base64 to exactly minSigningKeyBytes is key material; anything else is used
+// as its own bytes, which is what a passphrase gets. decoded reports which
+// happened, so a caller can say so.
+func SigningKeyBytes(key string) (root []byte, decoded bool) {
+	decoders := []func(string) ([]byte, error){
+		hex.DecodeString,
+		base64.StdEncoding.DecodeString,
+		base64.RawURLEncoding.DecodeString,
+	}
+
+	for _, decode := range decoders {
+		if b, err := decode(key); err == nil && len(b) == minSigningKeyBytes {
+			return b, true
+		}
+	}
+
+	return []byte(key), false
 }
 
 // resolveMCPIssuer reads CETACEAN_MCP_ISSUER and the file value, validates

@@ -1,6 +1,9 @@
 package config
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
@@ -738,6 +741,50 @@ func TestMCPIssuerRequired(t *testing.T) {
 
 			if got := cfg.MCPIssuerRequired(tt.authMode); got != tt.want {
 				t.Errorf("MCPIssuerRequired(%q) = %v, want %v", tt.authMode, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSigningKeyBytes(t *testing.T) {
+	raw := bytes.Repeat([]byte{0xAB}, 32)
+
+	tests := []struct {
+		name        string
+		key         string
+		wantRoot    []byte
+		wantDecoded bool
+	}{
+		{"hex", hex.EncodeToString(raw), raw, true},
+		{"standard base64", base64.StdEncoding.EncodeToString(raw), raw, true},
+		{"raw url base64", base64.RawURLEncoding.EncodeToString(raw), raw, true},
+		{
+			"a passphrase is its own bytes",
+			"correct-horse-battery-staple-abc",
+			[]byte("correct-horse-battery-staple-abc"),
+			false,
+		},
+		{
+			// 32 hex characters decode to 16 bytes, not 32. A decoder that
+			// checks only "is this hex" would take it.
+			"hex-looking but half the length",
+			"abcdefabcdefabcdefabcdefabcdefab",
+			[]byte("abcdefabcdefabcdefabcdefabcdefab"),
+			false,
+		},
+		{"unset", "", []byte(""), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root, decoded := SigningKeyBytes(tt.key)
+
+			if !bytes.Equal(root, tt.wantRoot) {
+				t.Errorf("root = %x, want %x", root, tt.wantRoot)
+			}
+
+			if decoded != tt.wantDecoded {
+				t.Errorf("decoded = %v, want %v", decoded, tt.wantDecoded)
 			}
 		})
 	}
