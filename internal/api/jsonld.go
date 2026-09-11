@@ -148,11 +148,18 @@ func (i Item[T]) MarshalJSON() ([]byte, error) {
 	return buf, nil
 }
 
-// wrapItems maps a slice of T to []Item[T] using the given type name and ID extractor.
-func wrapItems[T any](items []T, typ string, id func(T) string) []Item[T] {
+// wrapItems maps a slice of T to []Item[T] using the given type name and ID
+// extractor.
+//
+// The extractor returns a bare path and absPath is applied here, so a
+// deployment under a base path cannot hand out an identifier that 404s beside
+// a correctly prefixed @context and Link-Template in the same document. Doing
+// it here rather than in each extractor is also what keeps a new listing from
+// reintroducing it.
+func wrapItems[T any](ctx context.Context, items []T, typ string, id func(T) string) []Item[T] {
 	out := make([]Item[T], len(items))
 	for index, v := range items {
-		out[index] = Item[T]{id: id(v), typ: typ, val: v}
+		out[index] = Item[T]{id: absPath(ctx, id(v)), typ: typ, val: v}
 	}
 	return out
 }

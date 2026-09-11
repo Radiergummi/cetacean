@@ -64,7 +64,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		r,
 		NewCollectionResponse(
 			r.Context(),
-			wrapItems(enriched, "Task", enrichedTaskID),
+			wrapItems(r.Context(), enriched, "Task", enrichedTaskID),
 			paged.Total,
 			paged.Limit,
 			paged.Offset,

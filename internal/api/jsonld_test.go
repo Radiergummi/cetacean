@@ -233,26 +233,49 @@ func TestWrapItems(t *testing.T) {
 		{Name: "b", Value: 2},
 	}
 
-	wrapped := wrapItems(items, "Thing", func(s testStruct) string { return "/things/" + s.Name })
+	id := func(s testStruct) string { return "/things/" + s.Name }
 
-	if len(wrapped) != 2 {
-		t.Fatalf("len = %d, want 2", len(wrapped))
-	}
+	for _, tc := range []struct {
+		name   string
+		ctx    context.Context
+		prefix string
+	}{
+		{"at the root", context.Background(), ""},
+		{
+			"under a base path",
+			context.WithValue(context.Background(), basePathKey, "/cetacean"),
+			"/cetacean",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wrapped := wrapItems(tc.ctx, items, "Thing", id)
 
-	for index, item := range wrapped {
-		body, err := json.Marshal(item)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var m map[string]any
-		if err := json.Unmarshal(body, &m); err != nil {
-			t.Fatal(err)
-		}
-		if m["@type"] != "Thing" {
-			t.Errorf("item %d: @type = %v, want Thing", index, m["@type"])
-		}
-		if m["@id"] != "/things/"+items[index].Name {
-			t.Errorf("item %d: @id = %v, want /things/%s", index, m["@id"], items[index].Name)
-		}
+			if len(wrapped) != 2 {
+				t.Fatalf("len = %d, want 2", len(wrapped))
+			}
+
+			for index, item := range wrapped {
+				body, err := json.Marshal(item)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				var m map[string]any
+				if err := json.Unmarshal(body, &m); err != nil {
+					t.Fatal(err)
+				}
+
+				if m["@type"] != "Thing" {
+					t.Errorf("item %d: @type = %v, want Thing", index, m["@type"])
+				}
+
+				// The deployment's prefix has to be on every identifier, or a
+				// client following @id leaves the deployment and gets a 404.
+				want := tc.prefix + "/things/" + items[index].Name
+				if m["@id"] != want {
+					t.Errorf("item %d: @id = %v, want %s", index, m["@id"], want)
+				}
+			}
+		})
 	}
 }

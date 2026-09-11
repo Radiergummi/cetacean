@@ -49,6 +49,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		NewCollectionResponse(
 			r.Context(),
 			wrapItems(
+				r.Context(),
 				entries,
 				"HistoryEntry",
 				func(e cache.HistoryEntry) string { return fmt.Sprintf("/history/%d", e.ID) },

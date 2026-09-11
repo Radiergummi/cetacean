@@ -117,65 +117,27 @@ func TestBasePathMovesTheWholeSurface(t *testing.T) {
 			}
 		}
 
-		// Every identifier the server emits has to be reachable as written.
-		// Quarantined per finding D-16, and narrowly: an item @id may only be
-		// the same path with the prefix missing, and following the prefixed
-		// form must actually serve the resource — so an @id that is wrong in
-		// any other way still fails.
+		// Every identifier the server emits has to be reachable as written,
+		// which is what makes the prefixed @context and Link-Template above
+		// more than decoration: a client following @id must not leave the
+		// deployment.
 		for _, item := range body.Items {
-			if strings.HasPrefix(item.AtID, deploymentBasePath+"/") {
-				continue
-			}
+			assertPrefixed(t, "item @id", item.AtID)
 
-			if !strings.HasPrefix(item.AtID, "/services/") {
-				t.Errorf("item @id = %q, which is not a service path at all", item.AtID)
-
-				continue
-			}
-
-			if unreachable := precondRequest(t, proc, http.MethodGet, item.AtID,
-				map[string]string{"Accept": "application/json"}, "", ""); unreachable.status !=
-				http.StatusNotFound {
-				t.Errorf(
-					"item @id %q answered %d rather than the 404 D-16 predicts",
-					item.AtID, unreachable.status,
-				)
-
-				continue
-			}
-
-			reachable := precondRequest(t, proc, http.MethodGet, deploymentBasePath+item.AtID,
+			served := precondRequest(t, proc, http.MethodGet, item.AtID,
 				map[string]string{"Accept": "application/json"}, "", "")
-			if reachable.status != http.StatusOK {
+			if served.status != http.StatusOK {
 				t.Errorf(
-					"item @id %q is unreachable even with the prefix added: status = %d",
-					item.AtID, reachable.status,
+					"item @id %q answered %d rather than serving the resource",
+					item.AtID, served.status,
 				)
-
-				continue
 			}
-
-			t.Logf(
-				"FINDING D-16: item @id %q omits the base path and 404s as written; "+
-					"the same path under %s serves the resource. internal/api/list.go's "+
-					"wrapItems takes each listSpec's idFunc verbatim, and every one of "+
-					"them returns a bare path (\"/services/\" + s.ID and its five "+
-					"siblings) — absPath is never applied, though NewDetailResponse, "+
-					"NewCollectionResponse's @context and writeLinkTemplate all apply it. "+
-					"So one response carries a prefixed @context and Link-Template beside "+
-					"unprefixed item identifiers, and a client following @id leaves the "+
-					"deployment.",
-				item.AtID, deploymentBasePath,
-			)
-
-			break
 		}
 	})
 
 	t.Run("a task names its parents reachably", func(t *testing.T) {
-		// The same defect in a second shape: a task detail cross-references
-		// its service and node by @id, built in internal/api/representations.go
-		// as "/services/" + et.ServiceID with no absPath.
+		// The same rule in a second shape: a task detail cross-references its
+		// service and node by @id, beside the document's own prefixed @id.
 		list := precondRequest(t, proc, http.MethodGet, deploymentBasePath+"/tasks",
 			map[string]string{"Accept": "application/json"}, "", "")
 
@@ -228,23 +190,16 @@ func TestBasePathMovesTheWholeSurface(t *testing.T) {
 			"service cross-reference": task.Service.AtID,
 			"node cross-reference":    task.Node.AtID,
 		} {
-			if strings.HasPrefix(ref, deploymentBasePath+"/") {
-				continue
-			}
+			assertPrefixed(t, what, ref)
 
-			if unreachable := precondRequest(t, proc, http.MethodGet, ref,
-				map[string]string{"Accept": "application/json"}, "", ""); unreachable.status !=
-				http.StatusNotFound {
+			served := precondRequest(t, proc, http.MethodGet, ref,
+				map[string]string{"Accept": "application/json"}, "", "")
+			if served.status != http.StatusOK {
 				t.Errorf(
-					"the %s %q answered %d rather than the 404 D-16 predicts",
-					what, ref, unreachable.status,
+					"the %s %q answered %d rather than serving the resource",
+					what, ref, served.status,
 				)
-
-				continue
 			}
-
-			t.Logf("FINDING D-16: the %s %q omits the base path and 404s as written, "+
-				"beside a correctly prefixed @id in the same document", what, ref)
 		}
 	})
 

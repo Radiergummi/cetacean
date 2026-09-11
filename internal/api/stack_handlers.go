@@ -114,6 +114,7 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 		NewCollectionResponse(
 			r.Context(),
 			wrapItems(
+				r.Context(),
 				summaries,
 				"StackSummary",
 				func(s cache.StackSummary) string { return "/stacks/" + s.Name },
