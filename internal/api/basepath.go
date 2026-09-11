@@ -52,29 +52,34 @@ func absURL(r *http.Request, path string) string {
 	return originOf(r) + absPath(r.Context(), path)
 }
 
+// origin resolves the scheme and authority every outbound URI is built on:
+// server.public_url when configured, the request's own origin otherwise.
+// One resolution, so a document naming both a URL and a host names one host.
+//
+// server.public_url is validated as scheme and host with nothing after them
+// (config.ValidatePublicURL), so splitting it loses nothing.
+func origin(r *http.Request) (scheme, host string) {
+	if base := PublicURLFromContext(r.Context()); base != "" {
+		if u, err := url.Parse(base); err == nil && u.Host != "" {
+			return u.Scheme, u.Host
+		}
+	}
+
+	return requestOrigin(r)
+}
+
 // originOf returns the scheme and authority absURL builds on. A document
 // naming many URIs resolves it once and appends absPath itself.
 func originOf(r *http.Request) string {
-	if base := PublicURLFromContext(r.Context()); base != "" {
-		return base
-	}
-
-	scheme, host := requestOrigin(r)
+	scheme, host := origin(r)
 
 	return scheme + "://" + host
 }
 
-// originHostOf is originOf's authority alone, for a document that names a host
-// rather than a URL. Both resolve the same way, so a document using each
-// cannot name two hosts.
+// originHostOf is the authority alone, for a document naming a host rather
+// than a URL.
 func originHostOf(r *http.Request) string {
-	if base := PublicURLFromContext(r.Context()); base != "" {
-		if u, err := url.Parse(base); err == nil {
-			return u.Host
-		}
-	}
-
-	_, host := requestOrigin(r)
+	_, host := origin(r)
 
 	return host
 }
