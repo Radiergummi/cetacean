@@ -220,14 +220,11 @@ var excusedUncovered = map[string]string{
 	"GET /cluster":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /cluster/capacity":               "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /configs":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
-	"GET /configs/{id}":                   "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /configs/{id}/labels":            "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /history":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /metrics/status":                 "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /networks":                       "gap: no sweep in the first slice reaches this; see the campaign defect list",
-	"GET /networks/{id}":                  "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /nodes":                          "gap: no sweep in the first slice reaches this; see the campaign defect list",
-	"GET /nodes/{id}":                     "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /nodes/{id}/labels":              "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /nodes/{id}/role":                "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /nodes/{id}/tasks":               "gap: no sweep in the first slice reaches this; see the campaign defect list",
@@ -235,7 +232,6 @@ var excusedUncovered = map[string]string{
 	"GET /recommendations":                "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /search":                         "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /secrets":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
-	"GET /secrets/{id}":                   "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /secrets/{id}/labels":            "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /services/{id}/configs":          "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /services/{id}/container-config": "gap: no sweep in the first slice reaches this; see the campaign defect list",
@@ -256,12 +252,17 @@ var excusedUncovered = map[string]string{
 	"GET /services/{id}/update-policy":    "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /stacks":                         "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /stacks/summary":                 "gap: no sweep in the first slice reaches this; see the campaign defect list",
-	"GET /stacks/{name}":                  "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /tasks":                          "gap: no sweep in the first slice reaches this; see the campaign defect list",
-	"GET /tasks/{id}":                     "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /topology":                       "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /topology/networks":              "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /topology/placement":             "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /volumes":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
-	"GET /volumes/{name}":                 "gap: no sweep in the first slice reaches this; see the campaign defect list",
 }
+
+// knownTransportDivergences records places where REST and MCP disagree about
+// whether a resource is readable. Each is a defect on the campaign's list, not
+// an accepted behaviour — the entry exists so the invariant keeps guarding
+// every other combination while the disagreement stands.
+//
+// Keys are "<singular type> by <id|name>".
+var knownTransportDivergences = map[string]string{}

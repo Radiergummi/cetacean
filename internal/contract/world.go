@@ -26,6 +26,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/mcp"
+	"github.com/radiergummi/cetacean/internal/mcp/oauth"
 )
 
 // Identifiers the fixture uses. Sweeps address resources through these rather
@@ -162,12 +163,37 @@ func NewWorld(t *testing.T) *World {
 		evaluator,
 	)
 
+	// mcp.New's Handler only installs its bearer-token middleware when OAuth
+	// is non-nil (see internal/mcp/server.go's Handler doc comment), matching
+	// main.go's own wiring: setupMCP always builds a real *oauth.Server
+	// whenever the upstream auth mode is not "none", before calling mcp.New.
+	// Without one here, /mcp would be served unauthenticated regardless of
+	// the "headers" auth mode REST runs under — no identity would ever reach
+	// checkRead, and every ACL-restrictive persona would read everything.
+	// This Server never mints or verifies a token: AuthBypass below sends
+	// every request through the upstream provider instead (see bypassActive
+	// and bearerAuth's comment naming "headers" as one of the providers safe
+	// for this, since it never writes on the success path), so the config
+	// only needs to be valid enough for NewServer to construct.
+	oauthSrv := oauth.NewServer(oauth.ServerConfig{
+		Issuer:      "https://cetacean.test",
+		MCPResource: "https://cetacean.test/mcp",
+		MCP:         config.MCPConfig{Enabled: true, OperationsLevel: config.OpsInherit},
+	})
+
+	authProvider := headersProvider()
+
 	mcpServer, err := mcp.New(c, mcp.Options{
-		ACL:            evaluator,
-		Config:         config.MCPConfig{Enabled: true, OperationsLevel: config.OpsInherit},
+		ACL: evaluator,
+		Config: config.MCPConfig{
+			Enabled:         true,
+			OperationsLevel: config.OpsInherit,
+			AuthBypass:      []string{"headers"},
+		},
 		GlobalOpsLevel: config.OpsImpactful,
+		OAuth:          oauthSrv,
 		AuthMode:       "headers",
-		AuthProvider:   headersProvider(),
+		AuthProvider:   authProvider,
 	})
 	if err != nil {
 		t.Fatalf("mcp.New: %v", err)
@@ -184,7 +210,7 @@ func NewWorld(t *testing.T) *World {
 		Broadcaster:    broadcaster,
 		SPA:            spa,
 		OpenAPISpec:    []byte("openapi: '3.1.0'"),
-		AuthProvider:   headersProvider(),
+		AuthProvider:   authProvider,
 		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")},
 		MCPHandler:     mcpServer.Handler(),
 	})
