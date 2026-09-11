@@ -278,6 +278,20 @@ func buildClient(t *testing.T, cfg Config) *http.Client {
 
 func (p *Process) Client() *http.Client { return p.client }
 
+// StreamClient is Client without the overall timeout, for a response a case
+// intends to hold open — an SSE subscription, a log tail. http.Client.Timeout
+// covers reading the response *body*, not just the headers, so Client's 30s
+// cap tears a stream down mid-test and the closed body then reads as the
+// server having stopped sending. The request's own context is the bound on
+// these; the shared Transport (and so the connection pool and TLS config) is
+// the same one Client uses.
+func (p *Process) StreamClient() *http.Client {
+	streaming := *p.client
+	streaming.Timeout = 0
+
+	return &streaming
+}
+
 // get issues a GET against the running binary. It exists only so waitReady's
 // polling loop can build a request rather than call the context-less
 // (*http.Client).Get; the client's own Timeout still bounds each attempt.

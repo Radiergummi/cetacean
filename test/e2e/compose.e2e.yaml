@@ -20,6 +20,11 @@ services:
       - |
         set -e
         cd /certs
+        # `ready` is written last, after the chmod below, and is what the
+        # harness waits for. It is removed first so a run interrupted between
+        # generating the chain and fixing its modes cannot present a stale
+        # sentinel over a half-finished directory.
+        rm -f ready
         # Idempotent: a restart of this one-shot (any `docker compose up -d`
         # against an already-running project, e.g. a second `go test`
         # invocation) must not regenerate the chain. Caddy loads its cert and
@@ -29,6 +34,8 @@ services:
         if [ -f ca.pem ] && [ -f server.pem ] && [ -f server-key.pem ] && \
            [ -f client.pem ] && [ -f client-key.pem ]; then
           echo "certs already present, skipping generation"
+          chmod 644 *.pem
+          touch ready
           exit 0
         fi
         apk add --no-cache openssl >/dev/null 2>&1
@@ -48,6 +55,7 @@ services:
           -CAcreateserial -out client.pem -days 365
         rm -f *.csr *.srl
         chmod 644 *.pem
+        touch ready
         echo "certs ready"
     volumes:
       - ./certs:/certs

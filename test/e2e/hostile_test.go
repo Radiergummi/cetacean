@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/radiergummi/cetacean/test/e2e/harness"
 	"github.com/radiergummi/cetacean/test/e2e/proxy"
@@ -136,9 +137,39 @@ func TestForwardedWithoutAddressFallsBackToXFF(t *testing.T) {
 	// The request log records the resolved client address under "client_ip"
 	// (internal/api/middleware.go's requestLogger); assert the chain was
 	// consulted rather than collapsed to the proxy's own loopback address.
-	if !strings.Contains(proc.Logs(), "203.0.113.9") {
+	if !waitForLog(t, proc, "203.0.113.9") {
 		t.Errorf("logs do not record the XFF client address:\n%s", tail(proc.Logs()))
 	}
+}
+
+// logWaitTimeout bounds waitForLog. Generous, because it only ever elapses on
+// a genuine failure: the line this waits for is written microseconds after the
+// response, and the poll returns as soon as it lands.
+const logWaitTimeout = 10 * time.Second
+
+// waitForLog polls the binary's output until it contains want, reporting
+// whether it arrived within logWaitTimeout.
+//
+// Reading Logs() once right after the response races the log line into
+// existence: requestLogger emits its record only after the handler returns,
+// http.Get returns as soon as the response headers arrive, and the record
+// still has to cross the child's stderr, the pipe and the copier goroutine
+// before it is visible here. A single read therefore fails a correct build,
+// which is why every other cross-process wait in this suite polls.
+func waitForLog(t *testing.T, proc *sut.Process, want string) bool {
+	t.Helper()
+
+	deadline := time.Now().Add(logWaitTimeout)
+
+	for time.Now().Before(deadline) {
+		if strings.Contains(proc.Logs(), want) {
+			return true
+		}
+
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	return false
 }
 
 // tail returns the last 2000 characters of s, for embedding a bounded amount

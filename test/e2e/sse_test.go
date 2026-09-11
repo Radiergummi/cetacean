@@ -29,7 +29,13 @@ type sseFrame struct {
 // one on frames, closing frames once r is exhausted or the scan errors (the
 // response body closing, on this test's timeout or on stream end, is what
 // stops it).
-func readSSEFrames(r io.Reader, frames chan<- sseFrame) {
+//
+// done releases it from a send no one is going to receive: a consumer that
+// stops at the frame it was looking for leaves this blocked on a full
+// channel, and closing the response body does not unblock a blocked channel
+// send — so without done the goroutine, and the close(frames) it owes,
+// outlive the test that started it.
+func readSSEFrames(r io.Reader, frames chan<- sseFrame, done <-chan struct{}) {
 	defer close(frames)
 
 	scanner := bufio.NewScanner(r)
@@ -45,7 +51,11 @@ func readSSEFrames(r io.Reader, frames chan<- sseFrame) {
 		switch {
 		case line == "":
 			if event != "" || data.Len() > 0 {
-				frames <- sseFrame{event: event, data: data.String()}
+				select {
+				case frames <- sseFrame{event: event, data: data.String()}:
+				case <-done:
+					return
+				}
 			}
 
 			event = ""
@@ -136,7 +146,11 @@ func TestServiceCreationReachesTheSSEStream(t *testing.T) {
 
 	req.Header.Set("Accept", "text/event-stream")
 
-	resp, err := proc.Client().Do(req)
+	// StreamClient, not Client: Client's 30s timeout bounds the whole
+	// response including the body, and DeployStack below can take longer than
+	// that to converge on a cold engine. Under Client the stream would be torn
+	// down mid-deploy and this would report a broken watcher chain.
+	resp, err := proc.StreamClient().Do(req)
 	if err != nil {
 		t.Fatalf("open stream: %v", err)
 	}
@@ -147,7 +161,11 @@ func TestServiceCreationReachesTheSSEStream(t *testing.T) {
 	}
 
 	frames := make(chan sseFrame, 16)
-	go readSSEFrames(resp.Body, frames)
+
+	done := make(chan struct{})
+	defer close(done)
+
+	go readSSEFrames(resp.Body, frames, done)
 
 	type found struct {
 		event   sseServiceEvent

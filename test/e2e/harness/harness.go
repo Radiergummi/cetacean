@@ -106,11 +106,21 @@ func UpCLI() (*Env, error) {
 	return &Env{DockerHost: dockerHost, CertDir: certDir, Docker: docker}, nil
 }
 
-// waitForCerts blocks until cert-init has written the whole chain. The
-// container exits when done, so `--wait` does not cover it.
+// waitForCerts blocks until cert-init has finished. The container exits when
+// done, so `--wait` does not cover it.
+//
+// It gates on the `ready` sentinel as well as the chain, because the chain
+// existing is not the same as cert-init being done: the script writes
+// client.pem and only then fixes the modes on every key it wrote. Returning
+// on client.pem's appearance handed the cert lane a chain whose key files
+// still carried whatever mode the container created them with — so cert-init
+// touches `ready` after that chmod, and this waits for it.
 func waitForCerts(dir string) error {
 	deadline := time.Now().Add(upTimeout)
-	want := []string{"ca.pem", "server.pem", "server-key.pem", "client.pem", "client-key.pem"}
+	want := []string{
+		"ca.pem", "server.pem", "server-key.pem", "client.pem", "client-key.pem",
+		"ready",
+	}
 
 	for time.Now().Before(deadline) {
 		missing := false
@@ -130,7 +140,7 @@ func waitForCerts(dir string) error {
 		time.Sleep(pollInterval)
 	}
 
-	return fmt.Errorf("certificates not written to %s within %s", dir, upTimeout)
+	return fmt.Errorf("cert-init did not finish writing %s within %s", dir, upTimeout)
 }
 
 // engineLabel is set on the DinD engine's own dockerd (compose.e2e.yaml's

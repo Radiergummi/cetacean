@@ -48,6 +48,12 @@ const (
 	removeStackTimeout   = 60 * time.Second
 	removeStackPollEvery = 500 * time.Millisecond
 
+	// removeNetworkTimeout is the network stage's own budget. It cannot share
+	// removeStackTimeout with the service stage: service teardown consuming
+	// the whole budget is exactly the slow case this cleanup exists for, and
+	// a shared deadline then leaves nothing for the removals that follow.
+	removeNetworkTimeout = 60 * time.Second
+
 	stackLabel = "com.docker.stack.namespace"
 
 	// BaselineSentinel is a config created as the very last step of
@@ -613,7 +619,9 @@ func runningTasks(ctx context.Context, env *harness.Env, serviceID string) (int,
 
 // removeStack removes every service and network carrying the stack's label.
 // It runs from t.Cleanup, where t.Context() is already canceled, so it uses
-// an independent, bounded context rather than the test's own.
+// independent, bounded contexts rather than the test's own — one per stage,
+// so a slow service teardown cannot leave the network stage with an expired
+// context and no time to run in.
 //
 // Both stages have to wait, not just fire once: ServiceRemove and the task
 // teardown it triggers are asynchronous, so a network can still show "active
@@ -649,7 +657,12 @@ func removeStack(t *testing.T, env *harness.Env, stack string) {
 		waitServicesGone(t, ctx, env, stackFilter, stack, deadline)
 	}
 
-	networks, err := env.Docker.NetworkList(ctx, network.ListOptions{Filters: stackFilter})
+	netCtx, netCancel := context.WithTimeout(context.Background(), removeNetworkTimeout)
+	defer netCancel()
+
+	netDeadline := time.Now().Add(removeNetworkTimeout)
+
+	networks, err := env.Docker.NetworkList(netCtx, network.ListOptions{Filters: stackFilter})
 	if err != nil {
 		t.Errorf("NetworkList for stack %s: %v", stack, err)
 
@@ -657,7 +670,7 @@ func removeStack(t *testing.T, env *harness.Env, stack string) {
 	}
 
 	for _, net := range networks {
-		removeNetworkWithRetry(t, ctx, env, net.ID, net.Name, deadline)
+		removeNetworkWithRetry(t, netCtx, env, net.ID, net.Name, netDeadline)
 	}
 }
 
@@ -701,6 +714,11 @@ func waitServicesGone(
 // removal. A network still standing when the deadline expires is reported
 // against the test that leaked it, since it will collide with the next run's
 // attempt to create a network of the same name.
+//
+// It attempts the removal before consulting the deadline, so the report names
+// a real failure: a deadline already spent on an earlier stage used to skip
+// the loop body entirely, leaving lastErr nil and announcing a leaked network
+// with a <nil> cause for a removal that was never tried.
 func removeNetworkWithRetry(
 	t *testing.T,
 	ctx context.Context,
@@ -712,10 +730,14 @@ func removeNetworkWithRetry(
 
 	var lastErr error
 
-	for time.Now().Before(deadline) {
+	for {
 		lastErr = env.Docker.NetworkRemove(ctx, id)
 		if lastErr == nil {
 			return
+		}
+
+		if !time.Now().Add(removeStackPollEvery).Before(deadline) {
+			break
 		}
 
 		time.Sleep(removeStackPollEvery)
