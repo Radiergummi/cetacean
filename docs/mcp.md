@@ -146,6 +146,10 @@ Cetacean is its own OAuth 2.1 authorization server for `/mcp`, implementing the 
 A client discovers it, sends you through your configured auth provider, and exchanges the result for an access token and
 a refresh token. Access tokens are scoped to this deployment, so one cannot be replayed against another Cetacean.
 
+Access tokens follow the JWT profile in [RFC 9068](https://www.rfc-editor.org/rfc/rfc9068): the header carries
+`typ: at+jwt`, and the token is refused unless it does, so an ID token cannot be presented where an access token
+belongs. Refresh tokens are opaque and unaffected.
+
 ```mermaid
 sequenceDiagram
     accTitle: How an MCP client gets an access token

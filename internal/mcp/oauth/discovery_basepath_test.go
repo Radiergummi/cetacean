@@ -66,7 +66,10 @@ func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 
 	// The token's iss claim must match the advertised issuer, or a client that
 	// validates iss against the discovered AS rejects the token.
-	tok, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{Subject: "u"}, time.Hour)
+	tok, err := s.tokenIssuer.IssueAccessToken(
+		AccessTokenClaims{Subject: "u", ClientID: "c1"},
+		time.Hour,
+	)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}

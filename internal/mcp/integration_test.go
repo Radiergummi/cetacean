@@ -276,7 +276,7 @@ func TestMCPIntegration_ResourcesReadHonoursACL(t *testing.T) {
 	handler, issuer := newOAuthIntegrationServer(t, c, e)
 
 	token, err := issuer.IssueAccessToken(
-		oauth.AccessTokenClaims{Subject: "agent@example.com"},
+		oauth.AccessTokenClaims{Subject: "agent@example.com", ClientID: "agent-client"},
 		5*time.Minute,
 	)
 	if err != nil {
@@ -331,7 +331,7 @@ func TestMCPIntegration_FindToolFiltersByACL(t *testing.T) {
 	handler, issuer := newOAuthIntegrationServer(t, c, e)
 
 	token, err := issuer.IssueAccessToken(
-		oauth.AccessTokenClaims{Subject: "agent@example.com"},
+		oauth.AccessTokenClaims{Subject: "agent@example.com", ClientID: "agent-client"},
 		5*time.Minute,
 	)
 	if err != nil {

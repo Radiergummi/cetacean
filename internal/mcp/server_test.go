@@ -120,8 +120,9 @@ func TestHandlerAcceptsValidBearer(t *testing.T) {
 		Audience:   "https://cetacean.example.com/mcp",
 	}
 	token, err := issuer.IssueAccessToken(oauth.AccessTokenClaims{
-		Subject: "user@example.com",
-		Groups:  []string{"ops"},
+		Subject:  "user@example.com",
+		Groups:   []string{"ops"},
+		ClientID: "test-client",
 	}, cfg.AccessTokenTTL)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)

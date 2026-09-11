@@ -1,7 +1,10 @@
 package oauth
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -50,7 +53,7 @@ func TestJWTExpiredToken(t *testing.T) {
 		Audience:   "mcp",
 	}
 	token, err := issuer.IssueAccessToken(
-		AccessTokenClaims{Subject: "user@example.com"},
+		AccessTokenClaims{Subject: "user@example.com", ClientID: "c1"},
 		-time.Hour, // already expired
 	)
 	if err != nil {
@@ -72,7 +75,10 @@ func TestJWTWrongSigningKey(t *testing.T) {
 		Issuer:     "https://cetacean.example.com",
 		Audience:   "mcp",
 	}
-	token, _ := issuer1.IssueAccessToken(AccessTokenClaims{Subject: "u@e"}, time.Hour)
+	token, _ := issuer1.IssueAccessToken(
+		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
+		time.Hour,
+	)
 	if _, err := issuer2.VerifyAccessToken(token); err == nil {
 		t.Fatal("expected error for wrong signing key")
 	}
@@ -84,7 +90,10 @@ func TestJWTWrongAudience(t *testing.T) {
 		Issuer:     "https://cetacean.example.com",
 		Audience:   "mcp",
 	}
-	token, _ := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e"}, time.Hour)
+	token, _ := issuer.IssueAccessToken(
+		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
+		time.Hour,
+	)
 	other := *issuer
 	other.Audience = "wrong"
 	if _, err := other.VerifyAccessToken(token); err == nil {
@@ -98,7 +107,10 @@ func TestJWTWrongIssuer(t *testing.T) {
 		Issuer:     "https://cetacean.example.com",
 		Audience:   "mcp",
 	}
-	token, _ := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e"}, time.Hour)
+	token, _ := issuer.IssueAccessToken(
+		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
+		time.Hour,
+	)
 	other := *issuer
 	other.Issuer = "https://attacker.example.com"
 	if _, err := other.VerifyAccessToken(token); err == nil {
@@ -162,9 +174,170 @@ func TestJWTReusedJTIsAreDistinct(t *testing.T) {
 		Issuer:     "https://cetacean.example.com",
 		Audience:   "mcp",
 	}
-	t1, _ := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e"}, time.Hour)
-	t2, _ := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e"}, time.Hour)
+	t1, _ := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e", ClientID: "c1"}, time.Hour)
+	t2, _ := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e", ClientID: "c1"}, time.Hour)
 	if t1 == t2 {
 		t.Fatal("two issued tokens are byte-identical; jti must randomize")
+	}
+}
+
+// reheader re-signs a token under a different JWT header, keeping the payload
+// and the key intact, so a rejection can only be attributable to the header.
+func reheader(t *testing.T, token, header string) string {
+	t.Helper()
+
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		t.Fatalf("token has %d segments, want 3", len(parts))
+	}
+
+	signingInput := base64.RawURLEncoding.EncodeToString([]byte(header)) + "." + parts[1]
+
+	return signingInput + "." + sign([]byte(testKey), signingInput)
+}
+
+// requiredClaims is the claim set RFC 9068 §2.2 requires an access token to
+// carry. The test below reads them off the wire as raw JSON rather than
+// unmarshalling into jwtPayload, because a struct field zeroes out silently
+// when its key is absent — which is exactly what an `omitempty` on a required
+// claim produces.
+var requiredClaims = []string{"iss", "exp", "aud", "sub", "client_id", "iat", "jti"}
+
+func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
+	issuer := &TokenIssuer{
+		SigningKey: []byte(testKey),
+		Issuer:     "https://cetacean.example.com",
+		Audience:   "https://cetacean.example.com/mcp",
+	}
+
+	token, err := issuer.IssueAccessToken(AccessTokenClaims{
+		Subject:  "user@example.com",
+		ClientID: "cetacean-client-abc",
+	}, time.Hour)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	parts := strings.Split(token, ".")
+
+	headerJSON, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		t.Fatalf("decode header: %v", err)
+	}
+
+	var hdr jwtHeaderClaims
+	if err := json.Unmarshal(headerJSON, &hdr); err != nil {
+		t.Fatalf("unmarshal header: %v", err)
+	}
+
+	// RFC 9068 §2.1: typ SHOULD be at+jwt, with the application/ prefix
+	// omitted. It is what lets a resource server refuse an ID token where an
+	// access token belongs.
+	if hdr.Typ != "at+jwt" {
+		t.Errorf("typ = %q, want at+jwt", hdr.Typ)
+	}
+
+	if hdr.Alg != "HS256" {
+		t.Errorf("alg = %q, want HS256", hdr.Alg)
+	}
+
+	payloadJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+
+	var claims map[string]json.RawMessage
+	if err := json.Unmarshal(payloadJSON, &claims); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+
+	for _, claim := range requiredClaims {
+		raw, ok := claims[claim]
+		if !ok {
+			t.Errorf("%s: absent, but RFC 9068 §2.2 requires it", claim)
+
+			continue
+		}
+
+		if len(raw) == 0 || string(raw) == `""` || string(raw) == "0" {
+			t.Errorf("%s: present but empty (%s)", claim, raw)
+		}
+	}
+}
+
+func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
+	issuer := &TokenIssuer{
+		SigningKey: []byte(testKey),
+		Issuer:     "https://cetacean.example.com",
+		Audience:   "mcp",
+	}
+
+	token, err := issuer.IssueAccessToken(AccessTokenClaims{
+		Subject:  "u@e",
+		ClientID: "client-1",
+	}, time.Hour)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	// RFC 9068 §4: a resource server MUST verify that typ is at+jwt or
+	// application/at+jwt, and reject any other value. The bare JWT case is
+	// what this server used to mint; the absent one is what it used to wave
+	// through.
+	refused := []struct {
+		name   string
+		header string
+	}{
+		{"the type this server used to mint", `{"alg":"HS256","typ":"JWT"}`},
+		{"no type at all", `{"alg":"HS256"}`},
+		{"an ID token", `{"alg":"HS256","typ":"id_token+jwt"}`},
+		{"an empty type", `{"alg":"HS256","typ":""}`},
+	}
+
+	for _, c := range refused {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := issuer.VerifyAccessToken(reheader(t, token, c.header))
+			if !errors.Is(err, ErrMalformedToken) {
+				t.Errorf("got %v, want errors.Is(ErrMalformedToken)", err)
+			}
+		})
+	}
+
+	t.Run("the media type spelled in full is accepted", func(t *testing.T) {
+		full := `{"alg":"HS256","typ":"application/at+jwt"}`
+		if _, err := issuer.VerifyAccessToken(reheader(t, token, full)); err != nil {
+			t.Errorf("application/at+jwt: %v, want accepted (RFC 9068 §4)", err)
+		}
+	})
+}
+
+func TestJWTRefusesToMintWithoutARequiredClaim(t *testing.T) {
+	issuer := &TokenIssuer{
+		SigningKey: []byte(testKey),
+		Issuer:     "https://cetacean.example.com",
+		Audience:   "mcp",
+	}
+
+	// sub and client_id are the two required claims that come from the caller
+	// rather than from the issuer, so they are the two it can get wrong. A
+	// token missing either is one no resource server may accept, which makes
+	// minting it worse than failing.
+	cases := []struct {
+		name   string
+		claims AccessTokenClaims
+	}{
+		{"no subject", AccessTokenClaims{ClientID: "client-1"}},
+		{"no client id", AccessTokenClaims{Subject: "u@e"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if _, err := issuer.IssueAccessToken(c.claims, time.Hour); !errors.Is(
+				err,
+				ErrIncompleteClaims,
+			) {
+				t.Errorf("got %v, want errors.Is(ErrIncompleteClaims)", err)
+			}
+		})
 	}
 }
