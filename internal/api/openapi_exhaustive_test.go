@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,9 +13,34 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3filter"
 
+	"github.com/radiergummi/cetacean/internal/api/sbom"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
+
+// licenseTextID is an id GET /-/licenses/texts/{id} actually serves. The ids
+// are content hashes of the embedded texts, not SPDX identifiers, and they
+// change whenever the SBOM is regenerated — so it is read out of the same
+// embedded artifact the handler answers from rather than written down.
+var licenseTextID = func() string {
+	var doc struct {
+		Components []struct {
+			TextID string `json:"textId"`
+		} `json:"components"`
+	}
+
+	if err := json.Unmarshal(sbom.ProjectedJSON(), &doc); err != nil {
+		return ""
+	}
+
+	for _, component := range doc.Components {
+		if component.TextID != "" {
+			return component.TextID
+		}
+	}
+
+	return ""
+}()
 
 // TestEveryReadEndpointMatchesSpec walks every GET operation in the OpenAPI
 // spec, issues a request with substituted path parameters, and validates the
@@ -199,9 +225,9 @@ func resolvePath(template string) (string, bool) {
 		"/plugins/{name}":    "/plugins/plug-1",
 		"/api/errors/{code}": "/api/errors/SVC001",
 
-		// Not cache fixtures: an SPDX identifier the embedded license set
-		// carries, and a label name the Prometheus proxy would forward.
-		"/-/licenses/texts/{id}": "/-/licenses/texts/MIT",
+		// Not cache fixtures: a text id the embedded license set carries, and
+		// a label name the Prometheus proxy would forward.
+		"/-/licenses/texts/{id}": "/-/licenses/texts/" + licenseTextID,
 		"/metrics/labels/{name}": "/metrics/labels/job",
 	}
 

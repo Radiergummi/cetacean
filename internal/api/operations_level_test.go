@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 
@@ -30,19 +32,20 @@ var operationsLevels = []config.OperationsLevel{
 }
 
 // unmeasurableOperations lists spec operations this test cannot drive, with
-// the reason. All three stream until the client goes away, so a probe would
-// block on the recorder rather than return a status to read.
+// the reason. It is empty, and should stay that way: the streaming endpoints
+// that look unmeasurable are not. The probe asks for application/json, which
+// routes /events to the SPA and the two log tails to their JSON handlers, so
+// all three answer a status promptly rather than streaming. Excluding them
+// would be a blind spot rather than a saving — the guard below only fires when
+// an excluded operation grows a *badge*, so a gate added without one would go
+// unnoticed on exactly the operations nothing else measures.
 //
 // An entry may only cover an operation that declares no tier. One that grows
 // an operations-level badge needs a way to be measured, not a skip — the
 // assertion below fails outright rather than exempting it. An entry naming an
 // operation the spec no longer has fails too, so the list cannot rot into
 // silently skipping a path that gets added back under the same name.
-var unmeasurableOperations = map[string]string{
-	"GET /events":             "server-sent event stream; never returns",
-	"GET /services/{id}/logs": "log tail; streams until cancelled",
-	"GET /tasks/{id}/logs":    "log tail; streams until cancelled",
-}
+var unmeasurableOperations = map[string]string{}
 
 // TestEveryOperationIsGatedAtItsDeclaredTier holds the OpenAPI spec's
 // operations-level badges and the router's requireLevel gates together, in
@@ -178,6 +181,11 @@ func TestEveryOperationIsGatedAtItsDeclaredTier(t *testing.T) {
 			declared, gated,
 		)
 	}
+
+	// Logged on success too: the floor above only catches a walk that covered
+	// nothing at all, so a skip rule that quietly halved the coverage would
+	// still pass. The counts make that visible in the output.
+	t.Logf("badged=%d gated=%d", declared, gated)
 }
 
 // declaredOperationsLevel reads the operations-level badge off a spec
@@ -248,6 +256,15 @@ func refusesForOperationsLevel(router http.Handler, method, path string) bool {
 	req := httptest.NewRequest(method, path, nil)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("If-Match", `"bogus-etag"`)
+
+	// No operation streams under application/json today, but one that started
+	// to would otherwise hang the walk until the whole package times out. A
+	// deadline turns that into a measured tier of 0, which fails against the
+	// badge instead.
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+
+	req = req.WithContext(ctx)
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
