@@ -409,3 +409,37 @@ func ValidateCertMode(tlsEnabled bool, certCA string, trustedProxies []netip.Pre
 			"or server.trusted_proxies, to accept a Client-Cert header from a proxy that terminates it",
 	)
 }
+
+// ResolveTrustedProxies settles which list headers mode authenticates against.
+// Headers mode cannot authenticate anyone without one: every claim arrives in a
+// header that any client could have sent, so the list is what separates a proxy
+// Cetacean believes from one it does not.
+//
+// auth.headers.trusted_proxies is the older spelling and applies only where
+// server.trusted_proxies is unset, since that one also governs realIP and a
+// deployment setting both means the two to agree.
+func ResolveTrustedProxies(
+	current, deprecated []netip.Prefix,
+) (resolved []netip.Prefix, warnings []string, err error) {
+	switch {
+	case len(current) > 0 && len(deprecated) > 0:
+		return current, []string{
+			"auth.headers.trusted_proxies is deprecated and ignored when " +
+				"server.trusted_proxies is set; remove the old setting",
+		}, nil
+
+	case len(current) > 0:
+		return current, nil, nil
+
+	case len(deprecated) > 0:
+		return deprecated, []string{
+			"auth.headers.trusted_proxies is deprecated; use server.trusted_proxies instead",
+		}, nil
+
+	default:
+		return nil, nil, fmt.Errorf(
+			"headers auth mode requires server.trusted_proxies; " +
+				"set it to the CIDR of your reverse proxy",
+		)
+	}
+}

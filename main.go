@@ -137,29 +137,23 @@ func main() {
 		}
 	}
 
-	// Resolve trusted proxies for headers auth: the deprecated
-	// CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES falls back to the general setting.
 	if authCfg.Mode == "headers" {
-		if len(authCfg.Headers.TrustedProxies) > 0 {
-			if len(cfg.TrustedProxies) > 0 {
-				slog.Warn(
-					"auth.headers.trusted_proxies is deprecated and ignored when server.trusted_proxies is set; please remove the old setting",
-				)
-			} else {
-				slog.Warn(
-					"auth.headers.trusted_proxies is deprecated; use server.trusted_proxies instead",
-				)
-				cfg.TrustedProxies = authCfg.Headers.TrustedProxies
-			}
-		}
-		if len(cfg.TrustedProxies) == 0 {
-			fmt.Fprintf(
-				os.Stderr,
-				"headers auth mode requires server.trusted_proxies; set to the CIDR of your reverse proxy\n",
-			)
+		proxies, warnings, err := config.ResolveTrustedProxies(
+			cfg.TrustedProxies,
+			authCfg.Headers.TrustedProxies,
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
-		authCfg.Headers.TrustedProxies = cfg.TrustedProxies
+
+		for _, warning := range warnings {
+			slog.Warn(warning)
+		}
+
+		// realIP reads the one, the provider the other; they must agree.
+		cfg.TrustedProxies = proxies
+		authCfg.Headers.TrustedProxies = proxies
 	}
 
 	aclCfg := config.LoadACL(flags, fc)
