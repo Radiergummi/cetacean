@@ -327,6 +327,19 @@ var drivenWriteRoutes = map[string]driveFunc{
 	"PATCH /services/{id}/log-driver":      driveServiceLogDriver,
 	"PUT /nodes/{id}/availability":         driveNodeAvailability,
 	"DELETE /tasks/{id}":                   driveTaskRemoval,
+
+	// Resource lifecycle — see write_sweep_lifecycle_test.go.
+	"POST /configs":              driveConfigCreate,
+	"DELETE /configs/{id}":       driveConfigRemoval,
+	"PATCH /configs/{id}/labels": driveConfigLabels,
+	"POST /secrets":              driveSecretCreate,
+	"DELETE /secrets/{id}":       driveSecretRemoval,
+	"PATCH /secrets/{id}/labels": driveSecretLabels,
+	"DELETE /networks/{id}":      driveNetworkRemoval,
+	"DELETE /volumes/{name}":     driveVolumeRemoval,
+	"DELETE /services/{id}":      driveServiceRemoval,
+	"DELETE /stacks/{name}":      driveStackRemoval,
+	"PATCH /nodes/{id}/labels":   driveNodeLabels,
 }
 
 // excusedWriteRoutes carries a reason for every mutating route this file does
@@ -393,17 +406,6 @@ var excusedWriteRoutes = map[string]string{
 	"PATCH /services/{id}/mounts":           "gap: attachment PATCHes (configs/secrets/networks/mounts/container-config) not covered in this slice",
 	"PATCH /services/{id}/container-config": "gap: attachment PATCHes (configs/secrets/networks/mounts/container-config) not covered in this slice",
 	"PUT /services/{id}/placement":          "gap: placement constraint editing not covered in this slice",
-	"PATCH /nodes/{id}/labels":              "gap: node label editing not covered in this slice",
-	"DELETE /configs/{id}":                  "gap: config lifecycle (create/delete) not covered in this slice",
-	"DELETE /secrets/{id}":                  "gap: secret lifecycle (create/delete) not covered in this slice",
-	"DELETE /networks/{id}":                 "gap: network removal not covered in this slice",
-	"DELETE /volumes/{name}":                "gap: volume removal not covered in this slice",
-	"DELETE /stacks/{name}":                 "gap: stack removal not covered in this slice",
-	"DELETE /services/{id}":                 "gap: service removal not covered in this slice",
-	"POST /configs":                         "gap: config creation not covered in this slice",
-	"POST /secrets":                         "gap: secret creation not covered in this slice",
-	"PATCH /configs/{id}/labels":            "gap: config label editing not covered in this slice",
-	"PATCH /secrets/{id}/labels":            "gap: secret label editing not covered in this slice",
 	"PATCH /swarm/dispatcher":               "gap: cluster-wide dispatcher tuning not covered in this slice",
 	"PATCH /swarm/encryption":               "gap: autolock toggling not covered in this slice",
 	"PATCH /swarm/orchestration":            "gap: task-history retention tuning not covered in this slice",
@@ -787,6 +789,13 @@ func driveTaskRemoval(t *testing.T, env *harness.Env, proc *sut.Process) {
 		taskID = id
 		break
 	}
+
+	// The task IDs above come from the engine, but HandleRemoveTask resolves
+	// its target through the cache (lookupOr404), which the watcher fills
+	// asynchronously. Deleting inside that window answers 404 — a latent race
+	// this case carried until enough other engine churn ran alongside it to
+	// make the window matter.
+	awaitCached(t, proc, "/tasks/"+taskID)
 
 	resp := sweepRequest(t, proc, http.MethodDelete, "/tasks/"+taskID, "", nil)
 	defer resp.Body.Close()
