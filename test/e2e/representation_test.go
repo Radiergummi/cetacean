@@ -640,13 +640,6 @@ func TestUndeclaredRepresentationsAreRefused(t *testing.T) {
 	}
 }
 
-// etagless names the routes that serve JSON without a validator, which is
-// finding D-15 rather than a property of the format.
-var etagless = map[string]bool{
-	"GET /services/{id}/logs": true,
-	"GET /tasks/{id}/logs":    true,
-}
-
 // TestRepresentationETagsAreStable drives what internal/api/jsonld.go's
 // deterministic key ordering exists for. An ETag that changes between two
 // identical requests makes every conditional request miss and every If-Match
@@ -680,30 +673,10 @@ func TestRepresentationETagsAreStable(t *testing.T) {
 
 					etag := first.header.Get("ETag")
 					if etag == "" {
-						// Quarantined per finding D-15, and narrowly: the two
-						// log reads are the only routes allowed to be silent
-						// here, and they are named rather than detected.
-						if !etagless[route] {
-							t.Fatalf(
-								"a 200 carried no ETag, though docs/api.md:306 says " +
-									"every JSON response does",
-							)
-						}
-
-						t.Logf(
-							"FINDING D-15: %s serves JSON with no ETag. "+
-								"internal/api/log_handlers.go:177 ends serveLogs with "+
-								"writeJSON rather than writeCachedJSON, so the response "+
-								"carries neither a validator nor Cache-Control. "+
-								"docs/api.md:306 states \"JSON responses carry an ETag and "+
-								"Cache-Control: no-cache\" without qualification, and "+
-								"CLAUDE.md's Key Conventions say the same of all JSON "+
-								"endpoints. A paginated log read is a snapshot a poller "+
-								"could revalidate; it has no way to.",
-							route,
+						t.Fatalf(
+							"a 200 carried no ETag, though docs/api.md says every " +
+								"JSON response does",
 						)
-
-						return
 					}
 
 					second := precondRequest(t, proc, http.MethodGet, path, headers, "", "")
