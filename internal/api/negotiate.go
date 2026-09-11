@@ -65,9 +65,7 @@ func ContentTypeFromContext(ctx context.Context) ContentType {
 // Accept header and stores it in the request context for downstream handlers.
 //
 // It resolves and records; it does not refuse. 406 is a statement about one
-// endpoint, and the route is not known here — refusing at this altitude meant
-// a document serving a single media type could only be reached by adding that
-// type to supportedTypes, widening a process-wide table for one URL.
+// endpoint, and the route is not known here.
 func negotiate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Accept")
@@ -82,9 +80,8 @@ func negotiate(next http.Handler) http.Handler {
 	})
 }
 
-// notAcceptable refuses a type the endpoint does not serve. Every dispatcher
-// that chooses among representations ends here; a handler that serves one
-// representation ignores the negotiated type entirely.
+// notAcceptable refuses a type the endpoint does not serve, naming what it
+// does. Every dispatcher that chooses among representations ends here.
 func notAcceptable(w http.ResponseWriter, r *http.Request, serves string) {
 	writeErrorCode(w, r, "API003", "this endpoint supports "+serves)
 }

@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -22,10 +23,27 @@ func (f feedHandlers) hasFeed() bool {
 	return f.atom != nil || f.jsonFeed != nil
 }
 
-// resourceTypes names what a resource endpoint serves, for the 406 it answers
-// when asked for anything else.
-const resourceTypes = "application/json, text/html, " +
-	"application/atom+xml and application/feed+json"
+// servedTypes names what an endpoint carrying these feeds serves, for the 406
+// it answers when asked for anything else. Derived from the same fields the
+// switch dispatches on: an endpoint registered with no feeds refuses Atom one
+// branch up, and must not advertise it here.
+func (f feedHandlers) servedTypes(sse bool) string {
+	types := []string{"application/json", "text/html"}
+
+	if sse {
+		types = append(types, "text/event-stream")
+	}
+
+	if f.atom != nil {
+		types = append(types, "application/atom+xml")
+	}
+
+	if f.jsonFeed != nil {
+		types = append(types, "application/feed+json")
+	}
+
+	return strings.Join(types, ", ")
+}
 
 // contentNegotiated wraps a JSON handler to dispatch based on content type.
 // HTML requests go to the SPA, SSE gets 406 (not supported here).
@@ -51,7 +69,7 @@ func contentNegotiated(
 			addFeedLinks(w, r, feeds)
 			jsonHandler(w, r)
 		default:
-			notAcceptable(w, r, resourceTypes)
+			notAcceptable(w, r, feeds.servedTypes(false))
 		}
 	}
 }
@@ -77,7 +95,7 @@ func contentNegotiatedWithSSE(
 			addFeedLinks(w, r, feeds)
 			jsonHandler(w, r)
 		default:
-			notAcceptable(w, r, resourceTypes+", text/event-stream")
+			notAcceptable(w, r, feeds.servedTypes(true))
 		}
 	}
 }

@@ -261,13 +261,13 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			h.handleFeedHistory(w, r, renderAtom)
 		case ContentTypeJSONFeed:
 			h.handleFeedHistory(w, r, renderJSONFeed)
-		case ContentTypeUnsupported:
+		case ContentTypeHTML:
+			spa.ServeHTTP(w, r)
+		default:
 			notAcceptable(
 				w, r,
-				"text/event-stream, application/atom+xml and application/feed+json",
+				"text/event-stream, text/html, application/atom+xml, application/feed+json",
 			)
-		default:
-			spa.ServeHTTP(w, r)
 		}
 	})
 
@@ -762,11 +762,9 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		case ContentTypeDOT:
 			h.HandleTopologyDOT(w, r)
 		default:
-			writeErrorCode(
-				w,
-				r,
-				"API003",
-				"this endpoint supports application/vnd.jgf+json, application/graphml+xml, and text/vnd.graphviz",
+			notAcceptable(
+				w, r,
+				"application/vnd.jgf+json, application/graphml+xml, text/vnd.graphviz",
 			)
 		}
 	})
@@ -810,10 +808,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		cfg.OAuthRoutes(mux.mux, "")
 	}
 
-	// SPA fallback (must be last). It serves one representation, so it reads
-	// the negotiated type only to refuse a client that asked for something
-	// else — which is what an unrouted path answered while negotiate refused
-	// for every route at once.
+	// SPA fallback (must be last). It refuses only a type nothing serves,
+	// rather than everything but text/html: this route also carries
+	// /assets/*, which a browser requests with Accept: */* — resolved as
+	// JSON, and a 406 there is a blank dashboard.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if ContentTypeFromContext(r.Context()) == ContentTypeUnsupported {
 			notAcceptable(w, r, "text/html")
