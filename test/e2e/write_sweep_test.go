@@ -246,6 +246,45 @@ func sweepRequest(
 	return resp
 }
 
+// sweepWriteAfterWrite issues a service write that closely follows another,
+// retrying while it loses a version race.
+//
+// Swarm bumps a service's version itself as a change rolls out, so a write
+// whose inspect straddles that bump is refused 409 (SVC001). docs/api.md
+// documents that as "re-read the resource and retry", which is what a client
+// does and what these cases do: the contract under test is the write, not who
+// wins the race against the orchestrator's own bookkeeping.
+func sweepWriteAfterWrite(
+	t *testing.T,
+	proc *sut.Process,
+	method, path, contentType string,
+	body []byte,
+) *http.Response {
+	t.Helper()
+
+	const attempts = 5
+
+	for attempt := range attempts {
+		resp := sweepRequest(t, proc, method, path, contentType, body)
+		if resp.StatusCode != http.StatusConflict {
+			return resp
+		}
+
+		resp.Body.Close()
+
+		if attempt == attempts-1 {
+			t.Fatalf(
+				"%s %s lost a version race on every one of %d attempts",
+				method, path, attempts,
+			)
+		}
+
+		time.Sleep(time.Duration(attempt+1) * 500 * time.Millisecond)
+	}
+
+	return nil
+}
+
 // problemType decodes an RFC 9457 problem body and returns its type field,
 // closing the body. Used to assert on the error code named in the response
 // rather than the status code alone.
@@ -361,7 +400,6 @@ var drivenWriteRoutes = map[string]driveFunc{
 	"PATCH /services/{id}/mounts":           driveServiceMounts,
 	"PATCH /services/{id}/container-config": driveServiceContainerConfig,
 	"PUT /services/{id}/placement":          driveServicePlacement,
-	"PUT /services/{id}/mode":               driveServiceMode,
 	"PUT /services/{id}/endpoint-mode":      driveServiceEndpointMode,
 	"PUT /services/{id}/healthcheck":        driveServiceHealthcheckPut,
 	"PATCH /services/{id}/healthcheck":      driveServiceHealthcheckPatch,
@@ -419,10 +457,11 @@ var excusedWriteRoutes = map[string]string{
 	"POST /services/{id}/restart": "driven by " +
 		"TestRestartServiceRecreatesTasksOnTheCluster in write_test.go",
 
-	"POST /-/resync": "registered under the auth-exempt /-/ prefix with no requireLevel " +
-		"wrapper, so it cannot be replayed at tier 0 the way every other driven entry is; " +
-		"driven instead by TestResyncBypassesAuthenticationAndTheOperationsTier in " +
-		"write_sweep_swarm_test.go, which pins that as finding D-9",
+	"POST /-/resync": "mutates the cache rather than the cluster, so there is no engine " +
+		"state to read back the way every other driven entry is verified, and it is " +
+		"deliberately not tiered — the operations level says what a deployment may do to " +
+		"the cluster, and a resync only re-reads it; its authentication and grant check " +
+		"are driven by TestResyncIsAuthenticatedAndGated in write_sweep_swarm_test.go",
 	"PATCH /swarm/encryption": "enabling autolock means a manager restart needs an unlock " +
 		"key, and this harness restarts SUTs against a shared engine with nowhere to keep " +
 		"one; excused rather than forced, unlike the three reversible /swarm/* patches " +

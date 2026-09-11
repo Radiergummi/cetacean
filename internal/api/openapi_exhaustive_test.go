@@ -294,6 +294,7 @@ var unpreconditionedWriteEndpointChecks = []writeEndpointCheck{
 		`{"image":"nginx:1.28"}`, "application/json"},
 	{"POST", "/services/{id}/rollback", "/services/svc1/rollback", "", ""},
 	{"POST", "/services/{id}/restart", "/services/svc1/restart", "", ""},
+	{"POST", "/-/resync", "/-/resync", "", ""},
 	{"POST", "/plugins", "/plugins",
 		`{"remote":"registry.example.com/plugin:latest"}`, "application/json"},
 	{"POST", "/plugins/privileges", "/plugins/privileges",

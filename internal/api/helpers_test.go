@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"io/fs"
 	"net/http"
 	"testing"
@@ -129,5 +130,12 @@ func newTestRouterWithCache(
 		OpenAPISpec:       []byte("openapi: '3.1.0'"),
 		EnableSelfMetrics: true,
 		AuthProvider:      &auth.NoneProvider{},
+		Resyncer:          stubResyncer{},
 	})
 }
+
+// stubResyncer stands in for the watcher, so POST /-/resync is registered and
+// the tests that sweep the spec's operations can reach it.
+type stubResyncer struct{}
+
+func (stubResyncer) Resync(context.Context) error { return nil }

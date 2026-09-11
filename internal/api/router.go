@@ -188,7 +188,15 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		mux.Handle("GET /-/metrics", metrics.Handler())
 	}
 	if cfg.Resyncer != nil {
-		mux.Handle("POST /-/resync", HandleResync(cfg.Resyncer))
+		// Authenticated and grant-gated, but deliberately not tiered: this is
+		// the one /-/ route internal/auth's isExempt does not exempt, because
+		// each call is a full sweep of the Docker API and leaving it open let
+		// anyone who could reach the port amplify one cheap request into a
+		// cluster enumeration. The operations level is not the right gate —
+		// it says what a deployment may do to the *cluster*, and a resync only
+		// re-reads it, so a read-only deployment keeps the dashboard's refresh
+		// button.
+		mux.HandleFunc("POST /-/resync", h.withAnyGrant(HandleResync(cfg.Resyncer)))
 	}
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
 	mux.HandleFunc("GET /metrics/status", h.HandleMonitoringStatus)
@@ -492,9 +500,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		"GET /services/{id}/mode",
 		contentNegotiated(h.HandleGetServiceMode, feedHandlers{}, spa),
 	)
-	mux.Handle("PUT /services/{id}/mode",
-		svcTier3.Append(h.precond(h.serviceModeRepresentation)).
-			ThenFunc(h.HandleUpdateServiceMode))
+	// There is deliberately no PUT: Swarmkit refuses every service mode
+	// change, in either direction, with gRPC Unimplemented "service mode
+	// change is not allowed" — which is also why `docker service update` has
+	// no --mode flag. The endpoint existed, was documented as working, and
+	// could only ever answer 500.
 	mux.HandleFunc(
 		"GET /services/{id}/endpoint-mode",
 		contentNegotiated(h.HandleGetServiceEndpointMode, feedHandlers{}, spa),

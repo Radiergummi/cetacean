@@ -4,8 +4,8 @@ package e2e_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -193,28 +193,24 @@ func driveSwarmRotateToken(t *testing.T, env *harness.Env, proc *sut.Process) {
 	}
 }
 
-// TestResyncBypassesAuthenticationAndTheOperationsTier drives `POST
-// /-/resync`, the one mutating route in the inventory that the write sweep
-// cannot replay at operations level 0 the way it replays every other: it is
-// registered under the auth-exempt `/-/` prefix with no requireLevel wrapper
-// at all (internal/api/router.go:173).
+// TestResyncIsAuthenticatedAndGated drives `POST /-/resync`, the one route
+// under the `/-/` prefix that does work on request rather than reporting
+// state: each call is a full seven-goroutine sweep of the Docker API,
+// unbounded and unthrottled, so an uncredentialed caller able to reach the
+// port could amplify one cheap request into a cluster enumeration at will.
 //
-// The expectation is derived from the convention the project states for
-// itself. CLAUDE.md's Key Conventions: "All write endpoints go through
-// `requireLevel` (operations tier) AND `requireWriteACL` (per-resource ACL
-// write check)." This one goes through neither, so anyone who can reach the
-// port can force a full cluster resync — seven parallel Docker API sweeps —
-// as often as they like, in every auth mode, at every operations level.
-//
-// The case asserts the convention and quarantines exactly what it finds.
-func TestResyncBypassesAuthenticationAndTheOperationsTier(t *testing.T) {
+// It is the one `/-/` path internal/auth's isExempt does not exempt, and it
+// additionally requires the caller to hold a grant. It is deliberately not
+// gated on the operations level: that says what a deployment may do to the
+// cluster, and a resync only re-reads it, so a read-only deployment keeps the
+// dashboard's refresh button.
+func TestResyncIsAuthenticatedAndGated(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
 
-	// Operations level 0 — read-only, the tier at which requireLevel refuses
-	// every mutation — and an auth mode that refuses an uncredentialed caller
-	// on every non-exempt route. Under the stated convention either alone
-	// would be enough to refuse this.
+	// An auth mode that refuses an uncredentialed caller on every non-exempt
+	// route, at operations level 0 — so a 200 here would mean the route is
+	// reachable by anyone, in the most locked-down configuration there is.
 	policy := filepath.Join(t.TempDir(), "acl.yaml")
 	if err := os.WriteFile(policy, []byte(sseACLPolicy), 0o644); err != nil {
 		t.Fatalf("write policy: %v", err)
@@ -236,37 +232,12 @@ func TestResyncBypassesAuthenticationAndTheOperationsTier(t *testing.T) {
 	resp := sweepRequest(t, proc, http.MethodPost, "/-/resync", "application/json", nil)
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
-		return
-	}
-
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusForbidden {
+		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf(
-			"POST /-/resync with no credentials: status = %d; this is neither a refusal "+
-				"nor the quarantined D-9 success",
-			resp.StatusCode,
+			"POST /-/resync with no credentials against a headers-auth SUT at operations "+
+				"level 0: status = %d, want 401 or 403; body: %s",
+			resp.StatusCode, body,
 		)
 	}
-
-	var body struct {
-		Status     string `json:"status"`
-		DurationMs int64  `json:"durationMs"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("decode resync response: %v", err)
-	}
-
-	if body.Status != "ok" {
-		t.Fatalf("resync reported %q rather than ok", body.Status)
-	}
-
-	t.Logf(
-		"D-9 still open: POST /-/resync answered 200 (%dms of real work) to a caller "+
-			"with no credentials, against a headers-auth SUT. The route sits under the "+
-			"auth-exempt /-/ prefix and carries no requireLevel wrapper, so it is reachable "+
-			"in every auth mode at every operations level — including 0, read-only. It is "+
-			"also absent from api/openapi.yaml (finding D-2).",
-		body.DurationMs,
-	)
 }
