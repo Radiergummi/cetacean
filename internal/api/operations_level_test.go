@@ -171,6 +171,59 @@ func TestEveryOperationIsGatedAtItsDeclaredTier(t *testing.T) {
 		}
 	}
 
+	// The walk above starts from the spec, so it sees only operations the spec
+	// declares. A gated route that was never written into api/openapi.yaml is
+	// invisible to it — and to every other test in the package, all of which
+	// are spec-driven. Walking what the router actually registered closes that
+	// direction: an undocumented route must be gated at no tier, because a
+	// tier nothing documents is a tier nothing can be held to.
+	var undocumented int
+
+	for _, pattern := range routerPatterns(t) {
+		method, path, ok := strings.Cut(pattern, " ")
+		if !ok {
+			// A mount rather than an operation: the SPA fallback, /mcp, the
+			// pprof tree. None carries a method to drive, and none is gated.
+			continue
+		}
+
+		if specified[method+" "+path] {
+			continue
+		}
+
+		undocumented++
+
+		requestPath, ok := resolvePath(path)
+		if !ok {
+			t.Errorf(
+				"%s: registered by the router, absent from the spec, and its path "+
+					"parameters resolve to no fixture — teach resolvePath the prefix "+
+					"so its tier can be measured",
+				pattern,
+			)
+
+			continue
+		}
+
+		observed, admitted := observedOperationsLevel(routers, method, requestPath)
+
+		switch {
+		case !admitted:
+			t.Errorf(
+				"%s: refused with OPS001 at every level including %d — no "+
+					"configuration admits it",
+				pattern, config.OpsImpactful,
+			)
+		case observed > config.OpsReadOnly:
+			t.Errorf(
+				"%s: the router gates this at tier %d, but the spec has no such "+
+					"operation — document it, or the tier is a promise nothing "+
+					"states",
+				pattern, observed,
+			)
+		}
+	}
+
 	// A walk that measured nothing would otherwise pass in silence: every
 	// assertion above is per-operation, so an empty spec, or a skip rule broad
 	// enough to swallow the lot, produces no failures at all. Both counts are
@@ -185,7 +238,7 @@ func TestEveryOperationIsGatedAtItsDeclaredTier(t *testing.T) {
 	// Logged on success too: the floor above only catches a walk that covered
 	// nothing at all, so a skip rule that quietly halved the coverage would
 	// still pass. The counts make that visible in the output.
-	t.Logf("badged=%d gated=%d", declared, gated)
+	t.Logf("badged=%d gated=%d undocumented-routes=%d", declared, gated, undocumented)
 }
 
 // declaredOperationsLevel reads the operations-level badge off a spec

@@ -642,6 +642,9 @@ func newSeededTestRouter(t testing.TB, opts ...testHandlersOption) http.Handler 
 		append([]testHandlersOption{
 			withWriteClient(seededWriteClient()),
 			withPluginClient(plugins),
+			// The two log routes reach their streamer as soon as the service
+			// or task resolves, and a nil one panics there.
+			withDockerClient(&mockLogStreamer{}),
 		}, opts...)...,
 	)
 }

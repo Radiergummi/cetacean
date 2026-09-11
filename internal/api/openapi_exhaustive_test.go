@@ -209,20 +209,11 @@ func skipEndpoint(path string) bool {
 	return false
 }
 
-// resolvePath substitutes path parameters in a spec path template with known
-// fixture IDs. Returns (resolved, true) if every {param} was substituted,
-// or (template, false) if any remain.
-func resolvePath(template string) (string, bool) {
-	replacements := map[string]string{
-		"/nodes/{id}":        "/nodes/node-1",
-		"/services/{id}":     "/services/svc-1",
-		"/tasks/{id}":        "/tasks/task-1",
-		"/stacks/{name}":     "/stacks/myapp",
-		"/configs/{id}":      "/configs/cfg-1",
-		"/secrets/{id}":      "/secrets/sec-1",
-		"/networks/{id}":     "/networks/net-1",
-		"/volumes/{name}":    "/volumes/vol-1",
-		"/plugins/{name}":    "/plugins/plug-1",
+// pathFixtures maps a spec path prefix to the concrete path resolvePath
+// substitutes for it: every resource in specFixtureIDs, plus the three
+// parameters that name something other than a cached resource.
+var pathFixtures = func() map[string]string {
+	fixtures := map[string]string{
 		"/api/errors/{code}": "/api/errors/SVC001",
 
 		// Not cache fixtures: a text id the embedded license set carries, and
@@ -231,7 +222,18 @@ func resolvePath(template string) (string, bool) {
 		"/metrics/labels/{name}": "/metrics/labels/job",
 	}
 
-	for prefix, replacement := range replacements {
+	for template, id := range specFixtureIDs {
+		fixtures[template] = template[:strings.LastIndex(template, "/")+1] + id
+	}
+
+	return fixtures
+}()
+
+// resolvePath substitutes path parameters in a spec path template with known
+// fixture IDs. Returns (resolved, true) if every {param} was substituted,
+// or (template, false) if any remain.
+func resolvePath(template string) (string, bool) {
+	for prefix, replacement := range pathFixtures {
 		if template == prefix {
 			return replacement, true
 		}
@@ -250,6 +252,55 @@ func resolvePath(template string) (string, bool) {
 	return template, false
 }
 
+// TestSpecFixtureIDsResolve drives the detail endpoint of every specFixtureIDs
+// entry against both fixtures that claim to seed it. Neither walk that reads
+// the table would notice an id gone stale: the contract walk logs a non-2xx
+// and moves on, and the operations-level probe reads its tier off the gate,
+// which answers before the resource is ever looked up. Coverage would drain
+// away in silence.
+func TestSpecFixtureIDsResolve(t *testing.T) {
+	specBytes, _, _ := loadTestSpec(t)
+
+	c := cache.New(nil)
+	populateSpecFixtures(c)
+
+	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	defer b.Close()
+
+	fixtures := map[string]http.Handler{
+		"populateSpecFixtures": newTestRouter(t, newTestHandlers(t, withCache(c)), b, specBytes),
+		"newSeededTestRouter":  newSeededTestRouter(t),
+	}
+
+	for name, router := range fixtures {
+		for template := range specFixtureIDs {
+			// Plugins are answered by a Docker client rather than the cache,
+			// so a plugin id proves nothing about either fixture's seeding.
+			if strings.HasPrefix(template, "/plugins/") {
+				continue
+			}
+
+			path, _ := resolvePath(template)
+
+			t.Run(name+" "+path, func(t *testing.T) {
+				req := httptest.NewRequest(http.MethodGet, path, nil)
+				req.Header.Set("Accept", "application/json")
+
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, req)
+
+				if rec.Code != http.StatusOK {
+					t.Errorf(
+						"status=%d, want 200 — the fixture seeds no resource under "+
+							"the id specFixtureIDs addresses it by",
+						rec.Code,
+					)
+				}
+			})
+		}
+	}
+}
+
 // writeEndpointCheck is one non-GET spec operation exercised by the
 // behavioural half of TestEveryWriteEndpointDocumentsPreconditions: the spec
 // path template it proves coverage for, and the concrete request that drives
@@ -262,21 +313,19 @@ type writeEndpointCheck struct {
 	contentType string
 }
 
-// resourceIDPlaceholder maps each ID newSeededTestRouter's fixture uses to
-// the OpenAPI path parameter it fills. specTemplate uses it to turn a
+// resourceIDPlaceholder inverts specFixtureIDs: each fixture ID against the
+// OpenAPI path parameter it fills. specTemplate uses it to turn a
 // pairedEndpoints concrete path back into the spec's template, so the 30
 // precondition-carrying rows don't have to be retyped here.
-var resourceIDPlaceholder = map[string]string{
-	"svc1":      "{id}",
-	"node1":     "{id}",
-	"cfg1":      "{id}",
-	"sec1":      "{id}",
-	"net1":      "{id}",
-	"task1":     "{id}",
-	"vol1":      "{name}",
-	"plug1":     "{name}",
-	seededStack: "{name}",
-}
+var resourceIDPlaceholder = func() map[string]string {
+	placeholders := make(map[string]string, len(specFixtureIDs))
+
+	for template, id := range specFixtureIDs {
+		placeholders[id] = template[strings.LastIndex(template, "/")+1:]
+	}
+
+	return placeholders
+}()
 
 // specTemplate turns a concrete fixture path (as used in pairedEndpoints)
 // back into the OpenAPI path template it was resolved from.
