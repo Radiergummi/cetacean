@@ -142,11 +142,9 @@ func TestReadServiceLogsPropagatesStreamerError(t *testing.T) {
 }
 
 // The cursor is the newest returned timestamp verbatim, at fixed nanosecond
-// width. It used to be advanced by a nanosecond and formatted with
-// RFC3339Nano, which trims trailing zeros — so a cursor taken from a line at
-// .999999999Z came back as a bare second and sorted above the whole of that
-// second, discarding it on the next read. Filtering excludes the boundary
-// line itself, so no advance is needed.
+// width: RFC3339Nano trims trailing zeros, so a cursor from a line at
+// .999999999Z would come back as a bare second and sort above the whole of it.
+// Filtering excludes the boundary line, so no advance is needed.
 func TestReadServiceLogsCursorKeepsFullPrecision(t *testing.T) {
 	c := cache.New(nil)
 	streamer := &fakeLogStreamer{
@@ -319,13 +317,10 @@ func TestReadServiceLogsHonoursCursor(t *testing.T) {
 	}
 }
 
-// nextCursor must skip lines with no timestamp when picking what to advance:
-// parseLine can leave Timestamp empty for a line that doesn't match the
-// expected shape, and nextCursor("") returns "". If the last returned line
-// happened to be one of those, the cursor would go empty, the client's next
-// call would send no since, and paging would loop on the newest lines again
-// — the exact bug this task exists to fix, just reintroduced from the other
-// end.
+// nextCursor must skip untimestamped lines when picking what to advance:
+// parseLine leaves Timestamp empty for a line of unexpected shape, and an empty
+// cursor means the client's next call sends no `since` and paging loops on the
+// newest lines again.
 func TestReadServiceLogsCursorSkipsUntimestampedTrailingLine(t *testing.T) {
 	c := cache.New(nil)
 	streamer := &fakeLogStreamer{
@@ -454,13 +449,10 @@ func TestGetLogsPointsAtTheLogWidget(t *testing.T) {
 	}
 }
 
-// TestGetLogsToolReadsATaskDirectly — the output of a replica that has already
-// died is what an operator needs after a crash, and Swarm keeps it only until
-// the task record falls out of the history window. Reading the parent service
-// does not substitute: the service's own log stream drops a task's lines once
-// it is gone. Docker exposes it, docker.Client.Logs has always had the
-// TaskLog branch and REST already uses it — only this tool hardcoded
-// ServiceLog.
+// The output of a replica that has already died is what an operator needs after
+// a crash, and Swarm keeps it only until the task record leaves the history
+// window. Reading the parent service does not substitute: its log stream drops
+// a task's lines once the task is gone.
 func TestGetLogsToolReadsATaskDirectly(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
@@ -554,10 +546,9 @@ func TestGetLogsWidensTheFetchForAServerSideFilter(t *testing.T) {
 }
 
 // The wide scopes must be rejected against the narrow ones exactly as service
-// and task are against each other. Checking them in order and returning from
-// the first match resolves a conflict by the order the checks happen to be
-// written in: a call naming `service` and `cluster` would read the whole
-// cluster and never mention that `service` was ignored.
+// and task are against each other. Returning from the first match would resolve
+// a conflict by the order the checks happen to be written in, so a call naming
+// `service` and `cluster` would silently read the whole cluster.
 func TestGetLogsToolRejectsConflictingScopes(t *testing.T) {
 	c := cache.New(nil)
 	srv := newLogTestServer(t, c, &fakeLogStreamer{})
@@ -603,14 +594,10 @@ func TestGetLogsToolRequiresAScope(t *testing.T) {
 	}
 }
 
-// Docker ignores `since` for service logs, so the window is enforced here by
-// filtering after the fetch — and the fetch itself is bounded by `tail`. When
-// a service is chatty enough to fill that bound before reaching the start of
-// the requested window, the answer covers a fraction of what was asked for and
-// says nothing about it: a five-minute request against a service emitting
-// hundreds of lines a second came back holding seven seconds. "Nothing
-// happened in the last hour" and "here are the newest 100 lines" are not the
-// same answer, and only the payload can tell them apart.
+// Docker ignores `since` for service logs, so the window is enforced by
+// filtering after a fetch that `tail` bounds. A service chatty enough to fill
+// that bound answers with a fraction of the window asked for: "nothing happened
+// in the last hour" and "here are the newest 100 lines" are not the same answer.
 func TestReadLogsReportsAWindowTheTailCeilingCutShort(t *testing.T) {
 	// One line past the ceiling the widened fetch uses, all newer than the
 	// `since` below, so filtering removes nothing and only the ceiling binds.
@@ -692,11 +679,10 @@ func taskLogFrames(taskID string, count int) []byte {
 	return frames
 }
 
-// Docker applies `tail` to each of a service's task streams and interleaves
-// the results, so a three-replica read comes back holding up to three full
-// windows. Comparing the merged total against the bound called every such read
-// truncated — a complete answer reported as a partial one, which is the same
-// lie the field exists to prevent told backwards.
+// Docker applies `tail` to each of a service's task streams and interleaves the
+// results, so a three-replica read holds up to three full windows. Comparing
+// the merged total against the bound reports a complete answer as a partial
+// one — the same lie the field exists to prevent, told backwards.
 func TestReadLogsDoesNotCountReplicasAgainstThePerStreamCeiling(t *testing.T) {
 	// Three streams, each well inside the widened ceiling, but well over it
 	// once merged.
@@ -746,11 +732,10 @@ func TestReadLogsReportsAPerStreamCeilingAcrossReplicas(t *testing.T) {
 	}
 }
 
-// `tail` is widened for `contains` and `level` exactly as it is for `since`,
-// so a grep can fill the ceiling too — and `since` is optional, which makes
-// this the common shape of one. Reporting truncated: false on a search that
-// matched nothing but never reached the older lines is the confusion the field
-// was added to end, told in its most likely form.
+// `tail` is widened for `contains` and `level` exactly as for `since`, so a
+// grep fills the ceiling too — and `since` is optional, which makes this the
+// common shape. truncated: false on a search that matched nothing and never
+// reached the older lines is the confusion the field exists to end.
 func TestReadLogsReportsACeilingOnAGrepWithoutSince(t *testing.T) {
 	streamer := &fakeLogStreamer{frames: taskLogFrames("t-1", 100)}
 	srv := newLogTestServer(t, cache.New(nil), streamer)

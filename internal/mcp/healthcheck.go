@@ -12,14 +12,10 @@ import (
 // Docker's own default retry count when a caller sets none.
 const defaultHealthcheckRetries = 3
 
-// healthcheckValue is the healthcheck section's argument.
-//
-// Durations arrive as strings ("10s") rather than the nanosecond integers
-// container.HealthConfig carries, for the same reason ServiceDetails reports
-// them that way: 10000000000 is a value a caller has to decode, and one they
-// will sooner or later write in the wrong scale. Parse failures name the
-// offending field, because a caller that guessed the format has to be told
-// which of three it got wrong.
+// healthcheckValue is the healthcheck section's argument. Durations arrive as
+// strings, not the nanosecond integers container.HealthConfig carries, for the
+// reason ServiceDetails reports them that way: the integer will sooner or later
+// be written in the wrong scale. Parse failures name the offending field.
 type healthcheckValue struct {
 	Test        []string `json:"test"`
 	Interval    string   `json:"interval,omitempty"`
@@ -28,12 +24,10 @@ type healthcheckValue struct {
 	Retries     int      `json:"retries,omitempty"`
 }
 
-// toHealthConfig converts the wire shape to Docker's.
-//
-// An empty Test clears the healthcheck: a probe that runs no command is not a
-// thing Swarm can execute, so the only sensible reading of "no test" is
-// "remove it". A nil result with a nil error says exactly that, and
-// UpdateServiceHealthcheck takes a nil config to mean the same.
+// toHealthConfig converts the wire shape to Docker's. An empty Test clears the
+// healthcheck: a probe that runs no command is not something Swarm can
+// execute. A nil result with a nil error says exactly that, which is also what
+// UpdateServiceHealthcheck reads a nil config as.
 func (v healthcheckValue) toHealthConfig() (*container.HealthConfig, error) {
 	if len(v.Test) == 0 {
 		return nil, nil
@@ -74,11 +68,9 @@ func (v healthcheckValue) toHealthConfig() (*container.HealthConfig, error) {
 	return hc, nil
 }
 
-// commandValue is the command section's argument.
-//
-// Command is the entrypoint and Args what follows it, the split Docker itself
-// makes and the one ServiceDetails reports — a caller must be able to write
-// back what a describe just showed them.
+// commandValue is the command section's argument. Command is the entrypoint and
+// Args what follows it — Docker's own split, and the one ServiceDetails
+// reports, so a caller can write back what a describe showed them.
 type commandValue struct {
 	Command []string `json:"command,omitempty"`
 	Args    []string `json:"args,omitempty"`

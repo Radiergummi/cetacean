@@ -40,11 +40,8 @@ var (
 )
 
 // Routes returns every route registered in internal/api/router.go, sorted and
-// deduplicated.
-//
-// It reads the source rather than the running server because http.ServeMux
-// exposes no way to enumerate its patterns — and because the source is what a
-// reviewer edits, so drift is caught where it is introduced.
+// deduplicated. It reads the source because ServeMux cannot enumerate its
+// patterns, and because the source is what a reviewer edits.
 func Routes() ([]Route, error) {
 	routesOnce.Do(func() {
 		routes, routesErr = parseRoutesFile(routerSource)

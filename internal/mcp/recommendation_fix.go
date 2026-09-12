@@ -5,15 +5,9 @@ import (
 )
 
 // recommendationFix names the tool call that applies a finding's remedy.
-//
-// recommendations.Recommendation carries FixAction as a REST route —
-// "PUT /nodes/{id}/availability" — because the dashboard reads it that way and
-// dispatches on it (frontend/src/lib/applyRecommendation.ts). An MCP caller
-// holds tools, not routes, and cannot issue an HTTP request at all, so the one
-// field meant to say what to do next says something it cannot act on.
-//
-// Translating rather than renaming keeps the REST contract intact: this is the
-// only consumer that needs the other vocabulary.
+// Recommendation carries FixAction as a REST route, which is what the dashboard
+// dispatches on, but an MCP caller holds tools and cannot issue an HTTP request
+// at all. Translating rather than renaming keeps the REST contract intact.
 type recommendationFix struct {
 	// Tool is the MCP tool to call.
 	Tool string `json:"tool"`
@@ -23,12 +17,10 @@ type recommendationFix struct {
 	Section string `json:"section,omitempty"`
 }
 
-// mcpRecommendation is a finding as MCP serves it.
-//
-// Recommendation is embedded so every field it grows arrives here without
-// this type being touched. FixAction is redeclared at the shallower depth and
-// left nil, which is how encoding/json is told to drop it: leaving the route
-// beside the tool would let a model pick the one it cannot use.
+// mcpRecommendation is a finding as MCP serves it. Recommendation is embedded,
+// so a field it grows arrives here untouched. FixAction is redeclared at the
+// shallower depth and left nil, which drops it: leaving the route beside the
+// tool would let a model pick the one it cannot use.
 type mcpRecommendation struct {
 	recommendations.Recommendation
 

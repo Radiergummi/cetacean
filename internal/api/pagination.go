@@ -136,17 +136,10 @@ func pageOf[T any](items []T, p PageParams) []T {
 	return items[start:end]
 }
 
-// writeCollectionResponse writes a CollectionResponse with the appropriate
-// status code and headers based on whether the request used the Range header.
-//
-// For Range requests:
-//   - Empty collection → 200 OK
-//   - Offset beyond total → 416 with Content-Range: items */TOTAL
-//   - Full collection covered → 200 OK
-//   - Partial → 206 with Content-Range: items START-END/TOTAL
-//
-// For query-param requests: 200 OK with Link pagination headers.
-// Always sets Accept-Ranges: items.
+// writeCollectionResponse writes a CollectionResponse, choosing its status from
+// whether the request used Range: 206 with Content-Range for a partial answer,
+// 416 for an offset beyond the total, 200 otherwise. A query-param request gets
+// 200 with Link headers. Accept-Ranges: items is always set.
 func writeCollectionResponse[T any](
 	w http.ResponseWriter,
 	r *http.Request,

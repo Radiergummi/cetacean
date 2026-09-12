@@ -266,11 +266,10 @@ func TestWatchPolicyFile_ReloadsAfterRenameOverWrite(t *testing.T) {
 	}, "policy was not reloaded after the second rename-over-write")
 }
 
-// TestWatchPolicyFile_ReloadsAfterSymlinkSwap covers how a Kubernetes
-// ConfigMap and a Docker secret actually update: the mounted name is a symlink
-// into a versioned directory, and an update swaps the directory symlink beside
-// it. No filesystem event ever names the policy file, so a watch filtering on
-// its basename alone would see the update and discard it.
+// Covers how a Kubernetes ConfigMap and a Docker secret actually update: the
+// mounted name is a symlink into a versioned directory, and an update swaps the
+// directory symlink beside it. No event ever names the policy file, so a watch
+// filtering on its basename would see the update and discard it.
 func TestWatchPolicyFile_ReloadsAfterSymlinkSwap(t *testing.T) {
 	dir := t.TempDir()
 
@@ -322,10 +321,9 @@ func TestWatchPolicyFile_ReloadsAfterSymlinkSwap(t *testing.T) {
 	}
 
 	// Creating the version directory and the temporary symlink are themselves
-	// events in the watched directory, and on kqueue they are the only ones the
-	// swap produces. Letting them drain first is what holds the watcher to
-	// noticing the swap rather than to being woken near it: without it this
-	// passed or failed on the order two goroutines happened to run in.
+	// events in the watched directory, and on kqueue the only ones the swap
+	// produces. Draining them first holds the watcher to noticing the swap
+	// rather than to being woken near it.
 	time.Sleep(300 * time.Millisecond)
 
 	if err := os.Rename(tmp, data); err != nil {

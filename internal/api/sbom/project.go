@@ -38,13 +38,10 @@ type License struct {
 	URL  string `json:"url,omitempty"`
 }
 
-// Project parses a CycloneDX JSON document and flattens it into a Document.
-// It is a pure projection of raw: the license and notice text ids come from a
-// second artifact and are stamped on afterwards, by attachTexts.
-// Components lacking a recognized package URL (e.g. the synthetic container
-// components a hierarchical merge produces) are skipped; nested components are
-// walked recursively. Output is sorted by ecosystem, then name, so the
-// projection is deterministic.
+// Project parses a CycloneDX JSON document and flattens it into a Document — a
+// pure projection, with the license and notice text ids stamped on afterwards
+// by attachTexts. A component with no recognized package URL is skipped and
+// nested ones are walked. Output sorts by ecosystem then name.
 func Project(raw []byte) (Document, error) {
 	var bom cyclonedx.BOM
 	if err := cyclonedx.NewBOMDecoder(bytes.NewReader(raw), cyclonedx.BOMFileFormatJSON).

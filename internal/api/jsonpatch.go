@@ -6,11 +6,9 @@ import (
 	"maps"
 )
 
-// errPatchApply is the sentinel wrapping every patch-application failure
-// from applyJSONPatch and the merge-patch closure built in
-// parsePatchMutator. Callers use errors.Is to distinguish them from
-// writer-side (Docker) errors so the HTTP layer can pick the right status
-// code (400/409 vs 500).
+// errPatchApply is the sentinel wrapping every patch-application failure from
+// applyJSONPatch and parsePatchMutator's merge closure. Callers use errors.Is
+// to tell them from writer-side Docker errors, which decides 400/409 over 500.
 var errPatchApply = errors.New("patch apply")
 
 // PatchOp represents a single RFC 6902 JSON Patch operation.

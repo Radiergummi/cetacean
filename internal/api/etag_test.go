@@ -380,11 +380,10 @@ func TestCompressedResponsesKeepConditionalCaching(t *testing.T) {
 	}
 }
 
-// TestCompressedETagStillSatisfiesIfMatch guards the base hash staying
-// coding-independent: precond hashes the identity representation, so an ETag
-// hashed over compressed bytes could never match one, and every browser sends
-// Accept-Encoding. There is a row per JSON helper because the preconditioned
-// surface is split between them, and one row would leave the other unguarded.
+// Guards the base hash staying coding-independent: precond hashes the identity
+// representation, so an ETag hashed over compressed bytes could never match one
+// — and every browser sends Accept-Encoding. There is a row per JSON helper,
+// since the preconditioned surface is split between them.
 func TestCompressedETagStillSatisfiesIfMatch(t *testing.T) {
 	cases := []struct {
 		name string
@@ -449,11 +448,10 @@ func TestCompressedETagStillSatisfiesIfMatch(t *testing.T) {
 	}
 }
 
-// TestSearchIsNeverCompressed covers both search representations: the JSON
-// handler echoes ?q= into the body and the feed titles itself with it, both
-// beside ACL-filtered content, so both opt out. The cache is seeded until each
-// response clears compressionThreshold, or either assertion would pass whether
-// the opt-out were wired or not.
+// Covers both search representations: the JSON handler echoes ?q= into the body
+// and the feed titles itself with it, both beside ACL-filtered content, so both
+// opt out. The cache is seeded until each response clears compressionThreshold,
+// or either assertion passes whether the opt-out is wired or not.
 func TestSearchIsNeverCompressed(t *testing.T) {
 	c := cache.New(nil)
 	for i := range 60 {

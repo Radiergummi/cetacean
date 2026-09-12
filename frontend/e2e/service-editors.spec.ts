@@ -13,11 +13,9 @@ test.describe("Service Editors", () => {
    * Ensure a collapsible section is present and expanded, and return its
    * header row.
    *
-   * The section toggle is matched as a disclosure control rather than by name
-   * alone: a service detail page carries four buttons named "Labels", three of
-   * them unrelated, and only the toggle has aria-expanded. An unqualified name
-   * match is a strict-mode violation — which this file never hit, because the
-   * whole of it is gated behind CETACEAN_E2E_WRITE and had not been run.
+   * The toggle is matched as a disclosure control rather than by name alone: a
+   * service detail page carries four buttons named "Labels" and only the toggle
+   * has aria-expanded, so an unqualified name match is a strict-mode violation.
    */
   async function ensureSectionOpen(page: Page, name: RegExp) {
     const toggle = page.getByRole("button", { name }).and(page.locator("[aria-expanded]"));
@@ -44,7 +42,7 @@ test.describe("Service Editors", () => {
    *
    * Scoped to that section's header, because a service detail page has an Edit
    * button per editable section and the first one in the DOM belongs to
-   * whichever section happens to come first — not to the one under test.
+   * whichever section comes first.
    */
   async function clickEdit(header: Locator) {
     const editButton = header.getByRole("button", { name: /^Edit$/i });

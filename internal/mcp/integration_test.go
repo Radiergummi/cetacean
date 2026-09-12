@@ -48,10 +48,9 @@ func readSSEResponse(t *testing.T, body io.Reader) []byte {
 }
 
 // mcpJSONRPCResult captures the subset of the *http.Response the integration
-// tests actually look at. Returning a value type instead of *http.Response
-// keeps the response body lifecycle inside the helper (which always drains
-// and closes it) and stops golangci-lint's bodyclose from flagging every
-// caller.
+// tests look at. Returning a value type keeps the body lifecycle inside the
+// helper, which always drains and closes it, and stops bodyclose flagging
+// every caller.
 type mcpJSONRPCResult struct {
 	StatusCode int
 	Header     http.Header

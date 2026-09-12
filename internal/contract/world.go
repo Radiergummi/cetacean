@@ -163,18 +163,10 @@ func NewWorld(t *testing.T) *World {
 		evaluator,
 	)
 
-	// mcp.New's Handler only installs its bearer-token middleware when OAuth
-	// is non-nil (see internal/mcp/server.go's Handler doc comment), matching
-	// main.go's own wiring: setupMCP always builds a real *oauth.Server
-	// whenever the upstream auth mode is not "none", before calling mcp.New.
-	// Without one here, /mcp would be served unauthenticated regardless of
-	// the "headers" auth mode REST runs under — no identity would ever reach
-	// checkRead, and every ACL-restrictive persona would read everything.
-	// This Server never mints or verifies a token: AuthBypass below sends
-	// every request through the upstream provider instead (see bypassActive
-	// and bearerAuth's comment naming "headers" as one of the providers safe
-	// for this, since it never writes on the success path), so the config
-	// only needs to be valid enough for NewServer to construct.
+	// Handler installs its bearer-token middleware only when OAuth is non-nil,
+	// so without a Server here /mcp is unauthenticated and every ACL persona
+	// reads everything. This one never mints or verifies a token, since
+	// AuthBypass routes every request through the upstream provider.
 	oauthSrv := oauth.NewServer(oauth.ServerConfig{
 		Issuer:      "https://cetacean.test",
 		MCPResource: "https://cetacean.test/mcp",
@@ -261,12 +253,9 @@ type RPCError struct {
 	Message string `json:"message"`
 }
 
-// MCP issues one JSON-RPC call as the named persona.
-//
-// The server speaks protocol 2026-07-28 only and is stateless: there is no
-// initialize and no session id. Every modern request must declare its protocol
-// version in the Mcp-Protocol-Version header and its client capabilities in
-// params._meta, or mcp-go refuses it before any handler runs.
+// MCP issues one JSON-RPC call as the named persona. The server is stateless
+// with no initialize and no session id, so every request must declare its
+// protocol version in the header and its capabilities in params._meta.
 func (w *World) MCP(
 	t *testing.T,
 	persona, method string,

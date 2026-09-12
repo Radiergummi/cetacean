@@ -7,11 +7,9 @@ import (
 )
 
 // serviceUpdateInFlight reports whether a service's desired spec is still in
-// flux — a rolling update, or a rollback that has started but not finished.
-//
-// This is the single definition of "not settled yet". Both DeriveServiceState
-// and ServiceConverged read it, so the state a caller is shown and the moment a
-// mutation is called done cannot disagree about which Swarm update states count.
+// flux — a rolling update, or an unfinished rollback. The single definition of
+// "not settled yet": DeriveServiceState and ServiceConverged both read it, so
+// the state shown and the moment a mutation is done cannot disagree.
 func serviceUpdateInFlight(svc swarm.Service) bool {
 	if svc.UpdateStatus == nil {
 		return false
@@ -30,28 +28,10 @@ func serviceUpdateInFlight(svc swarm.Service) bool {
 	}
 }
 
-// ServiceConverged reports whether a service has actually reached its desired
-// state, and a human-readable line describing what is still outstanding.
-//
-// Docker's write APIs return as soon as the swarm accepts a spec change, long
-// before the new state is real. This is what turns "accepted" into "running".
-//
-// The count must *equal* the desired one. Accepting any count that reaches it
-// was meant to break a wait that could never end — an overshoot that never
-// falls, from a garbage-collected task record frozen at its last-inspected
-// status — but it broke every scale-down instead: the surplus replicas are
-// still running when the wait begins, so 5 >= 2 holds on the first look and a
-// 5-to-2 scale reports "converged: 5/2 replicas running" with five replicas
-// up. The overshoot is what the watcher fixes at the source, by dropping the
-// record of a task the daemon has forgotten and re-reading one whose
-// container has just died; a wait is the wrong place to paper over a cache
-// that is wrong, because it cannot tell that case from a surplus that is
-// genuinely still draining.
-//
-// The caller must also not ask before the cache has caught up with the write
-// — see awaitServiceConvergenceFor — or the count and the desired figure both
-// still describe the state before the mutation, and any predicate at all
-// holds immediately.
+// ServiceConverged reports whether a service has reached its desired state, and
+// what is outstanding — Docker's writes return as soon as a spec change is
+// accepted. The count must *equal* the desired one, since `>=` holds on the
+// first look of every scale-down, and the cache must have caught up first.
 func ServiceConverged(svc swarm.Service, runningCount int) (bool, string) {
 	// An in-flight rolling update means tasks are still being replaced; wait it
 	// out rather than reporting a transient count match as success.
@@ -75,13 +55,9 @@ func ServiceConverged(svc swarm.Service, runningCount int) (bool, string) {
 }
 
 // DeriveServiceState returns a human-readable state for a service given its
-// current running-task count. Used by both REST (internal/api/search_handlers.go)
-// and MCP (internal/mcp/tools.go) search so the two transports report
-// identical state.
-//
-// States: "running", "pending", "failed", "updating". The "updating" branch
-// also covers in-progress rollbacks — paused rollbacks and freshly-started
-// rollbacks both still represent a service whose desired spec is in flux.
+// running-task count — "running", "pending", "failed" or "updating" — and is
+// read by both transports so they cannot report differently. "updating" also
+// covers a rollback, paused or freshly started: the desired spec is in flux.
 func DeriveServiceState(svc swarm.Service, runningCount int) string {
 	if serviceUpdateInFlight(svc) {
 		return "updating"
@@ -109,18 +85,10 @@ func DeriveServiceState(svc swarm.Service, runningCount int) string {
 	return "running"
 }
 
-// deriveNodeState reports a node's practical condition, and is the single
-// definition both RowsForNodes and NodeDigest call — a list and a detail view
-// of the same node must never disagree about it.
-//
-// Status.State ("ready", "down", "disconnected") is Swarm's own read on
-// whether the node is reachable at all; Spec.Availability ("active", "pause",
-// "drain") is the operator's separate decision about whether the scheduler
-// may still place work there. Unreachable is the strictly worse fact, so it
-// takes precedence: only once Status.State says "ready" does a paused or
-// drained node's Availability become the more useful answer, because "ready"
-// alone would mislead a caller into thinking the scheduler could still use
-// it.
+// deriveNodeState reports a node's practical condition, and is what both
+// RowsForNodes and NodeDigest call. Status.State is Swarm's read on whether the
+// node is reachable, Spec.Availability the operator's decision about scheduling
+// there. Unreachable is worse, so Availability only answers once it is "ready".
 func deriveNodeState(node swarm.Node) string {
 	if node.Status.State != swarm.NodeStateReady {
 		return string(node.Status.State)

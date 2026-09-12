@@ -30,11 +30,10 @@ func TestPromptCatalogDrivesOnlyRealTools(t *testing.T) {
 	}
 }
 
-// TestPromptReadsCoverItsDrivenTools keeps the two declarations from drifting.
-// reads is the wider one by construction: a type a driven tool is gated on is
-// a type the sequence reads, so every toolACLSpec type must appear in reads.
-// The reverse does not hold — that gap is exactly why reads exists, since the
-// ungated cross-type tools name no type at all.
+// Keeps the two declarations from drifting. reads is the wider one by
+// construction: a type a driven tool is gated on is a type the sequence reads,
+// so every toolACLSpec type must appear there. The reverse does not hold, which
+// is exactly why reads exists.
 func TestPromptReadsCoverItsDrivenTools(t *testing.T) {
 	for _, def := range promptCatalog() {
 		if len(def.reads) == 0 {
@@ -91,12 +90,10 @@ func TestPromptTierIsTheMaxOfItsTools(t *testing.T) {
 	}
 }
 
-// TestPromptTierDerivesFromDrives exercises promptTier directly against a
-// synthetic tiers map, independent of what the real catalog happens to drive
-// today. TestPromptTierIsTheMaxOfItsTools alone cannot catch a broken
-// promptTier: every catalogued prompt currently drives only tier-0 tools, so
-// a hardcoded config.OpsReadOnly, a minimum instead of a maximum, or a
-// first-entry-only implementation would all pass it unchanged.
+// Exercises promptTier against a synthetic tiers map, independent of what the
+// catalog happens to drive today: every catalogued prompt drives only tier-0
+// tools, so a hardcoded OpsReadOnly, a minimum instead of a maximum, or a
+// first-entry-only implementation would all pass a catalog-driven test.
 func TestPromptTierDerivesFromDrives(t *testing.T) {
 	tiers := map[string]config.OperationsLevel{
 		"low":     config.OpsReadOnly,
@@ -276,14 +273,10 @@ func TestPromptHandlerRejectsAMissingArgument(t *testing.T) {
 	}
 }
 
-// TestPromptTextMakesNoClusterClaims enforces rule 4 of the text conventions.
-// A prompt asserting something false about this cluster teaches the model a
-// wrong premise it will then act on, and the text is static so it cannot know.
-//
-// "there are three" is deliberately not in this list: it is a false-positive
-// hazard rather than a guard. Method text ("there are three things to check")
-// is legitimate and would fail the suite for no reason. The remaining phrases
-// all assert cluster *state*, which is what the rule forbids.
+// Enforces rule 4: a prompt asserting something false about this cluster teaches
+// the model a wrong premise it will act on, and the text is static so it cannot
+// know. "there are three" is deliberately absent — method text like "three
+// things to check" is legitimate. The listed phrases all assert cluster *state*.
 func TestPromptTextMakesNoClusterClaims(t *testing.T) {
 	// Phrases that can only be true of a particular cluster.
 	banned := []string{

@@ -142,14 +142,9 @@ func writeDockerError(
 	writeErrorCode(w, r, "ENG004", "failed to update "+resource)
 }
 
-// sequenceConflict is Swarmkit's optimistic-concurrency refusal: the version
-// the update carried is no longer the object's current one, because something
-// committed in between.
-//
-// It has to be matched on its message. Swarmkit raises it with gRPC code
-// Unknown, which Docker renders as a bare HTTP 500 and cerrdefs classifies as
-// an internal error, so there is no class to test for — and the message is the
-// one `docker service update` prints for the same race.
+// sequenceConflict is Swarmkit's optimistic-concurrency refusal. Matched on
+// its message because Swarmkit raises it with gRPC code Unknown, which Docker
+// renders as a bare 500 with no class to test for.
 const sequenceConflict = "update out of sequence"
 
 // writeResourceError handles Docker API errors for resource mutations,
@@ -187,13 +182,10 @@ func writeMutation[T any](
 	writeMutationResponse(w, r, resp(updated))
 }
 
-// writeServiceMutation calls a service writer function and writes the standard
-// service detail response, honouring the RFC 7240 wait and respond-async
-// preferences on the way.
-//
-// It spells out what writeMutation does rather than calling it: the preference
-// handling sits between the write and the response, and a wait that runs out
-// answers 202 instead.
+// writeServiceMutation calls a service writer and writes the standard detail
+// response, honouring the RFC 7240 wait and respond-async preferences. It
+// spells out what writeMutation does because the preference handling sits
+// between the write and the response, and an expired wait answers 202.
 func (h *Handlers) writeServiceMutation(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -216,14 +208,10 @@ func (h *Handlers) writeServiceMutation(
 	))
 }
 
-// awaitPreferred applies the RFC 7240 wait and respond-async preferences to a
-// service mutation Docker has already accepted. It returns the service the
-// caller should render, and reports whether it wrote the response itself.
-//
-// The version to converge to comes from the service the write returned, not
-// from the asynchronously filled cache, where reading it back is a race. The
-// request context is passed through as given, so a client that hangs up cancels
-// its own wait rather than leaving a five-minute goroutine behind.
+// awaitPreferred applies the RFC 7240 wait and respond-async preferences to an
+// accepted mutation, returning the service to render and whether it answered
+// itself. The version to converge to comes from the write, not the
+// asynchronously filled cache; the request context passes through.
 func (h *Handlers) awaitPreferred(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -321,18 +309,10 @@ func (e *specPatchError) Error() string { return e.message }
 // they made that check themselves.
 var errNoContainerSpec = &specPatchError{"ENG003", "service has no container spec"}
 
-// structMergePatch reads a merge-patch body and returns a function that merges
-// it into a current value (any JSON-marshalable struct) and unmarshals the
-// result into target. Returns false and writes an error response when the
-// request itself is unusable — a wrong Content-Type, an unreadable body,
-// invalid JSON.
-//
-// Parsing and applying are separate so the merge can run inside the writer,
-// against the service as the engine currently holds it. Merging into the
-// asynchronously filled cache would silently discard a field written moments
-// earlier, and nothing downstream could catch it: the writer reads the version
-// it writes with in the same breath as the spec, so the engine's own
-// optimistic concurrency sees nothing stale (M-42).
+// structMergePatch reads a merge-patch body and returns a function merging it
+// into a current value, unmarshalling into target; false means the request was
+// unusable and the error is written. Parsing and applying are separate so the
+// merge runs inside the writer, against the spec the engine currently holds.
 func structMergePatch(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -408,17 +388,10 @@ func requireMergePatch(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// parsePatchMutator validates Content-Type, reads the request body, and
-// returns a MapMutator that applies the parsed JSON Patch (RFC 6902) or JSON
-// Merge Patch (RFC 7396) to whatever fresh current-state map the writer hands
-// it. The mutator is invoked inside the Docker writer against a live inspect
-// — pre-merging against the in-memory cache would race third-party writers
-// and silently drop their concurrent changes.
-//
-// Content-type and body-read failures are written to w and ok=false is
-// returned. Patch *application* failures (test-failed, unknown op, replace
-// of a missing key) bubble up from the mutator so the caller can decide the
-// HTTP status — see writePatchError.
+// parsePatchMutator validates Content-Type, reads the body and returns a
+// MapMutator applying the JSON Patch or Merge Patch to whatever map the writer
+// hands it, against a live inspect — pre-merging against the cache would drop
+// concurrent changes. Request failures are written to w; patch failures bubble up.
 func parsePatchMutator(
 	w http.ResponseWriter,
 	r *http.Request,

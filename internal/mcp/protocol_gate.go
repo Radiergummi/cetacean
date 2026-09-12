@@ -18,21 +18,10 @@ const ProtocolVersion = mcplib.LATEST_PROTOCOL_VERSION
 // simply carries a null id.
 const maxIDSniffBytes = 64 << 10
 
-// requireModernProtocol rejects any request that is not on protocol 2026-07-28
-// or later.
-//
-// Cetacean speaks one revision of MCP. mcp-go still implements the older
-// initialize handshake and would happily negotiate down to 2024-11-05, but the
-// pre-2026-07-28 eras are session-based, and a session-based client on this
-// server subscribes successfully and then receives nothing: the notification
-// path is built on the stateless core. Serving those clients half-correctly is
-// worse than telling them plainly, so this refuses them at the door with the
-// error the specification defines for exactly this case.
-//
-// A compliant modern request always carries Mcp-Protocol-Version — mcp-go
-// rejects a request that declares its version only in _meta — so the header
-// alone is a sufficient and cheap test, and the common path never touches the
-// body.
+// requireModernProtocol rejects any request not on protocol 2026-07-28 or
+// later. mcp-go would negotiate down, but the older eras are session-based
+// while the notification path here is stateless: such a client subscribes
+// successfully and then receives nothing. The header alone decides.
 func (s *Server) requireModernProtocol(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		version := r.Header.Get(mcplib.HeaderProtocolVersion)

@@ -6,14 +6,10 @@ import (
 	"testing"
 )
 
-// FuzzParseDockerLogs exercises ParseDockerLogs against Docker's multiplexed
-// log framing ([stream(1)][pad(3)][size(4, big-endian)][payload]), which
-// Cetacean decodes as it comes straight off the Docker daemon.
-//
-// Property: bounded allocation. The parser must never produce more message
-// bytes, or more lines, than the input actually contained — in particular, a
-// length prefix claiming more than the stream holds must not be believed and
-// must not be allocated for.
+// Exercises ParseDockerLogs against Docker's multiplexed framing, which Cetacean
+// decodes straight off the daemon. The property is bounded allocation: the
+// parser must never produce more message bytes, or more lines, than the input
+// held — so a length prefix claiming more must not be allocated for.
 func FuzzParseDockerLogs(f *testing.F) {
 	frame := func(streamType byte, payload string) []byte {
 		buf := make([]byte, 8+len(payload))

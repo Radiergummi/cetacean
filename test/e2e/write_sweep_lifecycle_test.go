@@ -23,27 +23,14 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// Resource lifecycle drivers for the write sweep: creating and removing the
-// data resources, and removing the four resource types Cetacean can remove but
-// not create. They live beside write_sweep_test.go rather than inside it
-// because they share nothing with the service-spec editors there but the
-// harness, and that file is already long.
-//
-// Registered in drivenWriteRoutes, so both of the sweep's top-level tests pick
-// them up: TestWriteSweepMutatesTheCluster runs them against the real engine,
-// and TestWriteSweepRefusedAtReadOnlyLevel replays each route at operations
-// level 0 expecting OPS001.
-//
-// Every case verifies through the engine, never through Cetacean's own
-// response — a handler that answers 201 or 204 without touching the cluster
-// must not pass. For creation that means inspecting what the engine now holds;
-// for removal, that the engine no longer holds it.
+// Resource lifecycle drivers for the write sweep: creating and removing the data
+// resources, and removing the four types Cetacean can remove but not create.
+// Every case verifies through the engine, never through Cetacean's own response
+// — a handler answering 201 or 204 without touching the cluster must not pass.
 
 // sweepRunID distinguishes the resources these drivers create from those of
-// any earlier run. The harness containers outlive a `go test` invocation —
-// nothing tears them down until `make e2e-down` — so a run that failed before
-// its cleanup ran leaves resources behind, and a fixed name would then meet a
-// 409 on the next run and fail a case that has nothing wrong with it.
+// any earlier run: the harness containers outlive a `go test` invocation, so a
+// run that failed before cleanup leaves resources a fixed name would 409 on.
 var sweepRunID = func() string {
 	raw := make([]byte, 4)
 	if _, err := rand.Read(raw); err != nil {
@@ -169,14 +156,10 @@ func cleanupNamedSecret(t *testing.T, env *harness.Env, name string) {
 
 // ─── cache synchronisation ──────────────────────────────────────────────
 
-// awaitCached blocks until Cetacean serves path with 200.
-//
-// Every remove handler resolves its target through the cache before calling
-// the engine (lookupOr404), and the cache is filled asynchronously by the
-// watcher from the engine's event stream. A resource created directly on the
-// engine is therefore briefly invisible to Cetacean, and a DELETE issued in
-// that window answers 404 — a race, not a defect, and one that would make
-// these cases intermittently red.
+// awaitCached blocks until Cetacean serves path with 200. Every remove handler
+// resolves its target through the cache (lookupOr404), which the watcher fills
+// asynchronously, so a resource created directly on the engine is briefly
+// invisible and a DELETE in that window answers 404.
 func awaitCached(t *testing.T, proc *sut.Process, path string) {
 	t.Helper()
 

@@ -90,14 +90,10 @@ type ClusterSnapshot struct {
 	MaxNodeMemory     int64          `json:"maxNodeMemory"`
 	LastSync          time.Time      `json:"lastSync"`
 
-	// RunningByService is the per-service running-task count Snapshot has to
-	// build anyway to decide converged versus degraded. It is handed back
-	// rather than discarded so a caller needing both — cluster status names
-	// the degraded services as well as counting them — walks the task table
-	// once instead of calling RunningTaskCounts for a second identical pass
-	// under a second lock. Not serialized: the REST /cluster payload is a
-	// published contract, and this is an aggregate its readers never asked
-	// for.
+	// RunningByService is the per-service running-task count Snapshot builds
+	// anyway to decide converged versus degraded, handed back so a caller
+	// needing both walks the task table once rather than twice under two locks.
+	// Not serialized: the REST /cluster payload is a published contract.
 	RunningByService map[string]int `json:"-"`
 }
 
@@ -782,38 +778,18 @@ func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
 }
 
 // TaskIsLive reports whether the orchestrator still intends this task to run.
-//
-// Swarm keeps a task record for every replica it has replaced, so a service
-// that has been updated — or one that restarts in a loop — accumulates
-// terminal records. Those are history, not slots awaiting a start.
-// DesiredState is the orchestrator's own answer, which is why it decides this
-// rather than the task's current state — a task still coming up has no
-// terminal state yet but is genuinely awaited.
-//
-// It lives here rather than beside the topology builders that named it because
-// the replica counters below need it and internal/cluster imports this package
-// rather than the other way round. cluster.TaskIsLive delegates to it, so the
-// placement views, the digests and every replica figure apply one rule.
+// Swarm keeps a record for every replica it has replaced, and those are history
+// rather than slots awaiting a start. DesiredState decides it, not the current
+// state. It lives here because the replica counters below need it.
 func TaskIsLive(task swarm.Task) bool {
 	return task.DesiredState != swarm.TaskStateShutdown &&
 		task.DesiredState != swarm.TaskStateRemove
 }
 
-// CountsAsRunningReplica reports whether a task should be counted towards a
-// service's running replica total.
-//
-// Status.State alone is not enough, for two reasons that both bite hard. A
-// task Swarm has marked for shutdown — during a rolling update, or a
-// scale-down — keeps Status.State: running while it drains, so counting it
-// reports more replicas than the service has. And a task Docker has since
-// garbage-collected past its history limit keeps whatever status it was last
-// inspected with *forever*, because the inspect that would correct it 404s: a
-// service restarting in a loop accumulated thirty such records, every one of
-// them reported running, inflating find, describe, the placement view and the
-// convergence wait at once.
-// It is exported because internal/cluster's digests need the same rule: they
-// counted Status.State alone and so disagreed with every figure below about
-// the same service, which is the drift this predicate exists to prevent.
+// CountsAsRunningReplica reports whether a task counts towards a service's
+// running replica total. Status.State alone is not enough twice over: a task
+// marked for shutdown keeps it running while it drains, and one Docker has
+// garbage-collected keeps its last-inspected status forever.
 func CountsAsRunningReplica(task swarm.Task) bool {
 	return task.Status.State == swarm.TaskStateRunning && TaskIsLive(task)
 }
@@ -831,14 +807,10 @@ func (c *Cache) RunningTaskCount(serviceID string) int {
 	return count
 }
 
-// RunningTaskCounts returns the number of running tasks for every service that
-// has one, in a single pass under one read lock.
-//
-// It exists because the alternative — handing a caller ListTasks() so it can
-// count them itself — clones and sorts the entire task table to answer a
-// question about one integer per service. On a cluster of a few thousand tasks
-// that is close to a megabyte copied per call, and the MCP completion path
-// walks it on every keystroke.
+// RunningTaskCounts returns the number of running tasks per service, in a
+// single pass under one read lock. The alternative — handing a caller
+// ListTasks() to count itself — clones and sorts the whole task table to answer
+// a question about one integer per service, on a path completion walks per keystroke.
 func (c *Cache) RunningTaskCounts() map[string]int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -1193,11 +1165,9 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 		c.services = services
 	}
 
-	// Detect new failures missed by the live event stream: any task whose state
-	// is failed/rejected/orphaned in the new snapshot but was not in that state
-	// in the previous snapshot is recorded here. The snapshot-load path
-	// overwrites these counts via Restore() afterwards, so this only affects
-	// the periodic full-sync path.
+	// Failures the live event stream missed: a task failed/rejected/orphaned
+	// here but not in the previous snapshot. The snapshot-load path overwrites
+	// these counts through Restore afterwards, so only the full sync is affected.
 	var newFailures []swarm.Task
 	if data.HasTasks {
 		for id, t := range tasks {

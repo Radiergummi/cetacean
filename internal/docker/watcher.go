@@ -188,12 +188,9 @@ func (w *Watcher) fullSync(ctx context.Context) error {
 }
 
 // sync re-fetches the cluster and replaces the cache with the result.
-//
-// tracksConnection says whether this sync speaks for the event stream's
-// health. A watcher-driven sync does; a manual resync does not — it runs
-// beside a healthy stream, and letting a transient failure there report the
-// engine as unreachable left /-/health and the dashboard claiming "Cetacean
-// cannot reach Docker" until the next periodic sync, five minutes later.
+// tracksConnection says whether this sync speaks for the event stream's health:
+// a watcher-driven one does, a manual resync does not — it runs beside a
+// healthy stream, and a transient failure there is not the engine going away.
 func (w *Watcher) sync(ctx context.Context, tracksConnection bool) error {
 	start := time.Now()
 	slog.Info("starting full sync")
@@ -253,10 +250,7 @@ const (
 	workerCount    = 4
 
 	// defaultSettleDelay is how long Swarm is given to reconcile a task record
-	// after the container behind it starts or exits. Long enough that the
-	// second read sees the state the event announced, short enough that the
-	// count is only briefly wrong — the alternative was waiting out the
-	// five-minute re-sync.
+	// after its container starts or exits.
 	defaultSettleDelay = 750 * time.Millisecond
 
 	// defaultSyncInterval is how often the event loop re-reads the whole
@@ -264,13 +258,7 @@ const (
 	defaultSyncInterval = 5 * time.Minute
 
 	// settleAttempts bounds how many times a task is re-read while its record
-	// still lags. One read is right almost always and wrong exactly when it
-	// matters: a loaded manager that has not reconciled within the first
-	// delay leaves the miscount standing until the five-minute re-sync, and
-	// nothing re-arms it. In practice a following container event usually
-	// schedules another attempt, but "usually" is what this fix was meant to
-	// stop relying on. Three attempts with the delay doubling covers about
-	// five seconds of reconcile lag.
+	// still lags, each wait twice the last. Three covers about five seconds.
 	settleAttempts = 3
 )
 
@@ -285,11 +273,9 @@ type coalesced struct {
 	action string
 }
 
-// actionSettle marks a task update triggered by its container ending, and
-// actionStarted one triggered by its container coming up. Both need a second
-// read once Swarm has caught up — in opposite directions, which is what
-// taskCaughtUp resolves. They are internal to the watcher and never reach
-// applyRemove, which only ever tests for "remove".
+// actionSettle marks a task update triggered by its container ending,
+// actionStarted one by its container starting. Both need a second read once
+// Swarm has caught up, in opposite directions -- see taskCaughtUp.
 const (
 	actionSettle  = "settle"
 	actionStarted = "started"
@@ -488,36 +474,10 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	}
 }
 
-// scheduleSettle re-reads a task shortly after its container started or
-// exited.
-//
-// Docker emits no task events, so a container event is the only signal a task
-// changed — and Swarm reconciles the task record a moment *after* the
-// container it wraps. Inspecting on the event itself therefore reads a record
-// that has not caught up yet, and since nothing further arrives the cache
-// keeps that reading until the five-minutely full re-sync corrects it.
-//
-// Both ends of a container's life have the hazard, with opposite symptoms.
-// A container dying is read as still running, desired running, so everything
-// derived from it overcounts: a service crash-looping every eight seconds
-// reported four running replicas against a desired one, `find` and the
-// placement view repeated the figure, and the convergence wait behind every
-// deploy could not settle because the count it waited on never fell. A
-// container starting is read as still `starting`, so the same figures
-// *undercount*: the dashboard showed a task starting for minutes, and the
-// convergence wait could not settle because the count it waited on never rose
-// — which hung `Prefer: wait`, the MCP `watch` tool and every task-augmented
-// mutation until the re-sync.
-//
-// A short series of delayed reads closes both, each waiting twice as long as
-// the one before and the series stopping the moment the record catches up — so
-// the common case costs exactly one read, and a daemon slow to reconcile still
-// gets corrected in seconds rather than at the next full re-sync. It is
-// skipped entirely when the first inspect already saw the record it was
-// waiting for.
-//
-// A task the daemon has since forgotten is not a failure of this: the inspect
-// 404s, and inspectAndApply drops the record, which settles it just as well.
+// scheduleSettle re-reads a task shortly after its container started or exited.
+// Docker emits no task events, and Swarm reconciles the record after the
+// container it wraps, so the inspect on the event reads one that has not caught
+// up in either direction. Each read waits twice as long as the last.
 func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action string) {
 	if task, ok := w.store.GetTask(key.id); !ok || taskCaughtUp(task, action) {
 		return
@@ -552,15 +512,10 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action strin
 	})
 }
 
-// taskCaughtUp reports whether Swarm's record of a task has caught up with the
-// container event that prompted the re-read, so there is nothing a further
-// read could learn. DesiredState is the orchestrator's own answer and moves
-// first; Status follows.
-//
-// The two directions have opposite resting states, which is why one predicate
-// cannot serve both: a task whose container has just come up is unsettled
-// until its status reads running, while one whose container has just died is
-// unsettled *while* it still reads running.
+// taskCaughtUp reports whether Swarm's record has caught up with the container
+// event that prompted the re-read. DesiredState moves first, Status follows.
+// The two directions rest at opposite states, which is why one predicate
+// cannot serve both.
 func taskCaughtUp(task swarm.Task, action string) bool {
 	if !cache.TaskIsLive(task) || cache.IsTerminalState(task.Status.State) {
 		return true
@@ -611,19 +566,10 @@ func (w *Watcher) handleEvent(ctx context.Context, msg events.Message) {
 func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
 	resource, err := w.inspectWithRetry(ctx, key)
 	if err != nil {
-		// A not-found that outlived every retry is the daemon's answer rather
-		// than a race, so the resource is gone and the cached record with it.
-		// Swarm garbage-collects a task's record once it falls out of the
-		// history window and emits no removal event when it does, so this is
-		// the only signal that it went: holding the record left a task Docker
-		// had forgotten in every listing, still carrying the status it was
-		// last inspected with, until the five-minutely re-sync swept it. On a
-		// service restarting in a loop that is dozens of phantom replicas.
-		//
-		// This is decided here rather than inside inspectWithRetry because the
-		// retries are what tell the two cases apart: during a stack deploy a
-		// 404 means "not registered yet", and giving up on the first one would
-		// drop resources that were about to exist.
+		// A not-found that outlived every retry is the daemon's answer, not a
+		// race: Swarm garbage-collects a task's record without emitting a
+		// removal event, so this is the only signal it went. The retries are
+		// what tell it from "not registered yet" during a stack deploy.
 		if cerrdefs.IsNotFound(err) {
 			slog.Debug(
 				"resource no longer exists; dropping cached record",
@@ -679,17 +625,13 @@ type refreshRequest struct {
 	done chan error
 }
 
-// Refresh re-reads one resource from the engine and applies it to the cache,
-// so a caller that must not act on a stale record can make that record current
-// without waiting for the event stream. A resource the engine no longer has is
-// dropped, which is the same answer the event stream would eventually give.
-//
-// The work runs on the event loop, which applies every other write: inspecting
-// here and applying from the caller's goroutine lets a remove processed in
-// between be undone, putting a deleted resource back into every listing until
-// the next re-sync. With no loop running there is nothing to serialize
-// against, and waiting for one would stall the write this refresh precedes.
+// Refresh re-reads one resource from the engine into the cache, for a caller
+// that cannot wait for the event stream. The work runs on the event loop,
+// which applies every other write: applying from the caller's goroutine lets a
+// remove arriving mid-inspect be undone, resurrecting the resource.
 func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
+	// Nothing to serialize against with no loop running, and waiting for one
+	// would stall the write this refresh precedes.
 	if !w.loopRunning.Load() {
 		return w.refreshNow(ctx, kind, id)
 	}
@@ -710,11 +652,9 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 	}
 }
 
-// refreshNow is Refresh's work, on whichever goroutine is entitled to apply it.
-//
-// Unlike the event-driven path, an inspect failure is returned rather than
-// logged: the caller asked precisely because it cannot tolerate a stale
-// answer, so it has to be told the refresh did not happen.
+// refreshNow is Refresh's work, on whichever goroutine may apply it. An
+// inspect failure is returned rather than logged: the caller asked because it
+// cannot tolerate a stale answer.
 func (w *Watcher) refreshNow(ctx context.Context, kind, id string) error {
 	resource, err := w.client.Inspect(ctx, events.Type(kind), id)
 	if err != nil {
@@ -733,10 +673,9 @@ func (w *Watcher) refreshNow(ctx context.Context, kind, id string) error {
 }
 
 // inspectWithRetry retries transient inspect failures with capped exponential
-// backoff. Rapid stack deploys often race: an event arrives for a resource the
-// daemon hasn't fully registered yet (404), or a network glitch surfaces. The
-// previous one-shot inspect would silently drop the event and leave the cache
-// stale until the periodic 5-minute re-sync.
+// backoff. Rapid stack deploys race: an event arrives for a resource the daemon
+// has not registered yet. A one-shot inspect drops the event and leaves the
+// cache stale until the periodic re-sync.
 func (w *Watcher) inspectWithRetry(ctx context.Context, key eventKey) (any, error) {
 	const maxAttempts = 4
 	backoff := 100 * time.Millisecond

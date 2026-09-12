@@ -9,13 +9,9 @@ import (
 
 const jsonLDContext = "/api/context.jsonld"
 
-// DetailResponse is a JSON-LD wrapped detail response with deterministic
-// key ordering. The @context, @id, @type fields are serialized first,
-// followed by extra fields.
-//
-// extra may be a map[string]any (keys sorted alphabetically) or a struct
-// (fields serialized in declaration order via JSON tags). Both produce
-// deterministic output suitable for stable ETags.
+// DetailResponse is a JSON-LD wrapped detail response. @context, @id and @type
+// serialize first, then extra -- a map (sorted) or a struct (declaration
+// order). The ordering is deterministic, so ETags are stable.
 type DetailResponse struct {
 	context string
 	id      string
@@ -148,14 +144,10 @@ func (i Item[T]) MarshalJSON() ([]byte, error) {
 	return buf, nil
 }
 
-// wrapItems maps a slice of T to []Item[T] using the given type name and ID
-// extractor.
-//
-// The extractor returns a bare path and absPath is applied here, so a
-// deployment under a base path cannot hand out an identifier that 404s beside
-// a correctly prefixed @context and Link-Template in the same document. Doing
-// it here rather than in each extractor is also what keeps a new listing from
-// reintroducing it.
+// wrapItems maps a slice of T to []Item[T]. The extractor returns a bare path
+// and absPath is applied here, not in each extractor, so a deployment under a
+// base path cannot hand out an identifier that 404s -- and a new listing
+// cannot reintroduce that.
 func wrapItems[T any](ctx context.Context, items []T, typ string, id func(T) string) []Item[T] {
 	out := make([]Item[T], len(items))
 	for index, v := range items {

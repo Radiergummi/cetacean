@@ -63,10 +63,9 @@ func forwardedOrigin(values []string) (proto, host string) {
 }
 
 // nodeAddr returns the IP address a Forwarded node identifier names. Of RFC
-// 7239 §6's four nodename forms only an IPv4 address and a bracketed IPv6
-// address name one; "unknown" and obfuscated identifiers report false. An
-// IPv4-mapped address is unmapped, so ::ffff:10.0.0.2 still matches an IPv4
-// trusted-proxy prefix.
+// 7239 §6's four nodename forms only a plain IPv4 and a bracketed IPv6 address
+// name one; "unknown" and obfuscated identifiers report false. An IPv4-mapped
+// address is unmapped, so ::ffff:10.0.0.2 still matches an IPv4 prefix.
 func nodeAddr(node string) (netip.Addr, bool) {
 	host := node
 

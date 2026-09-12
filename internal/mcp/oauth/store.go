@@ -217,24 +217,17 @@ func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
 	return out, true
 }
 
-// Rotate implements refresh-token rotation with theft detection.
-//
-// Algorithm:
-//  1. Hash the presented token.
-//  2. Replay check FIRST: if the hash is in consumed, burn the entire grant
-//     family and return RotateResult{Theft: true}.
-//  3. Look up in live tokens; if absent, return RotateResult{}.
-//  4. If expired, delete and return RotateResult{}.
-//  5. Move old hash to consumed, mint a fresh token, register it in tokens
-//     and grants, return RotateResult{OK: true, NewToken: ..., Data: ...}.
+// Rotate implements refresh-token rotation with theft detection. The replay
+// check runs first: a hash already in consumed burns the whole grant family.
+// A live token is then moved to consumed and a fresh one minted; an unknown
+// or expired one yields the zero result.
 func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateResult {
 	result, mutated := s.rotate(oldToken, ttl)
 
-	// Theft burns the grant family and an expired token tears it down, so
-	// those write as surely as a successful rotation does. An unknown token
-	// changes nothing, and must not write: anyone can post a made-up refresh
-	// token to the token endpoint, and rewriting the whole file for each one
-	// would turn that into an amplified write.
+	// Theft burns the grant family and an expired token tears it down, so both
+	// write as surely as a rotation does. An unknown token changes nothing and
+	// must not write: anyone can post a made-up token, and rewriting the file
+	// for each would make that an amplified write.
 	if mutated {
 		s.writeThrough()
 	}
@@ -350,15 +343,10 @@ func (s *RefreshTokenStore) revokeGrant(token string) (RefreshTokenData, bool) {
 	return s.revokeGrantLocked(grantID), true
 }
 
-// revokeGrantLocked removes every hash ever associated with grantID from both
-// tokens and consumed, then drops the grant record. It returns the identity
-// the family belonged to, read from its live token — a family has exactly one,
-// unless it has already expired, in which case the zero value comes back.
-//
-// Whether revoking a family should also drop the user's consent record is the
-// caller's decision, not this function's: an explicit revocation and a theft
-// must clear it, and an expiry must not, because consent outliving the refresh
-// token is the point of remembering it. Must be called with s.mu held.
+// revokeGrantLocked removes every hash associated with grantID and drops the
+// grant, returning the identity it belonged to — read from its live token, of
+// which a family has exactly one. Whether to drop the user's consent record
+// too is the caller's decision: a theft must, an expiry must not. Needs s.mu.
 func (s *RefreshTokenStore) revokeGrantLocked(grantID string) RefreshTokenData {
 	var owner RefreshTokenData
 

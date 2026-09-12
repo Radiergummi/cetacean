@@ -241,9 +241,8 @@ func TestServiceConvergedHandlesUnknownService(t *testing.T) {
 
 // A scale-down must not report success while the replicas it removed are still
 // running. The cache is filled asynchronously, so mid-write a 5-to-2 scale looks
-// like two desired against five running, or five against five, depending on
-// which half has landed; the wait refuses to judge anything older than the
-// version the write produced.
+// like two desired against five running, or five against five — so the wait
+// refuses to judge anything older than the version the write produced.
 func TestServiceConvergedWaitsForTheWriteToReachTheCache(t *testing.T) {
 	c := cache.New(nil)
 	seedService(t, c, "svc-1", 5 /* desired */, 5 /* running */)

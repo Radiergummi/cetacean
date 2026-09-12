@@ -108,12 +108,10 @@ func TestSizingChecker_Interval(t *testing.T) {
 	}
 }
 
-// TestSizingCheckerIgnoresServicesWithNoSeries — a Prometheus that answers
-// without error but returns no series for a service (no cAdvisor, an exporter
-// that has not scraped it yet, a service too new to have history) is silence,
-// not a measurement. Reading the absent key out of the result map yielded 0,
-// and 0 is under every over-provisioned threshold, so every service in a
-// cluster without container metrics was told to shrink to the floor.
+// A Prometheus that answers without error but returns no series for a service —
+// no cAdvisor, an exporter that has not scraped it, a service too new — is
+// silence, not a measurement. Reading the absent key yields 0, which is under
+// every over-provisioned threshold, so every service is told to shrink.
 func TestSizingCheckerIgnoresServicesWithNoSeries(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{

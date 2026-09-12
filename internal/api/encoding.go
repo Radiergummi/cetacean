@@ -114,10 +114,9 @@ func gzipEncode(body []byte) []byte {
 }
 
 // resolveEncoding picks the content-coding to serve for r, per RFC 9110
-// §12.5.3. A coding's weight is its q-value, else the "*" entry's, else 0;
-// zstd and gzip need a positive weight to be chosen at all, so identity is a
-// fallback of last resort rather than a q=1 competitor. At equal weight a
-// compressed coding beats identity and zstd beats gzip.
+// §12.5.3. A coding's weight is its q-value, else the "*" entry's, else 0, and
+// zstd and gzip need a positive one — so identity is a last resort rather than
+// a q=1 competitor. At equal weight, compressed beats identity and zstd gzip.
 func resolveEncoding(r *http.Request) Encoding {
 	header := r.Header.Get("Accept-Encoding")
 	if header == "" {

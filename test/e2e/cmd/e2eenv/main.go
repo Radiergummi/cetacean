@@ -1,11 +1,9 @@
 //go:build e2e
 
-// Command e2eenv brings the end-to-end environment up and leaves it running,
-// so the Playwright suite in frontend/e2e can be pointed at a reproducible
-// cluster instead of whatever the developer's machine happens to hold.
-//
-// With -history it instead relabels the baseline; see
-// fixtures.TouchForHistoryCLI.
+// Command e2eenv brings the end-to-end environment up and leaves it running, so
+// the Playwright suite can be pointed at a reproducible cluster rather than
+// whatever the developer's machine holds. With -history it instead relabels the
+// baseline; see fixtures.TouchForHistoryCLI.
 package main
 
 import (

@@ -94,10 +94,9 @@ func htmlUnacceptable(ctx context.Context) bool {
 }
 
 // negotiate resolves the effective content type from an extension suffix or
-// Accept header and stores it in the request context for downstream handlers.
-//
-// It resolves and records; it does not refuse. 406 is a statement about one
-// endpoint, and the route is not known here.
+// Accept header and stores it in the request context. It resolves and records;
+// it does not refuse. 406 is a statement about one endpoint, and the route is
+// not known here.
 func negotiate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Accept")

@@ -29,12 +29,10 @@ func TestMatchResource(t *testing.T) {
 		{"service:*", ":noname", false},  // empty type in resource
 		{"service:*", "service:", false}, // empty resource names never match
 
-		// A backslash escapes the character after it, which docs/authorization.md
-		// documents alongside the other metacharacters. It is significant whether
-		// the author meant it or not, so it is pinned in both directions: an
-		// escaped metacharacter stops being one, and an escape before an ordinary
-		// character disappears. Docker resource names cannot contain a backslash,
-		// so nothing a cluster actually holds is addressable by one.
+		// A backslash escapes the character after it, whether the author meant
+		// it or not, so it is pinned both ways: an escaped metacharacter stops
+		// being one, and an escape before an ordinary character disappears.
+		// Docker resource names cannot contain a backslash.
 		{`service:release-\*`, "service:release-*", true},
 		{`service:release-\*`, "service:release-1", false},
 		{`service:a\b`, "service:ab", true},

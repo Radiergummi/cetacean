@@ -25,17 +25,9 @@ import (
 )
 
 // This file drives the metrics domain against a real Prometheus holding
-// generated history. It reserves port 19020 (see README.md's reserved-ports
-// table).
-//
-// Everything the lane asserts is a number it put there. The series below are
-// counters rising by a fixed step every harness.SeedInterval, so `rate()` over
-// the [5m] window every query in the product uses yields an exact value rather
-// than one within a tolerance — which is what lets a case say "the CPU panel
-// reads 50%" instead of "the CPU panel reads something".
-//
-// Until this lane, internal/prometheus was covered end-to-end only in its
-// "Prometheus is not configured, answer 503" branch.
+// generated history, on port 19020. Everything it asserts is a number it put
+// there: the series below are counters rising by a fixed step every
+// harness.SeedInterval, so `rate()` over a [5m] window yields an exact value.
 
 const metricsPort = 19020
 
@@ -176,13 +168,10 @@ func TestMetricsStatusDetectsBothExporters(t *testing.T) {
 	}
 }
 
-// TestMetricsStatusReportsCadvisorMissing covers the state a cluster is
-// actually in while it is being set up, and the one the docs warn about: a
-// cAdvisor scraped under any job name but `cadvisor` is not detected, because
-// detection asks `up{job="cadvisor"}` rather than asking for the metric family
-// the way the node-exporter half does. The container series are all still
-// here, which is what makes the asymmetry visible — every chart on the page
-// has data, and the banner still reports the exporter as missing.
+// Covers a cAdvisor scraped under any job name but `cadvisor`, which detection
+// misses because it asks `up{job="cadvisor"}` rather than for the metric family
+// as the node-exporter half does. The container series are all still here, so
+// every chart has data while the banner reports the exporter missing.
 func TestMetricsStatusReportsCadvisorMissing(t *testing.T) {
 	proc, _ := startMetricsLaneWith(t, func(s harness.Series) bool {
 		return s.Name != "up" || s.Labels["job"] != "cadvisor"
@@ -524,14 +513,10 @@ const (
 	roomyMemoryUsage       = 32 * 1024 * 1024 // 6% of the reservation
 )
 
-// TestSizingRecommendationsReadTheSeededUsage drives the recommendation engine's
-// only Prometheus-dependent checker end to end. It is the reason the metrics
-// domain is worth seeding at all: the sizing rules turn measured usage into
-// advice a user is invited to apply with one click, and nothing had ever run
-// them against a Prometheus.
-//
-// Two services, chosen to reach both halves of the rules: one pinned just under
-// its limits, one given far more than it uses.
+// TestSizingRecommendationsReadTheSeededUsage drives the recommendation
+// engine's only Prometheus-dependent checker end to end. Two services, chosen
+// to reach both halves of the rules: one pinned just under its limits, one
+// given far more than it uses.
 func TestSizingRecommendationsReadTheSeededUsage(t *testing.T) {
 	env, address, hostname := metricsCluster(t)
 
@@ -571,11 +556,10 @@ func TestSizingRecommendationsReadTheSeededUsage(t *testing.T) {
 
 	proc, _ := seedAndStart(t, env, series, nil)
 
-	// The engine forces every checker once at startup and then leaves the
-	// sizing checker alone for five minutes, so the bound below is what makes
-	// this a test rather than a wait: findings that are not here within it are
-	// not coming until long after, and the startup tick is held behind the
-	// first cache sync precisely so they are here.
+	// The engine forces every checker once at startup and then leaves the sizing
+	// checker alone for five minutes, so the bound below is what makes this a
+	// test rather than a wait. The startup tick is held behind the first cache
+	// sync, so the findings are there by then.
 	want := map[string]string{
 		hot + "/cpu":      "at-limit",
 		hot + "/memory":   "at-limit",
@@ -655,15 +639,10 @@ func covers(recs []recommendation, want map[string]string) bool {
 
 // ─── the MCP transport over the same seed ───────────────────────────────
 
-// TestMCPGetMetricsReadsTheSameSeed drives `get_metrics`, the tool behind the
-// metrics widget. Its queries are deliberately a second copy of the ones the
-// dashboard composes in the browser — there is no shared query layer — so the
-// value of driving them here is that a copy which has drifted answers with a
-// different number than the REST side does against the same seed.
-//
-// It also covers what the tool does with an id: the target is resolved against
-// the cache and the *cached name* is what reaches the query, so a service is
-// addressable by either.
+// Drives `get_metrics`, the tool behind the metrics widget. Its queries are a
+// second copy of the ones the dashboard composes in the browser, so a drifted
+// copy answers differently from REST against the same seed. It also covers id
+// resolution: the cached name is what reaches the query.
 func TestMCPGetMetricsReadsTheSameSeed(t *testing.T) {
 	env, address, hostname := metricsCluster(t)
 
@@ -738,9 +717,8 @@ func TestMCPGetMetricsReadsTheSameSeed(t *testing.T) {
 
 // TestMCPGetMetricsReportsAMissingExporter covers the answer the tool gives
 // when every series comes back empty. An empty series alone cannot tell an
-// idle resource from a cluster with no cAdvisor, and `right_size_service`
-// instructs the model to stop on exactly that signal — so the tool probes for
-// the exporter rather than charting zeros.
+// idle resource from a cluster with no cAdvisor, so the tool probes for the
+// exporter rather than charting zeros.
 func TestMCPGetMetricsReportsAMissingExporter(t *testing.T) {
 	env, address, hostname := metricsCluster(t)
 
@@ -909,14 +887,10 @@ func rankedNames(t *testing.T, proc *sut.Process, args map[string]any) []string 
 	return names
 }
 
-// TestMCPRankMetricsOrdersTheSeededMembers drives the ranking form of
-// get_metrics, which has its own PromQL catalog — separate from the charting
-// one because the aggregation differs — and had never been executed against a
-// Prometheus at all.
-//
-// The seed ranks the services in one order by CPU and the exact reverse by
-// memory, so a ranking that read the wrong metric could not come back in the
-// right order by luck.
+// Drives the ranking form of get_metrics, which has its own PromQL catalog
+// because the aggregation differs. The seed ranks the services in one order by
+// CPU and the exact reverse by memory, so a ranking that read the wrong metric
+// could not come back in the right order by luck.
 func TestMCPRankMetricsOrdersTheSeededMembers(t *testing.T) {
 	env, address, hostname := metricsCluster(t)
 
@@ -1000,11 +974,9 @@ const flakyOnlyPolicy = `grants:
 `
 
 // TestMCPRankMetricsScopesByGrantBeforeRanking pins the rule rankScope exists
-// for: a caller's grants have to reach the query, not the result.
-//
-// The distinction is invisible for a caller granted the top of the ranking and
-// decisive for one granted the bottom, which is why the grant below is the
-// lowest-CPU service in the seed.
+// for: a caller's grants have to reach the query, not the result. The
+// distinction is decisive only for a caller granted the bottom of the ranking,
+// which is why the grant below is the lowest-CPU service in the seed.
 func TestMCPRankMetricsScopesByGrantBeforeRanking(t *testing.T) {
 	env, address, hostname := metricsCluster(t)
 
@@ -1095,12 +1067,9 @@ func atNodePressure(series []harness.Series, diskPercent, memoryPercent float64)
 }
 
 // TestNodePressureRecommendationsRespectTheThreshold drives the operational
-// checker's two Prometheus-dependent findings, which fire above 90% and are
-// the only critical recommendations the engine can raise about a node.
-//
-// The boundary is asserted from both sides, which the seed makes exact: the
-// rule is `usage <= 90` continues, so ninety per cent is deliberately not a
-// finding and the case would fail if the comparison were loosened to `<`.
+// checker's two Prometheus-dependent findings, which fire above 90%. The
+// boundary is asserted from both sides: the rule is `usage <= 90` continues,
+// so ninety per cent is deliberately not a finding.
 func TestNodePressureRecommendationsRespectTheThreshold(t *testing.T) {
 	t.Run("at the threshold, nothing is raised", func(t *testing.T) {
 		env, address, hostname := metricsCluster(t)
@@ -1208,15 +1177,10 @@ func findCategory(recs []recommendation, category string) (recommendation, bool)
 
 // ─── the SSE form of GET /metrics ───────────────────────────────────────
 
-// TestMetricsStreamPushesTheSeededValue drives `GET /metrics` with
-// `Accept: text/event-stream`, which every live chart in the dashboard opens
-// after its first JSON fetch. It is a different handler from the proxy the
-// same URL serves to a JSON client — content negotiation picks between them —
-// and it had never been driven.
-//
-// The two events it emits answer different questions and are asserted apart:
-// `initial` carries the whole range as a matrix, and each `point` carries one
-// instant value.
+// Drives `GET /metrics` with `Accept: text/event-stream`, which every live chart
+// opens after its first JSON fetch — a different handler from the proxy the
+// same URL serves a JSON client. The two events are asserted apart: `initial`
+// carries the whole range as a matrix, each `point` one instant value.
 func TestMetricsStreamPushesTheSeededValue(t *testing.T) {
 	proc, _ := startMetricsLane(t)
 

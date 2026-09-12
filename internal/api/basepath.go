@@ -53,11 +53,9 @@ func absURL(r *http.Request, path string) string {
 }
 
 // origin resolves the scheme and authority every outbound URI is built on:
-// server.public_url when configured, the request's own origin otherwise.
-// One resolution, so a document naming both a URL and a host names one host.
-//
-// server.public_url is validated as scheme and host with nothing after them
-// (config.ValidatePublicURL), so splitting it loses nothing.
+// server.public_url when configured, the request's own origin otherwise. One
+// resolution, so a document naming both a URL and a host names one host.
+// public_url is validated as scheme and host alone, so splitting loses nothing.
 func origin(r *http.Request) (scheme, host string) {
 	if base := PublicURLFromContext(r.Context()); base != "" {
 		if u, err := url.Parse(base); err == nil && u.Host != "" {
@@ -85,14 +83,9 @@ func originHostOf(r *http.Request) string {
 }
 
 // requestOrigin resolves the origin a client reached this request on, when
-// server.public_url is unset.
-//
-// A proxy's headers are believed only when auth.FromTrustedProxy vouches for
-// the peer, and the values are validated even then: forwarding a client's own
-// Host into X-Forwarded-Host is a common proxy configuration.
-//
-// r.Host is the remaining fallback and is also the client's. Only
-// server.public_url gives links that do not depend on the caller.
+// server.public_url is unset. A proxy's headers are believed only when
+// auth.FromTrustedProxy vouches for the peer, and validated even then. r.Host
+// is the fallback and is also the client's: only public_url is caller-independent.
 func requestOrigin(r *http.Request) (scheme, host string) {
 	scheme = "http"
 	if r.TLS != nil {

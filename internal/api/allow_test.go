@@ -278,14 +278,10 @@ func TestSetAllow_NilACL(t *testing.T) {
 	}
 }
 
-// TestAllowHeaderOffersNodePatchAtTierTwo fails while allow.go still calls a
-// node PATCH impactful, which hides the dashboard's labels editor on an API
-// that accepts the edit. TestEveryOperationIsGatedAtItsDeclaredTier holds the
-// route's own gate to the same tier but reads no Allow header, and
-// resourceWriteMethods is a second, hand-stated projection of it.
-//
-// The tier is asserted rather than read from that table: a walk deriving its
-// expectation from resourceWriteMethods would pass whatever the table said.
+// Fails while allow.go still calls a node PATCH impactful, which hides the
+// dashboard's labels editor on an API that accepts the edit. The gate is held to
+// the same tier elsewhere, but that reads no Allow header. The tier is asserted
+// rather than read from resourceWriteMethods, which would pass whatever it said.
 func TestAllowHeaderOffersNodePatchAtTierTwo(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{

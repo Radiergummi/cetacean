@@ -115,10 +115,9 @@ func newTestRouter(
 }
 
 // specFixtureIDs pairs each parameterised resource path in the spec with the
-// identifier that addresses it. resolvePath substitutes from it and
-// specTemplate inverts it, and both fixtures below seed these ids — one
-// vocabulary, so a walk cannot spend its probes on resources no fixture
-// holds.
+// identifier that addresses it. resolvePath substitutes from it and specTemplate
+// inverts it, and both fixtures seed these ids — one vocabulary, so a walk
+// cannot spend its probes on resources no fixture holds.
 var specFixtureIDs = map[string]string{
 	"/nodes/{id}":     "node1",
 	"/services/{id}":  "svc1",

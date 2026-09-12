@@ -10,9 +10,8 @@ import (
 
 // contentItem is one entry of a tool result's content array, decoded loosely
 // enough to tell a text item from a resource link. The tests below go through
-// the real transport rather than calling the handler, because the links are
-// attached where the CallToolResult is assembled — a handler returns only its
-// JSON text, so none of this exists until mcp-go has serialized the result.
+// the real transport, because the links are attached where the CallToolResult
+// is assembled and a handler returns only its JSON text.
 type contentItem struct {
 	Type     string `json:"type"`
 	URI      string `json:"uri"`

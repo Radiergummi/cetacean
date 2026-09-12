@@ -6,12 +6,9 @@ import (
 	"strings"
 )
 
-// NormalizeBasePath cleans input to canonical form: leading slash, no trailing
-// slash. Both "" and "/" normalize to "" (root/no prefix). Examples:
-//   - "cetacean"   → "/cetacean"
-//   - "/cetacean/" → "/cetacean"
-//   - ""           → ""
-//   - "/"          → ""
+// NormalizeBasePath cleans input to canonical form: a leading slash and no
+// trailing one, so "cetacean" and "/cetacean/" both become "/cetacean". Both ""
+// and "/" normalize to "", meaning no prefix.
 func NormalizeBasePath(s string) string {
 	if s == "" {
 		return ""

@@ -9,13 +9,9 @@ import (
 )
 
 // RestartTracker counts involuntary task terminations per service in fixed-size
-// time buckets. Used by the recommendation engine to flag flaky services without
-// relying on Prometheus.
-//
-// A task is "failed" when its observed state transitions into TaskStateFailed,
-// TaskStateRejected, or TaskStateOrphaned — these are the swarm states for
-// involuntary terminations. Voluntary shutdowns (rolling updates, scale-down)
-// use TaskStateShutdown and are intentionally not counted.
+// time buckets, so the recommendation engine can flag flaky services without
+// Prometheus. A task counts on transitioning into failed, rejected or orphaned;
+// a voluntary shutdown uses TaskStateShutdown and is not counted.
 type RestartTracker struct {
 	mu       sync.RWMutex
 	horizon  time.Duration
@@ -48,18 +44,9 @@ func NewRestartTracker(horizon, bucket time.Duration) *RestartTracker {
 }
 
 // TrackingSince is the earliest moment the tracker can account for, and so the
-// start of the only window its counts honestly describe.
-//
-// A count is labelled by the window asked for, but the tracker is built at
-// startup: a freshly-restarted Cetacean answered "107 failures over the past
-// 7d" for a service that had failed some twenty thousand times over two days,
-// and reported the identical figure for the hour and the week — which is
-// precisely the comparison a reader uses to tell a new fault from a chronic
-// one. Callers report this beside the counts so the two cases separate.
-//
-// It is the later of when this tracker started observing and the retention
-// horizon, because buckets past the horizon are pruned: claiming to account
-// for them would be the same misstatement in the other direction.
+// start of the only window its counts honestly describe: a count is labelled by
+// the window asked for, but a young process reports the same figure for the
+// hour and the week. It is the later of that start and the retention horizon.
 func (rt *RestartTracker) TrackingSince() time.Time {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
@@ -174,10 +161,9 @@ func (rt *RestartTracker) Snapshot() RestartTrackerSnapshot {
 }
 
 // Restore replaces the tracker's state from a snapshot, pruning stale buckets.
-// Bucket size and horizon from the snapshot are honored only if compatible
-// with the current tracker; mismatches keep the existing settings and the
-// snapshot data is bucketed under those settings as-is (callers should ensure
-// the snapshot was produced with matching settings).
+// The snapshot's bucket size and horizon are honoured only if compatible;
+// otherwise the existing settings stand and the data is bucketed under them
+// as-is, so a caller should snapshot and restore with matching settings.
 func (rt *RestartTracker) Restore(snap RestartTrackerSnapshot) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
