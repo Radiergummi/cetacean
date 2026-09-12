@@ -20,13 +20,13 @@ func TestRepresentationsReadsBothNegotiationForms(t *testing.T) {
 		{"GET /cluster", []Representation{RepresentationJSON, RepresentationHTML}},
 		{"GET /services", []Representation{
 			RepresentationJSON, RepresentationHTML, RepresentationSSE,
-			RepresentationAtom, RepresentationJSONFeed,
+			RepresentationAtom, RepresentationJSONFeed, RepresentationCSV,
 		}},
 
 		// A feedHandlers composite literal naming its fields.
 		{"GET /history", []Representation{
 			RepresentationJSON, RepresentationHTML,
-			RepresentationAtom, RepresentationJSONFeed,
+			RepresentationAtom, RepresentationJSONFeed, RepresentationCSV,
 		}},
 
 		// The hand-written switch, which no helper call describes.

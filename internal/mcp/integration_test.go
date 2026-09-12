@@ -244,10 +244,13 @@ func newOAuthIntegrationServer(
 	}
 	t.Cleanup(srv.Close)
 
-	issuer := &oauth.TokenIssuer{
-		SigningKey: key,
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "https://cetacean.example.com/mcp",
+	issuer, err := oauth.NewTokenIssuer(
+		key,
+		"https://cetacean.example.com",
+		"https://cetacean.example.com/mcp",
+	)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 	return srv.Handler(), issuer
 }
@@ -276,7 +279,7 @@ func TestMCPIntegration_ResourcesReadHonoursACL(t *testing.T) {
 	handler, issuer := newOAuthIntegrationServer(t, c, e)
 
 	token, err := issuer.IssueAccessToken(
-		oauth.AccessTokenClaims{Subject: "agent@example.com"},
+		oauth.AccessTokenClaims{Subject: "agent@example.com", ClientID: "agent-client"},
 		5*time.Minute,
 	)
 	if err != nil {
@@ -331,7 +334,7 @@ func TestMCPIntegration_FindToolFiltersByACL(t *testing.T) {
 	handler, issuer := newOAuthIntegrationServer(t, c, e)
 
 	token, err := issuer.IssueAccessToken(
-		oauth.AccessTokenClaims{Subject: "agent@example.com"},
+		oauth.AccessTokenClaims{Subject: "agent@example.com", ClientID: "agent-client"},
 		5*time.Minute,
 	)
 	if err != nil {

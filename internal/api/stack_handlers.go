@@ -10,6 +10,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -30,6 +31,7 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 		},
 		itemType: "Stack",
 		idFunc:   stackID,
+		rows:     cluster.RowsForStacks,
 	})
 }
 

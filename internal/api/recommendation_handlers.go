@@ -24,6 +24,11 @@ func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request)
 		results = []recommendations.Recommendation{}
 	}
 
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		writeCSV(w, r, "recommendations", csvTableForRecommendations(results))
+		return
+	}
+
 	summary := recommendations.ComputeSummary(results)
 	writeCachedJSON(
 		w,

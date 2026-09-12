@@ -766,6 +766,93 @@ paths:
                   limit: "urn:cetacean:limit"
                   offset: "urn:cetacean:offset"
 
+  /opensearch.xml:
+    get:
+      operationId: getOpenSearchDescription
+      tags: [Documentation]
+      summary: OpenSearch description document
+      description: |
+        Describes the cluster search so a browser can offer it from the address
+        bar. Templates are absolute, built from `server.public_url` when set.
+      responses:
+        "200":
+          description: OpenSearch description
+          content:
+            application/opensearchdescription+xml:
+              schema:
+                type: string
+              example: |
+                <?xml version="1.0" encoding="UTF-8"?>
+                <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+                  <ShortName>Cetacean</ShortName>
+                  <Description>Search services, stacks, nodes, tasks, configs, secrets, networks and volumes in the Swarm cluster</Description>
+                  <InputEncoding>UTF-8</InputEncoding>
+                  <Url type="text/html" template="https://cetacean.example.com/search?q={searchTerms}"/>
+                </OpenSearchDescription>
+
+  /.well-known/api-catalog:
+    get:
+      operationId: getAPICatalog
+      tags: [Documentation]
+      summary: API catalog
+      description: |
+        Lists the APIs this deployment publishes, as an RFC 9264 linkset at the
+        RFC 9727 well-known URI. Each `item` names one API; the contexts beside
+        it carry its description, documentation and status links. The MCP server
+        appears only when enabled, and its metadata only when an authorization
+        server is wired for it.
+      security: []
+      responses:
+        "200":
+          description: API catalog
+          content:
+            application/linkset+json:
+              schema:
+                type: object
+                required: [linkset]
+                properties:
+                  linkset:
+                    type: array
+                    items:
+                      type: object
+                      required: [anchor]
+                      properties:
+                        anchor:
+                          type: string
+                          format: uri
+                      additionalProperties:
+                        type: array
+                        items:
+                          type: object
+                          required: [href]
+                          properties:
+                            href:
+                              type: string
+                              format: uri
+                            type:
+                              type: string
+                            title:
+                              type: string
+              example:
+                linkset:
+                  - anchor: "https://cetacean.example.com/.well-known/api-catalog"
+                    item:
+                      - href: "https://cetacean.example.com/"
+                        title: "Cetacean REST API"
+                  - anchor: "https://cetacean.example.com/"
+                    service-desc:
+                      - href: "https://cetacean.example.com/api"
+                        type: "application/json"
+                        title: "OpenAPI description"
+                    describedby:
+                      - href: "https://cetacean.example.com/api/context.jsonld"
+                        type: "application/ld+json"
+                        title: "JSON-LD context"
+                    status:
+                      - href: "https://cetacean.example.com/-/health"
+                        type: "application/json"
+                        title: "Health"
+
   /api/errors:
     get:
       operationId: listErrorCodes
@@ -1988,6 +2075,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -2133,6 +2223,9 @@ paths:
                 total: 2
                 limit: 2
                 offset: 0
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -2222,14 +2315,18 @@ paths:
     patch:
       operationId: patchNodeLabels
       x-badges:
-        - name: "operations-level:3"
+        - name: "operations-level:2"
           position: after
-          color: red
+          color: orange
       tags: [Nodes]
       summary: Patch node labels
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the node labels.
         Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
+
+        Requires operations level 2 — one below the other node writes. Relabelling changes where
+        tasks may be placed; draining a node or demoting it from manager changes whether the swarm
+        stays healthy, so those stay at level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -2439,6 +2536,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -2589,6 +2689,9 @@ paths:
                 total: 3
                 limit: 3
                 offset: 0
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -4197,6 +4300,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -4403,6 +4509,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -4457,6 +4566,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -4671,6 +4783,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -4950,6 +5065,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -5229,6 +5347,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -5362,6 +5483,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -5625,6 +5749,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -5988,7 +6115,7 @@ components:
             instance: /plugins/vieux/sshfs:latest
             requestId: req_a1b2c3d4e5f6
     Forbidden:
-      description: Access denied by operations level or ACL
+      description: Access denied by operations level, ACL, or cross-origin protection
       content:
         application/problem+json:
           schema:
@@ -6022,6 +6149,16 @@ components:
                 title: Write Access Denied
                 status: 403
                 detail: "grants for service:webapp permit read but not write"
+                instance: /services/r8m2x5nk3p7q/image
+                requestId: req_a1b2c3d4e5f6
+            crossOriginBlocked:
+              summary: Cross-origin write blocked (CSR001)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/CSR001
+                title: Cross-Origin Request Blocked
+                status: 403
+                detail: "cross-origin request detected from Sec-Fetch-Site header"
                 instance: /services/r8m2x5nk3p7q/image
                 requestId: req_a1b2c3d4e5f6
 
@@ -6070,6 +6207,28 @@ components:
         `Accept: application/atom+xml` header or `.atom` URL suffix.
 
         Pagination parameters: `?before=<cursor>&limit=<n>` (default 50, max 200).
+
+    # ── CSV ────────────────────────────────────────────────────────────
+
+    CSVDocument:
+      type: string
+      description: |
+        RFC 4180 CSV with a header row, served as
+        `text/csv; charset=utf-8; header=present` under an RFC 6266
+        `Content-Disposition` naming a dated file. Request via
+        `Accept: text/csv` or a `.csv` URL suffix.
+
+        A resource list renders the compact row — name, state, and the one
+        secondary fact that identifies the type, plus replica counts where
+        they mean something — rather than the full Docker object. `/history`
+        and `/recommendations` carry their own columns.
+
+        Unlike the JSON representation, a request naming no page (`limit` or
+        `offset`) renders every row rather than the first 50: a truncated
+        export carries nothing in the file to say it was truncated. A `Range`
+        header is not honoured here, since this response is always `200` with
+        no `Content-Range`. `search`, `filter`, `sort` and ACL filtering apply
+        exactly as they do to the JSON.
 
     # ── Error ────────────────────────────────────────────────────────
 

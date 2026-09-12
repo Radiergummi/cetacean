@@ -85,6 +85,9 @@ func HandleResync(r Resyncer) http.HandlerFunc {
 	}
 }
 
+// profilePath answers from the identity on the request, never from the cache.
+const profilePath = "/profile"
+
 // HandleProfile returns the authenticated user's identity as JSON.
 // Registered with content negotiation so /profile serves the SPA for
 // browsers and JSON for API clients (/profile.json or Accept: application/json).

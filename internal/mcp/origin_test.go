@@ -14,13 +14,16 @@ import (
 // 403 (DNS-rebinding defense required by the MCP Streamable HTTP transport)
 // while letting allowed origins, empty origins, and wildcard config through.
 func TestOriginGuard(t *testing.T) {
-	newHandler := func(allowed []string) http.Handler {
+	newHandler := func(allowed []string, allowAny bool) http.Handler {
 		srv := newToolTestServer(
 			t,
 			cache.New(nil),
 			&fakeWriteClient{},
 			config.OpsReadOnly,
-			func(o *Options) { o.AllowedOrigins = allowed },
+			func(o *Options) {
+				o.AllowedOrigins = allowed
+				o.AllowAnyOrigin = allowAny
+			},
 		)
 		return srv.Handler()
 	}
@@ -37,30 +40,40 @@ func TestOriginGuard(t *testing.T) {
 	}
 
 	t.Run("forged origin is rejected", func(t *testing.T) {
-		h := newHandler([]string{"https://good.example"})
+		h := newHandler([]string{"https://good.example"}, false)
 		if got := post(h, "https://evil.example"); got != http.StatusForbidden {
 			t.Errorf("forged origin: status = %d, want %d", got, http.StatusForbidden)
 		}
 	})
 
 	t.Run("allowed origin passes", func(t *testing.T) {
-		h := newHandler([]string{"https://good.example"})
+		h := newHandler([]string{"https://good.example"}, false)
 		if got := post(h, "https://good.example"); got == http.StatusForbidden {
 			t.Errorf("allowed origin: status = %d, want not 403", got)
 		}
 	})
 
 	t.Run("missing origin passes", func(t *testing.T) {
-		h := newHandler([]string{"https://good.example"})
+		h := newHandler([]string{"https://good.example"}, false)
 		if got := post(h, ""); got == http.StatusForbidden {
 			t.Errorf("missing origin: status = %d, want not 403", got)
 		}
 	})
 
 	t.Run("wildcard allows any origin", func(t *testing.T) {
-		h := newHandler([]string{"*"})
+		h := newHandler([]string{"*"}, true)
 		if got := post(h, "https://anything.example"); got == http.StatusForbidden {
 			t.Errorf("wildcard origin: status = %d, want not 403", got)
+		}
+	})
+
+	// A "*" among real origins is a literal list to api.CORSConfig.Wildcard(),
+	// so it must be one here too: this guard used to read any "*" in the list
+	// as a wildcard and wave the same configuration through.
+	t.Run("a star among real origins is not a wildcard", func(t *testing.T) {
+		h := newHandler([]string{"*", "https://good.example"}, false)
+		if got := post(h, "https://evil.example"); got != http.StatusForbidden {
+			t.Errorf("star among origins: status = %d, want %d", got, http.StatusForbidden)
 		}
 	})
 }

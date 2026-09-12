@@ -108,7 +108,24 @@ func writeRawWithPrecomputedETag(
 	data []byte,
 	etag string,
 ) {
-	coding := negotiateCoding(w, r, data)
+	writeRawNegotiated(w, r, data, etag, func(coding Encoding) []byte {
+		body, _ := encodeBody(data, coding)
+
+		return body
+	})
+}
+
+// writeRawNegotiated negotiates a coding, answers a matching precondition with
+// 304 before touching the body, and otherwise writes what encode returns for
+// the negotiated coding.
+func writeRawNegotiated(
+	w http.ResponseWriter,
+	r *http.Request,
+	identity []byte,
+	etag string,
+	encode func(Encoding) []byte,
+) {
+	coding := negotiateCoding(w, r, identity)
 	etag = codedETag(etag, coding)
 
 	w.Header().Set("ETag", etag)
@@ -122,10 +139,8 @@ func writeRawWithPrecomputedETag(
 		return
 	}
 
-	body, _ := encodeBody(data, coding)
-
 	w.WriteHeader(http.StatusOK)
-	w.Write(body) //nolint:errcheck
+	w.Write(encode(coding)) //nolint:errcheck
 }
 
 // setJSONContentType labels the response as JSON unless the caller already

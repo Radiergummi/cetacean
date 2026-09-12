@@ -39,9 +39,9 @@ var resourceWriteMethods = map[string][]methodSpec{
 		{"DELETE", config.OpsImpactful},    // remove
 	},
 	"node": {
-		{"PUT", config.OpsImpactful},    // availability, role
-		{"PATCH", config.OpsImpactful},  // labels
-		{"DELETE", config.OpsImpactful}, // remove
+		{"PUT", config.OpsImpactful},       // availability, role
+		{"PATCH", config.OpsConfiguration}, // labels
+		{"DELETE", config.OpsImpactful},    // remove
 	},
 	"task": {
 		{"DELETE", config.OpsImpactful},

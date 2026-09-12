@@ -72,6 +72,14 @@ func variantSuffix(e Encoding) string {
 	}
 }
 
+// assetContentTypes names the types the mime package does not, consulted
+// before it rather than registered into it — mime.AddExtensionType mutates
+// process-global state. Without the .webmanifest entry the header goes unset
+// and http.ServeContent sniffs JSON as text/plain, which browsers must reject.
+var assetContentTypes = map[string]string{
+	".webmanifest": "application/manifest+json",
+}
+
 // assetCacheControl returns the Cache-Control value for a non-index asset path.
 // Hashed filenames under assets/ never change, so they are cached immutably;
 // everything else keeps the server's default.
@@ -127,7 +135,13 @@ func serveAsset(
 	// sniffs the compressed variant's bytes and reports application/gzip — a
 	// statement about the coding, not the resource. Identity is left to sniff,
 	// where the bytes are the resource.
-	contentType := mime.TypeByExtension(filepath.Ext(path))
+	extension := filepath.Ext(path)
+
+	contentType := assetContentTypes[extension]
+	if contentType == "" {
+		contentType = mime.TypeByExtension(extension)
+	}
+
 	if contentType == "" && coding != EncodingIdentity {
 		contentType = "application/octet-stream"
 	}

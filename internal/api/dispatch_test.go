@@ -151,18 +151,60 @@ func TestFeedLinkHeaders(t *testing.T) {
 		}
 	})
 
-	t.Run("feed Links preserve query string", func(t *testing.T) {
+	// The href carries only what the feed reads, so a parameter no feed
+	// declares must not come back — the rule feedQuery states for the links
+	// inside a feed body, now applied to the alternate Link headers too.
+	t.Run("feed Links drop parameters no feed reads", func(t *testing.T) {
 		handler := contentNegotiated(jsonH, feedHandlers{atom: atomH, jsonFeed: feedH}, spa)
-		req := httptest.NewRequest("GET", "/search?q=web&limit=10", nil)
+		req := httptest.NewRequest("GET", "/nodes?sort=name&unread=whatever", nil)
 		req = withContentType(req, ContentTypeJSON)
 		rec := httptest.NewRecorder()
 		handler(rec, req)
 
 		links := strings.Join(rec.Header().Values("Link"), ", ")
-		if !strings.Contains(links, "/search.atom?q=web&limit=10") {
+		for _, unwanted := range []string{"unread", "sort=name"} {
+			if strings.Contains(links, unwanted) {
+				t.Errorf("Link headers echo %q, which no feed reads: %q", unwanted, links)
+			}
+		}
+	})
+
+	// The inverse: the cursor pair every feed reads must survive, or an
+	// alternate link addresses the first page instead of this one.
+	t.Run("feed Links keep the pagination parameters", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{atom: atomH, jsonFeed: feedH}, spa)
+		req := httptest.NewRequest("GET", "/nodes?before=42&limit=10", nil)
+		req = withContentType(req, ContentTypeJSON)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		links := strings.Join(rec.Header().Values("Link"), ", ")
+		for _, want := range []string{"before=42", "limit=10"} {
+			if !strings.Contains(links, want) {
+				t.Errorf("Link headers dropped %q, which every feed reads: %q", want, links)
+			}
+		}
+	})
+
+	t.Run("feed Links preserve the parameters the feed reads", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{
+			atom:        atomH,
+			jsonFeed:    feedH,
+			queryParams: []string{"q"},
+		}, spa)
+		req := httptest.NewRequest("GET", "/search?q=web&limit=10", nil)
+		req = withContentType(req, ContentTypeJSON)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		// Sorted, not in the order they arrived: the href is now built by
+		// url.Values.Encode rather than pasted from RawQuery, so it is the
+		// canonical form the feed's own self link uses.
+		links := strings.Join(rec.Header().Values("Link"), ", ")
+		if !strings.Contains(links, "/search.atom?limit=10&q=web") {
 			t.Errorf("expected query params preserved in atom Link, got %q", links)
 		}
-		if !strings.Contains(links, "/search.feed?q=web&limit=10") {
+		if !strings.Contains(links, "/search.feed?limit=10&q=web") {
 			t.Errorf("expected query params preserved in feed Link, got %q", links)
 		}
 	})
@@ -186,6 +228,111 @@ func TestFeedLinkHeaders(t *testing.T) {
 		}
 		if !strings.Contains(links, "/nodes.feed") {
 			t.Errorf("expected /nodes.feed in Link header, got %q", links)
+		}
+	})
+}
+
+// TestSearchFeedReachesFeedQueryOnBothPaths drives the real registered route
+// and checks that ?q= survives, and an unread parameter does not, on both
+// paths that build a feed link: the alternate Link header, built at
+// registration, and the links inside the feed itself, built at render.
+//
+// Both read searchFeedParams, so they cannot disagree about the value — this
+// is a wiring check, not a drift guard. It fails if /search stops using
+// searchFeeds(), or if either path stops going through feedQuery.
+func TestSearchFeedReachesFeedQueryOnBothPaths(t *testing.T) {
+	router := newSeededTestRouter(t)
+	const target = "/search?q=app&limit=5&unread=whatever"
+
+	jsonReq := httptest.NewRequest("GET", target, nil)
+	jsonReq.Header.Set("Accept", "application/json")
+	jsonRec := httptest.NewRecorder()
+	router.ServeHTTP(jsonRec, jsonReq)
+
+	header := strings.Join(jsonRec.Header().Values("Link"), ", ")
+	if !strings.Contains(header, "q=app") {
+		t.Errorf("the alternate Link header addresses a different search: %q", header)
+	}
+	if strings.Contains(header, "unread") {
+		t.Errorf("Link header carries a parameter no feed reads: %q", header)
+	}
+
+	atomReq := httptest.NewRequest("GET", target, nil)
+	atomReq.Header.Set("Accept", "application/atom+xml")
+	atomRec := httptest.NewRecorder()
+	router.ServeHTTP(atomRec, atomReq)
+
+	body := atomRec.Body.String()
+	if atomRec.Code != http.StatusOK {
+		t.Fatalf("atom status = %d, want 200; body: %s", atomRec.Code, body)
+	}
+	if !strings.Contains(body, "q=app") {
+		t.Error("the feed's own links address a different search")
+	}
+	if strings.Contains(body, "unread") {
+		t.Error("the feed body carries a parameter no feed reads")
+	}
+}
+
+func TestContentNegotiatedCSV(t *testing.T) {
+	jsonH := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("json"))
+	})
+	spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("spa"))
+	})
+
+	// CSV is rendered by the handler that renders the JSON, off the list it
+	// already prepared, rather than by a second handler beside it.
+	t.Run("CSV dispatches to the list handler", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{csv: true}, spa)
+		req := withContentType(httptest.NewRequest("GET", "/services", nil), ContentTypeCSV)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		if rec.Body.String() != "json" {
+			t.Errorf("got %q, want the list handler's answer", rec.Body.String())
+		}
+	})
+
+	t.Run("an endpoint that renders no CSV refuses it", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{}, spa)
+		req := withContentType(httptest.NewRequest("GET", "/swarm", nil), ContentTypeCSV)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		if rec.Code != http.StatusNotAcceptable {
+			t.Errorf("got %d, want 406", rec.Code)
+		}
+		if strings.Contains(rec.Body.String(), "text/csv") {
+			t.Errorf("the refusal names text/csv as served: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("a CSV endpoint names text/csv when it refuses something else", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{csv: true}, spa)
+		req := withContentType(httptest.NewRequest("GET", "/services", nil), ContentTypeJGF)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		if rec.Code != http.StatusNotAcceptable {
+			t.Fatalf("got %d, want 406", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "text/csv") {
+			t.Errorf("the refusal does not name text/csv: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("the JSON response advertises the CSV alternate", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{csv: true}, spa)
+		req := withContentType(httptest.NewRequest("GET", "/services", nil), ContentTypeJSON)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		links := strings.Join(rec.Header().Values("Link"), ", ")
+		if !strings.Contains(links, `type="text/csv"`) ||
+			!strings.Contains(links, "/services.csv") {
+			t.Errorf("expected a text/csv alternate in Link, got %q", links)
 		}
 	})
 }

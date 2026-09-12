@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/api/types/volume"
 
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -45,5 +46,6 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 		},
 		itemType: "Volume",
 		idFunc:   func(v volume.Volume) string { return "/volumes/" + v.Name },
+		rows:     cluster.RowsForVolumes,
 	})
 }

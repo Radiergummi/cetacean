@@ -163,16 +163,16 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 }
 
 // RegisterRoutes registers the OIDC auth routes on the given mux.
-// The logout endpoint uses http.CrossOriginProtection (Go 1.25+) to prevent
-// cross-site logout attacks. It checks Sec-Fetch-Site first, then falls back
-// to Origin-vs-Host comparison, and allows non-browser clients through.
+//
+// Logout carries no cross-origin protection of its own: the router applies
+// http.CrossOriginProtection to every route, and a second one here would hold
+// a different set of trusted origins from the one the router mirrors out of
+// server.cors.origins — so a configured cross-origin dashboard would pass the
+// router's check and be refused by this one.
 func (p *OIDCProvider) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/login", p.handleLogin)
 	mux.HandleFunc("GET /auth/callback", p.handleCallback)
-	mux.Handle(
-		"POST /auth/logout",
-		http.NewCrossOriginProtection().Handler(http.HandlerFunc(p.handleLogout)),
-	)
+	mux.HandleFunc("POST /auth/logout", p.handleLogout)
 }
 
 func (p *OIDCProvider) handleLogin(w http.ResponseWriter, r *http.Request) {

@@ -548,7 +548,11 @@ func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 	}
 }
 
-func newSeededTestRouter(t testing.TB) http.Handler {
+// newSeededTestRouter builds a router over the shared write fixture. Callers
+// pass options to vary one thing about it — the operations level, say — so a
+// test that needs a differently configured server does not need a second
+// fixture to disagree with this one.
+func newSeededTestRouter(t testing.TB, opts ...testHandlersOption) http.Handler {
 	t.Helper()
 
 	stackLabels := map[string]string{"com.docker.stack.namespace": seededStack}
@@ -609,7 +613,12 @@ func newSeededTestRouter(t testing.TB) http.Handler {
 	return newTestRouterWithCache(
 		t,
 		c,
-		withWriteClient(seededWriteClient()),
-		withPluginClient(plugins),
+		append([]testHandlersOption{
+			withWriteClient(seededWriteClient()),
+			withPluginClient(plugins),
+			// The two log routes reach their streamer as soon as the service
+			// or task resolves, and a nil one panics there.
+			withDockerClient(&mockLogStreamer{}),
+		}, opts...)...,
 	)
 }

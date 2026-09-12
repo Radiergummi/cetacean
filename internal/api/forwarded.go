@@ -5,26 +5,61 @@ import (
 	"strings"
 )
 
-// forwardedNodes returns the node identifier named by each RFC 7239 Forwarded
-// element's "for" parameter, first proxy first — the ordering X-Forwarded-For
-// uses. Nodes are returned as they stand; nodeAddr decides which name an
-// address.
-func forwardedNodes(values []string) []string {
-	var nodes []string
+// forwardedParams returns the value every RFC 7239 Forwarded element gives the
+// named parameter, leftmost first.
+func forwardedParams(values []string, name string) []string {
+	var found []string
 
 	for _, value := range values {
 		for _, element := range splitOutsideQuotes(value, ',') {
 			for _, pair := range splitOutsideQuotes(element, ';') {
-				name, node, ok := strings.Cut(pair, "=")
-				if !ok || !strings.EqualFold(strings.TrimSpace(name), "for") {
+				key, param, ok := strings.Cut(pair, "=")
+				if !ok || !strings.EqualFold(strings.TrimSpace(key), name) {
 					continue
 				}
-				nodes = append(nodes, unquote(strings.TrimSpace(node)))
+				found = append(found, unquote(strings.TrimSpace(param)))
 			}
 		}
 	}
 
-	return nodes
+	return found
+}
+
+// forwardedNodes returns each Forwarded element's "for" node, first proxy
+// first — the ordering X-Forwarded-For uses.
+func forwardedNodes(values []string) []string {
+	return forwardedParams(values, "for")
+}
+
+// forwardedOrigin returns the "proto" and "host" of the first Forwarded
+// element, which is the hop that saw the client's connection. This is a
+// different rule from forwardedParams, which collects every occurrence across
+// every element.
+func forwardedOrigin(values []string) (proto, host string) {
+	if len(values) == 0 {
+		return "", ""
+	}
+
+	elements := splitOutsideQuotes(values[0], ',')
+	if len(elements) == 0 {
+		return "", ""
+	}
+
+	for _, pair := range splitOutsideQuotes(elements[0], ';') {
+		key, value, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+
+		switch {
+		case strings.EqualFold(strings.TrimSpace(key), "proto"):
+			proto = unquote(strings.TrimSpace(value))
+		case strings.EqualFold(strings.TrimSpace(key), "host"):
+			host = unquote(strings.TrimSpace(value))
+		}
+	}
+
+	return proto, host
 }
 
 // nodeAddr returns the IP address a Forwarded node identifier names. Of RFC

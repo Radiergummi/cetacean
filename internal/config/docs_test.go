@@ -237,104 +237,6 @@ func fileSuffixDocumentedVars(t *testing.T) map[string]bool {
 	return vars
 }
 
-const claudeMDPath = "../../CLAUDE.md"
-
-var backtickedEnvPattern = regexp.MustCompile("`(CETACEAN_[A-Z0-9_]+)`")
-
-// claudeMDEnvVars returns the set of CETACEAN_* env vars listed in the
-// Variable column of CLAUDE.md's "Environment variables" table. Reading only
-// that column keeps a name mentioned in prose elsewhere in the row — the
-// deprecated alias names its replacement — from counting as a row of its own.
-func claudeMDEnvVars(t *testing.T) map[string]bool {
-	t.Helper()
-
-	content, err := os.ReadFile(claudeMDPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", claudeMDPath, err)
-	}
-
-	vars := map[string]bool{}
-	inTable := false
-
-	for line := range strings.SplitSeq(string(content), "\n") {
-		trimmed := strings.TrimSpace(line)
-
-		if strings.HasPrefix(trimmed, "| Variable | Default | Required |") {
-			inTable = true
-
-			continue
-		}
-
-		if !inTable {
-			continue
-		}
-
-		if !strings.HasPrefix(trimmed, "|") {
-			inTable = false
-
-			continue
-		}
-
-		cells := strings.Split(strings.Trim(trimmed, "|"), "|")
-		if len(cells) == 0 {
-			continue
-		}
-
-		if match := backtickedEnvPattern.FindStringSubmatch(
-			strings.TrimSpace(cells[0]),
-		); match != nil {
-			vars[match[1]] = true
-		}
-	}
-
-	if len(vars) == 0 {
-		t.Fatalf(
-			"no CETACEAN_* variables found in the environment variables table in %s — "+
-				"the table's header text or format has changed",
-			claudeMDPath,
-		)
-	}
-
-	return vars
-}
-
-// claudeMDFileSuffixSentencePattern anchors on the one sentence in CLAUDE.md
-// that spells the _FILE-suffixed names out literally. Scoping to that sentence
-// rather than scanning the whole document matters because
-// CETACEAN_ACL_POLICY_FILE is named with a _FILE suffix on its own merits and
-// is not part of the secret-file convention. The pattern stops at the first
-// closing parenthesis because the clause after it hand-wraps in the source.
-var claudeMDFileSuffixSentencePattern = regexp.MustCompile(
-	"(?s)Secret settings also accept a `_FILE` suffix on their env var \\((.*?)\\)",
-)
-
-// claudeMDFileSuffixVars returns the _FILE-suffixed names listed in that one
-// sentence.
-func claudeMDFileSuffixVars(t *testing.T) map[string]bool {
-	t.Helper()
-
-	content, err := os.ReadFile(claudeMDPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", claudeMDPath, err)
-	}
-
-	match := claudeMDFileSuffixSentencePattern.FindStringSubmatch(string(content))
-	if match == nil {
-		t.Fatalf(
-			"no \"Secret settings also accept a `_FILE` suffix\" sentence found in %s — "+
-				"its wording has changed",
-			claudeMDPath,
-		)
-	}
-
-	vars := map[string]bool{}
-	for _, m := range backtickedEnvPattern.FindAllStringSubmatch(match[1], -1) {
-		vars[m[1]] = true
-	}
-
-	return vars
-}
-
 // # The comparison itself
 //
 // docDrift and diffDocs hold the rule from internal/contract/excused.go: an
@@ -417,14 +319,6 @@ var (
 	excusedUnread       = map[string]string{}
 )
 
-// excusedUndocumentedInCLAUDEMD and excusedUnreadInCLAUDEMD are the same
-// pair for CLAUDE.md's table. Also empty: CLAUDE.md's table lists the same
-// 66 variables as docs/configuration.mdx.
-var (
-	excusedUndocumentedInCLAUDEMD = map[string]string{}
-	excusedUnreadInCLAUDEMD       = map[string]string{}
-)
-
 // excusedFileSuffixUndocumented and excusedFileSuffixUnwired are the pair
 // for the narrower _FILE-convention check. Also empty: the five settings
 // wired through resolveSecret are exactly the five docs/configuration.mdx
@@ -446,30 +340,6 @@ func TestConfigEnvVarsMatchDocumentation(t *testing.T) {
 
 	for _, name := range drift.unexcusedUnread {
 		t.Errorf("%s is documented in %s but internal/config never reads it", name, configDocsPath)
-	}
-
-	for _, entry := range drift.staleExcuses {
-		t.Errorf("stale excuse in docs_test.go (no longer needed): %s", entry)
-	}
-}
-
-// TestConfigEnvVarsMatchCLAUDEMD holds the same surface against CLAUDE.md's
-// own copy of it, which the top-level CLAUDE.md documents as the canonical
-// list for anyone (human or agent) working in this repository.
-func TestConfigEnvVarsMatchCLAUDEMD(t *testing.T) {
-	drift := diffDocs(
-		readEnvVars(t),
-		claudeMDEnvVars(t),
-		excusedUndocumentedInCLAUDEMD,
-		excusedUnreadInCLAUDEMD,
-	)
-
-	for _, name := range drift.unexcusedUndocumented {
-		t.Errorf("%s is read by internal/config but not listed in %s", name, claudeMDPath)
-	}
-
-	for _, name := range drift.unexcusedUnread {
-		t.Errorf("%s is listed in %s but internal/config never reads it", name, claudeMDPath)
 	}
 
 	for _, entry := range drift.staleExcuses {
@@ -502,50 +372,6 @@ func TestFileSuffixConventionMatches(t *testing.T) {
 			"%s's card in %s says it accepts the _FILE suffix, but it is not wired "+
 				"through resolveSecret",
 			name, configDocsPath,
-		)
-	}
-
-	for _, entry := range drift.staleExcuses {
-		t.Errorf("stale excuse in docs_test.go (no longer needed): %s", entry)
-	}
-}
-
-// excusedFileSuffixUndocumentedInCLAUDEMD and
-// excusedFileSuffixUnwiredInCLAUDEMD are the same pair for CLAUDE.md's
-// spelled-out _FILE names. Also empty: the five names in its sentence are
-// exactly resolveSecretVars() with "_FILE" appended.
-var (
-	excusedFileSuffixUndocumentedInCLAUDEMD = map[string]string{}
-	excusedFileSuffixUnwiredInCLAUDEMD      = map[string]string{}
-)
-
-// TestFileSuffixConventionMatchesCLAUDEMD is the same check for CLAUDE.md,
-// which spells the _FILE-suffixed names out literally, so it compares at the
-// literal-name level rather than the base-setting level.
-func TestFileSuffixConventionMatchesCLAUDEMD(t *testing.T) {
-	wired := map[string]bool{}
-	for name := range resolveSecretVars(t) {
-		wired[name+"_FILE"] = true
-	}
-
-	drift := diffDocs(
-		wired,
-		claudeMDFileSuffixVars(t),
-		excusedFileSuffixUndocumentedInCLAUDEMD,
-		excusedFileSuffixUnwiredInCLAUDEMD,
-	)
-
-	for _, name := range drift.unexcusedUndocumented {
-		t.Errorf(
-			"%s is wired through resolveSecret but not named in %s's _FILE-suffix sentence",
-			name, claudeMDPath,
-		)
-	}
-
-	for _, name := range drift.unexcusedUnread {
-		t.Errorf(
-			"%s is named in %s's _FILE-suffix sentence but not wired through resolveSecret",
-			name, claudeMDPath,
 		)
 	}
 

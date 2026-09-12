@@ -76,6 +76,8 @@ the config file.
 
 <ConfigParam name="server.cors.origins" flag="-cors-origins" env="CETACEAN_CORS_ORIGINS">
   Origins allowed to make cross-origin requests to the API, as a comma-separated list, e.g. `https://admin.example.com`, or `*` for any. When unset, no CORS headers are sent and browsers block cross-origin requests.
+
+  The same origins are trusted for cross-origin writes; `*` cannot be, so with a wildcard browsers may read the API from any origin while cross-origin writes are refused.
 </ConfigParam>
 
 <ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">
@@ -246,7 +248,7 @@ already has.
 </ConfigParam>
 
 <ConfigParam name="mcp.signing_key" env="CETACEAN_MCP_SIGNING_KEY">
-  HMAC-SHA256 key signing the JWTs Cetacean issues. When unset, a fresh key is generated at startup and every existing token becomes invalid, so set it for any deployment that should survive a restart. Accepts the `_FILE` suffix.
+  Root secret the token-signing key and the consent page's CSRF key are each derived from. When unset, a fresh key is generated at startup and every existing token becomes invalid, so set it for any deployment that should survive a restart. Generate one with `openssl rand -hex 32`. Cetacean refuses to start unless the value decodes as hex or base64 to exactly 32 bytes: the public half of the signing key is published and unauthenticated, so a guessable root could be recovered from it. Accepts the `_FILE` suffix.
 </ConfigParam>
 
 <ConfigParam name="mcp.access_token_ttl" env="CETACEAN_MCP_ACCESS_TOKEN_TTL" default="1h">

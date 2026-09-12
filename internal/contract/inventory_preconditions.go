@@ -36,7 +36,9 @@ func PreconditionedRoutes() ([]Route, error) {
 			return
 		}
 
-		preconds, precondErr = collectPreconditioned(fset, file, routerSource)
+		preconds, precondErr = collectPreconditioned(
+			fset, file, routerSource, packageStringConsts(routerSource),
+		)
 	})
 
 	return preconds, precondErr
@@ -53,14 +55,19 @@ func parsePreconditionedFromSource(name, source string) ([]Route, error) {
 		return nil, fmt.Errorf("parse %s: %w", name, err)
 	}
 
-	return collectPreconditioned(fset, file, name)
+	return collectPreconditioned(fset, file, name, fileStringConsts(file))
 }
 
 // collectPreconditioned finds the registrations that carry h.precond. It runs
 // in two passes because a chain variable may be defined after nothing and used
 // later: the first resolves which identifiers carry the middleware, the second
 // reads the registrations.
-func collectPreconditioned(fset *token.FileSet, file *ast.File, name string) ([]Route, error) {
+func collectPreconditioned(
+	fset *token.FileSet,
+	file *ast.File,
+	name string,
+	consts map[string]string,
+) ([]Route, error) {
 	sites := precondCallSites(file)
 	if len(sites) == 0 {
 		return nil, fmt.Errorf(
@@ -99,7 +106,7 @@ func collectPreconditioned(fset *token.FileSet, file *ast.File, name string) ([]
 			return true
 		}
 
-		patterns, ok := resolvePatternLiterals(call.Args[0], enclosingRangeStmt(ancestors))
+		patterns, ok := resolvePatternLiterals(call.Args[0], enclosingRangeStmt(ancestors), consts)
 		if !ok {
 			bad = append(bad, fmt.Sprintf(
 				"%s: preconditioned registration with a non-literal pattern",

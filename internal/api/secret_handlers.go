@@ -46,5 +46,6 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 		},
 		itemType: "Secret",
 		idFunc:   func(s swarm.Secret) string { return "/secrets/" + s.ID },
+		rows:     cluster.RowsForSecrets,
 	})
 }

@@ -162,7 +162,7 @@ func searchFeedData(
 	limit int,
 ) feedData {
 	data := historyFeedData(r, title, entries, beforeID, limit)
-	data.QueryParams = []string{"q"}
+	data.QueryParams = searchFeedParams
 
 	return data
 }
@@ -408,20 +408,15 @@ func (h *Handlers) filterHistoryACL(
 }
 
 // feedID builds a tag URI (RFC 4151) for the feed: tag:{host},{year}:{path}.
-// {host} is server.public_url's host when configured, otherwise r.Host.
+// The host is the one the feed's own links carry; only server.public_url makes
+// it permanent, which is what RFC 4151 asks of it.
 // The year 2026 is the date the tag namespace was minted and must remain constant.
 func feedID(r *http.Request) string {
-	// RFC 4151 tag URIs are permanent identifiers, so prefer the configured
-	// origin: derived from r.Host, an entry's identity changes with the
-	// hostname a reader happened to reach the server by.
-	host := r.Host
-	if base := PublicURLFromContext(r.Context()); base != "" {
-		if u, err := url.Parse(base); err == nil {
-			host = u.Host
-		}
-	}
-
-	return fmt.Sprintf("tag:%s,2026:%s", host, absPath(r.Context(), r.URL.Path))
+	return fmt.Sprintf(
+		"tag:%s,2026:%s",
+		originHostOf(r),
+		absPath(r.Context(), r.URL.Path),
+	)
 }
 
 // parseFeedPagination reads ?before= and ?limit= from the query string.
@@ -453,16 +448,17 @@ func parseFeedPagination(r *http.Request) (beforeID uint64, limit int) {
 // beyond these declares it in feedData.QueryParams.
 var feedPaginationParams = []string{"before", "limit"}
 
-// feedQuery returns the subset of r's query this feed's links may carry: the
-// pagination pair every feed reads, plus whatever else data declared.
+// searchFeedParams names the parameter only the search feed reads.
+var searchFeedParams = []string{"q"}
+
+// feedQuery returns the subset of r's query a feed's links may carry: the
+// pagination pair every feed reads, plus whatever else the caller declares.
 //
-// The rest of the raw query is attacker-chosen text, and reflecting it into a
-// compressed feed beside ACL-filtered resource names is the BREACH shape. The
-// set is per-feed rather than global because ?q= is read by handleFeedSearch
-// alone, and echoing it from a compressed feed would rebuild that shape.
-func feedQuery(r *http.Request, data feedData) url.Values {
+// Reflecting the rest of the raw query into a compressed feed beside
+// ACL-filtered resource names is the BREACH shape.
+func feedQuery(r *http.Request, extra []string) url.Values {
 	source := r.URL.Query()
-	kept := make(url.Values, len(feedPaginationParams)+len(data.QueryParams))
+	kept := make(url.Values, len(feedPaginationParams)+len(extra))
 
 	keep := func(names []string) {
 		for _, name := range names {
@@ -473,7 +469,7 @@ func feedQuery(r *http.Request, data feedData) url.Values {
 	}
 
 	keep(feedPaginationParams)
-	keep(data.QueryParams)
+	keep(extra)
 
 	return kept
 }

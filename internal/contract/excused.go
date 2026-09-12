@@ -167,7 +167,6 @@ var excusedUncovered = map[string]string{
 	"PUT /services/{id}/endpoint-mode":      "mutates through the Docker daemon; covered by the e2e write lane",
 	"PUT /services/{id}/healthcheck":        "mutates through the Docker daemon; covered by the e2e write lane",
 	"PUT /services/{id}/image":              "mutates through the Docker daemon; covered by the e2e write lane",
-	"PUT /services/{id}/mode":               "mutates through the Docker daemon; covered by the e2e write lane",
 	"PUT /services/{id}/placement":          "mutates through the Docker daemon; covered by the e2e write lane",
 	"PUT /services/{id}/scale":              "mutates through the Docker daemon; covered by the e2e write lane",
 
@@ -186,6 +185,7 @@ var excusedUncovered = map[string]string{
 	"GET /-/notices":                      "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /-/ready":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /-/sbom.cdx":                     "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /.well-known/api-catalog":        "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /api":                            "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /api/context.jsonld":             "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /api/errors":                     "gap: no sweep in the first slice reaches this; see the campaign defect list",
@@ -203,6 +203,7 @@ var excusedUncovered = map[string]string{
 	"GET /nodes/{id}/labels":              "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /nodes/{id}/role":                "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /nodes/{id}/tasks":               "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /opensearch.xml":                 "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /profile":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /recommendations":                "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /search":                         "gap: no sweep in the first slice reaches this; see the campaign defect list",

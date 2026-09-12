@@ -58,6 +58,17 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		// Counted once: asking per row would walk the task table per service.
+		running := h.cache.RunningTaskCounts()
+
+		writeListCSV(w, r, "service", services, p, func(page []swarm.Service) []cluster.Row {
+			return cluster.RowsForServices(page, running)
+		})
+
+		return
+	}
+
 	paged := applyPagination(r.Context(), services, p)
 
 	items := make([]ServiceListItem, len(paged.Items))
@@ -104,11 +115,17 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.lookupServiceACL(w, r)
+	svc, ok := h.lookupServiceACL(w, r)
 	if !ok {
 		return
 	}
 	tasks := cluster.EnrichTasks(h.cache, h.cache.ListTasksByService(r.PathValue("id")))
+
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		h.writeTaskCSV(w, r, svc.Spec.Name, tasks)
+		return
+	}
+
 	writeCachedJSON(
 		w,
 		r,

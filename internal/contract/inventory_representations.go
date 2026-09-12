@@ -23,6 +23,7 @@ const (
 	RepresentationJGF      Representation = "JGF"
 	RepresentationGraphML  Representation = "GraphML"
 	RepresentationDOT      Representation = "DOT"
+	RepresentationCSV      Representation = "CSV"
 )
 
 var (
@@ -50,7 +51,9 @@ func Representations() (map[string][]Representation, error) {
 			return
 		}
 
-		reps, repsErr = collectRepresentations(fset, file, routerSource)
+		reps, repsErr = collectRepresentations(
+			fset, file, routerSource, packageStringConsts(routerSource),
+		)
 	})
 
 	return reps, repsErr
@@ -67,13 +70,14 @@ func parseRepresentationsFromSource(name, source string) (map[string][]Represent
 		return nil, fmt.Errorf("parse %s: %w", name, err)
 	}
 
-	return collectRepresentations(fset, file, name)
+	return collectRepresentations(fset, file, name, fileStringConsts(file))
 }
 
 func collectRepresentations(
 	fset *token.FileSet,
 	file *ast.File,
 	name string,
+	consts map[string]string,
 ) (map[string][]Representation, error) {
 	found := map[string][]Representation{}
 
@@ -103,7 +107,7 @@ func collectRepresentations(
 			return true
 		}
 
-		patterns, ok := resolvePatternLiterals(call.Args[0], enclosingRangeStmt(ancestors))
+		patterns, ok := resolvePatternLiterals(call.Args[0], enclosingRangeStmt(ancestors), consts)
 		if !ok {
 			bad = append(bad, fmt.Sprintf(
 				"%s: content-negotiated registration with a non-literal pattern",
@@ -237,7 +241,7 @@ func helperRepresentations(
 		return declared, fmt.Sprintf("%s call with an unexpected argument count", helper)
 	}
 
-	atom, jsonFeed, ok := feedFields(feeds)
+	atom, jsonFeed, csv, ok := feedFields(feeds)
 	if !ok {
 		return declared, fmt.Sprintf(
 			"%s: %s with a feedHandlers argument this inventory cannot read",
@@ -253,41 +257,47 @@ func helperRepresentations(
 		declared = append(declared, RepresentationJSONFeed)
 	}
 
+	if csv {
+		declared = append(declared, RepresentationCSV)
+	}
+
 	return declared, ""
 }
 
 // feedFields reports which feed handlers a feedHandlers argument carries. Both
 // builders return both; a composite literal carries whichever keys it names.
-func feedFields(expr ast.Expr) (atom, jsonFeed, ok bool) {
+func feedFields(expr ast.Expr) (atom, jsonFeed, csv, ok bool) {
 	switch e := expr.(type) {
 	case *ast.CallExpr:
 		sel, isSel := e.Fun.(*ast.SelectorExpr)
 		if !isSel {
-			return false, false, false
+			return false, false, false, false
 		}
 
 		switch sel.Sel.Name {
-		case "listFeeds", "detailFeeds":
-			return true, true, true
+		case "listFeeds":
+			return true, true, true, true
+		case "detailFeeds", "searchFeeds":
+			return true, true, false, true
 		default:
-			return false, false, false
+			return false, false, false, false
 		}
 
 	case *ast.CompositeLit:
 		ident, isIdent := e.Type.(*ast.Ident)
 		if !isIdent || ident.Name != "feedHandlers" {
-			return false, false, false
+			return false, false, false, false
 		}
 
 		for _, elt := range e.Elts {
 			kv, isKV := elt.(*ast.KeyValueExpr)
 			if !isKV {
-				return false, false, false
+				return false, false, false, false
 			}
 
 			key, isIdent := kv.Key.(*ast.Ident)
 			if !isIdent {
-				return false, false, false
+				return false, false, false, false
 			}
 
 			switch key.Name {
@@ -295,15 +305,17 @@ func feedFields(expr ast.Expr) (atom, jsonFeed, ok bool) {
 				atom = true
 			case "jsonFeed":
 				jsonFeed = true
+			case "csv":
+				csv = true
 			default:
-				return false, false, false
+				return false, false, false, false
 			}
 		}
 
-		return atom, jsonFeed, true
+		return atom, jsonFeed, csv, true
 
 	default:
-		return false, false, false
+		return false, false, false, false
 	}
 }
 
@@ -317,7 +329,7 @@ func representationOf(name string) (Representation, bool) {
 	switch r := Representation(trimmed); r {
 	case RepresentationJSON, RepresentationHTML, RepresentationSSE,
 		RepresentationAtom, RepresentationJSONFeed, RepresentationJGF,
-		RepresentationGraphML, RepresentationDOT:
+		RepresentationGraphML, RepresentationDOT, RepresentationCSV:
 		return r, true
 	default:
 		// ContentTypeUnsupported and the context helpers land here.

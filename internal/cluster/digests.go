@@ -387,9 +387,7 @@ func NetworkDigest(net network.Summary, users []cache.ServiceRef) Digest {
 	}
 }
 
-// VolumeDigest builds the detail view of one volume. It takes a value rather
-// than the *volume.Volume RowsForVolumes takes: a digest describes one
-// resource the caller has already resolved, so there is no nil to guard.
+// VolumeDigest builds the detail view of one volume.
 func VolumeDigest(vol volume.Volume, users []cache.ServiceRef) Digest {
 	details := stackScopedDetails(vol.Labels)
 	details["driver"] = vol.Driver

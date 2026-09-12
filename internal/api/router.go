@@ -81,11 +81,22 @@ type RouterConfig struct {
 	OAuthRoutes func(mux *http.ServeMux, basePath string)
 }
 
-// listFeeds builds feedHandlers for a resource list endpoint.
+// listFeeds builds feedHandlers for a resource list endpoint. Every one of
+// them renders its rows as CSV.
 func (h *Handlers) listFeeds(title string, eventType cache.EventType) feedHandlers {
 	return feedHandlers{
 		atom:     h.feedListHandler(title, eventType, renderAtom),
 		jsonFeed: h.feedListHandler(title, eventType, renderJSONFeed),
+		csv:      true,
+	}
+}
+
+// searchFeeds builds feedHandlers for the search endpoint.
+func (h *Handlers) searchFeeds() feedHandlers {
+	return feedHandlers{
+		atom:        h.feedSearchHandler(renderAtom),
+		jsonFeed:    h.feedSearchHandler(renderJSONFeed),
+		queryParams: searchFeedParams,
 	}
 }
 
@@ -101,7 +112,56 @@ func (h *Handlers) detailFeeds(
 	}
 }
 
+// routeRecorder is the mux NewRouter registers on: an http.ServeMux that also
+// remembers the patterns it was handed. The stdlib mux exposes no way to
+// enumerate them, and without the list nothing can hold the routes that exist
+// against the ones api/openapi.yaml documents — a walk that starts from the
+// spec cannot see a route the spec never mentions.
+//
+// Routes another component registers directly on the wrapped mux — the auth
+// provider's, the OAuth server's — are not recorded. Both sit under paths the
+// spec does not describe.
+type routeRecorder struct {
+	mux      *http.ServeMux
+	patterns []string
+}
+
+func (r *routeRecorder) Handle(pattern string, handler http.Handler) {
+	r.patterns = append(r.patterns, pattern)
+	r.mux.Handle(pattern, handler)
+}
+
+func (r *routeRecorder) HandleFunc(
+	pattern string,
+	handler func(http.ResponseWriter, *http.Request),
+) {
+	r.patterns = append(r.patterns, pattern)
+	r.mux.HandleFunc(pattern, handler)
+}
+
+func (r *routeRecorder) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	r.mux.ServeHTTP(w, req)
+}
+
+// route returns the pattern the mux matches this request against, empty when
+// none does. It covers the routes another component registered directly on the
+// wrapped mux as well, which the recorded list does not.
+func (r *routeRecorder) route(req *http.Request) string {
+	_, pattern := r.mux.Handler(req)
+
+	return pattern
+}
+
 func NewRouter(cfg RouterConfig) http.Handler {
+	handler, _ := newRouter(cfg)
+
+	return handler
+}
+
+// newRouter assembles the router and returns the patterns it registered beside
+// it. Production calls NewRouter and drops the second value; the spec-parity
+// test reads it.
+func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	auth.SetErrorWriter(WriteErrorCode)
 
 	h := cfg.Handlers
@@ -112,7 +172,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	spa := cfg.SPA
 	authProvider := cfg.AuthProvider
 
-	mux := http.NewServeMux()
+	mux := &routeRecorder{mux: http.NewServeMux()}
 
 	tier1 := requireLevel(config.OpsOperational, h.operationsLevel)
 	tier2 := requireLevel(config.OpsConfiguration, h.operationsLevel)
@@ -161,6 +221,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	svcTier1 := NewChain(svcACL, tier1)
 	svcTier2 := NewChain(svcACL, tier2)
 	svcTier3 := NewChain(svcACL, tier3)
+	nodeTier2 := NewChain(nodeACL, tier2)
 	nodeTier3 := NewChain(nodeACL, tier3)
 	taskTier3 := NewChain(taskACL, tier3)
 	stackTier3 := NewChain(stackACL, tier3)
@@ -178,7 +239,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	swarmTier2 := NewChain(swarmACL, tier2)
 	swarmTier3 := NewChain(swarmACL, tier3)
 
-	authProvider.RegisterRoutes(mux)
+	authProvider.RegisterRoutes(mux.mux)
 	mux.HandleFunc("GET /auth/whoami", auth.WhoamiHandler(authProvider, writeIdentityJSONLD))
 
 	// Meta endpoints (no content negotiation, no discovery links)
@@ -220,6 +281,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /api", HandleAPIDoc(cfg.OpenAPISpec))
 	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(cfg.ScalarJS))
 	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
+	mux.HandleFunc("GET "+openSearchPath, HandleOpenSearch)
+	mux.HandleFunc("GET "+apiCatalogPath, HandleAPICatalog(catalogMounts{
+		mcp:           cfg.MCPHandler != nil,
+		oauthMetadata: cfg.OAuthRoutes != nil,
+	}))
 	mux.HandleFunc("GET /api/errors", contentNegotiated(HandleErrorIndex, feedHandlers{}, spa))
 	mux.HandleFunc(
 		"GET /api/errors/{code}",
@@ -238,9 +304,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		case ContentTypeHTML:
 			spa.ServeHTTP(w, r)
 		default:
-			// This route streams; there is no JSON snapshot of it. Falling
-			// back to the SPA answered a JSON client with the dashboard.
-			refuseRepresentation(w, r, ct)
+			notAcceptable(
+				w, r,
+				"text/event-stream, text/html, application/atom+xml, application/feed+json",
+			)
 		}
 	})
 
@@ -311,7 +378,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	)
 	mux.HandleFunc(
 		"GET /nodes/{id}/tasks",
-		contentNegotiated(h.HandleNodeTasks, feedHandlers{}, spa),
+		contentNegotiated(h.HandleNodeTasks, feedHandlers{csv: true}, spa),
 	)
 
 	// Recommendations
@@ -320,6 +387,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiated(h.HandleRecommendations, feedHandlers{
 			atom:     h.feedRecommendationsHandler(renderAtom),
 			jsonFeed: h.feedRecommendationsHandler(renderJSONFeed),
+			csv:      true,
 		}, spa),
 	)
 
@@ -351,7 +419,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/tasks",
-		contentNegotiated(h.HandleServiceTasks, feedHandlers{}, spa),
+		contentNegotiated(h.HandleServiceTasks, feedHandlers{csv: true}, spa),
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/logs",
@@ -365,7 +433,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiated(h.HandleGetNodeLabels, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /nodes/{id}/labels",
-		nodeTier3.Append(h.precond(h.nodeLabelsSpec().representation)).
+		nodeTier2.Append(h.precond(h.nodeLabelsSpec().representation)).
 			ThenFunc(h.HandlePatchNodeLabels))
 	mux.HandleFunc(
 		"GET /nodes/{id}/role",
@@ -557,6 +625,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
 		atom:     h.feedHistoryHandler(renderAtom),
 		jsonFeed: h.feedHistoryHandler(renderJSONFeed),
+		csv:      true,
 	}, spa))
 
 	// Stacks
@@ -720,13 +789,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			ThenFunc(h.HandleRemoveVolume))
 
 	// Search
-	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, feedHandlers{
-		atom:     h.feedSearchHandler(renderAtom),
-		jsonFeed: h.feedSearchHandler(renderJSONFeed),
-	}, spa))
+	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, h.searchFeeds(), spa))
 
 	// Profile
-	mux.HandleFunc("GET /profile", contentNegotiated(h.HandleProfile, feedHandlers{}, spa))
+	mux.HandleFunc("GET "+profilePath, contentNegotiated(h.HandleProfile, feedHandlers{}, spa))
 
 	// Topology
 	mux.HandleFunc("GET /topology", func(w http.ResponseWriter, r *http.Request) {
@@ -740,11 +806,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		case ContentTypeDOT:
 			h.HandleTopologyDOT(w, r)
 		default:
-			writeErrorCode(
-				w,
-				r,
-				"API003",
-				"this endpoint supports application/vnd.jgf+json, application/graphml+xml, and text/vnd.graphviz",
+			notAcceptable(
+				w, r,
+				"application/vnd.jgf+json, application/graphml+xml, text/vnd.graphviz",
 			)
 		}
 	})
@@ -785,11 +849,22 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	// enabled and an auth provider is configured; the api package itself
 	// doesn't reach into mcp/oauth.
 	if cfg.OAuthRoutes != nil {
-		cfg.OAuthRoutes(mux, "")
+		cfg.OAuthRoutes(mux.mux, "")
 	}
 
-	// SPA fallback (must be last)
-	mux.Handle("/", spa)
+	// SPA fallback (must be last). It refuses only a type nothing serves,
+	// rather than everything but text/html: */* resolves to JSON, so on this
+	// route JSON means "unknown" rather than "a client asked for JSON" — and
+	// every static file the dashboard pulls (/assets/*, the icons,
+	// manifest.webmanifest) arrives that way.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if ContentTypeFromContext(r.Context()) == ContentTypeUnsupported {
+			notAcceptable(w, r, "text/html")
+			return
+		}
+
+		spa.ServeHTTP(w, r)
+	})
 
 	stack := NewChain(
 		requestID,
@@ -797,9 +872,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		recovery,
 		securityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),
 		cors(cfg.CORS),
+		crossOriginProtection(cfg.CORS, cfg.PublicURL),
 		auth.Middleware(authProvider),
 		negotiate,
-		requireReady(h),
+		requireReady(h, mux),
 		discoveryLinks,
 		requestLogger,
 		// Innermost, so requestLogger wraps it: this answers a name-addressed
@@ -813,16 +889,20 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	return publicURLMiddleware(
 		cfg.PublicURL,
 		basePathMiddleware(cfg.BasePath, stack.Then(mux)),
-	)
+	), mux.patterns
 }
 
-func requireReady(h *Handlers) func(http.Handler) http.Handler {
+func requireReady(h *Handlers, mux *routeRecorder) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Named as what it is not, so the next representation cannot be
+			// left out: the dashboard renders its own error, a stream says so
+			// by closing, and a type nothing serves is the endpoint's 406 to
+			// give whether or not Docker is up.
 			ct := ContentTypeFromContext(r.Context())
-			if !h.isReady() && isResourcePath(r.URL.Path) &&
-				(ct == ContentTypeJSON || ct == ContentTypeAtom || ct == ContentTypeJSONFeed ||
-					ct == ContentTypeJGF || ct == ContentTypeGraphML || ct == ContentTypeDOT) {
+			if !h.isReady() && readsClusterState(mux, r) &&
+				ct != ContentTypeHTML && ct != ContentTypeSSE &&
+				ct != ContentTypeUnsupported {
 				writeErrorCode(w, r, "ENG001", "Docker daemon is not reachable")
 				return
 			}
@@ -831,17 +911,23 @@ func requireReady(h *Handlers) func(http.Handler) http.Handler {
 	}
 }
 
-func isResourcePath(path string) bool {
-	switch {
-	case strings.HasPrefix(path, "/-/"):
+// readsClusterState reports whether the endpoint answering this request reads
+// the cache. Path shape cannot say: what matches no route falls through to the
+// SPA catch-all, which serves the frontend — manifest and icons included — off
+// the embedded filesystem, so the mux is asked. The rest answer from the
+// request alone.
+func readsClusterState(mux *routeRecorder, r *http.Request) bool {
+	path := r.URL.Path
+
+	switch pattern := mux.route(r); {
+	case pattern == "" || pattern == "/":
 		return false
-	case strings.HasPrefix(path, "/api"):
-		return false
-	case strings.HasPrefix(path, "/auth/"):
-		return false
-	case strings.HasPrefix(path, "/assets/"):
-		return false
-	case path == "/":
+	case strings.HasPrefix(path, "/-/"),
+		strings.HasPrefix(path, "/api"),
+		strings.HasPrefix(path, "/auth/"),
+		strings.HasPrefix(path, "/.well-known/"),
+		path == openSearchPath,
+		path == profilePath:
 		return false
 	default:
 		return true

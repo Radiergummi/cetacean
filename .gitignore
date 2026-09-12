@@ -29,8 +29,11 @@ go.work.sum
 # IDE
 .idea/
 
-# Claude Code
-.claude/
+# Claude Code. Machine-local except the architecture map. The `.claude/*` form
+# is load-bearing: git cannot re-include a file under an excluded directory.
+.claude/*
+!.claude/ARCHITECTURE.md
+!.claude/rules/
 .superpowers/
 
 # Runtime data
@@ -41,7 +44,6 @@ go.work.sum
 # design it implements, which is where they used to land.
 docs/plans/
 docs/specs/*-plan.md
-docs/superpowers/
 docs/frontend-overhaul.md
 docs/task-state-timeline-design.md
 docs/task-state-timeline-plan.md

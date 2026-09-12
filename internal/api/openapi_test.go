@@ -60,7 +60,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		{
 			name:       "node detail",
 			method:     "GET",
-			path:       "/nodes/node-1",
+			path:       "/nodes/node1",
 			accept:     "application/json",
 			wantStatus: 200,
 		},
@@ -88,7 +88,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		{
 			name:       "task detail",
 			method:     "GET",
-			path:       "/tasks/task-1",
+			path:       "/tasks/task1",
 			accept:     "application/json",
 			wantStatus: 200,
 		},

@@ -31,17 +31,24 @@ the client asks for. There is no `/api/v1/` prefix; versioning lives in the medi
 |------------------------------------|-------------|----------------------------------------------|
 | `application/json`                 | `.json`     | JSON                                         |
 | `application/vnd.cetacean.v1+json` |             | JSON, versioned alias of `application/json`  |
+| `application/ld+json`              |             | JSON — every JSON response is a JSON-LD document |
 | `text/html`, `application/xhtml+xml` | `.html`   | The dashboard                                |
 | `text/event-stream`                |             | SSE, on endpoints that support it            |
 | `application/atom+xml`             | `.atom`     | Atom feed                                    |
 | `application/feed+json`            | `.feed`     | JSON Feed 1.1                                |
+| `text/csv`                         | `.csv`      | [CSV](#spreadsheets), on list endpoints      |
 | `application/vnd.jgf+json`         | `.jgf`      | JSON Graph Format, `/topology` only          |
 | `application/graphml+xml`          | `.graphml`  | GraphML, `/topology` only                    |
 | `text/vnd.graphviz`                | `.dot`      | Graphviz DOT, `/topology` only               |
 
 All negotiated responses include `Vary: Accept`. Requesting a type an endpoint cannot produce returns
 `406 Not Acceptable` with code [`API003`](api/errors#API003); asking for SSE on an endpoint without a stream
-returns `406` with [`API001`](api/errors#API001).
+returns `406` with [`API001`](api/errors#API001). A graph format asked of a resource endpoint is refused the same
+way — the table says which endpoints serve one.
+
+The refusal is each endpoint's own. A document with a single representation — the
+[OpenSearch description](#browser-search), the [API catalogue](#api-catalogue), the JSON-LD context — answers a client
+asking for exactly the type it serves, whether or not that type appears above.
 
 ```http tab
 GET /services HTTP/1.1
@@ -54,7 +61,7 @@ curl -H "Accept: application/json" http://localhost:9000/services
 
 ### Compression
 
-JSON, Atom and JSON Feed responses, and the `/topology` graph formats, are compressed when the request offers a
+JSON, Atom, JSON Feed and CSV responses, and the `/topology` graph formats, are compressed when the request offers a
 coding Cetacean serves and the body exceeds 1 KiB. Two codings are served, `zstd` and `gzip`, negotiated from
 `Accept-Encoding` per [RFC 9110 §12.5.3](https://www.rfc-editor.org/rfc/rfc9110#section-12.5.3) — `q` values and
 `*` included, and `zstd` preferred at equal weight. Smaller bodies are sent uncompressed regardless; there is
@@ -130,11 +137,76 @@ curl "http://localhost:9000/history.atom?before=<cursor-id>&limit=50"
 Feeds carry an `ETag`. Pass `If-None-Match` with a previous value to get `304 Not Modified` when nothing changed.
 Responses add `Vary: Authorization, Cookie` alongside `Vary: Accept` so caches separate formats and users.
 
+### Feed identity
+
+An Atom feed identifies itself with a [tag URI](https://www.rfc-editor.org/rfc/rfc4151) naming the same host its own
+links carry: [`server.public_url`][server.public_url] when set, otherwise the host the request arrived on. A tag URI is
+meant to be permanent, so set `server.public_url` behind a reverse proxy — derived from the request, a feed's identity
+changes with the hostname a reader happened to reach the server by.
+
 ### Feed autodiscovery
 
 JSON responses on feed-capable endpoints carry a `Link` header with `rel="alternate"` for each feed type. The dashboard
 injects an Atom `<link rel="alternate">` into the HTML `<head>` on resource, history, search, and recommendations
 pages, so feed readers can find the feed from the page.
+
+## Spreadsheets
+
+List endpoints also serve [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180) CSV, for the one consumer the other
+formats do not serve: a person pasting the cluster into a spreadsheet.
+
+```bash
+curl -o services.csv http://localhost:9000/services.csv
+curl -H 'Accept: text/csv' 'http://localhost:9000/tasks?filter=state == "failed"'
+```
+
+Responses carry `Content-Type: text/csv; charset=utf-8; header=present` and an
+[RFC 6266](https://www.rfc-editor.org/rfc/rfc6266) `Content-Disposition`, so a browser opening `/services.csv` saves
+`services-2026-09-11.csv` rather than rendering it. A task list hanging off a parent names it —
+`/nodes/{id}/tasks.csv` saves `tasks-worker-1-2026-09-11.csv`.
+
+### Supported endpoints
+
+- `/nodes`, `/services`, `/tasks`, `/stacks`, `/configs`, `/secrets`, `/networks`, `/volumes`
+- `/nodes/{id}/tasks`, `/services/{id}/tasks`
+- `/history`, `/recommendations`
+
+Detail endpoints serve no CSV: one resource is not a table. `/search` serves none either — its results are of mixed
+type, and one header row cannot describe them.
+
+### Columns
+
+A resource list renders the compact row the dashboard's own tables and the MCP `find` tool render: the name, the
+state, and the one secondary fact that identifies the type — the image for a service, the role for a node, the node
+for a task, the driver for a network or volume — plus replica counts where a replica count means something. The full
+Docker object is what the JSON representation is for.
+
+| Endpoint | Columns |
+|---|---|
+| `/services` | `name`, `stack`, `state`, `image`, `desired`, `running`, `id` |
+| `/nodes` | `name`, `state`, `role`, `id` |
+| `/tasks` | `name`, `state`, `node`, `id` |
+| `/stacks` | `name`, `services`, `id` |
+| `/configs`, `/secrets` | `name`, `stack`, `id` |
+| `/networks`, `/volumes` | `name`, `stack`, `driver`, `id` |
+| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary` |
+| `/recommendations` | `severity`, `category`, `scope`, `target`, `resource`, `message`, `current`, `configured`, `suggested` |
+
+### Pagination differs
+
+`search`, `filter`, `sort` and [authorization][authorization] filtering apply exactly as they do to the JSON. Paging
+does not: a CSV request that names no page renders **every** row, where the JSON would return the first 50. An export
+truncated at a default carries nothing inside the file to say it was truncated, and the `Link` header that says so for
+JSON is not something a downloaded file keeps.
+
+Naming a page still works, and then means what it means everywhere else:
+
+```bash
+curl 'http://localhost:9000/tasks.csv?limit=100&offset=200'
+```
+
+A [`Range` header](#range-header-pagination) is not honoured for CSV: that exchange answers `206` with a
+`Content-Range`, and a download is always a plain `200`. Ask for a page with `limit` and `offset` instead.
 
 ## Pagination
 
@@ -292,6 +364,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 | Resource changed between your read and your write | 409 | [`SVC001`](api/errors#SVC001), [`NOD002`](api/errors#NOD002), [`CFG005`](api/errors#CFG005), [`SEC005`](api/errors#SEC005) | Re-read the resource and retry |
 | Endpoint above the configured [operations level][operations-level] | 403 | [`OPS001`](api/errors#OPS001) | Raise the operations level |
 | [ACL][authorization] denies read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
+| Cross-origin write from an origin that is not allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
 | Name in the path identifies more than one resource | 409 | [`API014`](api/errors#API014) | Address the resource by ID; the detail lists the candidates |
@@ -559,9 +632,9 @@ passes the per-resource [ACL][authorization] write check.
 | `PATCH /services/{id}/container-config` | 2 |
 | `PUT /services/{id}/endpoint-mode` | 3 |
 | `DELETE /services/{id}` | 3 |
+| `PATCH /nodes/{id}/labels` | 2 |
 | `PUT /nodes/{id}/availability` | 3 |
 | `PUT /nodes/{id}/role` | 3 |
-| `PATCH /nodes/{id}/labels` | 3 |
 | `DELETE /nodes/{id}` | 3 |
 | `DELETE /tasks/{id}` | 3 |
 | `DELETE /stacks/{name}` | 3 |
@@ -590,9 +663,6 @@ passes the per-resource [ACL][authorization] write check.
 | `POST /plugins/privileges` | 3 |
 | `POST /plugins/{name}/upgrade` | 3 |
 | `DELETE /plugins/{name}` | 3 |
-
-> [!NOTE]
-> `GET /swarm/unlock-key` returns a credential, so it is gated at level 3 like the writes beside it.
 
 ### Preconditions
 
@@ -644,15 +714,36 @@ Every response outside the `/-/` meta endpoints carries [RFC 8631](https://www.r
 headers:
 
 ```http
-Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby"
+Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
 ```
 
-`service-desc` points at the OpenAPI spec, `describedby` at the JSON-LD context document.
+`service-desc` points at the OpenAPI spec, `describedby` at the JSON-LD context document, and `api-catalog` at the
+[API catalogue](#api-catalogue).
+
+### Browser search
+
+`GET /opensearch.xml` is an [OpenSearch 1.1](https://github.com/dewitt/opensearch/blob/master/opensearch-1-1-draft-6.md)
+description document, advertised by the dashboard with a `<link rel="search">`. Browsers that support the convention
+can be taught a keyword, so the address bar searches the cluster directly; Firefox still offers this, Chromium has
+narrowed it. The document also carries Atom and JSON templates for the same search, and requires authentication like
+any other endpoint.
 
 ## Request ID
 
 Every response carries a `Request-Id` header. Send your own in the `Request-Id` request header (max 64 printable ASCII
 characters) or the server generates one. The value appears in error responses as `requestId` and in the server logs.
+
+## API catalogue
+
+`GET /.well-known/api-catalog` lists the APIs this deployment publishes, as an
+[RFC 9264](https://www.rfc-editor.org/rfc/rfc9264) linkset served as `application/linkset+json`
+([RFC 9727](https://www.rfc-editor.org/rfc/rfc9727)). No authentication required.
+
+Each `item` names an API; the contexts beside it carry that API's `service-desc`, `service-doc`, `describedby` and
+`status` links. The MCP server appears only when [`mcp.enabled`][mcp.enabled] is set, and its authorization metadata
+only when [`auth.mode`][auth.mode] is not `none`.
+
+URIs are absolute — set [`server.public_url`][server.public_url] behind a reverse proxy.
 
 [api-explorer]: api/explorer
 [auth.mode]: configuration#auth.mode
@@ -661,7 +752,10 @@ characters) or the server generates one. The value appears in error responses as
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools
 [mcp.enabled]: configuration#mcp.enabled
+[server.public_url]: configuration#server.public_url
+[server.trusted_proxies]: configuration#server.trusted_proxies
 [mcp]: mcp
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
+[server.cors.origins]: configuration#server.cors.origins
 [server.sse.batch_interval]: configuration#server.sse.batch_interval

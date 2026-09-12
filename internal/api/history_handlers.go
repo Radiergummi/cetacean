@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
@@ -17,7 +18,13 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
+	wantCSV := ContentTypeFromContext(r.Context()) == ContentTypeCSV
+
 	limit := 50
+	if wantCSV {
+		// A download nobody paginated is the whole log the ring still holds.
+		limit = h.cache.History().Size()
+	}
 	if v := q.Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
 			limit = n
@@ -32,16 +39,20 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		entries = []cache.HistoryEntry{}
 	}
 
-	// Filter entries by per-resource ACL read permission.
-	identity := auth.IdentityFromContext(r.Context())
-	filtered := entries[:0]
-	for _, e := range entries {
-		resource := string(e.Type) + ":" + e.Name
-		if h.acl.Can(identity, "read", resource) {
-			filtered = append(filtered, e)
-		}
+	// Filter, not a Can per entry: it collects the caller's grants once, and a
+	// CSV asks for the whole ring.
+	entries = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		entries,
+		func(e cache.HistoryEntry) string { return string(e.Type) + ":" + e.Name },
+	)
+
+	if wantCSV {
+		writeCSV(w, r, "history", csvTableForHistory(entries))
+		return
 	}
-	entries = filtered
 
 	writeCachedJSON(
 		w,

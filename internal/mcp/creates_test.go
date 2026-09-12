@@ -163,35 +163,6 @@ func TestCreateConfigReturnsItsIdentity(t *testing.T) {
 	}
 }
 
-// Both creates sit at the configuration level, the same one the REST routes
-// for these operations require — the operations level must mean one thing
-// whichever transport an operator reaches for.
-func TestCreateToolsSitAtTheConfigurationTier(t *testing.T) {
-	srv := newResourceTestServer(t, cache.New(nil))
-
-	found := map[string]bool{}
-
-	for _, def := range srv.toolCatalog() {
-		switch def.tool.Name {
-		case "create_secret", "create_config":
-			found[def.tool.Name] = true
-
-			if def.tier != config.OpsConfiguration {
-				t.Errorf(
-					"%s tier = %v, want OpsConfiguration to match the REST route",
-					def.tool.Name, def.tier,
-				)
-			}
-		}
-	}
-
-	for _, name := range []string{"create_secret", "create_config"} {
-		if !found[name] {
-			t.Errorf("%s is not registered", name)
-		}
-	}
-}
-
 // TestCreatedSecretIsImmediatelyUsable is the sequence both tools' descriptions
 // tell a caller to follow: create the replacement, then repoint the service at
 // it. It failed against a live cluster — create_secret returned an ID and the

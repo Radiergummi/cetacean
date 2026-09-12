@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -111,6 +113,234 @@ func TestSPADirectoryPathIsNotAnAsset(t *testing.T) {
 				t.Errorf("GET %s Content-Type = %q, want the SPA shell", path, got)
 			}
 		})
+	}
+}
+
+// TestSPAServesWebManifestAsJSON pins the manifest's media type. Sniffing
+// reports text/plain for JSON, which browsers must reject — silently, so this
+// stands in for an install prompt the suite cannot see.
+func TestSPAServesWebManifestAsJSON(t *testing.T) {
+	fsys := fstest.MapFS{
+		"index.html":           {Data: []byte("<html><head></head></html>")},
+		"manifest.webmanifest": {Data: []byte(`{"name":"Cetacean","start_url":"./"}`)},
+	}
+	handler := NewSPAHandler(fsys, "")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest("GET", "/manifest.webmanifest", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	got, _, _ := strings.Cut(rec.Header().Get("Content-Type"), ";")
+	if strings.TrimSpace(got) != "application/manifest+json" {
+		t.Errorf("Content-Type = %q, want application/manifest+json", got)
+	}
+}
+
+// webManifestPath is read from source, so these tests need no build output.
+const webManifestPath = "../../frontend/public/manifest.webmanifest"
+
+type webManifestIcon struct {
+	Src   string `json:"src"`
+	Sizes string `json:"sizes"`
+}
+
+// webManifest is the subset these tests make claims about.
+type webManifest struct {
+	StartURL   string            `json:"start_url"`
+	Scope      string            `json:"scope"`
+	ThemeColor string            `json:"theme_color"`
+	Icons      []webManifestIcon `json:"icons"`
+}
+
+func readWebManifest(t *testing.T) webManifest {
+	t.Helper()
+
+	raw, err := os.ReadFile(webManifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+
+	var manifest webManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("manifest is not valid JSON: %v", err)
+	}
+
+	return manifest
+}
+
+// TestUnreadySharesTheFrontendButNotTheCluster holds the readiness gate to the
+// endpoints that read cluster state. The shell and everything it pulls — the
+// web manifest, the icons — come off the embedded filesystem, so an unreachable
+// Docker daemon must not turn them into problem documents; the browser asks for
+// them with */*, which negotiates to JSON like any cluster read.
+func TestUnreadySharesTheFrontendButNotTheCluster(t *testing.T) {
+	fsys := fstest.MapFS{
+		"index.html":           {Data: []byte("<html><head></head></html>")},
+		"manifest.webmanifest": {Data: []byte(`{"name":"Cetacean"}`)},
+		"favicon-32x32.png":    {Data: []byte("favicon")},
+		"apple-touch-icon.png": {Data: []byte("touch-icon")},
+	}
+
+	// Never closed: the daemon is unreachable for the whole test.
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withSPAFiles(fsys)},
+		withReady(make(chan struct{})),
+	)
+
+	get := func(t *testing.T, path string) *httptest.ResponseRecorder {
+		t.Helper()
+
+		req := httptest.NewRequest("GET", path, nil)
+		req.Header.Set("Accept", "*/*")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	for _, file := range []string{
+		"/",
+		"/manifest.webmanifest",
+		"/favicon-32x32.png",
+		"/apple-touch-icon.png",
+	} {
+		t.Run(file, func(t *testing.T) {
+			rec := get(t, file)
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("GET %s = %d, want %d", file, rec.Code, http.StatusOK)
+			}
+			got := rec.Header().Get("Content-Type")
+			if strings.HasPrefix(got, "application/problem") {
+				t.Errorf("GET %s Content-Type = %q, want the file", file, got)
+			}
+		})
+	}
+
+	// The manifest is served as itself, not as the index.html the SPA falls
+	// back to for a client-side route.
+	if got := get(t, "/manifest.webmanifest").Body.String(); got != `{"name":"Cetacean"}` {
+		t.Errorf("manifest body = %q, want the file from the embedded filesystem", got)
+	}
+
+	// Registered routes that answer from the request rather than the cache. A
+	// client probing a server it cannot reach is when the discovery documents
+	// are worth most, and identity says who you are, not what the cluster is.
+	for _, path := range []string{apiCatalogPath, openSearchPath, profilePath} {
+		t.Run(path, func(t *testing.T) {
+			rec := get(t, path)
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("GET %s = %d, want %d", path, rec.Code, http.StatusOK)
+			}
+		})
+	}
+
+	for _, resource := range []string{"/nodes", "/services", "/nodes/abc"} {
+		t.Run(resource, func(t *testing.T) {
+			rec := get(t, resource)
+
+			if rec.Code != http.StatusServiceUnavailable {
+				t.Errorf(
+					"GET %s = %d, want %d while Docker is unreachable",
+					resource, rec.Code, http.StatusServiceUnavailable,
+				)
+			}
+			if !strings.Contains(rec.Body.String(), "ENG001") {
+				t.Errorf("GET %s body = %s, want the ENG001 problem", resource, rec.Body.String())
+			}
+		})
+	}
+}
+
+// TestWebManifestIsSelfContainedAndRelative: a manifest resolves member URLs
+// against its own URL, so relative ones work under CETACEAN_BASE_PATH and
+// absolute ones address the origin root. It also checks each icon names a file
+// the build will ship, since a missing one voids the whole manifest.
+func TestWebManifestIsSelfContainedAndRelative(t *testing.T) {
+	manifest := readWebManifest(t)
+
+	relative := func(name, value string) {
+		t.Helper()
+
+		if value == "" {
+			t.Errorf("%s is empty", name)
+
+			return
+		}
+
+		if !strings.HasPrefix(value, "./") {
+			t.Errorf(
+				"%s = %q, want a ./-relative URL — an absolute one addresses the "+
+					"origin root rather than the base path the deployment serves",
+				name, value,
+			)
+		}
+	}
+
+	relative("start_url", manifest.StartURL)
+	relative("scope", manifest.Scope)
+
+	if len(manifest.Icons) == 0 {
+		t.Error("the manifest declares no icons, so nothing can install it")
+	}
+
+	for _, icon := range manifest.Icons {
+		relative("icon "+icon.Sizes, icon.Src)
+
+		if _, err := os.Stat(path.Join(path.Dir(webManifestPath), icon.Src)); err != nil {
+			t.Errorf("the manifest names %q but frontend/public holds no such file", icon.Src)
+		}
+	}
+
+	// A browser offers to install only with both present.
+	for _, size := range []string{"192x192", "512x512"} {
+		if !slices.ContainsFunc(manifest.Icons, func(i webManifestIcon) bool {
+			return i.Sizes == size
+		}) {
+			t.Errorf("no %s icon; a browser will not offer to install this", size)
+		}
+	}
+}
+
+// TestWebManifestThemeColorMatchesTheDocument pins two of the three places the
+// theme colour is stated — a manifest holds one value, index.html a
+// media-queried pair. The third is --background in index.css.
+func TestWebManifestThemeColorMatchesTheDocument(t *testing.T) {
+	manifest := readWebManifest(t)
+
+	if manifest.ThemeColor == "" {
+		t.Fatal("the manifest declares no theme_color")
+	}
+
+	raw, err := os.ReadFile("../../frontend/index.html")
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+
+	document := string(raw)
+
+	light := strings.Index(document, `media="(prefers-color-scheme: light)"`)
+	if light < 0 {
+		t.Fatal("index.html declares no light-scheme theme-color")
+	}
+
+	// content follows media inside the same tag.
+	tag := document[light:]
+	if end := strings.IndexByte(tag, '>'); end >= 0 {
+		tag = tag[:end]
+	}
+
+	if !strings.Contains(tag, `content="`+manifest.ThemeColor+`"`) {
+		t.Errorf(
+			"index.html's light theme-color does not match the manifest's "+
+				"theme_color (%q); the tag reads: %s",
+			manifest.ThemeColor, strings.Join(strings.Fields(tag), " "),
+		)
 	}
 }
 

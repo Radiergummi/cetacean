@@ -2,13 +2,17 @@ package api
 
 import (
 	"context"
+	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -115,6 +119,60 @@ func TestFeedID(t *testing.T) {
 			t.Errorf("feedID = %q, want %q", got, want)
 		}
 	})
+}
+
+// TestFeedIdentifiesOneHostBehindAProxy: with server.public_url unset, a
+// trusted proxy is where the feed's tag URI and the links inside it can part
+// company. The assertion is that one document names one host, not which host
+// it names.
+func TestFeedIdentifiesOneHostBehindAProxy(t *testing.T) {
+	router := newProxyRouter(
+		t,
+		&auth.NoneProvider{},
+		[]netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/services.atom", nil)
+	req.Header.Set("X-Forwarded-Host", "cetacean.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.RemoteAddr = "10.0.0.5:1234"
+	req.Host = "internal:9000"
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body=%s", w.Code, w.Body.String())
+	}
+
+	var feed atomxml.Feed
+	if err := xml.Unmarshal(w.Body.Bytes(), &feed); err != nil {
+		t.Fatalf("parse feed: %v", err)
+	}
+
+	var self string
+	for _, l := range feed.Links {
+		if l.Rel == "self" {
+			self = l.Href
+		}
+	}
+
+	if self == "" {
+		t.Fatal("feed has no self link")
+	}
+
+	selfURL, err := url.Parse(self)
+	if err != nil {
+		t.Fatalf("parse self link %q: %v", self, err)
+	}
+
+	// tag:{host},{year}:{path}
+	if want := "tag:" + selfURL.Host + ","; !strings.HasPrefix(feed.ID, want) {
+		t.Errorf(
+			"feed id = %q, want it to name the self link's host (%q); one document, two hosts",
+			feed.ID, selfURL.Host,
+		)
+	}
 }
 
 func TestHistoryToEntries(t *testing.T) {

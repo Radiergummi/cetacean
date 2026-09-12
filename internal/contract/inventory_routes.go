@@ -58,7 +58,7 @@ func parseRoutesFile(path string) ([]Route, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
-	return collectRoutes(fset, file, path)
+	return collectRoutes(fset, file, path, packageStringConsts(path))
 }
 
 // parseRoutesFromSource parses routes out of source text rather than a file. It
@@ -72,10 +72,15 @@ func parseRoutesFromSource(name, source string) ([]Route, error) {
 		return nil, fmt.Errorf("parse %s: %w", name, err)
 	}
 
-	return collectRoutes(fset, file, name)
+	return collectRoutes(fset, file, name, fileStringConsts(file))
 }
 
-func collectRoutes(fset *token.FileSet, file *ast.File, name string) ([]Route, error) {
+func collectRoutes(
+	fset *token.FileSet,
+	file *ast.File,
+	name string,
+	consts map[string]string,
+) ([]Route, error) {
 	var (
 		found []Route
 		bad   []string
@@ -127,7 +132,7 @@ func collectRoutes(fset *token.FileSet, file *ast.File, name string) ([]Route, e
 		// variable over an inline slice literal. Still fully determined by the
 		// source, so it resolves against the call's own enclosing loop and
 		// never another reusing the variable name.
-		patterns, ok := resolvePatternLiterals(call.Args[0], enclosingRangeStmt(ancestors))
+		patterns, ok := resolvePatternLiterals(call.Args[0], enclosingRangeStmt(ancestors), consts)
 		if !ok {
 			// A computed pattern is invisible to this inventory, so the
 			// inventory must refuse to be quietly incomplete.
@@ -170,7 +175,11 @@ func collectRoutes(fset *token.FileSet, file *ast.File, name string) ([]Route, e
 // argument evaluates to, or false if it is not fully determined by literals: a
 // bare literal yields one, a literal prefix over an inline slice yields one per
 // element. No suffix form, because nothing in router.go uses it.
-func resolvePatternLiterals(expr ast.Expr, enclosing *ast.RangeStmt) ([]string, bool) {
+func resolvePatternLiterals(
+	expr ast.Expr,
+	enclosing *ast.RangeStmt,
+	consts map[string]string,
+) ([]string, bool) {
 	if s, ok := stringLiteralValue(expr); ok {
 		return []string{s}, true
 	}
@@ -188,6 +197,10 @@ func resolvePatternLiterals(expr ast.Expr, enclosing *ast.RangeStmt) ([]string, 
 	name, ok := identName(bin.Y)
 	if !ok {
 		return nil, false
+	}
+
+	if value, ok := consts[name]; ok {
+		return []string{prefix + value}, true
 	}
 
 	elems, ok := rangeStringElements(enclosing, name)
