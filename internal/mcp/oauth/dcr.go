@@ -64,11 +64,8 @@ type ipBucket struct {
 }
 
 // ClientRegistry stores dynamically registered clients, evicting the oldest
-// registration once maxClients is reached.
-//
-// A nil registry is the DCR-disabled case. Its persistence methods tolerate
-// that receiver, so the state file can hold one unconditionally rather than
-// learning what a disabled registration endpoint means.
+// once maxClients is reached. A nil registry is the DCR-disabled case, and its
+// persistence methods tolerate that receiver.
 type ClientRegistry struct {
 	changeNotifier
 
@@ -120,14 +117,8 @@ func (r *ClientRegistry) register(reg *ClientRegistration) {
 }
 
 // Snapshot returns the registrations in the registry's own eviction order,
-// oldest first.
-//
-// The order is state, not presentation: it decides which client the next
-// registration at capacity drops. Restoring a sorted copy would silently
-// re-target eviction at whichever client happened to sort first, and since the
-// order only ever grows at the tail it is stable across unrelated writes,
-// which is what keeps a token rotation from rewriting the file with reshuffled
-// clients.
+// oldest first. The order is state, not presentation: it decides who the next
+// registration at capacity drops, so do not sort it.
 func (r *ClientRegistry) Snapshot() []ClientRegistration {
 	if r == nil {
 		return nil
@@ -147,17 +138,9 @@ func (r *ClientRegistry) Snapshot() []ClientRegistration {
 }
 
 // Restore replaces the registry's clients from a snapshot, keeping the newest
-// when the file holds more than the current capacity allows.
-//
-// An operator who lowered mcp.oauth.dcr.max_clients between restarts gets the
-// cap they configured, and the registrations dropped to reach it are the ones
-// the next registration would have evicted anyway.
-//
-// Nothing here is re-validated. A registration is not a credential — these are
-// public clients, and anyone can mint one at the registration endpoint — but a
-// forged redirect URI in a hand-edited file would now outlive a restart. That
-// is the same integrity property the consent records in this file already
-// carry, and the same mode 0600 protects it.
+// when the file holds more than mcp.oauth.dcr.max_clients now allows. Nothing
+// is re-validated, so a forged redirect URI in a hand-edited file outlives a
+// restart — the integrity mode 0600 protects, as for the consent records.
 func (r *ClientRegistry) Restore(registrations []ClientRegistration) {
 	if r == nil {
 		return
