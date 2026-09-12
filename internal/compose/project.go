@@ -45,28 +45,32 @@ func externalVolume(m *map[string]Volume, name string) {
 }
 
 // FromService renders one service as a one-service document. Everything it
-// references is external, because a service creates none of it.
+// references is external, because a service creates none of it. A service
+// with no ContainerSpec (a plugin or network-attachment task) is not a
+// compose service at all, so nothing about it is emitted.
 func FromService(svc swarm.Service) (File, []string) {
 	spec, warnings := serviceSpec(svc, identity)
+
+	c := svc.Spec.TaskTemplate.ContainerSpec
+	if c == nil {
+		return File{}, warnings
+	}
 
 	f := File{Services: map[string]Service{svc.Spec.Name: spec}}
 
 	for _, n := range svc.Spec.TaskTemplate.Networks {
 		externalNetwork(&f.Networks, n.Target)
 	}
-
-	if c := svc.Spec.TaskTemplate.ContainerSpec; c != nil {
-		for _, m := range c.Mounts {
-			if m.Type == mount.TypeVolume {
-				externalVolume(&f.Volumes, m.Source)
-			}
+	for _, m := range c.Mounts {
+		if m.Type == mount.TypeVolume {
+			externalVolume(&f.Volumes, m.Source)
 		}
-		for _, s := range c.Secrets {
-			externalRef(&f.Secrets, s.SecretName)
-		}
-		for _, cfg := range c.Configs {
-			externalRef(&f.Configs, cfg.ConfigName)
-		}
+	}
+	for _, s := range c.Secrets {
+		externalRef(&f.Secrets, s.SecretName)
+	}
+	for _, cfg := range c.Configs {
+		externalRef(&f.Configs, cfg.ConfigName)
 	}
 
 	return f, warnings

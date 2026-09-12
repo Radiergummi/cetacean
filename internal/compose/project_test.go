@@ -149,6 +149,44 @@ func TestFromServiceDropsRuntimeState(t *testing.T) {
 	}
 }
 
+// A plugin or network-attachment task has no ContainerSpec and is not a
+// compose service; it must be omitted, not written out as an empty stanza.
+func TestFromServiceOmitsServicesWithoutAContainerSpec(t *testing.T) {
+	svc := swarm.Service{
+		Spec: swarm.ServiceSpec{
+			Annotations:  swarm.Annotations{Name: "plugin_svc"},
+			TaskTemplate: swarm.TaskSpec{Runtime: "plugin"},
+		},
+	}
+
+	f, warnings := FromService(svc)
+
+	if _, ok := f.Services["plugin_svc"]; ok {
+		t.Errorf("services = %v, want plugin_svc omitted", keys(f.Services))
+	}
+	if len(f.Services) != 0 {
+		t.Errorf("services = %d, want none", len(f.Services))
+	}
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "plugin_svc") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("warnings = %v, want one naming plugin_svc", warnings)
+	}
+
+	out, err := Render(f, warnings)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(string(out), "plugin_svc: {}") {
+		t.Errorf("document carries an empty service stanza:\n%s", out)
+	}
+}
+
 func keys[V any](m map[string]V) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
