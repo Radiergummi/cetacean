@@ -18085,10 +18085,10 @@
     },
     {
       "type": "library",
-      "name": "typescript-darwin-arm64",
+      "name": "typescript-linux-x64",
       "group": "@typescript",
       "version": "7.0.2",
-      "bom-ref": "frontend@0.0.0|@typescript/typescript-darwin-arm64@7.0.2",
+      "bom-ref": "frontend@0.0.0|@typescript/typescript-linux-x64@7.0.2",
       "author": "Microsoft Corp.",
       "description": "TypeScript is a language for application scale JavaScript development",
       "scope": "optional",
@@ -18100,7 +18100,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40typescript/typescript-darwin-arm64@7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-linux-x64@7.0.2",
       "externalReferences": [
         {
           "url": "git+https://github.com/microsoft/TypeScript.git",
@@ -18118,12 +18118,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@typescript/typescript-darwin-arm64/-/typescript-darwin-arm64-7.0.2.tgz",
+          "url": "https://registry.npmjs.org/@typescript/typescript-linux-x64/-/typescript-linux-x64-7.0.2.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "828c336abf4cc12fda456a7a7f76b8294ab34630198ceb2618d08ce8b713817ba6f9d05f82c05530df8082f38209b82e5f289c93a2c986906ccf131e6c9f2cc8"
+              "content": "11875fd9c360eeb8025899f109d27e177577f4ef2285bdfb78702ed4b2bca00162ce04d06cf38aef31c75db3edf2b5f6e023aa3835de237b087f47c25c6ec7fc"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -18132,7 +18132,7 @@
       "properties": [
         {
           "name": "cdx:npm:package:path",
-          "value": "node_modules/@typescript/typescript-darwin-arm64"
+          "value": "node_modules/@typescript/typescript-linux-x64"
         }
       ]
     },
