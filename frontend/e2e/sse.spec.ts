@@ -17,7 +17,7 @@ test.describe("SSE / Connection Status", () => {
     await page.goto("/services");
 
     // Table must render successfully
-    await expect(page.getByRole("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("grid")).toBeVisible({ timeout: 10_000 });
 
     // Connection status must show Live (no reconnecting state)
     await expect(page.getByText("Live")).toBeVisible({ timeout: 10_000 });
