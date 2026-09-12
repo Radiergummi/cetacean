@@ -55,12 +55,25 @@ func (ct ContentType) String() string {
 
 type contentTypeKey struct{}
 
+// htmlUnacceptableKey marks a request whose client would not take text/html.
+// Recorded only when true, so the zero value is the permissive one.
+type htmlUnacceptableKey struct{}
+
 // ContentTypeFromContext returns the negotiated content type, defaulting to JSON.
 func ContentTypeFromContext(ctx context.Context) ContentType {
 	if ct, ok := ctx.Value(contentTypeKey{}).(ContentType); ok {
 		return ct
 	}
 	return ContentTypeJSON
+}
+
+// htmlUnacceptable reports whether the client ruled out text/html — by naming
+// an extension suffix that is not .html, or by an Accept header that does not
+// admit it.
+func htmlUnacceptable(ctx context.Context) bool {
+	refused, _ := ctx.Value(htmlUnacceptableKey{}).(bool)
+
+	return refused
 }
 
 // negotiate resolves the effective content type from an extension suffix or
@@ -73,11 +86,19 @@ func negotiate(next http.Handler) http.Handler {
 		w.Header().Add("Vary", "Accept")
 
 		ct := resolveExtension(r)
+		acceptsHTML := ct == ContentTypeHTML
+
 		if ct == ContentTypeUnsupported {
-			ct = parseAccept(r.Header.Get("Accept"))
+			ranges := parseAcceptRanges(r.Header.Get("Accept"))
+			ct = bestMatch(ranges)
+			acceptsHTML = rangesAcceptHTML(ranges)
 		}
 
 		ctx := context.WithValue(r.Context(), contentTypeKey{}, ct)
+		if !acceptsHTML {
+			ctx = context.WithValue(ctx, htmlUnacceptableKey{}, true)
+		}
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -128,6 +149,22 @@ var extensionTypes = []struct {
 	{".csv", ContentTypeCSV},
 }
 
+// hasMidPathExtension reports whether a known extension suffix appears in a
+// non-terminal segment, which a segment ends with exactly when the path holds
+// it followed by a separator. resolveExtension answers this for the terminal
+// segment. Matching the table rather than any dot is what keeps a Docker name
+// like web.json from reading as a representation; the router calls this only
+// where no route matched, since where one did, it is a real resource.
+func hasMidPathExtension(path string) bool {
+	for _, ext := range extensionTypes {
+		if strings.Contains(path, ext.ext+"/") {
+			return true
+		}
+	}
+
+	return false
+}
+
 // resolveExtension checks for a known extension suffix on the request path.
 // If found, it strips the suffix from r.URL.Path and returns the content type.
 // Returns ContentTypeUnsupported if no extension matches.
@@ -140,6 +177,32 @@ func resolveExtension(r *http.Request) ContentType {
 		}
 	}
 	return ContentTypeUnsupported
+}
+
+// rangesAcceptHTML reports whether the ranges admit text/html at a usable
+// quality, per RFC 9110 §12.5.1: no preference admits everything, and the most
+// specific range matching a type is the one whose weight applies — so
+// "*/*, text/html;q=0" refuses HTML while "application/json, */*;q=0.1" does
+// not. Answering this from the resolved ContentType is impossible: it reports
+// JSON for a wildcard and for an explicit application/json alike.
+func rangesAcceptHTML(ranges []mediaRange) bool {
+	if len(ranges) == 0 {
+		return true
+	}
+
+	specificity, quality := -1, 0.0
+
+	for _, mr := range ranges {
+		if !mr.matches("text", "html") {
+			continue
+		}
+
+		if s := mr.specificity(); s > specificity {
+			specificity, quality = s, mr.q
+		}
+	}
+
+	return quality > 0
 }
 
 // mediaRange is a parsed Accept header entry.
@@ -175,16 +238,15 @@ func (mr mediaRange) matches(typ, subtype string) bool {
 	return mr.typ == typ && mr.subtype == subtype
 }
 
-// parseAccept parses an Accept header value per RFC 7231 Section 5.3.2 and
-// returns the best matching ContentType. Returns ContentTypeUnsupported when
-// the header contains media types but none match our supported types.
-func parseAccept(accept string) ContentType {
+// parseAcceptRanges parses an Accept field value into its media ranges. An
+// absent, empty or wholly unparsable header yields none, which every consumer
+// reads as "no preference expressed".
+func parseAcceptRanges(accept string) []mediaRange {
 	accept = strings.TrimSpace(accept)
 	if accept == "" {
-		return ContentTypeJSON
+		return nil
 	}
 
-	// Parse all media ranges from the header.
 	var ranges []mediaRange
 	for i, part := range strings.Split(accept, ",") {
 		part = strings.TrimSpace(part)
@@ -224,7 +286,13 @@ func parseAccept(accept string) ContentType {
 		})
 	}
 
-	// No valid ranges parsed — treat as empty Accept (default JSON).
+	return ranges
+}
+
+// bestMatch picks the supported type the given ranges prefer, defaulting to
+// JSON when no preference was expressed and returning ContentTypeUnsupported
+// when a preference was expressed that none of our types satisfies.
+func bestMatch(ranges []mediaRange) ContentType {
 	if len(ranges) == 0 {
 		return ContentTypeJSON
 	}
@@ -241,7 +309,8 @@ func parseAccept(accept string) ContentType {
 
 	for _, sup := range supportedTypes {
 		for _, mr := range ranges {
-			if !mr.matches(sup.typ, sup.subtype) {
+			// RFC 9110 §12.5.1: a weight of zero means not acceptable.
+			if mr.q <= 0 || !mr.matches(sup.typ, sup.subtype) {
 				continue
 			}
 

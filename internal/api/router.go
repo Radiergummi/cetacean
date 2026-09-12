@@ -823,6 +823,16 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			return
 		}
 
+		// A known suffix in an inner segment (/nodes.atom/feed) is a feed
+		// reader's discovery probe, not a client-side route. It is decided
+		// here because only this route knows nothing matched: `spa` is also
+		// the text/html arm of every contentNegotiated endpoint, where a
+		// dotted Docker name like web.json is a real, routed resource.
+		if hasMidPathExtension(r.URL.Path) {
+			writeProblem(w, r, http.StatusNotFound, "no such resource")
+			return
+		}
+
 		spa.ServeHTTP(w, r)
 	})
 

@@ -11,6 +11,12 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
+// parseAccept is the whole header-to-type path in one call. negotiate drives
+// the two halves separately, since it needs the ranges for rangesAcceptHTML.
+func parseAccept(accept string) ContentType {
+	return bestMatch(parseAcceptRanges(accept))
+}
+
 func TestNegotiate(t *testing.T) {
 	// Helper: runs a request through the negotiate middleware and returns
 	// the resolved ContentType and the path seen by the inner handler.
