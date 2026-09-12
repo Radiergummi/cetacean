@@ -12,11 +12,9 @@ import (
 )
 
 // uiResourceURIMetaKey is the flat _meta key a tool uses to name its widget.
-//
-// The MCP Apps SDK exposes this as RESOURCE_URI_META_KEY and its registerAppTool
-// writes both this and the nested _meta.ui.resourceUri, because hosts predating
-// the nested form read only this one. We do the same: emitting a single form
-// hides the widget from whichever half of the ecosystem reads the other.
+// The MCP Apps SDK writes both this and the nested _meta.ui.resourceUri, since
+// hosts predating the nested form read only this one; emitting one form hides
+// the widget from whichever half of the ecosystem reads the other.
 const uiResourceURIMetaKey = "ui/resourceUri"
 
 // uiResource is one built widget: a self-contained HTML document served as an
@@ -91,12 +89,9 @@ func SetWidgetFS(fsys fs.FS) { widgetFS = fsys }
 func uiResourceURI(name string) string { return "ui://cetacean/" + name }
 
 // uiResources returns every widget found in the embedded build output.
-//
-// Widgets are discovered rather than listed: the Vite target emits one
-// directory per widget, so adding one is a directory on each side and no
-// registry to keep in step. A malformed build yields no resources instead of a
-// panic, and the UI extension then goes unadvertised, which is the honest
-// signal — better than pointing a host at a widget that will not load.
+// Discovered rather than listed: the Vite target emits one directory per
+// widget, so there is no registry to keep in step. A malformed build yields no
+// resources, and the UI extension then goes unadvertised.
 func uiResources() []uiResource {
 	if widgetFS == nil {
 		return nil
@@ -141,10 +136,9 @@ func uiResources() []uiResource {
 }
 
 // uiMetaFields builds the nested _meta.ui object a widget resource carries.
-//
-// csp is always present and always an object, never null: an absent policy and
-// an empty one say different things to a host, and only the empty one states
-// that this widget wants no external origin at all.
+// csp is always present and always an object: an absent policy and an empty
+// one say different things, and only the empty one states that the widget
+// wants no external origin at all.
 func uiMetaFields(resource uiResource) map[string]any {
 	ui := map[string]any{
 		"csp": uiCSP{},
@@ -177,12 +171,10 @@ func toolUIMeta(widgetName string) *mcplib.Meta {
 	}
 }
 
-// registerUIResources publishes each built widget at ui://cetacean/<name>.
-//
-// The bundle is static, so the read handler closes over the bytes rather than
-// re-reading the FS per call. The contents carry the same _meta.ui as the
-// listing: the listing entry is a fallback, and a host reading the resource
-// takes the content's copy.
+// registerUIResources publishes each built widget at ui://cetacean/<name>. The
+// bundle is static, so the handler closes over the bytes rather than re-reading
+// the FS per call. The listing's _meta.ui is a fallback; a host reading the
+// resource takes the content's copy.
 func (s *Server) registerUIResources() {
 	for _, resource := range uiResources() {
 		uri := uiResourceURI(resource.Name)

@@ -14,15 +14,10 @@ const (
 	maxWatchTimeout     = 5 * time.Minute
 	defaultWatchTimeout = 60 * time.Second
 
-	// maxConcurrentWatches bounds how many waits may be in flight at once.
-	//
-	// A wait detaches from its request context, so a client that disconnects,
-	// times out or reconnects leaves the poll running to its own ceiling. The
-	// converging mutations are bounded by mcp-go's MaxConcurrentTasks; nothing
-	// bounded this, and `watch` is a tier-0 read, so a read-only deployment is
-	// reachable too — a client looping it accumulates uncancellable pollers for
-	// up to five minutes each. Deliberately not configurable: it exists to stop
-	// accumulation, not to be tuned.
+	// maxConcurrentWatches bounds how many waits may be in flight at once. A
+	// wait detaches from its request context, so a disconnected client leaves
+	// the poll running to its ceiling, and `watch` is a tier-0 read reachable
+	// on a read-only deployment. Not configurable: it stops accumulation.
 	maxConcurrentWatches = 16
 )
 
@@ -39,17 +34,10 @@ type watchResult struct {
 	ElapsedSeconds float64 `json:"elapsedSeconds"`
 }
 
-// toolWatch waits until a service has settled, and reports what it saw.
-//
-// cluster.ServiceConverged is the rule for "settled", and REST and MCP already
-// share it — but it was reachable only as a side effect of a mutation, so an
-// agent could not ask "has it deployed yet?" without deploying something.
-// Making it a read turns a poll loop of twenty describe calls into one call.
-//
-// The wait detaches from the request context, exactly as the converging
-// mutations do, because a task-augmented call runs on a goroutine holding an
-// already-cancelled HTTP context. tasks/cancel therefore cannot interrupt it;
-// `timeout` is the real bound, which is why it is capped.
+// toolWatch waits until a service has settled, and reports what it saw:
+// cluster.ServiceConverged as a read, so an agent can ask "has it deployed
+// yet?" without deploying something. The wait detaches from the request
+// context, as the converging mutations do, so `timeout` is the real bound.
 func (s *Server) toolWatch(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -104,12 +92,10 @@ func (s *Server) toolWatch(
 	return marshalResult(result)
 }
 
-// watchTimeout resolves how long a wait may run.
-//
-// Zero or negative means "no preference", not "wait as long as you are
-// allowed to": the wait is detached from the request context, so tasks/cancel
-// cannot interrupt it, and a caller spelling it that way would be held for the
-// full ceiling instead of the documented minute.
+// watchTimeout resolves how long a wait may run. Zero or negative means "no
+// preference", not "as long as allowed": the wait is detached, so tasks/cancel
+// cannot interrupt it and such a caller would be held for the full ceiling
+// instead of the documented minute.
 func watchTimeout(req mcplib.CallToolRequest) time.Duration {
 	timeout := time.Duration(
 		req.GetInt("timeout", int(defaultWatchTimeout.Seconds())),
@@ -127,12 +113,9 @@ func watchTimeout(req mcplib.CallToolRequest) time.Duration {
 }
 
 // claimWatch takes one of the concurrent-wait slots, reporting whether it got
-// one. The release function returns it.
-//
-// A Server without the channel — one built in a test rather than by New — is
-// unbounded, which is the right answer there: the bound protects a process
-// serving untrusted callers, and a test that wanted to observe it would wire
-// the channel itself.
+// one; the release function returns it. A Server without the channel — built
+// in a test rather than by New — is unbounded, since the bound protects a
+// process serving untrusted callers.
 func (s *Server) claimWatch() (release func(), ok bool) {
 	if s.watches == nil {
 		return func() {}, true

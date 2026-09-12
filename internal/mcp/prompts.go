@@ -12,23 +12,10 @@ import (
 )
 
 // promptDef is a prompt plus the tools it walks and the resource types it
-// reads. drives is load-bearing: both the prompt's operations tier and half of
-// its per-caller visibility derive from it, so a prompt cannot advertise itself
-// below the tier of a mutation it instructs, and cannot be offered to a caller
-// who could not call one of its steps.
-//
-// reads is the other half, and it exists because "callable" is not "will return
-// anything". find, get_metrics and get_recommendations are
-// deliberately ungated — each ACL-filters its own results, so each stays
-// visible to any caller — which makes a sequence built only from them pass the
-// drives check for a caller who can read none of the types it walks. reads
-// names those types, so a prompt is offered only to a caller who would get
-// answers rather than a run of empty lists. Every type implied by a driven
-// tool's toolACLSpec must appear here too; TestPromptReadsCoverItsDrivenTools
-// keeps the two declarations from drifting.
-//
-// The order of drives is the order the text walks them, which keeps the
-// declaration readable against the prompt body.
+// reads. drives decides both the prompt's tier and half its visibility, so it
+// cannot advertise below the tier of a mutation it instructs. reads is the
+// other half: "callable" is not "will return anything", since the ungated
+// cross-type reads stay visible to every caller.
 type promptDef struct {
 	prompt  mcplib.Prompt
 	drives  []string
@@ -189,8 +176,7 @@ func promptCatalog() []promptDef {
 
 // interpolatingHandler builds a handler that substitutes one required argument
 // into the text. The argument is not checked against the cache: the text tells
-// the model to resolve the name with find first, which is what
-// mcpInstructions already asks of every client, and failing prompts/get on a
+// the model to resolve the name with find first, and failing prompts/get on a
 // typo leaves the client no way to correct it.
 func interpolatingHandler(description, text, argument string) mcpserver.PromptHandlerFunc {
 	return func(
@@ -252,20 +238,9 @@ func (s *Server) toolTiers() map[string]config.OperationsLevel {
 }
 
 // promptTier is the highest tier among the tools a prompt drives, so a prompt
-// is never offered at a tier that would refuse one of its steps.
-//
-// A name absent from tiers is treated as the highest tier rather than
-// contributing nothing: there is nowhere sensible to fail from a pure
-// function called during registration, so an unknown name fails closed by
-// mis-tiering the prompt loudly — it drops out of every deployment below the
-// top tier — instead of under-tiering it into visibility it should not have.
-// TestPromptCatalogDrivesOnlyRealTools is the guard that catches a typo at
-// authoring time, before it ever reaches this fallback. That fallback is
-// asymmetric with the ACL side: allToolsVisible treats a name absent from
-// toolACLSpecs as visible, correctly, for genuinely ungated tools like
-// search — so a typo'd drives entry still passes filterPromptsForIdentity's
-// check, and the prompt is offered as a dead end rather than hidden. Tier
-// derivation can fail closed; the visibility check cannot, by design.
+// is never offered at a tier that would refuse one of its steps. An unknown
+// name is treated as the highest: a pure function called during registration
+// has nowhere to fail, so it mis-tiers loudly rather than under-tiering.
 func promptTier(def promptDef, tiers map[string]config.OperationsLevel) config.OperationsLevel {
 	tier := config.OpsReadOnly
 	for _, name := range def.drives {
