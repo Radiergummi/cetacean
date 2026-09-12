@@ -451,25 +451,37 @@ var feedPaginationParams = []string{"before", "limit"}
 // searchFeedParams names the parameter only the search feed reads.
 var searchFeedParams = []string{"q"}
 
+// listCSVParams names the query parameters a list endpoint reads (searchFilter,
+// exprFilter, parsePagination). The CSV comes off the list its JSON handler
+// prepared, so its advertised alternate has to carry them or it points at a
+// different set of rows.
+var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset"}
+
+// historyCSVParams names what HandleHistory reads.
+var historyCSVParams = []string{"type", "resourceId", "limit"}
+
 // feedQuery returns the subset of r's query a feed's links may carry: the
 // pagination pair every feed reads, plus whatever else the caller declares.
-//
-// Reflecting the rest of the raw query into a compressed feed beside
-// ACL-filtered resource names is the BREACH shape.
 func feedQuery(r *http.Request, extra []string) url.Values {
-	source := r.URL.Query()
-	kept := make(url.Values, len(feedPaginationParams)+len(extra))
+	return keptQuery(r, feedPaginationParams, extra)
+}
 
-	keep := func(names []string) {
-		for _, name := range names {
+// keptQuery returns the values of the named parameters, and nothing else.
+//
+// Reflecting the rest of the raw query into a compressed response beside
+// ACL-filtered resource names is the BREACH shape, so every link built here
+// names what it carries.
+func keptQuery(r *http.Request, names ...[]string) url.Values {
+	source := r.URL.Query()
+	kept := url.Values{}
+
+	for _, set := range names {
+		for _, name := range set {
 			if values, ok := source[name]; ok {
 				kept[name] = values
 			}
 		}
 	}
-
-	keep(feedPaginationParams)
-	keep(extra)
 
 	return kept
 }

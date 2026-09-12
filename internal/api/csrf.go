@@ -44,6 +44,11 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if carriesItsOwnProof(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Check rather than Handler: the stdlib's own deny path writes a
 			// plain-text 403, and its error names which branch refused the
 			// request, which is what an operator needs to fix the deployment.
@@ -54,5 +59,28 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+// carriesItsOwnProof names the endpoints that authenticate from the request
+// itself — a PKCE verifier, a refresh token, a registration request, an MCP
+// bearer token — and never from a credential the browser attaches on its own.
+//
+// There is no ambient authority for a cross-origin page to borrow, so the
+// protection defends nothing here and costs the thing the MCP authorization
+// profile depends on: a browser-based client completing a token exchange from
+// its own origin. RFC 7591 registration is the case that cannot be configured
+// around, since its whole point is a client the operator has never heard of.
+//
+// Deliberately not /oauth/authorize: consent runs under the user's session
+// cookie, which is exactly the ambient credential this protects.
+func carriesItsOwnProof(path string) bool {
+	// Spelled here rather than imported: internal/api and internal/mcp
+	// deliberately do not import each other, as oauthProtectedResourcePath is.
+	switch path {
+	case "/mcp", "/oauth/token", "/oauth/revoke", "/oauth/register":
+		return true
+	default:
+		return false
 	}
 }

@@ -110,11 +110,6 @@ func csvTableForRecommendations(results []recommendations.Recommendation) csvTab
 	}
 
 	for _, result := range results {
-		suggested := ""
-		if result.Suggested != nil {
-			suggested = csvNumber(*result.Suggested)
-		}
-
 		table.records = append(table.records, []string{
 			string(result.Severity),
 			string(result.Category),
@@ -124,21 +119,22 @@ func csvTableForRecommendations(results []recommendations.Recommendation) csvTab
 			result.Message,
 			csvNumber(result.Current),
 			csvNumber(result.Configured),
-			suggested,
+			csvNumber(result.Suggested),
 		})
 	}
 
 	return table
 }
 
-// csvNumber leaves an absent measurement blank: a column of zeroes would read
-// as measured.
-func csvNumber(value float64) string {
-	if value == 0 {
+// csvNumber leaves an absent measurement blank and writes a present one, zero
+// included: a service using no CPU measured zero, and blanking that reads as
+// though nothing was measured.
+func csvNumber(value *float64) string {
+	if value == nil {
 		return ""
 	}
 
-	return strconv.FormatFloat(value, 'f', -1, 64)
+	return strconv.FormatFloat(*value, 'f', -1, 64)
 }
 
 func csvTableForRows(resourceType string, rows []cluster.Row) csvTable {

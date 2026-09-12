@@ -16,9 +16,15 @@
       rel="apple-touch-icon"
       href="./apple-touch-icon.png"
     />
+    <!--
+      use-credentials: a manifest is fetched with credentials omitted by
+      default, and /manifest.webmanifest is not exempt from authentication, so
+      without this the browser never gets one to install under auth.mode=oidc.
+    -->
     <link
       rel="manifest"
       href="./manifest.webmanifest"
+      crossorigin="use-credentials"
     />
     <link
       rel="search"

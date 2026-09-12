@@ -6758,8 +6758,14 @@ components:
           type: string
         current:
           type: number
+          description: >-
+            The measured value. Absent when nothing was measured; present and
+            zero when the measurement was zero.
         configured:
           type: number
+          description: >-
+            The configured value. Absent when the finding is that nothing is
+            configured.
         suggested:
           type: number
         fixAction:

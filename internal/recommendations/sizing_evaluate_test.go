@@ -329,7 +329,7 @@ func TestEvaluate_OverProvisioned_ReservationNotLimit(t *testing.T) {
 
 	// Configured must be the reservation, not the limit — in NanoCPUs, the unit
 	// Suggested and the fixAction's PATCH body both use.
-	if cpuHint.Configured != float64(spec.cpuReservation) {
+	if cpuHint.Configured == nil || *cpuHint.Configured != float64(spec.cpuReservation) {
 		t.Errorf("cpu Configured = %v, want reservation %v NanoCPUs (not limit %v)",
 			cpuHint.Configured, float64(spec.cpuReservation), float64(spec.cpuLimit))
 	}
@@ -339,7 +339,7 @@ func TestEvaluate_OverProvisioned_ReservationNotLimit(t *testing.T) {
 	}
 
 	// Configured must be the reservation bytes, not the limit bytes.
-	if memHint.Configured != float64(spec.memoryReservation) {
+	if memHint.Configured == nil || *memHint.Configured != float64(spec.memoryReservation) {
 		t.Errorf("memory Configured = %v, want reservation %v (not limit %v)",
 			memHint.Configured, float64(spec.memoryReservation), float64(spec.memoryLimit))
 	}
@@ -410,14 +410,14 @@ func TestOverProvisionedCPUReportsNanoCPUs(t *testing.T) {
 
 	hint := findHint(t, evaluate(spec, nil, p95, defaultConfig()), CategoryOverProvisioned, "cpu")
 
-	if hint.Configured != 250e6 {
+	if hint.Configured == nil || *hint.Configured != 250e6 {
 		t.Errorf(
 			"configured = %v, want 250000000 NanoCPUs to match suggested's unit",
 			hint.Configured,
 		)
 	}
 
-	if hint.Current != 20e6 {
+	if hint.Current == nil || *hint.Current != 20e6 {
 		t.Errorf("current = %v, want 20000000 NanoCPUs (2%% of a core)", hint.Current)
 	}
 }
