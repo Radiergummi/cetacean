@@ -249,10 +249,14 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	))
 
 	// API documentation (content-negotiated)
-	mux.HandleFunc("GET /api", HandleAPIDoc(cfg.OpenAPISpec))
+	apiDoc, openAPIYAML := HandleAPIDoc(cfg.OpenAPISpec)
+	mux.HandleFunc("GET /api", apiDoc)
+	mux.HandleFunc("GET "+openAPIYAMLPath, openAPIYAML)
 	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(cfg.ScalarJS))
 	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
-	mux.HandleFunc("GET "+asyncAPIPath, HandleAsyncAPI(cfg.AsyncAPISpec))
+	asyncAPI, asyncAPIYAML := HandleAsyncAPI(cfg.AsyncAPISpec)
+	mux.HandleFunc("GET "+asyncAPIPath, asyncAPI)
+	mux.HandleFunc("GET "+asyncAPIYAMLPath, asyncAPIYAML)
 	mux.HandleFunc("GET "+openSearchPath, HandleOpenSearch)
 	mux.HandleFunc("GET "+apiCatalogPath, HandleAPICatalog(catalogMounts{
 		mcp:           cfg.MCPHandler != nil,

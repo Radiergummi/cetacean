@@ -1,34 +1,39 @@
 package api
 
 import (
+	"bytes"
+	"errors"
 	"maps"
 	"net/http"
+	"slices"
 	"sync/atomic"
 
 	json "github.com/goccy/go-json"
+	"gopkg.in/yaml.v3"
 )
 
 const (
-	asyncAPIPath = "/api/asyncapi"
+	asyncAPIPath     = "/api/asyncapi"
+	asyncAPIYAMLPath = asyncAPIPath + ".yaml"
 
 	// asyncAPIMediaTypeBase is the type without its version parameter, for
 	// the places that compare types rather than state them.
 	asyncAPIMediaTypeBase = "application/vnd.aai.asyncapi+json"
 	asyncAPIMediaType     = asyncAPIMediaTypeBase + ";version=3.0.0"
+
+	asyncAPIYAMLMediaType = "application/vnd.aai.asyncapi+yaml;version=3.0.0"
 )
 
-// asyncAPIRendering is the document as one origin sees it, under the key that
-// produced it.
+// asyncAPIRendering is the document as one origin sees it, in both
+// representations, under the key that produced them.
 type asyncAPIRendering struct {
 	key  string
-	body *staticBody
+	json *staticBody
+	yaml *staticBody
 }
 
-// HandleAsyncAPI serves the AsyncAPI description of the SSE streams.
-//
-// One representation, served unconditionally, as HandleContext does for the
-// JSON-LD context: this document has exactly one form, so there is nothing to
-// negotiate and no SPA fallback to reach.
+// HandleAsyncAPI serves the AsyncAPI description of the SSE streams, and
+// HandleAsyncAPIYAML the same document at its .yaml address.
 //
 // AsyncAPI 3.0 requires host on a server object, so the document names the
 // deployment's own origin — from the validated origin, never from a raw
@@ -38,49 +43,108 @@ type asyncAPIRendering struct {
 // rather than a map: origin falls back to r.Host when server.public_url is
 // unset, so a hostile client can vary the key without bound — a map would
 // grow, a slot degrades to rebuilding per request and no worse.
-func HandleAsyncAPI(specYAML []byte) http.HandlerFunc {
+//
+// Anything that is not a YAML request gets JSON, text/html included: there is
+// no SPA route here, so a browser pointed at the URL should see the document
+// rather than a refusal.
+func HandleAsyncAPI(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 	doc, err := yamlDocument(specYAML)
+	if err != nil {
+		panic("asyncapi spec " + err.Error())
+	}
+
+	source, err := newAsyncAPISource(specYAML)
 	if err != nil {
 		panic("asyncapi spec " + err.Error())
 	}
 
 	var current atomic.Pointer[asyncAPIRendering]
 
-	return func(w http.ResponseWriter, r *http.Request) {
+	render := func(r *http.Request) (*asyncAPIRendering, error) {
 		scheme, host := origin(r)
 		base := BasePathFromContext(r.Context())
 		key := scheme + "\x00" + host + "\x00" + base
 
-		rendering := current.Load()
+		if rendering := current.Load(); rendering != nil && rendering.key == key {
+			return rendering, nil
+		}
 
-		if rendering == nil || rendering.key != key {
-			body, err := renderAsyncAPI(doc, scheme, host, base)
-			if err != nil {
-				writeErrorCode(w, r, "API009", "failed to serialize response")
+		fields := asyncAPIServerFields(scheme, host, base)
 
-				return
-			}
+		asJSON, err := renderAsyncAPIJSON(doc, fields)
+		if err != nil {
+			return nil, err
+		}
 
-			rendering = &asyncAPIRendering{key: key, body: newStaticBody(body)}
-			current.Store(rendering)
+		asYAML, err := source.render(fields)
+		if err != nil {
+			return nil, err
+		}
+
+		rendering := &asyncAPIRendering{
+			key:  key,
+			json: newStaticBody(asJSON),
+			yaml: newStaticBody(asYAML),
+		}
+		current.Store(rendering)
+
+		return rendering, nil
+	}
+
+	serve := func(w http.ResponseWriter, r *http.Request, asYAML bool) {
+		rendering, err := render(r)
+		if err != nil {
+			writeErrorCode(w, r, "API009", "failed to serialize response")
+
+			return
+		}
+
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+
+		if asYAML {
+			w.Header().Set("Content-Type", asyncAPIYAMLMediaType)
+			rendering.yaml.serve(w, r)
+
+			return
 		}
 
 		w.Header().Set("Content-Type", asyncAPIMediaType)
-		w.Header().Set("Cache-Control", "public, max-age=3600")
-		rendering.body.serve(w, r)
+		rendering.json.serve(w, r)
 	}
+
+	negotiated = func(w http.ResponseWriter, r *http.Request) {
+		serve(w, r, ContentTypeFromContext(r.Context()) == ContentTypeYAML)
+	}
+
+	yamlOnly = func(w http.ResponseWriter, r *http.Request) {
+		serve(w, r, true)
+	}
+
+	return negotiated, yamlOnly
 }
 
-// renderAsyncAPI marshals doc with the server block one origin gets.
-func renderAsyncAPI(doc map[string]any, scheme, host, base string) ([]byte, error) {
-	server := map[string]any{
-		"host":        host,
-		"protocol":    scheme,
-		"description": "This deployment.",
+// asyncAPIServerFields is the server object both representations inject, in
+// the order they write it. Named once so the two cannot disagree about what
+// the deployment is called.
+func asyncAPIServerFields(scheme, host, base string) [][2]string {
+	fields := [][2]string{
+		{"host", host},
+		{"protocol", scheme},
+		{"description", "This deployment."},
 	}
 
 	if base != "" {
-		server["pathname"] = base
+		fields = append(fields, [2]string{"pathname", base})
+	}
+
+	return fields
+}
+
+// renderAsyncAPIJSON marshals doc with the server block one origin gets.
+func renderAsyncAPIJSON(doc map[string]any, fields [][2]string) ([]byte, error) {
+	server := make(map[string]any, len(fields))
+	for _, field := range fields {
+		server[field[0]] = field[1]
 	}
 
 	// Copied shallowly so a concurrent render cannot see this server block;
@@ -91,4 +155,95 @@ func renderAsyncAPI(doc map[string]any, scheme, host, base string) ([]byte, erro
 	described["servers"] = map[string]any{"self": server}
 
 	return json.Marshal(described)
+}
+
+// asyncAPISource is the authored document as a node tree. The YAML
+// representation is spliced rather than re-encoded from the map the JSON is
+// built from, because marshalling a map loses every comment and the authored
+// key order — and the point of serving YAML is that a person reads it.
+type asyncAPISource struct {
+	root *yaml.Node
+
+	// serversAt indexes the servers *value* in root.Content, or -1 when the
+	// document declares none. The key node is left in place, so a comment
+	// attached to it survives the splice.
+	serversAt int
+}
+
+func newAsyncAPISource(specYAML []byte) (*asyncAPISource, error) {
+	var document yaml.Node
+	if err := yaml.Unmarshal(specYAML, &document); err != nil {
+		return nil, errors.New("is not valid YAML: " + err.Error())
+	}
+
+	if len(document.Content) == 0 || document.Content[0].Kind != yaml.MappingNode {
+		return nil, errors.New("does not parse to an object")
+	}
+
+	source := &asyncAPISource{root: document.Content[0], serversAt: -1}
+
+	for i := 0; i+1 < len(source.root.Content); i += 2 {
+		if source.root.Content[i].Value == "servers" {
+			source.serversAt = i + 1
+
+			break
+		}
+	}
+
+	return source, nil
+}
+
+// render writes the document with the server object one origin gets. The root
+// mapping is copied so concurrent renders never share the slice they write.
+func (s *asyncAPISource) render(fields [][2]string) ([]byte, error) {
+	servers := &yaml.Node{
+		Kind:    yaml.MappingNode,
+		Content: []*yaml.Node{yamlScalar("self"), yamlMapping(fields)},
+	}
+
+	root := *s.root
+	root.Content = slices.Clone(s.root.Content)
+
+	if s.serversAt >= 0 {
+		root.Content[s.serversAt] = servers
+	} else {
+		root.Content = append(root.Content, yamlScalar("servers"), servers)
+	}
+
+	// yaml.Marshal would indent by four. The authored file indents by two, and
+	// this is meant to read as that file.
+	var out bytes.Buffer
+
+	encoder := yaml.NewEncoder(&out)
+	encoder.SetIndent(2)
+
+	if err := encoder.Encode(&yaml.Node{
+		Kind:    yaml.DocumentNode,
+		Content: []*yaml.Node{&root},
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+
+	return out.Bytes(), nil
+}
+
+func yamlMapping(fields [][2]string) *yaml.Node {
+	node := &yaml.Node{
+		Kind:    yaml.MappingNode,
+		Content: make([]*yaml.Node, 0, len(fields)*2),
+	}
+
+	for _, field := range fields {
+		node.Content = append(node.Content, yamlScalar(field[0]), yamlScalar(field[1]))
+	}
+
+	return node
+}
+
+func yamlScalar(value string) *yaml.Node {
+	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
 }

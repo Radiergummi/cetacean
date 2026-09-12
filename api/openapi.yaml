@@ -13,6 +13,11 @@ info:
     Detail responses include `@context`, `@id`, and `@type`.
     Error responses follow RFC 9457 (Problem Details).
 
+    Both descriptions are served as JSON and as YAML. `/api` and `/api/asyncapi` negotiate on `Accept`
+    (`application/yaml`, `text/yaml`, or the registered `application/vnd.oai.openapi` and
+    `application/vnd.aai.asyncapi+yaml`), and `/api/openapi.yaml` and `/api/asyncapi.yaml` address the
+    YAML form directly.
+
     Every response (except `/-/` meta endpoints) includes:
     - `Link: </api>; rel="service-desc"; type="application/json"` — pointer to this spec
     - `Link: </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0"` —
@@ -655,8 +660,9 @@ paths:
       tags: [Documentation]
       summary: API documentation
       description: |
-        Content-negotiated. HTML requests get the Scalar API playground;
-        all other requests get this OpenAPI spec as JSON.
+        Content-negotiated. HTML requests get the Scalar API playground, a
+        request naming a YAML type gets this document as YAML, and all others
+        get it as JSON.
       security: []
       responses:
         "200":
@@ -666,6 +672,69 @@ paths:
               schema:
                 type: object
             text/html:
+              schema:
+                type: string
+            application/vnd.oai.openapi:
+              schema:
+                type: string
+
+  /api/openapi.yaml:
+    get:
+      operationId: getApiDocYaml
+      tags: [Documentation]
+      summary: OpenAPI description as YAML
+      description: |
+        This document as YAML, at the address the documentation site publishes
+        it under. The source file is served verbatim, so its comments and key
+        order are intact.
+      security: []
+      responses:
+        "200":
+          description: OpenAPI description
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: string
+
+  /api/asyncapi:
+    get:
+      operationId: getAsyncApiDoc
+      tags: [Documentation]
+      summary: AsyncAPI description of the event streams
+      description: |
+        Describes every Server-Sent Events stream this server serves — what
+        each channel sends, the shape of its payloads, and which cursor dialect
+        its `id:` belongs to. A request naming a YAML type gets YAML; everything
+        else gets JSON.
+
+        The document names this deployment's own origin in its `servers` block,
+        so it is built per origin rather than served as a fixed file.
+      security: []
+      responses:
+        "200":
+          description: AsyncAPI description
+          content:
+            application/vnd.aai.asyncapi+json:
+              schema:
+                type: object
+            application/vnd.aai.asyncapi+yaml:
+              schema:
+                type: string
+
+  /api/asyncapi.yaml:
+    get:
+      operationId: getAsyncApiDocYaml
+      tags: [Documentation]
+      summary: AsyncAPI description as YAML
+      description: |
+        The same document as `/api/asyncapi`, always as YAML, keeping the
+        source's comments and key order.
+      security: []
+      responses:
+        "200":
+          description: AsyncAPI description
+          content:
+            application/vnd.aai.asyncapi+yaml:
               schema:
                 type: string
 

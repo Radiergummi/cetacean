@@ -542,7 +542,8 @@ Append `point` events to the data you already hold to build a rolling window.
 ### Stream contract
 
 `GET /api/asyncapi` describes every stream above as an [AsyncAPI 3.0](https://www.asyncapi.com/) document —
-`/api/asyncapi.json` serves the same thing. It names all twenty channels, the messages each can carry, and which of
+`/api/asyncapi.json` serves the same thing, and `/api/asyncapi.yaml` (or an `Accept` naming a YAML type)
+serves it as YAML. It names all twenty channels, the messages each can carry, and which of
 three cursor dialects its `id:` belongs to: a monotonic history id on the resource streams, an RFC 3339 timestamp that
 only moves forward on the log tails, and no id at all on `/metrics`. Paste it into
 [AsyncAPI Studio](https://studio.asyncapi.com/) to browse it; Cetacean ships no renderer of its own.

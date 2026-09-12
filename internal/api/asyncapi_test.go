@@ -10,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -415,4 +416,172 @@ func withAsyncAPISpec(t *testing.T) routerOption {
 	}
 
 	return func(cfg *RouterConfig) { cfg.AsyncAPISpec = raw }
+}
+
+// asyncAPIRequest fetches the document under one Accept header.
+func asyncAPIRequest(
+	t *testing.T,
+	router http.Handler,
+	path, accept string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Host = "cetacean.example.com"
+
+	if accept != "" {
+		req.Header.Set("Accept", accept)
+	}
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%s (Accept: %q) = %d; body: %s", path, accept, rec.Code, rec.Body.String())
+	}
+
+	return rec
+}
+
+// TestAsyncAPIYAMLIsTheSameDocument holds the two representations together.
+// The server block is spliced into a node tree for YAML and into a map for
+// JSON — two injection sites that would otherwise drift silently.
+func TestAsyncAPIYAMLIsTheSameDocument(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withAsyncAPISpec(t)},
+		withCache(cache.New(nil)),
+	)
+
+	asJSON := asyncAPIRequest(t, router, asyncAPIPath, "application/json")
+	asYAML := asyncAPIRequest(t, router, asyncAPIYAMLPath, "")
+
+	// Both sides start from the same file, so normalising the YAML through the
+	// same conversion the JSON path uses has to land on identical bytes.
+	normalized, err := json.Marshal(loadYAMLDocument(t, "the served YAML", asYAML.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("marshal the served YAML: %v", err)
+	}
+
+	if !bytes.Equal(normalized, asJSON.Body.Bytes()) {
+		t.Errorf(
+			"the YAML and JSON representations are different documents\n yaml: %s\n json: %s",
+			truncate(normalized), truncate(asJSON.Body.Bytes()),
+		)
+	}
+}
+
+// TestAsyncAPIYAMLKeepsTheAuthoredDocument: the point of serving YAML is that
+// a person reads it, so the comments and the key order in api/asyncapi.yaml
+// have to survive. Re-encoding the map the JSON is built from loses both.
+func TestAsyncAPIYAMLKeepsTheAuthoredDocument(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withAsyncAPISpec(t)},
+		withCache(cache.New(nil)),
+	)
+
+	body := asyncAPIRequest(t, router, asyncAPIYAMLPath, "").Body.String()
+
+	if !strings.HasPrefix(body, "asyncapi:") {
+		t.Errorf(
+			"the document does not open on asyncapi:, so the key order was rebuilt:\n%.120s",
+			body,
+		)
+	}
+
+	// A comment from the source file. A bare "#" would pass on any $ref, so
+	// this names one the file actually carries.
+	const comment = "# The /metrics stream forwards Prometheus' own response bodies unchanged."
+
+	if !strings.Contains(body, comment) {
+		t.Error("the served YAML dropped the source file's comments")
+	}
+
+	// The authored file indents by two; yaml.Marshal's default is four.
+	if !strings.Contains(body, "\ninfo:\n  title:") {
+		t.Error("the served YAML is not indented like the file it comes from")
+	}
+
+	// The placeholder in the file must not survive: the served document names
+	// the origin the request arrived on.
+	if strings.Contains(body, "localhost:9000") {
+		t.Error("the served YAML still names the file's placeholder host")
+	}
+
+	if !strings.Contains(body, "cetacean.example.com") {
+		t.Error("the served YAML does not name the request's origin")
+	}
+}
+
+// TestSpecDocumentsNegotiateYAML drives every spelling a client might send.
+func TestSpecDocumentsNegotiateYAML(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withAsyncAPISpec(t), withAPIDocs([]byte("openapi: '3.1.0'\n"), nil)},
+		withCache(cache.New(nil)),
+	)
+
+	yamlTypes := []string{
+		"application/yaml",
+		"text/yaml",
+		"application/x-yaml",
+		"text/x-yaml",
+	}
+
+	t.Run("openapi", func(t *testing.T) {
+		for _, accept := range append(yamlTypes,
+			"application/vnd.oai.openapi", "application/openapi+yaml",
+		) {
+			t.Run(accept, func(t *testing.T) {
+				rec := asyncAPIRequest(t, router, "/api", accept)
+
+				if got := rec.Header().Get("Content-Type"); got != openAPIYAMLMediaType {
+					t.Errorf("Content-Type = %q, want %q", got, openAPIYAMLMediaType)
+				}
+
+				if !strings.HasPrefix(rec.Body.String(), "openapi:") {
+					t.Errorf("body is not the YAML source: %.60s", rec.Body.String())
+				}
+			})
+		}
+	})
+
+	t.Run("asyncapi", func(t *testing.T) {
+		for _, accept := range append(yamlTypes,
+			"application/vnd.aai.asyncapi+yaml", "application/asyncapi+yaml",
+		) {
+			t.Run(accept, func(t *testing.T) {
+				rec := asyncAPIRequest(t, router, asyncAPIPath, accept)
+
+				if got := rec.Header().Get("Content-Type"); got != asyncAPIYAMLMediaType {
+					t.Errorf("Content-Type = %q, want %q", got, asyncAPIYAMLMediaType)
+				}
+
+				if !strings.HasPrefix(rec.Body.String(), "asyncapi:") {
+					t.Errorf("body is not YAML: %.60s", rec.Body.String())
+				}
+			})
+		}
+	})
+
+	// The generic spellings ask for a format, not a document, so JSON must
+	// still be what an ordinary client gets.
+	t.Run("json is still the default", func(t *testing.T) {
+		for _, accept := range []string{"", "*/*", "application/json", "application/*"} {
+			rec := asyncAPIRequest(t, router, asyncAPIPath, accept)
+
+			if got := rec.Header().Get("Content-Type"); got != asyncAPIMediaType {
+				t.Errorf("Accept %q gave Content-Type %q, want %q", accept, got, asyncAPIMediaType)
+			}
+		}
+	})
+}
+
+func truncate(b []byte) string {
+	if len(b) > 200 {
+		return string(b[:200]) + "…"
+	}
+
+	return string(b)
 }
