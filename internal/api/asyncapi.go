@@ -24,29 +24,21 @@ const (
 	asyncAPIYAMLMediaType = "application/vnd.aai.asyncapi+yaml;version=3.0.0"
 )
 
-// asyncAPIRendering is the document as one origin sees it, in both
-// representations, under the key that produced them.
+// asyncAPIRendering is the document as one origin sees it.
 type asyncAPIRendering struct {
 	key  string
 	json *staticBody
 	yaml *staticBody
 }
 
-// HandleAsyncAPI serves the AsyncAPI description of the SSE streams, and
-// HandleAsyncAPIYAML the same document at its .yaml address.
+// HandleAsyncAPI returns the negotiated handler and the one behind the .yaml
+// address. Anything that is not a YAML request gets JSON, text/html included:
+// there is no SPA route here.
 //
-// AsyncAPI 3.0 requires host on a server object, so the document names the
-// deployment's own origin — from the validated origin, never from a raw
-// forwarding header. The body is therefore a pure function of scheme, host and
-// base path, and one rendering is retained under that key so this document is
-// hashed and compressed once like every other served document. A single slot
-// rather than a map: origin falls back to r.Host when server.public_url is
-// unset, so a hostile client can vary the key without bound — a map would
-// grow, a slot degrades to rebuilding per request and no worse.
-//
-// Anything that is not a YAML request gets JSON, text/html included: there is
-// no SPA route here, so a browser pointed at the URL should see the document
-// rather than a refusal.
+// AsyncAPI 3.0 requires host on a server object, so the body varies by scheme,
+// host and base path and is retained under that key. One slot, not a map:
+// origin falls back to r.Host, so the key is caller-controlled and a map would
+// grow without bound.
 func HandleAsyncAPI(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 	doc, err := yamlDocument(specYAML)
 	if err != nil {
@@ -123,9 +115,8 @@ func HandleAsyncAPI(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 	return negotiated, yamlOnly
 }
 
-// asyncAPIServerFields is the server object both representations inject, in
-// the order they write it. Named once so the two cannot disagree about what
-// the deployment is called.
+// asyncAPIServerFields is the server object both representations inject, named
+// once so they cannot disagree.
 func asyncAPIServerFields(scheme, host, base string) [][2]string {
 	fields := [][2]string{
 		{"host", host},
@@ -147,8 +138,7 @@ func renderAsyncAPIJSON(doc map[string]any, fields [][2]string) ([]byte, error) 
 		server[field[0]] = field[1]
 	}
 
-	// Copied shallowly so a concurrent render cannot see this server block;
-	// nothing below servers is written.
+	// Shallow copy: nothing below servers is written.
 	described := make(map[string]any, len(doc))
 	maps.Copy(described, doc)
 
@@ -157,16 +147,13 @@ func renderAsyncAPIJSON(doc map[string]any, fields [][2]string) ([]byte, error) 
 	return json.Marshal(described)
 }
 
-// asyncAPISource is the authored document as a node tree. The YAML
-// representation is spliced rather than re-encoded from the map the JSON is
-// built from, because marshalling a map loses every comment and the authored
-// key order — and the point of serving YAML is that a person reads it.
+// asyncAPISource is the authored document as a node tree. The YAML is spliced
+// rather than re-encoded from a map, which would lose the comments and key
+// order a reader came for.
 type asyncAPISource struct {
 	root *yaml.Node
 
-	// serversAt indexes the servers *value* in root.Content, or -1 when the
-	// document declares none. The key node is left in place, so a comment
-	// attached to it survives the splice.
+	// serversAt indexes the servers *value*, or -1 if there is none.
 	serversAt int
 }
 
@@ -193,8 +180,8 @@ func newAsyncAPISource(specYAML []byte) (*asyncAPISource, error) {
 	return source, nil
 }
 
-// render writes the document with the server object one origin gets. The root
-// mapping is copied so concurrent renders never share the slice they write.
+// render writes the document for one origin. The root mapping is copied so
+// concurrent renders never share the slice they write.
 func (s *asyncAPISource) render(fields [][2]string) ([]byte, error) {
 	servers := &yaml.Node{
 		Kind:    yaml.MappingNode,
@@ -210,8 +197,7 @@ func (s *asyncAPISource) render(fields [][2]string) ([]byte, error) {
 		root.Content = append(root.Content, yamlScalar("servers"), servers)
 	}
 
-	// yaml.Marshal would indent by four. The authored file indents by two, and
-	// this is meant to read as that file.
+	// yaml.Marshal indents by four; the authored file uses two.
 	var out bytes.Buffer
 
 	encoder := yaml.NewEncoder(&out)

@@ -26,14 +26,10 @@ const (
 	openAPIYAMLMediaType = "application/vnd.oai.openapi"
 )
 
-// HandleAPIDoc serves the API documentation, and HandleOpenAPIYAML the same
-// document at the .yaml address the documentation site publishes it under.
-//
-// HTML requests get the Scalar playground, JSON requests (including default
-// */* negotiation) get the spec as JSON, and a request naming a YAML type gets
-// the source file — bytes rather than a re-encoding, so the comments and the
-// authored key order survive. Both handlers come from one call because they
-// share the bodies, each hashed once and compressed at most once per coding.
+// HandleAPIDoc returns the negotiated handler and the one behind the .yaml
+// address. HTML gets the Scalar playground, */* and JSON get the spec as JSON,
+// and a YAML type gets the source file verbatim. Both come from one call so
+// they share the bodies, each hashed and compressed once.
 func HandleAPIDoc(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 	// Convert YAML to JSON once at startup.
 	var parsed any

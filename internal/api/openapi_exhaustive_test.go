@@ -157,11 +157,9 @@ func TestEveryReadEndpointMatchesSpec(t *testing.T) {
 	)
 }
 
-// The two description documents answer with their own registered media types,
-// which kin-openapi has no decoder for — it would report the document as an
-// undecodable body rather than validating it against the spec that declares
-// it. Registering them here is what brings /api/openapi.yaml, /api/asyncapi
-// and /api/asyncapi.yaml into the walk instead of being skipped out of it.
+// kin-openapi has no decoder for the descriptions' own media types, and would
+// call them undecodable bodies rather than validate them. Registering these is
+// what keeps the three /api documents in the walk.
 func init() {
 	yamlDecoder := func(
 		body io.Reader,

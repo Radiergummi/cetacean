@@ -81,7 +81,7 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">
-  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose forwarding headers are trusted, e.g. `10.0.0.0/8,172.16.0.0/12`. Both [`Forwarded`][rfc7239] and `X-Forwarded-For` are read for the real client IP, the standard header first. Required for [header-based authentication][trusted-proxy-headers], and for `cert` mode behind a [TLS-terminating proxy][cert-behind-proxy]. When unset, every request counts as a direct connection, and `X-Forwarded-Proto`/`X-Forwarded-Host` are ignored — so absolute URLs (feed links and identifiers, OpenSearch templates, the API catalogue) name the address Cetacean was reached on inside the cluster. Set [`server.public_url`][server.public_url] instead if you would rather pin those URLs outright.
+  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose forwarding headers are trusted, e.g. `10.0.0.0/8,172.16.0.0/12`. Both [`Forwarded`][rfc7239] and `X-Forwarded-For` are read for the real client IP, the standard header first. Required for [header-based authentication][trusted-proxy-headers], and for `cert` mode behind a [TLS-terminating proxy][cert-behind-proxy]. When unset, every request counts as a direct connection.
 </ConfigParam>
 
 <ConfigParam name="storage.snapshot" flag="-snapshot" env="CETACEAN_SNAPSHOT" default="true">

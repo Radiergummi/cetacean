@@ -20,8 +20,8 @@ type feedHandlers struct {
 	// has already prepared.
 	csv bool
 
-	// csvParams names the query parameters the CSV reads, for the alternate
-	// link. Empty on a sub-collection that takes none.
+	// csvParams names what the CSV reads, for the alternate link. Empty on a
+	// sub-collection that takes none.
 	csvParams []string
 
 	queryParams []string

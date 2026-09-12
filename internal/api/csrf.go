@@ -63,20 +63,11 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 }
 
 // carriesItsOwnProof names the endpoints that authenticate from the request
-// itself — a PKCE verifier, a refresh token, a registration request, an MCP
-// bearer token — and never from a credential the browser attaches on its own.
-//
-// There is no ambient authority for a cross-origin page to borrow, so the
-// protection defends nothing here and costs the thing the MCP authorization
-// profile depends on: a browser-based client completing a token exchange from
-// its own origin. RFC 7591 registration is the case that cannot be configured
-// around, since its whole point is a client the operator has never heard of.
-//
-// Deliberately not /oauth/authorize: consent runs under the user's session
-// cookie, which is exactly the ambient credential this protects.
+// body, with no ambient credential for a cross-origin page to borrow — so the
+// protection defends nothing and only breaks browser-based MCP clients.
+// /oauth/authorize is excluded: consent runs under the session cookie.
 func carriesItsOwnProof(path string) bool {
-	// Spelled here rather than imported: internal/api and internal/mcp
-	// deliberately do not import each other, as oauthProtectedResourcePath is.
+	// Spelled out because internal/api does not import internal/mcp.
 	switch path {
 	case "/mcp", "/oauth/token", "/oauth/revoke", "/oauth/register":
 		return true

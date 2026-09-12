@@ -541,16 +541,12 @@ Append `point` events to the data you already hold to build a rolling window.
 
 ### Stream contract
 
-`GET /api/asyncapi` describes every stream above as an [AsyncAPI 3.0](https://www.asyncapi.com/) document —
-`/api/asyncapi.json` serves the same thing, and `/api/asyncapi.yaml` (or an `Accept` naming a YAML type)
-serves it as YAML. It names all twenty channels, the messages each can carry, and which of
-three cursor dialects its `id:` belongs to: a monotonic history id on the resource streams, an RFC 3339 timestamp that
-only moves forward on the log tails, and no id at all on `/metrics`. Paste it into
-[AsyncAPI Studio](https://studio.asyncapi.com/) to browse it; Cetacean ships no renderer of its own.
+`GET /api/asyncapi` describes all twenty streams as an [AsyncAPI 3.0](https://www.asyncapi.com/) document: their
+channels, messages and cursor semantics. Add `.json` or `.yaml`, or negotiate on `Accept`. Browse it in
+[AsyncAPI Studio](https://studio.asyncapi.com/).
 
-Two things the document states that are easy to get wrong from the examples alone: a `batch` frame's payload is an
-**array** of envelopes rather than one, and a **replayed** event has no `resource` — replay reads the change history,
-which stores identity and not payload.
+Two details the examples above don't show: a `batch` payload is an **array** of envelopes, and a **replayed** event
+carries no `resource`.
 
 ## Connection limits
 
@@ -703,9 +699,8 @@ headers:
 Link: </api>; rel="service-desc"; type="application/json", </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
 ```
 
-There are two `service-desc` links because there are two descriptions: the OpenAPI document at `/api` describes the
-request/response API, and the AsyncAPI document at `/api/asyncapi` describes the event streams. The `type` parameter
-tells them apart. `describedby` points at the JSON-LD context document, and `api-catalog` at the
+The two `service-desc` links are told apart by `type`: `/api` describes the request/response API, `/api/asyncapi`
+the event streams. `describedby` points at the JSON-LD context document, and `api-catalog` at the
 [API catalogue](#api-catalogue).
 
 ### Browser search

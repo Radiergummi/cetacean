@@ -21,9 +21,7 @@ const (
 	ContentTypeDOT
 	ContentTypeCSV
 
-	// ContentTypeYAML is the form both specification documents are authored
-	// in. Only /api and /api/asyncapi serve it; nothing else in the API has a
-	// YAML representation.
+	// ContentTypeYAML is served by the two specification documents only.
 	ContentTypeYAML
 
 	// ContentTypeUnsupported means no supported media type matched. What to
@@ -117,11 +115,9 @@ var supportedTypes = []struct {
 	{"text", "vnd.graphviz", ContentTypeDOT},
 	// After text/html, so a text/* wildcard still resolves to HTML.
 	{"text", "csv", ContentTypeCSV},
-	// The specification documents. A client naming a vendor type is asking
-	// for that document; the generic spellings ask only for the format, and
-	// each endpoint answers with its own document and says so in the response
-	// Content-Type. All of them after application/json, so an application/*
-	// wildcard still resolves to JSON.
+	// The specification documents, served by /api and /api/asyncapi only.
+	// After application/json, so an application/* wildcard still resolves to
+	// JSON.
 	{"application", "vnd.oai.openapi", ContentTypeYAML},
 	{"application", "openapi+yaml", ContentTypeYAML},
 	{"application", "vnd.aai.asyncapi+yaml", ContentTypeYAML},

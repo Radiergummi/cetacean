@@ -451,10 +451,8 @@ var feedPaginationParams = []string{"before", "limit"}
 // searchFeedParams names the parameter only the search feed reads.
 var searchFeedParams = []string{"q"}
 
-// listCSVParams names the query parameters a list endpoint reads (searchFilter,
-// exprFilter, parsePagination). The CSV comes off the list its JSON handler
-// prepared, so its advertised alternate has to carry them or it points at a
-// different set of rows.
+// listCSVParams names what a list endpoint reads. The CSV comes off the list
+// its JSON handler prepared, so the alternate link has to carry them.
 var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset"}
 
 // historyCSVParams names what HandleHistory reads.
@@ -466,11 +464,8 @@ func feedQuery(r *http.Request, extra []string) url.Values {
 	return keptQuery(r, feedPaginationParams, extra)
 }
 
-// keptQuery returns the values of the named parameters, and nothing else.
-//
-// Reflecting the rest of the raw query into a compressed response beside
-// ACL-filtered resource names is the BREACH shape, so every link built here
-// names what it carries.
+// keptQuery returns the values of the named parameters, and nothing else:
+// reflecting a raw query into a compressed response is the BREACH shape.
 func keptQuery(r *http.Request, names ...[]string) url.Values {
 	source := r.URL.Query()
 	kept := url.Values{}
