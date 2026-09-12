@@ -105,6 +105,12 @@ func DeployBaseline(t *testing.T, env *harness.Env) {
 	if err := DeployBaselineCLI(env); err != nil {
 		t.Fatalf("%v", err)
 	}
+
+	// An environment `make e2e-up` left running carries the browser suite's
+	// extras, and the lanes assert over the baseline alone — see browser.go.
+	if err := RemoveBrowserExtrasCLI(env); err != nil {
+		t.Fatalf("%v", err)
+	}
 }
 
 // DeployBaselineCLI is DeployBaseline's non-test entry point, for callers

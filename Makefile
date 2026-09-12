@@ -137,6 +137,11 @@ e2e-up: build
 		if [ $$i -eq 60 ]; then echo "cetacean did not become ready on :19001" >&2; exit 1; fi; \
 		sleep 1; \
 	done
+	@# Relabel the fixtures now that the SUT is watching. Its history ring
+	@# buffer is fed by watcher events, and the initial full sync records
+	@# none, so without this every Recent Activity section is empty and the
+	@# specs that assert one skip.
+	go run -tags e2e ./test/e2e/cmd/e2eenv -history
 	@echo "Cetacean running at http://localhost:19001"
 	@echo "Run the browser suite with:"
 	@echo "  CETACEAN_E2E_URL=http://localhost:19001 make test-e2e"
