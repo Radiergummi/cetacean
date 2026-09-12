@@ -416,12 +416,10 @@ func TestEmbeddedManifestOmitsIndexHTML(t *testing.T) {
 	}
 }
 
-// The catch-all serves one representation, text/html. A client that ruled it
-// out cannot be answered with it, however it said so: negotiate strips an
-// extension suffix and mutates r.URL.Path before routing, so a path no route
-// matches arrives with the suffix gone and only the negotiation record left.
-// Registered well-known URIs ending in .json (assetlinks.json, did.json,
-// host-meta.json) all land here.
+// The catch-all serves one representation, text/html, so a client that ruled
+// it out cannot be answered with it. negotiate strips an extension suffix and
+// mutates r.URL.Path before routing, so an unmatched path arrives with the
+// suffix gone and only the negotiation record left.
 func TestUnroutedExtensionPathIsRefusedNotServedTheSPA(t *testing.T) {
 	router := newTestRouterWithConfig(t, nil)
 

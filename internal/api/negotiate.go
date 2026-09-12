@@ -150,11 +150,9 @@ var extensionTypes = []struct {
 }
 
 // hasMidPathExtension reports whether a known extension suffix appears in a
-// non-terminal segment, which a segment ends with exactly when the path holds
-// it followed by a separator. resolveExtension answers this for the terminal
-// segment. Matching the table rather than any dot is what keeps a Docker name
-// like web.json from reading as a representation; the router calls this only
-// where no route matched, since where one did, it is a real resource.
+// non-terminal segment; resolveExtension answers for the terminal one. Matching
+// the table rather than any dot is what keeps a Docker name like web.json from
+// reading as a representation.
 func hasMidPathExtension(path string) bool {
 	for _, ext := range extensionTypes {
 		if strings.Contains(path, ext.ext+"/") {
@@ -180,11 +178,9 @@ func resolveExtension(r *http.Request) ContentType {
 }
 
 // rangesAcceptHTML reports whether the ranges admit text/html at a usable
-// quality, per RFC 9110 §12.5.1: no preference admits everything, and the most
-// specific range matching a type is the one whose weight applies — so
-// "*/*, text/html;q=0" refuses HTML while "application/json, */*;q=0.1" does
-// not. Answering this from the resolved ContentType is impossible: it reports
-// JSON for a wildcard and for an explicit application/json alike.
+// quality (RFC 9110 §12.5.1): the most specific matching range carries the
+// weight, so "*/*, text/html;q=0" refuses it. The resolved ContentType cannot
+// answer this — it reports JSON for a wildcard and an explicit type alike.
 func rangesAcceptHTML(ranges []mediaRange) bool {
 	if len(ranges) == 0 {
 		return true
