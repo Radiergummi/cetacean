@@ -264,6 +264,7 @@ func testRouterConfig(
 		Broadcaster:       b,
 		SPA:               spa,
 		OpenAPISpec:       []byte("openapi: '3.1.0'"),
+		AsyncAPISpec:      []byte("asyncapi: '3.0.0'"),
 		EnableSelfMetrics: true,
 		AuthProvider:      &auth.NoneProvider{},
 	}

@@ -539,6 +539,18 @@ curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step
 
 Append `point` events to the data you already hold to build a rolling window.
 
+### Stream contract
+
+`GET /api/asyncapi` describes every stream above as an [AsyncAPI 3.0](https://www.asyncapi.com/) document —
+`/api/asyncapi.json` serves the same thing. It names all twenty channels, the messages each can carry, and which of
+three cursor dialects its `id:` belongs to: a monotonic history id on the resource streams, an RFC 3339 timestamp that
+only moves forward on the log tails, and no id at all on `/metrics`. Paste it into
+[AsyncAPI Studio](https://studio.asyncapi.com/) to browse it; Cetacean ships no renderer of its own.
+
+Two things the document states that are easy to get wrong from the examples alone: a `batch` frame's payload is an
+**array** of envelopes rather than one, and a **replayed** event has no `resource` — replay reads the change history,
+which stores identity and not payload.
+
 ## Connection limits
 
 There is no general rate limiting. Concurrent streams are capped, and a request over the cap returns
@@ -687,10 +699,12 @@ Every response outside the `/-/` meta endpoints carries [RFC 8631](https://www.r
 headers:
 
 ```http
-Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
+Link: </api>; rel="service-desc", </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
 ```
 
-`service-desc` points at the OpenAPI spec, `describedby` at the JSON-LD context document, and `api-catalog` at the
+There are two `service-desc` links because there are two descriptions: the OpenAPI document at `/api` describes the
+request/response API, and the AsyncAPI document at `/api/asyncapi` describes the event streams. The `type` parameter
+tells them apart. `describedby` points at the JSON-LD context document, and `api-catalog` at the
 [API catalogue](#api-catalogue).
 
 ### Browser search

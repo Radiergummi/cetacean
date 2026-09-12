@@ -32,6 +32,7 @@ type RouterConfig struct {
 	MetricsProxy      *prometheus.Proxy
 	SPA               http.Handler
 	OpenAPISpec       []byte
+	AsyncAPISpec      []byte
 	ScalarJS          []byte
 	EnablePprof       bool
 	EnableSelfMetrics bool
@@ -251,6 +252,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET /api", HandleAPIDoc(cfg.OpenAPISpec))
 	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(cfg.ScalarJS))
 	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
+	mux.HandleFunc("GET "+asyncAPIPath, HandleAsyncAPI(cfg.AsyncAPISpec))
 	mux.HandleFunc("GET "+openSearchPath, HandleOpenSearch)
 	mux.HandleFunc("GET "+apiCatalogPath, HandleAPICatalog(catalogMounts{
 		mcp:           cfg.MCPHandler != nil,

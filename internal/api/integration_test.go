@@ -48,6 +48,7 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 		Broadcaster:       b,
 		SPA:               spa,
 		OpenAPISpec:       specBytes,
+		AsyncAPISpec:      []byte("asyncapi: '3.0.0'"),
 		ScalarJS:          []byte("/* scalar */"),
 		EnableSelfMetrics: true,
 		AuthProvider:      &auth.NoneProvider{},

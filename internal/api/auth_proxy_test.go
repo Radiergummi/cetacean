@@ -39,6 +39,7 @@ func newProxyRouter(t *testing.T, provider auth.Provider, trusted []netip.Prefix
 		Handlers:       h,
 		Broadcaster:    b,
 		SPA:            NewSPAHandler(fs.FS(fsys), ""),
+		AsyncAPISpec:   []byte("asyncapi: '3.0.0'"),
 		AuthProvider:   provider,
 		TrustedProxies: trusted,
 	})
