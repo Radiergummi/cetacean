@@ -21,6 +21,9 @@ const (
 	ContentTypeDOT
 	ContentTypeCSV
 
+	// ContentTypeYAML is served by the two specification documents only.
+	ContentTypeYAML
+
 	// ContentTypeUnsupported means no supported media type matched. What to
 	// do about it is the endpoint's to decide.
 	ContentTypeUnsupported ContentType = -1
@@ -46,6 +49,8 @@ func (ct ContentType) String() string {
 		return "DOT"
 	case ContentTypeCSV:
 		return "CSV"
+	case ContentTypeYAML:
+		return "YAML"
 	case ContentTypeUnsupported:
 		return "Unsupported"
 	default:
@@ -54,6 +59,10 @@ func (ct ContentType) String() string {
 }
 
 type contentTypeKey struct{}
+
+// htmlUnacceptableKey marks a request whose client would not take text/html.
+// Recorded only when true, so the zero value is the permissive one.
+type htmlUnacceptableKey struct{}
 
 type extensionKey struct{}
 
@@ -65,14 +74,23 @@ func ContentTypeFromContext(ctx context.Context) ContentType {
 	return ContentTypeJSON
 }
 
-// extensionFromContext returns the extension suffix negotiate stripped from the
-// path, or "" when the type came from Accept instead. Anything rebuilding the
-// URI has to put it back: it is the only thing naming the representation, so a
-// redirect dropping it is re-negotiated from an Accept that may disagree.
+// extensionFromContext returns the suffix negotiate stripped from the path, or
+// "" when the type came from Accept instead. Anything rebuilding the URI puts
+// it back: it is the only thing naming the representation, so a redirect that
+// drops it is re-negotiated from an Accept that may disagree.
 func extensionFromContext(ctx context.Context) string {
 	ext, _ := ctx.Value(extensionKey{}).(string)
 
 	return ext
+}
+
+// htmlUnacceptable reports whether the client ruled out text/html — by naming
+// an extension suffix that is not .html, or by an Accept header that does not
+// admit it.
+func htmlUnacceptable(ctx context.Context) bool {
+	refused, _ := ctx.Value(htmlUnacceptableKey{}).(bool)
+
+	return refused
 }
 
 // negotiate resolves the effective content type from an extension suffix or
@@ -84,13 +102,21 @@ func negotiate(next http.Handler) http.Handler {
 		w.Header().Add("Vary", "Accept")
 
 		ct, ext := resolveExtension(r)
+		acceptsHTML := ct == ContentTypeHTML
+
 		if ct == ContentTypeUnsupported {
-			ct = parseAccept(r.Header.Get("Accept"))
+			ranges := parseAcceptRanges(r.Header.Get("Accept"))
+			ct = bestMatch(ranges)
+			acceptsHTML = rangesAcceptHTML(ranges)
 		}
 
 		ctx := context.WithValue(r.Context(), contentTypeKey{}, ct)
 		if ext != "" {
 			ctx = context.WithValue(ctx, extensionKey{}, ext)
+		}
+
+		if !acceptsHTML {
+			ctx = context.WithValue(ctx, htmlUnacceptableKey{}, true)
 		}
 
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -125,6 +151,28 @@ var supportedTypes = []struct {
 	{"text", "vnd.graphviz", ContentTypeDOT},
 	// After text/html, so a text/* wildcard still resolves to HTML.
 	{"text", "csv", ContentTypeCSV},
+	// The specification documents, served by /api and /api/asyncapi only.
+	// After application/json, so an application/* wildcard still resolves to
+	// JSON.
+	//
+	// Both halves of each pair are named. Registering only the +yaml spelling
+	// would resolve `Accept: …+json, …+yaml` — the pair an AsyncAPI tool sends
+	// — to YAML, since the JSON half would match nothing and the YAML half
+	// would win by default; and it would leave /api answering 406 to the
+	// registered JSON type for an OpenAPI document.
+	{"application", "vnd.oai.openapi+json", ContentTypeJSON},
+	{"application", "openapi+json", ContentTypeJSON},
+	{"application", "vnd.aai.asyncapi+json", ContentTypeJSON},
+	{"application", "asyncapi+json", ContentTypeJSON},
+	{"application", "vnd.oai.openapi", ContentTypeYAML},
+	{"application", "openapi+yaml", ContentTypeYAML},
+	{"application", "vnd.aai.asyncapi+yaml", ContentTypeYAML},
+	{"application", "asyncapi+yaml", ContentTypeYAML},
+	{"application", "yaml", ContentTypeYAML},
+	{"application", "x-yaml", ContentTypeYAML},
+	// After text/html and text/csv, for the same wildcard reason.
+	{"text", "yaml", ContentTypeYAML},
+	{"text", "x-yaml", ContentTypeYAML},
 }
 
 // extensionTypes maps URL extension suffixes to content types.
@@ -143,6 +191,20 @@ var extensionTypes = []struct {
 	{".csv", ContentTypeCSV},
 }
 
+// hasMidPathExtension reports whether a known extension suffix appears in a
+// non-terminal segment; resolveExtension answers for the terminal one. Matching
+// the table rather than any dot is what keeps a Docker name like web.json from
+// reading as a representation.
+func hasMidPathExtension(path string) bool {
+	for _, ext := range extensionTypes {
+		if strings.Contains(path, ext.ext+"/") {
+			return true
+		}
+	}
+
+	return false
+}
+
 // resolveExtension checks for a known extension suffix on the request path.
 // If found, it strips the suffix from r.URL.Path and returns the content type
 // along with the suffix it removed. Returns ContentTypeUnsupported if no
@@ -156,6 +218,30 @@ func resolveExtension(r *http.Request) (ContentType, string) {
 		}
 	}
 	return ContentTypeUnsupported, ""
+}
+
+// rangesAcceptHTML reports whether the ranges admit text/html at a usable
+// quality (RFC 9110 §12.5.1): the most specific matching range carries the
+// weight, so "*/*, text/html;q=0" refuses it. The resolved ContentType cannot
+// answer this — it reports JSON for a wildcard and an explicit type alike.
+func rangesAcceptHTML(ranges []mediaRange) bool {
+	if len(ranges) == 0 {
+		return true
+	}
+
+	specificity, quality := -1, 0.0
+
+	for _, mr := range ranges {
+		if !mr.matches("text", "html") {
+			continue
+		}
+
+		if s := mr.specificity(); s > specificity {
+			specificity, quality = s, mr.q
+		}
+	}
+
+	return quality > 0
 }
 
 // mediaRange is a parsed Accept header entry.
@@ -191,16 +277,15 @@ func (mr mediaRange) matches(typ, subtype string) bool {
 	return mr.typ == typ && mr.subtype == subtype
 }
 
-// parseAccept parses an Accept header value per RFC 7231 Section 5.3.2 and
-// returns the best matching ContentType. Returns ContentTypeUnsupported when
-// the header contains media types but none match our supported types.
-func parseAccept(accept string) ContentType {
+// parseAcceptRanges parses an Accept field value into its media ranges. An
+// absent, empty or wholly unparsable header yields none, which every consumer
+// reads as "no preference expressed".
+func parseAcceptRanges(accept string) []mediaRange {
 	accept = strings.TrimSpace(accept)
 	if accept == "" {
-		return ContentTypeJSON
+		return nil
 	}
 
-	// Parse all media ranges from the header.
 	var ranges []mediaRange
 	for i, part := range strings.Split(accept, ",") {
 		part = strings.TrimSpace(part)
@@ -240,7 +325,13 @@ func parseAccept(accept string) ContentType {
 		})
 	}
 
-	// No valid ranges parsed — treat as empty Accept (default JSON).
+	return ranges
+}
+
+// bestMatch picks the supported type the given ranges prefer, defaulting to
+// JSON when no preference was expressed and returning ContentTypeUnsupported
+// when a preference was expressed that none of our types satisfies.
+func bestMatch(ranges []mediaRange) ContentType {
 	if len(ranges) == 0 {
 		return ContentTypeJSON
 	}
@@ -257,7 +348,8 @@ func parseAccept(accept string) ContentType {
 
 	for _, sup := range supportedTypes {
 		for _, mr := range ranges {
-			if !mr.matches(sup.typ, sup.subtype) {
+			// RFC 9110 §12.5.1: a weight of zero means not acceptable.
+			if mr.q <= 0 || !mr.matches(sup.typ, sup.subtype) {
 				continue
 			}
 

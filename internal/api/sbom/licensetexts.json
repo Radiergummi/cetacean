@@ -829,7 +829,7 @@
   "npm:@types/web-bluetooth@0.0.21": {
    "license": "c2cfccb812fe482101a8f04597dfc5a9"
   },
-  "npm:@typescript/typescript-linux-x64@7.0.2": {
+  "npm:@typescript/typescript-darwin-arm64@7.0.2": {
    "license": "a5e9f9b1575301c7a7a03508fdaa2e05",
    "notice": "75b89b45fbbe1abdfe5de8884a22c84f"
   },

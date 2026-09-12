@@ -20,11 +20,11 @@ export async function GET({ site }: APIContext) {
     "",
     `> ${generatedPage("/").description}`,
     "",
-    "Cetacean is a single Go binary that reads a Docker Swarm cluster through the Docker socket, caches its state in memory, and serves it as a live dashboard, a REST API and an MCP server.",
+    "Cetacean is a single Go binary that reads a Docker Swarm cluster through the Docker socket, caches its state in memory, and serves it as a live dashboard, a web API and an MCP server.",
     "",
     "Every page on this site has a Markdown representation at the same path with `.md` appended, which is what the links below point at. The site's own URLs are described by an OpenAPI document at " +
       url("/openapi.json") +
-      "; the REST API of Cetacean itself is described separately at " +
+      "; the web API of Cetacean itself is described separately at " +
       url("/api/openapi.yaml") +
       ".",
   ];

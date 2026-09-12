@@ -123,7 +123,7 @@ These bite across the codebase; the per-component rules live in `.claude/ARCHITE
 
 ## API documentation
 
-- `api/openapi.yaml` — the REST API, served at `GET /api` (Scalar playground for HTML).
+- `api/openapi.yaml` — the web API, served at `GET /api` (Scalar playground for HTML).
 - `internal/api/context.go` — the JSON-LD context, served at `GET /api/context.jsonld`.
 - `docs/api.md` — the prose reference.
 

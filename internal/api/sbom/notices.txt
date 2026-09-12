@@ -14255,7 +14255,7 @@ License: MIT
 
 ------------------------------------------------------------------------------
 
-@typescript/typescript-linux-x64 7.0.2
+@typescript/typescript-darwin-arm64 7.0.2
 https://www.typescriptlang.org/
 License: Apache-2.0
 

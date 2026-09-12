@@ -732,8 +732,8 @@ export interface Recommendation {
   targetName: string;
   resource: string;
   message: string;
-  current: number;
-  configured: number;
+  current?: number | undefined;
+  configured?: number | undefined;
   suggested?: number | undefined;
   fixAction?: string | undefined;
 }

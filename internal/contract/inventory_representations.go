@@ -303,6 +303,8 @@ func feedFields(expr ast.Expr) (atom, jsonFeed, csv, ok bool) {
 				jsonFeed = true
 			case "csv":
 				csv = true
+			case "csvParams":
+				// Parameterises the CSV link; it declares no representation.
 			default:
 				return false, false, false, false
 			}

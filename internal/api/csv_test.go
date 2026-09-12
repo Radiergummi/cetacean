@@ -476,6 +476,67 @@ func TestHistoryCSV(t *testing.T) {
 	}
 }
 
+// TestRecommendationCSVDistinguishesZeroFromAbsent: a service using no CPU
+// measures zero, and blanking that reads as though nothing was measured — the
+// confusion the blank is there to avoid, inverted.
+func TestRecommendationCSVDistinguishesZeroFromAbsent(t *testing.T) {
+	engine := recommendations.NewEngine(&stubChecker{results: []recommendations.Recommendation{
+		{
+			Category:   recommendations.CategoryOverProvisioned,
+			Severity:   recommendations.SeverityWarning,
+			Scope:      recommendations.ScopeService,
+			TargetID:   "s1",
+			TargetName: "idle",
+			Resource:   "cpu",
+			Message:    "idle uses no CPU at all",
+			Current:    new(float64(0)),
+			Configured: new(float64(1e9)),
+		},
+		{
+			Category:   recommendations.CategoryNoLimits,
+			Severity:   recommendations.SeverityWarning,
+			Scope:      recommendations.ScopeService,
+			TargetID:   "s2",
+			TargetName: "unmeasured",
+			Resource:   "cpu",
+			Message:    "unmeasured has no CPU limit set",
+		},
+	}})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	engine.Run(ctx)
+
+	router := newTestRouterWithCache(t, cache.New(nil), withRecEngine(engine))
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest("GET", "/recommendations.csv", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+	}
+
+	records := csvRecords(t, rec.Body.String())
+	if len(records) != 3 {
+		t.Fatalf("got %d records, want a header and two findings", len(records))
+	}
+
+	const current = 6
+
+	byTarget := map[string][]string{}
+	for _, record := range records[1:] {
+		byTarget[record[3]] = record
+	}
+
+	if got := byTarget["idle"][current]; got != "0" {
+		t.Errorf("a measured zero renders as %q, want \"0\"", got)
+	}
+
+	if got := byTarget["unmeasured"][current]; got != "" {
+		t.Errorf("an unmeasured value renders as %q, want blank", got)
+	}
+}
+
 func TestRecommendationsCSV(t *testing.T) {
 	suggested := 512.0
 	engine := recommendations.NewEngine(&stubChecker{results: []recommendations.Recommendation{{
@@ -486,8 +547,8 @@ func TestRecommendationsCSV(t *testing.T) {
 		TargetName: "api",
 		Resource:   "memory",
 		Message:    "api is over-provisioned, by a lot",
-		Current:    128,
-		Configured: 1024,
+		Current:    new(float64(128)),
+		Configured: new(float64(1024)),
 		Suggested:  &suggested,
 	}}})
 

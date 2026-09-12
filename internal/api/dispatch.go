@@ -20,6 +20,10 @@ type feedHandlers struct {
 	// has already prepared.
 	csv bool
 
+	// csvParams names what the CSV reads, for the alternate link. Empty on a
+	// sub-collection that takes none.
+	csvParams []string
+
 	queryParams []string
 }
 
@@ -164,10 +168,9 @@ func addFeedLinks(w http.ResponseWriter, r *http.Request, feeds feedHandlers) {
 	basePath := absPath(r.Context(), r.URL.Path)
 
 	if feeds.csv {
-		// No query: the CSV reads the same parameters this request did.
 		w.Header().Add("Link", fmt.Sprintf(
 			`<%s>; rel="alternate"; type="text/csv"`,
-			basePath+".csv",
+			feedHref(basePath+".csv", keptQuery(r, feeds.csvParams)),
 		))
 	}
 

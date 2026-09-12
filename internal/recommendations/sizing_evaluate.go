@@ -105,8 +105,6 @@ func evaluate(
 			TargetName: spec.name,
 			Resource:   "cpu+memory",
 			Message:    "Service has no CPU or memory limits set",
-			Current:    0,
-			Configured: 0,
 		})
 	} else {
 		if noCPULimit {
@@ -118,8 +116,6 @@ func evaluate(
 				TargetName: spec.name,
 				Resource:   "cpu",
 				Message:    "Service has no CPU limit set",
-				Current:    0,
-				Configured: 0,
 			})
 		}
 
@@ -132,8 +128,6 @@ func evaluate(
 				TargetName: spec.name,
 				Resource:   "memory",
 				Message:    "Service has no memory limit set",
-				Current:    0,
-				Configured: 0,
 			})
 		}
 	}
@@ -151,8 +145,6 @@ func evaluate(
 			TargetName: spec.name,
 			Resource:   "cpu+memory",
 			Message:    "Service has limits but no CPU or memory reservations set",
-			Current:    0,
-			Configured: 0,
 		})
 	} else {
 		if !noCPULimit && noCPUReservation {
@@ -164,8 +156,6 @@ func evaluate(
 				TargetName: spec.name,
 				Resource:   "cpu",
 				Message:    "Service has a CPU limit but no reservation set",
-				Current:    0,
-				Configured: 0,
 			})
 		}
 
@@ -178,8 +168,6 @@ func evaluate(
 				TargetName: spec.name,
 				Resource:   "memory",
 				Message:    "Service has a memory limit but no reservation set",
-				Current:    0,
-				Configured: 0,
 			})
 		}
 	}
@@ -205,8 +193,8 @@ func evaluate(
 					TargetName: spec.name,
 					Resource:   "cpu",
 					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
-					Current:    nanoCPUsFromPercent(instant.cpu),
-					Configured: float64(spec.cpuLimit),
+					Current:    new(nanoCPUsFromPercent(instant.cpu)),
+					Configured: new(float64(spec.cpuLimit)),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
@@ -221,8 +209,8 @@ func evaluate(
 					TargetName: spec.name,
 					Resource:   "cpu",
 					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
-					Current:    nanoCPUsFromPercent(instant.cpu),
-					Configured: float64(spec.cpuLimit),
+					Current:    new(nanoCPUsFromPercent(instant.cpu)),
+					Configured: new(float64(spec.cpuLimit)),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
@@ -243,8 +231,8 @@ func evaluate(
 					TargetName: spec.name,
 					Resource:   "memory",
 					Message:    fmt.Sprintf("Memory usage is at %.0f%% of limit", memRatio*100),
-					Current:    instant.memory,
-					Configured: float64(spec.memoryLimit),
+					Current:    new(instant.memory),
+					Configured: new(float64(spec.memoryLimit)),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
@@ -259,8 +247,8 @@ func evaluate(
 					TargetName: spec.name,
 					Resource:   "memory",
 					Message:    fmt.Sprintf("Memory usage is at %.0f%% of limit", memRatio*100),
-					Current:    instant.memory,
-					Configured: float64(spec.memoryLimit),
+					Current:    new(instant.memory),
+					Configured: new(float64(spec.memoryLimit)),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
@@ -289,8 +277,8 @@ func evaluate(
 						formatDuration(cfg.Lookback),
 						cpuResRatio*100,
 					),
-					Current:    nanoCPUsFromPercent(p95.cpu),
-					Configured: float64(spec.cpuReservation),
+					Current:    new(nanoCPUsFromPercent(p95.cpu)),
+					Configured: new(float64(spec.cpuReservation)),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
@@ -314,8 +302,8 @@ func evaluate(
 						formatDuration(cfg.Lookback),
 						memResRatio*100,
 					),
-					Current:    p95.memory,
-					Configured: float64(spec.memoryReservation),
+					Current:    new(p95.memory),
+					Configured: new(float64(spec.memoryReservation)),
 					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})

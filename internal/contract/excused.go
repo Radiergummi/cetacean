@@ -173,9 +173,12 @@ var excusedUncovered = map[string]string{
 	"GET /-/sbom.cdx":                     "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /.well-known/api-catalog":        "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /api":                            "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /api/asyncapi":                   "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /api/asyncapi.yaml":              "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /api/context.jsonld":             "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /api/errors":                     "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /api/errors/{code}":              "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /api/openapi.yaml":               "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /api/scalar.js":                  "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /auth/whoami":                    "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /cluster":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
@@ -183,6 +186,7 @@ var excusedUncovered = map[string]string{
 	"GET /configs":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /configs/{id}/labels":            "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /history":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /index":                          "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /metrics/status":                 "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /networks":                       "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /nodes":                          "gap: no sweep in the first slice reaches this; see the campaign defect list",
@@ -219,6 +223,7 @@ var excusedUncovered = map[string]string{
 	"GET /topology/networks":              "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /topology/placement":             "gap: no sweep in the first slice reaches this; see the campaign defect list",
 	"GET /volumes":                        "gap: no sweep in the first slice reaches this; see the campaign defect list",
+	"GET /{$}":                            "gap: no sweep in the first slice reaches this; see the campaign defect list",
 }
 
 // knownTransportDivergences records places where REST and MCP disagree about

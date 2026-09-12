@@ -47,6 +47,7 @@ type RouterConfig struct {
 	MetricsProxy      *prometheus.Proxy
 	SPA               http.Handler
 	OpenAPISpec       []byte
+	AsyncAPISpec      []byte
 	ScalarJS          []byte
 	EnablePprof       bool
 	EnableSelfMetrics bool
@@ -85,9 +86,10 @@ type RouterConfig struct {
 // them renders its rows as CSV.
 func (h *Handlers) listFeeds(title string, eventType cache.EventType) feedHandlers {
 	return feedHandlers{
-		atom:     h.feedListHandler(title, eventType, renderAtom),
-		jsonFeed: h.feedListHandler(title, eventType, renderJSONFeed),
-		csv:      true,
+		atom:      h.feedListHandler(title, eventType, renderAtom),
+		jsonFeed:  h.feedListHandler(title, eventType, renderJSONFeed),
+		csv:       true,
+		csvParams: listCSVParams,
 	}
 }
 
@@ -272,9 +274,14 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	))
 
 	// API documentation (content-negotiated)
-	mux.HandleFunc("GET /api", HandleAPIDoc(cfg.OpenAPISpec))
+	apiDoc, openAPIYAML := HandleAPIDoc(cfg.OpenAPISpec)
+	mux.HandleFunc("GET /api", apiDoc)
+	mux.HandleFunc("GET "+openAPIYAMLPath, openAPIYAML)
 	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(cfg.ScalarJS))
 	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
+	asyncAPI, asyncAPIYAML := HandleAsyncAPI(cfg.AsyncAPISpec)
+	mux.HandleFunc("GET "+asyncAPIPath, asyncAPI)
+	mux.HandleFunc("GET "+asyncAPIYAMLPath, asyncAPIYAML)
 	mux.HandleFunc("GET "+openSearchPath, HandleOpenSearch)
 	mux.HandleFunc("GET "+apiCatalogPath, HandleAPICatalog(catalogMounts{
 		mcp:           cfg.MCPHandler != nil,
@@ -615,9 +622,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 
 	// History
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
-		atom:     h.feedHistoryHandler(renderAtom),
-		jsonFeed: h.feedHistoryHandler(renderJSONFeed),
-		csv:      true,
+		atom:      h.feedHistoryHandler(renderAtom),
+		jsonFeed:  h.feedHistoryHandler(renderJSONFeed),
+		csv:       true,
+		csvParams: historyCSVParams,
 	}, spa))
 
 	// Stacks
@@ -842,12 +850,35 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		cfg.OAuthRoutes(mux.mux, "")
 	}
 
-	// SPA fallback (must be last). It refuses only a type nothing serves,
-	// rather than everything but text/html: */* resolves to JSON, so here JSON
-	// means "unknown", and every static file the dashboard pulls arrives so.
+	// The web API's entry point. /{$} matches "/" alone, so the catch-all
+	// below still answers every other unmatched path, and text/html still
+	// reaches the dashboard — which is what a browser at the origin wants.
+	mux.HandleFunc("GET /{$}", contentNegotiated(HandleEntrypoint, feedHandlers{}, spa))
+
+	// The same resource under the name static hosting taught clients to
+	// expect. negotiate has already stripped any suffix, so one route covers
+	// /index, /index.html and /index.json — and the suffix goes back on the
+	// target, which would otherwise re-negotiate from a disagreeing Accept.
+	mux.HandleFunc("GET /index", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		http.Redirect(
+			w, r,
+			absPath(ctx, "/")+extensionFromContext(ctx),
+			http.StatusMovedPermanently,
+		)
+	})
+
+	// SPA fallback (must be last). It answers 404 and never 406: a file it has
+	// is one representation with nothing to negotiate, and a path it does not
+	// have is no resource to hold representations at all.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if ContentTypeFromContext(r.Context()) == ContentTypeUnsupported {
-			notAcceptable(w, r, "text/html")
+		// A known suffix in an inner segment (/nodes.atom/feed) is a feed
+		// reader's probe, not a client-side route. Decided here because only
+		// this route knows nothing matched: `spa` is also the text/html arm of
+		// every contentNegotiated endpoint, where web.json is a real resource.
+		if hasMidPathExtension(r.URL.Path) {
+			writeProblem(w, r, http.StatusNotFound, "no such resource")
 			return
 		}
 
@@ -911,6 +942,8 @@ func readsClusterState(mux *routeRecorder, r *http.Request) bool {
 		strings.HasPrefix(path, "/api"),
 		strings.HasPrefix(path, "/auth/"),
 		strings.HasPrefix(path, "/.well-known/"),
+		path == "/",
+		path == "/index",
 		path == openSearchPath,
 		path == profilePath:
 		return false

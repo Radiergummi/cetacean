@@ -65,15 +65,52 @@ func collectStringConsts(file *ast.File, into map[string]string) {
 			}
 
 			for i, name := range value.Names {
-				lit, ok := value.Values[i].(*ast.BasicLit)
-				if !ok || lit.Kind != token.STRING {
-					continue
-				}
-
-				if raw, err := strconv.Unquote(lit.Value); err == nil {
+				if raw, ok := constStringValue(value.Values[i], into); ok {
 					into[name.Name] = raw
 				}
 			}
 		}
+	}
+}
+
+// constStringValue evaluates a constant's expression against the constants
+// already collected: a literal, a name standing for one, or a concatenation of
+// those — asyncAPIYAMLPath is asyncAPIPath + ".yaml". Declaration order is
+// enough to resolve it, since a constant cannot precede the one it is built on.
+func constStringValue(expr ast.Expr, known map[string]string) (string, bool) {
+	switch e := expr.(type) {
+	case *ast.BasicLit:
+		if e.Kind != token.STRING {
+			return "", false
+		}
+
+		raw, err := strconv.Unquote(e.Value)
+
+		return raw, err == nil
+
+	case *ast.Ident:
+		value, ok := known[e.Name]
+
+		return value, ok
+
+	case *ast.BinaryExpr:
+		if e.Op != token.ADD {
+			return "", false
+		}
+
+		left, ok := constStringValue(e.X, known)
+		if !ok {
+			return "", false
+		}
+
+		right, ok := constStringValue(e.Y, known)
+		if !ok {
+			return "", false
+		}
+
+		return left + right, true
+
+	default:
+		return "", false
 	}
 }

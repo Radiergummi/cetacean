@@ -85,6 +85,9 @@ func TestMetricsStream_StreamsEvents(t *testing.T) {
 	if !strings.Contains(body, "event: point") {
 		t.Error("expected at least one point event in body")
 	}
+	if strings.Contains(body, "\nid: ") {
+		t.Error("metrics frames carry no id; this stream writes none")
+	}
 	if queryCount.Load() < 2 {
 		t.Errorf(
 			"expected at least 2 Prometheus calls (range + instant), got %d",
@@ -171,5 +174,8 @@ func TestMetricsStream_ErrorEvent(t *testing.T) {
 	}
 	if !strings.Contains(body, "server_error") {
 		t.Error("expected errorType in error event data")
+	}
+	if strings.Contains(body, "\nid: ") {
+		t.Error("metrics frames carry no id; this stream writes none")
 	}
 }

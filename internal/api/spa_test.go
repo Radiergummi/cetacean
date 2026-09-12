@@ -495,3 +495,181 @@ func TestEmbeddedManifestOmitsIndexHTML(t *testing.T) {
 		}
 	}
 }
+
+// The catch-all serves one representation, text/html, so a client that ruled
+// it out cannot be answered with it. negotiate strips an extension suffix and
+// mutates r.URL.Path before routing, so an unmatched path arrives with the
+// suffix gone and only the negotiation record left.
+func TestUnroutedExtensionPathIsRefusedNotServedTheSPA(t *testing.T) {
+	router := newTestRouterWithConfig(t, nil)
+
+	cases := []struct {
+		name   string
+		path   string
+		accept string
+	}{
+		{"a well-known .json URI", "/.well-known/jwks.json", "text/html"},
+		{"a .json suffix", "/nonesuch.json", "text/html"},
+		{"a .atom suffix", "/nonesuch.atom", "text/html"},
+		// The suffix in an inner segment is the same probe.
+		{"a suffix one segment in", "/nonesuch.atom/feed", "*/*"},
+		// No suffix at all: the Accept header rules the shell out on its own.
+		// One Accept-driven case, as proof the middleware reaches this route;
+		// rangesAcceptHTML owns the rest of the matrix.
+		{"an explicit JSON ask", "/nonesuch", "application/json"},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req.Header.Set("Accept", tt.accept)
+
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("GET %s = %d, want %d", tt.path, rec.Code, http.StatusNotFound)
+			}
+
+			if got := rec.Header().Get("Content-Type"); got != "application/problem+json" {
+				t.Errorf("GET %s Content-Type = %q, want application/problem+json", tt.path, got)
+			}
+		})
+	}
+}
+
+// The catch-all is the asset server and the client-side router both, so the
+// refusal above must turn on the suffix alone. Every built asset is fetched
+// with Accept: */*, which resolves to JSON.
+func TestUnroutedPathWithoutExtensionStillServesTheSPA(t *testing.T) {
+	router := newTestRouterWithConfig(t, nil)
+
+	cases := []struct {
+		name   string
+		path   string
+		accept string
+	}{
+		{"a client-side route", "/nonesuch", "text/html"},
+		{"an asset probe", "/nonesuch", "*/*"},
+		{"an explicit .html suffix", "/nonesuch.html", "text/html"},
+		// Docker names may hold dots, and /services/:id/:subResource is a
+		// real client-side route, so a dot alone cannot mean "not a route".
+		{"a dotted service name", "/services/web.api/logs", "text/html"},
+		{"a version-like service name", "/services/v1.2.3/logs", "text/html"},
+		// `spa` is also the text/html arm of every routed endpoint, so a
+		// dotted name that ends in a known suffix is a resource, not a probe.
+		{"a service named for a format", "/services/web.json/logs", "text/html"},
+		{"a preference that is not an exclusion", "/nonesuch", "application/json, */*;q=0.1"},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req.Header.Set("Accept", tt.accept)
+
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("GET %s = %d, want %d", tt.path, rec.Code, http.StatusOK)
+			}
+
+			if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/html") {
+				t.Errorf("GET %s Content-Type = %q, want the SPA shell", tt.path, got)
+			}
+		})
+	}
+}
+
+// The rule the catch-all turns on, table-driven; see rangesAcceptHTML.
+func TestRangesAcceptHTML(t *testing.T) {
+	cases := []struct {
+		accept string
+		want   bool
+	}{
+		{"", true},
+		{"*/*", true},
+		{"text/*", true},
+		{"text/html", true},
+		{"text/html;q=0.1", true},
+		{"application/json, */*;q=0.1", true},
+		{"text/html, application/json", true},
+		{"application/json", false},
+		{"application/atom+xml", false},
+		{"text/event-stream", false},
+		// The most specific matching range carries the weight that applies.
+		{"*/*, text/html;q=0", false},
+		{"text/html;q=0", false},
+		{"*/*;q=0", false},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.accept, func(t *testing.T) {
+			if got := rangesAcceptHTML(parseAcceptRanges(tt.accept)); got != tt.want {
+				t.Errorf("rangesAcceptHTML(%q) = %v, want %v", tt.accept, got, tt.want)
+			}
+		})
+	}
+}
+
+// A static file has one representation, so there is nothing to negotiate and
+// Accept is not consulted (RFC 9110 §12.1). negotiate resolves against the
+// API's media types, which name no file type at all: image/png is
+// "unsupported" there while the file is right here.
+func TestAssetIsServedWhateverTheClientAccepts(t *testing.T) {
+	png := []byte("\x89PNG\r\n\x1a\n")
+
+	router := newTestRouterWithConfig(t, []routerOption{func(cfg *RouterConfig) {
+		cfg.SPA = NewSPAHandler(fstest.MapFS{
+			"index.html":        {Data: []byte("<html></html>")},
+			"favicon-32x32.png": {Data: png},
+		}, "")
+	}})
+
+	for _, accept := range []string{"image/png", "image/*", "text/html", "*/*"} {
+		t.Run(accept, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/favicon-32x32.png", nil)
+			req.Header.Set("Accept", accept)
+
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status=%d, want 200; body=%s", rec.Code, rec.Body.String())
+			}
+
+			if ct := rec.Header().Get("Content-Type"); ct != "image/png" {
+				t.Errorf("content-type=%q, want image/png", ct)
+			}
+
+			if !bytes.Equal(rec.Body.Bytes(), png) {
+				t.Errorf("body=%q, want the file's bytes", rec.Body.Bytes())
+			}
+		})
+	}
+}
+
+// 406 answers for a resource that exists and cannot be represented acceptably.
+// Nothing exists on this route, so an Accept naming a type it never heard of
+// earns the same 404 as one naming JSON.
+func TestUnroutedPathIsNotFoundRatherThanUnacceptable(t *testing.T) {
+	router := newTestRouterWithConfig(t, nil)
+
+	for _, accept := range []string{"image/png", "image/*", "application/xml"} {
+		t.Run(accept, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/nonesuch", nil)
+			req.Header.Set("Accept", accept)
+
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status=%d, want 404; body=%s", rec.Code, rec.Body.String())
+			}
+
+			if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
+				t.Errorf("content-type=%q, want application/problem+json", ct)
+			}
+		})
+	}
+}

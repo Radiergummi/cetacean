@@ -47,6 +47,9 @@ var widgetDist embed.FS
 //go:embed api/openapi.yaml
 var openapiSpec []byte
 
+//go:embed api/asyncapi.yaml
+var asyncapiSpec []byte
+
 // scalarJS is the Scalar API reference bundle served at /api/scalar.js, copied
 // out of node_modules by the frontend build's postbuild step, so Dependabot,
 // the SBOM and THIRD_PARTY_LICENSES govern it. A missing file fails the build.
@@ -491,6 +494,7 @@ func main() {
 		SPA:                spa,
 		InlineScriptHashes: inlineScriptHashes,
 		OpenAPISpec:        openapiSpec,
+		AsyncAPISpec:       asyncapiSpec,
 		ScalarJS:           scalarJS,
 		EnablePprof:        cfg.Pprof,
 		EnableSelfMetrics:  cfg.SelfMetrics,

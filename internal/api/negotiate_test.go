@@ -11,6 +11,12 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
+// parseAccept is the whole header-to-type path in one call. negotiate drives
+// the two halves separately, since it needs the ranges for rangesAcceptHTML.
+func parseAccept(accept string) ContentType {
+	return bestMatch(parseAcceptRanges(accept))
+}
+
 func TestNegotiate(t *testing.T) {
 	// Helper: runs a request through the negotiate middleware and returns
 	// the resolved ContentType and the path seen by the inner handler.
@@ -426,9 +432,9 @@ func refuse(t *testing.T, router http.Handler, path, accept string) ProblemDetai
 }
 
 // An endpoint refuses every type it does not serve, including one another
-// endpoint does. The rows differ in how they dispatch: with a stream, without
-// the helpers, and the dashboard fallback, which refuses only what nothing
-// serves — */* resolves to JSON, so JSON there means "unknown".
+// endpoint does: a graph format resolves here and is no more servable for it.
+// The rows differ in how they dispatch — /services and /cluster in whether
+// they carry a stream, and /api, /events and /topology without the helpers.
 func TestUnservedTypeIsRefusedByTheEndpoint(t *testing.T) {
 	router := newTestRouterWithCache(t, cache.New(nil))
 
@@ -442,7 +448,6 @@ func TestUnservedTypeIsRefusedByTheEndpoint(t *testing.T) {
 		{"/api", "application/graphml+xml"},
 		{"/events", "application/json"},
 		{"/topology", "application/atom+xml"},
-		{"/not-a-route", "application/xml"},
 	} {
 		t.Run(probe.path+" "+probe.accept, func(t *testing.T) {
 			refuse(t, router, probe.path, probe.accept)

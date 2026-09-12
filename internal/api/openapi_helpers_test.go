@@ -108,6 +108,7 @@ func newTestRouter(
 		Broadcaster:       broadcaster,
 		SPA:               noopSPA,
 		OpenAPISpec:       specBytes,
+		AsyncAPISpec:      []byte("asyncapi: '3.0.0'"),
 		EnableSelfMetrics: true,
 		AuthProvider:      &auth.NoneProvider{},
 	})

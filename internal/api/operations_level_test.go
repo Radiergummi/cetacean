@@ -154,6 +154,10 @@ func TestEveryOperationIsGatedAtItsDeclaredTier(t *testing.T) {
 			continue
 		}
 
+		// {$} anchors a ServeMux pattern to the exact path; the spec names
+		// the path itself, so the two spell the root differently.
+		path = strings.TrimSuffix(path, "{$}")
+
 		if specified[method+" "+path] {
 			continue
 		}

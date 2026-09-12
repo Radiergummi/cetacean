@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+// specKey is the route as api/openapi.yaml spells it: {$} anchors a ServeMux
+// pattern to the exact path, and the spec names that path itself.
+func specKey(route Route) string {
+	return strings.TrimSuffix(route.String(), "{$}")
+}
+
 // compareInventories is the pure comparison at the heart of the drift check:
 // given two inventories and the excuse maps, it reports every unexcused
 // asymmetry and every excuse no longer needed. It touches no file, so it can be
@@ -24,11 +30,11 @@ func compareInventories(
 
 	registered := make(map[string]bool, len(routes))
 	for _, route := range routes {
-		registered[route.String()] = true
+		registered[specKey(route)] = true
 	}
 
 	for _, route := range routes {
-		key := route.String()
+		key := specKey(route)
 
 		if documented[key] {
 			if _, excused := excusedUndoc[key]; excused {

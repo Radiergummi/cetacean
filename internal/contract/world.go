@@ -202,6 +202,7 @@ func NewWorld(t *testing.T) *World {
 		Broadcaster:    broadcaster,
 		SPA:            spa,
 		OpenAPISpec:    []byte("openapi: '3.1.0'"),
+		AsyncAPISpec:   []byte("asyncapi: '3.0.0'"),
 		AuthProvider:   authProvider,
 		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")},
 		MCPHandler:     mcpServer.Handler(),

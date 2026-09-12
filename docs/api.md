@@ -560,6 +560,15 @@ curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step
 
 Append `point` events to the data you already hold to build a rolling window.
 
+### Stream contract
+
+`GET /api/asyncapi` describes all twenty streams as an [AsyncAPI 3.0](https://www.asyncapi.com/) document: their
+channels, messages and cursor semantics. Add `.json` or `.yaml`, or negotiate on `Accept`. Browse it in
+[AsyncAPI Studio](https://studio.asyncapi.com/).
+
+Two details the examples above don't show: a `batch` payload is an **array** of envelopes, and a **replayed** event
+carries no `resource`.
+
 ## Connection limits
 
 There is no general rate limiting. Concurrent streams are capped, and a request over the cap returns
@@ -580,6 +589,7 @@ There is no general rate limiting. Concurrent streams are capped, and a request 
 
 | Area | Endpoints |
 |---|---|
+| Entry point | `/`, `/index` |
 | Nodes | `/nodes`, `/nodes/{id}`, `/nodes/{id}/tasks`, `/nodes/{id}/labels`, `/nodes/{id}/role` |
 | Services | `/services`, `/services/{id}`, `/services/{id}/tasks`, `/services/{id}/logs` |
 | Service spec sections | `/services/{id}/` + `env`, `labels`, `resources`, `healthcheck`, `placement`, `ports`, `update-policy`, `rollback-policy`, `log-driver`, `configs`, `secrets`, `networks`, `mounts`, `container-config`, `mode`, `endpoint-mode` |
@@ -714,10 +724,11 @@ Every response outside the `/-/` meta endpoints carries [RFC 8631](https://www.r
 headers:
 
 ```http
-Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
+Link: </api>; rel="service-desc"; type="application/json", </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
 ```
 
-`service-desc` points at the OpenAPI spec, `describedby` at the JSON-LD context document, and `api-catalog` at the
+The two `service-desc` links are told apart by `type`: `/api` describes the request/response API, `/api/asyncapi`
+the event streams. `describedby` points at the JSON-LD context document, and `api-catalog` at the
 [API catalogue](#api-catalogue).
 
 ### Browser search
@@ -732,6 +743,31 @@ any other endpoint.
 
 Every response carries a `Request-Id` header. Send your own in the `Request-Id` request header (max 64 printable ASCII
 characters) or the server generates one. The value appears in error responses as `requestId` and in the server logs.
+
+## Entry point
+
+`GET /` is the web API's entry point. A browser gets the [dashboard][dashboard]; a JSON client gets a JSON-LD
+document naming every top-level collection, so knowing the origin is enough to find everything else:
+
+```json
+{
+  "@context": "/api/context.jsonld",
+  "@id": "/",
+  "@type": "EntryPoint",
+  "name": "Cetacean",
+  "resources": {
+    "nodes": { "@id": "/nodes" },
+    "services": { "@id": "/services" }
+  },
+  "version": "0.11.0"
+}
+```
+
+`/index` redirects here permanently, keeping any `.json` or `.html` suffix — `/index.json` lands on `/.json`, since
+the suffix is the only thing naming the representation.
+
+The [API catalogue](#api-catalogue) is unauthenticated and points here; this document is not. Discovery is public,
+the API behind it is not.
 
 ## API catalogue
 

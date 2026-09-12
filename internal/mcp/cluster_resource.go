@@ -9,8 +9,8 @@ import (
 
 // clusterOverview is the shape cetacean://cluster serves. cache.ClusterSnapshot
 // cannot be: it reports TotalCPU in cores and ReservedCPU in nanoCPUs under
-// adjacent names carrying no unit. Its field names stay, since REST publishes
-// them, so the correction is made here and every field names its unit.
+// adjacent names carrying no unit. Its field names stay, since the web API
+// publishes them, so the correction is made here and every field names its unit.
 type clusterOverview struct {
 	NodeCount    int            `json:"nodeCount"`
 	ServiceCount int            `json:"serviceCount"`
