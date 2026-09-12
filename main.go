@@ -528,11 +528,17 @@ func main() {
 		TLSConfig:    serverTLSConfig,
 	}
 
-	// Graceful shutdown
+	// Graceful shutdown. ListenAndServe returns ErrServerClosed as soon as
+	// Shutdown closes the listeners, so main waits on drained rather than
+	// returning mid-drain.
+	drained := make(chan struct{})
+
 	go func() {
+		defer close(drained)
+
 		<-ctx.Done()
 		slog.Info("shutting down", "cause", context.Cause(ctx))
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			slog.Error("shutdown error", "error", err)
@@ -564,7 +570,15 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	<-drained
+	slog.Info("shutdown complete")
 }
+
+
+// shutdownGrace bounds how long a signalled process waits for in-flight
+// requests, inside the ten seconds an orchestrator allows before SIGKILL.
+const shutdownGrace = 5 * time.Second
 
 func runHealthcheck() int {
 	addr := os.Getenv("CETACEAN_LISTEN_ADDR")
@@ -630,11 +644,15 @@ func serveDualListeners(
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// Graceful shutdown of both servers
+	// Graceful shutdown of both servers; see drained above.
+	drained := make(chan struct{})
+
 	go func() { //nolint:gosec // G118: context.Background is correct here — ctx is done, we need a fresh timeout
+		defer close(drained)
+
 		<-ctx.Done()
 		slog.Info("shutting down", "cause", context.Cause(ctx))
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer shutdownCancel()
 		if err := appServer.Shutdown(shutdownCtx); err != nil {
 			slog.Error("tsnet server shutdown error", "error", err)
@@ -667,6 +685,9 @@ func serveDualListeners(
 		slog.Error("tsnet server error", "error", err)
 		os.Exit(1)
 	}
+
+	<-drained
+	slog.Info("shutdown complete")
 }
 
 // mcpDeps bundles the runtime objects setupMCP needs. The split between
