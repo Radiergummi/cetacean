@@ -106,6 +106,8 @@ fails—so you can see which agent scaled what, and when. If the calling agent i
 picked up and Cetacean's spans join the same trace, putting the agent's turn and the Docker call it produced on
 one timeline.
 
+Give it the collector's base URL; Cetacean appends OTLP's `/v1/traces` itself, so a collector behind a gateway prefix (`https://gateway.example.com/otlp`) works as written. An endpoint that already ends in `/v1/traces` is left as it is.
+
 Tracing stays off until the endpoint is set. A malformed endpoint stops startup rather than silently exporting nowhere.
 
 ## Before you expose it
