@@ -225,10 +225,6 @@ var pairedEndpoints = []preconditionEndpoint{
 		`{"user":"nobody"}`, "application/merge-patch+json", http.StatusOK,
 	},
 	{
-		"service mode", "/services/svc1/mode", "PUT", "/services/svc1/mode",
-		`{"mode":"replicated","replicas":3}`, "application/json", http.StatusOK,
-	},
-	{
 		"service endpoint mode", "/services/svc1/endpoint-mode",
 		"PUT", "/services/svc1/endpoint-mode",
 		`{"mode":"dnsrr"}`, "application/json", http.StatusOK,
@@ -449,21 +445,18 @@ func seededWriteClient() *mockWriteClient {
 	return &mockWriteClient{
 		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
 			removeServiceFn: func(context.Context, string) error { return nil },
-			updateServiceModeFn: func(_ context.Context, id string, _ swarm.ServiceMode) (swarm.Service, error) {
-				return updated(id)
-			},
 			updateServiceEndpointModeFn: func(_ context.Context, id string, _ swarm.ResolutionMode) (swarm.Service, error) {
 				return updated(id)
 			},
 		},
 		mockServiceSpecWriter: mockServiceSpecWriter{
+			updateServiceSpecFn: func(_ context.Context, id string, _ swarm.ServiceSpec) (swarm.Service, error) {
+				return updated(id)
+			},
 			updateServiceEnvFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
 				return updated(id)
 			},
 			updateServiceLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceResourcesFn: func(_ context.Context, id string, _ *swarm.ResourceRequirements) (swarm.Service, error) {
 				return updated(id)
 			},
 			updateServiceHealthcheckFn: func(_ context.Context, id string, _ *container.HealthConfig) (swarm.Service, error) {
@@ -473,15 +466,6 @@ func seededWriteClient() *mockWriteClient {
 				return updated(id)
 			},
 			updateServicePortsFn: func(_ context.Context, id string, _ []swarm.PortConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceUpdatePolicyFn: func(_ context.Context, id string, _ *swarm.UpdateConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceRollbackPolicyFn: func(_ context.Context, id string, _ *swarm.UpdateConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceLogDriverFn: func(_ context.Context, id string, _ *swarm.Driver) (swarm.Service, error) {
 				return updated(id)
 			},
 		},
@@ -496,9 +480,6 @@ func seededWriteClient() *mockWriteClient {
 				return updated(id)
 			},
 			updateServiceMountsFn: func(_ context.Context, id string, _ []mount.Mount) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceContainerConfigFn: func(_ context.Context, id string, _ func(*swarm.ContainerSpec)) (swarm.Service, error) {
 				return updated(id)
 			},
 		},

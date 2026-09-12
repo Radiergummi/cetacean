@@ -36,6 +36,13 @@ make build       # Frontend, MCP widgets, and the binary that embeds them
 
 All checks must pass before submitting a PR. The CI pipeline runs the same checks.
 
+### End-to-end tests
+
+`make test-stack` and `make e2e-up` run a local Docker Swarm against the real `./cetacean` binary. Neither
+runs in CI — both need Docker and take minutes — so they are not part of `make check`. See
+[`test/e2e/README.md`](test/e2e/README.md) for prerequisites, running a single lane, and pointing the
+Playwright suite (`make test-e2e`) at the environment.
+
 ## Submitting Changes
 
 1. Fork the repository and create a branch from `main`

@@ -23,6 +23,15 @@ make test         # go test ./...
 make sbom         # regenerate the committed SBOM (rarely needed by hand)
 ```
 
+The end-to-end suite is local-only, behind the `e2e` build tag, and drives the real binary
+against a Docker-in-Docker swarm. `test/e2e/README.md` covers its lanes and known gaps.
+
+```bash
+make test-stack   # build instrumented + run the suite, reporting the coverage it reached
+make e2e-up       # bring the environment up with a SUT on :19001, for the browser suite
+make e2e-down     # tear it down
+```
+
 ```bash
 go build -o cetacean .          # needs frontend/dist and frontend/dist-widgets to exist
 go test ./internal/cache/       # one package

@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"io"
 	"io/fs"
 	"net/http"
@@ -267,6 +268,7 @@ func testRouterConfig(
 		AsyncAPISpec:      []byte("asyncapi: '3.0.0'"),
 		EnableSelfMetrics: true,
 		AuthProvider:      &auth.NoneProvider{},
+		Resyncer:          stubResyncer{},
 	}
 
 	for _, opt := range routerOpts {
@@ -286,3 +288,9 @@ func routerPatterns(t testing.TB) []string {
 
 	return patterns
 }
+
+// stubResyncer stands in for the watcher, so POST /-/resync is registered and
+// the tests that sweep the spec's operations can reach it.
+type stubResyncer struct{}
+
+func (stubResyncer) Resync(context.Context) error { return nil }

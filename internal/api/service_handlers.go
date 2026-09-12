@@ -86,6 +86,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		NewCollectionResponse(
 			r.Context(),
 			wrapItems(
+				r.Context(),
 				items,
 				"Service",
 				func(s ServiceListItem) string { return "/services/" + s.ID },
@@ -130,7 +131,7 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 		r,
 		NewCollectionResponse(
 			r.Context(),
-			wrapItems(tasks, "Task", enrichedTaskID),
+			wrapItems(r.Context(), tasks, "Task", enrichedTaskID),
 			len(tasks),
 			len(tasks),
 			0,

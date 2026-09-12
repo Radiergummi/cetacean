@@ -84,6 +84,13 @@ func Middleware(provider Provider) func(http.Handler) http.Handler {
 // isExempt returns true for paths that should skip authentication.
 func isExempt(path string) bool {
 	switch {
+	case path == "/-/resync":
+		// The one /-/ route that does work on request rather than reporting
+		// state: it triggers a full seven-goroutine sweep of the Docker API,
+		// unbounded and unthrottled, so an uncredentialed caller who can
+		// reach the port could amplify one cheap request into a cluster
+		// enumeration at will.
+		return false
 	case strings.HasPrefix(path, "/-/"):
 		return true
 	case path == "/api" || strings.HasPrefix(path, "/api/"):

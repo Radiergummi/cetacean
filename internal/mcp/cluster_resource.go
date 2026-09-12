@@ -7,26 +7,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// clusterOverview is the shape cetacean://cluster serves.
-//
-// It exists because cache.ClusterSnapshot cannot be served as-is: it reports
-// TotalCPU in whole cores and ReservedCPU in nanoCPUs, under two adjacent
-// names that carry no unit. The dashboard knows to divide one by 1e9 before
-// comparing them (frontend/src/components/metrics/CapacitySection.tsx), but
-// that knowledge lives in the reader, not the payload, and an MCP caller
-// asking "how much of the cluster is reserved?" divides the two as spelled and
-// is wrong by nine orders of magnitude.
-//
-// The snapshot's field names stay as they are because the web API publishes
-// them and the dashboard string-matches on that contract; the correction is
-// made here, at the one boundary where the reader is a model rather than code
-// that was written against the quirk.
-//
-// Every numeric field names its unit, per the house rule that a quantity is
-// never implied — the same rule the CPU defect in e25089e2 produced. The four
-// shared with get_cluster_status are embedded from cluster.ClusterCapacity
-// rather than restated, so the two reads cannot correct the snapshot
-// differently; embedding is anonymous, so they stay flat in the JSON.
+// clusterOverview is the shape cetacean://cluster serves. cache.ClusterSnapshot
+// cannot be: it reports TotalCPU in cores and ReservedCPU in nanoCPUs under
+// adjacent names carrying no unit. Its field names stay, since the web API
+// publishes them, so the correction is made here and every field names its unit.
 type clusterOverview struct {
 	NodeCount    int            `json:"nodeCount"`
 	ServiceCount int            `json:"serviceCount"`
