@@ -110,6 +110,13 @@ change this environment — it did, in testing, until this was added) and
 `CETACEAN_OPERATIONS_LEVEL=3`, because `frontend/e2e`'s specs check for write affordances (Remove
 buttons, inline editors) being present unconditionally, not gated on `CETACEAN_E2E_WRITE`.
 
+**Bring it down when you are done with it.** The baseline includes `shop_flaky`, a service that
+crash-loops on purpose so failed tasks and the restart counter have real input, and `e2e-up` leaves
+it running indefinitely — which is fine for a Playwright run and not fine for an afternoon. Left up
+for hours it churns task containers continuously inside Docker-in-Docker, and the host daemon slows
+to the point where `docker ps` and even a `PATCH` through the SUT hang for minutes. Tearing the
+environment down releases it; nothing else needs restarting.
+
 This is deliberately the same environment `make test-stack` uses, just without the Go test binary
 driving it — useful for exploring the fixture cluster by hand, or for the Playwright suite below.
 
@@ -140,50 +147,24 @@ Prometheus (via `/metrics/status`) skip, since this environment has none — see
 [Deferred](#deferred) below. Specs gated behind `CETACEAN_E2E_WRITE` also skip unless you set that
 variable; the baseline fixtures are shared and idempotent, so mutating them isn't the default.
 
-### Known spec failures against this environment
+### Keeping it honest
 
-The first real run of `frontend/e2e` against a reproducible cluster (105 passed, 30 skipped, 16
-failed at the time of writing) turned up genuine mismatches between the suite and the current
-dashboard — not fixture gaps, and none fixed here, per this task's brief: don't edit specs to make
-them pass. Recorded so nobody re-diagnoses them from scratch:
+The browser suite passes in full against this environment: **141 passed, 13 skipped** with
+`CETACEAN_E2E_WRITE=1`, and 133 passed with it unset. The sixteen failures a previous pass
+catalogued here are gone — they were fixed in the dashboard since, and the list had outlived them.
 
-- **`DataTable`'s ARIA role.** The accessibility pass in `6fed71d5` gave `DataTable` an explicit
-  `role="grid"` (with `aria-activedescendant` keyboard navigation), which overrides the `<table>`
-  element's implicit `table`/`row`/`cell` roles. Every spec still locating rows with
-  `page.getByRole("table")` / `getByRole("cell")` no longer finds them —
-  `nodes.spec.ts:4,32`, `services.spec.ts:4,22,42`, `sse.spec.ts:16`, `stacks.spec.ts:4`,
-  `tasks.spec.ts:4`. (Locators built on `page.locator("table tbody tr")`, a plain CSS selector, are
-  unaffected — that's why "row click navigates to detail" tests still pass.)
-- **`SearchPalette`'s markup.** The same pass moved grouped results to an ARIA
-  listbox/option/group pattern; the group label is a `<span>`, not a `<section><header>`.
-  `global-shell.spec.ts:149` still looks for `section header` and finds nothing.
-- **A real bug**: `ErrorIndex.tsx` passes the whole `/api/errors` response — the JSON-LD
-  `CollectionResponse` envelope (`{"@context", "@type", "items": [...]}`) — straight to
-  `setErrors`, then does `for (const definition of errors)` over it. That throws (`e is not
-  iterable`), and the page's `ErrorBoundary` catches it, so `/api/errors` shows the generic error
-  screen instead of the reference table. `errors.spec.ts:21,29` fail on it. The fix is
-  `.then((body) => setErrors(body.items))`; nothing in this task's brief covers touching frontend
-  source, so it's left as found.
-- **Row clicks landing on a nested link.** `.click()` on a `<tr>` clicks its bounding-box center,
-  which — on the tasks table's current column layout — lands on the `Node` column's hostname link
-  rather than triggering the row's own navigation, so the browser follows the link to
-  `/nodes/<id>` instead. `tasks.spec.ts:16,31,37` and `log-viewer.spec.ts:82` (which all navigate
-  to a task via a row click) land on a node page and time out waiting for a `/tasks/.+` URL.
-- **An ambiguous accessible name.** `services.spec.ts:110` asks for
-  `getByRole("button", { name: /^Labels$/i })` and gets a strict-mode violation: four buttons on a
-  service detail page currently share the name "Labels".
+What replaced them is worth knowing, because the same thing will happen again. Every spec that had
+been skipping — the metrics specs, which had no Prometheus until `e2eenv` seeded one, and the
+write-gated ones behind `CETACEAN_E2E_WRITE` — failed the first time it actually ran. Not one was a
+product defect. They were assertions about a page nobody had watched: locators that matched twice
+once a second MetricsPanel appeared, a section header addressed as a heading when this app renders
+a disclosure button, a keyboard test that clicked the middle of `<main>` and relied on the table
+being under it, a shortcut pressed before the component that registers it had mounted, and a name
+shared by four different buttons.
 
-None of these are specific to the harness or the fixture cluster's data — they reproduce against
-any real cluster once one is up, which is exactly why they were invisible before this task: the
-suite had never had one.
-
-One more thing, unconfirmed: a `--workers=1` diagnostic run against the same long-lived `cetacean`
-process, after several minutes of continuous prior load from repeated Playwright runs, showed
-failures cascading and getting faster near the end — including plain HTTP-only specs — suggesting
-the SUT itself may degrade under sustained load (a connection or goroutine leak is a plausible
-suspect, though unconfirmed). This did not reproduce in the canonical single `make e2e-up` →
-`make test-e2e` → `make e2e-down` sequence above, so it wasn't chased further, but it's worth
-watching for if the suite is run repeatedly against one long-lived environment.
+**A skipped spec is not a passing spec.** Each of these could only pass in the environment that
+declined to run it, and each went stale unobserved for months. If you add a gate, plan to run what
+is behind it.
 
 ## Constraints
 
