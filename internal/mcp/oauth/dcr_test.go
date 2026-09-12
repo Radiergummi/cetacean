@@ -404,3 +404,69 @@ func TestRestoreTruncatesToCurrentCapacity(t *testing.T) {
 		t.Error("restoring past the cap should keep the newest registrations")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// TestDCRRejectsOversizedMetadata
+// ---------------------------------------------------------------------------
+
+func TestDCRRejectsOversizedMetadata(t *testing.T) {
+	longURI := "https://example.test/" + strings.Repeat("a", dcrMaxRedirectURILen)
+	manyURIs := make([]string, 0, dcrMaxRedirectURIs+1)
+	for range dcrMaxRedirectURIs + 1 {
+		manyURIs = append(manyURIs, `"https://example.test/cb"`)
+	}
+
+	tests := map[string]struct {
+		body string
+		code string
+	}{
+		"client_name": {
+			body: `{
+				"client_name": "` + strings.Repeat("n", dcrMaxClientNameLen+1) + `",
+				"redirect_uris": ["https://example.test/cb"]
+			}`,
+			code: "invalid_client_metadata",
+		},
+		"redirect_uri length": {
+			body: `{"redirect_uris": ["` + longURI + `"]}`,
+			code: "invalid_redirect_uri",
+		},
+		"redirect_uri count": {
+			body: `{"redirect_uris": [` + strings.Join(manyURIs, ",") + `]}`,
+			code: "invalid_client_metadata",
+		},
+		"repeated grant_types": {
+			body: `{
+				"redirect_uris": ["https://example.test/cb"],
+				"grant_types": ["authorization_code","authorization_code"]
+			}`,
+			code: "invalid_client_metadata",
+		},
+		"repeated response_types": {
+			body: `{
+				"redirect_uris": ["https://example.test/cb"],
+				"response_types": ["code","code"]
+			}`,
+			code: "invalid_client_metadata",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			s := newTestServer(t)
+			rec := httptest.NewRecorder()
+			s.HandleRegister(rec, newDCRRequest(t, tc.body))
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+			}
+			var errResp dcrErrorResponse
+			if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if errResp.Error != tc.code {
+				t.Errorf("error = %q, want %q", errResp.Error, tc.code)
+			}
+		})
+	}
+}
