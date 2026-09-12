@@ -13,11 +13,6 @@ info:
     Detail responses include `@context`, `@id`, and `@type`.
     Error responses follow RFC 9457 (Problem Details).
 
-    Both descriptions are served as JSON and as YAML. `/api` and `/api/asyncapi` negotiate on `Accept`
-    (`application/yaml`, `text/yaml`, or the registered `application/vnd.oai.openapi` and
-    `application/vnd.aai.asyncapi+yaml`), and `/api/openapi.yaml` and `/api/asyncapi.yaml` address the
-    YAML form directly.
-
     Every response (except `/-/` meta endpoints) includes:
     - `Link: </api>; rel="service-desc"; type="application/json"` — pointer to this spec
     - `Link: </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0"` —
