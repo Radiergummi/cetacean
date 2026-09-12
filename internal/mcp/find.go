@@ -17,13 +17,9 @@ import (
 )
 
 // listableResourceTypes are the resource types find can enumerate with a
-// `type` argument.
-//
-// It is exactly the set lookupResource lists when given no ID, and the tool
-// forwards to that same dispatch rather than reading the cache itself — so ACL
-// filtering, secret redaction and task enrichment all happen on the one audited
-// path. A type added to the resource tree must be added here too, which
-// TestFindCoversEveryListableType enforces.
+// `type` argument: exactly the set lookupResource lists when given no ID. find
+// forwards to that same dispatch rather than reading the cache, so ACL
+// filtering, secret redaction and task enrichment stay on one audited path.
 var listableResourceTypes = slices.Sorted(maps.Keys(pluralToSingularRowType))
 
 // defaultListLimit bounds what a single call pulls into a widget frame. A
@@ -31,11 +27,10 @@ var listableResourceTypes = slices.Sorted(maps.Keys(pluralToSingularRowType))
 // host sizes; the caller pages with offset.
 const defaultListLimit = 200
 
-// pluralToSingularRowType maps a listable resource type's plural key (matching
-// cetacean:// resource URIs) to the singular cluster.Row.Type it produces.
-// cluster.Row follows TopologyNode's singular convention; the resource tree
-// does not, so a cross-type search — which tags each row with its own type
-// rather than grouping by a map key — needs the translation.
+// pluralToSingularRowType maps a listable type's plural key, as the cetacean://
+// URIs spell it, to the singular cluster.Row.Type it produces. A cross-type
+// search tags each row with its own type rather than grouping by a map key,
+// so it needs the translation.
 var pluralToSingularRowType = map[string]string{
 	"nodes":    "node",
 	"services": "service",
@@ -47,28 +42,10 @@ var pluralToSingularRowType = map[string]string{
 	"volumes":  "volume",
 }
 
-// findResult is the envelope for a list of resources.
-//
-// Total is the count before paging and after filtering, so a caller can say
-// "showing 200 of 1,432" without a second call. In a typed listing that is a
-// promise the caller can act on: `offset` pages through to the rest.
-//
-// Counts is populated only by the cross-type search, where it has to be. There
-// `limit` caps the hits *per type* and there is no paging at all, so Total —
-// the number of matches across the cluster — is a number the caller cannot
-// reach the tail of, and one figure over eight types says nothing about where
-// the matches are. Counts is the per-type breakdown cluster.Search already
-// computes for exactly this, and the same field the HTTP search response
-// carries, so one search reads the same over both transports. It stays absent
-// on a typed listing, where Total already means one type and paging works.
-//
-// Raw carries the untouched resource records behind Items when the caller
-// asked for them, one per row and in the same order. It rides *beside* the
-// compact rows rather than replacing them because a tool that advertises an
-// output schema must return content conforming to it — the reference client
-// rejects a result that omits structuredContent when a schema was declared —
-// and one tool has one schema, whatever its arguments. Absent otherwise, so
-// the ordinary listing is unchanged.
+// findResult is the envelope for a list of resources. Total counts after
+// filtering and before paging; Counts is the per-type breakdown, present only
+// on a cross-type search. Raw rides beside the rows rather than replacing
+// them: a tool advertising an output schema must conform to it every call.
 type findResult struct {
 	Type   string         `json:"type"`
 	Items  []cluster.Row  `json:"items"`
@@ -135,12 +112,9 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 
 	result := findResult{Type: resourceType, Items: rows, Total: total}
 
-	// raw changes what the answer carries, never its scope: a caller who asked
-	// for one stack's worth of services must not silently get every service
-	// back because raw skipped the filters and paging that shape applied.
-	// Project the returned rows' IDs back onto the untouched records — never
-	// pair the two slices by index, since rowsFor's builders each sort their
-	// own output and positional correspondence with `listed` does not hold.
+	// raw changes what the answer carries, never its scope. Project the
+	// returned rows' IDs back onto the untouched records: never pair the two
+	// slices by index, since each RowsFor* builder sorts its own output.
 	if req.GetBool("raw", false) {
 		byID := rawItemsByID(listed)
 
@@ -156,10 +130,9 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 }
 
 // findAcrossTypes searches every listable resource type by name, label or
-// image reference, the way the tool find replaced did with no `type` given.
-// Each result already carries its own singular Type, so — unlike
-// cluster.SearchResults, which groups hits under a per-type map key — the
-// rows can be returned as one flat, sorted list.
+// image reference. Each hit carries its own singular Type, so — unlike
+// cluster.SearchResults, which groups under a per-type map key — the rows
+// return as one flat, sorted list.
 func (s *Server) findAcrossTypes(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -220,18 +193,10 @@ func sortFindRows(rows []cluster.Row) {
 	})
 }
 
-// rowsFor converts the slice lookupResource returned into the compact Row
-// shape, by calling the one cluster.RowsFor* builder that knows that type.
-//
-// It dispatches on the concrete slice type rather than on resourceType: the
-// eight element types are mutually distinct, so the value already carries the
-// answer, and asking it directly removes eight unreachable mismatch branches.
-// resourceType survives only to name the type in the default case.
-//
-// It takes the context because a row can name a resource other than the one it
-// describes — a task row names its parent service and the node it runs on — and
-// those names have to pass the caller's read grants first, exactly as
-// digestOf's do.
+// rowsFor converts what lookupResource returned into Rows, via the one
+// cluster.RowsFor* builder that knows the type. It dispatches on the concrete
+// slice type, which already carries the answer. The context is needed because
+// a row can name a parent, which must pass the caller's read grants first.
 func (s *Server) rowsFor(
 	ctx context.Context,
 	resourceType string,
@@ -278,11 +243,9 @@ func (s *Server) rowsFor(
 	}
 }
 
-// rowFilters narrows a Row list after it is built — a caller who already
-// knows roughly what they want (a stack, a state, an image) filters without
-// walking the whole type themselves. Only meaningful once `type` is given:
-// findAcrossTypes does not apply these, since a cross-type hit does not carry
-// enough of the underlying record to test most of them.
+// rowFilters narrows a Row list after it is built. Only meaningful once `type`
+// is given: findAcrossTypes does not apply these, since a cross-type hit does
+// not carry enough of the underlying record to test most of them.
 type rowFilters struct {
 	query string
 	state string
@@ -372,12 +335,10 @@ func labelMatches(labels map[string]string, filter string) bool {
 	return got == value
 }
 
-// labelsFor collects each row's label map, keyed by the ID cluster.Row uses,
-// from the raw slice lookupResource returned. cluster.Row does not carry
-// labels — it is the compact shape find hands back — so the `label` filter
-// reads them from the pre-conversion record instead. Types with nothing
-// resembling a label (stacks) are simply absent from the result, and
-// labelMatches treats a missing entry as no match.
+// labelsFor collects each row's labels from the raw slice, keyed by the ID
+// cluster.Row uses, since the compact Row does not carry them. A type with
+// nothing resembling a label is absent, and labelMatches reads a missing
+// entry as no match.
 func labelsFor(listed any) map[string]map[string]string {
 	out := map[string]map[string]string{}
 
@@ -423,13 +384,10 @@ func labelsFor(listed any) map[string]map[string]string {
 	return out
 }
 
-// rawItemsByID indexes the raw slice lookupResource returned by the same ID
-// cluster.Row.ID carries for each entry — the same per-type identity
-// labelsFor keys by, with cache.Stack added since a stack has no labels to
-// collect but still needs an identity for raw mode to filter by. This is what
-// lets raw mode filter by the compact Row's identity and hand back the
-// untouched record: pairing the two slices by index would not work, since
-// every RowsFor* builder sorts its own output.
+// rawItemsByID indexes the raw slice by the ID cluster.Row.ID carries — the
+// identity labelsFor keys by, plus stacks, which have no labels but still need
+// one. It is what lets raw mode filter by the Row's identity and return the
+// untouched record, since every RowsFor* builder sorts its own output.
 func rawItemsByID(listed any) map[string]any {
 	out := map[string]any{}
 

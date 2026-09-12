@@ -64,12 +64,10 @@ type Server struct {
 	keys          *keyMaterial    // nil when no root was configured
 }
 
-// issuerID is the external base URL clients discover this authorization server
-// at — Issuer plus any base path. It is the single source of truth for the
-// advertised `issuer` (AS metadata), the PRM `authorization_servers` entry, and
-// the token `iss` claim, so all three agree with the path the well-known
-// documents and OAuth endpoints are actually served under. With an empty base
-// path it is just Issuer.
+// issuerID is the external base URL clients discover this server at: Issuer
+// plus any base path. Single source of truth for the advertised `issuer`, the
+// PRM `authorization_servers` entry and the token `iss` claim, so all three
+// agree with the path the endpoints are actually served under.
 func (c ServerConfig) issuerID() string {
 	return c.Issuer + c.BasePath
 }
@@ -105,11 +103,9 @@ func NewServer(cfg ServerConfig) *Server {
 	if cfg.StatePath != "" {
 		sweepTempFiles(cfg.StatePath)
 
-		// A missing file is the normal first start. Anything else — corrupt
-		// JSON, bad permissions, a version from a newer build — costs every
+		// A missing file is the normal first start. Anything else costs every
 		// client a re-authorization, so it is worth an operator's attention.
-		// Neither is fatal: the server comes up empty and clients re-authorize,
-		// exactly as they did before the store existed.
+		// Neither is fatal: the server comes up empty and clients re-authorize.
 		if state, err := readState(cfg.StatePath); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				slog.Info("no MCP OAuth state yet", "path", cfg.StatePath)
@@ -337,10 +333,8 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 	}
 
 	// Verify PKCE S256. RFC 7636 §4.1 requires 43–128 characters from the
-	// unreserved set (ALPHA / DIGIT / "-" / "." / "_" / "~"). Enforce the
-	// length and alphabet here — a 1-character verifier brute-forces in
-	// milliseconds against a 43-char base64url challenge, which defeats the
-	// point of PKCE.
+	// unreserved set; the length and alphabet are enforced here, since a
+	// one-character verifier brute-forces in milliseconds.
 	if err := validateCodeVerifier(codeVerifier); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_grant", err.Error())
 		return
@@ -393,11 +387,10 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	refreshTokenRaw := r.FormValue("refresh_token") // #nosec G120 -- bounded in HandleToken
 	resourceForm := r.FormValue("resource")         // #nosec G120 -- bounded in HandleToken
 
-	// RFC 8707 resource indicator validation against the server's resource.
-	// Run BEFORE consuming the refresh token: a malformed resource parameter
-	// (which is almost always a client typo) should not burn the grant family.
-	// Theft detection still works because a replay of an already-rotated token
-	// triggers Rotate's Theft branch on its second presentation.
+	// Before consuming the refresh token: a malformed resource parameter is
+	// almost always a client typo and must not burn the grant family. Theft
+	// detection still works — a replay of a rotated token triggers Rotate's
+	// Theft branch on its second presentation.
 	if _, err := ValidateResourceIndicator(
 		resourceForm,
 		s.cfg.MCPResource,
@@ -521,11 +514,9 @@ func writeTokenResponse(w http.ResponseWriter, resp tokenResponse) {
 // Revocation endpoint (RFC 7009)
 // ---------------------------------------------------------------------------
 
-// HandleRevoke handles POST {base}/oauth/revoke (RFC 7009).
-//
-// Refresh tokens only: access tokens are stateless JWTs and stay valid until
-// `exp`. RFC 7009 §2.2 requires 200 regardless, so a client cannot tell an
-// unknown token from a no-op.
+// HandleRevoke handles POST {base}/oauth/revoke (RFC 7009). Refresh tokens
+// only: access tokens are stateless JWTs valid until `exp`. §2.2 requires 200
+// regardless, so a client cannot tell an unknown token from a no-op.
 func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, tokenEndpointMaxBytes)
 	if err := r.ParseForm(); err != nil {
@@ -562,11 +553,9 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 }
 
 // issueCodeAndRedirect mints an authorization code and redirects the browser
-// back to the client with it. Both the consent-page POST and the skipped-consent
-// GET path end here, so they cannot drift apart.
-//
-// state is separate from code because it is echoed back to the client rather
-// than bound into the code.
+// back to the client with it. Both the consent POST and the skipped-consent
+// GET end here, so they cannot drift apart. state is separate from code
+// because it is echoed back rather than bound into it.
 func (s *Server) issueCodeAndRedirect(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -574,12 +563,9 @@ func (s *Server) issueCodeAndRedirect(
 	code AuthCodeData,
 	state string,
 ) {
-	// Re-check the target against the client's registered set, even though
-	// both callers already did. This is the sink for an open redirect on an
-	// authorization endpoint, and hoisting the redirect into a shared helper
-	// moved it away from the guard that made it safe — leaving the invariant
-	// resting on a comment, and on every future caller remembering to check.
-	// Keeping the guard adjacent to the redirect makes it local again.
+	// Re-checked against the client's registered set even though both callers
+	// already did: this is the sink for an open redirect, and the guard has to
+	// sit beside it rather than rest on every future caller remembering.
 	if !meta.HasRedirectURI(code.RedirectURI) {
 		renderErrorPage(w, http.StatusBadRequest,
 			"redirect_uri is not registered for this client")
@@ -701,11 +687,10 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fingerprint the metadata once, from the document the page is rendered
-	// from, and carry it to the POST under the CSRF HMAC: a record must be
-	// bound to what the user was shown, and re-resolving on POST could record
-	// a document they never saw. Computed for unverified clients too, so the
-	// POST re-prompts whenever the name or redirect URI on screen went stale.
+	// Fingerprinted once, from the document the page renders, and carried to
+	// the POST under the CSRF HMAC: a record must be bound to what the user
+	// was shown, and re-resolving on POST could record a document they never
+	// saw. Computed for unverified clients too, so a stale screen re-prompts.
 	fingerprint := consentFingerprint(meta)
 
 	// A remembered approval skips the page: verified clients only, and only
@@ -971,11 +956,9 @@ func (s *Server) WriteUnauthorized(w http.ResponseWriter, errorCode string) {
 	w.WriteHeader(http.StatusUnauthorized)
 }
 
-// httpQuotedString wraps s in an RFC 7230 quoted-string. Per RFC 7230 §3.2.6
-// the only characters that must be escaped inside quoted-string are " and \;
-// everything else in the visible-ASCII range (and obs-text) is allowed bare.
-// Go's %q produces a Go-syntax string literal — close but wrong by spec,
-// notably for backticks and non-ASCII runes. We escape "\" and `"` only.
+// httpQuotedString wraps s in an RFC 7230 quoted-string, where §3.2.6 requires
+// escaping only " and \. Go's %q produces a Go-syntax literal instead, which
+// is wrong by spec for backticks and non-ASCII runes.
 func httpQuotedString(s string) string {
 	var b strings.Builder
 	b.Grow(len(s) + 2)

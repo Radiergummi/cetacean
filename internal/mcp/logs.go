@@ -30,20 +30,16 @@ type LogStreamer interface {
 	) (io.ReadCloser, error)
 }
 
-// LogResourceResponse is the body returned by reading
-// cetacean://services/<id>/logs and the get_logs tool. Lines are time-ordered
-// (oldest first). Cursor is opaque to clients but in practice is the
-// timestamp of the newest line returned — pass it back as `since` on the next
-// read to receive only lines newer than it.
+// LogResourceResponse is the body of a cetacean://services/<id>/logs read and
+// of get_logs. Lines are oldest first. Cursor is opaque, and passing it back
+// as `since` on the next read returns only lines newer than it.
 type LogResourceResponse struct {
 	Lines  []logs.LogLine `json:"lines"`
 	Cursor string         `json:"cursor,omitempty"`
 
 	// Errors names the services a scoped read could not reach, so a partial
-	// answer says which part is missing rather than pretending to be whole.
-	// Always an array, never null — `omitempty` is deliberately absent, since
-	// dropping the field on the common path is exactly the "never null"
-	// promise broken in the other direction.
+	// answer says which part is missing. Always an array, never null, which
+	// is why `omitempty` is absent.
 	Errors []string `json:"errors"`
 
 	// Oldest is the timestamp of the earliest line returned, so a caller can
@@ -52,22 +48,13 @@ type LogResourceResponse struct {
 	Oldest string `json:"oldest,omitempty"`
 
 	// Truncated reports that the read ran out of budget before it ran out of
-	// log, so it covers less time than it was asked to. Docker ignores `since`
-	// for service logs and knows nothing of `contains` or `level`, so all three
-	// are enforced by filtering after a fetch that `tail` bounds — on a chatty
-	// service that bound binds first, and a five-minute request comes back
-	// holding seconds. A search is bounded the same way with no window to fall
-	// short of, and a read across many services is cut again when their lines
-	// are merged; all three set this. Without it the two indistinguishable
-	// answers are "nothing happened" and "I did not look that far".
+	// log, so it covers less time than it was asked to. Without it,
+	// "nothing happened" and "I did not look that far" are the same answer.
 	Truncated bool `json:"truncated,omitempty"`
 
-	// Note is a caveat about the read as a whole rather than about any one
-	// line: a scope wider than one fan-out may cover, so far. It exists
-	// because the cap is otherwise invisible in the payload — a cluster-wide
-	// grep that read a quarter of the services and matched nothing is
-	// indistinguishable from a clean cluster, and the model reasons over the
-	// result, not over the tool description.
+	// Note is a caveat about the read as a whole: a scope wider than one
+	// fan-out covers. The cap is otherwise invisible in the payload, and the
+	// model reasons over the result rather than the tool description.
 	Note string `json:"note,omitempty"`
 }
 
@@ -77,17 +64,10 @@ const (
 	logFetchTimeout = 5 * time.Second
 )
 
-// readLogsImpl drives the cetacean://services/{id}/logs read and the get_logs
-// tool so they produce identical output. Returns an empty response (not an
-// error) when no LogStreamer is wired — keeps unit tests that don't need a
-// Docker client working.
-//
-// kind selects the Docker endpoint: a service merges the output of its live
-// replicas, while a task reads one replica's own stream and is the only way to
-// reach a replica that has already exited. Swarm keeps a dead task's output
-// only until its record falls out of the history window
-// (TaskHistoryRetentionLimit, 5 by default), so on a service that restarts in
-// a loop that window is seconds deep.
+// readLogsImpl drives both the logs resource and the get_logs tool, so they
+// produce identical output. kind selects the Docker endpoint: a service merges
+// its live replicas, while a task is the only way to reach one that has
+// exited — and only until its record falls out of Swarm's history window.
 func (s *Server) readLogsImpl(
 	ctx context.Context,
 	kind docker.LogKind,
@@ -106,13 +86,10 @@ func (s *Server) readLogsImpl(
 
 	wanted := boundLogTail(opts.tail)
 
-	// Every narrowing below happens after the fetch — Docker ignores `since`
-	// for service logs, and it knows nothing of `contains` or `level` at all —
-	// so any of them has to pull a wider window than the caller asked for.
-	// Without it a grep returns the matches among the newest `tail` lines
-	// rather than the newest `tail` matches, which on a scoped read is 50
-	// lines per service. The widening is an implementation detail: the caller
-	// asked for `tail` lines and gets at most that many.
+	// Every narrowing below happens after the fetch, since Docker ignores
+	// `since` for service logs and knows nothing of `contains` or `level`, so
+	// each has to pull a wider window: otherwise a grep returns the matches
+	// among the newest `tail` lines rather than the newest `tail` matches.
 	tail := wanted
 	widened := opts.since != "" || opts.contains != "" || opts.level != ""
 	if widened {
@@ -154,11 +131,9 @@ func (s *Server) readLogsImpl(
 	// lines away, a ceiling-bound read and a quiet service look identical.
 	ceilingHit := widened && hitFetchCeiling(lines, tail)
 
-	// How far back the fetch actually reached, which is the limit of what the
-	// answer can be evidence about. It is not resp.Oldest below: that is the
-	// oldest line to *survive* the filters, and on a grep the two are worlds
-	// apart — a search that read back an hour and matched once ten minutes ago
-	// would otherwise claim to have looked only ten minutes.
+	// How far back the fetch reached, which bounds what the answer is evidence
+	// about. Not resp.Oldest, which is the oldest line to *survive* the
+	// filters: on a grep the two are worlds apart.
 	deepest := oldestTimestamp(lines)
 
 	lines = filterLogLines(lines, opts.level)
@@ -174,20 +149,10 @@ func (s *Server) readLogsImpl(
 	return resp, nil
 }
 
-// hitFetchCeiling reports whether the fetch stopped because it ran out of
-// budget rather than out of log.
-//
-// It counts per task, because that is how Docker spends the budget: `tail` is
-// applied to each of a service's task streams and the results are interleaved,
-// so a three-replica service comes back holding up to three full windows.
-// Comparing the merged total against the bound called every such read
-// truncated — a complete answer reported as a partial one, which is the same
-// lie the field exists to prevent, told in the other direction. Lines carry
-// their task in Attrs because the fetch asks Docker for Details.
-//
-// A stream that ends exactly on the bound is indistinguishable from one that
-// was cut, and is reported as cut: an unnecessary "there may be more" costs a
-// caller one wider read, where the reverse costs it a wrong conclusion.
+// hitFetchCeiling reports whether the fetch ran out of budget rather than out
+// of log. It counts per task, because Docker applies `tail` to each of a
+// service's streams and interleaves them. A stream ending exactly on the bound
+// is reported as cut: the cheaper error is one unnecessary wider read.
 func hitFetchCeiling(lines []logs.LogLine, tail int) bool {
 	if tail <= 0 {
 		return false
@@ -207,16 +172,10 @@ func hitFetchCeiling(lines []logs.LogLine, tail int) bool {
 	return false
 }
 
-// truncationNote says what a filled fetch means for the answer.
-//
-// The two cases really are different questions. With `since` the caller named
-// a window and did not get all of it, so the note compares the two. Without
-// one — a `contains` grep or a `level` filter, which widen the fetch just the
-// same — there is no window to fall short of, and the miss is that lines older
-// than the ceiling were never searched at all. That second case was silent
-// until now, and it is the common shape of a grep, since `since` is optional:
-// a cluster-wide search that filled its budget and matched nothing answered
-// exactly like a clean cluster.
+// truncationNote says what a filled fetch means for the answer. With `since`
+// the caller named a window and did not get all of it, so the note compares
+// the two. Without one, there is no window to fall short of, and the miss is
+// that lines older than the ceiling were never searched at all.
 func truncationNote(tail int, deepest, since string) string {
 	if since != "" {
 		return fmt.Sprintf(
@@ -277,19 +236,9 @@ func boundLogTail(tail int) int {
 }
 
 // finishLogRead is the tail every log read shares: newest-last ordering, the
-// caller's cut, and the cursor.
-//
-// Docker interleaves the output of a service's tasks, so arrival order is not
-// time order. Sorting first makes the truncation keep the truly newest lines
-// and the cursor the truly newest timestamp — without it a late-arriving older
-// line would push the cursor backwards, silently dropping everything between
-// the two on the next read. Mirrors the REST path in api/log_handlers.go.
-//
-// The cursor comes from logs.ParseCursor rather than the raw Docker timestamp,
-// falling back to the caller's own `since` when no line carries a parseable
-// one. internal/logs is where cursor semantics live and logs.FilterSince is
-// what receives this value on the next call, so a cursor minted any other way
-// resumes a tail on something the rest of the codebase never produced.
+// caller's cut, and the cursor. Docker interleaves a service's tasks, so an
+// unsorted late line would push the cursor backwards. The cursor must come
+// from logs.ParseCursor, which is what logs.FilterSince reads next call.
 func finishLogRead(lines []logs.LogLine, wanted int, since string) LogResourceResponse {
 	slices.SortStableFunc(lines, func(a, b logs.LogLine) int {
 		return strings.Compare(a.Timestamp, b.Timestamp)
