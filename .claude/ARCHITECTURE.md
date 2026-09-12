@@ -61,6 +61,9 @@ Each of these looks like a simplification and is not.
   proxy named — which broke headers mode behind every proxy. The composed
   behaviour is covered in `internal/api/auth_proxy_test.go`, not in the provider
   tests, which is where it hid.
+- **A path ending `.json` never reaches the mux.** `negotiate` strips a known extension and
+  rewrites the path before routing, so the SPA fallback answers it. That is why the JWK Set
+  is served at `/oauth/jwks` rather than the conventional `/.well-known/jwks.json`.
 - **Docker ignores the `since` option for service logs.** Every caller offering a
   cursor must filter after parsing, which is why one function owns that and no
   caller does it itself.

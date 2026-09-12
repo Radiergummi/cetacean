@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Cross-site request forgery protection covers every write. An origin must be in `server.cors.origins`; `server.public_url` is trusted automatically. A wildcard cannot grant writes, so a read-everything deployment must now name its writers
 - Client certificate authentication works behind a TLS-terminating proxy that forwards the certificate in `Client-Cert` (RFC 9440)
 - `Forwarded` (RFC 7239) is read alongside `X-Forwarded-For` when resolving the client address behind a trusted proxy
+- The MCP authorization server publishes the public key that verifies its access tokens, as a JWK Set at `/oauth/jwks`. Anything checking a token Cetacean issued no longer needs a key that could issue one
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 
 ### Changed
@@ -25,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The API reference at `/api` is six months newer, and now follows Scalar releases automatically
 - MCP access tokens follow the RFC 9068 `at+jwt` profile. Clients holding an older token refresh automatically
 - The Cetacean API description moved to `/api/openapi.yaml`; `/openapi.json` now describes the documentation site itself
+- **Breaking:** `CETACEAN_MCP_SIGNING_KEY` is now a root secret both keys derive from, and must be 32 bytes of hex or base64 — generate one with `openssl rand -hex 32`. Leaving it unset still generates a key at startup
+- MCP access tokens are signed with ES256 rather than HMAC. Clients refresh once on upgrade; stop every replica before starting the new version
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
 
 ### Fixed
