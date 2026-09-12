@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
@@ -16,6 +18,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // lookupOr404 resolves a resource from the cache by key. Returns false (and
@@ -173,18 +176,106 @@ func writeMutation[T any](
 }
 
 // writeServiceMutation calls a service writer function and writes the standard
-// service detail response.
-func writeServiceMutation(
+// service detail response, honouring the RFC 7240 wait and respond-async
+// preferences on the way.
+//
+// It spells out what writeMutation does rather than calling it: the preference
+// handling sits between the write and the response, and a wait that runs out
+// answers 202 instead.
+func (h *Handlers) writeServiceMutation(
 	w http.ResponseWriter,
 	r *http.Request,
 	id string,
 	fn func() (swarm.Service, error),
 ) {
-	writeMutation(w, r, "service", id, "SVC001", func(svc swarm.Service) DetailResponse {
-		return NewDetailResponse(r.Context(), "/services/"+id, "Service", ServiceResponse{
-			Service: svc,
-		})
-	}, fn)
+	svc, err := fn()
+	if err != nil {
+		writeResourceError(w, r, err, "service", id, "SVC001")
+		return
+	}
+
+	svc, handled := h.awaitPreferred(w, r, id, svc)
+	if handled {
+		return
+	}
+
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(), "/services/"+id, "Service", ServiceResponse{Service: svc},
+	))
+}
+
+// awaitPreferred applies the RFC 7240 wait and respond-async preferences to a
+// service mutation Docker has already accepted. It returns the service the
+// caller should render, and reports whether it wrote the response itself.
+//
+// The version to converge to comes from the service the write returned, not
+// from the asynchronously filled cache, where reading it back is a race. The
+// request context is passed through as given, so a client that hangs up cancels
+// its own wait rather than leaving a five-minute goroutine behind.
+func (h *Handlers) awaitPreferred(
+	w http.ResponseWriter,
+	r *http.Request,
+	id string,
+	svc swarm.Service,
+) (swarm.Service, bool) {
+	// id addresses the response, matching how the 200 identifies itself;
+	// svc.ID addresses the cache, which is keyed by ID alone.
+	wait, wanted := preferWait(r)
+	async := preferRespondAsync(r)
+
+	if !wanted && !async {
+		return svc, false
+	}
+
+	var (
+		progress string
+		err      error
+	)
+
+	if wanted {
+		progress, err = cluster.AwaitService(
+			r.Context(), h.cache, svc.ID, svc.Version.Index,
+			cluster.ConvergencePollInterval, wait,
+		)
+	}
+
+	// RFC 7240 §2 asks for the wait actually applied, which preferWait may
+	// have clamped to the server ceiling, not for the one requested.
+	if wanted && !async && err == nil {
+		applyPreference(
+			w,
+			"wait="+strconv.FormatInt(int64(wait/time.Second), 10),
+		)
+
+		// The service Docker returned describes the moment it accepted the
+		// write — the state the wait existed to move past. AwaitService only
+		// succeeds once the cache holds that version or beyond, so the cached
+		// copy is the settled one, unless it has since been removed.
+		if settled, ok := h.cache.GetService(svc.ID); ok {
+			return settled, false
+		}
+
+		return svc, false
+	}
+
+	// RFC 7240 §4.1 asks only for somewhere to obtain status: the service's own
+	// UpdateStatus reports convergence, with a per-resource SSE stream beside it.
+	w.Header().Set("Location", absPath(r.Context(), "/services/"+id))
+
+	if async {
+		applyPreference(w, "respond-async")
+	}
+
+	// writeJSONStatus, not writeCachedJSONStatus: an ETag here would invite a
+	// 304 on a write that did happen.
+	writeJSONStatus(w, http.StatusAccepted, NewDetailResponse(
+		r.Context(), "/services/"+id, "Service", AcceptedServiceResponse{
+			Service:  svc,
+			Progress: progress,
+		},
+	))
+
+	return svc, true
 }
 
 // writeNodeMutation calls a node writer function and writes the standard

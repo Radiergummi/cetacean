@@ -55,15 +55,19 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request) {
-	handleGetLabels(w, r, h.acl, getLabelsSpec[swarm.Config]{
+func (h *Handlers) configLabelsSpec() getLabelsSpec[swarm.Config] {
+	return getLabelsSpec[swarm.Config]{
 		resource:    "config",
 		pathKey:     "id",
 		typeName:    "ConfigLabels",
 		getter:      h.cache.GetConfig,
 		aclResource: func(c swarm.Config) string { return "config:" + c.Spec.Name },
 		getLabels:   func(c swarm.Config) map[string]string { return c.Spec.Labels },
-	})
+	}
+}
+
+func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request) {
+	handleGetLabels(w, r, h.acl, h.configLabelsSpec())
 }
 
 func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Request) {

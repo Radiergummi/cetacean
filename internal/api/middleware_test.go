@@ -113,9 +113,14 @@ func TestRequestLogger_5xxLevel(t *testing.T) {
 }
 
 func TestSecurityHeaders(t *testing.T) {
-	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}), false, nil)
+	handler := securityHeaders(
+		false,
+		nil,
+	)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
@@ -141,9 +146,14 @@ func TestSecurityHeaders(t *testing.T) {
 }
 
 func TestSecurityHeaders_HSTS(t *testing.T) {
-	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}), true, nil)
+	handler := securityHeaders(
+		true,
+		nil,
+	)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
@@ -165,16 +175,23 @@ func TestDiscoveryLinks_AddedToAPIRoutes(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	links := w.Header().Values("Link")
-	if len(links) != 2 {
-		t.Fatalf("expected 2 Link headers, got %d: %v", len(links), links)
+	if len(links) != 3 {
+		t.Fatalf("expected 3 Link headers, got %d: %v", len(links), links)
 	}
-	found := map[string]bool{"service-desc": false, "describedby": false}
+	found := map[string]bool{
+		"service-desc": false,
+		"describedby":  false,
+		"api-catalog":  false,
+	}
 	for _, link := range links {
 		if link == `</api>; rel="service-desc"` {
 			found["service-desc"] = true
 		}
 		if link == `</api/context.jsonld>; rel="describedby"` {
 			found["describedby"] = true
+		}
+		if link == `</.well-known/api-catalog>; rel="api-catalog"` {
+			found["api-catalog"] = true
 		}
 	}
 	for rel, ok := range found {
@@ -359,6 +376,43 @@ func TestRequestID_RejectsUnsafeCharacters(t *testing.T) {
 				t.Errorf("context ID=%q, want it to match the header %q", body, got)
 			}
 		})
+	}
+}
+
+// TestVaryAccumulatesAcrossMiddleware drives the assembled router: cors adds
+// "Vary: Origin" and negotiate runs after it. If negotiate overwrites rather
+// than appends, a shared cache can serve one origin's response to another.
+func TestVaryAccumulatesAcrossMiddleware(t *testing.T) {
+	c := cache.New(nil)
+	h := newTestHandlers(t, withCache(c))
+	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	defer b.Close()
+	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
+	spa := NewSPAHandler(fs.FS(fsys), "")
+
+	router := NewRouter(RouterConfig{
+		Handlers:          h,
+		Broadcaster:       b,
+		SPA:               spa,
+		OpenAPISpec:       []byte("openapi: '3.1.0'"),
+		EnableSelfMetrics: true,
+		AuthProvider:      &auth.NoneProvider{},
+		CORS:              &CORSConfig{AllowedOrigins: []string{"https://example.test"}},
+	})
+
+	req := httptest.NewRequest("GET", "/nodes", nil)
+	req.Header.Set("Origin", "https://example.test")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	vary := rec.Header().Values("Vary")
+	joined := strings.Join(vary, ", ")
+	for _, want := range []string{"Origin", "Accept"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("Vary = %q, missing %q", joined, want)
+		}
 	}
 }
 

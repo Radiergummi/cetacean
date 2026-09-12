@@ -1,8 +1,10 @@
 package config
 
 import (
+	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -187,11 +189,17 @@ func TestLoadAuth_TailscaleTsnetHappyPath(t *testing.T) {
 	}
 }
 
-func TestLoadAuth_CertRequiresCA(t *testing.T) {
+func TestLoadAuth_CertWithoutCA(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "cert")
-	_, err := LoadAuth(nil, nil, "", "")
-	if err == nil {
-		t.Fatal("expected error for missing CA")
+
+	// Whether a missing CA is fatal depends on TLS config LoadAuth cannot see;
+	// ValidateCertMode decides, and TestValidateCertMode covers it.
+	cfg, err := LoadAuth(nil, nil, "", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Cert.CA != "" {
+		t.Errorf("CA = %q, want empty", cfg.Cert.CA)
 	}
 }
 
@@ -255,9 +263,8 @@ func TestLoadAuth_HeadersNoTrustedProxies(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Proxy-Secret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
 
-	// LoadAuth no longer rejects missing trusted proxies — that check
-	// moved to main.go where the general CETACEAN_TRUSTED_PROXIES is
-	// resolved and can provide the value.
+	// The check moved to main.go, where the general CETACEAN_TRUSTED_PROXIES
+	// is resolved and can supply the value.
 	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -649,5 +656,119 @@ func TestOIDCStillRequiresRedirectURLWithoutPublicURL(t *testing.T) {
 
 	if _, err := LoadAuth(nil, nil, "", ""); err == nil {
 		t.Fatal("LoadAuth = nil error, want the existing 'oidc mode requires' rejection")
+	}
+}
+
+func TestValidateCertMode(t *testing.T) {
+	proxies := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
+
+	tests := []struct {
+		name           string
+		tlsEnabled     bool
+		certCA         string
+		trustedProxies []netip.Prefix
+		wantErr        bool
+	}{
+		{"TLS terminated here", true, "/ca.pem", nil, false},
+		{"TLS terminated here without a CA", true, "", nil, true},
+		{"TLS terminated by a trusted proxy", false, "", proxies, false},
+		{"both", true, "/ca.pem", proxies, false},
+		{"neither, so no certificate can ever arrive", false, "", nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateCertMode(tt.tlsEnabled, tt.certCA, tt.trustedProxies)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateCertMode(%v, %q, %v) = %v, wantErr = %v",
+					tt.tlsEnabled, tt.certCA, tt.trustedProxies, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestResolveTrustedProxies(t *testing.T) {
+	current := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
+	deprecated := []netip.Prefix{netip.MustParsePrefix("192.168.0.0/16")}
+
+	tests := []struct {
+		name         string
+		current      []netip.Prefix
+		deprecated   []netip.Prefix
+		want         []netip.Prefix
+		wantWarnings int
+		wantErr      bool
+	}{
+		{"only the current setting", current, nil, current, 0, false},
+		{"only the deprecated setting", nil, deprecated, deprecated, 1, false},
+		{"both, so the current one wins", current, deprecated, current, 1, false},
+		{"neither, so no request could authenticate", nil, nil, nil, 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, warnings, err := ResolveTrustedProxies(tt.current, tt.deprecated)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v, wantErr = %v", err, tt.wantErr)
+			}
+
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("resolved = %v, want %v", got, tt.want)
+			}
+
+			if len(warnings) != tt.wantWarnings {
+				t.Errorf("warnings = %v, want %d", warnings, tt.wantWarnings)
+			}
+		})
+	}
+}
+
+// A warning an operator cannot act on is noise, so each names both spellings:
+// the one to remove and the one to keep.
+func TestResolveTrustedProxiesWarningsNameBothSettings(t *testing.T) {
+	current := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
+	deprecated := []netip.Prefix{netip.MustParsePrefix("192.168.0.0/16")}
+
+	cases := []struct {
+		name       string
+		current    []netip.Prefix
+		deprecated []netip.Prefix
+	}{
+		{"superseded", current, deprecated},
+		{"still in use", nil, deprecated},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			_, warnings, err := ResolveTrustedProxies(tt.current, tt.deprecated)
+			if err != nil {
+				t.Fatalf("ResolveTrustedProxies: %v", err)
+			}
+
+			if len(warnings) != 1 {
+				t.Fatalf("warnings = %v, want exactly one", warnings)
+			}
+
+			for _, setting := range []string{
+				"auth.headers.trusted_proxies",
+				"server.trusted_proxies",
+			} {
+				if !strings.Contains(warnings[0], setting) {
+					t.Errorf("warning %q does not name %s", warnings[0], setting)
+				}
+			}
+		})
+	}
+}
+
+func TestResolveTrustedProxiesErrorNamesTheSetting(t *testing.T) {
+	_, _, err := ResolveTrustedProxies(nil, nil)
+	if err == nil {
+		t.Fatal("want an error when neither setting is configured")
+	}
+
+	if !strings.Contains(err.Error(), "server.trusted_proxies") {
+		t.Errorf("error %q does not name server.trusted_proxies", err)
 	}
 }

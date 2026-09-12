@@ -3,7 +3,9 @@ import Heading from "@/components/Heading.astro";
 import DocsLayout from "../../layouts/DocsLayout.astro";
 import ErrorCode from "../../components/ErrorCode.astro";
 import {errorDomains, errorsInDomain} from "@/lib/errors.ts";
+import {generatedPage} from "@/lib/pages.ts";
 
+const {description, markdown, title} = generatedPage("/api/errors");
 const domains = errorDomains.map((domain) => ({
     ...domain,
     errors: errorsInDomain(domain.prefix),
@@ -21,10 +23,11 @@ const headings = domains.map(({label, prefix}) => ({
 }));
 ---
 <DocsLayout
-    title="Error Reference"
-    description="Every well-known error code the Cetacean API returns, with its HTTP status, what it means, and how to resolve it."
+    title={title}
+    description={description}
     slug="api/errors"
     headings={headings}
+    markdownUrl={markdown}
 >
     <p>
         A domain-specific error carries a stable code as the last path segment of the

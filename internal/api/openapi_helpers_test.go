@@ -10,9 +10,11 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
 
+	"github.com/radiergummi/cetacean/internal/api/linkset"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -36,6 +38,19 @@ func loadTestSpec(t *testing.T) ([]byte, *openapi3.T, routers.Router) {
 	t.Helper()
 
 	specOnce.Do(func() {
+		// openapi3filter decodes by exact media type, so these two would be
+		// "unsupported content type" and have to be skipped like /topology,
+		// leaving their schemas unchecked.
+		openapi3filter.RegisterBodyDecoder(
+			linkset.MediaType,
+			openapi3filter.RegisteredBodyDecoder("application/json"),
+		)
+
+		openapi3filter.RegisterBodyDecoder(
+			openSearchMediaType,
+			openapi3filter.RegisteredBodyDecoder("text/plain"),
+		)
+
 		const specPath = "../../api/openapi.yaml"
 
 		bytes, err := os.ReadFile(specPath)
@@ -98,14 +113,30 @@ func newTestRouter(
 	})
 }
 
-// populateSpecFixtures seeds the cache with resource IDs that the exhaustive
-// contract test uses when resolving path templates. The fixture IDs
-// (node-1, svc-1, task-1, cfg-1, sec-1, net-1, vol-1, stack "myapp") match
-// resolvePath(). The service carries a stack-namespace label so the "myapp"
+// specFixtureIDs pairs each parameterised resource path in the spec with the
+// identifier that addresses it. resolvePath substitutes from it and
+// specTemplate inverts it, and both fixtures below seed these ids — one
+// vocabulary, so a walk cannot spend its probes on resources no fixture
+// holds.
+var specFixtureIDs = map[string]string{
+	"/nodes/{id}":     "node1",
+	"/services/{id}":  "svc1",
+	"/tasks/{id}":     "task1",
+	"/stacks/{name}":  seededStack,
+	"/configs/{id}":   "cfg1",
+	"/secrets/{id}":   "sec1",
+	"/networks/{id}":  "net1",
+	"/volumes/{name}": "vol1",
+	"/plugins/{name}": "plug1",
+}
+
+// populateSpecFixtures seeds the cache with the specFixtureIDs resources, for
+// the contract walks that want a lean fixture rather than newSeededTestRouter's
+// fully populated one. The service carries a stack-namespace label so the
 // stack is derivable from cache state.
 func populateSpecFixtures(c *cache.Cache) {
 	c.SetNode(swarm.Node{
-		ID: "node-1",
+		ID: "node1",
 		Spec: swarm.NodeSpec{
 			Role:         swarm.NodeRoleManager,
 			Availability: swarm.NodeAvailabilityActive,
@@ -120,11 +151,11 @@ func populateSpecFixtures(c *cache.Cache) {
 
 	replicas := uint64(1)
 	c.SetService(swarm.Service{
-		ID: "svc-1",
+		ID: "svc1",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{
 				Name:   "web",
-				Labels: map[string]string{"com.docker.stack.namespace": "myapp"},
+				Labels: map[string]string{"com.docker.stack.namespace": seededStack},
 			},
 			Mode: swarm.ServiceMode{
 				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
@@ -136,24 +167,24 @@ func populateSpecFixtures(c *cache.Cache) {
 	})
 
 	c.SetTask(swarm.Task{
-		ID:           "task-1",
-		ServiceID:    "svc-1",
-		NodeID:       "node-1",
+		ID:           "task1",
+		ServiceID:    "svc1",
+		NodeID:       "node1",
 		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
 		DesiredState: swarm.TaskStateRunning,
 	})
 
 	c.SetConfig(swarm.Config{
-		ID:   "cfg-1",
+		ID:   "cfg1",
 		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "cfg"}},
 	})
 
 	c.SetSecret(swarm.Secret{
-		ID:   "sec-1",
+		ID:   "sec1",
 		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "sec"}},
 	})
 
-	c.SetNetwork(network.Summary{ID: "net-1", Name: "net"})
+	c.SetNetwork(network.Summary{ID: "net1", Name: "net"})
 
-	c.SetVolume(volume.Volume{Name: "vol-1", Driver: "local"})
+	c.SetVolume(volume.Volume{Name: "vol1", Driver: "local"})
 }

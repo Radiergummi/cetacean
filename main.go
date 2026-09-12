@@ -51,7 +51,19 @@ var widgetDist embed.FS
 //go:embed api/openapi.yaml
 var openapiSpec []byte
 
-//go:embed api/scalar/standalone.js
+// scalarJS is the Scalar API reference bundle served at /api/scalar.js, copied
+// out of node_modules into frontend/dist by the frontend build's postbuild
+// step. It comes from npm rather than a copy committed here so that one
+// dependency declaration governs it: Dependabot watches the version, the SBOM
+// and THIRD_PARTY_LICENSES pick it up with the rest of the frontend's
+// production dependencies, and there is no 3.5MB blob in the tree to go stale
+// unnoticed — the committed one had reached six months and 613 releases behind
+// before anything noticed, because nothing was watching it.
+//
+// Embedded by its own directive rather than read out of frontendDist so a
+// missing file fails `go build`, the way the two directives above do.
+//
+//go:embed frontend/dist/scalar.js
 var scalarJS []byte
 
 func main() {
@@ -117,34 +129,31 @@ func main() {
 		fmt.Fprintf(os.Stderr, "TLS configuration error: %v\n", err)
 		os.Exit(1)
 	}
-	if authCfg.Mode == "cert" && !tlsCfg.Enabled() {
-		fmt.Fprintf(os.Stderr, "cert auth mode requires tls.cert and tls.key\n")
-		os.Exit(1)
-	}
-
-	// Resolve trusted proxies for headers auth: the deprecated
-	// CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES falls back to the general setting.
-	if authCfg.Mode == "headers" {
-		if len(authCfg.Headers.TrustedProxies) > 0 {
-			if len(cfg.TrustedProxies) > 0 {
-				slog.Warn(
-					"auth.headers.trusted_proxies is deprecated and ignored when server.trusted_proxies is set; please remove the old setting",
-				)
-			} else {
-				slog.Warn(
-					"auth.headers.trusted_proxies is deprecated; use server.trusted_proxies instead",
-				)
-				cfg.TrustedProxies = authCfg.Headers.TrustedProxies
-			}
-		}
-		if len(cfg.TrustedProxies) == 0 {
-			fmt.Fprintf(
-				os.Stderr,
-				"headers auth mode requires server.trusted_proxies; set to the CIDR of your reverse proxy\n",
-			)
+	if authCfg.Mode == "cert" {
+		err := config.ValidateCertMode(tlsCfg.Enabled(), authCfg.Cert.CA, cfg.TrustedProxies)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
-		authCfg.Headers.TrustedProxies = cfg.TrustedProxies
+	}
+
+	if authCfg.Mode == "headers" {
+		proxies, warnings, err := config.ResolveTrustedProxies(
+			cfg.TrustedProxies,
+			authCfg.Headers.TrustedProxies,
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+
+		for _, warning := range warnings {
+			slog.Warn(warning)
+		}
+
+		// realIP reads the one, the provider the other; they must agree.
+		cfg.TrustedProxies = proxies
+		authCfg.Headers.TrustedProxies = proxies
 	}
 
 	aclCfg := config.LoadACL(flags, fc)
@@ -403,6 +412,16 @@ func main() {
 	if len(cfg.CORSOrigins) > 0 {
 		corsConfig = &api.CORSConfig{AllowedOrigins: cfg.CORSOrigins}
 		slog.Info("CORS enabled", "origins", cfg.CORSOrigins)
+
+		// A wildcard can only answer half of what this setting decides: "*" is
+		// not an origin, so it cannot be trusted for cross-origin writes.
+		if corsConfig.Wildcard() {
+			slog.Warn(
+				"server.cors.origins is a wildcard: browsers may read the API " +
+					"from any origin, but cross-origin writes are refused. List " +
+					"the origins explicitly to allow them.",
+			)
+		}
 	}
 
 	// Distributed tracing is opt-in: with no collector configured the MCP
@@ -442,6 +461,7 @@ func main() {
 
 	mcpHandler, oauthRoutes, closeMCP := setupMCP(mcpDeps{
 		cfg:          cfg,
+		cors:         corsConfig,
 		authMode:     authCfg.Mode,
 		authProvider: authProvider,
 		tlsEnabled:   tlsCfg.Enabled(),
@@ -477,7 +497,10 @@ func main() {
 	})
 
 	var serverTLSConfig *tls.Config
-	if authCfg.Mode == "cert" {
+	// Only where we terminate TLS ourselves: behind a TLS-terminating proxy
+	// the client certificate arrives in a header the proxy already verified,
+	// and this config would never be consulted.
+	if authCfg.Mode == "cert" && tlsCfg.Enabled() {
 		caCert, err := os.ReadFile(filepath.Clean(authCfg.Cert.CA))
 		if err != nil {
 			slog.Error("failed to read CA cert", "error", err)
@@ -656,6 +679,7 @@ func serveDualListeners(
 // runtime state onto config structs.
 type mcpDeps struct {
 	cfg          *config.Config
+	cors         *api.CORSConfig
 	authMode     string
 	authProvider auth.Provider
 	tlsEnabled   bool
@@ -717,7 +741,9 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 
 	var oauthSrv *oauth.Server
 	if d.authMode != "none" {
-		signingKey := []byte(d.cfg.MCP.SigningKey)
+		// A configured key has already been rejected unless it decodes, so it
+		// arrives here as key material or not at all.
+		signingKey, _ := config.SigningKeyBytes(d.cfg.MCP.SigningKey)
 		if len(signingKey) == 0 {
 			signingKey = make([]byte, 32)
 			if _, err := rand.Read(signingKey); err != nil {
@@ -776,6 +802,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		Recommendations: d.rec,
 		Prometheus:      metricsQuerier,
 		AllowedOrigins:  d.cfg.CORSOrigins,
+		AllowAnyOrigin:  d.cors.Wildcard(),
 		IconBaseURL:     issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 	})
@@ -787,9 +814,17 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		"operations_level", d.cfg.MCP.EffectiveOperationsLevel(d.cfg.OperationsLevel),
 		"protocol_version", mcp.ProtocolVersion)
 
-	if len(d.cfg.CORSOrigins) == 0 {
+	// A browser-based MCP client has to clear two gates: the Origin guard
+	// below, and the cross-origin protection every route carries. The guard
+	// honours a wildcard and the protection cannot, so "*" is no longer the
+	// shortcut it once was here — the origins have to be named.
+	if !d.cors.Enabled() {
 		slog.Warn(
-			"MCP Origin guard active with no allowlist: browser-based MCP clients (e.g. MCP Inspector) will be rejected with 403. Set CETACEAN_CORS_ORIGINS to the allowed origins (or '*' for any). Non-browser MCP clients send no Origin and are unaffected.",
+			"MCP Origin guard active with no allowlist: browser-based MCP clients (e.g. MCP Inspector) will be rejected with 403. Set CETACEAN_CORS_ORIGINS to the origins they run on. Non-browser MCP clients send no Origin and are unaffected.",
+		)
+	} else if d.cors.Wildcard() {
+		slog.Warn(
+			"MCP Origin guard allows any origin, but a wildcard cannot be a trusted origin for cross-origin protection, so browser-based MCP clients (e.g. MCP Inspector) will be rejected with 403 on every call. List the origins they run on instead. Non-browser MCP clients send no Origin and are unaffected.",
 		)
 	}
 

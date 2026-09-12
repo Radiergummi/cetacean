@@ -29,6 +29,7 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		},
 		itemType: "Node",
 		idFunc:   func(n swarm.Node) string { return "/nodes/" + n.ID },
+		rows:     cluster.RowsForNodes,
 	})
 }
 
@@ -39,14 +40,19 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "node", node.Description.Hostname)
-	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", NodeResponse{
-		Node: node,
-	}), node.UpdatedAt)
+
+	rep, ok := representationOr404(w, r, "node", id, h.nodeRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSONTimed(w, r, rep, node.UpdatedAt)
 }
 
 func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if _, ok := lookupACL(h, w, r, "node", id, h.cache.GetNode, nodeResource); !ok {
+	node, ok := lookupACL(h, w, r, "node", id, h.cache.GetNode, nodeResource)
+	if !ok {
 		return
 	}
 	tasks := h.cache.ListTasksByNode(id)
@@ -58,6 +64,12 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 		func(t swarm.Task) string { return "task:" + t.ID },
 	)
 	enriched := cluster.EnrichTasks(h.cache, tasks)
+
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		h.writeTaskCSV(w, r, node.Description.Hostname, enriched)
+		return
+	}
+
 	writeCachedJSON(
 		w,
 		r,

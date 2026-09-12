@@ -277,3 +277,28 @@ func TestSetAllow_NilACL(t *testing.T) {
 		}
 	}
 }
+
+// TestAllowHeaderOffersNodePatchAtTierTwo fails while allow.go still calls a
+// node PATCH impactful, which hides the dashboard's labels editor on an API
+// that accepts the edit. TestEveryOperationIsGatedAtItsDeclaredTier holds the
+// route's own gate to the same tier but reads no Allow header, and
+// resourceWriteMethods is a second, hand-stated projection of it.
+//
+// The tier is asserted rather than read from that table: a walk deriving its
+// expectation from resourceWriteMethods would pass whatever the table said.
+func TestAllowHeaderOffersNodePatchAtTierTwo(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"node:*"}, Audience: []string{"*"}, Permissions: []string{"write"}},
+	}})
+
+	h := newTestHandlers(t, withACL(e), withOpsLevel(config.OpsConfiguration))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/nodes/node1", nil)
+	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
+	h.setAllow(w, r, "node", "node1")
+
+	if allow := w.Header().Get("Allow"); !strings.Contains(allow, "PATCH") {
+		t.Errorf("Allow = %q at operations level 2, want PATCH offered", allow)
+	}
+}

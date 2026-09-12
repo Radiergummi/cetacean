@@ -21,6 +21,12 @@ const errorDictionary: Record<string, ErrorInfo> = {
     suggestion: "Ensure the request body is well-formed JSON.",
   },
 
+  // CSR: cross-origin protection
+  CSR001: {
+    title: "Cross-origin request blocked",
+    suggestion: "Add this origin to the server.cors.origins setting and restart the server.",
+  },
+
   // OPS: operations level
   OPS001: {
     title: "Operations level too low",

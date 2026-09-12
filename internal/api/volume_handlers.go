@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/api/types/volume"
 
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -20,16 +21,14 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "volume", vol.Name)
+
+	rep, ok := representationOr404(w, r, "volume", name, h.volumeRepresentation)
+	if !ok {
+		return
+	}
+
 	created, _ := time.Parse(time.RFC3339, vol.CreatedAt)
-	writeCachedJSONTimed(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/volumes/"+name, "Volume", VolumeResponse{
-			Volume:   vol,
-			Services: h.filterServiceRefs(r, h.cache.ServicesUsingVolume(name)),
-		}),
-		created,
-	)
+	writeCachedJSONTimed(w, r, rep, created)
 }
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
@@ -47,5 +46,6 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 		},
 		itemType: "Volume",
 		idFunc:   func(v volume.Volume) string { return "/volumes/" + v.Name },
+		rows:     cluster.RowsForVolumes,
 	})
 }

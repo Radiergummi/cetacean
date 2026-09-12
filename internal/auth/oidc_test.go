@@ -837,115 +837,22 @@ func TestCallback_TokenExchangeFails_ClearsCookies(t *testing.T) {
 	assertAuthFlowCookiesCleared(t, resp)
 }
 
-func TestLogout_SameOrigin_ClearsSession(t *testing.T) {
+// TestLogout_ThroughRegisteredRoute pins that RegisterRoutes reaches the
+// logout handler, so it fails if the route is dropped or registered under
+// another method. What the handler does is TestLogout_ClearsSession's
+// business, in oidc_callback_test.go; the cross-origin check this route used
+// to carry is TestCrossOriginProtection's, in internal/api.
+func TestLogout_ThroughRegisteredRoute(t *testing.T) {
 	server := newMockOIDCServer(t)
 	p := newTestOIDCProvider(t, server.URL)
 	mux := http.NewServeMux()
 	p.RegisterRoutes(mux)
 
-	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-	r.Header.Set("Sec-Fetch-Site", "same-origin")
-	r.Host = "app.example.com"
 	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/logout", nil))
 
-	mux.ServeHTTP(w, r)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
-	}
-	if loc := resp.Header.Get("Location"); loc != "/" {
-		t.Errorf("Location = %q, want %q", loc, "/")
-	}
-
-	// Session cookie should be cleared.
-	var sessionCleared bool
-	for _, c := range resp.Cookies() {
-		if c.Name == cookieName && c.MaxAge == -1 {
-			sessionCleared = true
-		}
-	}
-	if !sessionCleared {
-		t.Error("session cookie was not cleared")
-	}
-}
-
-func TestLogout_CrossSite_Rejected(t *testing.T) {
-	server := newMockOIDCServer(t)
-	p := newTestOIDCProvider(t, server.URL)
-	mux := http.NewServeMux()
-	p.RegisterRoutes(mux)
-
-	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-	r.Header.Set("Sec-Fetch-Site", "cross-site")
-	r.Host = "app.example.com"
-	w := httptest.NewRecorder()
-
-	mux.ServeHTTP(w, r)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusForbidden)
-	}
-}
-
-func TestLogout_CrossOriginHeader_Rejected(t *testing.T) {
-	server := newMockOIDCServer(t)
-	p := newTestOIDCProvider(t, server.URL)
-	mux := http.NewServeMux()
-	p.RegisterRoutes(mux)
-
-	// No Sec-Fetch-Site, but Origin mismatches Host — falls back to Origin check.
-	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-	r.Header.Set("Origin", "https://evil.example.com")
-	r.Host = "app.example.com"
-	w := httptest.NewRecorder()
-
-	mux.ServeHTTP(w, r)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusForbidden)
-	}
-}
-
-func TestLogout_MatchingOriginHeader_Accepted(t *testing.T) {
-	server := newMockOIDCServer(t)
-	p := newTestOIDCProvider(t, server.URL)
-	mux := http.NewServeMux()
-	p.RegisterRoutes(mux)
-
-	// No Sec-Fetch-Site, but Origin matches Host.
-	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-	r.Header.Set("Origin", "https://app.example.com")
-	r.Host = "app.example.com"
-	w := httptest.NewRecorder()
-
-	mux.ServeHTTP(w, r)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
-	}
-}
-
-func TestLogout_NonBrowserClient_Accepted(t *testing.T) {
-	server := newMockOIDCServer(t)
-	p := newTestOIDCProvider(t, server.URL)
-	mux := http.NewServeMux()
-	p.RegisterRoutes(mux)
-
-	// Non-browser clients send neither Sec-Fetch-Site nor Origin.
-	// CrossOriginProtection allows these through since CSRF is a browser attack.
-	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-	r.Host = "app.example.com"
-	w := httptest.NewRecorder()
-
-	mux.ServeHTTP(w, r)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusSeeOther)
 	}
 }
 

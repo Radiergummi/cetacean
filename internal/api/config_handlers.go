@@ -5,6 +5,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -19,15 +20,13 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "config", cfg.Spec.Name)
-	writeCachedJSONTimed(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
-			Config:   cfg,
-			Services: h.filterServiceRefs(r, h.cache.ServicesUsingConfig(id)),
-		}),
-		cfg.UpdatedAt,
-	)
+
+	rep, ok := representationOr404(w, r, "config", id, h.configRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSONTimed(w, r, rep, cfg.UpdatedAt)
 }
 
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
@@ -45,5 +44,6 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 		},
 		itemType: "Config",
 		idFunc:   func(c swarm.Config) string { return "/configs/" + c.ID },
+		rows:     cluster.RowsForConfigs,
 	})
 }

@@ -33,6 +33,10 @@ type feedData struct {
 	BeforeID   uint64
 	Limit      int
 	LastItemID uint64 // numeric ID of last entry for pagination cursors
+
+	// QueryParams names the query parameters this feed reads beyond the
+	// pagination pair, and so the only ones its links may echo back.
+	QueryParams []string
 }
 
 // feedRenderer writes a feed in a specific format (Atom, JSON Feed, etc.).
@@ -140,9 +144,27 @@ func (h *Handlers) handleFeedSearch(
 	})
 	entries = h.filterHistoryACL(r, entries)
 
-	render(w, r, historyFeedData(
+	// This feed titles itself with ?q= verbatim beside ACL-filtered entries,
+	// the same BREACH shape HandleSearch opts out of, so it opts out too.
+	render(w, disableCompression(r), searchFeedData(
 		r, fmt.Sprintf("Cetacean — Search: %s", q), entries, beforeID, limit,
 	))
+}
+
+// searchFeedData is historyFeedData for the search feed, the one feed that
+// reads ?q= and so the only one whose links may carry it back. Echoing it is
+// safe only because handleFeedSearch pairs it with disableCompression.
+func searchFeedData(
+	r *http.Request,
+	title string,
+	entries []cache.HistoryEntry,
+	beforeID uint64,
+	limit int,
+) feedData {
+	data := historyFeedData(r, title, entries, beforeID, limit)
+	data.QueryParams = searchFeedParams
+
+	return data
 }
 
 // handleFeedRecommendations queries recommendations and renders them using the
@@ -386,20 +408,15 @@ func (h *Handlers) filterHistoryACL(
 }
 
 // feedID builds a tag URI (RFC 4151) for the feed: tag:{host},{year}:{path}.
-// {host} is server.public_url's host when configured, otherwise r.Host.
+// The host is the one the feed's own links carry; only server.public_url makes
+// it permanent, which is what RFC 4151 asks of it.
 // The year 2026 is the date the tag namespace was minted and must remain constant.
 func feedID(r *http.Request) string {
-	// RFC 4151 tag URIs are permanent identifiers, so prefer the configured
-	// origin: derived from r.Host, an entry's identity changes with the
-	// hostname a reader happened to reach the server by.
-	host := r.Host
-	if base := PublicURLFromContext(r.Context()); base != "" {
-		if u, err := url.Parse(base); err == nil {
-			host = u.Host
-		}
-	}
-
-	return fmt.Sprintf("tag:%s,2026:%s", host, absPath(r.Context(), r.URL.Path))
+	return fmt.Sprintf(
+		"tag:%s,2026:%s",
+		originHostOf(r),
+		absPath(r.Context(), r.URL.Path),
+	)
 }
 
 // parseFeedPagination reads ?before= and ?limit= from the query string.
@@ -424,6 +441,47 @@ func parseFeedPagination(r *http.Request) (beforeID uint64, limit int) {
 	}
 
 	return beforeID, limit
+}
+
+// feedPaginationParams names the query parameters every feed reads: the
+// cursor and its page size (parseFeedPagination). A feed reading anything
+// beyond these declares it in feedData.QueryParams.
+var feedPaginationParams = []string{"before", "limit"}
+
+// searchFeedParams names the parameter only the search feed reads.
+var searchFeedParams = []string{"q"}
+
+// feedQuery returns the subset of r's query a feed's links may carry: the
+// pagination pair every feed reads, plus whatever else the caller declares.
+//
+// Reflecting the rest of the raw query into a compressed feed beside
+// ACL-filtered resource names is the BREACH shape.
+func feedQuery(r *http.Request, extra []string) url.Values {
+	source := r.URL.Query()
+	kept := make(url.Values, len(feedPaginationParams)+len(extra))
+
+	keep := func(names []string) {
+		for _, name := range names {
+			if values, ok := source[name]; ok {
+				kept[name] = values
+			}
+		}
+	}
+
+	keep(feedPaginationParams)
+	keep(extra)
+
+	return kept
+}
+
+// feedHref joins a base URL and a feed query, omitting the "?" for an empty
+// one.
+func feedHref(base string, query url.Values) string {
+	if encoded := query.Encode(); encoded != "" {
+		return base + "?" + encoded
+	}
+
+	return base
 }
 
 // emptyFeedEpoch is a stable timestamp for empty feeds so the ETag is

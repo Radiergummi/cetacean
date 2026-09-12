@@ -92,7 +92,7 @@ jobs:
       - run: cd frontend && npm ci
       - run: cd frontend && npx oxlint
       - run: cd frontend && npx oxfmt --check .
-      - run: cd frontend && npx tsc -b --noEmit
+      - run: cd frontend && npm run check
 
   lint-website:
     runs-on: ubuntu-latest
@@ -103,9 +103,19 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: website/package-lock.json
+
+      # `astro check` type-checks `src/lib/errors.ts`, which imports the error
+      # reference generated from internal/api; see website/package.json's
+      # sync-assets script.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
       - run: cd website && npm ci
       - run: cd website && npx oxlint
       - run: cd website && npx oxfmt --check .
+      - run: cd website && npm run sync-assets
+      - run: cd website && npm run check
 
   test-frontend:
     runs-on: ubuntu-latest
@@ -140,10 +150,12 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      # open-sbom-pr.sh dispatches ci.yml on the branch it opens, because a
-      # pull request created with GITHUB_TOKEN raises no pull_request event and
-      # its required checks would never report. Dispatching needs actions:write,
-      # and a job-level block replaces the default rather than adding to it.
+      # Both write paths dispatch ci.yml afterwards, because nothing authored
+      # with GITHUB_TOKEN raises an event of its own: open-sbom-pr.sh for the
+      # pull request it opens, commit-sbom.sh for the commit it lands on a
+      # branch. Either way the required checks would otherwise never report.
+      # Dispatching needs actions:write, and a job-level block replaces the
+      # default rather than adding to it.
       actions: write
     # One sync per branch: two concurrent runs would race the same commit.
     concurrency:
@@ -178,6 +190,11 @@ jobs:
       # API, so the result is Verified with no signing key in CI secrets, and
       # because expectedHeadOid makes the write fail rather than clobber a
       # branch that moved since checkout.
+      #
+      # The script also dispatches a run for the branch afterwards. A commit
+      # authored with GITHUB_TOKEN raises no event, so without that the pull
+      # request sits blocked on required checks that passed one commit earlier
+      # and can never appear on the new head.
       - name: Commit regenerated SBOM
         if: >-
           github.event_name == 'pull_request' &&

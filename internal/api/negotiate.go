@@ -19,9 +19,10 @@ const (
 	ContentTypeJGF
 	ContentTypeGraphML
 	ContentTypeDOT
+	ContentTypeCSV
 
-	// ContentTypeUnsupported means the client explicitly asked for a type we
-	// cannot provide. Dispatch helpers should return 406 Not Acceptable.
+	// ContentTypeUnsupported means no supported media type matched. What to
+	// do about it is the endpoint's to decide.
 	ContentTypeUnsupported ContentType = -1
 )
 
@@ -43,6 +44,8 @@ func (ct ContentType) String() string {
 		return "GraphML"
 	case ContentTypeDOT:
 		return "DOT"
+	case ContentTypeCSV:
+		return "CSV"
 	case ContentTypeUnsupported:
 		return "Unsupported"
 	default:
@@ -62,23 +65,27 @@ func ContentTypeFromContext(ctx context.Context) ContentType {
 
 // negotiate resolves the effective content type from an extension suffix or
 // Accept header and stores it in the request context for downstream handlers.
+//
+// It resolves and records; it does not refuse. 406 is a statement about one
+// endpoint, and the route is not known here.
 func negotiate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Vary", "Accept")
+		w.Header().Add("Vary", "Accept")
 
 		ct := resolveExtension(r)
 		if ct == ContentTypeUnsupported {
 			ct = parseAccept(r.Header.Get("Accept"))
 		}
 
-		if ct == ContentTypeUnsupported {
-			writeErrorCode(w, r, "API003", "no supported media type in Accept header")
-			return
-		}
-
 		ctx := context.WithValue(r.Context(), contentTypeKey{}, ct)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// notAcceptable refuses a type the endpoint does not serve, naming what it
+// does. Every dispatcher that chooses among representations ends here.
+func notAcceptable(w http.ResponseWriter, r *http.Request, serves string) {
+	writeErrorCode(w, r, "API003", "this endpoint supports "+serves)
 }
 
 // supportedTypes lists the media types we support, mapped to ContentType.
@@ -90,6 +97,9 @@ var supportedTypes = []struct {
 }{
 	{"application", "json", ContentTypeJSON},
 	{"application", "vnd.cetacean.v1+json", ContentTypeJSON},
+	// Every JSON response here is a JSON-LD document, so this is an alias for
+	// the JSON branch rather than a separate representation.
+	{"application", "ld+json", ContentTypeJSON},
 	{"text", "html", ContentTypeHTML},
 	{"application", "xhtml+xml", ContentTypeHTML},
 	{"text", "event-stream", ContentTypeSSE},
@@ -98,6 +108,8 @@ var supportedTypes = []struct {
 	{"application", "vnd.jgf+json", ContentTypeJGF},
 	{"application", "graphml+xml", ContentTypeGraphML},
 	{"text", "vnd.graphviz", ContentTypeDOT},
+	// After text/html, so a text/* wildcard still resolves to HTML.
+	{"text", "csv", ContentTypeCSV},
 }
 
 // extensionTypes maps URL extension suffixes to content types.
@@ -113,6 +125,7 @@ var extensionTypes = []struct {
 	{".jgf", ContentTypeJGF},
 	{".graphml", ContentTypeGraphML},
 	{".dot", ContentTypeDOT},
+	{".csv", ContentTypeCSV},
 }
 
 // resolveExtension checks for a known extension suffix on the request path.

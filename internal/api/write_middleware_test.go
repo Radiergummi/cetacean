@@ -118,7 +118,12 @@ func TestRequireLevel_Integration_ScaleBlockedAtLevel0(t *testing.T) {
 		withWriteClient(&mockWriteClient{}),
 		withOpsLevel(config.OpsReadOnly),
 	)
-	handler := requireLevel(config.OpsOperational, config.OpsReadOnly)(h.HandleScaleService)
+	handler := requireLevel(
+		config.OpsOperational,
+		config.OpsReadOnly,
+	)(
+		http.HandlerFunc(h.HandleScaleService),
+	)
 
 	body := strings.NewReader(`{"replicas": 3}`)
 	req := httptest.NewRequest("PUT", "/services/svc1/scale", body)
@@ -157,7 +162,12 @@ func TestRequireLevel_Integration_ScaleAllowedAtLevel1(t *testing.T) {
 		withWriteClient(mock),
 		withOpsLevel(config.OpsOperational),
 	)
-	handler := requireLevel(config.OpsOperational, config.OpsOperational)(h.HandleScaleService)
+	handler := requireLevel(
+		config.OpsOperational,
+		config.OpsOperational,
+	)(
+		http.HandlerFunc(h.HandleScaleService),
+	)
 
 	body := strings.NewReader(`{"replicas": 3}`)
 	req := httptest.NewRequest("PUT", "/services/svc1/scale", body)

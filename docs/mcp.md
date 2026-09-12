@@ -30,7 +30,7 @@ environment:
 > whenever MCP OAuth is in use.
 
 Also set [`mcp.signing_key`][mcp.signing_key]. Without it Cetacean generates a new key on every restart, and every agent
-has to sign in again after a redeployment.
+has to sign in again after a redeployment. Generate one with `openssl rand -hex 32`.
 
 ## Connect a client
 
@@ -87,6 +87,11 @@ Clients that support this opt in per call; the agent handles it, there is nothin
 settled within five minutes is reported as failed, and [`mcp.max_concurrent_tasks`][mcp.max_concurrent_tasks] (default
 is 32) caps how many such waits run at once.
 
+Four tools wait; the [API][api] offers the same wait on six endpoints, adding service mode and endpoint mode. That is
+deliberate rather than an oversight: waiting over MCP costs a held task slot per call, so it is offered on the changes
+an agent routinely makes and watches, while an HTTP client waits on its own connection and pays for nothing it is not
+using.
+
 ## Trace agent activity
 
 Point [`tracing.endpoint`][tracing.endpoint] at an OpenTelemetry collector that accepts OTLP over HTTP:
@@ -109,7 +114,9 @@ Tracing stays off until the endpoint is set. A malformed endpoint stops startup 
 - **Auth mode `none` leaves `/mcp` open.** Anyone who can reach it gets whatever the operations level allows.
   Use it only on a trusted network.
 - **Set [`server.cors.origins`][server.cors.origins] if the consent screen crosses origins.** It also guards
-  `/mcp` itself against DNS rebinding. Non-browser clients are unaffected.
+  `/mcp` itself against DNS rebinding. Name the origins rather than using `*`: a browser-based client's every
+  call is a `POST`, and a wildcard is not trusted for cross-origin writes, so those calls are refused.
+  Non-browser clients send no `Origin` and are unaffected by either check.
 - **Run a single replica.** Sign-in state lives in one process; see [How it works](#how-it-works).
 
 ## Troubleshooting
@@ -140,6 +147,10 @@ through to `/mcp`'s host alongside the endpoint itself:
 Cetacean is its own OAuth 2.1 authorization server for `/mcp`, implementing the MCP `2026-07-28` authorization profile.
 A client discovers it, sends you through your configured auth provider, and exchanges the result for an access token and
 a refresh token. Access tokens are scoped to this deployment, so one cannot be replayed against another Cetacean.
+
+Access tokens follow the JWT profile in [RFC 9068](https://www.rfc-editor.org/rfc/rfc9068): the header carries
+`typ: at+jwt`, and the token is refused unless it does, so an ID token cannot be presented where an access token
+belongs. Refresh tokens are opaque and unaffected.
 
 ```mermaid
 sequenceDiagram
@@ -174,6 +185,7 @@ Refresh tokens, approvals and dynamically registered clients are stored in `mcp-
 else survives a restart, which is why a single replica is required: the file is node-local, and an unset signing key
 would leave each replica signing differently.
 
+[api]: api
 [authorization]: authorization
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools

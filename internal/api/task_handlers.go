@@ -56,6 +56,11 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		writeListCSV(w, r, "task", tasks, p, h.taskRows)
+		return
+	}
+
 	paged := applyPagination(r.Context(), tasks, p)
 	enriched := cluster.EnrichTasks(h.cache, paged.Items)
 	writeLinkTemplate(w, r, "/tasks/{id}")
@@ -73,6 +78,34 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
+func (h *Handlers) taskRows(tasks []swarm.Task) []cluster.Row {
+	return h.enrichedTaskRows(cluster.EnrichTasks(h.cache, tasks))
+}
+
+// enrichedTaskRows looks up each task's parent rather than handing the builder
+// every service, which would index the whole service table per page.
+func (h *Handlers) enrichedTaskRows(tasks []cluster.EnrichedTask) []cluster.Row {
+	parents := make([]swarm.Service, 0, len(tasks))
+	for _, task := range tasks {
+		if svc, ok := h.cache.GetService(task.ServiceID); ok {
+			parents = append(parents, svc)
+		}
+	}
+
+	return cluster.RowsForTasks(tasks, parents)
+}
+
+// writeTaskCSV names the file after the parent, so two downloads do not
+// collide.
+func (h *Handlers) writeTaskCSV(
+	w http.ResponseWriter,
+	r *http.Request,
+	parent string,
+	tasks []cluster.EnrichedTask,
+) {
+	writeCSV(w, r, "tasks-"+parent, csvTableForRows("task", h.enrichedTaskRows(tasks)))
+}
+
 func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	task, ok := lookupACL(h, w, r, "task", id, h.cache.GetTask, func(t swarm.Task) string {
@@ -81,13 +114,14 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	et := cluster.EnrichTask(h.cache, task)
 	h.setAllow(w, r, "task", id)
-	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/tasks/"+id, "Task", TaskResponse{
-		Task:    et,
-		Service: TaskServiceRef{AtID: "/services/" + et.ServiceID, Name: et.ServiceName},
-		Node:    TaskNodeRef{AtID: "/nodes/" + et.NodeID, Hostname: et.NodeHostname},
-	}), task.UpdatedAt)
+
+	rep, ok := representationOr404(w, r, "task", id, h.taskRepresentation)
+	if !ok {
+		return
+	}
+
+	writeCachedJSONTimed(w, r, rep, task.UpdatedAt)
 }
 
 func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {

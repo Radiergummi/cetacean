@@ -34,6 +34,7 @@ var ErrorDomains = []ErrorDomain{
 	{Prefix: "AUT", Label: "Authentication"},
 	{Prefix: "ACL", Label: "Authorization"},
 	{Prefix: "OPS", Label: "Operations level"},
+	{Prefix: "CSR", Label: "Cross-origin protection"},
 	{Prefix: "FLT", Label: "Filter expressions"},
 	{Prefix: "SEA", Label: "Search"},
 	{Prefix: "MTR", Label: "Metrics and Prometheus"},
@@ -114,6 +115,13 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "This endpoint was deprecated and has since been removed.",
 		Suggestion:  "See the endpoint named in the detail, or GET /api for the current surface.",
 	},
+	"API013": {
+		Code:        "API013",
+		Title:       "Precondition Failed",
+		Status:      http.StatusPreconditionFailed,
+		Description: "The If-Match header did not match the current state of the resource.",
+		Suggestion:  "Re-read the resource, take the ETag from that response, and retry with it.",
+	},
 
 	// ── AUT: authentication ───────────────────────────────────────────
 	"AUT001": {Code: "AUT001", Title: "Not Authenticated", Status: http.StatusUnauthorized,
@@ -152,6 +160,15 @@ var errorRegistry = map[string]ErrorDef{
 		Status:      http.StatusForbidden,
 		Description: "The requested operation requires a higher operations level than the server is configured for.",
 		Suggestion:  "Increase the server.operations_level setting and restart the server.",
+	},
+
+	// ── CSR: cross-origin protection ──────────────────────────────────
+	"CSR001": {
+		Code:        "CSR001",
+		Title:       "Cross-Origin Request Blocked",
+		Status:      http.StatusForbidden,
+		Description: "The request changes state and arrived from another origin, which cross-site request forgery protection refuses.",
+		Suggestion:  "Call the API from an allowed origin, or add yours to the server.cors.origins setting.",
 	},
 
 	// ── FLT: filter expressions ───────────────────────────────────────

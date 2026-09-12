@@ -76,10 +76,12 @@ the config file.
 
 <ConfigParam name="server.cors.origins" flag="-cors-origins" env="CETACEAN_CORS_ORIGINS">
   Origins allowed to make cross-origin requests to the API, as a comma-separated list, e.g. `https://admin.example.com`, or `*` for any. When unset, no CORS headers are sent and browsers block cross-origin requests.
+
+  The same origins are trusted for cross-origin writes; `*` cannot be, so with a wildcard browsers may read the API from any origin while cross-origin writes are refused.
 </ConfigParam>
 
 <ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">
-  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose `X-Forwarded-For` header is trusted for the real client IP, e.g. `10.0.0.0/8,172.16.0.0/12`. Required for [header-based authentication][trusted-proxy-headers]. When unset, every request counts as a direct connection.
+  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose forwarding headers are trusted, e.g. `10.0.0.0/8,172.16.0.0/12`. Both [`Forwarded`][rfc7239] and `X-Forwarded-For` are read for the real client IP, the standard header first. Required for [header-based authentication][trusted-proxy-headers], and for `cert` mode behind a [TLS-terminating proxy][cert-behind-proxy]. When unset, every request counts as a direct connection.
 </ConfigParam>
 
 <ConfigParam name="storage.snapshot" flag="-snapshot" env="CETACEAN_SNAPSHOT" default="true">
@@ -91,7 +93,7 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="tls.cert" flag="-tls-cert" env="CETACEAN_TLS_CERT">
-  Path to the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail)-encoded server certificate for TLS termination. Set it together with [`tls.key`][tls.key] or not at all. Required for [client certificate authentication][client-certificates], optional otherwise.
+  Path to the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail)-encoded server certificate for TLS termination. Set it together with [`tls.key`][tls.key] or not at all. Required for [client certificate authentication][client-certificates] unless a [TLS-terminating proxy][cert-behind-proxy] forwards the certificate instead; optional in every other mode.
 </ConfigParam>
 
 <ConfigParam name="tls.key" flag="-tls-key" env="CETACEAN_TLS_KEY">
@@ -145,7 +147,7 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="auth.tailscale.hostname" flag="-auth-tailscale-hostname" env="CETACEAN_AUTH_TAILSCALE_HOSTNAME" default="cetacean">
-  Hostname the embedded Tailscale node registers as (`tsnet` mode only). The dashboard is then reachable at `http://cetacean.<tailnet-name>.ts.net`.
+  Hostname the embedded Tailscale node registers as (`tsnet` mode only). The dashboard is then reachable at `http://cetacean.[[tailnet-name]].ts.net`.
 </ConfigParam>
 
 <ConfigParam name="auth.tailscale.state_dir" flag="-auth-tailscale-state-dir" env="CETACEAN_AUTH_TAILSCALE_STATE_DIR">
@@ -159,7 +161,7 @@ the config file.
 ### Client certificates
 
 <ConfigParam name="auth.cert.ca" flag="-auth-cert-ca" env="CETACEAN_AUTH_CERT_CA" required>
-  Path to a PEM-encoded CA certificate bundle. Client certificates must be signed by one of its CAs. Supports certificate chains and multiple CAs in one file. Requires `tls.cert` and `tls.key`, since mTLS needs TLS terminated at Cetacean.
+  Path to a PEM-encoded CA certificate bundle. Client certificates must be signed by one of its CAs. Supports certificate chains and multiple CAs in one file. Configures Cetacean's own TLS listener, so it requires `tls.cert` and `tls.key` and is required with them. Behind a [TLS-terminating proxy][cert-behind-proxy] the proxy verifies the certificate against its own CA instead, and this setting is not consulted.
 </ConfigParam>
 
 ### Trusted proxy headers
@@ -246,7 +248,7 @@ already has.
 </ConfigParam>
 
 <ConfigParam name="mcp.signing_key" env="CETACEAN_MCP_SIGNING_KEY">
-  HMAC-SHA256 key signing the JWTs Cetacean issues. When unset, a fresh key is generated at startup and every existing token becomes invalid, so set it for any deployment that should survive a restart. Accepts the `_FILE` suffix.
+  Root secret the token-signing key and the consent page's CSRF key are each derived from. When unset, a fresh key is generated at startup and every existing token becomes invalid, so set it for any deployment that should survive a restart. Generate one with `openssl rand -hex 32`. Cetacean refuses to start unless the value decodes as hex or base64 to exactly 32 bytes: the public half of the signing key is published and unauthenticated, so a guessable root could be recovered from it. Accepts the `_FILE` suffix.
 </ConfigParam>
 
 <ConfigParam name="mcp.access_token_ttl" env="CETACEAN_MCP_ACCESS_TOKEN_TTL" default="1h">
@@ -403,6 +405,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [auth.headers.secret_header]: #auth.headers.secret_header
 [auth.oidc.redirect_url]: #auth.oidc.redirect_url
 [authentication]: authentication
+[cert-behind-proxy]: authentication#behind-a-tls-terminating-proxy
 [authorization]: authorization
 [choosing-a-mode]: authentication#choosing-a-mode
 [client-certificates]: #client-certificates
@@ -419,6 +422,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [oidc]: #oidc
 [operations-level]: #operations-level
 [recommendations]: recommendations
+[rfc7239]: https://www.rfc-editor.org/rfc/rfc7239
 [server.base_path]: #server.base_path
 [server.operations_level]: #server.operations_level
 [server.pprof]: #server.pprof

@@ -73,13 +73,7 @@ func (h *Handlers) HandleGetPlugin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setAllow(w, r, "plugin", name)
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", PluginResponse{
-			Plugin: *plugin,
-		}),
-	)
+	writeCachedJSON(w, r, pluginDetail(r, name, *plugin))
 }
 
 func (h *Handlers) HandleEnablePlugin(w http.ResponseWriter, r *http.Request) {

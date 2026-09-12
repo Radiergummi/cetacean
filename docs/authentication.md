@@ -307,8 +307,7 @@ Groups from multiple matching grants are merged and deduplicated. Malformed capa
 
 Authenticates with [mTLS](https://en.wikipedia.org/wiki/Mutual_authentication#mTLS) client certificates. Standard
 [X.509](https://www.rfc-editor.org/rfc/rfc5280) certificates and [SPIFFE](https://spiffe.io/) X.509-SVIDs both
-work. Requires TLS termination at Cetacean, so this mode cannot sit behind a TLS-terminating proxy. See [client
-certificate configuration][client-certificates] for the CA setting.
+work. See [client certificate configuration][client-certificates] for the CA setting.
 
 ```yaml
 environment:
@@ -325,6 +324,25 @@ secrets:
 Clients without a certificate signed by that CA cannot connect. Identity comes from the SPIFFE URI SAN, else the
 Common Name, else the first email SAN—a certificate carrying none of the three is rejected, as is one carrying
 more than one SPIFFE SAN. Groups come from Organizational Unit (OU) fields.
+
+### Behind a TLS-terminating proxy
+
+A proxy that terminates TLS forwards the certificate it verified in the [`Client-Cert`][rfc9440] header, and
+identity is built from it exactly as from a directly presented one:
+
+```yaml
+environment:
+  CETACEAN_AUTH_MODE: cert
+  CETACEAN_TRUSTED_PROXIES: "10.0.0.0/8"
+```
+
+The proxy verifies the certificate against its own CA; [`auth.cert.ca`][auth.cert.ca] configures Cetacean's own
+TLS listener and is not consulted here. A certificate presented directly always wins over the header, and
+`Client-Cert-Chain` is ignored. One of the two—TLS here, or a trusted proxy—is required for cert mode to start.
+
+> [!WARNING]
+> The header is honoured **only** from an address in [`server.trusted_proxies`][server.trusted_proxies], so the
+> proxy must strip any `Client-Cert` its own clients send.
 
 ## Trusted proxy headers
 
@@ -516,6 +534,7 @@ response schemas.
 
 [acl.oidc_claim]: configuration#acl.oidc_claim
 [api]: api
+[auth.cert.ca]: configuration#auth.cert.ca
 [auth.headers.subject]: configuration#auth.headers.subject
 [auth.headers.trusted_proxies]: configuration#auth.headers.trusted_proxies
 [auth.mode]: configuration#auth.mode
@@ -532,6 +551,7 @@ response schemas.
 [getting-started]: getting-started
 [mcp]: mcp
 [oidc]: configuration#oidc
+[rfc9440]: https://www.rfc-editor.org/rfc/rfc9440
 [server.listen_addr]: configuration#server.listen_addr
 [server.public_url]: configuration#server.public_url
 [server.trusted_proxies]: configuration#server.trusted_proxies

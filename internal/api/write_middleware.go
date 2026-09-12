@@ -12,8 +12,8 @@ import (
 
 // requireLevel returns middleware that blocks requests when the configured
 // operations level is below the required level for this endpoint.
-func requireLevel(required, configured config.OperationsLevel) func(http.HandlerFunc) http.Handler {
-	return func(next http.HandlerFunc) http.Handler {
+func requireLevel(required, configured config.OperationsLevel) Constructor {
+	return func(next http.Handler) http.Handler {
 		if configured >= required {
 			return next
 		}

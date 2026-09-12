@@ -69,7 +69,8 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 	}
 
 	body := buf.Bytes()
-	etag := computeETag(body)
+	coding := negotiateCoding(w, r, body)
+	etag := codedETag(computeETag(body), coding)
 
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/atom+xml;charset=utf-8")
@@ -81,6 +82,8 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 		return
 	}
 
+	body, _ = encodeBody(body, coding)
+
 	w.WriteHeader(http.StatusOK)
 	w.Write(body) //nolint:errcheck
 }
@@ -90,20 +93,17 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 func atomPaginationLinks(r *http.Request, data feedData) []atomxml.Link {
 	atomPath := r.URL.Path + ".atom"
 
-	selfHref := absURL(r, atomPath)
-	if r.URL.RawQuery != "" {
-		selfHref += "?" + r.URL.RawQuery
-	}
+	selfHref := feedHref(absURL(r, atomPath), feedQuery(r, data.QueryParams))
 
-	alternateHref := absURL(r, r.URL.Path)
-	if aq := r.URL.Query(); len(aq) > 0 {
-		aq.Del("before")
-		aq.Del("limit")
+	// The HTML alternate and the subscription document are both the feed
+	// without a cursor on it, so they share one query.
+	baseQuery := feedQuery(r, data.QueryParams)
+	baseQuery.Del("before")
+	baseQuery.Del("limit")
 
-		if encoded := aq.Encode(); encoded != "" {
-			alternateHref += "?" + encoded
-		}
-	}
+	alternateHref := feedHref(absURL(r, r.URL.Path), baseQuery)
+	baseHref := feedHref(absURL(r, atomPath), baseQuery)
+
 	links := []atomxml.Link{
 		{Rel: "self", Href: selfHref, Type: "application/atom+xml"},
 		{Rel: "alternate", Href: alternateHref, Type: "text/html"},
@@ -111,10 +111,9 @@ func atomPaginationLinks(r *http.Request, data feedData) []atomxml.Link {
 
 	// On non-first pages, link back to the subscription document (first page).
 	if data.BeforeID > 0 {
-		firstPageHref := atomBaseHref(r, atomPath)
 		links = append(links, atomxml.Link{
 			Rel:  "previous",
-			Href: firstPageHref,
+			Href: baseHref,
 			Type: "application/atom+xml",
 		})
 	}
@@ -123,19 +122,19 @@ func atomPaginationLinks(r *http.Request, data feedData) []atomxml.Link {
 	// empty despite requesting a non-first page. Include a "current" link
 	// (RFC 5005 Section 2) so feed readers can recover.
 	if data.BeforeID > 0 && len(data.Entries) == 0 {
-		currentHref := atomBaseHref(r, atomPath)
 		links = append(links, atomxml.Link{
 			Rel:  "current",
-			Href: currentHref,
+			Href: baseHref,
 			Type: "application/atom+xml",
 		})
 	}
 
 	if data.LastItemID > 0 && len(data.Entries) == data.Limit {
-		q := r.URL.Query()
-		q.Set("before", strconv.FormatUint(data.LastItemID, 10))
-		q.Set("limit", strconv.Itoa(data.Limit))
-		nextHref := absURL(r, atomPath) + "?" + q.Encode()
+		nextQuery := feedQuery(r, data.QueryParams)
+		nextQuery.Set("before", strconv.FormatUint(data.LastItemID, 10))
+		nextQuery.Set("limit", strconv.Itoa(data.Limit))
+
+		nextHref := feedHref(absURL(r, atomPath), nextQuery)
 
 		links = append(links, atomxml.Link{
 			Rel:  "next",
@@ -145,19 +144,4 @@ func atomPaginationLinks(r *http.Request, data feedData) []atomxml.Link {
 	}
 
 	return links
-}
-
-// atomBaseHref builds the Atom feed URL without pagination params,
-// preserving other query params (e.g., ?q= for search).
-func atomBaseHref(r *http.Request, atomPath string) string {
-	href := absURL(r, atomPath)
-	if aq := r.URL.Query(); len(aq) > 0 {
-		aq.Del("before")
-		aq.Del("limit")
-
-		if encoded := aq.Encode(); encoded != "" {
-			href += "?" + encoded
-		}
-	}
-	return href
 }

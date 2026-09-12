@@ -31,10 +31,11 @@ func renderJSONFeed(w http.ResponseWriter, r *http.Request, data feedData) {
 	}
 
 	if data.LastItemID > 0 && len(data.Entries) == data.Limit {
-		q := r.URL.Query()
-		q.Set("before", fmt.Sprintf("%d", data.LastItemID))
-		q.Set("limit", fmt.Sprintf("%d", data.Limit))
-		feed.NextURL = absURL(r, r.URL.Path+".feed") + "?" + q.Encode()
+		nextQuery := feedQuery(r, data.QueryParams)
+		nextQuery.Set("before", fmt.Sprintf("%d", data.LastItemID))
+		nextQuery.Set("limit", fmt.Sprintf("%d", data.Limit))
+
+		feed.NextURL = feedHref(absURL(r, r.URL.Path+".feed"), nextQuery)
 	}
 
 	w.Header().Set("Content-Type", "application/feed+json;charset=utf-8")

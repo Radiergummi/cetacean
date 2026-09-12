@@ -188,6 +188,13 @@ func TestIsExempt_Complete(t *testing.T) {
 		{"/auth/logout", true},
 		{"/auth/whoami", true},
 
+		// OAuth routes — token endpoints are exempt, consent is not.
+		{"/oauth/jwks", true},
+		{"/oauth/token", true},
+		{"/oauth/revoke", true},
+		{"/oauth/register", true},
+		{"/oauth/authorize", false},
+
 		// Application routes — NOT exempt.
 		{"/", false},
 		{"/nodes", false},

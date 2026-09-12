@@ -1,9 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/api/linkset"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func TestNegotiate(t *testing.T) {
@@ -183,34 +188,20 @@ func TestNegotiate(t *testing.T) {
 		}
 	})
 
-	// --- Unsupported types → 406 at middleware level ---
+	// --- Unsupported types are recorded, not refused ---
+	// TestUnservedTypeIsRefusedByTheEndpoint drives the other half.
 
-	t.Run("application/xml alone returns 406", func(t *testing.T) {
-		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Error("inner handler should not be called for unsupported type")
-		})
-		req := httptest.NewRequest("GET", "/services", nil)
-		req.Header.Set("Accept", "application/xml")
-		rec := httptest.NewRecorder()
-		negotiate(inner).ServeHTTP(rec, req)
-		if rec.Code != http.StatusNotAcceptable {
-			t.Errorf("status=%d, want 406", rec.Code)
-		}
-		if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
-			t.Errorf("content-type=%q, want application/problem+json", ct)
+	t.Run("application/xml alone resolves to Unsupported", func(t *testing.T) {
+		ct, _ := run("/services", "application/xml")
+		if ct != ContentTypeUnsupported {
+			t.Errorf("got %v, want Unsupported", ct)
 		}
 	})
 
-	t.Run("text/plain alone returns 406", func(t *testing.T) {
-		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Error("inner handler should not be called for unsupported type")
-		})
-		req := httptest.NewRequest("GET", "/services", nil)
-		req.Header.Set("Accept", "text/plain")
-		rec := httptest.NewRecorder()
-		negotiate(inner).ServeHTTP(rec, req)
-		if rec.Code != http.StatusNotAcceptable {
-			t.Errorf("status=%d, want 406", rec.Code)
+	t.Run("text/plain alone resolves to Unsupported", func(t *testing.T) {
+		ct, _ := run("/services", "text/plain")
+		if ct != ContentTypeUnsupported {
+			t.Errorf("got %v, want Unsupported", ct)
 		}
 	})
 
@@ -314,6 +305,14 @@ func TestParseAccept_JGF(t *testing.T) {
 	}
 }
 
+// TestParseAccept_JSONLD: application/ld+json is an alias for the JSON branch,
+// not a second representation.
+func TestParseAccept_JSONLD(t *testing.T) {
+	if ct := parseAccept("application/ld+json"); ct != ContentTypeJSON {
+		t.Errorf("got %v, want ContentTypeJSON", ct)
+	}
+}
+
 func TestParseAccept_GraphML(t *testing.T) {
 	ct := parseAccept("application/graphml+xml")
 	if ct != ContentTypeGraphML {
@@ -392,4 +391,105 @@ func TestNegotiate_JGFSuffix(t *testing.T) {
 	if capturedPath != "/topology" {
 		t.Errorf("expected path /topology, got %s", capturedPath)
 	}
+}
+
+// refuse drives one request and asserts it was refused as unacceptable,
+// returning the problem body so a caller can read what the endpoint offered
+// instead. The code matters as much as the status: API001 is also a 406, and
+// asserting the status alone would let the SSE refusal stand in for this one.
+func refuse(t *testing.T, router http.Handler, path, accept string) ProblemDetail {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Accept", accept)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotAcceptable {
+		t.Fatalf("status=%d, want 406; body=%s", rec.Code, rec.Body.String())
+	}
+
+	if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Errorf("content-type=%q, want application/problem+json", ct)
+	}
+
+	var problem ProblemDetail
+	if err := json.Unmarshal(rec.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("parse problem body: %v", err)
+	}
+
+	if !strings.Contains(problem.Type, "API003") {
+		t.Errorf("problem type=%q, want it to name API003", problem.Type)
+	}
+
+	return problem
+}
+
+// TestUnservedTypeIsRefusedByTheEndpoint: an endpoint refuses every type it
+// does not serve, including one another endpoint does — a graph format
+// resolves successfully here and is no more servable for it.
+//
+// /services and /cluster differ in whether they carry a stream, /api, /events
+// and /topology dispatch without the helpers, and the dashboard fallback
+// refuses only what nothing serves: */* resolves to JSON, so JSON on that
+// route means "unknown" and every static file arrives that way.
+func TestUnservedTypeIsRefusedByTheEndpoint(t *testing.T) {
+	router := newTestRouterWithCache(t, cache.New(nil))
+
+	for _, probe := range []struct{ path, accept string }{
+		{"/services", openSearchMediaType},
+		{"/services", "application/vnd.jgf+json"},
+		{"/services", "application/graphml+xml"},
+		{"/services", "text/vnd.graphviz"},
+		{"/cluster", linkset.MediaType},
+		{"/cluster", "application/vnd.jgf+json"},
+		{"/api", "application/graphml+xml"},
+		{"/events", "application/json"},
+		{"/topology", "application/atom+xml"},
+		{"/not-a-route", "application/xml"},
+	} {
+		t.Run(probe.path+" "+probe.accept, func(t *testing.T) {
+			refuse(t, router, probe.path, probe.accept)
+		})
+	}
+}
+
+// TestRefusalNamesOnlyWhatTheEndpointServes: the 406 says what to ask for
+// instead, so an endpoint registered without feeds must not name Atom — it
+// refuses Atom one branch above, and one endpoint cannot answer two
+// contradicting 406s.
+func TestRefusalNamesOnlyWhatTheEndpointServes(t *testing.T) {
+	router := newTestRouterWithCache(t, cache.New(nil))
+
+	for _, accept := range []string{"application/xml", "application/atom+xml"} {
+		t.Run(accept, func(t *testing.T) {
+			problem := refuse(t, router, "/cluster", accept)
+
+			if strings.Contains(problem.Detail, "atom") {
+				t.Errorf("/cluster has no feed, but its 406 offers one: %q", problem.Detail)
+			}
+		})
+	}
+}
+
+// TestSingleRepresentationDocumentsNeedNoTableRow holds both halves of the
+// claim together: neither media type resolves against supportedTypes, and each
+// document still answers a client asking for it. Asserting only the second
+// half is satisfied by putting the row back, which is the thing being removed.
+//
+// The fetch helpers assert the status and the content type.
+func TestSingleRepresentationDocumentsNeedNoTableRow(t *testing.T) {
+	router := newTestRouterWithCache(t, cache.New(nil))
+
+	for _, mediaType := range []string{openSearchMediaType, linkset.MediaType} {
+		if ct := parseAccept(mediaType); ct != ContentTypeUnsupported {
+			t.Errorf(
+				"parseAccept(%q) = %v; the document is reachable without this row",
+				mediaType, ct,
+			)
+		}
+	}
+
+	fetchOpenSearch(t, router, openSearchPath)
+	fetchCatalog(t, router, apiCatalogPath, linkset.MediaType)
 }

@@ -4,46 +4,43 @@ import (
 	"crypto/hmac"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
-	"net/netip"
 	"strings"
 	"unicode"
 
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// maxSubjectLen caps the subject header value to prevent abuse via
-// extremely long headers that could bloat logs, sessions, or storage.
+// maxSubjectLen caps the subject header value, so an over-long one cannot
+// bloat logs, sessions or storage.
 const maxSubjectLen = 256
 
 // HeadersProvider authenticates requests using trusted proxy headers.
 type HeadersProvider struct {
 	cfg config.HeadersConfig
 
-	// extraHeaders are additional header names whose values are captured
-	// into Identity.Raw. Used to pass the ACL grants header through to
-	// the grant source.
+	// extraHeaders are header names whose values are captured into
+	// Identity.Raw, which is how the ACL grants header reaches its source.
 	extraHeaders []string
 }
 
-// NewHeadersProvider creates a new HeadersProvider with the given configuration.
-// Extra header names are captured into Identity.Raw for use by grant sources.
+// NewHeadersProvider creates a HeadersProvider. Extra header names are
+// captured into Identity.Raw for grant sources.
 func NewHeadersProvider(cfg config.HeadersConfig, extraHeaders ...string) *HeadersProvider {
 	return &HeadersProvider{cfg: cfg, extraHeaders: extraHeaders}
 }
 
 // Authenticate reads identity information from request headers set by a
-// trusted reverse proxy. If TrustedProxies is configured, the request's
-// remote address must match. If SecretHeader is configured, the proxy must
-// also send a matching secret value.
+// trusted reverse proxy, which the edge must have vouched for. If
+// SecretHeader is configured, the proxy must also send a matching secret.
 func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Identity, error) {
-	// Check trusted proxy allowlist (always configured; enforced at startup).
-	if err := p.validateSourceIP(r.RemoteAddr); err != nil {
-		return nil, err
+	// Not re-derived from RemoteAddr: realIP has by then rewritten it to the
+	// client address the proxy reported, so the check would ask whether the
+	// *client* is a trusted proxy.
+	if !FromTrustedProxy(r.Context()) {
+		return nil, errors.New("request did not arrive through a trusted proxy")
 	}
 
-	// Check shared secret (constant-time).
 	if p.cfg.SecretHeader != "" {
 		got := []byte(r.Header.Get(p.cfg.SecretHeader))
 		want := []byte(p.cfg.SecretValue)
@@ -102,29 +99,7 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 
 func (p *HeadersProvider) RegisterRoutes(_ *http.ServeMux) {}
 
-// validateSourceIP checks that the request originates from a trusted proxy.
-func (p *HeadersProvider) validateSourceIP(remoteAddr string) error {
-	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		return errors.New("invalid remote address")
-	}
-
-	addr, err := netip.ParseAddr(host)
-	if err != nil {
-		return errors.New("invalid remote IP")
-	}
-
-	for _, prefix := range p.cfg.TrustedProxies {
-		if prefix.Contains(addr) {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("remote address %s is not a trusted proxy", addr)
-}
-
-// validateSubject checks the subject header value for sanity: non-empty,
-// no control characters, and within length limits.
+// validateSubject rejects an empty, over-long, or control-character subject.
 func validateSubject(s string) error {
 	if s == "" {
 		return errors.New("empty value")

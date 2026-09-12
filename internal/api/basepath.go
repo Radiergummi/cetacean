@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 type basePathCtxKey struct{}
@@ -44,28 +46,98 @@ func absPath(ctx context.Context, path string) string {
 }
 
 // absURL builds a full absolute URL (scheme://host/base/path) from the
-// request. Uses server.public_url when configured; otherwise
-// X-Forwarded-Proto/Host, falling back to r.TLS and r.Host. Intended for Atom
-// feeds where RFC 4287 requires IRIs.
+// request, for documents that must carry them: Atom feeds and the discovery
+// documents under /.well-known.
 func absURL(r *http.Request, path string) string {
+	return originOf(r) + absPath(r.Context(), path)
+}
+
+// origin resolves the scheme and authority every outbound URI is built on:
+// server.public_url when configured, the request's own origin otherwise.
+// One resolution, so a document naming both a URL and a host names one host.
+//
+// server.public_url is validated as scheme and host with nothing after them
+// (config.ValidatePublicURL), so splitting it loses nothing.
+func origin(r *http.Request) (scheme, host string) {
 	if base := PublicURLFromContext(r.Context()); base != "" {
-		return base + absPath(r.Context(), path)
+		if u, err := url.Parse(base); err == nil && u.Host != "" {
+			return u.Scheme, u.Host
+		}
 	}
 
-	scheme := "http"
+	return requestOrigin(r)
+}
+
+// originOf returns the scheme and authority absURL builds on. A document
+// naming many URIs resolves it once and appends absPath itself.
+func originOf(r *http.Request) string {
+	scheme, host := origin(r)
+
+	return scheme + "://" + host
+}
+
+// originHostOf is the authority alone, for a document naming a host rather
+// than a URL.
+func originHostOf(r *http.Request) string {
+	_, host := origin(r)
+
+	return host
+}
+
+// requestOrigin resolves the origin a client reached this request on, when
+// server.public_url is unset.
+//
+// A proxy's headers are believed only when auth.FromTrustedProxy vouches for
+// the peer, and the values are validated even then: forwarding a client's own
+// Host into X-Forwarded-Host is a common proxy configuration.
+//
+// r.Host is the remaining fallback and is also the client's. Only
+// server.public_url gives links that do not depend on the caller.
+func requestOrigin(r *http.Request) (scheme, host string) {
+	scheme = "http"
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
-		scheme = proto
+
+	host = r.Host
+
+	if !auth.FromTrustedProxy(r.Context()) {
+		return scheme, host
 	}
 
-	host := r.Host
-	if fwd := r.Header.Get("X-Forwarded-Host"); fwd != "" {
-		host = fwd
+	// RFC 7239 standardizes the pair below it, so Forwarded wins.
+	forwardedProto, forwardedHost := forwardedOrigin(r.Header.Values("Forwarded"))
+
+	if forwardedProto == "" {
+		forwardedProto = r.Header.Get("X-Forwarded-Proto")
 	}
 
-	return scheme + "://" + host + absPath(r.Context(), path)
+	if forwardedHost == "" {
+		forwardedHost = r.Header.Get("X-Forwarded-Host")
+	}
+
+	if forwardedProto == "http" || forwardedProto == "https" {
+		scheme = forwardedProto
+	}
+
+	if isAuthority(forwardedHost) {
+		host = forwardedHost
+	}
+
+	return scheme, host
+}
+
+// isAuthority reports whether s can stand as a URL authority. Anything beyond
+// one — a path, query, fragment, userinfo, control character — lands somewhere
+// other than Host and fails the round-trip.
+func isAuthority(s string) bool {
+	if s == "" {
+		return false
+	}
+
+	parsed, err := url.Parse("//" + s)
+
+	return err == nil && parsed.Host == s && parsed.User == nil
 }
 
 // publicURLMiddleware stores server.public_url in the request context so

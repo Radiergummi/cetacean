@@ -18,6 +18,13 @@ info:
     - `Link: </api/context.jsonld>; rel="describedby"` — JSON-LD context
     - `Vary: Accept` — content negotiation indicator
 
+    JSON, Atom and graph responses over 1 KiB honour `Accept-Encoding: zstd`
+    and `gzip`, answering with `Content-Encoding` and `Vary: Accept-Encoding`.
+    A compressed representation carries its coding as an ETag suffix inside
+    the quotes (`"abc123-zstd"`); the hash itself is always of the
+    uncompressed body, so such a validator can be sent back as `If-Match`
+    unchanged. `/search` is never compressed.
+
 servers:
   - url: /
 
@@ -688,6 +695,93 @@ paths:
                   total: "urn:cetacean:total"
                   limit: "urn:cetacean:limit"
                   offset: "urn:cetacean:offset"
+
+  /opensearch.xml:
+    get:
+      operationId: getOpenSearchDescription
+      tags: [Documentation]
+      summary: OpenSearch description document
+      description: |
+        Describes the cluster search so a browser can offer it from the address
+        bar. Templates are absolute, built from `server.public_url` when set.
+      responses:
+        "200":
+          description: OpenSearch description
+          content:
+            application/opensearchdescription+xml:
+              schema:
+                type: string
+              example: |
+                <?xml version="1.0" encoding="UTF-8"?>
+                <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+                  <ShortName>Cetacean</ShortName>
+                  <Description>Search services, stacks, nodes, tasks, configs, secrets, networks and volumes in the Swarm cluster</Description>
+                  <InputEncoding>UTF-8</InputEncoding>
+                  <Url type="text/html" template="https://cetacean.example.com/search?q={searchTerms}"/>
+                </OpenSearchDescription>
+
+  /.well-known/api-catalog:
+    get:
+      operationId: getAPICatalog
+      tags: [Documentation]
+      summary: API catalog
+      description: |
+        Lists the APIs this deployment publishes, as an RFC 9264 linkset at the
+        RFC 9727 well-known URI. Each `item` names one API; the contexts beside
+        it carry its description, documentation and status links. The MCP server
+        appears only when enabled, and its metadata only when an authorization
+        server is wired for it.
+      security: []
+      responses:
+        "200":
+          description: API catalog
+          content:
+            application/linkset+json:
+              schema:
+                type: object
+                required: [linkset]
+                properties:
+                  linkset:
+                    type: array
+                    items:
+                      type: object
+                      required: [anchor]
+                      properties:
+                        anchor:
+                          type: string
+                          format: uri
+                      additionalProperties:
+                        type: array
+                        items:
+                          type: object
+                          required: [href]
+                          properties:
+                            href:
+                              type: string
+                              format: uri
+                            type:
+                              type: string
+                            title:
+                              type: string
+              example:
+                linkset:
+                  - anchor: "https://cetacean.example.com/.well-known/api-catalog"
+                    item:
+                      - href: "https://cetacean.example.com/"
+                        title: "Cetacean REST API"
+                  - anchor: "https://cetacean.example.com/"
+                    service-desc:
+                      - href: "https://cetacean.example.com/api"
+                        type: "application/json"
+                        title: "OpenAPI description"
+                    describedby:
+                      - href: "https://cetacean.example.com/api/context.jsonld"
+                        type: "application/ld+json"
+                        title: "JSON-LD context"
+                    status:
+                      - href: "https://cetacean.example.com/-/health"
+                        type: "application/json"
+                        title: "Health"
 
   /api/errors:
     get:
@@ -1648,6 +1742,7 @@ paths:
             type: boolean
             default: false
           example: false
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Plugin removed
@@ -1655,6 +1750,10 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "503":
+          $ref: "#/components/responses/BackendUnavailable"
 
   /plugins/{name}/enable:
     post:
@@ -1886,6 +1985,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -1968,6 +2070,7 @@ paths:
             type: boolean
             default: false
           example: false
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Node removed
@@ -1977,6 +2080,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /nodes/{id}/tasks:
     get:
@@ -2028,6 +2133,9 @@ paths:
                 total: 2
                 limit: 2
                 offset: 0
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -2117,16 +2225,21 @@ paths:
     patch:
       operationId: patchNodeLabels
       x-badges:
-        - name: "operations-level:3"
+        - name: "operations-level:2"
           position: after
-          color: red
+          color: orange
       tags: [Nodes]
       summary: Patch node labels
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the node labels.
         Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
+
+        Requires operations level 2 — one below the other node writes. Relabelling changes where
+        tasks may be placed; draining a node or demoting it from manager changes whether the swarm
+        stays healthy, so those stay at level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2171,6 +2284,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -2219,6 +2334,7 @@ paths:
       description: Promotes or demotes a node. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2257,6 +2373,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   # ── Services ─────────────────────────────────────────────────────────
 
@@ -2328,6 +2446,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -2413,6 +2534,7 @@ paths:
       description: Removes a service from the swarm. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Service removed
@@ -2420,6 +2542,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/tasks:
     get:
@@ -2475,6 +2599,9 @@ paths:
                 total: 3
                 limit: 3
                 offset: 0
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -2531,6 +2658,7 @@ paths:
       description: Sets the replica count for a replicated service.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/Prefer"
       requestBody:
         required: true
         content:
@@ -2552,6 +2680,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDetail"
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2571,6 +2701,7 @@ paths:
       description: Updates the container image for a service.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/Prefer"
       requestBody:
         required: true
         content:
@@ -2592,6 +2723,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDetail"
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2611,6 +2744,7 @@ paths:
       description: Rolls back the service to its previous specification.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/Prefer"
       responses:
         "200":
           description: Service rollback initiated
@@ -2637,6 +2771,8 @@ paths:
                     StartedAt: "2026-04-13T08:15:00Z"
                     Message: rollback initiated
                 integrations: []
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2656,6 +2792,7 @@ paths:
       description: Forces a re-deploy of the service by incrementing its ForceUpdate counter.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/Prefer"
       responses:
         "200":
           description: Service restart initiated
@@ -2679,6 +2816,8 @@ paths:
                     Mode:
                       Replicated: { Replicas: 3 }
                 integrations: []
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -2730,6 +2869,7 @@ paths:
         `application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2776,6 +2916,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -2815,6 +2957,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2846,6 +2989,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -2883,6 +3028,7 @@ paths:
       description: Replaces the placement constraints and preferences for the service.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2914,6 +3060,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/ports:
     get:
@@ -2947,6 +3095,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -2978,6 +3127,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3017,6 +3168,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3048,6 +3200,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3087,6 +3241,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3118,6 +3273,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3153,6 +3310,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3180,6 +3338,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3221,6 +3381,7 @@ paths:
         Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3267,6 +3428,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3305,6 +3468,7 @@ paths:
       description: Replaces the healthcheck configuration for the service. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3339,6 +3503,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
     patch:
       operationId: patchServiceHealthcheck
       x-badges:
@@ -3352,6 +3518,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3383,6 +3550,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3428,6 +3597,7 @@ paths:
       description: Replaces the config references for the service. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3481,6 +3651,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/secrets:
     get:
@@ -3524,6 +3696,7 @@ paths:
       description: Replaces the secret references for the service. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3577,6 +3750,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/networks:
     get:
@@ -3620,6 +3795,7 @@ paths:
       description: Replaces the network attachments for the service. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3672,6 +3848,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/mounts:
     get:
@@ -3709,6 +3887,7 @@ paths:
       description: Replaces the mount configuration for the service. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3751,6 +3930,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/container-config:
     get:
@@ -3810,6 +3991,7 @@ paths:
         Requires `Content-Type: application/merge-patch+json`. Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -3842,6 +4024,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -3896,6 +4080,8 @@ paths:
         For replicated mode, specify the initial replica count. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/Prefer"
       requestBody:
         required: true
         content:
@@ -3924,6 +4110,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDetail"
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -3932,6 +4120,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/endpoint-mode:
     get:
@@ -3978,6 +4168,8 @@ paths:
         Changes the service endpoint mode between vip and dnsrr. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/Prefer"
       requestBody:
         required: true
         content:
@@ -4002,6 +4194,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDetail"
+        "202":
+          $ref: "#/components/responses/ServiceAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -4010,6 +4204,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   # ── Tasks ────────────────────────────────────────────────────────────
 
@@ -4069,6 +4265,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -4158,11 +4357,14 @@ paths:
         Only works on tasks whose containers are still accessible on the node.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Task removed
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /tasks/{id}/logs:
     get:
@@ -4272,6 +4474,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -4326,6 +4531,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -4461,6 +4669,7 @@ paths:
           schema:
             type: string
           example: myapp
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "200":
           description: Stack removal initiated
@@ -4483,6 +4692,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   # ── Configs ──────────────────────────────────────────────────────────
 
@@ -4537,6 +4748,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -4663,6 +4877,7 @@ paths:
       description: Removes a config from the swarm. Fails if the config is in use by a service. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Config removed
@@ -4672,6 +4887,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /configs/{id}/labels:
     get:
@@ -4710,6 +4927,7 @@ paths:
         Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -4754,6 +4972,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -4810,6 +5030,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -4935,6 +5158,7 @@ paths:
       description: Removes a secret from the swarm. Fails if the secret is in use by a service. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Secret removed
@@ -4944,6 +5168,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /secrets/{id}/labels:
     get:
@@ -4982,6 +5208,7 @@ paths:
         Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -5027,6 +5254,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
@@ -5083,6 +5312,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -5153,6 +5385,7 @@ paths:
       description: Removes a network from the swarm. Fails if services are still attached. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Network removed
@@ -5162,6 +5395,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   # ── Volumes ──────────────────────────────────────────────────────────
 
@@ -5213,6 +5448,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -5303,6 +5541,7 @@ paths:
             type: boolean
             default: false
           example: false
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Volume removed
@@ -5312,6 +5551,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   # ── Search ───────────────────────────────────────────────────────────
 
@@ -5473,6 +5714,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -5506,6 +5750,37 @@ components:
       schema:
         type: string
       example: qz7k3v9xm2p4
+
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      schema:
+        type: string
+      description: >
+        Optional RFC 9110 precondition. Supply the ETag from a GET on this
+        same path; the write is refused with 412 if the resource has
+        changed since. Omitting the header skips the check.
+      example: '"a1b2c3d4e5f6a1b2"'
+
+    Prefer:
+      name: Prefer
+      in: header
+      required: false
+      schema:
+        type: string
+      description: >
+        Optional RFC 7240 convergence preferences, comma-separated.
+        `wait=<seconds>` holds the response until the cluster has settled on
+        the change, up to a server ceiling of 300 seconds; the response then
+        carries `Preference-Applied: wait=<seconds>` reporting the wait
+        actually applied. A wait that runs out answers 202 with the last
+        progress line and no `Preference-Applied`. `respond-async` answers 202
+        immediately. Omitting the header leaves the endpoint's behaviour
+        unchanged. The unrelated `return=minimal` preference is honoured on
+        every write endpoint, this one included, and is not documented per
+        endpoint.
+      example: wait=30
 
     search:
       name: search
@@ -5601,10 +5876,26 @@ components:
 
   headers:
     ETag:
-      description: Weak ETag for conditional requests (use with If-None-Match)
+      description: >
+        Strong validator for conditional requests: send it back as
+        `If-None-Match` to revalidate a cached copy, or as `If-Match` to make
+        a write conditional on the resource not having changed. A compressed
+        representation carries its content-coding as a suffix inside the
+        quotes; the hash itself is always of the uncompressed body, so a
+        suffixed validator is still accepted verbatim as `If-Match`.
       schema:
         type: string
-        example: '"w/abc123"'
+        example: '"a1b2c3d4e5f60718"'
+
+    Content-Encoding:
+      description: >
+        Content-coding applied to the response body, when the request's
+        `Accept-Encoding` offered one and the body exceeds 1 KiB. Absent
+        otherwise. `Vary: Accept-Encoding` is sent either way.
+      schema:
+        type: string
+        enum: [zstd, gzip]
+        example: zstd
 
     Link:
       description: RFC 8288 pagination links (rel="next", rel="prev")
@@ -5623,6 +5914,30 @@ components:
   responses:
     NotModified:
       description: Not modified (ETag matched If-None-Match)
+
+    ServiceAccepted:
+      description: >
+        Accepted: Docker took the change, but the cluster has not settled on
+        it. Returned when `Prefer: respond-async` was sent, or when a
+        `Prefer: wait` ran out before the service converged. Poll or stream
+        the `Location` URL to follow the rollout.
+      headers:
+        Location:
+          description: The service to read convergence from
+          schema:
+            type: string
+            example: /services/r8m2x5nk3p7q
+        Preference-Applied:
+          description: >
+            `respond-async` when that preference was applied. Absent on a
+            wait that ran out — the preference was asked for and not met.
+          schema:
+            type: string
+            example: respond-async
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ServiceAccepted"
 
     BadRequest:
       description: Bad request (invalid filter, missing parameter, etc.)
@@ -5735,8 +6050,37 @@ components:
             instance: /services/r8m2x5nk3p7q/env
             requestId: req_a1b2c3d4e5f6
 
+    PreconditionFailed:
+      description: The If-Match precondition failed — the resource has changed since the supplied ETag was read
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            "@context": /api/context.jsonld
+            type: /api/errors/API013
+            title: Precondition Failed
+            status: 412
+            detail: If-Match did not match the current state of the resource
+            instance: /services/r8m2x5nk3p7q/env
+            requestId: req_a1b2c3d4e5f6
+
+    BackendUnavailable:
+      description: The Docker Engine could not be reached, so the request could not be evaluated
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            "@context": /api/context.jsonld
+            type: /api/errors/ENG001
+            title: Docker Engine Unavailable
+            status: 503
+            detail: "error during connect: Get \"http://docker/v1.51/plugins/vieux/sshfs:latest/json\": EOF"
+            instance: /plugins/vieux/sshfs:latest
+            requestId: req_a1b2c3d4e5f6
     Forbidden:
-      description: Access denied by operations level or ACL
+      description: Access denied by operations level, ACL, or cross-origin protection
       content:
         application/problem+json:
           schema:
@@ -5770,6 +6114,16 @@ components:
                 title: Write Access Denied
                 status: 403
                 detail: "grants for service:webapp permit read but not write"
+                instance: /services/r8m2x5nk3p7q/image
+                requestId: req_a1b2c3d4e5f6
+            crossOriginBlocked:
+              summary: Cross-origin write blocked (CSR001)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/CSR001
+                title: Cross-Origin Request Blocked
+                status: 403
+                detail: "cross-origin request detected from Sec-Fetch-Site header"
                 instance: /services/r8m2x5nk3p7q/image
                 requestId: req_a1b2c3d4e5f6
 
@@ -5818,6 +6172,28 @@ components:
         `Accept: application/atom+xml` header or `.atom` URL suffix.
 
         Pagination parameters: `?before=<cursor>&limit=<n>` (default 50, max 200).
+
+    # ── CSV ────────────────────────────────────────────────────────────
+
+    CSVDocument:
+      type: string
+      description: |
+        RFC 4180 CSV with a header row, served as
+        `text/csv; charset=utf-8; header=present` under an RFC 6266
+        `Content-Disposition` naming a dated file. Request via
+        `Accept: text/csv` or a `.csv` URL suffix.
+
+        A resource list renders the compact row — name, state, and the one
+        secondary fact that identifies the type, plus replica counts where
+        they mean something — rather than the full Docker object. `/history`
+        and `/recommendations` carry their own columns.
+
+        Unlike the JSON representation, a request naming no page (`limit` or
+        `offset`) renders every row rather than the first 50: a truncated
+        export carries nothing in the file to say it was truncated. A `Range`
+        header is not honoured here, since this response is always `200` with
+        no `Content-Range`. `search`, `filter`, `sort` and ACL filtering apply
+        exactly as they do to the JSON.
 
     # ── Error ────────────────────────────────────────────────────────
 
@@ -7151,6 +7527,25 @@ components:
               description: Detected third-party integrations (e.g. Traefik)
               items:
                 $ref: "#/components/schemas/Integration"
+
+    ServiceAccepted:
+      description: >
+        Service detail for a change the cluster has not settled on yet, with
+        the last convergence line the wait observed
+      allOf:
+        - $ref: "#/components/schemas/DetailEnvelope"
+        - type: object
+          properties:
+            service:
+              type: object
+              description: Docker swarm.Service object
+            progress:
+              type: string
+              description: >
+                The last convergence line observed, e.g.
+                "waiting: 2/5 replicas running". Absent when the response was
+                sent without waiting.
+              example: "waiting: 2/5 replicas running"
 
     Integration:
       description: A detected third-party integration on a service

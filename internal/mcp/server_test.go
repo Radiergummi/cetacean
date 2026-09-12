@@ -114,14 +114,18 @@ func TestHandlerAcceptsValidBearer(t *testing.T) {
 		SigningKey:  key,
 	})
 
-	issuer := &oauth.TokenIssuer{
-		SigningKey: key,
-		Issuer:     "https://cetacean.example.com",
-		Audience:   "https://cetacean.example.com/mcp",
+	issuer, err := oauth.NewTokenIssuer(
+		key,
+		"https://cetacean.example.com",
+		"https://cetacean.example.com/mcp",
+	)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 	token, err := issuer.IssueAccessToken(oauth.AccessTokenClaims{
-		Subject: "user@example.com",
-		Groups:  []string{"ops"},
+		Subject:  "user@example.com",
+		Groups:   []string{"ops"},
+		ClientID: "test-client",
 	}, cfg.AccessTokenTTL)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)

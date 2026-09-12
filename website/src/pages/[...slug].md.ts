@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { APIContext } from "astro";
 import { docsDir, getDocPaths, operationsLevels } from "../lib/docs";
+import { markdownResponse } from "../lib/markdown";
 
 export async function getStaticPaths() {
   const docs = await getDocPaths();
@@ -108,8 +110,8 @@ function assertRendered(markdown: string, path: string): string {
   return markdown;
 }
 
-export async function GET({ props }: { props: { filePath?: string } }) {
-  const path = props.filePath ?? join(docsDir, "not-found");
+export async function GET({ params, props, site }: APIContext) {
+  const path: string = props.filePath ?? join(docsDir, "not-found");
 
   let content: string;
 
@@ -122,7 +124,9 @@ export async function GET({ props }: { props: { filePath?: string } }) {
     return new Response("Not found", { status: 404 });
   }
 
-  return new Response(path.endsWith(".mdx") ? assertRendered(toMarkdown(content), path) : content, {
-    headers: { "Content-Type": "text/markdown; charset=utf-8" },
-  });
+  return markdownResponse(
+    path.endsWith(".mdx") ? assertRendered(toMarkdown(content), path) : content,
+    `/${params.slug}`,
+    site,
+  );
 }
