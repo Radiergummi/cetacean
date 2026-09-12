@@ -2,9 +2,12 @@ package compose
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // stackNamespaceLabel marks the stack a resource was deployed under; compose's
@@ -71,6 +74,87 @@ func FromService(svc swarm.Service) (File, []string) {
 	}
 	for _, cfg := range c.Configs {
 		externalRef(&f.Configs, cfg.ConfigName)
+	}
+
+	return f, warnings
+}
+
+// shortenFor strips the stack's own prefix. docker stack deploy adds it back,
+// so a name left long redeploys as web_web_api.
+func shortenFor(stack string) func(string) string {
+	prefix := stack + "_"
+
+	return func(name string) string {
+		return strings.TrimPrefix(name, prefix)
+	}
+}
+
+// owns reports whether a resource carries this stack's namespace label, the
+// only thing distinguishing one the stack created from one it adopted.
+func owns(labels map[string]string, stack string) bool {
+	return labels[stackNamespaceLabel] == stack
+}
+
+// FromStack projects every member of a stack. A network or volume carrying
+// the stack's namespace label is declared with its driver; everything else,
+// including every config and secret, is external, because the deploy must
+// not try to create what it does not own.
+func FromStack(d cache.StackDetail) (File, []string) {
+	shorten := shortenFor(d.Name)
+
+	f := File{Services: map[string]Service{}}
+	var warnings []string
+
+	for _, svc := range d.Services {
+		if svc.Spec.TaskTemplate.ContainerSpec == nil {
+			warnings = append(warnings, svc.Spec.Name+": not a container service, omitted")
+			continue
+		}
+
+		spec, w := serviceSpec(svc, shorten)
+		f.Services[shorten(svc.Spec.Name)] = spec
+		warnings = append(warnings, w...)
+	}
+
+	for _, n := range d.Networks {
+		key := shorten(n.Name)
+		if owns(n.Labels, d.Name) {
+			set(&f.Networks, key, Network{
+				Driver:     n.Driver,
+				DriverOpts: n.Options,
+				Attachable: n.Attachable,
+				Internal:   n.Internal,
+				EnableIPv6: n.EnableIPv6,
+				Labels:     stripNamespace(n.Labels),
+			})
+			continue
+		}
+
+		set(&f.Networks, key, Network{External: true, Name: n.Name})
+	}
+
+	for _, v := range d.Volumes {
+		key := shorten(v.Name)
+		if owns(v.Labels, d.Name) {
+			set(&f.Volumes, key, Volume{
+				Driver:     v.Driver,
+				DriverOpts: v.Options,
+				Labels:     stripNamespace(v.Labels),
+			})
+			continue
+		}
+
+		set(&f.Volumes, key, Volume{External: true, Name: v.Name})
+	}
+
+	// Always external, both of them. A config's content is available and is
+	// still not inlined: compose's content: field would have the redeploy
+	// create a new config rather than reuse the one the service is mounting.
+	for _, c := range d.Configs {
+		set(&f.Configs, shorten(c.Spec.Name), ExternalRef{External: true, Name: c.Spec.Name})
+	}
+	for _, s := range d.Secrets {
+		set(&f.Secrets, shorten(s.Spec.Name), ExternalRef{External: true, Name: s.Spec.Name})
 	}
 
 	return f, warnings

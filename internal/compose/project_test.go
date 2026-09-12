@@ -7,7 +7,10 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // testService is a fully populated service the whole suite reuses.
@@ -62,6 +65,29 @@ func testService() swarm.Service {
 					},
 				},
 			},
+		},
+	}
+}
+
+// testStack is a stack owning the network testService's task attaches to,
+// plus a network it merely references, adopted from outside the stack.
+func testStack() cache.StackDetail {
+	return cache.StackDetail{
+		Name:     "web",
+		Services: []swarm.Service{testService()},
+		Networks: []network.Summary{
+			{
+				Name:   "web_internal",
+				Driver: "overlay",
+				Labels: map[string]string{"com.docker.stack.namespace": "web"},
+			},
+			{Name: "monitoring"},
+		},
+		Configs: []swarm.Config{
+			{Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "web_settings"}}},
+		},
+		Secrets: []swarm.Secret{
+			{Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "web_token"}}},
 		},
 	}
 }
@@ -184,6 +210,99 @@ func TestFromServiceOmitsServicesWithoutAContainerSpec(t *testing.T) {
 	}
 	if strings.Contains(string(out), "plugin_svc: {}") {
 		t.Errorf("document carries an empty service stanza:\n%s", out)
+	}
+}
+
+func TestShortenStripsTheStackPrefix(t *testing.T) {
+	shorten := shortenFor("web")
+
+	if got := shorten("web_api"); got != "api" {
+		t.Errorf("shorten(web_api) = %q, want api", got)
+	}
+	// Adopted from outside the stack: the name is not the stack's to shorten.
+	if got := shorten("monitoring"); got != "monitoring" {
+		t.Errorf("shorten(monitoring) = %q, want it unchanged", got)
+	}
+}
+
+// Without stripping, redeploying the file produces web_web_api.
+func TestFromStackStripsPrefixesFromKeys(t *testing.T) {
+	f, _ := FromStack(testStack())
+
+	if _, ok := f.Services["api"]; !ok {
+		t.Errorf("service keys = %v, want api", keys(f.Services))
+	}
+	if _, ok := f.Networks["internal"]; !ok {
+		t.Errorf("network keys = %v, want internal", keys(f.Networks))
+	}
+}
+
+// A resource adopted into the stack keeps its full name as the key and says so
+// with an explicit name:, or the reference resolves to nothing.
+func TestFromStackNamesAdoptedResourcesExplicitly(t *testing.T) {
+	f, _ := FromStack(testStack())
+
+	n, ok := f.Networks["monitoring"]
+	if !ok {
+		t.Fatalf("network keys = %v, want monitoring", keys(f.Networks))
+	}
+	if !n.External {
+		t.Error("a network the stack does not own must be external")
+	}
+	if n.Name != "monitoring" {
+		t.Errorf("name = %q, want it stated explicitly", n.Name)
+	}
+}
+
+// The single most likely way to produce a file that reads right and deploys
+// wrong, so it is pinned in both directions.
+func TestFromStackSplitsOwnedFromExternal(t *testing.T) {
+	f, _ := FromStack(testStack())
+
+	owned := f.Networks["internal"]
+	if owned.External {
+		t.Error("a network carrying the stack's namespace label is owned")
+	}
+	if owned.Driver != "overlay" {
+		t.Errorf("an owned network must carry its driver, got %+v", owned)
+	}
+
+	if !f.Networks["monitoring"].External {
+		t.Error("a network without the label is external")
+	}
+}
+
+// Their content is available and still not inlined: compose's content: field
+// would make the redeploy create a new config rather than reuse the one the
+// running service is already mounting.
+func TestFromStackNeverInlinesConfigsOrSecrets(t *testing.T) {
+	f, _ := FromStack(testStack())
+
+	if c := f.Configs["settings"]; !c.External {
+		t.Errorf("config = %+v, want external", c)
+	}
+	if s := f.Secrets["token"]; !s.External {
+		t.Errorf("secret = %+v, want external", s)
+	}
+
+	out, err := Render(f, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(string(out), "content:") {
+		t.Errorf("document inlines content:\n%s", out)
+	}
+}
+
+func TestFromStackOmitsEmptyLabelMaps(t *testing.T) {
+	f, _ := FromStack(testStack())
+
+	out, err := Render(f, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(string(out), "labels: {}") {
+		t.Errorf("empty label map rendered:\n%s", out)
 	}
 }
 
