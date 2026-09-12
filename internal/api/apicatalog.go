@@ -24,7 +24,7 @@ type catalogMounts struct {
 }
 
 // HandleAPICatalog serves the RFC 9727 API catalog as an RFC 9264 linkset.
-// Cetacean publishes two APIs from one process: the REST API at "/", and the
+// Cetacean publishes two APIs from one process: the web API at "/", and the
 // MCP server at /mcp when enabled.
 //
 // The document is unauthenticated — /.well-known/ is exempt — so it may name
@@ -40,7 +40,7 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 
 		items := []linkset.Target{{
 			Href:  restAPI,
-			Title: "Cetacean REST API",
+			Title: "Cetacean web API",
 		}}
 
 		var mcpContexts []linkset.Context

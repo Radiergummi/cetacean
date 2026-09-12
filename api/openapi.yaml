@@ -768,7 +768,7 @@ paths:
                   - anchor: "https://cetacean.example.com/.well-known/api-catalog"
                     item:
                       - href: "https://cetacean.example.com/"
-                        title: "Cetacean REST API"
+                        title: "Cetacean web API"
                   - anchor: "https://cetacean.example.com/"
                     service-desc:
                       - href: "https://cetacean.example.com/api"

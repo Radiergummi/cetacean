@@ -102,7 +102,7 @@ export const siteResources: SiteResource[] = [
     mediaType: "application/yaml",
     title: "Cetacean API specification",
     description:
-      "The OpenAPI specification of the Cetacean REST API — the product this site documents, not this site.",
+      "The OpenAPI specification of the Cetacean web API — the product this site documents, not this site.",
   },
   {
     path: "/api/schema.jsonld",
