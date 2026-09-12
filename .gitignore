@@ -33,6 +33,7 @@ go.work.sum
 # is load-bearing: git cannot re-include a file under an excluded directory.
 .claude/*
 !.claude/ARCHITECTURE.md
+!.claude/rules/
 .superpowers/
 
 # Runtime data

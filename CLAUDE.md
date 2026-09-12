@@ -5,7 +5,9 @@ embedded React SPA: it reads the Docker socket, caches all swarm state in memory
 updates to browsers over SSE. The goal is to replace the Docker CLI for *understanding* a
 cluster — every resource browsable, with working cross-references between them.
 
-- `.claude/ARCHITECTURE.md` — the component map. Read it when changing a component, not before.
+- `.claude/ARCHITECTURE.md` — the component map and the traps. Read it when changing a
+  component, not before.
+- `.claude/rules/` — per-language style, loaded when a matching file is opened.
 - `docs/` — user documentation, published to the website.
 - `docs/specs/*-design.md` — why a larger change is shaped the way it is.
 - The rest of `.claude/` is machine-local and untracked: settings, worktrees, the backlog,
@@ -95,31 +97,6 @@ These bite across the codebase; the per-component rules live in `.claude/ARCHITE
 - Match the terseness of the siblings: if `listFeeds` has a one-line doc, `searchFeeds` gets one.
 - `.claude/ARCHITECTURE.md` is dense on purpose. It is not a model for source comments.
 
-### Go
-
-- Standard `gofmt`; `golangci-lint run` must be clean (it includes `golines`).
-- `new(expr)` is valid on Go 1.26 and `modernize` requires it — a `ptrTo` helper fails lint.
-  Copilot review flags it as a compile error; that finding is wrong, so answer and resolve the
-  thread rather than taking the edit.
-
-### TypeScript
-
-- **No abbreviations.** `formatNumber`, not `fmtNum`; `index`, not `idx`. Industry-standard
-  acronyms (URL, API, SSE, HTML) are fine.
-- Brace every `if` body. Blank lines around logical blocks — after `if`, after declarations
-  before logic, between `case` arms, before a trailing `return`.
-- Destructure in callbacks: `({ value }) => value`.
-- JSX props on separate lines at 3+ props or long lines.
-- camelCase module constants (`knownStates`), `as const` where it applies.
-- Multi-line JSDoc (`/**\n *\n */`).
-- Optionality in `api/types.ts` mirrors the Docker Go struct tags — read them in
-  `$(go env GOMODCACHE)/github.com/docker/docker@<version>/api/types/`. `omitempty` does not
-  apply to struct fields, so container objects are always on the wire while their scalar leaves
-  vanish when zero; guessing here is what caused the recurring `undefined` crashes.
-- `exactOptionalPropertyTypes` is on, so a new optional prop needs `?: T | undefined`. Treat `!`
-  as a hidden bug. `noPropertyAccessFromIndexSignature` and CI `--checkers` were measured and
-  rejected — don't re-propose them.
-
 ## Review
 
 - Docs here sometimes land ahead of the code, on a separate branch. Before calling a documented
@@ -132,10 +109,8 @@ These bite across the codebase; the per-component rules live in `.claude/ARCHITE
 
 - **Sign release tags** — `git tag -s`, never `-a`. Unsigned tags show unverified, and
   immutable releases make it unfixable afterwards.
-- **Update `CHANGELOG.md`** for every user-facing change, under `[Unreleased]`.
-  Entries are written for someone *using* the dashboard: no implementation detail, no
-  internal refactoring, no pixel values. Consolidate related changes into one entry.
-  If a user wouldn't notice, don't list it.
+- **Update `CHANGELOG.md`** for every user-facing change — `.claude/rules/changelog.md`
+  says how an entry is written.
 
 ## API documentation
 
