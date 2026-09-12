@@ -171,6 +171,79 @@ func readWebManifest(t *testing.T) webManifest {
 	return manifest
 }
 
+// TestUnreadySharesTheFrontendButNotTheCluster holds the readiness gate to the
+// endpoints that read cluster state. The shell and everything it pulls — the
+// web manifest, the icons — come off the embedded filesystem, so an unreachable
+// Docker daemon must not turn them into problem documents; the browser asks for
+// them with */*, which negotiates to JSON like any cluster read.
+func TestUnreadySharesTheFrontendButNotTheCluster(t *testing.T) {
+	fsys := fstest.MapFS{
+		"index.html":           {Data: []byte("<html><head></head></html>")},
+		"manifest.webmanifest": {Data: []byte(`{"name":"Cetacean"}`)},
+		"favicon-32x32.png":    {Data: []byte("favicon")},
+		"apple-touch-icon.png": {Data: []byte("touch-icon")},
+	}
+
+	// Never closed: the daemon is unreachable for the whole test.
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withSPAFiles(fsys)},
+		withReady(make(chan struct{})),
+	)
+
+	get := func(t *testing.T, path string) *httptest.ResponseRecorder {
+		t.Helper()
+
+		req := httptest.NewRequest("GET", path, nil)
+		req.Header.Set("Accept", "*/*")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	for _, file := range []string{
+		"/",
+		"/manifest.webmanifest",
+		"/favicon-32x32.png",
+		"/apple-touch-icon.png",
+	} {
+		t.Run(file, func(t *testing.T) {
+			rec := get(t, file)
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("GET %s = %d, want %d", file, rec.Code, http.StatusOK)
+			}
+			got := rec.Header().Get("Content-Type")
+			if strings.HasPrefix(got, "application/problem") {
+				t.Errorf("GET %s Content-Type = %q, want the file", file, got)
+			}
+		})
+	}
+
+	// The manifest is served as itself, not as the index.html the SPA falls
+	// back to for a client-side route.
+	if got := get(t, "/manifest.webmanifest").Body.String(); got != `{"name":"Cetacean"}` {
+		t.Errorf("manifest body = %q, want the file from the embedded filesystem", got)
+	}
+
+	for _, resource := range []string{"/nodes", "/services", "/nodes/abc"} {
+		t.Run(resource, func(t *testing.T) {
+			rec := get(t, resource)
+
+			if rec.Code != http.StatusServiceUnavailable {
+				t.Errorf(
+					"GET %s = %d, want %d while Docker is unreachable",
+					resource, rec.Code, http.StatusServiceUnavailable,
+				)
+			}
+			if !strings.Contains(rec.Body.String(), "ENG001") {
+				t.Errorf("GET %s body = %s, want the ENG001 problem", resource, rec.Body.String())
+			}
+		})
+	}
+}
+
 // TestWebManifestIsSelfContainedAndRelative: a manifest resolves member URLs
 // against its own URL, so relative ones work under CETACEAN_BASE_PATH and
 // absolute ones address the origin root. It also checks each icon names a file

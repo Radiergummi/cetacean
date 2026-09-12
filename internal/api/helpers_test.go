@@ -201,6 +201,14 @@ func newBasePathTestRouter(t *testing.T, basePath string) http.Handler {
 	)
 }
 
+// withSPAFiles serves the frontend off fsys, for the tests that care what the
+// embedded filesystem holds beside index.html.
+func withSPAFiles(fsys fs.FS) routerOption {
+	return func(cfg *RouterConfig) {
+		cfg.SPA = NewSPAHandler(fsys, "")
+	}
+}
+
 // withAPIDocs configures the two documents the /api endpoints serve, which
 // default to a stub spec and no bundle.
 func withAPIDocs(spec, scalarJS []byte) routerOption {
