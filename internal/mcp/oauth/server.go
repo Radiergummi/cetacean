@@ -38,8 +38,8 @@ type ServerConfig struct {
 	// MCP holds DCR knobs and the require_resource_indicator flag.
 	MCP config.MCPConfig
 
-	// SigningKey is the HMAC-SHA256 key for JWTs and CSRF tokens. If
-	// MCPConfig.SigningKey is empty, main.go auto-generates an ephemeral key.
+	// SigningKey is the root the token and CSRF keys derive from. An empty one
+	// leaves the server unable to issue tokens.
 	SigningKey []byte
 
 	// HTTPClient is an optional HTTP client for CIMD fetches.
@@ -61,6 +61,7 @@ type Server struct {
 	refreshTokens *RefreshTokenStore
 	consent       *ConsentStore
 	clients       *ClientRegistry // nil when DCREnabled is false
+	keys          *keyMaterial    // nil when no root was configured
 }
 
 // issuerID is the external base URL clients discover this authorization server
@@ -76,10 +77,17 @@ func (c ServerConfig) issuerID() string {
 // NewServer constructs a fully wired Server from cfg. No separate init step
 // is required; call RegisterRoutes to attach handlers to a mux.
 func NewServer(cfg ServerConfig) *Server {
-	issuer := &TokenIssuer{
-		SigningKey: cfg.SigningKey,
-		Issuer:     cfg.issuerID(),
-		Audience:   cfg.MCPResource,
+	// Without a root, issuing and verifying answer ErrMissingKey.
+	km, err := deriveKeys(cfg.SigningKey)
+	if err != nil {
+		slog.Warn("MCP OAuth has no signing key; tokens cannot be issued", "error", err)
+	}
+
+	var issuer *TokenIssuer
+	if km != nil {
+		issuer = newTokenIssuer(km, cfg.issuerID(), cfg.MCPResource)
+	} else {
+		issuer = &TokenIssuer{Issuer: cfg.issuerID(), Audience: cfg.MCPResource}
 	}
 
 	cimd := &CIMDFetcher{
@@ -134,6 +142,7 @@ func NewServer(cfg ServerConfig) *Server {
 		refreshTokens: refreshTokens,
 		consent:       consent,
 		clients:       clients,
+		keys:          km,
 	}
 }
 
@@ -145,6 +154,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
 		"GET "+basePath+"/.well-known/oauth-protected-resource",
 		s.HandleProtectedResourceMetadata,
 	)
+	mux.HandleFunc("GET "+basePath+jwksPath, s.HandleJWKS)
 	mux.HandleFunc("GET "+basePath+"/oauth/authorize", s.HandleAuthorize)
 	mux.HandleFunc("POST "+basePath+"/oauth/authorize", s.HandleAuthorize)
 	mux.HandleFunc("POST "+basePath+"/oauth/token", s.HandleToken)
@@ -166,6 +176,10 @@ type asMetadata struct {
 	RevocationEndpoint    string `json:"revocation_endpoint"`
 	RegistrationEndpoint  string `json:"registration_endpoint,omitempty"`
 
+	// Omitted with no key to serve, so the document never names an endpoint
+	// that would refuse.
+	JWKSURI string `json:"jwks_uri,omitempty"`
+
 	// ClientIDMetadataDocumentSupported advertises CIMD, which 2026-07-28
 	// prefers over RFC 7591 DCR. A client has no other way to learn that an
 	// https:// client_id will be accepted. Omitted when CIMD is disabled, so
@@ -177,6 +191,21 @@ type asMetadata struct {
 	ResponseTypesSupported                 []string `json:"response_types_supported"`
 	TokenEndpointAuthMethodsSupported      []string `json:"token_endpoint_auth_methods_supported"`
 	RevocationEndpointAuthMethodsSupported []string `json:"revocation_endpoint_auth_methods_supported"`
+}
+
+// Marshals before touching the response, so an encoding failure cannot leave
+// partial headers in front of a 500.
+func writeDiscoveryDoc(w http.ResponseWriter, doc any, contentType string) {
+	body, err := json.Marshal(doc)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "max-age=3600")
+	_, _ = w.Write(body)
 }
 
 // HandleMetadata serves the RFC 8414 AS metadata document.
@@ -196,19 +225,13 @@ func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.MCP.DCREnabled {
 		doc.RegistrationEndpoint = base + "/oauth/register"
 	}
+	if s.keys != nil {
+		doc.JWKSURI = base + jwksPath
+	}
 
 	doc.ClientIDMetadataDocumentSupported = s.cfg.MCP.CIMDEnabled
 
-	// Marshal first so an encoding failure doesn't write partial headers
-	// followed by a 500 status (which would corrupt the response).
-	body, err := json.Marshal(doc)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "max-age=3600")
-	_, _ = w.Write(body)
+	writeDiscoveryDoc(w, doc, "application/json")
 }
 
 // ---------------------------------------------------------------------------
@@ -616,13 +639,23 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 
 	data.CSRFToken, _ = issueCSRFNonce(
 		w,
-		s.cfg.SigningKey,
+		s.csrfKey(),
 		data.State,
 		data.Fingerprint,
 		strings.HasPrefix(s.cfg.Issuer, "https://"),
 	)
 
 	renderConsent(w, data)
+}
+
+// Nil without a root, which hmac.New accepts: tokens would verify, forgeably,
+// rather than fail.
+func (s *Server) csrfKey() []byte {
+	if s.keys == nil {
+		return nil
+	}
+
+	return s.keys.csrf
 }
 
 func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
@@ -782,7 +815,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	secure := strings.HasPrefix(s.cfg.Issuer, "https://")
 
 	// Validate CSRF.
-	if !verifyCSRFToken(r, s.cfg.SigningKey) {
+	if !verifyCSRFToken(r, s.csrfKey()) {
 		renderErrorPage(w, http.StatusBadRequest, "invalid or missing CSRF token")
 		return
 	}

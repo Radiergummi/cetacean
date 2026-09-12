@@ -1,6 +1,8 @@
 package config
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"os"
@@ -26,11 +28,8 @@ type MCPConfig struct {
 	// public URL (e.g. "https://cetacean.example.com").
 	Issuer string
 
-	// SigningKey is the HMAC key used to sign MCP tokens. If empty, main.go
-	// auto-generates an ephemeral key on startup — which invalidates every
-	// issued token on restart, so a deployment that persists refresh tokens
-	// wants this set. CETACEAN_MCP_SIGNING_KEY_FILE reads it from a file, so
-	// it can arrive as a Docker secret rather than through the environment.
+	// SigningKey is the root the token and CSRF keys derive from. Empty means
+	// a fresh root each start, which invalidates every issued token.
 	SigningKey string
 
 	// AccessTokenTTL is how long MCP access tokens remain valid.
@@ -287,7 +286,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 	if err != nil {
 		return MCPConfig{}, err
 	}
-	if err := checkSigningKeyLength(signingKey); err != nil {
+	if err := checkSigningKey(signingKey); err != nil {
 		return MCPConfig{}, err
 	}
 
@@ -326,28 +325,44 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 	}, nil
 }
 
-// minSigningKeyBytes is the HS256 key length RFC 7518 section 3.2 requires: "A
-// key of the same size as the hash output or larger MUST be used", which for
-// SHA-256 is 32 bytes. Shorter keys are accepted by the HMAC itself, so nothing
-// downstream would complain — a one-character key would sign every MCP token
-// and be trivially forgeable.
-const minSigningKeyBytes = 32
+const signingKeyBytes = 32
 
-// checkSigningKeyLength rejects a configured key that is too short to sign
-// with. An empty key is not too short: it means "none configured", and main.go
-// generates a random one.
-func checkSigningKeyLength(key string) error {
-	if key == "" || len(key) >= minSigningKeyBytes {
+// The published public key is a deterministic function of the root and needs no
+// authentication to fetch, so anything but real key material can be ground
+// offline from it. An empty key is not a failure: it means none was configured,
+// and one is generated instead.
+func checkSigningKey(key string) error {
+	if key == "" {
+		return nil
+	}
+
+	if _, decoded := SigningKeyBytes(key); decoded {
 		return nil
 	}
 
 	return fmt.Errorf(
-		"MCP signing key is %d bytes; it must be at least %d "+
-			"(set CETACEAN_MCP_SIGNING_KEY, CETACEAN_MCP_SIGNING_KEY_FILE or "+
-			"mcp.signing_key to a longer value, or leave it unset to have one "+
-			"generated)",
-		len(key), minSigningKeyBytes,
+		"mcp.signing_key must be %d bytes of hex or base64 — generate one with "+
+			"`openssl rand -hex 32`, or leave it unset to have one generated",
+		signingKeyBytes,
 	)
+}
+
+// A value that decodes as hex or base64 to exactly signingKeyBytes is key
+// material; anything else is not, and decoded reports which.
+func SigningKeyBytes(key string) (root []byte, decoded bool) {
+	decoders := []func(string) ([]byte, error){
+		hex.DecodeString,
+		base64.StdEncoding.DecodeString,
+		base64.RawURLEncoding.DecodeString,
+	}
+
+	for _, decode := range decoders {
+		if b, err := decode(key); err == nil && len(b) == signingKeyBytes {
+			return b, true
+		}
+	}
+
+	return []byte(key), false
 }
 
 // resolveMCPIssuer reads CETACEAN_MCP_ISSUER and the file value, validates
