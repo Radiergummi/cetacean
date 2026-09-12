@@ -118,6 +118,16 @@ var supportedTypes = []struct {
 	// The specification documents, served by /api and /api/asyncapi only.
 	// After application/json, so an application/* wildcard still resolves to
 	// JSON.
+	//
+	// Both halves of each pair are named. Registering only the +yaml spelling
+	// would resolve `Accept: …+json, …+yaml` — the pair an AsyncAPI tool sends
+	// — to YAML, since the JSON half would match nothing and the YAML half
+	// would win by default; and it would leave /api answering 406 to the
+	// registered JSON type for an OpenAPI document.
+	{"application", "vnd.oai.openapi+json", ContentTypeJSON},
+	{"application", "openapi+json", ContentTypeJSON},
+	{"application", "vnd.aai.asyncapi+json", ContentTypeJSON},
+	{"application", "asyncapi+json", ContentTypeJSON},
 	{"application", "vnd.oai.openapi", ContentTypeYAML},
 	{"application", "openapi+yaml", ContentTypeYAML},
 	{"application", "vnd.aai.asyncapi+yaml", ContentTypeYAML},

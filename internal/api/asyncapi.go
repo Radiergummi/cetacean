@@ -24,11 +24,11 @@ const (
 	asyncAPIYAMLMediaType = "application/vnd.aai.asyncapi+yaml;version=3.0.0"
 )
 
-// asyncAPIRendering is the document as one origin sees it.
+// asyncAPIRendering is one representation of the document as one origin sees
+// it.
 type asyncAPIRendering struct {
 	key  string
-	json *staticBody
-	yaml *staticBody
+	body *staticBody
 }
 
 // HandleAsyncAPI returns the negotiated handler and the one behind the .yaml
@@ -36,9 +36,11 @@ type asyncAPIRendering struct {
 // there is no SPA route here.
 //
 // AsyncAPI 3.0 requires host on a server object, so the body varies by scheme,
-// host and base path and is retained under that key. One slot, not a map:
-// origin falls back to r.Host, so the key is caller-controlled and a map would
-// grow without bound.
+// host and base path and is retained under that key. One slot per
+// representation, not a map: origin falls back to r.Host, so the key is
+// caller-controlled and a map would grow without bound. A miss is what every
+// request with an unseen Host costs, so it renders only the representation
+// being served rather than both.
 func HandleAsyncAPI(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 	doc, err := yamlDocument(specYAML)
 	if err != nil {
@@ -50,41 +52,47 @@ func HandleAsyncAPI(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 		panic("asyncapi spec " + err.Error())
 	}
 
-	var current atomic.Pointer[asyncAPIRendering]
+	var currentJSON, currentYAML atomic.Pointer[asyncAPIRendering]
 
-	render := func(r *http.Request) (*asyncAPIRendering, error) {
+	render := func(r *http.Request, asYAML bool) (*staticBody, error) {
+		slot := &currentJSON
+		if asYAML {
+			slot = &currentYAML
+		}
+
 		scheme, host := origin(r)
 		base := BasePathFromContext(r.Context())
 		key := scheme + "\x00" + host + "\x00" + base
 
-		if rendering := current.Load(); rendering != nil && rendering.key == key {
-			return rendering, nil
+		if rendering := slot.Load(); rendering != nil && rendering.key == key {
+			return rendering.body, nil
 		}
 
 		fields := asyncAPIServerFields(scheme, host, base)
 
-		asJSON, err := renderAsyncAPIJSON(doc, fields)
+		var (
+			raw []byte
+			err error
+		)
+
+		if asYAML {
+			raw, err = source.render(fields)
+		} else {
+			raw, err = renderAsyncAPIJSON(doc, fields)
+		}
+
 		if err != nil {
 			return nil, err
 		}
 
-		asYAML, err := source.render(fields)
-		if err != nil {
-			return nil, err
-		}
+		body := newStaticBody(raw)
+		slot.Store(&asyncAPIRendering{key: key, body: body})
 
-		rendering := &asyncAPIRendering{
-			key:  key,
-			json: newStaticBody(asJSON),
-			yaml: newStaticBody(asYAML),
-		}
-		current.Store(rendering)
-
-		return rendering, nil
+		return body, nil
 	}
 
 	serve := func(w http.ResponseWriter, r *http.Request, asYAML bool) {
-		rendering, err := render(r)
+		body, err := render(r, asYAML)
 		if err != nil {
 			writeErrorCode(w, r, "API009", "failed to serialize response")
 
@@ -95,13 +103,11 @@ func HandleAsyncAPI(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 
 		if asYAML {
 			w.Header().Set("Content-Type", asyncAPIYAMLMediaType)
-			rendering.yaml.serve(w, r)
-
-			return
+		} else {
+			w.Header().Set("Content-Type", asyncAPIMediaType)
 		}
 
-		w.Header().Set("Content-Type", asyncAPIMediaType)
-		rendering.json.serve(w, r)
+		body.serve(w, r)
 	}
 
 	negotiated = func(w http.ResponseWriter, r *http.Request) {

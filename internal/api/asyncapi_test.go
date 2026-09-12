@@ -576,6 +576,40 @@ func TestSpecDocumentsNegotiateYAML(t *testing.T) {
 			}
 		}
 	})
+
+	// A tool that names both registered spellings of its own document type
+	// gets the one it listed first. Registering only the +yaml half would let
+	// the YAML win by default, since the JSON half would match nothing.
+	t.Run("the json spellings are named too", func(t *testing.T) {
+		cases := []struct {
+			path, accept, want string
+		}{{
+			asyncAPIPath,
+			"application/vnd.aai.asyncapi+json;version=3.0.0," +
+				"application/vnd.aai.asyncapi+yaml;version=3.0.0",
+			asyncAPIMediaType,
+		}, {
+			asyncAPIPath, "application/asyncapi+json", asyncAPIMediaType,
+		}, {
+			"/api", "application/vnd.oai.openapi+json", "application/json",
+		}, {
+			"/api", "application/openapi+json", "application/json",
+		}}
+
+		for _, tc := range cases {
+			t.Run(tc.path+" "+tc.accept, func(t *testing.T) {
+				rec := asyncAPIRequest(t, router, tc.path, tc.accept)
+
+				if rec.Code != http.StatusOK {
+					t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+				}
+
+				if got := rec.Header().Get("Content-Type"); got != tc.want {
+					t.Errorf("Content-Type = %q, want %q", got, tc.want)
+				}
+			})
+		}
+	})
 }
 
 func truncate(b []byte) string {
