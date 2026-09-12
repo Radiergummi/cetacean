@@ -19,13 +19,9 @@ import (
 // the pre-upgrade behaviour: every client is prompted once more, then
 // remembered.
 //
-// Client registrations arrived after v2 and did not bump it, because the
-// version gates compatibility rather than recording what a build happens to
-// write. The addition is readable in both directions: a file without the key
-// loads here and yields none, and an older build ignores a key it does not
-// know. Bumping would have made a rollback destructive — the old build
-// refuses anything newer, so it would discard every refresh token and
-// approval in the file, not just the registrations it cannot use.
+// An additive key needs no bump: it loads as absent in both directions, and a
+// bump would make a rollback discard the whole file rather than the one key
+// the older build cannot use.
 const oauthStateVersion = 2
 
 // RefreshTokenSnapshot is the serializable state of a RefreshTokenStore.
@@ -56,15 +52,10 @@ type oauthState struct {
 	// free-form strings.
 	Consent []ConsentRecord `json:"consent,omitempty"`
 
-	// Clients are the RFC 7591 registrations, oldest first. The order is the
-	// registry's eviction order rather than a presentation choice — see
-	// ClientRegistry.Snapshot.
-	//
-	// Unlike the token snapshot above, this is the live type rather than a
-	// shape of its own, which would normally make the file hostage to a field
-	// rename. It is not: every tag here is an RFC 7591 field name, so what the
-	// file holds is a registration response as the spec defines it, and the
-	// names cannot move without breaking the wire format first.
+	// Clients are the RFC 7591 registrations in eviction order, oldest first —
+	// see ClientRegistry.Snapshot. The live type is safe on disk here, unlike
+	// the token snapshot above, because every tag is an RFC 7591 field name and
+	// cannot move without breaking the wire format first.
 	Clients []ClientRegistration `json:"clients,omitempty"`
 }
 
@@ -355,10 +346,8 @@ type stateFile struct {
 	clients *ClientRegistry
 
 	// carriedClients is what the file held at startup, written back verbatim
-	// while there is no registry to snapshot. Disabling DCR is often a
-	// maintenance-window setting, and a single token rotation would otherwise
-	// rewrite the registrations away — costing every client the
-	// re-registration this file exists to avoid the next time it is on.
+	// while there is no registry to snapshot, so turning DCR off for a window
+	// does not let a token rotation erase the registrations.
 	carriedClients []ClientRegistration
 }
 

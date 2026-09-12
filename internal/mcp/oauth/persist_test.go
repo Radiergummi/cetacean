@@ -458,11 +458,9 @@ func TestServerCarriesClientRegistrationsAcrossRestart(t *testing.T) {
 		t.Errorf("redirect uris = %v", restored.RedirectURIs)
 	}
 
-	// The redirect URI is what the authorize endpoint exact-matches a request
-	// against, so a registration that came back without it would resolve and
-	// then reject every authorization. The application type only ever governs
-	// which redirect URIs registration accepts, but it is the rest of the
-	// record: if it survived, nothing was dropped on the way through the file.
+	// The authorize endpoint exact-matches the redirect URI, so losing it would
+	// resolve and then reject every authorization. The application type stands
+	// in for the rest of the record surviving the round trip.
 	if restored.ApplicationType != "native" {
 		t.Errorf("application type = %q, want native", restored.ApplicationType)
 	}
@@ -508,11 +506,9 @@ func TestStateFileWithoutRegistrationsLoads(t *testing.T) {
 	}
 }
 
-// TestRegistrationsDidNotBumpTheStateVersion — registrations were added to the
-// file without a version bump, because the addition reads in both directions:
-// a file without the key loads here, and an older build ignores a key it does
-// not know. Bumping would make a rollback discard every token and approval in
-// the file, so the version stays where the last incompatible change left it.
+// TestRegistrationsDidNotBumpTheStateVersion: the key is additive and reads in
+// both directions, so bumping would only make a rollback discard the tokens and
+// approvals beside it.
 func TestRegistrationsDidNotBumpTheStateVersion(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
@@ -531,11 +527,9 @@ func TestRegistrationsDidNotBumpTheStateVersion(t *testing.T) {
 	}
 }
 
-// TestServerWithoutDCRKeepsPersistedRegistrations — turning registration off is
-// often a maintenance-window setting. There is no registry to restore into, and
-// nothing on the write path may assume there is — but a token rotation in the
-// meantime must not rewrite the registrations away, or turning DCR back on
-// costs every client the re-registration this file exists to avoid.
+// TestServerWithoutDCRKeepsPersistedRegistrations: with DCR off there is no
+// registry to restore into, and a token rotation in the meantime must not
+// rewrite the registrations away.
 func TestServerWithoutDCRKeepsPersistedRegistrations(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 

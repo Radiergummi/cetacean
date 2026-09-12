@@ -45,11 +45,9 @@ type ServerConfig struct {
 	// HTTPClient is an optional HTTP client for CIMD fetches.
 	HTTPClient *http.Client
 
-	// StatePath is where the OAuth server's durable state — refresh tokens,
-	// remembered approvals and dynamic client registrations — is persisted,
-	// so a restart does not force every client to register and authorize
-	// again. Empty keeps all three in memory only, which is what happens when
-	// the data directory is not writable.
+	// StatePath persists refresh tokens, remembered approvals and client
+	// registrations, so a restart does not force every client to authorize
+	// again. Empty keeps all three in memory, as an unwritable data dir does.
 	StatePath string
 }
 
