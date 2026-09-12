@@ -24,13 +24,9 @@ type ResourceResolver interface {
 	LabelsOf(resourceType, name string) map[string]string
 
 	// LabelsByType returns every resource of a type, keyed by that same name.
-	//
-	// Filter needs a whole type at once. Resolving one name at a time costs
-	// the implementation a scan per item — the cache is keyed by ID, not by
-	// name — which is quadratic over a list and takes a read lock per item:
-	// measured at 41ms and 2000 lock acquisitions to filter one page of 2000
-	// services, on every list request, SSE refetch and MCP find. One pass
-	// answers the whole page.
+	// Filter needs a whole type at once: the cache is keyed by ID, so resolving
+	// one name at a time costs a scan and a read lock per item — quadratic over
+	// a list, on every list request, SSE refetch and MCP find.
 	LabelsByType(resourceType string) map[string]map[string]string
 }
 
