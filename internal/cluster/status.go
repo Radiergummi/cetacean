@@ -7,23 +7,14 @@ import (
 )
 
 // ClusterStatus is the landing read: everything needed to decide whether to
-// look further, and where.
-//
-// It names the unhealthy resources rather than counting them.
-// cache.ClusterSnapshot reports "servicesDegraded": 3, which is an answer that
-// guarantees a second call — and follow-up calls are where a caller's budget
-// actually goes. Every unhealthy entry is a Row, so it carries the id and name
-// the next describe needs.
+// look further, and where. It names the unhealthy resources rather than
+// counting them, since a count guarantees a second call. Every unhealthy entry
+// is a Row, so it carries the id and name the next describe needs.
 type ClusterStatus struct {
-	// Healthy is the one-line answer: nothing degraded, nothing unreachable,
-	// nothing mid-rollout that has stalled.
-	//
-	// A node deliberately drained or paused is not a fault — it is the cluster
-	// doing what it was told — so it lands in DrainingNodes and leaves this
-	// true. Draining a node is the one operation whose own follow-up check
-	// would otherwise report the cluster broken for as long as the maintenance
-	// lasted. An update still rolling is likewise the system working; only one
-	// Swarm has paused counts against it.
+	// Healthy is the one-line answer: nothing degraded, unreachable, or
+	// stalled mid-rollout. A node deliberately drained is the cluster doing
+	// what it was told, so it lands in DrainingNodes and leaves this true; an
+	// update still rolling likewise, and only one Swarm has paused counts.
 	Healthy bool `json:"healthy"`
 
 	NodeCount    int `json:"nodeCount"`
@@ -43,10 +34,8 @@ type ClusterStatus struct {
 }
 
 // ClusterCapacity is the reserved-versus-available picture, in named units.
-//
-// Both CPU figures are cores because the snapshot behind them holds one in
-// cores and one in nanoCPUs, and a caller dividing them as the snapshot spells
-// them is wrong by nine orders of magnitude.
+// Both CPU figures are cores: the snapshot behind them holds one in cores and
+// one in nanoCPUs, so dividing them as spelled is wrong by a factor of 1e9.
 type ClusterCapacity struct {
 	TotalCPUCores       float64 `json:"totalCPUCores"`
 	ReservedCPUCores    float64 `json:"reservedCPUCores"`
@@ -57,14 +46,10 @@ type ClusterCapacity struct {
 // nanoCPUsPerCore is Docker's fixed-point scale: NanoCPUs of 1e9 is one core.
 const nanoCPUsPerCore = 1e9
 
-// CapacityOf puts a snapshot's two CPU figures in the same unit.
-//
-// It is the one place that correction is made. cache.ClusterSnapshot reports
-// TotalCPU in whole cores and ReservedCPU in nanoCPUs under two adjacent names
-// that carry neither unit, so every reader has to know the quirk; stating it
-// twice is how the two readers come to disagree by nine orders of magnitude.
-// Total and per-node CPU the snapshot has already divided down, so they are
-// only widened, not rescaled.
+// CapacityOf puts a snapshot's two CPU figures in the same unit, and is the
+// one place that correction is made: TotalCPU is whole cores and ReservedCPU
+// nanoCPUs, under adjacent names carrying neither unit. Total and per-node CPU
+// are already divided down, so they are widened rather than rescaled.
 func CapacityOf(snap cache.ClusterSnapshot) ClusterCapacity {
 	return ClusterCapacity{
 		TotalCPUCores:       float64(snap.TotalCPU),
@@ -74,12 +59,9 @@ func CapacityOf(snap cache.ClusterSnapshot) ClusterCapacity {
 	}
 }
 
-// BuildClusterStatus assembles the landing view.
-//
-// services and nodes are the caller's already-ACL-filtered slices, and running
-// the running-task count per service, so a caller with grants over one stack is
-// told about their cluster rather than everyone's — the same rule every builder
-// in this package follows.
+// BuildClusterStatus assembles the landing view. services and nodes are the
+// caller's already-ACL-filtered slices and running the per-service task count,
+// so a caller granted one stack is told about their cluster, not everyone's.
 func BuildClusterStatus(
 	snap cache.ClusterSnapshot,
 	services []swarm.Service,
@@ -150,19 +132,10 @@ func BuildClusterStatus(
 	return status
 }
 
-// rolloutStalled reports whether a spec change has stopped short rather than
-// merely being in progress.
-//
-// Swarm pauses an update whose tasks keep failing, and a rollback likewise;
-// those are the states that need someone to look. An update still rolling is
-// the system working, and counting it as unhealthy would report every ordinary
-// deploy as a fault.
-//
-// This reads the Docker record rather than the derived state on purpose.
-// serviceUpdateInFlight treats a paused update as settled — correctly, since
-// waiting on it would never finish — so such a service derives its state from
-// its replica count and reads as "running" on the spec it failed to leave.
-// That is precisely the case a health check must not miss.
+// rolloutStalled reports whether a spec change stopped short rather than
+// merely being in progress: Swarm pauses an update whose tasks keep failing.
+// It reads the Docker record, not the derived state, where a paused update
+// counts as settled and the service reads as "running".
 func rolloutStalled(svc swarm.Service) bool {
 	if svc.UpdateStatus == nil {
 		return false
