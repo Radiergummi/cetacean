@@ -129,7 +129,10 @@ func NewServer(cfg ServerConfig) *Server {
 			// keeps the file's registrations from being rewritten away in
 			// that case, and is read only then.
 			clients.Restore(state.Clients)
-			carriedClients = state.Clients
+
+			if clients == nil {
+				carriedClients = state.Clients
+			}
 
 			slog.Info("loaded MCP OAuth state",
 				"grants", len(state.Grants),
