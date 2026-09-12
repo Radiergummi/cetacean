@@ -821,17 +821,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		cfg.OAuthRoutes(mux.mux, "")
 	}
 
-	// SPA fallback (must be last). It refuses only a type nothing serves,
-	// rather than everything but text/html: */* resolves to JSON, so on this
-	// route JSON means "unknown" rather than "a client asked for JSON" — and
-	// every static file the dashboard pulls (/assets/*, the icons,
-	// manifest.webmanifest) arrives that way.
+	// SPA fallback (must be last). It answers 404 and never 406: a file it has
+	// is one representation with nothing to negotiate, and a path it does not
+	// have is no resource to hold representations at all.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if ContentTypeFromContext(r.Context()) == ContentTypeUnsupported {
-			notAcceptable(w, r, "text/html")
-			return
-		}
-
 		// A known suffix in an inner segment (/nodes.atom/feed) is a feed
 		// reader's probe, not a client-side route. Decided here because only
 		// this route knows nothing matched: `spa` is also the text/html arm of

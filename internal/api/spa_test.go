@@ -617,3 +617,65 @@ func TestRangesAcceptHTML(t *testing.T) {
 		})
 	}
 }
+
+// A static file has one representation, so there is nothing to negotiate and
+// Accept is not consulted (RFC 9110 §12.1). negotiate resolves against the
+// API's media types, which name no file type at all: image/png is
+// "unsupported" there while the file is right here.
+func TestAssetIsServedWhateverTheClientAccepts(t *testing.T) {
+	png := []byte("\x89PNG\r\n\x1a\n")
+
+	router := newTestRouterWithConfig(t, []routerOption{func(cfg *RouterConfig) {
+		cfg.SPA = NewSPAHandler(fstest.MapFS{
+			"index.html":        {Data: []byte("<html></html>")},
+			"favicon-32x32.png": {Data: png},
+		}, "")
+	}})
+
+	for _, accept := range []string{"image/png", "image/*", "text/html", "*/*"} {
+		t.Run(accept, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/favicon-32x32.png", nil)
+			req.Header.Set("Accept", accept)
+
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status=%d, want 200; body=%s", rec.Code, rec.Body.String())
+			}
+
+			if ct := rec.Header().Get("Content-Type"); ct != "image/png" {
+				t.Errorf("content-type=%q, want image/png", ct)
+			}
+
+			if !bytes.Equal(rec.Body.Bytes(), png) {
+				t.Errorf("body=%q, want the file's bytes", rec.Body.Bytes())
+			}
+		})
+	}
+}
+
+// 406 answers for a resource that exists and cannot be represented acceptably.
+// Nothing exists on this route, so an Accept naming a type it never heard of
+// earns the same 404 as one naming JSON.
+func TestUnroutedPathIsNotFoundRatherThanUnacceptable(t *testing.T) {
+	router := newTestRouterWithConfig(t, nil)
+
+	for _, accept := range []string{"image/png", "image/*", "application/xml"} {
+		t.Run(accept, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/nonesuch", nil)
+			req.Header.Set("Accept", accept)
+
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status=%d, want 404; body=%s", rec.Code, rec.Body.String())
+			}
+
+			if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
+				t.Errorf("content-type=%q, want application/problem+json", ct)
+			}
+		})
+	}
+}
