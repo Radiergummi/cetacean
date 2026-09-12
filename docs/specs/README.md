@@ -14,7 +14,7 @@ committed by accident.
 
 Point-in-time reviews and audits are ephemeral for the same reason and go to the
 same place. What survives a review is the fix, the test that pins it, and — when
-it changes how the code must be read — a note in `CLAUDE.md`.
+it changes how the code must be read — a note in `.claude/ARCHITECTURE.md`.
 
 Two documents here are living rather than historical, and are maintained rather
 than superseded:
