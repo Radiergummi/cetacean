@@ -13,10 +13,15 @@ services:
       - e2e
 
   cert-init:
-    image: alpine
-    command:
+    # The dind image above, reused because it already ships openssl. This was
+    # `alpine` plus `apk add openssl`, which reached the Alpine CDN on every
+    # bring-up under `set -e` -- so a transient TLS failure fetching APKINDEX
+    # failed the whole environment, `make test-stack` included.
+    image: docker:28-dind
+    entrypoint:
       - sh
       - -c
+    command:
       - |
         set -e
         cd /certs
@@ -38,7 +43,6 @@ services:
           touch ready
           exit 0
         fi
-        apk add --no-cache openssl >/dev/null 2>&1
         openssl ecparam -genkey -name prime256v1 -out ca-key.pem
         openssl req -x509 -new -key ca-key.pem -out ca.pem -days 365 \
           -subj "/CN=Cetacean E2E CA"
