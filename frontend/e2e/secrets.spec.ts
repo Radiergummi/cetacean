@@ -1,4 +1,4 @@
-import { test, expect, navigateToFirst, clickRow } from "./fixtures";
+import { test, expect, detailId, hasHistory, navigateToFirst, clickRow } from "./fixtures";
 
 test.describe("Secret List (/secrets)", () => {
   test("renders heading", async ({ page }) => {
@@ -40,13 +40,17 @@ test.describe("Secret Detail (/secrets/:id)", () => {
     });
   });
 
-  test("activity section renders when history exists", async ({ page }) => {
+  test("activity section renders when history exists", async ({ page, request, baseURL }) => {
+    // ActivitySection returns null for an empty feed, fetched after mount —
+    // so absence right now means "not loaded yet" as readily as "no history".
     await expect(page.getByText("ID", { exact: true })).toBeVisible({ timeout: 10_000 });
 
-    const activityButton = page.getByRole("button", { name: /Recent Activity/i });
-    const count = await activityButton.count();
-    test.skip(count === 0, "No activity history present for this secret");
-    await expect(activityButton).toBeVisible();
+    const present = await hasHistory(request, baseURL, detailId(page));
+    test.skip(!present, "No activity history recorded for this secret");
+
+    await expect(page.getByRole("button", { name: /Recent Activity/i })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test("remove button is present", async ({ page }) => {

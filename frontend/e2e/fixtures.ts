@@ -68,6 +68,80 @@ export async function clickRow(row: import("@playwright/test").Locator) {
 }
 
 /**
+ * Read a JSON document from the API. The dashboard fills itself in after
+ * mount, so a spec deciding from the DOM as `goto` resolves reads "absent" for
+ * "not fetched yet" — and `test.skip` makes that silent.
+ */
+export async function apiJson(
+  request: import("@playwright/test").APIRequestContext,
+  baseURL: string | undefined,
+  path: string,
+): Promise<Record<string, unknown>> {
+  const response = await request.get(`${baseURL}${path}`, {
+    headers: { Accept: "application/json" },
+  });
+
+  return (await response.json()) as Record<string, unknown>;
+}
+
+/** The auth provider the server reports for this run. */
+export async function authProvider(
+  request: import("@playwright/test").APIRequestContext,
+  baseURL: string | undefined,
+): Promise<string> {
+  const identity = await apiJson(request, baseURL, "/auth/whoami");
+
+  return String(identity.provider ?? "none");
+}
+
+/**
+ * Whether the SUT holds change history for a resource. It is that process's
+ * ring buffer, so a resource unchanged since startup has none however long the
+ * dashboard is given — a real precondition, not a wait.
+ */
+export async function hasHistory(
+  request: import("@playwright/test").APIRequestContext,
+  baseURL: string | undefined,
+  resourceId: string,
+): Promise<boolean> {
+  const history = await apiJson(
+    request,
+    baseURL,
+    `/history?resourceId=${encodeURIComponent(resourceId)}&limit=1`,
+  );
+  const items = history.items;
+
+  return Array.isArray(items) && items.length > 0;
+}
+
+/**
+ * The methods the server offers for a resource, from its `Allow` header — what
+ * the dashboard itself gates its write affordances on.
+ */
+export async function allowedMethods(
+  request: import("@playwright/test").APIRequestContext,
+  baseURL: string | undefined,
+  path: string,
+): Promise<Set<string>> {
+  const response = await request.get(`${baseURL}${path}`, {
+    headers: { Accept: "application/json" },
+  });
+  const allow = response.headers().allow ?? "";
+
+  return new Set(
+    allow
+      .split(",")
+      .map((method) => method.trim().toUpperCase())
+      .filter(Boolean),
+  );
+}
+
+/** The trailing identifier of the detail page currently open. */
+export function detailId(page: import("@playwright/test").Page): string {
+  return decodeURIComponent(new URL(page.url()).pathname.split("/").pop() ?? "");
+}
+
+/**
  * Navigate to the first item in a resource list and wait for the detail page.
  * Uses `table tbody tr` because DataTable renders standard HTML table elements
  * and Playwright's role-based `getByRole("row")` also matches the header row.

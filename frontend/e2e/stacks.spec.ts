@@ -1,4 +1,4 @@
-import { test, expect, navigateToFirst, clickRow } from "./fixtures";
+import { test, expect, apiJson, navigateToFirst, clickRow } from "./fixtures";
 
 test.describe("Stack List (/stacks)", () => {
   test("renders heading and table", async ({ page }) => {
@@ -50,49 +50,52 @@ test.describe("Stack Detail", () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
   });
+});
 
-  test("Configs section toggle is present when stack has configs", async ({ page }) => {
-    // Configs section only renders when the stack has configs
-    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({
-      timeout: 10_000,
+/**
+ * These sections render only for a stack that has the resource, so they cannot
+ * use the first row: nothing says the stack sorting first carries configs.
+ */
+const crossReferenceSections = ["configs", "secrets", "networks", "volumes"] as const;
+
+async function stackWithSection(
+  request: import("@playwright/test").APIRequestContext,
+  baseURL: string | undefined,
+  section: (typeof crossReferenceSections)[number],
+): Promise<string | null> {
+  const stacks = await apiJson(request, baseURL, "/stacks");
+  const items = Array.isArray(stacks.items) ? (stacks.items as Record<string, unknown>[]) : [];
+
+  for (const item of items) {
+    const members = item[section];
+
+    if (Array.isArray(members) && members.length > 0) {
+      return String(item.name);
+    }
+  }
+
+  return null;
+}
+
+test.describe("Stack Detail cross-references", () => {
+  for (const section of crossReferenceSections) {
+    const heading = section.charAt(0).toUpperCase() + section.slice(1);
+
+    test(`${heading} section toggle is present when a stack has ${section}`, async ({
+      page,
+      request,
+      baseURL,
+    }) => {
+      const name = await stackWithSection(request, baseURL, section);
+      test.skip(name === null, `No stack in this cluster has ${section}`);
+
+      await page.goto(`/stacks/${name}`);
+
+      await expect(page.getByRole("button", { name: new RegExp(`^${heading}$`, "i") })).toBeVisible(
+        {
+          timeout: 10_000,
+        },
+      );
     });
-
-    const configsButton = page.getByRole("button", { name: /^Configs$/i });
-    const count = await configsButton.count();
-    test.skip(count === 0, "Stack has no configs");
-    await expect(configsButton).toBeVisible();
-  });
-
-  test("Secrets section toggle is present when stack has secrets", async ({ page }) => {
-    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({
-      timeout: 10_000,
-    });
-
-    const secretsButton = page.getByRole("button", { name: /^Secrets$/i });
-    const count = await secretsButton.count();
-    test.skip(count === 0, "Stack has no secrets");
-    await expect(secretsButton).toBeVisible();
-  });
-
-  test("Networks section toggle is present when stack has networks", async ({ page }) => {
-    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({
-      timeout: 10_000,
-    });
-
-    const networksButton = page.getByRole("button", { name: /^Networks$/i });
-    const count = await networksButton.count();
-    test.skip(count === 0, "Stack has no networks");
-    await expect(networksButton).toBeVisible();
-  });
-
-  test("Volumes section toggle is present when stack has volumes", async ({ page }) => {
-    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({
-      timeout: 10_000,
-    });
-
-    const volumesButton = page.getByRole("button", { name: /^Volumes$/i });
-    const count = await volumesButton.count();
-    test.skip(count === 0, "Stack has no volumes");
-    await expect(volumesButton).toBeVisible();
-  });
+  }
 });

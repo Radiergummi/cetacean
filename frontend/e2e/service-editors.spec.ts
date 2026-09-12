@@ -21,6 +21,14 @@ test.describe("Service Editors", () => {
    */
   async function ensureSectionOpen(page: Page, name: RegExp) {
     const toggle = page.getByRole("button", { name }).and(page.locator("[aria-expanded]"));
+
+    // The sections come from the detail fetch, so counting as it stands
+    // reports "absent" for "not rendered yet".
+    await toggle
+      .first()
+      .waitFor({ state: "attached", timeout: 10_000 })
+      .catch(() => {});
+
     const count = await toggle.count();
     test.skip(count === 0, "Section not present on this service");
 

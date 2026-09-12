@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, apiJson } from "./fixtures";
 
 test.describe("Range Request Pagination (API)", () => {
   test("list endpoint returns Accept-Ranges: items", async ({ request, baseURL }) => {
@@ -84,26 +84,56 @@ test.describe("Range Request Pagination (API)", () => {
 });
 
 test.describe("Infinite Scroll (UI)", () => {
+  /**
+   * The sentinel shows only while a page is outstanding, so this needs a list
+   * longer than the dashboard's page size (`pageSize` in api/client.ts). Which
+   * list that is depends on the cluster, so each is asked in turn.
+   */
+  const paginatedLists = ["/tasks", "/configs", "/secrets", "/services", "/networks", "/volumes"];
+  const dashboardPageSize = 50;
+
   test("load-more sentinel appears when list has more items", async ({
     page,
     request,
     baseURL,
   }) => {
-    // First check if any resource type has enough items to paginate
-    const response = await request.get(`${baseURL}/tasks`, {
-      headers: {
-        Accept: "application/json",
-        Range: "items 0-0",
-      },
+    let listPath: string | null = null;
+
+    for (const candidate of paginatedLists) {
+      // eslint-disable-next-line no-await-in-loop
+      const body = await apiJson(request, baseURL, candidate);
+
+      if (typeof body.total === "number" && body.total > dashboardPageSize) {
+        listPath = candidate;
+        break;
+      }
+    }
+
+    test.skip(listPath === null, `No list holds more than ${dashboardPageSize} items`);
+
+    // The next page is requested the moment the sentinel mounts, and against a
+    // local server the answer beats the assertion. Holding it open is what
+    // makes the sentinel observable.
+    await page.route(`**${listPath}*`, async (route) => {
+      const range = route.request().headers().range ?? "";
+
+      if (range.startsWith("items 0-")) {
+        await route.continue();
+
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      await route.continue();
     });
-    const body = await response.json();
 
-    test.skip(body.total <= 50, "Not enough tasks to trigger pagination");
-
-    await page.goto("/tasks");
+    await page.goto(listPath as string);
     await expect(page.getByRole("grid")).toBeVisible({ timeout: 10_000 });
 
     // The sentinel row should be present when there are more items to load
     await expect(page.getByTestId("load-more-sentinel")).toBeVisible({ timeout: 5_000 });
+
+    // And gone once they have loaded, which is what it is a sentinel for.
+    await expect(page.getByTestId("load-more-sentinel")).toBeHidden({ timeout: 15_000 });
   });
 });

@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, apiJson } from "./fixtures";
 
 test.describe("Recommendations (/recommendations)", () => {
   test("page loads with Recommendations heading", async ({ page }) => {
@@ -44,16 +44,19 @@ test.describe("Recommendations (/recommendations)", () => {
     await expect(cards.first().or(emptyState)).toBeVisible({ timeout: 10_000 });
   });
 
-  test("target links have href attributes", async ({ page }) => {
+  test("target links have href attributes", async ({ page, request, baseURL }) => {
     await page.goto("/recommendations");
     await expect(page.getByRole("heading", { name: "Recommendations" })).toBeVisible({
       timeout: 10_000,
     });
 
-    // Recommendation cards contain a severity icon with aria-label
+    // The heading renders before the fetch behind these cards resolves.
+    const recommendations = await apiJson(request, baseURL, "/recommendations");
+    const items = Array.isArray(recommendations.items) ? recommendations.items : [];
+    test.skip(items.length === 0, "No recommendations present — target link test skipped");
+
     const cards = page.locator("[aria-label=info], [aria-label=warning], [aria-label=critical]");
-    const cardCount = await cards.count();
-    test.skip(cardCount === 0, "No recommendations present — target link test skipped");
+    await expect(cards.first()).toBeVisible({ timeout: 10_000 });
 
     // Recommendation cards contain target links (service/node names)
     const links = page.locator("a[href^='/services/'], a[href^='/nodes/']");

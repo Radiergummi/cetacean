@@ -1,4 +1,4 @@
-import { test, expect, navigateToFirst, clickRow } from "./fixtures";
+import { test, expect, detailId, hasHistory, navigateToFirst, clickRow } from "./fixtures";
 
 test.describe("Node List (/nodes)", () => {
   test("renders table with expected columns", async ({ page }) => {
@@ -77,16 +77,17 @@ test.describe("Node Detail (/nodes/:id)", () => {
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
   });
 
-  test("activity section renders when history exists", async ({ page }) => {
-    // ActivitySection renders only when there are history entries — it returns null for an
-    // empty list. Wait for the tasks section (which always renders) to confirm the page is
-    // loaded, then check whether recent activity appears.
+  test("activity section renders when history exists", async ({ page, request, baseURL }) => {
+    // ActivitySection returns null for an empty feed, fetched after mount —
+    // so absence right now means "not loaded yet" as readily as "no history".
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
 
-    const activityButton = page.getByRole("button", { name: /Recent Activity/i });
-    const count = await activityButton.count();
-    test.skip(count === 0, "No activity history present for this node");
-    await expect(activityButton).toBeVisible();
+    const present = await hasHistory(request, baseURL, detailId(page));
+    test.skip(!present, "No activity history recorded for this node");
+
+    await expect(page.getByRole("button", { name: /Recent Activity/i })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test("labels section renders", async ({ page }) => {

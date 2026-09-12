@@ -1,4 +1,12 @@
-import { test, expect, navigateToFirst, clickRow } from "./fixtures";
+import {
+  test,
+  expect,
+  allowedMethods,
+  detailId,
+  hasHistory,
+  navigateToFirst,
+  clickRow,
+} from "./fixtures";
 
 test.describe("Service List (/services)", () => {
   test("renders table with expected columns", async ({ page }) => {
@@ -76,16 +84,19 @@ test.describe("Service Detail (/services/:id)", () => {
     await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test("action buttons present when write operations are enabled", async ({ page }) => {
-    // ServiceActions renders only when the ops level is >= 1 (operational).
-    await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 10_000 });
+  test("action buttons present when write operations are enabled", async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    // ServiceActions gates on allowedMethods.has("POST"), parsed from the
+    // Allow header — so the server answers whether these buttons belong here,
+    // rather than the DOM being asked before it has been filled in.
+    const methods = await allowedMethods(request, baseURL, `/services/${detailId(page)}`);
+    test.skip(!methods.has("POST"), "Service writes are not offered at this operations level");
 
-    const rollback = page.getByRole("button", { name: /Rollback/i });
-    const count = await rollback.count();
-    test.skip(count === 0, "Write operations not enabled — action buttons not rendered");
-
-    await expect(rollback).toBeVisible();
-    await expect(page.getByRole("button", { name: /Restart/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Rollback/i })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /Restart/i })).toBeVisible({ timeout: 10_000 });
   });
 
   test("tasks section renders with state filter", async ({ page }) => {
@@ -143,13 +154,20 @@ test.describe("Service Detail (/services/:id)", () => {
     await expect(page.getByRole("button", { name: /^Logs$/i })).toBeVisible({ timeout: 10_000 });
   });
 
-  test("recent activity section renders when history entries are present", async ({ page }) => {
-    // Wait for the page to fully load (Tasks section always renders)
+  test("recent activity section renders when history entries are present", async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    // ActivitySection returns null for an empty feed, fetched after mount —
+    // so absence right now means "not loaded yet" as readily as "no history".
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
 
-    const activityButton = page.getByRole("button", { name: /Recent Activity/i });
-    const count = await activityButton.count();
-    test.skip(count === 0, "No activity history present for this service");
-    await expect(activityButton).toBeVisible();
+    const present = await hasHistory(request, baseURL, detailId(page));
+    test.skip(!present, "No activity history recorded for this service");
+
+    await expect(page.getByRole("button", { name: /Recent Activity/i })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });

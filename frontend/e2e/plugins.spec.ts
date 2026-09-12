@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, apiJson } from "./fixtures";
 
 test.describe("Plugins (/plugins)", () => {
   test("renders Plugins heading", async ({ page }) => {
@@ -6,13 +6,16 @@ test.describe("Plugins (/plugins)", () => {
     await expect(page.getByRole("heading", { name: "Plugins" })).toBeVisible({ timeout: 10_000 });
   });
 
-  test("plugin name link navigates to plugin detail", async ({ page }) => {
+  test("plugin name link navigates to plugin detail", async ({ page, request, baseURL }) => {
     await page.goto("/plugins");
     await expect(page.getByRole("heading", { name: "Plugins" })).toBeVisible({ timeout: 10_000 });
 
+    const plugins = await apiJson(request, baseURL, "/plugins");
+    const items = Array.isArray(plugins.items) ? plugins.items : [];
+    test.skip(items.length === 0, "No plugins installed — cannot test detail navigation");
+
     const pluginLinks = page.locator("table tbody tr a");
-    const linkCount = await pluginLinks.count();
-    test.skip(linkCount === 0, "No plugins installed — cannot test detail navigation");
+    await expect(pluginLinks.first()).toBeVisible({ timeout: 10_000 });
 
     await pluginLinks.first().click();
     await expect(page).toHaveURL(/\/plugins\/.+/);
