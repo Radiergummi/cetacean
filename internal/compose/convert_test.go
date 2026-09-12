@@ -1,8 +1,13 @@
 package compose
 
 import (
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/swarm"
 )
 
 func TestDuration(t *testing.T) {
@@ -94,5 +99,97 @@ func TestExtraHosts(t *testing.T) {
 	}
 	if extraHosts([]string{"   "}) != nil {
 		t.Error("a blank entry must be dropped, not emitted as \":\"")
+	}
+}
+
+func TestMountsUseLongSyntaxAndShortenTheSource(t *testing.T) {
+	got := mounts([]mount.Mount{
+		{Type: mount.TypeVolume, Source: "web_data", Target: "/data"},
+		{Type: mount.TypeBind, Source: "/etc/hosts", Target: "/etc/hosts", ReadOnly: true},
+	}, func(s string) string { return strings.TrimPrefix(s, "web_") })
+
+	if got[0].Type != "volume" || got[0].Source != "data" || got[0].Target != "/data" {
+		t.Errorf("volume mount = %+v", got[0])
+	}
+	if got[0].ReadOnly {
+		t.Error("mount must not claim read-only when it is not")
+	}
+	// A bind source is a host path, not a stack resource: shortening it would
+	// rewrite the filesystem path.
+	if got[1].Source != "/etc/hosts" || !got[1].ReadOnly {
+		t.Errorf("bind mount = %+v", got[1])
+	}
+}
+
+func TestPortsMapPublishMode(t *testing.T) {
+	got := ports([]swarm.PortConfig{
+		{
+			TargetPort:    80,
+			PublishedPort: 8080,
+			Protocol:      "tcp",
+			PublishMode:   swarm.PortConfigPublishModeIngress,
+		},
+		{
+			TargetPort:    53,
+			PublishedPort: 5353,
+			Protocol:      "udp",
+			PublishMode:   swarm.PortConfigPublishModeHost,
+		},
+	})
+
+	if got[0].Mode != "ingress" || got[0].Target != 80 || got[0].Published != 8080 {
+		t.Errorf("ingress port = %+v", got[0])
+	}
+	if got[1].Mode != "host" || got[1].Protocol != "udp" {
+		t.Errorf("host port = %+v", got[1])
+	}
+}
+
+func TestHealthcheckDurationsBecomeStrings(t *testing.T) {
+	got := healthcheck(&container.HealthConfig{
+		Test:          []string{"CMD", "curl", "-f", "http://localhost/"},
+		Interval:      30 * time.Second,
+		Timeout:       5 * time.Second,
+		StartPeriod:   time.Minute,
+		StartInterval: 2 * time.Second,
+		Retries:       3,
+	})
+
+	if got.Interval != "30s" || got.Timeout != "5s" || got.StartPeriod != "1m0s" ||
+		got.StartInterval != "2s" {
+		t.Errorf("healthcheck = %+v", got)
+	}
+	if got.Retries != 3 || len(got.Test) != 4 {
+		t.Errorf("healthcheck = %+v", got)
+	}
+	if healthcheck(nil) != nil {
+		t.Error("no healthcheck must produce nil")
+	}
+}
+
+func TestPrivilegesSplitAndWarnOnSeccomp(t *testing.T) {
+	spec, opts, warn := privileges(&swarm.Privileges{
+		CredentialSpec: &swarm.CredentialSpec{File: "spec.json"},
+		SELinuxContext: &swarm.SELinuxContext{Level: "s0:c1,c2"},
+		Seccomp:        &swarm.SeccompOpts{Profile: []byte(`{"defaultAction":"SCMP_ACT_ERRNO"}`)},
+	})
+
+	if spec["file"] != "spec.json" {
+		t.Errorf("credential_spec = %v", spec)
+	}
+	if len(opts) == 0 || !strings.Contains(opts[0], "s0:c1,c2") {
+		t.Errorf("security_opt = %v", opts)
+	}
+	if warn == "" || !strings.Contains(warn, "seccomp") {
+		t.Errorf("a custom seccomp profile must warn, got %q", warn)
+	}
+
+	_, opts, _ = privileges(&swarm.Privileges{NoNewPrivileges: true})
+	if len(opts) != 1 || opts[0] != "no-new-privileges:true" {
+		t.Errorf("security_opt = %v, want no-new-privileges:true", opts)
+	}
+
+	if _, _, w := privileges(nil); w != "" {
+		t.Errorf("no privileges must not warn, got %q", w)
 	}
 }
