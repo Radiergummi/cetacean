@@ -405,6 +405,30 @@ func TestRestoreTruncatesToCurrentCapacity(t *testing.T) {
 	}
 }
 
+// TestRestoreIgnoresRepeatedClientIDs — a hand-edited or future-written file
+// can repeat an ID, and the registry's two halves must still agree: otherwise
+// the cap under-counts and an eviction drops a client that is not the oldest.
+func TestRestoreIgnoresRepeatedClientIDs(t *testing.T) {
+	registry := newClientRegistry(10, 10)
+	registry.Restore([]ClientRegistration{
+		{ClientID: "first"},
+		{ClientID: "second"},
+		{ClientID: "first"},
+	})
+
+	registry.mu.Lock()
+	clients, order := len(registry.clients), len(registry.order)
+	registry.mu.Unlock()
+
+	if clients != 2 || order != 2 {
+		t.Fatalf("registry holds %d clients and %d order entries, want 2 and 2", clients, order)
+	}
+
+	if registry.Get("first") == nil || registry.Get("second") == nil {
+		t.Error("both distinct registrations should have survived")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // TestDCRRejectsOversizedMetadata
 // ---------------------------------------------------------------------------

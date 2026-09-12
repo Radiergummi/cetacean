@@ -167,7 +167,13 @@ func (r *ClientRegistry) Restore(registrations []ClientRegistration) {
 	r.clients = make(map[string]*ClientRegistration, len(registrations))
 	r.order = make([]string, 0, len(registrations))
 
+	// A repeated client_id would leave order longer than clients, and the next
+	// eviction would then delete an ID a later order entry still names.
 	for _, reg := range registrations {
+		if _, seen := r.clients[reg.ClientID]; seen {
+			continue
+		}
+
 		r.clients[reg.ClientID] = new(reg.clone())
 		r.order = append(r.order, reg.ClientID)
 	}
