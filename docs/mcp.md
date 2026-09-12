@@ -30,7 +30,7 @@ environment:
 > whenever MCP OAuth is in use.
 
 Also set [`mcp.signing_key`][mcp.signing_key]. Without it Cetacean generates a new key on every restart, and every agent
-has to sign in again after a redeployment.
+has to sign in again after a redeployment. Generate one with `openssl rand -hex 32`.
 
 ## Connect a client
 

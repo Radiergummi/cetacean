@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"bytes"
 	"html"
 	"maps"
 	"net/http"
@@ -254,4 +255,34 @@ func submitConsent(
 	s.HandleAuthorize(w, req)
 
 	return w
+}
+
+// The consent page must not accept a token signed with the root itself, which
+// is what it did before the keys were derived.
+func TestConsentRefusesACSRFTokenSignedWithTheRoot(t *testing.T) {
+	km := mustDeriveKeys(t, testRoot)
+
+	if bytes.Equal(km.csrf, testRoot) {
+		t.Fatal("derived CSRF key is the root; the split did not happen")
+	}
+
+	const (
+		nonce       = "test-nonce"
+		state       = "test-state"
+		fingerprint = "test-fingerprint"
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(
+		url.Values{
+			"state":                 {state},
+			consentFingerprintField: {fingerprint},
+			"csrf_token":            {csrfMAC(testRoot, nonce, state, fingerprint)},
+		}.Encode(),
+	))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: nonce})
+
+	if verifyCSRFToken(req, km.csrf) {
+		t.Error("a CSRF token signed with the root verified against the derived key")
+	}
 }
