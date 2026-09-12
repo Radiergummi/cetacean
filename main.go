@@ -242,6 +242,18 @@ func main() {
 	}
 	defer dockerClient.Close() //nolint:errcheck // best-effort shutdown close
 
+	// A too-old daemon refuses every request, which otherwise surfaces as
+	// empty listings and a failing readiness probe.
+	versionCtx, versionCancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+	err = dockerClient.CheckAPIVersion(versionCtx)
+
+	versionCancel()
+
+	if err != nil {
+		slog.Error("unsupported Docker Engine", "error", err, "host", cfg.DockerHost)
+		os.Exit(1)
+	}
+
 	snapshotPath := ""
 	if cfg.Snapshot {
 		snapshotPath = filepath.Join(cfg.DataDir, "snapshot.json")
@@ -576,6 +588,9 @@ func main() {
 	slog.Info("shutdown complete")
 }
 
+// dockerProbeTimeout bounds the startup version probe, so a socket that
+// accepts and then says nothing cannot hold startup open.
+const dockerProbeTimeout = 10 * time.Second
 
 // shutdownGrace bounds how long a signalled process waits for in-flight
 // requests, inside the ten seconds an orchestrator allows before SIGKILL.

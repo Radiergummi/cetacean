@@ -10,6 +10,9 @@ tags: [ installation, docker, swarm, quickstart ]
 ## Requirements
 
 - A Docker Swarm Mode cluster. Single-node swarms work.
+- **Docker Engine 27.0 or newer.** Cetacean speaks Docker API 1.46, and an older daemon refuses every
+  request as too new. It says so at startup and stops, naming both versions, rather than coming up and
+  serving empty pages.
 - A manager node to run Cetacean on. Cetacean reads the swarm API, which only managers serve.
 - The Docker socket, mounted read-only into the container.
 
