@@ -10,6 +10,7 @@ tags: [ installation, docker, swarm, quickstart ]
 ## Requirements
 
 - A Docker Swarm Mode cluster. Single-node swarms work.
+- **Docker Engine 27.0 or newer, speaking Docker API 1.46 or above.**
 - A manager node to run Cetacean on. Cetacean reads the swarm API, which only managers serve.
 - The Docker socket, mounted read-only into the container.
 

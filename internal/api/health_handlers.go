@@ -25,7 +25,13 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		status = "error"
 	}
 
-	writeJSON(w, NewHealthResponse(status, h.operationsLevel))
+	body := NewHealthResponse(status, h.operationsLevel)
+
+	if h.liveness != nil {
+		body = body.withWatcher(h.liveness.Liveness())
+	}
+
+	writeJSON(w, body)
 }
 
 func (h *Handlers) HandleReady(w http.ResponseWriter, r *http.Request) {
@@ -53,11 +59,14 @@ func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 // HandleResync triggers a manual full re-fetch of cluster state. Useful when
 // the cache has drifted from reality (e.g. an event was missed during a rapid
 // stack deploy). Wraps the watcher's Resync method behind a small HTTP shim
-// so the api package doesn't import docker. Returns 202 once the sync starts.
+// so the api package doesn't import docker.
 //
-// We deliberately don't gate this on operations level: a resync only re-reads
-// Docker — it never mutates the cluster — so it's safe to expose alongside
-// /-/health and /-/ready.
+// Authenticated and behind a grant, and not exempt despite its /-/ prefix:
+// each call is a full seven-goroutine sweep of the Docker API, unbounded and
+// unthrottled, so leaving it open let anyone who could reach the port amplify
+// one cheap request into a cluster enumeration. Still not gated on the
+// operations level, which says what a deployment may do to the cluster: a
+// resync only re-reads it.
 func HandleResync(r Resyncer) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()

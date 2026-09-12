@@ -40,7 +40,8 @@ grants:
 
 A resource expression is `type:pattern`. Valid types are `service`, `stack`, `node`, `task`, `config`, `secret`,
 `network`, `volume`, `plugin` and `swarm`. A bare `*` matches every resource of every type; every other expression
-must name a type. Patterns are globs (`*`, `?`, `[...]`) matched against the identifier the resource is keyed by:
+must name a type. Patterns are globs (`*`, `?`, `[...]`, and `\` to escape any of them) matched against the
+identifier the resource is keyed by:
 
 | Type                                                                  | Pattern matches                            |
 | --------------------------------------------------------------------- | ------------------------------------------ |
@@ -56,6 +57,7 @@ Two inheritance rules widen a grant beyond a literal match:
 
 Task patterns match task IDs, which change every time a replica is replaced. Grant the parent service or the stack
 instead of naming tasks.
+
 
 ### Audience
 

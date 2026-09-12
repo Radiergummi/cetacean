@@ -18,6 +18,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/versions"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
@@ -37,9 +38,49 @@ type Client struct {
 	docker *client.Client
 }
 
+// The Docker API this client speaks, and the Engine release that first served
+// it. Pinned rather than negotiated: negotiating down would leave Cetacean
+// partially working against an older daemon without saying so.
+const (
+	RequiredAPIVersion   = "1.46"
+	MinimumEngineVersion = "27.0"
+)
+
+// UnsupportedEngineError reports a daemon too old to serve RequiredAPIVersion.
+type UnsupportedEngineError struct {
+	DaemonAPIVersion string
+}
+
+func (e *UnsupportedEngineError) Error() string {
+	return fmt.Sprintf(
+		"this Docker daemon serves API %s, and Cetacean requires %s "+
+			"(Docker Engine %s or newer); every request would be refused as too new",
+		e.DaemonAPIVersion, RequiredAPIVersion, MinimumEngineVersion,
+	)
+}
+
+// CheckAPIVersion reports whether the daemon can serve RequiredAPIVersion. An
+// unreachable daemon is not an error: the socket may not be mounted yet, and
+// the watcher retries.
+func (c *Client) CheckAPIVersion(ctx context.Context) error {
+	// Ping reads Api-Version from the headers even when the daemon refuses the
+	// request as too new, so the error it returns is the case being checked.
+	ping, _ := c.docker.Ping(ctx)
+
+	if ping.APIVersion == "" {
+		return nil
+	}
+
+	if versions.LessThan(ping.APIVersion, RequiredAPIVersion) {
+		return &UnsupportedEngineError{DaemonAPIVersion: ping.APIVersion}
+	}
+
+	return nil
+}
+
 func NewClient(host string) (*Client, error) {
 	opts := []client.Opt{
-		client.WithVersion("1.46"),
+		client.WithVersion(RequiredAPIVersion),
 	}
 	if host != "" {
 		opts = append(opts, client.WithHost(host))
@@ -821,26 +862,38 @@ func (c *Client) UpdateServiceEndpointMode(
 	return c.InspectService(ctx, id)
 }
 
-func (c *Client) UpdateServiceMode(
+// UpdateServiceSpec applies mutate to the service spec as the engine currently
+// holds it and writes the result back.
+//
+// It exists for the merge patches. A merge patch's base has to be the live
+// spec: merging into a cached copy the watcher has not yet refreshed silently
+// discards whatever was written in between, and the engine cannot refuse it,
+// because the version this update carries is read in the same breath as the
+// spec (M-42).
+func (c *Client) UpdateServiceSpec(
 	ctx context.Context,
 	id string,
-	mode swarm.ServiceMode,
+	mutate func(spec *swarm.ServiceSpec) error,
 ) (swarm.Service, error) {
 	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
 	if err != nil {
 		return swarm.Service{}, err
 	}
-	svc.Spec.Mode = mode
-	_, err = c.docker.ServiceUpdate(
+
+	if err := mutate(&svc.Spec); err != nil {
+		return swarm.Service{}, err
+	}
+
+	if _, err := c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
 		svc.Version,
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
+	); err != nil {
 		return swarm.Service{}, err
 	}
+
 	return c.InspectService(ctx, id)
 }
 
@@ -1094,6 +1147,14 @@ func (c *Client) UpdateServiceContainerConfig(
 	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
 	if err != nil {
 		return swarm.Service{}, err
+	}
+	// Guarded like every other writer reaching into the container spec: apply
+	// dereferences it, so a service without one panicked inside the handler
+	// rather than answering.
+	if svc.Spec.TaskTemplate.ContainerSpec == nil {
+		return swarm.Service{}, errdefs.InvalidParameter(
+			fmt.Errorf("service has no container spec"),
+		)
 	}
 	apply(svc.Spec.TaskTemplate.ContainerSpec)
 	_, err = c.docker.ServiceUpdate(

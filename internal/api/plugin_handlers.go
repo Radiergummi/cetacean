@@ -44,6 +44,7 @@ func (h *Handlers) HandleListPlugins(w http.ResponseWriter, r *http.Request) {
 		NewCollectionResponse(
 			r.Context(),
 			wrapItems(
+				r.Context(),
 				plugins,
 				"Plugin",
 				func(p *types.Plugin) string { return "/plugins/" + p.Name },

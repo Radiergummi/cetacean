@@ -425,9 +425,15 @@ func (h *Handlers) taskRepresentation(r *http.Request) (any, error) {
 	et := cluster.EnrichTask(h.cache, task)
 
 	return NewDetailResponse(r.Context(), "/tasks/"+id, "Task", TaskResponse{
-		Task:    et,
-		Service: TaskServiceRef{AtID: "/services/" + et.ServiceID, Name: et.ServiceName},
-		Node:    TaskNodeRef{AtID: "/nodes/" + et.NodeID, Hostname: et.NodeHostname},
+		Task: et,
+		Service: TaskServiceRef{
+			AtID: absPath(r.Context(), "/services/"+et.ServiceID),
+			Name: et.ServiceName,
+		},
+		Node: TaskNodeRef{
+			AtID:     absPath(r.Context(), "/nodes/"+et.NodeID),
+			Hostname: et.NodeHostname,
+		},
 	}), nil
 }
 

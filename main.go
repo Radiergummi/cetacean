@@ -239,6 +239,18 @@ func main() {
 	}
 	defer dockerClient.Close() //nolint:errcheck // best-effort shutdown close
 
+	// A too-old daemon refuses every request, which otherwise surfaces as
+	// empty listings and a failing readiness probe.
+	versionCtx, versionCancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+	err = dockerClient.CheckAPIVersion(versionCtx)
+
+	versionCancel()
+
+	if err != nil {
+		slog.Error("unsupported Docker Engine", "error", err, "host", cfg.DockerHost)
+		os.Exit(1)
+	}
+
 	snapshotPath := ""
 	if cfg.Snapshot {
 		snapshotPath = filepath.Join(cfg.DataDir, "snapshot.json")
@@ -303,7 +315,7 @@ func main() {
 		}
 		recEngine = recommendations.NewEngine(checkers...)
 		if recEngine != nil {
-			go recEngine.Run(ctx)
+			go recEngine.RunAfter(ctx, watcher.Ready())
 			slog.Info("recommendation engine started", "checkers", len(checkers))
 		}
 	} else {
@@ -313,6 +325,17 @@ func main() {
 	// ACL
 	var aclEval *acl.Evaluator
 	var stopPolicyWatch func()
+
+	// Auth mode "none" resolves every caller to the same anonymous identity,
+	// so a configured policy is not applied at all.
+	if authCfg.Mode == "none" && (aclCfg.Policy != "" || aclCfg.PolicyFile != "") {
+		slog.Warn(
+			"an ACL policy is configured but auth.mode is none, so no grant will be enforced; "+
+				"set auth.mode to identify callers, or remove the policy",
+			"policy_file", aclCfg.PolicyFile,
+		)
+	}
+
 	if authCfg.Mode != "none" {
 		aclEval = acl.NewEvaluator()
 		aclEval.SetResolver(stateCache)
@@ -496,6 +519,8 @@ func main() {
 		TLSEnabled:         tlsCfg.Enabled(),
 		TrustedProxies:     cfg.TrustedProxies,
 		Resyncer:           watcher,
+		Liveness:           watcher,
+		Refresher:          watcher,
 		MCPHandler:         mcpHandler,
 		OAuthRoutes:        oauthRoutes,
 	})
@@ -536,11 +561,17 @@ func main() {
 		TLSConfig:    serverTLSConfig,
 	}
 
-	// Graceful shutdown
+	// Graceful shutdown. ListenAndServe returns ErrServerClosed as soon as
+	// Shutdown closes the listeners, so main waits on drained rather than
+	// returning mid-drain.
+	drained := make(chan struct{})
+
 	go func() {
+		defer close(drained)
+
 		<-ctx.Done()
 		slog.Info("shutting down", "cause", context.Cause(ctx))
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			slog.Error("shutdown error", "error", err)
@@ -572,7 +603,18 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	<-drained
+	slog.Info("shutdown complete")
 }
+
+// dockerProbeTimeout bounds the startup version probe, so a socket that
+// accepts and then says nothing cannot hold startup open.
+const dockerProbeTimeout = 10 * time.Second
+
+// shutdownGrace bounds how long a signalled process waits for in-flight
+// requests, inside the ten seconds an orchestrator allows before SIGKILL.
+const shutdownGrace = 5 * time.Second
 
 func runHealthcheck() int {
 	addr := os.Getenv("CETACEAN_LISTEN_ADDR")
@@ -638,11 +680,15 @@ func serveDualListeners(
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// Graceful shutdown of both servers
+	// Graceful shutdown of both servers; see drained above.
+	drained := make(chan struct{})
+
 	go func() { //nolint:gosec // G118: context.Background is correct here — ctx is done, we need a fresh timeout
+		defer close(drained)
+
 		<-ctx.Done()
 		slog.Info("shutting down", "cause", context.Cause(ctx))
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer shutdownCancel()
 		if err := appServer.Shutdown(shutdownCtx); err != nil {
 			slog.Error("tsnet server shutdown error", "error", err)
@@ -675,6 +721,9 @@ func serveDualListeners(
 		slog.Error("tsnet server error", "error", err)
 		os.Exit(1)
 	}
+
+	<-drained
+	slog.Info("shutdown complete")
 }
 
 // mcpDeps bundles the runtime objects setupMCP needs. The split between

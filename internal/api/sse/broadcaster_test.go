@@ -265,8 +265,33 @@ func TestResourceType(t *testing.T) {
 	}
 }
 
+// recordedError captures what the broadcaster asked its ErrorWriter to write.
+// The real writer is internal/api's writeErrorCode, which this package cannot
+// import — internal/api imports it, which is the whole reason ErrorWriter is a
+// callback — so the concrete status for a code is asserted there
+// (TestWriteErrorCodeSSE001Is429) and what the broadcaster itself decides is
+// asserted here.
+type recordedError struct {
+	code   string
+	detail string
+}
+
+// recordingErrorWriter records the code and detail, and writes the status the
+// SSE001 registry entry documents, so the recorder observes a realistic
+// response rather than noopErrorWriter's blanket 500.
+func recordingErrorWriter(rec *recordedError) ErrorWriter {
+	return func(w http.ResponseWriter, _ *http.Request, code, detail string) {
+		rec.code = code
+		rec.detail = detail
+
+		http.Error(w, detail, http.StatusTooManyRequests)
+	}
+}
+
 func TestSSE_429OnConnectionLimit(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter, nil)
+	var recorded recordedError
+
+	b := NewBroadcaster(0, recordingErrorWriter(&recorded), nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -287,8 +312,21 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 	fw := &flushRecorder{ResponseRecorder: w}
 	b.ServeHTTP(fw, req)
 
-	// noopErrorWriter writes 500; the real error writer writes 429.
-	// We just verify the error writer was called (body contains the detail).
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want 429", w.Code)
+	}
+
+	// Retry-After is the broadcaster's own contribution — it sets the header
+	// before delegating to the writer — and is documented behaviour, so it is
+	// asserted rather than assumed.
+	if got := w.Header().Get("Retry-After"); got != "5" {
+		t.Errorf("Retry-After = %q, want %q", got, "5")
+	}
+
+	if recorded.code != "SSE001" {
+		t.Errorf("error code = %q, want SSE001", recorded.code)
+	}
+
 	if !strings.Contains(w.Body.String(), "too many SSE connections") {
 		t.Errorf("expected error about too many connections, got: %s", w.Body.String())
 	}
