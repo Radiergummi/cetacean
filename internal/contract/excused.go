@@ -12,12 +12,10 @@ var excusedUndocumented = map[string]string{
 	// internal/api/router.go's "SPA fallback (must be last)" registration.
 	"/": "serves the embedded SPA and /assets/*; not an API surface",
 
-	// The canonical URL is /-/sbom.cdx.json; router.go registers the mux
-	// pattern without the extension because the content-negotiation
-	// middleware strips a recognized .json/.html suffix before dispatch (see
-	// the comment directly above the registration in router.go). This is the
-	// same suffix-stripping every negotiated endpoint gets, not a mismatch:
-	// the spec's counterpart is excused in excusedUnregistered below.
+	// The canonical URL is /-/sbom.cdx.json; router.go registers the pattern
+	// without the extension because negotiate strips a recognized suffix
+	// before dispatch. Not a mismatch — the spec's counterpart is excused in
+	// excusedUnregistered below.
 	"GET /-/sbom.cdx": "canonical URL is /-/sbom.cdx.json; the negotiate " +
 		"middleware strips the .json suffix before dispatch, so the mux " +
 		"pattern omits it",
@@ -68,11 +66,9 @@ var excusedUnregistered = map[string]string{
 }
 
 // excusedUncovered holds routes no sweep in this package exercises, keyed by
-// Route.String(). Here rather than beside the other excuse lists because
-// `unused` fails a package variable nothing reads.
-//
-// gosec flags the "secrets" substring in the route keys; the values are excuse
-// reasons, not credentials.
+// Route.String(). It lives here rather than beside the other excuse lists
+// because `unused` fails a package variable nothing reads. gosec flags the
+// "secrets" substring in the keys; the values are excuses, not credentials.
 //
 //nolint:gosec // G101
 var excusedUncovered = map[string]string{
@@ -85,24 +81,18 @@ var excusedUncovered = map[string]string{
 	// SSE Accept header, and every sweep here asks for application/json, which
 	// returns immediately.
 
-	// Prometheus-backed: verified against source — each of these hard-errors
-	// (MTR001) when h.promClient or metricsProxy is nil, which it is in this
-	// world. GET /cluster, GET /cluster/capacity, GET /metrics/status and GET
-	// /stacks/summary also read h.promClient but degrade gracefully when it is
-	// nil, so they are genuine gaps below rather than excused here.
+	// Prometheus-backed: each hard-errors (MTR001) when h.promClient or
+	// metricsProxy is nil, which it is in this world. The four that read
+	// h.promClient and degrade gracefully are genuine gaps below, not excused.
 	"GET /cluster/metrics":       "needs a Prometheus; covered by the e2e harness's 503 case and deferred to phase two",
 	"GET /metrics":               "needs a Prometheus; covered by the e2e harness's 503 case and deferred to phase two",
 	"GET /metrics/labels":        "needs a Prometheus; covered by the e2e harness's 503 case and deferred to phase two",
 	"GET /metrics/labels/{name}": "needs a Prometheus; covered by the e2e harness's 503 case and deferred to phase two",
 
-	// Daemon-backed: verified against source — each reaches h.systemClient,
-	// h.pluginClient or h.dockerClient, all nil in this world (world.go calls
-	// api.NewHandlers with nil DockerSystemClient/DockerPluginClient/
-	// DockerLogStreamer), or, for POST /-/resync, the Resyncer interface,
-	// which world.go never sets — router.go does not even register that route
-	// here. The /plugins* handlers call their nil client with no nil check at
-	// all, so driving them in-process would panic the test binary rather than
-	// return an error.
+	// Daemon-backed: each reaches a Docker client world.go leaves nil, or, for
+	// POST /-/resync, a Resyncer it never sets — so router.go does not even
+	// register that route here. The /plugins* handlers call their nil client
+	// with no nil check, so driving them would panic the test binary.
 	"DELETE /plugins/{name}":         "reads the Docker daemon directly; covered by the e2e harness",
 	"GET /disk-usage":                "reads the Docker daemon directly; covered by the e2e harness",
 	"GET /plugins":                   "reads the Docker daemon directly; covered by the e2e harness",
@@ -120,11 +110,8 @@ var excusedUncovered = map[string]string{
 	"POST /plugins/{name}/enable":    "reads the Docker daemon directly; covered by the e2e harness",
 	"POST /plugins/{name}/upgrade":   "reads the Docker daemon directly; covered by the e2e harness",
 
-	// Write endpoints: mutate through h.systemClient, h.pluginClient, or the
-	// DockerWriteClient composite (serviceLifecycle/serviceSpec/
-	// serviceAttachment/nodeWriter/configWriter/secretWriter/resourceRemover) —
-	// all nil in this world (world.go calls api.NewHandlers with a nil
-	// DockerWriteClient).
+	// Write endpoints: every one mutates through h.systemClient, h.pluginClient
+	// or the DockerWriteClient composite, all of which world.go leaves nil.
 	"DELETE /configs/{id}":                  "mutates through the Docker daemon; covered by the e2e write lane",
 	"DELETE /networks/{id}":                 "mutates through the Docker daemon; covered by the e2e write lane",
 	"DELETE /nodes/{id}":                    "mutates through the Docker daemon; covered by the e2e write lane",
@@ -236,9 +223,7 @@ var excusedUncovered = map[string]string{
 }
 
 // knownTransportDivergences records places where REST and MCP disagree about
-// whether a resource is readable. Each is a defect on the campaign's list, not
-// an accepted behaviour — the entry exists so the invariant keeps guarding
-// every other combination while the disagreement stands.
-//
-// Keys are "<singular type> by <id|name>".
+// whether a resource is readable, keyed "<singular type> by <id|name>". Each is
+// a defect, not an accepted behaviour: the entry exists so the invariant keeps
+// guarding every other combination while the disagreement stands.
 var knownTransportDivergences = map[string]string{}

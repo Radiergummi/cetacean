@@ -25,15 +25,9 @@ type HistoryQuery struct {
 	Limit        int
 
 	// Types narrows to entries of any of these types, where Type narrows to
-	// exactly one. Empty means every type. Both may be set, in which case an
-	// entry has to satisfy both — only ever the intersection, which no caller
-	// asks for.
-	//
-	// It exists because a caller filtering by type *after* the read cannot have
-	// its copy bounded: List would have to return every candidate for the
-	// caller to reduce, which on a full ring is ten thousand entries copied
-	// under the read lock every Append contends with. Pushed down, the walk
-	// counts what matched and copies only what is returned.
+	// exactly one; empty means every type, and both set means the intersection.
+	// Pushed down rather than applied by the caller so the walk copies only
+	// what is returned, under the read lock every Append contends with.
 	Types []EventType
 
 	// Before bounds the result at the newer end: only entries at or before it.
@@ -43,14 +37,9 @@ type HistoryQuery struct {
 	Before time.Time
 
 	// After bounds the walk rather than the result: entries are visited
-	// newest-first, so the first one at or before it ends the scan. A caller
-	// asking for the last five minutes of a full ring would otherwise copy all
-	// ten thousand entries — under the read lock every Append contends with —
-	// and discard almost all of them. The bound is exclusive, matching the
-	// filter it replaced. Zero means unbounded.
-	//
-	// Named for the comparison rather than "since", which on this type already
-	// means the ID-based resume the SSE stream uses (History.Since).
+	// newest-first, so the first at or before it ends the scan, instead of
+	// copying the whole ring to discard it. Exclusive; zero means unbounded.
+	// Named for the comparison, since "since" here means History.Since.
 	After time.Time
 }
 
@@ -78,15 +67,10 @@ type indexRing struct {
 
 const indexRingSize = 64
 
-// maxListPrealloc bounds what List reserves up front.
-//
-// A caller that applies its own filters after the read passes the ring's whole
-// size as the limit — internal/mcp's get_events does, so that a narrow `types`
-// filter cannot come back empty and call itself complete. Most such reads are
-// also bounded by `After` and stop within a few entries, and reserving the
-// whole ring for them costs about a megabyte a call. A read that genuinely
-// walks the ring end to end still grows to fit; it just pays for the growth
-// instead of for the reservation.
+// maxListPrealloc bounds what List reserves up front. A caller filtering after
+// the read passes the ring's whole size as the limit, but is usually bounded by
+// `After` and stops within a few entries. A read that genuinely walks the ring
+// end to end still grows to fit; it pays for the growth, not the reservation.
 const maxListPrealloc = 512
 
 func (r *indexRing) push(idx int) {
@@ -134,17 +118,9 @@ func (h *History) Size() int {
 }
 
 // Oldest is the timestamp of the oldest entry the ring still holds, and so the
-// start of the only window any query over it can honestly answer for.
-//
-// The ring is built at startup and is not persisted, so after a restart it
-// begins at the moment the process came up; once it wraps it begins wherever
-// the oldest surviving entry does. Neither is otherwise visible in a result,
-// which is how a query covering twelve hours came back holding half an hour of
-// one service's churn and reported truncated:false — asserting completeness
-// over a window it never had. A caller comparing this against the `since` it
-// asked for sees the horizon immediately.
-//
-// Returns ok=false when nothing has been recorded yet.
+// start of the only window a query over it can honestly answer for: the ring
+// starts with the process and, once it wraps, begins at its oldest survivor.
+// Neither is otherwise visible in a result. ok=false when nothing is recorded.
 func (h *History) Oldest() (time.Time, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -261,19 +237,11 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 		limit = 50
 	}
 
-	// Fast path: when filtering by resource ID, use the per-resource index
-	// instead of scanning the entire ring buffer — but only when the index can
-	// answer the whole question.
-	//
-	// It holds the newest indexRingSize entries per resource, so it runs out in
-	// two different ways: a limit larger than the index, and a `BeforeID` cursor
-	// that pages off the end of it. Gating on the limit alone leaves the cursor
-	// broken and makes the behaviour depend on a number the caller picked — the
-	// Atom detail feeds page at 50, comfortably under the index size, and would
-	// still report a resource's history exhausted after 64 entries. So the
-	// index answers only when it can prove it is complete: either it holds
-	// every entry this resource ever had, or it filled the request outright.
-	// Anything else falls through to the scan below, which reads the main ring.
+	// Fast path: a resource-ID filter reads the per-resource index instead of
+	// scanning the ring — but only when the index can prove it answered the
+	// whole question, since it holds the newest indexRingSize entries and runs
+	// out both on a larger limit and on a cursor paging off its end. Anything
+	// else falls through to the scan below.
 	if q.ResourceID != "" {
 		if found, complete := h.listByResource(q, limit); complete {
 			return found
@@ -353,14 +321,9 @@ func (q HistoryQuery) matches(e HistoryEntry) bool {
 }
 
 // listByResource answers a query already known to name a resource, taking the
-// whole query rather than five of its fields so a field added to HistoryQuery
-// is honoured on both paths or on neither — a filter the indexed path silently
-// ignored would make one query mean two things.
-//
-// complete reports whether the answer can be trusted as the whole one. The
-// index is a fixed-size window, so a short result means either that the
-// resource genuinely has no more entries or that the window ran out — and only
-// the caller's fallback to a full scan can tell those apart.
+// whole query rather than five fields so a new one is honoured on both paths or
+// neither. complete says whether the answer is the whole one: the index is a
+// fixed window, so only the caller's fallback to a scan separates the cases.
 func (h *History) listByResource(
 	q HistoryQuery,
 	limit int,
