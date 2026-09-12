@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"gopkg.in/yaml.v3"
@@ -63,6 +65,22 @@ func HandleScalarJS(js []byte) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		bundle.serve(w, r)
 	}
+}
+
+// yamlDocument parses a spec into the JSON-shaped object both descriptions
+// are served from.
+func yamlDocument(raw []byte) (map[string]any, error) {
+	var parsed any
+	if err := yaml.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("not valid YAML: %w", err)
+	}
+
+	doc, ok := convertYAMLToJSON(parsed).(map[string]any)
+	if !ok {
+		return nil, errors.New("does not parse to an object")
+	}
+
+	return doc, nil
 }
 
 // convertYAMLToJSON recursively converts yaml.v3 map[string]any types to

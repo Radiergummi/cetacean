@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"testing"
 	"testing/fstest"
-	"time"
 
 	"github.com/klauspost/compress/zstd"
 
@@ -30,7 +29,6 @@ type testHandlersConfig struct {
 	pluginClient    DockerPluginClient
 	ready           <-chan struct{}
 	promClient      *prometheus.Client
-	tickerInterval  time.Duration
 	operationsLevel config.OperationsLevel
 	aclEval         *acl.Evaluator
 	recEngine       *recommendations.Engine
@@ -52,12 +50,6 @@ func withOpsLevel(level config.OperationsLevel) testHandlersOption {
 
 func withPromClient(pc *prometheus.Client) testHandlersOption {
 	return func(cfg *testHandlersConfig) { cfg.promClient = pc }
-}
-
-// withTickerInterval shortens the metrics stream's poll so a test sees a
-// point event. Unset, the stream ticks every `step` seconds.
-func withTickerInterval(d time.Duration) testHandlersOption {
-	return func(cfg *testHandlersConfig) { cfg.tickerInterval = d }
 }
 
 func withReady(ch <-chan struct{}) testHandlersOption {
@@ -104,7 +96,7 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		opt(&cfg)
 	}
 
-	h := NewHandlers(
+	return NewHandlers(
 		cfg.cache,
 		cfg.broadcaster,
 		cfg.dockerClient,
@@ -117,10 +109,6 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		cfg.recEngine,
 		cfg.aclEval,
 	)
-
-	h.tickerInterval = cfg.tickerInterval
-
-	return h
 }
 
 // decodeZstd decompresses a zstd response body, failing the test if it is

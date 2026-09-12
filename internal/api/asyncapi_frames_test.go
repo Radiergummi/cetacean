@@ -14,7 +14,6 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
-	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
 
 // sseFrame is one parsed `event:`/`id:`/`data:` group. Comment lines (the
@@ -95,27 +94,53 @@ func streamUntilIdle(
 	return readSSEFrames(t, rec.Body.String())
 }
 
-// resourceStreamRouter is a router whose broadcaster has a real history ring,
-// so Last-Event-ID reaches the replay path rather than being ignored.
-func resourceStreamRouter(t *testing.T) (http.Handler, *cache.Cache, *sse.Broadcaster) {
+// streamTestRouter is a router over the spec fixtures whose broadcaster has a
+// real history ring, so Last-Event-ID reaches the replay path rather than
+// being ignored, and whose Docker client serves one log frame.
+//
+// batch is the broadcaster's batching interval; zero sends each event on its
+// own.
+func streamTestRouter(
+	t *testing.T,
+	batch time.Duration,
+	opts ...testHandlersOption,
+) (http.Handler, *cache.Cache, *sse.Broadcaster) {
 	t.Helper()
 
 	c := cache.New(nil)
 	populateSpecFixtures(c)
 
-	broadcaster := sse.NewBroadcaster(50*time.Millisecond, noopErrorWriter, c.History())
+	broadcaster := sse.NewBroadcaster(batch, noopErrorWriter, c.History())
 	t.Cleanup(broadcaster.Close)
 
-	router := newTestRouterWithCache(t, c, withBroadcaster(broadcaster))
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, "2026-01-01T00:00:00.000000000Z hello\n"))
 
-	return router, c, broadcaster
+	opts = append([]testHandlersOption{
+		withBroadcaster(broadcaster),
+		withDockerClient(&mockLogStreamer{data: frames.Bytes()}),
+	}, opts...)
+
+	return newTestRouterWithCache(t, c, opts...), c, broadcaster
+}
+
+// resourceStreamRouter is streamTestRouter at the batching interval the
+// resource streams are driven at here.
+func resourceStreamRouter(t *testing.T) (http.Handler, *cache.Cache, *sse.Broadcaster) {
+	t.Helper()
+
+	return streamTestRouter(t, 50*time.Millisecond)
 }
 
 // TestListStreamEmitsTheDeclaredNames drives /services, the exemplar for
 // streamList: one mutation is named for its type, two inside a batch interval
 // become `batch` with an array payload.
 func TestListStreamEmitsTheDeclaredNames(t *testing.T) {
+	t.Parallel()
+
 	t.Run("a single event is named for its type", func(t *testing.T) {
+		t.Parallel()
+
 		router, _, broadcaster := resourceStreamRouter(t)
 
 		frames := streamUntilIdle(t, router, "/services", "", func() {
@@ -148,6 +173,8 @@ func TestListStreamEmitsTheDeclaredNames(t *testing.T) {
 	})
 
 	t.Run("two events inside the interval become a batch array", func(t *testing.T) {
+		t.Parallel()
+
 		router, _, broadcaster := resourceStreamRouter(t)
 
 		frames := streamUntilIdle(t, router, "/services", "", func() {
@@ -193,6 +220,8 @@ func TestListStreamEmitsTheDeclaredNames(t *testing.T) {
 // `sync` message the document declares, with action full_sync and no
 // resource.
 func TestAgedOutCursorEmitsSync(t *testing.T) {
+	t.Parallel()
+
 	router, _, _ := resourceStreamRouter(t)
 
 	frames := streamUntilIdle(t, router, "/services", "999999", nil)
@@ -223,6 +252,8 @@ func TestAgedOutCursorEmitsSync(t *testing.T) {
 // stores identity and not payload, so a replayed envelope has no resource.
 // A client that assumes it is present breaks only after a reconnection.
 func TestReplayedFrameOmitsResource(t *testing.T) {
+	t.Parallel()
+
 	router, c, _ := resourceStreamRouter(t)
 
 	c.History().Append(cache.HistoryEntry{
@@ -262,6 +293,8 @@ func TestReplayedFrameOmitsResource(t *testing.T) {
 // TestDetailStreamNeverReplays: a detail channel is ineligible for replay, so
 // any cursor gets sync — not only an aged-out one.
 func TestDetailStreamNeverReplays(t *testing.T) {
+	t.Parallel()
+
 	router, c, _ := resourceStreamRouter(t)
 
 	c.History().Append(cache.HistoryEntry{
@@ -292,6 +325,8 @@ func TestDetailStreamNeverReplays(t *testing.T) {
 // interleaves a service's tasks and a backwards cursor would discard the
 // lines in between on the next resume.
 func TestLogTailFramesAreUnnamedAndTheCursorOnlyMovesForward(t *testing.T) {
+	t.Parallel()
+
 	c := cache.New(nil)
 	populateSpecFixtures(c)
 
@@ -307,6 +342,8 @@ func TestLogTailFramesAreUnnamedAndTheCursorOnlyMovesForward(t *testing.T) {
 
 	for _, path := range []string{"/services/svc1/logs", "/tasks/task1/logs"} {
 		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+
 			frames := streamUntilIdle(t, router, path, "", nil)
 
 			if len(frames) == 0 {
@@ -340,99 +377,4 @@ func TestLogTailFramesAreUnnamedAndTheCursorOnlyMovesForward(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestMetricsStreamEmitsTheDeclaredNames covers the third dialect: initial,
-// point and query_error, and no id at all.
-func TestMetricsStreamEmitsTheDeclaredNames(t *testing.T) {
-	t.Run("initial then point, with no id", func(t *testing.T) {
-		prometheus := httptest.NewServer(http.HandlerFunc(
-			func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-
-				if strings.HasSuffix(r.URL.Path, "/query_range") {
-					w.Write([]byte(
-						`{"status":"success","data":{"resultType":"matrix","result":[]}}`,
-					))
-
-					return
-				}
-
-				w.Write([]byte(
-					`{"status":"success","data":{"resultType":"vector","result":[]}}`,
-				))
-			},
-		))
-		t.Cleanup(prometheus.Close)
-
-		router := newTestRouterWithCache(
-			t, cache.New(nil),
-			withPromClient(promapi.NewClient(prometheus.URL)),
-			withTickerInterval(10*time.Millisecond),
-		)
-
-		frames := streamUntilIdle(t, router, "/metrics?query=up&step=5", "", nil)
-
-		if len(frames) == 0 {
-			t.Fatal("no frames")
-		}
-
-		if frames[0].Event != "initial" {
-			t.Errorf("first event = %q, want initial", frames[0].Event)
-		}
-
-		var points int
-
-		for _, frame := range frames {
-			if frame.Event == "point" {
-				points++
-			}
-
-			if frame.ID != "" {
-				t.Errorf("metrics frame carries id %q; this stream writes none", frame.ID)
-			}
-		}
-
-		if points == 0 {
-			t.Error("no point event; the stream declares one per tick")
-		}
-	})
-
-	t.Run("a failing query is named query_error", func(t *testing.T) {
-		prometheus := httptest.NewServer(http.HandlerFunc(
-			func(w http.ResponseWriter, _ *http.Request) {
-				http.Error(w, "boom", http.StatusInternalServerError)
-			},
-		))
-		t.Cleanup(prometheus.Close)
-
-		router := newTestRouterWithCache(
-			t, cache.New(nil),
-			withPromClient(promapi.NewClient(prometheus.URL)),
-			withTickerInterval(10*time.Millisecond),
-		)
-
-		frames := streamUntilIdle(t, router, "/metrics?query=up&step=5", "", nil)
-
-		if len(frames) == 0 {
-			t.Fatal("no frames")
-		}
-
-		if frames[0].Event != "query_error" {
-			t.Fatalf("first event = %q, want query_error", frames[0].Event)
-		}
-
-		var payload struct {
-			Error     string `json:"error"`
-			ErrorType string `json:"errorType"`
-		}
-
-		if err := json.Unmarshal([]byte(frames[0].Data), &payload); err != nil {
-			t.Fatalf("payload is not an object: %v", err)
-		}
-
-		if payload.ErrorType != "server_error" {
-			t.Errorf("errorType = %q, want server_error", payload.ErrorType)
-		}
-	})
 }

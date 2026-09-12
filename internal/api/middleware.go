@@ -100,9 +100,12 @@ func discoveryLinks(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/-/") {
 			ctx := r.Context()
-			w.Header().Add("Link", fmt.Sprintf(`<%s>; rel="service-desc"`, absPath(ctx, "/api")))
 			// RFC 8631 does not limit service-desc to one link; the type
-			// parameter tells a client which description it is offered.
+			// parameter is what tells the two descriptions apart, so both
+			// carry one.
+			w.Header().Add("Link", fmt.Sprintf(
+				`<%s>; rel="service-desc"; type="application/json"`, absPath(ctx, "/api"),
+			))
 			w.Header().Add("Link", fmt.Sprintf(
 				`<%s>; rel="service-desc"; type="%s"`,
 				absPath(ctx, asyncAPIPath), asyncAPIMediaType,

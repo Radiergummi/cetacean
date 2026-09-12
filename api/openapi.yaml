@@ -14,7 +14,7 @@ info:
     Error responses follow RFC 9457 (Problem Details).
 
     Every response (except `/-/` meta endpoints) includes:
-    - `Link: </api>; rel="service-desc"` — pointer to this spec
+    - `Link: </api>; rel="service-desc"; type="application/json"` — pointer to this spec
     - `Link: </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0"` —
       the AsyncAPI description of the SSE streams
     - `Link: </api/context.jsonld>; rel="describedby"` — JSON-LD context

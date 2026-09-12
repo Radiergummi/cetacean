@@ -185,7 +185,7 @@ func TestDiscoveryLinks_AddedToAPIRoutes(t *testing.T) {
 		"api-catalog":           false,
 	}
 	for _, link := range links {
-		if link == `</api>; rel="service-desc"` {
+		if link == `</api>; rel="service-desc"; type="application/json"` {
 			found["service-desc"] = true
 		}
 		if link == `</api/asyncapi>; rel="service-desc"; type="`+asyncAPIMediaType+`"` {

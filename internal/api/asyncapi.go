@@ -3,9 +3,9 @@ package api
 import (
 	"maps"
 	"net/http"
+	"sync/atomic"
 
 	json "github.com/goccy/go-json"
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -17,55 +17,78 @@ const (
 	asyncAPIMediaType     = asyncAPIMediaTypeBase + ";version=3.0.0"
 )
 
+// asyncAPIRendering is the document as one origin sees it, under the key that
+// produced it.
+type asyncAPIRendering struct {
+	key  string
+	body *staticBody
+}
+
 // HandleAsyncAPI serves the AsyncAPI description of the SSE streams.
 //
 // One representation, served unconditionally, as HandleContext does for the
 // JSON-LD context: this document has exactly one form, so there is nothing to
 // negotiate and no SPA fallback to reach.
 //
-// The body is rebuilt per request because AsyncAPI 3.0 requires host on a
-// server object, so the document names the deployment's own origin. That
-// value comes from the validated origin, never from a raw forwarding header.
+// AsyncAPI 3.0 requires host on a server object, so the document names the
+// deployment's own origin — from the validated origin, never from a raw
+// forwarding header. The body is therefore a pure function of scheme, host and
+// base path, and one rendering is retained under that key so this document is
+// hashed and compressed once like every other served document. A single slot
+// rather than a map: origin falls back to r.Host when server.public_url is
+// unset, so a hostile client can vary the key without bound — a map would
+// grow, a slot degrades to rebuilding per request and no worse.
 func HandleAsyncAPI(specYAML []byte) http.HandlerFunc {
-	var parsed any
-	if err := yaml.Unmarshal(specYAML, &parsed); err != nil {
-		panic("asyncapi spec is not valid YAML: " + err.Error())
+	doc, err := yamlDocument(specYAML)
+	if err != nil {
+		panic("asyncapi spec " + err.Error())
 	}
 
-	doc, ok := convertYAMLToJSON(parsed).(map[string]any)
-	if !ok {
-		panic("asyncapi spec does not parse to an object")
-	}
+	var current atomic.Pointer[asyncAPIRendering]
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		scheme, host := origin(r)
+		base := BasePathFromContext(r.Context())
+		key := scheme + "\x00" + host + "\x00" + base
 
-		server := map[string]any{
-			"host":        host,
-			"protocol":    scheme,
-			"description": "This deployment.",
-		}
+		rendering := current.Load()
 
-		if base := BasePathFromContext(r.Context()); base != "" {
-			server["pathname"] = base
-		}
+		if rendering == nil || rendering.key != key {
+			body, err := renderAsyncAPI(doc, scheme, host, base)
+			if err != nil {
+				writeErrorCode(w, r, "API009", "failed to serialize response")
 
-		// Copied shallowly so concurrent requests cannot see each other's
-		// server block; nothing below servers is written.
-		described := make(map[string]any, len(doc))
-		maps.Copy(described, doc)
+				return
+			}
 
-		described["servers"] = map[string]any{"self": server}
-
-		body, err := json.Marshal(described)
-		if err != nil {
-			writeErrorCode(w, r, "API009", "failed to serialize response")
-
-			return
+			rendering = &asyncAPIRendering{key: key, body: newStaticBody(body)}
+			current.Store(rendering)
 		}
 
 		w.Header().Set("Content-Type", asyncAPIMediaType)
 		w.Header().Set("Cache-Control", "public, max-age=3600")
-		writeRawWithETag(w, r, body)
+		rendering.body.serve(w, r)
 	}
+}
+
+// renderAsyncAPI marshals doc with the server block one origin gets.
+func renderAsyncAPI(doc map[string]any, scheme, host, base string) ([]byte, error) {
+	server := map[string]any{
+		"host":        host,
+		"protocol":    scheme,
+		"description": "This deployment.",
+	}
+
+	if base != "" {
+		server["pathname"] = base
+	}
+
+	// Copied shallowly so a concurrent render cannot see this server block;
+	// nothing below servers is written.
+	described := make(map[string]any, len(doc))
+	maps.Copy(described, doc)
+
+	described["servers"] = map[string]any{"self": server}
+
+	return json.Marshal(described)
 }

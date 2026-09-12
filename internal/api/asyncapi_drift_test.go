@@ -1,20 +1,16 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/radiergummi/cetacean/internal/api/sse"
-	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // TestEveryStreamRouteIsAChannel probes every registered GET route with
@@ -30,20 +26,7 @@ import (
 // channel declaration is covered by TestAsyncAPIChannelsAnswerAsStreams,
 // which probes addresses rather than routes and supplies the query.
 func TestEveryStreamRouteIsAChannel(t *testing.T) {
-	c := cache.New(nil)
-	populateSpecFixtures(c)
-
-	broadcaster := sse.NewBroadcaster(0, noopErrorWriter, c.History())
-	t.Cleanup(broadcaster.Close)
-
-	var frames bytes.Buffer
-	frames.Write(buildFrame(1, "2026-01-01T00:00:00.000000000Z hello\n"))
-
-	router := newTestRouterWithCache(
-		t, c,
-		withBroadcaster(broadcaster),
-		withDockerClient(&mockLogStreamer{data: frames.Bytes()}),
-	)
+	router, _, _ := streamTestRouter(t, 0)
 
 	declared := make(map[string]bool)
 	for _, address := range asyncAPIAddresses(t) {
@@ -70,6 +53,8 @@ func TestEveryStreamRouteIsAChannel(t *testing.T) {
 		}
 
 		t.Run(template, func(t *testing.T) {
+			t.Parallel()
+
 			req := httptest.NewRequest(http.MethodGet, path, nil)
 			req.Header.Set("Accept", "text/event-stream")
 
@@ -111,18 +96,18 @@ func TestEveryStreamRouteIsAChannel(t *testing.T) {
 func TestAsyncAPIPerTypeMessagesMatchEventTypes(t *testing.T) {
 	want := eventTypeConstants(t)
 
-	messages, ok := loadAsyncAPIDoc(t)["components"].(map[string]any)
+	components, ok := loadAsyncAPIDoc(t)["components"].(map[string]any)
 	if !ok {
 		t.Fatal("the document declares no components")
 	}
 
-	declared, ok := messages["messages"].(map[string]any)
+	declared, ok := components["messages"].(map[string]any)
 	if !ok {
 		t.Fatal("the document declares no components.messages")
 	}
 
-	// The four messages that are not a resource type: a batch of them, the
-	// resync signal, and the three metrics frames plus the log line.
+	// The six messages that are not a resource type: a batch of them, the
+	// resync signal, the log line, and the three metrics frames.
 	notATypeName := map[string]bool{
 		"batch": true, "sync": true, "logLine": true,
 		"initial": true, "point": true, "queryError": true,
@@ -138,8 +123,8 @@ func TestAsyncAPIPerTypeMessagesMatchEventTypes(t *testing.T) {
 		got = append(got, name)
 	}
 
-	sort.Strings(got)
-	sort.Strings(want)
+	slices.Sort(got)
+	slices.Sort(want)
 
 	if !slices.Equal(got, want) {
 		t.Errorf(
@@ -151,23 +136,35 @@ func TestAsyncAPIPerTypeMessagesMatchEventTypes(t *testing.T) {
 	}
 }
 
-// eventTypeConstants reads the cache.EventType constant block out of
-// internal/cache/cache.go. EventSync is excluded: it is the resync signal,
-// not a resource type, and the document declares it as its own message.
+// eventTypeConstants reads the cache.EventType constants out of every file in
+// internal/cache, so a constant that moves between files is still found.
+// EventSync is excluded: it is the resync signal, not a resource type, and the
+// document declares it as its own message.
 func eventTypeConstants(t *testing.T) []string {
 	t.Helper()
 
-	const source = "../cache/cache.go"
+	const source = "../cache"
 
-	raw, err := os.ReadFile(source)
-	if err != nil {
-		t.Fatalf("read %s: %v", source, err)
+	sources, err := filepath.Glob(filepath.Join(source, "*.go"))
+	if err != nil || len(sources) == 0 {
+		t.Fatalf("glob %s: %v", source, err)
+	}
+
+	var declarations []byte
+
+	for _, name := range sources {
+		raw, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+
+		declarations = append(declarations, raw...)
 	}
 
 	// EventNode    EventType = "node"
 	pattern := regexp.MustCompile(`(?m)^\s*Event(\w+)\s+EventType\s*=\s*"([^"]+)"`)
 
-	matches := pattern.FindAllStringSubmatch(string(raw), -1)
+	matches := pattern.FindAllStringSubmatch(string(declarations), -1)
 	if len(matches) == 0 {
 		t.Fatalf(
 			"found no EventType constants in %s — the declaration moved and "+

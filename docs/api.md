@@ -699,7 +699,7 @@ Every response outside the `/-/` meta endpoints carries [RFC 8631](https://www.r
 headers:
 
 ```http
-Link: </api>; rel="service-desc", </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
+Link: </api>; rel="service-desc"; type="application/json", </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
 ```
 
 There are two `service-desc` links because there are two descriptions: the OpenAPI document at `/api` describes the

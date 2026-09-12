@@ -482,7 +482,6 @@ components:
       name: node
       title: Node event
       summary: A node appeared, changed or is gone.
-      contentType: application/json
       payload:
         $ref: "#/components/schemas/SSEEvent"
 
@@ -490,7 +489,6 @@ components:
       name: service
       title: Service event
       summary: A service appeared, changed or is gone.
-      contentType: application/json
       payload:
         $ref: "#/components/schemas/SSEEvent"
 
@@ -498,7 +496,6 @@ components:
       name: task
       title: Task event
       summary: A task appeared, changed or is gone.
-      contentType: application/json
       payload:
         $ref: "#/components/schemas/SSEEvent"
 
@@ -506,7 +503,6 @@ components:
       name: stack
       title: Stack event
       summary: A stack appeared, changed or is gone.
-      contentType: application/json
       payload:
         $ref: "#/components/schemas/SSEEvent"
 
@@ -514,7 +510,6 @@ components:
       name: config
       title: Config event
       summary: A config appeared, changed or is gone.
-      contentType: application/json
       payload:
         $ref: "#/components/schemas/SSEEvent"
 
@@ -523,7 +518,6 @@ components:
       title: Secret event
       summary: A secret appeared, changed or is gone.
       description: The `resource` never carries secret data.
-      contentType: application/json
       payload:
         $ref: "#/components/schemas/SSEEvent"
 
@@ -531,7 +525,6 @@ components:
       name: network
       title: Network event
       summary: A network appeared, changed or is gone.
-      contentType: application/json
       payload:
         $ref: "#/components/schemas/SSEEvent"
 
@@ -539,7 +532,6 @@ components:
       name: volume
       title: Volume event
       summary: A volume appeared, changed or is gone.
-      contentType: application/json
       payload:
         $ref: "#/components/schemas/SSEEvent"
 
@@ -551,7 +543,6 @@ components:
         The payload is an **array** of envelopes, not one envelope. A single
         event is written under its own type name instead; a client must handle
         both. The frame's `id` is the highest history id in the array.
-      contentType: application/json
       payload:
         type: array
         items:
@@ -567,7 +558,6 @@ components:
         channel, which is ineligible for replay. The frame's `id` is the
         current history count, so the next reconnect resumes from there. The
         payload carries no `@id`, no `@type`, an empty `id` and no `resource`.
-      contentType: application/json
       payload:
         type: object
         properties:
@@ -595,7 +585,6 @@ components:
         Log frames are unnamed: they carry `data:` and, when the line has a
         timestamp newer than the cursor, `id:`. An EventSource client receives
         them as `message`.
-      contentType: application/json
       payload:
         $ref: "#/components/schemas/LogLine"
 
@@ -603,7 +592,6 @@ components:
       name: initial
       title: Initial range
       summary: The full window, queried once when the stream opens.
-      contentType: application/json
       payload:
         $ref: "#/components/schemas/PrometheusResponse"
 
@@ -612,7 +600,6 @@ components:
       title: Instant value
       summary: One instant query result, appended at each tick.
       description: Append these to the window `initial` delivered.
-      contentType: application/json
       payload:
         $ref: "#/components/schemas/PrometheusResponse"
 
@@ -620,7 +607,6 @@ components:
       name: query_error
       title: Query failed
       summary: A query failed. The stream stays open and keeps ticking.
-      contentType: application/json
       payload:
         type: object
         required: [error, errorType]

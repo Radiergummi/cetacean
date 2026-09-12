@@ -86,10 +86,6 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 						Type:  "application/json",
 						Title: "OpenAPI description",
 					}, {
-						// The base type, without the version parameter:
-						// TestAPICatalogTargetsAnswerAsAdvertised compares a
-						// target's type against the response's, cut at the
-						// first ";".
 						Href:  link(asyncAPIPath),
 						Type:  asyncAPIMediaTypeBase,
 						Title: "AsyncAPI description of the event streams",
