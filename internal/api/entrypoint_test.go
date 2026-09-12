@@ -143,30 +143,36 @@ func TestRootRefusesATypeItCannotProduce(t *testing.T) {
 }
 
 // negotiate strips the suffix before routing, so one route covers all three;
-// the suffix goes back on the target, which names the representation.
-func TestIndexRedirectsToTheRootKeepingTheSuffix(t *testing.T) {
+// the root is served under it rather than redirected to, because the root has
+// no spelling that carries a suffix: "/.html" is a dot-segment path, which the
+// standard nginx and Apache hardening rule refuses. @id still names "/".
+func TestIndexServesTheEntrypoint(t *testing.T) {
 	router := newTestRouterWithConfig(t, nil)
 
-	for _, tt := range []struct{ path, want string }{
-		{"/index", "/"},
-		{"/index.html", "/.html"},
-		{"/index.json", "/.json"},
-	} {
-		t.Run(tt.path, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+	for _, path := range []string{"/index", "/index.json"} {
+		t.Run(path, func(t *testing.T) {
+			doc := fetchEntrypoint(t, router, path)
 
-			rec := httptest.NewRecorder()
-			router.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusMovedPermanently {
-				t.Fatalf("GET %s = %d, want 301", tt.path, rec.Code)
-			}
-
-			if got := rec.Header().Get("Location"); got != tt.want {
-				t.Errorf("GET %s Location = %q, want %q", tt.path, got, tt.want)
+			if got := doc["@id"]; got != "/" {
+				t.Errorf("GET %s @id = %v, want /", path, got)
 			}
 		})
 	}
+
+	t.Run("/index.html", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/index.html", nil)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /index.html = %d, want 200", rec.Code)
+		}
+
+		if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/html") {
+			t.Errorf("Content-Type = %q, want text/html", got)
+		}
+	})
 }
 
 // Under CETACEAN_BASE_PATH every link must carry the prefix, or it addresses a
@@ -186,12 +192,10 @@ func TestEntrypointIsAbsoluteUnderABasePath(t *testing.T) {
 		}
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/cetacean/index.json", nil)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	under := fetchEntrypoint(t, router, "/cetacean/index.json")
 
-	if got := rec.Header().Get("Location"); got != "/cetacean/.json" {
-		t.Errorf("Location = %q, want /cetacean/.json", got)
+	if got := under["@id"]; got != "/cetacean/" {
+		t.Errorf("/index.json @id = %v, want /cetacean/", got)
 	}
 }
 
@@ -234,5 +238,30 @@ func TestEntrypointETagIsStable(t *testing.T) {
 
 	if rec.Code != http.StatusNotModified {
 		t.Errorf("conditional GET = %d, want 304", rec.Code)
+	}
+}
+
+// /index is the root under the name static hosting taught clients to expect.
+// The redirect must not build a dot-segment path: "/.html" is what the standard
+// nginx and Apache hardening rule refuses, and a 301 is cached forever.
+func TestIndexNeverRedirectsToADotSegment(t *testing.T) {
+	router := newTestRouterWithConfig(t, nil)
+
+	for _, path := range []string{"/index", "/index.html", "/index.json"} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if location := rec.Header().Get("Location"); location != "" {
+				if location == "/.html" || location == "/.json" {
+					t.Errorf("%s redirects to %q, a dot-segment path", path, location)
+				}
+			}
+
+			if rec.Code >= 400 {
+				t.Errorf("%s answered %d", path, rec.Code)
+			}
+		})
 	}
 }

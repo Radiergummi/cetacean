@@ -873,18 +873,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET /{$}", contentNegotiated(HandleEntrypoint, feedHandlers{}, spa))
 
 	// The same resource under the name static hosting taught clients to
-	// expect. negotiate has already stripped any suffix, so one route covers
-	// /index, /index.html and /index.json — and the suffix goes back on the
-	// target, which would otherwise re-negotiate from a disagreeing Accept.
-	mux.HandleFunc("GET /index", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		http.Redirect(
-			w, r,
-			absPath(ctx, "/")+extensionFromContext(ctx),
-			http.StatusMovedPermanently,
-		)
-	})
+	// expect; negotiate has stripped any suffix, so one route covers all three
+	// spellings. Served rather than redirected: the root has no spelling that
+	// carries a suffix, and "/.html" is a path proxies are hardened to refuse.
+	mux.HandleFunc("GET /index", contentNegotiated(HandleEntrypoint, feedHandlers{}, spa))
 
 	// SPA fallback (must be last). It answers 404 and never 406: a file it has
 	// is one representation with nothing to negotiate, and a path it does not

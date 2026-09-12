@@ -55,6 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `/favicon.ico` and the dashboard's other static files are no longer refused with `406` when a client asks for them as an image
 - Deep links into a service whose name contains a dot, such as `/services/web.api/logs`, open instead of answering 404
 - A write to a path that does not exist answers `404`, instead of `200` and the dashboard's HTML
+- A CSV download of a filtered list is no longer cut to fifty rows by an `offset=0` the caller added for good measure. Only a limit truncates; an offset still says where to start
+- `/index.html` opens behind a hardened reverse proxy. It redirected to `/.html`, a dot-segment path nginx and Apache refuse by default, and the redirect was permanent; both spellings now serve the entry point directly
+- A transient hiccup in the five-minutely re-sync no longer reports the cluster as unreachable for the next five minutes. The stream ending is what marks a disconnection; a stalled cache still shows as stale
+- A resource deleted while a write held `If-Match` on it stays deleted, instead of reappearing in every listing until the next re-sync
+- A cluster operation run as an MCP task can no longer outlive the process. Detaching it from the request dropped its deadline too, so a wedged Docker call held its goroutine and its connection open forever
 - A write that loses a race answers `409` naming the conflict, instead of a bare `500 Docker Engine Error`
 - A `PATCH` to a service's resources, healthcheck, update policy, rollback policy, log driver or container config no longer discards an edit made just before it
 - `If-Match` can refuse the lost update it exists for: the condition is now evaluated against the engine rather than the cache

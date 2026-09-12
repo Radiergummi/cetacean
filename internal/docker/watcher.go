@@ -78,10 +78,20 @@ type Watcher struct {
 	// has just exited. See scheduleSettle.
 	settleDelay time.Duration
 
+	// syncInterval is how often the event loop re-reads the whole cluster.
+	syncInterval time.Duration
+
 	// settles tracks the re-reads still outstanding, so a test can wait for
 	// them instead of sleeping and production can be sure they are not
 	// silently dropped.
 	settles sync.WaitGroup
+
+	// refreshes carries a one-resource re-read to the event loop, which applies
+	// every other write. See Refresh.
+	refreshes chan refreshRequest
+
+	// loopRunning reports whether the event loop is reading refreshes.
+	loopRunning atomic.Bool
 
 	// Whether the watcher is still tracking the cluster. See Liveness.
 	connected atomic.Bool
@@ -112,6 +122,8 @@ func NewWatcher(client DockerClient, store Store, snapshotPath string) *Watcher 
 		ready:        make(chan struct{}),
 		snapshotPath: snapshotPath,
 		settleDelay:  defaultSettleDelay,
+		syncInterval: defaultSyncInterval,
+		refreshes:    make(chan refreshRequest),
 	}
 }
 
@@ -167,9 +179,10 @@ func (w *Watcher) writeSnapshot() {
 	}
 }
 
-// fullSync re-reads the cluster on the watcher's own schedule — at startup, on
-// reconnect, and on the five-minutely tick inside watchEvents — so its outcome
-// speaks for whether the engine is reachable at all.
+// fullSync re-reads the cluster where no stream is yet proven — at startup and
+// on reconnect — so its outcome speaks for whether the engine is reachable at
+// all. The periodic tick inside watchEvents runs beside a live stream and does
+// not.
 func (w *Watcher) fullSync(ctx context.Context) error {
 	return w.sync(ctx, true)
 }
@@ -246,6 +259,10 @@ const (
 	// five-minute re-sync.
 	defaultSettleDelay = 750 * time.Millisecond
 
+	// defaultSyncInterval is how often the event loop re-reads the whole
+	// cluster, catching anything the stream never announced.
+	defaultSyncInterval = 5 * time.Minute
+
 	// settleAttempts bounds how many times a task is re-read while its record
 	// still lags. One read is right almost always and wrong exactly when it
 	// matters: a loaded manager that has not reconciled within the first
@@ -295,6 +312,9 @@ func isContainerDeath(action events.Action) bool {
 func (w *Watcher) watchEvents(ctx context.Context) {
 	msgCh, errCh := w.client.Events(ctx)
 
+	w.loopRunning.Store(true)
+	defer w.loopRunning.Store(false)
+
 	// Only the disconnection: Events returns its channels before the request
 	// behind them is made, so fullSync's success is what proves reachability.
 	defer w.setConnected(false)
@@ -306,7 +326,7 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 	// Periodic re-sync runs inside the select loop so it is serialized
 	// with event processing — this prevents a concurrent ReplaceAll from
 	// re-inserting resources that were just deleted by an incremental event.
-	syncTicker := time.NewTicker(5 * time.Minute)
+	syncTicker := time.NewTicker(w.syncInterval)
 	defer syncTicker.Stop()
 
 	for {
@@ -357,6 +377,8 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 				pending = make(map[eventKey]coalesced)
 				w.processBatch(ctx, batch)
 			}
+		case req := <-w.refreshes:
+			req.done <- w.refreshNow(ctx, req.kind, req.id)
 		case <-syncTicker.C:
 			// Flush pending events before the full sync so we don't lose them.
 			if timer != nil {
@@ -369,7 +391,12 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 				w.processBatch(ctx, batch)
 			}
 			slog.Info("periodic full re-sync")
-			if err := w.fullSync(ctx); err == nil {
+
+			// Not a connection check: this runs beside a live stream, so a
+			// failure here is not a disconnection — the stream ending is.
+			// lastSync still stops advancing, which is what reports a cache
+			// that has gone stale.
+			if err := w.sync(ctx, false); err == nil {
 				w.writeSnapshot()
 			}
 		}
@@ -645,15 +672,50 @@ func (w *Watcher) apply(resource any) {
 	}
 }
 
+// refreshRequest asks the event loop to re-read one resource on its behalf.
+type refreshRequest struct {
+	kind string
+	id   string
+	done chan error
+}
+
 // Refresh re-reads one resource from the engine and applies it to the cache,
 // so a caller that must not act on a stale record can make that record current
 // without waiting for the event stream. A resource the engine no longer has is
 // dropped, which is the same answer the event stream would eventually give.
 //
+// The work runs on the event loop, which applies every other write: inspecting
+// here and applying from the caller's goroutine lets a remove processed in
+// between be undone, putting a deleted resource back into every listing until
+// the next re-sync. With no loop running there is nothing to serialize
+// against, and waiting for one would stall the write this refresh precedes.
+func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
+	if !w.loopRunning.Load() {
+		return w.refreshNow(ctx, kind, id)
+	}
+
+	done := make(chan error, 1)
+
+	select {
+	case w.refreshes <- refreshRequest{kind: kind, id: id, done: done}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// refreshNow is Refresh's work, on whichever goroutine is entitled to apply it.
+//
 // Unlike the event-driven path, an inspect failure is returned rather than
 // logged: the caller asked precisely because it cannot tolerate a stale
 // answer, so it has to be told the refresh did not happen.
-func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
+func (w *Watcher) refreshNow(ctx context.Context, kind, id string) error {
 	resource, err := w.client.Inspect(ctx, events.Type(kind), id)
 	if err != nil {
 		if cerrdefs.IsNotFound(err) {

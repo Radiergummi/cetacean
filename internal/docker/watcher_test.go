@@ -37,6 +37,8 @@ type mockClient struct {
 	errCh    chan error
 
 	listErrors map[string]error // resource name -> error
+
+	fullSyncs atomic.Int64
 }
 
 func newMockClient() *mockClient {
@@ -54,6 +56,8 @@ func (m *mockClient) setNodes(nodes []swarm.Node) {
 }
 
 func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
+	m.fullSyncs.Add(1)
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var data cache.FullSyncData

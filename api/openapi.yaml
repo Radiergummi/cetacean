@@ -763,17 +763,18 @@ paths:
       tags: [Documentation]
       summary: Web API entry point (alias)
       description: |
-        Redirects to `/`, keeping any `.json` or `.html` suffix: the suffix is
-        the only thing naming the representation, so a target without it would
-        be re-negotiated from an `Accept` header that may disagree.
+        The entry point under the name static hosting taught clients to expect.
+        Content-negotiated exactly as `/` is, and `@id` still names `/`, so the
+        two spellings share one identity. Served rather than redirected: the
+        root has no spelling that carries a suffix, and the `/.html` a redirect
+        would have to name is a path proxies are commonly hardened to refuse.
       responses:
-        "301":
-          description: Moved permanently to `/`
-          headers:
-            Location:
+        "200":
+          description: Entry point
+          content:
+            application/json:
               schema:
-                type: string
-                example: /.json
+                type: object
 
   /api:
     get:

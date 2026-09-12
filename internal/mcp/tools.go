@@ -8,6 +8,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -248,7 +249,10 @@ func (s *Server) registerTools() {
 				// keeps its live context, so a disconnecting client still
 				// cancels the work it started.
 				if req.Params.Task != nil {
-					ctx = context.WithoutCancel(ctx)
+					var release context.CancelFunc
+
+					ctx, release = detachTaskContext(ctx, s.detachedTaskBudget())
+					defer release()
 				}
 
 				ctx, annotations := withResultAnnotations(ctx)
@@ -842,4 +846,31 @@ func parseNodeRole(s string) (swarm.NodeRole, error) {
 	default:
 		return "", fmt.Errorf("invalid role %q (expected worker/manager)", s)
 	}
+}
+
+// detachTaskContext frees a task-augmented call from the request context and
+// bounds what it frees: WithoutCancel drops the deadline along with the
+// cancellation, so a Docker call that hangs would hold its goroutine and its
+// connection for the life of the process, past shutdown's drain.
+func detachTaskContext(
+	ctx context.Context,
+	budget time.Duration,
+) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), budget)
+}
+
+// detachedTaskBudget is how long detached work may run. A task's result is
+// discarded once its retention elapses, so work outliving that serves nobody.
+// With no retention configured, the longest legitimate step is a service
+// convergence, and the budget has to cover the mutation preceding it too.
+func (s *Server) detachedTaskBudget() time.Duration {
+	if s.config.MaxTaskTTL > 0 {
+		return s.config.MaxTaskTTL
+	}
+
+	if s.config.TaskTTL > 0 {
+		return s.config.TaskTTL
+	}
+
+	return 2 * cluster.ConvergenceTimeout
 }
