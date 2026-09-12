@@ -41,9 +41,11 @@ go.work.sum
 
 # Design docs (local-only). Plans are ephemeral working documents: they are
 # written into docs/plans/, and the second rule catches one written beside the
-# design it implements, which is where they used to land.
+# design it implements, which is where they used to land. docs/superpowers/ is
+# the directory before that one; a design worth keeping moves to docs/specs/.
 docs/plans/
 docs/specs/*-plan.md
+docs/superpowers/
 docs/frontend-overhaul.md
 docs/task-state-timeline-design.md
 docs/task-state-timeline-plan.md
