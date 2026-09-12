@@ -1,0 +1,734 @@
+asyncapi: 3.0.0
+
+info:
+  title: Cetacean streams
+  version: 1.0.0
+  description: |
+    Every Server-Sent Events stream Cetacean serves.
+
+    A stream is opened by sending `Accept: text/event-stream` to the channel's
+    address; the same address answers JSON, HTML and the feed formats under a
+    different `Accept`, which is what `/api` describes. This document describes
+    only the streaming representation.
+
+    Three cursor dialects appear below, and all three reach a client as
+    `Last-Event-ID`:
+
+    - The sixteen resource channels and `/events` write a monotonic history id.
+      Reconnecting with one replays the events in between from a 10,000-entry
+      ring. A cursor the ring no longer holds gets a `sync` message instead,
+      and so does every detail channel, always — they are ineligible for replay
+      because a cross-resource matcher cannot be reconstructed from history.
+    - The two log channels write an RFC 3339 timestamp, and only ever move it
+      forward: Docker interleaves a service's tasks, so a line can arrive
+      carrying an older timestamp than one already sent, and a cursor that
+      followed arrival order would discard everything in between on the next
+      resume. The cursor narrows the backlog Docker replays on connect; it
+      never filters live output.
+    - `/metrics` writes no id at all. There is nothing to resume.
+
+    A replayed event carries no `resource`: replay reads the change history,
+    which stores identity and not payload. A client that assumes `resource` is
+    present breaks only after a reconnection.
+  license:
+    name: MIT
+    url: https://github.com/Radiergummi/cetacean/blob/main/LICENSE
+  externalDocs:
+    description: REST API reference
+    url: https://cetacean.mazetti.me/api
+
+defaultContentType: application/json
+
+servers:
+  self:
+    host: localhost:9000
+    protocol: https
+    description: |
+      This deployment. The served document names the origin the request
+      arrived on; the file in the repository names a placeholder.
+
+channels:
+  nodes:
+    address: /nodes
+    title: Node list stream
+    description: Every node event in the cluster.
+    messages:
+      node:
+        $ref: "#/components/messages/node"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: ring
+
+  nodeDetail:
+    address: /nodes/{id}
+    title: Node detail stream
+    description: One node, plus the tasks placed on it.
+    parameters:
+      id:
+        description: Node ID.
+    messages:
+      node:
+        $ref: "#/components/messages/node"
+      task:
+        $ref: "#/components/messages/task"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: sync-only
+
+  services:
+    address: /services
+    title: Service list stream
+    description: Every service event in the cluster.
+    messages:
+      service:
+        $ref: "#/components/messages/service"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: ring
+
+  serviceDetail:
+    address: /services/{id}
+    title: Service detail stream
+    description: One service, plus its tasks.
+    parameters:
+      id:
+        description: Service ID.
+    messages:
+      service:
+        $ref: "#/components/messages/service"
+      task:
+        $ref: "#/components/messages/task"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: sync-only
+
+  tasks:
+    address: /tasks
+    title: Task list stream
+    description: Every task event in the cluster.
+    messages:
+      task:
+        $ref: "#/components/messages/task"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: ring
+
+  taskDetail:
+    address: /tasks/{id}
+    title: Task detail stream
+    description: One task.
+    parameters:
+      id:
+        description: Task ID.
+    messages:
+      task:
+        $ref: "#/components/messages/task"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: sync-only
+
+  stacks:
+    address: /stacks
+    title: Stack list stream
+    description: Every stack event in the cluster.
+    messages:
+      stack:
+        $ref: "#/components/messages/stack"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: ring
+
+  stackDetail:
+    address: /stacks/{name}
+    title: Stack detail stream
+    description: |
+      The members of one stack: its services, their tasks, and the configs,
+      secrets, networks and volumes they use. The stack itself is a derived
+      concept with no events of its own, so no `stack` message appears here.
+    parameters:
+      name:
+        description: Stack namespace, from the com.docker.stack.namespace label.
+    messages:
+      service:
+        $ref: "#/components/messages/service"
+      task:
+        $ref: "#/components/messages/task"
+      config:
+        $ref: "#/components/messages/config"
+      secret:
+        $ref: "#/components/messages/secret"
+      network:
+        $ref: "#/components/messages/network"
+      volume:
+        $ref: "#/components/messages/volume"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: sync-only
+
+  configs:
+    address: /configs
+    title: Config list stream
+    description: Every config event in the cluster.
+    messages:
+      config:
+        $ref: "#/components/messages/config"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: ring
+
+  configDetail:
+    address: /configs/{id}
+    title: Config detail stream
+    description: One config.
+    parameters:
+      id:
+        description: Config ID.
+    messages:
+      config:
+        $ref: "#/components/messages/config"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: sync-only
+
+  secrets:
+    address: /secrets
+    title: Secret list stream
+    description: |
+      Every secret event in the cluster. Secret data is cleared before
+      serialization and never appears on this channel.
+    messages:
+      secret:
+        $ref: "#/components/messages/secret"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: ring
+
+  secretDetail:
+    address: /secrets/{id}
+    title: Secret detail stream
+    description: One secret, without its data.
+    parameters:
+      id:
+        description: Secret ID.
+    messages:
+      secret:
+        $ref: "#/components/messages/secret"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: sync-only
+
+  networks:
+    address: /networks
+    title: Network list stream
+    description: Every network event in the cluster.
+    messages:
+      network:
+        $ref: "#/components/messages/network"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: ring
+
+  networkDetail:
+    address: /networks/{id}
+    title: Network detail stream
+    description: One network.
+    parameters:
+      id:
+        description: Network ID.
+    messages:
+      network:
+        $ref: "#/components/messages/network"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: sync-only
+
+  volumes:
+    address: /volumes
+    title: Volume list stream
+    description: Every volume event in the cluster.
+    messages:
+      volume:
+        $ref: "#/components/messages/volume"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: ring
+
+  volumeDetail:
+    address: /volumes/{name}
+    title: Volume detail stream
+    description: One volume. Volumes are keyed by name, not by ID.
+    parameters:
+      name:
+        description: Volume name.
+    messages:
+      volume:
+        $ref: "#/components/messages/volume"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: sync-only
+
+  events:
+    address: /events
+    title: Global event stream
+    description: |
+      Every resource change in one stream. `?types=` narrows it to a
+      comma-separated list of event type names; `sync` always passes the
+      filter.
+    messages:
+      node:
+        $ref: "#/components/messages/node"
+      service:
+        $ref: "#/components/messages/service"
+      task:
+        $ref: "#/components/messages/task"
+      stack:
+        $ref: "#/components/messages/stack"
+      config:
+        $ref: "#/components/messages/config"
+      secret:
+        $ref: "#/components/messages/secret"
+      network:
+        $ref: "#/components/messages/network"
+      volume:
+        $ref: "#/components/messages/volume"
+      batch:
+        $ref: "#/components/messages/batch"
+      sync:
+        $ref: "#/components/messages/sync"
+    x-cetacean-cursor: history-id
+    x-cetacean-replay: ring
+
+  serviceLogs:
+    address: /services/{id}/logs
+    title: Service log tail
+    description: |
+      Live log output for every task of one service. Frames are unnamed — an
+      EventSource client receives them as `message`.
+    parameters:
+      id:
+        description: Service ID.
+    messages:
+      logLine:
+        $ref: "#/components/messages/logLine"
+    x-cetacean-cursor: rfc3339-forward-only
+    x-cetacean-replay: backlog
+
+  taskLogs:
+    address: /tasks/{id}/logs
+    title: Task log tail
+    description: |
+      Live log output for one task. Frames are unnamed — an EventSource client
+      receives them as `message`.
+    parameters:
+      id:
+        description: Task ID.
+    messages:
+      logLine:
+        $ref: "#/components/messages/logLine"
+    x-cetacean-cursor: rfc3339-forward-only
+    x-cetacean-replay: backlog
+
+  metrics:
+    address: /metrics
+    title: Metrics stream
+    description: |
+      A Prometheus query, re-run on a timer. `query` is required; `step`
+      (5-300 seconds, default 15) sets the tick interval and `range` (seconds,
+      default 3600) the width of the initial window. No `id` is written, so
+      there is nothing to resume.
+    messages:
+      initial:
+        $ref: "#/components/messages/initial"
+      point:
+        $ref: "#/components/messages/point"
+      queryError:
+        $ref: "#/components/messages/queryError"
+    x-cetacean-cursor: none
+    x-cetacean-replay: none
+
+operations:
+  sendNodes:
+    action: send
+    channel:
+      $ref: "#/channels/nodes"
+  sendNodeDetail:
+    action: send
+    channel:
+      $ref: "#/channels/nodeDetail"
+  sendServices:
+    action: send
+    channel:
+      $ref: "#/channels/services"
+  sendServiceDetail:
+    action: send
+    channel:
+      $ref: "#/channels/serviceDetail"
+  sendTasks:
+    action: send
+    channel:
+      $ref: "#/channels/tasks"
+  sendTaskDetail:
+    action: send
+    channel:
+      $ref: "#/channels/taskDetail"
+  sendStacks:
+    action: send
+    channel:
+      $ref: "#/channels/stacks"
+  sendStackDetail:
+    action: send
+    channel:
+      $ref: "#/channels/stackDetail"
+  sendConfigs:
+    action: send
+    channel:
+      $ref: "#/channels/configs"
+  sendConfigDetail:
+    action: send
+    channel:
+      $ref: "#/channels/configDetail"
+  sendSecrets:
+    action: send
+    channel:
+      $ref: "#/channels/secrets"
+  sendSecretDetail:
+    action: send
+    channel:
+      $ref: "#/channels/secretDetail"
+  sendNetworks:
+    action: send
+    channel:
+      $ref: "#/channels/networks"
+  sendNetworkDetail:
+    action: send
+    channel:
+      $ref: "#/channels/networkDetail"
+  sendVolumes:
+    action: send
+    channel:
+      $ref: "#/channels/volumes"
+  sendVolumeDetail:
+    action: send
+    channel:
+      $ref: "#/channels/volumeDetail"
+  sendEvents:
+    action: send
+    channel:
+      $ref: "#/channels/events"
+  sendServiceLogs:
+    action: send
+    channel:
+      $ref: "#/channels/serviceLogs"
+  sendTaskLogs:
+    action: send
+    channel:
+      $ref: "#/channels/taskLogs"
+  sendMetrics:
+    action: send
+    channel:
+      $ref: "#/channels/metrics"
+
+components:
+  messages:
+    node:
+      name: node
+      title: Node event
+      summary: A node appeared, changed or is gone.
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SSEEvent"
+
+    service:
+      name: service
+      title: Service event
+      summary: A service appeared, changed or is gone.
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SSEEvent"
+
+    task:
+      name: task
+      title: Task event
+      summary: A task appeared, changed or is gone.
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SSEEvent"
+
+    stack:
+      name: stack
+      title: Stack event
+      summary: A stack appeared, changed or is gone.
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SSEEvent"
+
+    config:
+      name: config
+      title: Config event
+      summary: A config appeared, changed or is gone.
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SSEEvent"
+
+    secret:
+      name: secret
+      title: Secret event
+      summary: A secret appeared, changed or is gone.
+      description: The `resource` never carries secret data.
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SSEEvent"
+
+    network:
+      name: network
+      title: Network event
+      summary: A network appeared, changed or is gone.
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SSEEvent"
+
+    volume:
+      name: volume
+      title: Volume event
+      summary: A volume appeared, changed or is gone.
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SSEEvent"
+
+    batch:
+      name: batch
+      title: Batched events
+      summary: Two or more events that fell inside one batch interval.
+      description: |
+        The payload is an **array** of envelopes, not one envelope. A single
+        event is written under its own type name instead; a client must handle
+        both. The frame's `id` is the highest history id in the array.
+      contentType: application/json
+      payload:
+        type: array
+        items:
+          $ref: "#/components/schemas/SSEEvent"
+
+    sync:
+      name: sync
+      title: Resynchronize
+      summary: The stream could not be replayed from your cursor. Refetch.
+      description: |
+        Sent when a reconnecting client's `Last-Event-ID` is older than the
+        change-history ring still holds, and unconditionally on every detail
+        channel, which is ineligible for replay. The frame's `id` is the
+        current history count, so the next reconnect resumes from there. The
+        payload carries no `@id`, no `@type`, an empty `id` and no `resource`.
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: sync
+          action:
+            type: string
+            const: full_sync
+          id:
+            type: string
+            const: ""
+      examples:
+        - name: afterAnAgedOutCursor
+          payload:
+            type: sync
+            action: full_sync
+            id: ""
+
+    logLine:
+      name: logLine
+      title: Log line
+      summary: One line of container output.
+      description: |
+        Log frames are unnamed: they carry `data:` and, when the line has a
+        timestamp newer than the cursor, `id:`. An EventSource client receives
+        them as `message`.
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/LogLine"
+
+    initial:
+      name: initial
+      title: Initial range
+      summary: The full window, queried once when the stream opens.
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/PrometheusResponse"
+
+    point:
+      name: point
+      title: Instant value
+      summary: One instant query result, appended at each tick.
+      description: Append these to the window `initial` delivered.
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/PrometheusResponse"
+
+    queryError:
+      name: query_error
+      title: Query failed
+      summary: A query failed. The stream stays open and keeps ticking.
+      contentType: application/json
+      payload:
+        type: object
+        required: [error, errorType]
+        properties:
+          error:
+            type: string
+            description: The failure, as reported by the Prometheus client.
+          errorType:
+            type: string
+            const: server_error
+      examples:
+        - name: prometheusUnreachable
+          payload:
+            error: "prometheus request failed: connection refused"
+            errorType: server_error
+
+  schemas:
+    # Copied from api/openapi.yaml#/components/schemas/SSEEvent and held to it
+    # by TestAsyncAPISchemasMatchOpenAPI. A $ref cannot be used: the correct
+    # spelling differs between the file and the served document.
+    SSEEvent:
+      type: object
+      description: |
+        JSON payload of an SSE event. Single events have `event: <type>`,
+        batched events have `event: batch` with an array of these objects.
+      properties:
+        "@id":
+          type: string
+          description: Canonical resource path
+        "@type":
+          type: string
+          description: Resource type (Node, Service, Task, etc.)
+        type:
+          type: string
+          description: Event type string (node, service, task, etc.)
+        action:
+          type: string
+          enum: [create, update, remove, ref_changed, full_sync]
+          description: >-
+            Event action. `create` means the resource appeared, `update` that
+            an existing one changed, `remove` that it is gone, and
+            `ref_changed` that a resource this one cross-references changed.
+            `full_sync` accompanies a `sync` event and asks the client to
+            refetch, because the stream could not be replayed from its cursor.
+        id:
+          type: string
+          description: Resource ID
+        resource:
+          type: object
+          description: The full resource object (type varies by event type)
+      example:
+        "@id": /services/r8m2x5nk3p7q
+        "@type": Service
+        type: service
+        action: update
+        id: r8m2x5nk3p7q
+        resource:
+          ID: r8m2x5nk3p7q
+          Version: { Index: 157 }
+          Spec:
+            Name: webapp
+            TaskTemplate:
+              ContainerSpec: { Image: "nginx:1.28@sha256:def456..." }
+
+    # Copied from api/openapi.yaml#/components/schemas/LogLine.
+    LogLine:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          description: RFC 3339 Nano timestamp
+        message:
+          type: string
+        stream:
+          type: string
+          enum: [stdout, stderr]
+        attrs:
+          type: object
+          additionalProperties:
+            type: string
+          description: Docker log attributes (e.g. task ID)
+      example:
+        timestamp: "2026-04-13T08:12:34.123456789Z"
+        message: "172.18.0.1 - - [13/Apr/2026:08:12:34 +0000] \"GET / HTTP/1.1\" 200 612"
+        stream: stdout
+        attrs: { "com.docker.swarm.task.id": tsk_abc123def456 }
+
+    # The /metrics stream forwards Prometheus' own response bodies unchanged.
+    # This is the first schema for them anywhere; OpenAPI describes the proxy
+    # at /metrics as an opaque object.
+    PrometheusResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+        data:
+          type: object
+          properties:
+            resultType:
+              type: string
+              enum: [matrix, vector, scalar, string]
+            result:
+              type: array
+              items:
+                type: object
+        errorType:
+          type: string
+        error:
+          type: string
