@@ -223,6 +223,7 @@ type Handlers struct {
 	resourceRemover     ResourceRemover
 	pluginClient        DockerPluginClient
 	ready               <-chan struct{}
+	liveness            LivenessReporter
 	promClient          *prometheus.Client
 	operationsLevel     config.OperationsLevel
 	recEngine           *recommendations.Engine

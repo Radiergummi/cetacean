@@ -6,6 +6,7 @@ import (
 	"net/http/pprof"
 	"net/netip"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -37,6 +38,12 @@ type ResourceRefresher interface {
 	Refresh(ctx context.Context, kind, id string) error
 }
 
+// LivenessReporter answers whether the cache is still being kept current.
+// Backed by the watcher's Liveness method, decoupled like Resyncer.
+type LivenessReporter interface {
+	Liveness() (connected bool, lastSync time.Time)
+}
+
 // RouterConfig holds all dependencies and options for NewRouter.
 type RouterConfig struct {
 	Handlers          *Handlers
@@ -59,6 +66,9 @@ type RouterConfig struct {
 
 	TrustedProxies []netip.Prefix
 	Resyncer       Resyncer
+
+	// Liveness backs the watcher block on /-/health.
+	Liveness LivenessReporter
 
 	// Refresher makes one resource current before its If-Match precondition is
 	// evaluated. Leaving it nil evaluates against the cache as it stands, which
@@ -100,6 +110,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	h := cfg.Handlers
 	h.refresher = cfg.Refresher
+	h.liveness = cfg.Liveness
 	b := cfg.Broadcaster
 	metricsProxy := cfg.MetricsProxy
 	spa := cfg.SPA

@@ -487,6 +487,7 @@ func main() {
 		TLSEnabled:         tlsCfg.Enabled(),
 		TrustedProxies:     cfg.TrustedProxies,
 		Resyncer:           watcher,
+		Liveness:           watcher,
 		Refresher:          watcher,
 		MCPHandler:         mcpHandler,
 		OAuthRoutes:        oauthRoutes,

@@ -113,7 +113,9 @@ paths:
       operationId: getHealth
       tags: [Meta]
       summary: Health check
-      description: Always returns 200 with version info. No content negotiation.
+      description: |
+        Always returns 200 with version info and, when a watcher is attached, whether the
+        cache is still being kept current. No content negotiation.
       security: []
       responses:
         "200":
@@ -136,12 +138,34 @@ paths:
                     type: integer
                     description: Configured write operations level (0=read-only, 1=operational, 2=configuration, 3=impactful)
                     example: 1
+                  watcher:
+                    type: object
+                    description: |
+                      Whether the cache behind every other endpoint is still being kept current.
+                      When the Docker connection fails, Cetacean keeps serving the state it last
+                      read and readiness keeps passing — this is what says the data has stopped
+                      moving. Absent when no watcher is attached.
+                    properties:
+                      connected:
+                        type: boolean
+                        description: Whether the Docker event stream is established.
+                      lastSyncAt:
+                        type: string
+                        format: date-time
+                        description: When a full sync last reached the engine. Absent before the first one succeeds.
+                      lastSyncAgeSeconds:
+                        type: number
+                        description: Seconds since that sync. Compare against the five-minute re-sync interval.
               example:
                 status: ok
                 version: 0.11.0
                 commit: 607a5c7
                 buildDate: "2025-03-15T10:00:00Z"
                 operationsLevel: 1
+                watcher:
+                  connected: true
+                  lastSyncAt: "2025-03-15T10:00:00Z"
+                  lastSyncAgeSeconds: 12.4
 
   /-/ready:
     get:

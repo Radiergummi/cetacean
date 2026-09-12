@@ -532,6 +532,14 @@ returns up to 1000). `POST /-/resync` forces a full re-fetch from the Docker soc
 `/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API,
 but it is not gated on the operations level — it re-reads the cluster and never changes it.
 
+`GET /-/health` carries a `watcher` object alongside the version fields, reporting whether Cetacean is
+still tracking the cluster — `connected` for the Docker event stream, and `lastSyncAt` /
+`lastSyncAgeSeconds` for the last successful read. It matters because losing that connection is
+invisible from every other endpoint: they keep answering from the cache, and `/-/ready` keeps
+returning `200` so an orchestrator does not restart a process that would come back identical. The same
+facts are on `/-/metrics` as `cetacean_watcher_connected`, `cetacean_cache_last_sync_timestamp_seconds`
+and `cetacean_cache_sync_failures_total`.
+
 ### Writes
 
 Each row gives the minimum [operations level][operations-level] the endpoint needs. Every write also

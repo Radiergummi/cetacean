@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -81,6 +82,27 @@ type Watcher struct {
 	// them instead of sleeping and production can be sure they are not
 	// silently dropped.
 	settles sync.WaitGroup
+
+	// Whether the watcher is still tracking the cluster. See Liveness.
+	connected atomic.Bool
+	lastSync  atomic.Int64 // UnixNano; zero until the first sync
+}
+
+// setConnected records reachability for both /-/health and /-/metrics.
+func (w *Watcher) setConnected(connected bool) {
+	w.connected.Store(connected)
+	metrics.SetWatcherConnected(connected)
+}
+
+// Liveness reports whether the event stream is established, and when a full
+// sync last reached the engine (zero before the first). Safe from any
+// goroutine.
+func (w *Watcher) Liveness() (connected bool, lastSync time.Time) {
+	if nanos := w.lastSync.Load(); nanos != 0 {
+		lastSync = time.Unix(0, nanos)
+	}
+
+	return w.connected.Load(), lastSync
 }
 
 func NewWatcher(client DockerClient, store Store, snapshotPath string) *Watcher {
@@ -152,11 +174,16 @@ func (w *Watcher) fullSync(ctx context.Context) error {
 	data, err := w.client.FullSync(ctx)
 	if err != nil {
 		slog.Error("full sync failed", "error", err)
+		metrics.RecordSyncFailure()
+		w.setConnected(false)
 		return err
 	}
 
 	w.store.ReplaceAll(data)
 	metrics.ObserveSyncDuration(time.Since(start).Seconds())
+	metrics.RecordSyncSuccess(time.Now())
+	w.lastSync.Store(time.Now().UnixNano())
+	w.setConnected(true)
 
 	snap := w.store.Snapshot()
 	slog.Info(
@@ -244,6 +271,10 @@ func isContainerDeath(action events.Action) bool {
 
 func (w *Watcher) watchEvents(ctx context.Context) {
 	msgCh, errCh := w.client.Events(ctx)
+
+	// Only the disconnection: Events returns its channels before the request
+	// behind them is made, so fullSync's success is what proves reachability.
+	defer w.setConnected(false)
 
 	pending := make(map[eventKey]coalesced)
 	var timer *time.Timer

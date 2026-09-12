@@ -122,6 +122,25 @@ change at all. Set it to `0` for a read-only deployment.
 [`GET /-/health`][api.health] answers `200` whenever the process is up, including while Cetacean cannot reach Docker.
 [`/-/ready`][api.ready] is the one that tracks whether it has actually read the cluster.
 
+### The dashboard looks fine but the data has stopped moving
+
+Losing the Docker connection after startup is the failure that hides best: Cetacean keeps serving the
+state it last read, so every page still answers and readiness still passes. That is deliberate —
+restarting the container would not bring the engine back — but it means a page can be showing you a
+cluster that stopped being true some time ago.
+
+`GET /-/health` says so:
+
+```json
+{ "status": "ok", "watcher": { "connected": false, "lastSyncAgeSeconds": 942.1 } }
+```
+
+`connected` is whether the event stream is established; `lastSyncAgeSeconds` is how long ago
+Cetacean last read the cluster successfully, against a re-sync that runs every five minutes. The same
+facts are on [`/-/metrics`][api.selfmetrics] as `cetacean_watcher_connected`,
+`cetacean_cache_last_sync_timestamp_seconds` and `cetacean_cache_sync_failures_total` — alert on the
+first being `0`, or on the second falling far enough behind `time()`.
+
 ## Where to go next
 
 | Page                           | Covers                                                                                    |
@@ -135,6 +154,7 @@ change at all. Set it to `0` for a read-only deployment.
 [api]: api
 [api.health]: api/explorer#tag/meta/GET/-/health
 [api.ready]: api/explorer#tag/meta/GET/-/ready
+[api.selfmetrics]: api/explorer#tag/meta/GET/-/metrics
 [api.metrics]: api/explorer#tag/monitoring/GET/metrics/status
 [auth.mode]: configuration#auth.mode
 [authentication]: authentication

@@ -25,7 +25,13 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		status = "error"
 	}
 
-	writeJSON(w, NewHealthResponse(status, h.operationsLevel))
+	body := NewHealthResponse(status, h.operationsLevel)
+
+	if h.liveness != nil {
+		body = body.withWatcher(h.liveness.Liveness())
+	}
+
+	writeJSON(w, body)
 }
 
 func (h *Handlers) HandleReady(w http.ResponseWriter, r *http.Request) {

@@ -3,6 +3,7 @@ package metrics
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -93,6 +94,28 @@ var (
 		},
 	)
 
+	// Watcher metrics.
+	watcherConnected = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "cetacean_watcher_connected",
+			Help: "Whether the Docker event stream is currently connected (1) or retrying (0).",
+		},
+	)
+
+	cacheLastSyncTimestampSeconds = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "cetacean_cache_last_sync_timestamp_seconds",
+			Help: "Unix timestamp of the last successful full sync with the Docker API.",
+		},
+	)
+
+	cacheSyncFailuresTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "cetacean_cache_sync_failures_total",
+			Help: "Total number of full syncs that failed against the Docker API.",
+		},
+	)
+
 	cacheMutationsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "cetacean_cache_mutations_total",
@@ -148,6 +171,9 @@ func init() {
 	Registry.MustRegister(sseClientEventsDroppedTotal)
 	Registry.MustRegister(cacheResources)
 	Registry.MustRegister(cacheSyncDurationSeconds)
+	Registry.MustRegister(watcherConnected)
+	Registry.MustRegister(cacheLastSyncTimestampSeconds)
+	Registry.MustRegister(cacheSyncFailuresTotal)
 	Registry.MustRegister(cacheMutationsTotal)
 	Registry.MustRegister(prometheusRequestsTotal)
 	Registry.MustRegister(prometheusRequestDurationSeconds)
@@ -202,6 +228,27 @@ func SetCacheResources(resourceType string, count int) {
 // ObserveSyncDuration records the duration of a cache sync operation.
 func ObserveSyncDuration(seconds float64) {
 	cacheSyncDurationSeconds.Observe(seconds)
+}
+
+// SetWatcherConnected records whether the Docker event stream is established.
+func SetWatcherConnected(connected bool) {
+	if connected {
+		watcherConnected.Set(1)
+
+		return
+	}
+
+	watcherConnected.Set(0)
+}
+
+// RecordSyncSuccess stamps the time of a full sync that reached the engine.
+func RecordSyncSuccess(at time.Time) {
+	cacheLastSyncTimestampSeconds.Set(float64(at.Unix()))
+}
+
+// RecordSyncFailure counts a full sync that did not reach the engine.
+func RecordSyncFailure() {
+	cacheSyncFailuresTotal.Inc()
 }
 
 // RecordCacheMutation increments the cache mutation counter for a given type and action.

@@ -997,3 +997,93 @@ func TestSettleRetriesAreBounded(t *testing.T) {
 		t.Errorf("inspects = %d, want %d", calls.Load(), want)
 	}
 }
+
+// ─── liveness ───────────────────────────────────────────────────────────
+
+// TestLivenessStartsDisconnected: a watcher that has never synced must not
+// look healthy.
+func TestLivenessStartsDisconnected(t *testing.T) {
+	w := NewWatcher(newMockClient(), cache.New(nil), "")
+
+	connected, lastSync := w.Liveness()
+	if connected {
+		t.Error("a watcher that has never synced reports connected")
+	}
+
+	if !lastSync.IsZero() {
+		t.Errorf("lastSync = %v before any sync, want zero", lastSync)
+	}
+}
+
+// TestLivenessFollowsTheEngine is the point of the signal: with the engine
+// gone, every endpoint keeps answering and readiness keeps passing.
+func TestLivenessFollowsTheEngine(t *testing.T) {
+	mc := newMockClient()
+	mc.nodes = []swarm.Node{{ID: "n1"}}
+
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	before := time.Now()
+
+	if err := w.fullSync(context.Background()); err != nil {
+		t.Fatalf("fullSync: %v", err)
+	}
+
+	connected, lastSync := w.Liveness()
+	if !connected {
+		t.Error("a watcher that just synced reports disconnected")
+	}
+
+	if lastSync.Before(before) {
+		t.Errorf("lastSync = %v, want at or after %v", lastSync, before)
+	}
+
+	// The engine goes away.
+	mc.listErrors["nodes"] = errors.New("connection refused")
+	mc.listErrors["services"] = errors.New("connection refused")
+	mc.listErrors["tasks"] = errors.New("connection refused")
+	mc.listErrors["configs"] = errors.New("connection refused")
+	mc.listErrors["secrets"] = errors.New("connection refused")
+	mc.listErrors["networks"] = errors.New("connection refused")
+	mc.listErrors["volumes"] = errors.New("connection refused")
+
+	if err := w.fullSync(context.Background()); err == nil {
+		t.Fatal("fullSync succeeded with every list failing")
+	}
+
+	connected, stale := w.Liveness()
+	if connected {
+		t.Error("a watcher whose sync just failed still reports connected")
+	}
+
+	// The timestamp is when the cache was last correct, so a failure must not
+	// advance it.
+	if !stale.Equal(lastSync) {
+		t.Errorf("a failed sync moved lastSync from %v to %v", lastSync, stale)
+	}
+}
+
+// TestLivenessDropsWhenTheStreamEnds covers the other disconnection: the sync
+// succeeded, then the stream went away.
+func TestLivenessDropsWhenTheStreamEnds(t *testing.T) {
+	mc := newMockClient()
+
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	if err := w.fullSync(context.Background()); err != nil {
+		t.Fatalf("fullSync: %v", err)
+	}
+
+	if connected, _ := w.Liveness(); !connected {
+		t.Fatal("not connected after a successful sync")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	w.watchEvents(ctx)
+
+	if connected, _ := w.Liveness(); connected {
+		t.Error("still connected after the event stream ended")
+	}
+}
