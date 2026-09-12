@@ -120,6 +120,15 @@ func (r *routeRecorder) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mux.ServeHTTP(w, req)
 }
 
+// route returns the pattern the mux matches this request against, empty when
+// none does. It covers the routes another component registered directly on the
+// wrapped mux as well, which the recorded list does not.
+func (r *routeRecorder) route(req *http.Request) string {
+	_, pattern := r.mux.Handler(req)
+
+	return pattern
+}
+
 func NewRouter(cfg RouterConfig) http.Handler {
 	handler, _ := newRouter(cfg)
 
@@ -752,7 +761,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, h.searchFeeds(), spa))
 
 	// Profile
-	mux.HandleFunc("GET /profile", contentNegotiated(h.HandleProfile, feedHandlers{}, spa))
+	mux.HandleFunc("GET "+profilePath, contentNegotiated(h.HandleProfile, feedHandlers{}, spa))
 
 	// Topology
 	mux.HandleFunc("GET /topology", func(w http.ResponseWriter, r *http.Request) {
@@ -835,7 +844,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		crossOriginProtection(cfg.CORS, cfg.PublicURL),
 		auth.Middleware(authProvider),
 		negotiate,
-		requireReady(h),
+		requireReady(h, mux),
 		discoveryLinks,
 		requestLogger,
 	)
@@ -846,7 +855,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	), mux.patterns
 }
 
-func requireReady(h *Handlers) func(http.Handler) http.Handler {
+func requireReady(h *Handlers, mux *routeRecorder) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Named as what it is not, so the next representation cannot be
@@ -854,7 +863,7 @@ func requireReady(h *Handlers) func(http.Handler) http.Handler {
 			// by closing, and a type nothing serves is the endpoint's 406 to
 			// give whether or not Docker is up.
 			ct := ContentTypeFromContext(r.Context())
-			if !h.isReady() && isResourcePath(r.URL.Path) &&
+			if !h.isReady() && readsClusterState(mux, r) &&
 				ct != ContentTypeHTML && ct != ContentTypeSSE &&
 				ct != ContentTypeUnsupported {
 				writeErrorCode(w, r, "ENG001", "Docker daemon is not reachable")
@@ -865,17 +874,23 @@ func requireReady(h *Handlers) func(http.Handler) http.Handler {
 	}
 }
 
-func isResourcePath(path string) bool {
-	switch {
-	case strings.HasPrefix(path, "/-/"):
+// readsClusterState reports whether the endpoint answering this request reads
+// the cache. Path shape cannot say: what matches no route falls through to the
+// SPA catch-all, which serves the frontend — manifest and icons included — off
+// the embedded filesystem, so the mux is asked. The rest answer from the
+// request alone.
+func readsClusterState(mux *routeRecorder, r *http.Request) bool {
+	path := r.URL.Path
+
+	switch pattern := mux.route(r); {
+	case pattern == "" || pattern == "/":
 		return false
-	case strings.HasPrefix(path, "/api"):
-		return false
-	case strings.HasPrefix(path, "/auth/"):
-		return false
-	case strings.HasPrefix(path, "/assets/"):
-		return false
-	case path == "/":
+	case strings.HasPrefix(path, "/-/"),
+		strings.HasPrefix(path, "/api"),
+		strings.HasPrefix(path, "/auth/"),
+		strings.HasPrefix(path, "/.well-known/"),
+		path == openSearchPath,
+		path == profilePath:
 		return false
 	default:
 		return true
