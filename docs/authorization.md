@@ -58,10 +58,6 @@ Two inheritance rules widen a grant beyond a literal match:
 Task patterns match task IDs, which change every time a replica is replaced. Grant the parent service or the stack
 instead of naming tasks.
 
-A backslash escapes the character after it, so `service:release-\*` grants exactly the service named
-`release-*` rather than every service whose name begins `release-`. It is significant whether you meant it
-that way or not: `service:a\b` grants `ab`, not `a\b`. Docker resource names cannot contain a backslash,
-so a pattern carrying one is always either an escape or a mistake.
 
 ### Audience
 

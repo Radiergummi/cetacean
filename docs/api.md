@@ -227,9 +227,8 @@ the service and node for a task.
 
 ## Resource identifiers
 
-Detail paths accept a resource's ID or its name. A name is answered with `307 Temporary Redirect` to the canonical,
-ID-addressed URL, so each resource keeps exactly one URL — the one `@id`, `ETag`, `Link` headers and the
-[history feed](#feeds) all name:
+Detail paths accept a resource's ID or its name. A name is answered with `307 Temporary Redirect` to the
+canonical, ID-addressed URL:
 
 ```bash
 curl -i -H 'Accept: application/json' http://localhost:9000/services/shop_web
@@ -243,12 +242,8 @@ reaches the scale endpoint with its payload intact. Most clients follow the redi
 Volumes and stacks are keyed by name already, so their paths never redirect. Tasks are addressable by ID only: a
 task's `<service>.<slot>` name is derived from its parent rather than stored on it.
 
-A name matching more than one resource is answered `409 Conflict` with [`API014`](api/errors#API014), whose detail
-lists every ID the request could have meant. Swarm enforces unique names for services, configs, secrets and networks
-but not for node hostnames, so nodes are the type where this arises.
-
-Requests negotiating `text/html` are never redirected — those paths are the [dashboard][dashboard]'s own routing
-surface.
+A name matching more than one resource is answered `409 Conflict` with [`API014`](api/errors#API014), whose
+detail lists every ID the request could have meant.
 
 ## Errors
 
@@ -532,13 +527,10 @@ returns up to 1000). `POST /-/resync` forces a full re-fetch from the Docker soc
 `/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API,
 but it is not gated on the operations level — it re-reads the cluster and never changes it.
 
-`GET /-/health` carries a `watcher` object alongside the version fields, reporting whether Cetacean is
-still tracking the cluster — `connected` for the Docker event stream, and `lastSyncAt` /
-`lastSyncAgeSeconds` for the last successful read. It matters because losing that connection is
-invisible from every other endpoint: they keep answering from the cache, and `/-/ready` keeps
-returning `200` so an orchestrator does not restart a process that would come back identical. The same
-facts are on `/-/metrics` as `cetacean_watcher_connected`, `cetacean_cache_last_sync_timestamp_seconds`
-and `cetacean_cache_sync_failures_total`.
+`GET /-/health` carries a `watcher` object reporting whether Cetacean is still tracking the cluster:
+`connected` for the Docker event stream, and `lastSyncAt` / `lastSyncAgeSeconds` for the last
+successful read. `/-/metrics` carries the same as `cetacean_watcher_connected`,
+`cetacean_cache_last_sync_timestamp_seconds` and `cetacean_cache_sync_failures_total`.
 
 ### Writes
 
@@ -614,12 +606,6 @@ A `412` always means the resource moved. Where the current representation cannot
 `DELETE /plugins/{name}` inspects the daemon rather than the cache — the write answers `503`
 (`ENG001`) or `500` (`ENG004`) instead, so an unreachable daemon is not reported as a stale `ETag`.
 
-The comparison is made against the Docker engine, not against the cached copy a `GET` is served
-from: the cache is filled asynchronously, so a validator compared against it could only ever
-refuse a change the cache had already seen — never the lost update the header exists to prevent.
-Evaluating the condition therefore also brings the cached copy up to date, which is what lets a
-`412` be recovered from in a single round trip: re-read the resource and the `GET` answers the
-validator the write was held to.
 
 29 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
 `PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
