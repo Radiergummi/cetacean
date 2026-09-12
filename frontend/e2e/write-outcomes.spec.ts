@@ -155,7 +155,159 @@ test.describe("Write outcomes", () => {
       .poll(async () => name in (await serviceEnv(page, serviceId)), { timeout: 20_000 })
       .toBe(false);
   });
+
+  test("recommendation fix: applying the suggested value scales the service", async ({ page }) => {
+    // The one-click fix a recommendation offers is a write like any other, and
+    // the only one a user reaches without opening an editor at all. Nothing
+    // had ever clicked it.
+    const serviceId = await openService(page, "lonely");
+    expect(await replicaCount(page, serviceId)).toBe(1);
+
+    const apply = page.getByRole("button", { name: /Apply suggested value/i });
+    await expect(apply).toBeVisible({ timeout: 20_000 });
+
+    // The suggestion the button is about to apply, read from the page rather
+    // than assumed: a case that hardcodes 2 still passes if the button applies
+    // something else entirely.
+    const context = await apply.locator("xpath=../..").innerText();
+    const suggested = Number(/Suggested:\s*(\d+)\s*replicas/i.exec(context)?.[1]);
+    expect(suggested).toBeGreaterThan(1);
+
+    await apply.click();
+
+    await expect
+      .poll(async () => replicaCount(page, serviceId), { timeout: 30_000 })
+      .toBe(suggested);
+
+    const scaled = await page.request.put(`/services/${serviceId}/scale`, {
+      data: { replicas: 1 },
+    });
+    expect(scaled.ok()).toBeTruthy();
+
+    await expect.poll(async () => replicaCount(page, serviceId), { timeout: 30_000 }).toBe(1);
+  });
+
+  test("restart: the button replaces the service's tasks", async ({ page }) => {
+    const serviceId = await openService(page, "lonely");
+
+    const before = await runningTaskIDs(page, serviceId);
+    expect(before.length).toBeGreaterThan(0);
+
+    await page.getByRole("button", { name: /^Restart$/i }).click();
+
+    // A destructive action confirms in an *alertdialog*, which is a distinct
+    // ARIA role: getByRole("dialog") does not match one, so a case that looks
+    // for a dialog here silently skips the confirmation and asserts against a
+    // cluster nothing was ever asked to change.
+    await confirmIn(page, /^Restart$/i);
+
+    // A restart is a forced update: Docker starts a replacement task and winds
+    // the old one down. Asserting the identity of the tasks is what separates a
+    // restart that happened from a button that merely reported one — and the
+    // claim is that a task the service did not have before is now running, not
+    // that the old one has already gone, since the two overlap while the
+    // replacement comes up.
+    await expect
+      .poll(
+        async () => {
+          const now = await runningTaskIDs(page, serviceId);
+
+          return now.some((id) => !before.includes(id));
+        },
+        { timeout: 60_000 },
+      )
+      .toBe(true);
+  });
+
+  test("image update and rollback: both reach the service spec", async ({ page }) => {
+    // shop_flaky, deliberately: it crash-loops by design and never converges,
+    // so pointing it at an image that cannot be pulled costs the fixture
+    // cluster nothing that was not already true of it.
+    const serviceId = await openService(page, "flaky");
+    const original = await serviceImage(page, serviceId);
+    expect(original).toBeTruthy();
+
+    const replacement = "cetacean-e2e-fixture:rolled-forward";
+
+    await page.getByTitle("Update image").click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await dialog.locator("input").fill(replacement);
+    await dialog.getByRole("button", { name: /^Update$/i }).click();
+    await expect(dialog).not.toBeVisible({ timeout: 20_000 });
+
+    await expect
+      .poll(async () => serviceImage(page, serviceId), { timeout: 30_000 })
+      .toContain(replacement);
+
+    // Rollback is the only write whose correctness is defined by a previous
+    // one: it restores the spec Docker kept, so it can only be tested after a
+    // change has actually landed.
+    await page.reload();
+    await page.getByRole("button", { name: /^Rollback$/i }).click();
+    await confirmIn(page, /^Rollback$/i);
+
+    await expect
+      .poll(async () => serviceImage(page, serviceId), { timeout: 30_000 })
+      .toContain(original.split("@")[0]!);
+  });
 });
+
+/** Confirm a destructive action in the alertdialog its trigger opens. */
+async function confirmIn(page: Page, action: RegExp) {
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm).toBeVisible({ timeout: 10_000 });
+  await confirm.getByRole("button", { name: action }).click();
+  await expect(confirm).not.toBeVisible({ timeout: 20_000 });
+}
+
+/** Open a service's detail page by the part of its name that distinguishes it. */
+async function openService(page: Page, name: string): Promise<string> {
+  await page.goto("/services");
+
+  const row = page.locator("table tbody tr").filter({ hasText: name }).first();
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.click();
+  await page.waitForURL(/\/services\/.+/);
+
+  return new URL(page.url()).pathname.split("/").pop()!;
+}
+
+/** The service's desired replica count, as Docker currently holds it. */
+async function replicaCount(page: Page, id: string): Promise<number | undefined> {
+  const response = await page.request.get(`/services/${id}`, {
+    headers: { Accept: "application/json" },
+  });
+  const body = await response.json();
+
+  return body.service?.Spec?.Mode?.Replicated?.Replicas;
+}
+
+/** The image in the service's spec, as Docker currently holds it. */
+async function serviceImage(page: Page, id: string): Promise<string> {
+  const response = await page.request.get(`/services/${id}`, {
+    headers: { Accept: "application/json" },
+  });
+  const body = await response.json();
+
+  return body.service?.Spec?.TaskTemplate?.ContainerSpec?.Image ?? "";
+}
+
+/** The IDs of the service's currently running tasks. */
+async function runningTaskIDs(page: Page, serviceId: string): Promise<string[]> {
+  const response = await page.request.get("/tasks?limit=200", {
+    headers: { Accept: "application/json" },
+  });
+  const body = await response.json();
+
+  return (body.items ?? [])
+    .filter(
+      (task: { ServiceID?: string; Status?: { State?: string } }) =>
+        task.ServiceID === serviceId && task.Status?.State === "running",
+    )
+    .map((task: { ID: string }) => task.ID);
+}
 
 /** The service's environment, as Docker currently holds it. */
 async function serviceEnv(page: Page, id: string): Promise<Record<string, string>> {

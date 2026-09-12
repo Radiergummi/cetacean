@@ -106,6 +106,15 @@ e2e-up: build
 	CETACEAN_PROMETHEUS_URL=http://127.0.0.1:19090 \
 	CETACEAN_SNAPSHOT=false \
 	./cetacean & echo $$! > test/e2e/.sut.pid
+	@# Wait for the first full sync, not just for the port to open. Backgrounding
+	@# the binary and printing straight away hands the browser suite a server
+	@# whose cache is still filling, and its first spec fails on a cluster that
+	@# is not there yet.
+	@for i in $$(seq 1 60); do \
+		if curl -fsS -m 2 http://localhost:19001/-/ready >/dev/null 2>&1; then break; fi; \
+		if [ $$i -eq 60 ]; then echo "cetacean did not become ready on :19001" >&2; exit 1; fi; \
+		sleep 1; \
+	done
 	@echo "Cetacean running at http://localhost:19001"
 	@echo "Run the browser suite with:"
 	@echo "  CETACEAN_E2E_URL=http://localhost:19001 make test-e2e"
