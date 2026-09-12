@@ -64,3 +64,4 @@ frontend/test-results/
 test/e2e/certs/
 test/e2e/.sut.pid
 cetacean.cover
+cetacean.race

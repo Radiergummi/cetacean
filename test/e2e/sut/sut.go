@@ -82,6 +82,14 @@ type Process struct {
 	waitOnce sync.Once
 	waitErr  error
 	stopOnce sync.Once
+
+	// killed records that Stop escalated to SIGKILL, whose exit status says
+	// nothing about how the child was going to exit.
+	killed bool
+
+	// adopted marks the attempt Start handed back. An abandoned retry exits
+	// non-zero by definition, and must not be asserted over.
+	adopted bool
 }
 
 // reap waits for the child exactly once. It is the ONLY caller of cmd.Wait in
@@ -100,10 +108,19 @@ func Start(t *testing.T, cfg Config) *Process {
 
 	for attempt := 1; ; attempt++ {
 		proc := launch(t, cfg)
-		t.Cleanup(proc.Stop)
+
+		t.Cleanup(func() {
+			proc.Stop()
+
+			if proc.adopted {
+				proc.assertExitedCleanly(t)
+			}
+		})
 
 		err := proc.waitReady()
 		if err == nil {
+			proc.adopted = true
+
 			return proc
 		}
 
@@ -247,6 +264,12 @@ func buildEnv(cfg Config) []string {
 		env["GOCOVERDIR"] = dir
 	}
 
+	// Same reasoning for GORACE: `make test-stack-race` sets halt_on_error=1
+	// so the first race kills the SUT rather than being logged and outlived.
+	if opts := os.Getenv("GORACE"); opts != "" {
+		env["GORACE"] = opts
+	}
+
 	maps.Copy(env, cfg.Env)
 
 	out := make([]string, 0, len(env))
@@ -340,10 +363,50 @@ func (p *Process) Stop() {
 		select {
 		case <-p.exited:
 		case <-time.After(10 * time.Second):
+			p.killed = true
+
 			_ = p.cmd.Process.Kill()
 			<-p.exited
 		}
 	})
+}
+
+// assertExitedCleanly fails the test if the binary did not exit cleanly on
+// SIGINT, which is what an orchestrator sends on a rolling update. It is also
+// where a race surfaces: a -race binary exits 66 once the detector has fired.
+func (p *Process) assertExitedCleanly(t *testing.T) {
+	t.Helper()
+
+	if p.cmd.Process == nil {
+		return
+	}
+
+	if p.killed {
+		t.Errorf(
+			"SUT did not exit within 10s of SIGINT and had to be killed; logs:\n%s",
+			tailLines(p.Logs(), 40),
+		)
+
+		return
+	}
+
+	if p.waitErr != nil {
+		t.Errorf(
+			"SUT exited uncleanly after SIGINT: %v; logs:\n%s",
+			p.waitErr, tailLines(p.Logs(), 40),
+		)
+	}
+}
+
+// tailLines keeps a failure message to the end of the log.
+func tailLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func (p *Process) waitReady() error {

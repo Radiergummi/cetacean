@@ -1,8 +1,9 @@
-.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack e2e-up e2e-down check sbom sbom-check sbom-verify hooks cover fuzz
+.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check sbom sbom-check sbom-verify hooks cover fuzz
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
 E2E_BINARY   := cetacean.cover
+E2E_RACE_BIN := cetacean.race
 E2E_COVERDIR := coverdata
 
 ## Lint all code
@@ -81,6 +82,27 @@ test-stack: build
 		| awk '{ printf "  %-28s %s\n", $$1, $$2 }'; \
 	go tool covdata func -i=$(E2E_COVERDIR) \
 		| awk 'END { printf "  %-28s %s\n\n", "TOTAL", $$NF }'; \
+	exit $$status
+
+## Run the end-to-end stack suite against a race-instrumented binary
+## CI's `go test -race ./...` covers the packages in isolation; nothing until
+## now ran the real server's concurrency -- the watcher goroutines, the cache
+## mutex, the SSE fan-out, the MCP notification manager and the ACL hot reload
+## -- against real Docker events. halt_on_error=1 makes the first race kill
+## the SUT, which sut.assertExitedCleanly then reports against the case that
+## provoked it; without it the detector logs and the run carries on.
+## No coverage here: -cover and -race together make an already slow suite
+## slower for a number `make test-stack` already reports.
+test-stack-race: build
+	go build -race -ldflags "$(LDFLAGS)" -o $(E2E_RACE_BIN) .
+	@GORACE=halt_on_error=1 CETACEAN_E2E_BINARY=$(PWD)/$(E2E_RACE_BIN) \
+		go test -tags e2e -p 1 -count=1 -timeout 60m ./test/e2e/...; \
+	status=$$?; \
+	if [ $$status -eq 0 ]; then \
+		$(MAKE) e2e-down; \
+	else \
+		echo "e2e environment left running for inspection; tear down with: make e2e-down"; \
+	fi; \
 	exit $$status
 
 ## Bring the end-to-end environment up with fixtures, and run cetacean against it
