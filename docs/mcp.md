@@ -106,7 +106,6 @@ fails—so you can see which agent scaled what, and when. If the calling agent i
 picked up and Cetacean's spans join the same trace, putting the agent's turn and the Docker call it produced on
 one timeline.
 
-
 Tracing stays off until the endpoint is set. A malformed endpoint stops startup rather than silently exporting nowhere.
 
 ## Before you expose it
