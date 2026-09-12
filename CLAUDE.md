@@ -76,6 +76,8 @@ These bite across the codebase; the per-component rules live in `.claude/ARCHITE
 - A rule that both the REST and MCP transports must apply belongs in `internal/cluster`.
   A projection only one of them renders does not — see the note at the end of that
   package's section in `.claude/ARCHITECTURE.md`.
+- Protocol work follows the RFC exactly — case-insensitivity where the spec says so, header
+  syntax, status codes. A shortcut that passes the tests we happened to write is still wrong.
 - Structured logging via `log/slog` throughout.
 
 ## Code style
@@ -96,7 +98,9 @@ These bite across the codebase; the per-component rules live in `.claude/ARCHITE
 ### Go
 
 - Standard `gofmt`; `golangci-lint run` must be clean (it includes `golines`).
-- `new(expr)` (Go 1.26) is valid here and the linter asks for it.
+- `new(expr)` is valid on Go 1.26 and `modernize` requires it — a `ptrTo` helper fails lint.
+  Copilot review flags it as a compile error; that finding is wrong, so answer and resolve the
+  thread rather than taking the edit.
 
 ### TypeScript
 
@@ -108,6 +112,21 @@ These bite across the codebase; the per-component rules live in `.claude/ARCHITE
 - JSX props on separate lines at 3+ props or long lines.
 - camelCase module constants (`knownStates`), `as const` where it applies.
 - Multi-line JSDoc (`/**\n *\n */`).
+- Optionality in `api/types.ts` mirrors the Docker Go struct tags — read them in
+  `$(go env GOMODCACHE)/github.com/docker/docker@<version>/api/types/`. `omitempty` does not
+  apply to struct fields, so container objects are always on the wire while their scalar leaves
+  vanish when zero; guessing here is what caused the recurring `undefined` crashes.
+- `exactOptionalPropertyTypes` is on, so a new optional prop needs `?: T | undefined`. Treat `!`
+  as a hidden bug. `noPropertyAccessFromIndexSignature` and CI `--checkers` were measured and
+  rejected — don't re-propose them.
+
+## Review
+
+- Docs here sometimes land ahead of the code, on a separate branch. Before calling a documented
+  setting or endpoint nonexistent, run `gh pr list --state open` and grep the open diffs; say
+  "not on `main`; see PR #N". An unticked plan file is not evidence either.
+- Don't flag the action versions in `.github/workflows/` as nonexistent. They are ahead of model
+  training data and are correct as written.
 
 ## Releases
 
