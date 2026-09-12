@@ -135,7 +135,6 @@ func decodeClientCert(value string) ([]byte, error) {
 	return der, nil
 }
 
-// truncate shortens a header value for an error message.
 // extractSPIFFEID returns the SPIFFE ID from the URI SANs, or "" if none
 // present. Returns an error if the cert contains multiple SPIFFE URIs
 // (per X.509-SVID spec: exactly one required) or a malformed SPIFFE ID.
