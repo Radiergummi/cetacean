@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -15,6 +16,16 @@ import (
 // 64 KiB leaves comfortable headroom for unusual but legitimate inputs while
 // preventing a single client from forcing the server to buffer megabytes.
 const dcrMaxBodyBytes = 64 * 1024
+
+// A registration outlives its request: it is held in memory and rewritten to
+// disk on every later change, so the body cap alone does not bound it. RFC 7591
+// sets no limits; these keep one record near a kilobyte, far above what real
+// client metadata needs.
+const (
+	dcrMaxClientNameLen  = 256
+	dcrMaxRedirectURIs   = 10
+	dcrMaxRedirectURILen = 2048
+)
 
 // ClientRegistration holds a dynamically registered OAuth client.
 type ClientRegistration struct {
@@ -273,6 +284,12 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.ClientName) > dcrMaxClientNameLen {
+		writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
+			"client_name must be at most "+strconv.Itoa(dcrMaxClientNameLen)+" bytes")
+		return
+	}
+
 	// Validate redirect_uris.
 	if len(req.RedirectURIs) == 0 {
 		writeDCRError(
@@ -283,7 +300,17 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
+	if len(req.RedirectURIs) > dcrMaxRedirectURIs {
+		writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
+			"redirect_uris must hold at most "+strconv.Itoa(dcrMaxRedirectURIs)+" entries")
+		return
+	}
 	for _, uri := range req.RedirectURIs {
+		if len(uri) > dcrMaxRedirectURILen {
+			writeDCRError(w, http.StatusBadRequest, "invalid_redirect_uri",
+				"redirect_uri must be at most "+strconv.Itoa(dcrMaxRedirectURILen)+" bytes")
+			return
+		}
 		if !isValidRedirectURI(uri) {
 			writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
 				"redirect_uri must be https:// or loopback http://: "+uri)
@@ -330,8 +357,9 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if len(grantTypes) == 0 {
 		grantTypes = []string{"authorization_code", "refresh_token"}
 	}
-	for _, gt := range grantTypes {
-		if gt != "authorization_code" && gt != "refresh_token" {
+	for i, gt := range grantTypes {
+		known := gt == "authorization_code" || gt == "refresh_token"
+		if !known || slices.Contains(grantTypes[:i], gt) {
 			writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
 				"grant_types must be a subset of [authorization_code, refresh_token]")
 			return
@@ -342,8 +370,8 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if len(responseTypes) == 0 {
 		responseTypes = []string{"code"}
 	}
-	for _, rt := range responseTypes {
-		if rt != "code" {
+	for i, rt := range responseTypes {
+		if rt != "code" || slices.Contains(responseTypes[:i], rt) {
 			writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
 				"response_types must be a subset of [code]")
 			return
