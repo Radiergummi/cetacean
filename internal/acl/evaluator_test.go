@@ -1240,14 +1240,10 @@ func TestEvaluator_LabelUnsupportedResourceType(t *testing.T) {
 	}
 }
 
-// TestEvaluator_LabelsEnabledNoPolicyAllowsUnlabeled is the guard on the one
-// thing that makes acl.labels safe to turn on: a cluster with no policy file.
-//
-// Suppressing the implicit allow-all globally — which is what treating a nil
-// policy as empty for every resource does — denies every resource that does not
-// carry a label, and on the first deploy that is all of them. The suppression
-// has to be scoped to the resources the labels actually speak about, which is
-// what the feature claims to do.
+// TestEvaluator_LabelsEnabledNoPolicyAllowsUnlabeled guards the case that makes
+// acl.labels safe to turn on: suppressing the implicit allow-all globally,
+// rather than per labelled resource, denies every resource on a cluster that
+// has no policy file.
 func TestEvaluator_LabelsEnabledNoPolicyAllowsUnlabeled(t *testing.T) {
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
@@ -1330,12 +1326,10 @@ func (r *countingResolver) LabelsByType(resourceType string) map[string]map[stri
 	return r.stubResolver.LabelsByType(resourceType)
 }
 
-// TestFilter_ReadsLabelsOncePerType is the guard on Filter's cost. The real
-// resolver is the cache, which is keyed by ID and so answers LabelsOf with a
-// scan; asking it per item is quadratic over a page — measured at 41ms to
-// filter 2000 services, against 1.2ms for one bulk read per type. A timing
-// assertion would be flaky, so this pins the shape instead: one bulk read for
-// the type, and no per-name reads at all.
+// TestFilter_ReadsLabelsOncePerType guards Filter's cost. The real resolver is
+// the cache, keyed by ID, so LabelsOf is a scan and asking per item is
+// quadratic over a page. A timing assertion would flake, so this pins the shape
+// instead: one bulk read per type, and no per-name reads at all.
 func TestFilter_ReadsLabelsOncePerType(t *testing.T) {
 	labels := map[string]map[string]string{}
 	names := make([]string, 0, 50)

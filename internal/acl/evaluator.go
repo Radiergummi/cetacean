@@ -75,11 +75,9 @@ func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) b
 	}
 
 	// An absent policy means allow-all, except on a resource carrying ACL
-	// labels: there the labels *are* the policy, and falling back to allow-all
-	// would hand the resource to exactly the audiences the label leaves out.
-	// Scoping the suppression to labelled resources is what keeps enabling
-	// acl.labels from denying every unlabelled resource on a cluster that has
-	// no policy file — which is the whole cluster, on the first deploy.
+	// labels: there the labels *are* the policy, and allow-all would hand it to
+	// the audiences the label leaves out. Scoping the suppression to labelled
+	// resources is what keeps acl.labels from denying an unpolicied cluster.
 	if p == nil {
 		if !labelled {
 			return true
@@ -234,11 +232,10 @@ func (e *Evaluator) PermissionsFor(id *auth.Identity) map[string][]string {
 	return result
 }
 
-// checkLabels evaluates label-based ACL for a resource. If handled is true, the
-// label result is authoritative for this resource+identity. If handled is
-// false, the caller falls through to config grants — and labelled reports
-// whether the resource carried ACL labels at all, which is what decides
-// whether an absent policy still means allow-all for it.
+// checkLabels evaluates label-based ACL. handled means the label result is
+// authoritative for this resource+identity; otherwise the caller falls through
+// to config grants. labelled reports whether the resource carried ACL labels at
+// all, which decides whether an absent policy still means allow-all for it.
 func (e *Evaluator) checkLabels(
 	id *auth.Identity,
 	permission string,
