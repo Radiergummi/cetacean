@@ -40,11 +40,8 @@ var (
 )
 
 // Routes returns every route registered in internal/api/router.go, sorted and
-// deduplicated.
-//
-// It reads the source rather than the running server because http.ServeMux
-// exposes no way to enumerate its patterns — and because the source is what a
-// reviewer edits, so drift is caught where it is introduced.
+// deduplicated. It reads the source because ServeMux cannot enumerate its
+// patterns, and because the source is what a reviewer edits.
 func Routes() ([]Route, error) {
 	routesOnce.Do(func() {
 		routes, routesErr = parseRoutesFile(routerSource)
@@ -126,13 +123,10 @@ func collectRoutes(fset *token.FileSet, file *ast.File, name string) ([]Route, e
 			return true
 		}
 
-		// router.go registers most routes as a bare string literal, but one
-		// form builds the pattern by concatenating a literal method prefix
-		// with a range variable drawn from an inline []string{...} literal
-		// (the removed-endpoint loop). That is still fully determined by the
-		// source — just spread across two nodes — so it is resolved against
-		// the call's own enclosing loop, never any other loop in the file
-		// that happens to reuse the same variable name.
+		// One form builds the pattern from a literal prefix and a range
+		// variable over an inline slice literal. Still fully determined by the
+		// source, so it resolves against the call's own enclosing loop and
+		// never another reusing the variable name.
 		patterns, ok := resolvePatternLiterals(call.Args[0], enclosingRangeStmt(ancestors))
 		if !ok {
 			// A computed pattern is invisible to this inventory, so the
@@ -173,13 +167,9 @@ func collectRoutes(fset *token.FileSet, file *ast.File, name string) ([]Route, e
 }
 
 // resolvePatternLiterals returns the pattern string(s) a registration's first
-// argument evaluates to, or false if the expression is not fully determined
-// by literals. A bare string literal yields exactly one pattern; a literal
-// prefix concatenated with a range variable drawn from an inline
-// []string{...} literal in the call's own enclosing loop yields one pattern
-// per element. There is deliberately no symmetric suffix form
-// (identifier + literal): nothing in router.go uses it, so a resolving path
-// for it would be exercised by no real registration and no test.
+// argument evaluates to, or false if it is not fully determined by literals: a
+// bare literal yields one, a literal prefix over an inline slice yields one per
+// element. No suffix form, because nothing in router.go uses it.
 func resolvePatternLiterals(expr ast.Expr, enclosing *ast.RangeStmt) ([]string, bool) {
 	if s, ok := stringLiteralValue(expr); ok {
 		return []string{s}, true

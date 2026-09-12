@@ -21,14 +21,11 @@ import (
 
 // This file drives the conditional-request contract: the If-Match precondition
 // on every mutating route that carries one, and the If-None-Match conditional
-// GET on the representation that precondition compares against. It reserves
-// port 19014 (see README.md's reserved-ports table).
+// GET on the representation it compares against. It reserves port 19014.
 //
 // preconditionTargets and excusedPreconditionRoutes together are the
-// self-enforcing gate: TestEveryPreconditionedRouteIsDrivenOrExcused requires
-// every route contract.PreconditionedRoutes() reports to appear in one or the
-// other, so a precondition wired onto a new route fails this test instead of
-// silently going undriven.
+// self-enforcing gate: every route contract.PreconditionedRoutes() reports
+// must appear in one or the other.
 
 const preconditionPort = 19014
 
@@ -103,10 +100,9 @@ func putProbe() *precondProbe {
 }
 
 // preconditionFixture holds one live resource of each kind the preconditioned
-// routes address, so thirty routes cost one cluster setup rather than thirty.
-// Nothing driven against it mutates: every write this file sends against these
-// resources is refused, either by the precondition or by the handler's own
-// input validation.
+// routes address, so thirty routes cost one cluster setup. Nothing driven
+// against it mutates: every write is refused, either by the precondition or by
+// the handler's own input validation.
 type preconditionFixture struct {
 	service string
 	task    string
@@ -342,10 +338,9 @@ func assertPreconditionFailed(t *testing.T, what string, out httpOutcome) {
 // ─── the sweep ──────────────────────────────────────────────────────────
 
 // TestPreconditionSweep drives the conditional-request contract on every route
-// that carries the If-Match middleware. Nothing here mutates: each write is
-// refused either by the precondition under test or, in the accepted-validator
-// case, by the handler's own input validation — which is what makes it safe to
-// run every route against one shared fixture.
+// carrying the If-Match middleware. Nothing here mutates — each write is
+// refused either by the precondition or by input validation — which is what
+// makes one shared fixture safe.
 func TestPreconditionSweep(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -355,11 +350,10 @@ func TestPreconditionSweep(t *testing.T) {
 
 	for route, target := range preconditionTargets(fixture) {
 		t.Run(route, func(t *testing.T) {
-			// RFC 9110 §13.2.2: a resource with no current representation
-			// fails the precondition, and that answer comes ahead of the 404
-			// the same request would otherwise receive. `*` is the strongest
-			// form of the assertion — it matches any representation at all,
-			// so a 412 here can only mean there is none.
+			// RFC 9110 §13.2.2: a resource with no current representation fails
+			// the precondition, ahead of the 404 the request would otherwise
+			// receive. `*` matches any representation at all, so a 412 here can
+			// only mean there is none.
 			assertPreconditionFailed(t, "no current representation", precondRequest(
 				t, proc, target.method, target.missing,
 				map[string]string{"If-Match": "*"}, "", "",
@@ -371,17 +365,11 @@ func TestPreconditionSweep(t *testing.T) {
 				return
 			}
 
-			// RFC 9110 §13.1.1: a validator that is not the current one does
-			// not satisfy If-Match.
-			//
-			// Driven ahead of the baseline because evaluating a precondition
-			// refreshes its subject from the engine: the cache is filled
-			// asynchronously, so a validator read before any precondition had
-			// run could describe a moment the engine has already left, and
-			// would then move under the sweep without anything being written.
-			// That is also what lets a client recover from a 412 in one round
-			// trip — the GET it re-reads afterwards answers the fresh
-			// validator.
+			// RFC 9110 §13.1.1: a validator that is not the current one does not
+			// satisfy If-Match. Driven ahead of the baseline because evaluating a
+			// precondition refreshes its subject from the asynchronously filled
+			// cache, so a validator read beforehand could move under the sweep
+			// without anything being written.
 			assertPreconditionFailed(t, "stale validator", precondRequest(
 				t, proc, target.method, target.uri,
 				map[string]string{"If-Match": staleValidator}, "", "",
@@ -586,11 +574,9 @@ func TestConditionalRemovalRequiresTheCurrentValidator(t *testing.T) {
 func driveConditionalRemoval(t *testing.T, proc *sut.Process, uri string) {
 	t.Helper()
 
-	// One refusal before the baseline is taken, for the reason
-	// TestPreconditionSweep gives: evaluating a precondition refreshes its
-	// subject from the engine, so a validator read before any precondition had
-	// run could move under the refusal below without anything having been
-	// written.
+	// One refusal before the baseline is taken: evaluating a precondition
+	// refreshes its subject from the engine, so a validator read beforehand
+	// could move under the refusal below without anything having been written.
 	assertPreconditionFailed(t, "stale validator on removal", precondRequest(
 		t, proc, http.MethodDelete, uri,
 		map[string]string{"If-Match": staleValidator}, "", "",
@@ -648,12 +634,10 @@ func awaitReplacementTask(
 
 // ─── focused cases ──────────────────────────────────────────────────────
 
-// TestUnpreconditionedWriteIgnoresIfMatch pins the other half of the
-// documented surface: docs/api.md lists 23 mutating endpoints that carry no
-// precondition because no GET serves their exact path, and says the header is
-// simply not evaluated there. Driving one keeps the sweep above honest too —
-// every 412 it asserts has to come from the middleware rather than from
-// something the stack answers to any If-Match at all.
+// TestUnpreconditionedWriteIgnoresIfMatch pins the other half of the documented
+// surface: the mutating endpoints that carry no precondition because no GET
+// serves their exact path simply do not evaluate the header. Driving one keeps
+// the sweep honest — every 412 it asserts has to come from the middleware.
 func TestUnpreconditionedWriteIgnoresIfMatch(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -697,10 +681,9 @@ func TestUnpreconditionedWriteIgnoresIfMatch(t *testing.T) {
 // TestIfMatchAcceptsAValidatorObtainedUnderContentEncoding drives RFC 9110
 // §8.8.3 as Cetacean resolves it: the coding suffix on an ETag distinguishes
 // two cached representations, but a precondition asserts resource state, so a
-// validator obtained under gzip must satisfy an If-Match on an
-// identity-negotiated write. The service carries an oversized label because
-// the rule only engages past the 1 KiB compression threshold, which the small
-// sub-resource representations never reach on their own.
+// gzip validator must satisfy an If-Match on an identity-negotiated write. The
+// oversized label is there because the rule only engages past the 1 KiB
+// compression threshold.
 func TestIfMatchAcceptsAValidatorObtainedUnderContentEncoding(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -756,21 +739,15 @@ func TestIfMatchAcceptsAValidatorObtainedUnderContentEncoding(t *testing.T) {
 }
 
 // TestConditionalWriteIsEvaluatedAgainstTheEngine drives the case If-Match
-// exists to refuse, with no third party involved: a validator the server
-// itself superseded, replayed on the next write. RFC 9110 §13.1.1 makes that a
-// 412 — the representation changed, so the validator is no longer current.
+// exists to refuse with no third party involved: a validator the server itself
+// superseded, replayed on the next write.
 //
-// The window is the one the cache cannot see. Every representation is built
-// from the in-memory cache, which the watcher fills asynchronously from the
-// Docker event stream, while every writer in internal/docker/client.go
-// re-inspects the engine for a fresh Version immediately before
-// ServiceUpdate — so the precondition refreshes its subject from the engine
-// before evaluating, and the replay below is refused even though a GET issued
-// in the same instant still answers the superseded validator.
-//
-// The replay is sent as the sweep's probe — a Content-Type the handler
-// refuses — so the outcome reports the precondition's verdict alone and not
-// the handler's.
+// The window is the one the cache cannot see — representations are built from
+// the asynchronously filled cache while every writer re-inspects the engine for
+// a fresh Version — so the precondition refreshes its subject from the engine
+// before evaluating, and the replay is refused even though a GET in the same
+// instant still answers the superseded validator. The replay is sent as the
+// sweep's probe, so the outcome reports the precondition's verdict alone.
 func TestConditionalWriteIsEvaluatedAgainstTheEngine(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

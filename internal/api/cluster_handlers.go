@@ -265,17 +265,10 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	var anySuccess bool
 	wg.Add(2)
 
-	// Query node-exporter targets.
-	//
-	// Detection is by the presence of node-exporter's own metrics, not by a
-	// `job` label: the job name is chosen by whoever writes the Prometheus
-	// config, and a collector that scrapes nodes fleet-wide rather than
-	// per-cluster commonly names it something else entirely. node_uname_info is
-	// emitted by node-exporter's uname collector in every deployment, and it is
-	// also exactly what useInstanceResolver needs to map a Swarm node to an
-	// instance label -- so this asks the question the UI actually depends on.
-	// A configured but unreachable target used to report as detected and then
-	// render empty panels.
+	// Detected by node-exporter's own metrics, never by a `job` label: the job
+	// name belongs to whoever wrote the Prometheus config. node_uname_info is
+	// emitted in every deployment, and is what maps a Swarm node to an instance
+	// label -- the question the UI actually depends on.
 	go func() {
 		defer wg.Done()
 		results, err := h.promClient.InstantQuery(ctx, `count by (instance) (node_uname_info)`)

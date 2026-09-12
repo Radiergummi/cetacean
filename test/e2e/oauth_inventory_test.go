@@ -13,31 +13,22 @@ import (
 	"testing"
 )
 
-// This file is the OAuth lane's self-enforcing gate, the counterpart to
-// TestEveryReadRouteIsDrivenOrExcused and TestEveryMCPToolIsDrivenOrExcused.
-//
-// contract.Routes() cannot supply the inventory: internal/api/router.go
-// registers the authorization server's endpoints indirectly, through
-// `cfg.OAuthRoutes(mux, "")`, so the patterns never appear as literals in the
-// file that inventory is parsed from. They appear in
-// internal/mcp/oauth.Server.RegisterRoutes instead, which is what this file
-// parses. A new OAuth endpoint therefore fails TestEveryOAuthEndpointIsDriven
-// rather than going untested.
+// This file is the OAuth lane's self-enforcing gate. contract.Routes() cannot
+// supply the inventory: internal/api/router.go registers the authorization
+// server's endpoints through cfg.OAuthRoutes, so the patterns never appear as
+// literals there. They appear in oauth.Server.RegisterRoutes instead, which
+// is what this file parses.
 
 // oauthRoutesSource is the file the OAuth endpoint inventory is parsed from,
 // relative to this package's directory.
 const oauthRoutesSource = "../../internal/mcp/oauth/server.go"
 
 // oauthEndpoints returns every pattern Server.RegisterRoutes attaches to the
-// mux, as "METHOD /path".
-//
-// The patterns are written as `"GET " + basePath + "/oauth/authorize"`. The
-// basePath identifier contributes nothing here because internal/api/router.go
-// registers the routes with an empty base path (`cfg.OAuthRoutes(mux, "")`),
-// which is also what this lane's SUT runs with — CETACEAN_BASE_PATH is unset.
-// Only an identifier literally named basePath is treated that way, so a
-// pattern built from some other variable fails to parse rather than silently
-// yielding a shortened path.
+// mux, as "METHOD /path". Patterns read `"GET " + basePath + "/oauth/..."`;
+// basePath is elided because the router registers them with an empty one,
+// which is what this lane's SUT runs with. Only an identifier literally named
+// basePath is treated that way, so a pattern built from another variable
+// fails to parse rather than silently yielding a shortened path.
 func oauthEndpoints(t *testing.T) []string {
 	t.Helper()
 
@@ -148,10 +139,8 @@ func oauthPatternLiteral(expr ast.Expr) (string, bool) {
 }
 
 // drivenOAuthEndpoints names, for each endpoint the inventory reports, the
-// case in this lane that drives it. The value is prose a reader can check
-// against the test it names — not a function, because several endpoints are
-// driven many times over by the flow helpers rather than once by a single
-// case.
+// case in this lane that drives it. The value is prose rather than a function
+// because several endpoints are driven by the flow helpers, not by one case.
 var drivenOAuthEndpoints = map[string]string{
 	"GET /.well-known/oauth-authorization-server": "TestMCPOAuthFlow/discovery — fetched by " +
 		"discoverOAuth, which follows the same chain a real client does: 401 → " +

@@ -9,19 +9,13 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// WatchPolicyFile watches a policy file for changes and hot-reloads the
-// evaluator's policy. Returns a stop function to close the watcher.
-// Logs a warning if the file is world-readable.
+// WatchPolicyFile watches a policy file and hot-reloads the evaluator's
+// policy, returning a stop function. Warns if the file is world-readable.
 //
-// It watches the file's *directory*, not the file. fsnotify follows the inode,
-// so a watch on the file itself only ever sees a truncate-in-place write: an
-// atomic rename-over-write leaves the watch pointed at the old, unlinked inode
-// and hot reload then stops permanently, with no error and no log line. Since
-// rename-over-write is how several editors save and the safe way for a
-// deployment to replace a config file, the file watch failed precisely the
-// callers most likely to use the feature, while docs/authorization.md promises
-// hot reload unconditionally. A directory watch survives any number of swaps,
-// and covers a policy file that does not exist yet at startup.
+// It watches the file's directory, not the file: fsnotify follows the inode,
+// so a rename-over-write -- how editors and deployments replace a config file
+// -- leaves the watch on the old one and reload stops silently. A directory
+// watch survives any number of swaps, and a policy file absent at startup.
 func WatchPolicyFile(e *Evaluator, path string) (func(), error) {
 	warnFilePermissions(path)
 

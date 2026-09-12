@@ -20,13 +20,9 @@ import (
 // This file drives the representation matrix: every content type each
 // negotiated route declares, reached through both the Accept header and the
 // extension suffix, refused when a route cannot provide it, and stable across
-// identical requests. It reserves port 19017 (see README.md's reserved-ports
-// table).
-//
-// Only JSON and SSE were driven anywhere before this. Six other media forms
-// are registered across 58 routes, and the inventory behind the gate is parsed
-// from router.go's own dispatch wiring — so a route gaining a representation
-// has to be accounted for.
+// identical requests. It reserves port 19017. The inventory behind the gate is
+// parsed from router.go's own dispatch wiring, so a route gaining a
+// representation has to be accounted for.
 
 const representationPort = 19017
 
@@ -572,14 +568,10 @@ func TestRepresentationSuffixesMatchTheAcceptHeader(t *testing.T) {
 	}
 }
 
-// TestUndeclaredRepresentationsAreRefused drives the other half of
-// negotiation, without which the matrix above could pass on a server that
-// answered every request with the same thing. A route that cannot produce a
-// media type must say so — internal/api/errors.go spells that API003 / 406
-// ("The Accept header does not match any media type this endpoint can
-// produce"), or API001 for the SSE special case, and it is the answer
-// internal/api/dispatch.go's dispatchFeed already gives for a feed format a
-// route has no handler for.
+// TestUndeclaredRepresentationsAreRefused drives the other half of negotiation,
+// without which the matrix above could pass on a server answering every request
+// with the same thing. A route that cannot produce a media type must say so:
+// API003 / 406, or API001 for the SSE special case.
 //
 // Quarantined per finding D-13: a media type the route cannot produce is
 // answered with a representation of some other type instead, in two shapes.

@@ -14,44 +14,22 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file covers the `tailscale` auth mode, which had none. Reserves port
-// 19012 (see README.md's reserved-ports table).
+// This file covers the `tailscale` auth mode. Reserves port 19012.
 //
-// # What this lane can reach, and what it cannot
-//
-// A *successful* Tailscale authentication is out of reach here, and saying so
-// precisely matters more than the cases below. TailscaleProvider.Authenticate
-// asks the local daemon's WhoIs API who owns the peer address, so a pass
-// requires a real tailnet: a joined node, an auth key, and outbound access to
-// Tailscale's control plane. tsnet mode needs the same, and brings up an
-// embedded node at process start. Neither belongs in a suite that must run
-// offline against a throwaway Docker-in-Docker swarm. So group extraction from
-// the CapMap (extractCapGroups), acl.TailscaleSource, and the tsnet dual-listener
-// topology stay covered by internal/auth's unit tests alone, and this file says
-// so rather than leaving the gap to be rediscovered.
-//
-// What *is* reachable is everything the provider decides before it ever
-// consults the daemon, and that half is where the security property lives:
-// validateTailscaleAddr refuses any peer outside Tailscale's CGNAT
-// (100.64.0.0/10) and ULA (fd7a:115c:a1e0::/48) ranges, as defence in depth
-// for a server bound to 0.0.0.0. These cases drive that boundary from a real
-// client, and they distinguish "refused on the range" from "refused by the
-// daemon" through the binary's own log — at the HTTP layer both are an
-// indistinguishable 401/AUT001, which is exactly why a status-only assertion
-// would prove nothing about the ordering.
-//
-// Startup validation for tsnet mode is reachable too, and is driven against
-// the real binary rather than only against config.LoadAuth.
+// A successful authentication is out of reach: Authenticate asks the local
+// daemon's WhoIs API who owns the peer address, which needs a real tailnet --
+// so CapMap group extraction, acl.TailscaleSource and the tsnet dual-listener
+// topology stay covered by internal/auth's unit tests alone. What is reachable
+// is validateTailscaleAddr, refusing any peer outside Tailscale's CGNAT
+// (100.64.0.0/10) and ULA (fd7a:115c:a1e0::/48) ranges. Both refusals look
+// like an indistinguishable 401/AUT001, so these cases read the binary's log
+// to tell "refused on the range" from "refused by the daemon".
 
 const tailscalePort = 19012
 
-// tailnetULABase is the base address of Tailscale's IPv6 ULA prefix. It is
-// inside the range validateTailscaleAddr accepts, while being the one address
-// in it that a tailnet never assigns to a node — assigned Tailscale IPv6
-// addresses carry a non-zero host portion. That matters because these cases
-// run on a developer's machine, which may well have a real tailscaled: an
-// address the local daemon could actually vouch for would make the outcome
-// depend on whose laptop the suite runs on.
+// tailnetULABase is the base address of Tailscale's IPv6 ULA prefix: inside
+// the range validateTailscaleAddr accepts, but the one address a tailnet never
+// assigns, so a developer's real tailscaled cannot vouch for it.
 const tailnetULABase = "fd7a:115c:a1e0::"
 
 // startTailscale brings up a SUT in tailscale local mode. The provider is
@@ -100,12 +78,9 @@ func getWithHeaders(
 }
 
 // awaitLog waits for want to appear in everything the binary logged after
-// mark, and returns that slice of the log.
-//
-// The wait is not incidental: the child's stdout reaches sut.Process through a
-// pipe a goroutine copies, so a record written before the HTTP response was
-// flushed can still arrive after the client has read it. Reading once would
-// make every log assertion here intermittently wrong.
+// mark, and returns that slice of the log. The child's stdout reaches
+// sut.Process through a pipe a goroutine copies, so a record can arrive after
+// the client has read the response -- reading once would be flaky.
 func awaitLog(t *testing.T, proc *sut.Process, mark int, want string) string {
 	t.Helper()
 
@@ -211,11 +186,9 @@ func TestTailscaleRefusesEveryPeerOutsideTheTailnet(t *testing.T) {
 	})
 
 	t.Run("x_forwarded_for_cannot_forge_a_tailnet_peer", func(t *testing.T) {
-		// With no trusted proxies configured, realIP records the verdict and
-		// leaves RemoteAddr alone, so the provider still sees loopback. A
-		// forwarding header is a claim by whoever sent it; honouring it here
-		// would let any client on the box assert a tailnet address and put
-		// the daemon to work on it.
+		// With no trusted proxies configured, realIP leaves RemoteAddr alone, so
+		// the provider still sees loopback. Honouring a forwarding header here
+		// would let any client on the box assert a tailnet address.
 		mark := len(proc.Logs())
 
 		outcome := getWithHeaders(t, proc, "/services", map[string]string{
@@ -263,15 +236,11 @@ func TestTailscaleRefusesEveryPeerOutsideTheTailnet(t *testing.T) {
 }
 
 // TestTailscaleBehindATrustedProxyDefersToTheDaemon records what changes when
-// an operator configures server.trusted_proxies in tailscale mode: realIP then
-// rewrites RemoteAddr to the address the proxy named, so a peer the proxy calls
-// a tailnet address clears validateTailscaleAddr and the daemon becomes the
-// only thing deciding whether that address is real.
-//
-// That is the documented behaviour of the trusted-proxy allowlist rather than a
-// defect — realIP makes the decision once, on the peer the connection actually
-// arrived from — but it is worth pinning: it is the configuration in which the
-// range check stops being a boundary, and nothing else in the suite says so.
+// an operator configures server.trusted_proxies in tailscale mode: realIP
+// rewrites RemoteAddr to the address the proxy named, so a peer the proxy
+// calls a tailnet address clears validateTailscaleAddr and only the daemon
+// decides whether it is real. That is the configuration in which the range
+// check stops being a boundary.
 func TestTailscaleBehindATrustedProxyDefersToTheDaemon(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

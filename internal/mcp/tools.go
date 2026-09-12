@@ -240,13 +240,9 @@ func (s *Server) registerTools() {
 			td.tool,
 			func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
 				// mcp-go runs a task-augmented tool on a goroutine holding the
-				// HTTP request context, which net/http cancels the moment the
-				// create-task response is written — so the handler starts with
-				// a dead context and its first Docker call fails before any
-				// request is issued. Detaching here rather than per handler
-				// covers every tool, including ones added later. A plain call
-				// keeps its live context, so a disconnecting client still
-				// cancels the work it started.
+				// HTTP request context, which net/http cancels as soon as the
+				// create-task response is written. Detached here rather than
+				// per handler, so tools added later are covered too.
 				if req.Params.Task != nil {
 					ctx = context.WithoutCancel(ctx)
 				}
@@ -255,15 +251,10 @@ func (s *Server) registerTools() {
 
 				text, err := handler(ctx, req)
 				if err != nil {
-					// On a plain call the failure belongs in the result, so
-					// the model reads it in its context window and can
-					// self-correct (SEP-1303).
-					//
-					// As a task it must be a real error instead: mcp-go marks
-					// a task completed whenever the handler returns no error,
-					// so a tool error returned this way would leave an agent
-					// polling tasks/get and reading "completed" for a mutation
-					// that was refused.
+					// On a plain call the failure belongs in the result, for
+					// the model to self-correct from (SEP-1303). As a task it
+					// must be a real error: mcp-go marks a task completed
+					// whenever the handler returns none.
 					if req.Params.Task != nil {
 						return nil, err
 					}
@@ -284,13 +275,9 @@ func (s *Server) registerTools() {
 }
 
 // toolCatalog returns every tool the MCP server knows about. registerTools
-// filters this list by tier; per-identity ACL is enforced inside each handler
-// at call time.
-//
-// Each tool sets all four behaviour hints explicitly (read-only, destructive,
-// idempotent, open-world) so clients can render confirmation UI accurately —
-// mcp-go's NewTool defaults destructive and open-world to true, which is the
-// wrong shape for a closed cluster-management surface.
+// filters by tier; per-identity ACL is enforced in each handler at call time.
+// All four behaviour hints are set explicitly: mcp-go defaults destructive and
+// open-world to true, which is the wrong shape for this surface.
 func (s *Server) toolCatalog() []toolDef {
 	return slices.Concat(
 		s.readTools(),
@@ -318,12 +305,9 @@ func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (s
 	service := strings.TrimSpace(req.GetString("service", ""))
 	task := strings.TrimSpace(req.GetString("task", ""))
 
-	// Naming two scopes would leave the tool to guess which stream the caller
-	// meant, and they differ: a service merges its live replicas, a task is one
-	// replica including a dead one, and the two wide scopes fan out over many.
-	// Checking them in order and returning from the first match would resolve
-	// the conflict by the order they happen to be written in — a call passing
-	// `service` and `cluster` would silently read the whole cluster.
+	// Two scopes would leave the tool guessing which stream was meant, and
+	// they differ. Taking the first match would resolve that by declaration
+	// order, so a call passing `service` and `cluster` reads the cluster.
 	named := make([]string, 0, 4)
 
 	for _, scope := range []struct {
@@ -499,12 +483,9 @@ func (s *Server) toolRestartService(
 	return marshalResult(s.serviceMutation(svc))
 }
 
-// removeHandler builds a tool handler for the common `{ id } → {"removed":true}`
-// shape shared by remove_task / remove_service / remove_config / remove_secret
-// / remove_network. idKey is the JSON-Schema property name (`id` for most,
-// `name` for volumes); aclCheck enforces write permission against the right
-// resource (often delegating to checkServiceWrite/checkNodeWrite when the ACL
-// key derives from a cached name); remove invokes the actual writer.
+// removeHandler builds a handler for the `{ id } → {"removed":true}` shape the
+// remove_* tools share. idKey is the schema property name (`name` for volumes),
+// aclCheck enforces write permission, remove invokes the writer.
 func (s *Server) removeHandler(
 	idKey string,
 	aclCheck func(ctx context.Context, id string) error,
@@ -592,17 +573,11 @@ type removalResult struct {
 	Removed bool `json:"removed"`
 }
 
-// serviceMutationResult is what the four lifecycle mutations return: a summary
-// of where the service ended up, rather than its entire specification.
-//
-// Two reasons. A task-augmented call's result is retained for as long as the
-// task lives, and a client that omits task.ttl keeps it for the life of the
-// process (see docs/mcp.md, "Always send task.ttl") — a full swarm.Service runs
-// to kilobytes, so the compact shape bounds what a long-running agent
-// accumulates. And it is the more useful answer: after a scale or a rollback an
-// agent wants to know where the service got to, not to re-read a spec it just
-// supplied. The spec-editing tools still return the full service, because there
-// the resulting spec *is* the answer.
+// serviceMutationResult is what the four lifecycle mutations return: where the
+// service ended up, rather than its whole specification. A task's result is
+// retained for as long as the task lives, and after a scale or rollback an
+// agent wants the outcome, not the spec it just supplied. The spec-editing
+// tools return the full service, because there the spec is the answer.
 type serviceMutationResult struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -626,18 +601,11 @@ type serviceMutationResult struct {
 // cache is the fresher of the two, and taking spec, running count and state
 // from one source keeps them mutually consistent.
 func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
-	// svc is Docker's own post-mutation view: every caller passes the value
-	// its write returned, and docker.Client produces that with a fresh
-	// InspectService. Spec and version therefore come from the write itself.
-	//
-	// Only the running count is read from the cache, because Docker's service
-	// object does not carry one. Reading the whole service from the cache —
-	// which this used to do, for the consistency of describing one moment —
-	// reported the state *before* the write instead: the cache is filled
-	// asynchronously by the event watcher, so it still holds the previous
-	// version when this runs. A caller that scaled 2 to 3 was told 3 tasks
-	// were desired only on its *next* call, and the stale Version it got back
-	// would collide on any follow-up write.
+	// svc is Docker's own post-mutation view, so spec and version come from
+	// the write itself. Only the running count is read from the cache, which
+	// the service object does not carry -- and which the watcher fills
+	// asynchronously, so reading the rest from there reports the state before
+	// the write.
 	running := s.cache.RunningTaskCount(svc.ID)
 
 	out := serviceMutationResult{
@@ -699,30 +667,20 @@ func resultAnnotationsFrom(ctx context.Context) *resultAnnotations {
 }
 
 // attachResourceLinks offers the cetacean:// resources a result refers to as
-// resource_link content items, so a host can render them as somewhere to go
-// next and a client can resources/read one without the model first working
-// out how to spell the URI.
-//
-// They ride alongside the result rather than inside it: the shapes find and
-// describe advertise as output schemas describe cluster resources, and a link
-// is a statement about where to read one — the spec gives content items for
-// exactly that, and putting URIs in the schema would make every widget and
-// every consumer of structuredContent carry them too.
+// resource_link content items. They ride beside the result rather than inside
+// it: the output schemas describe cluster resources, and a link is a statement
+// about where to read one.
 func attachResourceLinks(ctx context.Context, links []mcplib.ResourceLink) {
 	if annotations := resultAnnotationsFrom(ctx); annotations != nil {
 		annotations.links = links
 	}
 }
 
-// structuredToolResult wraps a handler's JSON text into a tool result that
-// carries both the text representation (a fallback for clients negotiating a
-// pre-2025-06-18 protocol revision) and machine-parseable structuredContent
-// (per the 2025-06-18+ structured-output contract). Every MCP tool marshals a
-// JSON object; the bytes are passed through as json.RawMessage rather than
-// decoded into a map and re-encoded — that round-trip is wasted work and
-// silently rewrites the payload (e.g. integers above 2^53 lose precision once
-// decoded into float64). If the text is not a JSON object the result degrades
-// to text-only, since structuredContent must be an object.
+// structuredToolResult wraps a handler's JSON text into a result carrying both
+// the text representation and structuredContent. The bytes pass through as
+// json.RawMessage rather than being decoded and re-encoded, which would rewrite
+// the payload -- integers above 2^53 lose precision through float64. A text
+// that is not a JSON object degrades to text-only.
 func structuredToolResult(text string) *mcplib.CallToolResult {
 	if trimmed := strings.TrimLeft(text, " \t\r\n"); trimmed == "" || trimmed[0] != '{' {
 		return mcplib.NewToolResultText(text)
@@ -801,15 +759,10 @@ func decodeArgInto(req mcplib.CallToolRequest, key string, target any) error {
 		return fmt.Errorf("re-encode %q: %w", key, err)
 	}
 
-	// Unknown fields are refused rather than dropped. The shapes these tools
-	// read and the shapes they write are not the same — describe renders a
-	// port as {"published":…,"target":…} while swarm.PortConfig wants
-	// PublishedPort and TargetPort — and read-modify-write is the natural way
-	// to edit a section the caller is told to replace wholesale. Silently
-	// ignoring the keys that did not match turned that round trip into a
-	// different service: the two ports decoded to zero and Docker published
-	// nothing, with no error anywhere. A named key in the error is what tells
-	// the caller which spelling it got wrong.
+	// Unknown fields are refused rather than dropped: the shapes these tools
+	// read and write differ, so a read-modify-write round trip would otherwise
+	// decode the mismatched keys to zero with no error anywhere. The named key
+	// in the error is what tells the caller which spelling it got wrong.
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 

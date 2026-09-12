@@ -6,19 +6,13 @@ import (
 )
 
 // FuzzFilterCompile exercises Compile and Evaluate, the expr-lang parser and
-// runtime behind the ?filter= query parameter that every list endpoint
-// accepts. It is reachable by anyone who can issue a read request — there is
-// no authentication in front of it — so a pathological expression is a
-// denial-of-service vector, not merely a bad query.
+// runtime behind the ?filter= query parameter every list endpoint accepts. It
+// is reachable by anyone who can issue a read request, so a pathological
+// expression is a denial-of-service vector.
 //
-// Property: compiling and evaluating an arbitrary string never panics, and
-// never runs longer than a fixed time budget. A program that fails to
-// compile is never evaluated, matching how the real handlers use these two
-// functions.
-//
-// The budget only catches an expression that is slow. One that never
-// terminates hangs the fuzz worker instead of tripping this check, and is
-// caught by `go test`'s own timeout, not by anything here.
+// Property: compiling and evaluating an arbitrary string never panics and never
+// runs longer than a fixed time budget. An expression that never terminates
+// hangs the fuzz worker instead, and is caught by `go test`'s own timeout.
 func FuzzFilterCompile(f *testing.F) {
 	seeds := []string{
 		`name == "web"`,

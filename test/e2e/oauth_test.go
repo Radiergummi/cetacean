@@ -28,50 +28,24 @@ import (
 
 // This file drives Cetacean's MCP OAuth 2.1 authorization server the way an
 // MCP client drives it: discover from a 401, register, walk the consent page,
-// redeem a code with PKCE, call /mcp with the resulting bearer token, rotate
-// the refresh token, and survive a restart. Reserves port 19011 (see
-// README.md's reserved-ports table).
-//
-// It exists because internal/mcp/oauth had no end-to-end coverage at all. Its
-// unit tests drive handlers in isolation; nothing observed the composed
-// server — the wiring main.go's setupMCP builds, the auth middleware that
-// must supply an identity to /oauth/authorize, the persistence file under the
-// data directory, or the bearer path into /mcp. mcp_sweep_test.go
-// deliberately sidesteps all of it with CETACEAN_MCP_AUTH_BYPASS.
-//
-// The two properties worth the most here are the ones nothing else watches:
-// **refresh-token rotation with grant-family theft detection**, and the fact
-// that both **survive a restart** — a rotation history that failed to persist
-// would disable theft detection silently, with every token still working.
-//
-// TestEveryOAuthEndpointIsDriven (oauth_inventory_test.go) is the gate: every
-// pattern oauth.Server.RegisterRoutes attaches must be driven from here.
+// redeem a code with PKCE, call /mcp with the bearer token, rotate the refresh
+// token, and survive a restart. Reserves port 19011.
 
 const oauthPort = 19011
 
-// oauthIssuer must be set explicitly: main.go's setupMCP refuses to start
-// (config.MCPIssuerRequired) when OAuth is in play and no reachable issuer can
-// be derived, and the derived one here would be "http://:19011" — a wildcard
-// listen address with no host. It is also the value every downstream identity
-// is built from: the JWT `iss`, the `aud` (issuer + base path + "/mcp"), the
-// RFC 9207 `iss` on the authorization response, and the PRM document. This
-// lane hardcodes it once as configuration and then discovers everything else,
-// so an assertion that discovery reports it is a real check rather than a
-// tautology.
+// oauthIssuer must be set explicitly: setupMCP refuses to start when OAuth is
+// in play and no reachable issuer can be derived, and the derived one here
+// would be "http://:19011". Everything else in the lane is discovered from it.
 const oauthIssuer = "http://127.0.0.1:19011"
 
 // oauthSigningKey fixes the HMAC key so access tokens minted before a restart
-// still verify after it. Left unset, main.go generates an ephemeral key and
-// warns that tokens won't survive restarts — which would make
-// TestMCPOAuthStateSurvivesARestart unable to tell a lost signing key from
-// lost persisted state. config.LoadMCP rejects anything shorter than 32 bytes.
+// still verify after it; an ephemeral key would be indistinguishable from lost
+// persisted state. config.LoadMCP rejects anything shorter than 32 bytes.
 const oauthSigningKey = "e2e-oauth-signing-key-32-bytes!!"
 
-// oauthPolicy grants everything to group:ops and nothing to anyone else, so
-// the lane can ask whether the `groups` claim minted at consent time actually
-// reaches the ACL evaluator through the bearer path. It is deliberately
-// narrower than readSweepPolicy: this file is not a second ACL sweep, it only
-// needs one granted persona and one ungranted one.
+// oauthPolicy grants everything to group:ops and nothing to anyone else, so the
+// lane can ask whether the `groups` claim minted at consent time reaches the
+// ACL evaluator through the bearer path.
 const oauthPolicy = `grants:
   - resources: ["*"]
     audience: ["group:ops"]
@@ -85,12 +59,9 @@ var (
 	oauthUngranted = readPersona{name: "anonymous", user: "nobody@example.com"}
 )
 
-// oauthRedirectURI is a loopback callback nothing listens on. It never needs
-// to: sut.Process's client is built with CheckRedirect returning
-// http.ErrUseLastResponse, so the 302 is the response under test and the
-// browser's follow-up never happens. Loopback http is what RFC 8252 §7.3
-// native clients use, and what DCR's isValidRedirectURI accepts alongside
-// https.
+// oauthRedirectURI is a loopback callback nothing listens on: sut.Process's
+// client returns http.ErrUseLastResponse, so the 302 is the response under
+// test. Loopback http is what RFC 8252 §7.3 native clients use.
 const oauthRedirectURI = "http://127.0.0.1:19999/callback"
 
 // startOAuth brings up a headers-auth SUT with MCP and its OAuth 2.1
@@ -122,12 +93,9 @@ func startOAuth(
 		"CETACEAN_MCP_SIGNING_KEY":      oauthSigningKey,
 		"CETACEAN_DATA_DIR":             dataDir,
 
-		// The production default is 10 registrations per IP per hour, and
-		// every case below that needs a client of its own registers one —
-		// which starves the lane after the tenth. Raising it here keeps the
-		// limiter from deciding which flow cases run; the limit itself is
-		// driven at a configured value by TestMCPOAuthDCRRateLimit, on a SUT
-		// whose bucket nothing else shares.
+		// The production default is 10 registrations per IP per hour, which the
+		// cases below would exhaust; the limit itself is driven by its own test,
+		// on a SUT whose bucket nothing else shares.
 		"CETACEAN_MCP_DCR_RATE_LIMIT": "500",
 	}
 
@@ -315,12 +283,8 @@ var authParamPattern = regexp.MustCompile(`([a-zA-Z_-]+)="([^"]*)"`)
 // discoverOAuth follows the chain a real MCP client follows, starting from
 // nothing but the endpoint URL: an unauthenticated call to /mcp yields a 401
 // whose WWW-Authenticate names the protected-resource metadata document (RFC
-// 9728 §5.1); that document names the authorization servers (RFC 9728 §2);
-// each of those serves RFC 8414 metadata naming the endpoints.
-//
-// Driving it this way rather than composing URLs from oauthIssuer is the
-// point: a client that cannot find the authorization server from a 401 cannot
-// authorize at all, and that chain is exactly what no unit test spans.
+// 9728 §5.1), which names the authorization servers, each serving RFC 8414
+// metadata naming the endpoints.
 func discoverOAuth(t *testing.T, proc *sut.Process) oauthDiscovery {
 	t.Helper()
 
@@ -522,11 +486,9 @@ func newAuthorizeRequest(
 }
 
 // hiddenInputPattern reads the consent form's hidden fields. The consent page
-// is a fixed template literal in internal/mcp/oauth/consent.go emitting
-// exactly this shape, so a regexp is enough and avoids promoting
-// golang.org/x/net/html from an indirect dependency to a direct one for a
-// single test file. Values are attribute-escaped by html/template, hence the
-// unescape.
+// is a fixed template literal emitting exactly this shape, so a regexp avoids
+// promoting golang.org/x/net/html to a direct dependency. Values are
+// attribute-escaped by html/template, hence the unescape.
 var hiddenInputPattern = regexp.MustCompile(
 	`<input type="hidden" name="([^"]+)" value="([^"]*)">`,
 )
@@ -901,11 +863,8 @@ type mcpEnvelopeWithChallenge struct {
 }
 
 // mcpWithToken issues one JSON-RPC call against /mcp authenticated by an OAuth
-// bearer token rather than by proxy headers. It is deliberately separate from
-// mcp_sweep_test.go's mcpAs: that helper authenticates through
-// CETACEAN_MCP_AUTH_BYPASS and the upstream headers provider, which is the one
-// path this file exists not to take. An empty token sends no Authorization
-// header at all.
+// bearer token rather than by proxy headers — the path mcp_sweep_test.go's
+// mcpAs deliberately bypasses. An empty token sends no Authorization header.
 func mcpWithToken(
 	t *testing.T,
 	proc *sut.Process,
@@ -1607,9 +1566,7 @@ func TestMCPOAuthFlow(t *testing.T) {
 	t.Run("consent_groups_reach_the_acl", func(t *testing.T) {
 		// The identity the ACL evaluates on the bearer path comes from the
 		// JWT's own claims, minted from whoever was authenticated at the
-		// consent page. Nothing else in the suite watches that hop: the MCP
-		// sweep takes CETACEAN_MCP_AUTH_BYPASS, where identity arrives in a
-		// header on every request instead.
+		// consent page. Nothing else in the suite watches that hop.
 		granted, _ := completeFlow(t, proc, discovery, oauthGranted, "e2e-acl-granted")
 		ungranted, _ := completeFlow(t, proc, discovery, oauthUngranted, "e2e-acl-ungranted")
 
@@ -1672,16 +1629,10 @@ func TestMCPOAuthFlow(t *testing.T) {
 	})
 
 	t.Run("theft_detection_burns_the_grant_family", func(t *testing.T) {
-		// The security property with no other coverage anywhere, driven the
-		// way a conforming client drives it: with the RFC 8707 `resource`
-		// parameter, which mcp.require_resource_indicator makes mandatory by
-		// default. Replaying a consumed refresh token must burn the whole
-		// grant family, or a stolen token keeps working alongside the
-		// legitimate one and the user is never re-prompted.
-		//
-		// TestMCPOAuthTheftDetectionWithoutTheResourceIndicator drives the
-		// same sequence with the indicator off, so the two paths into
-		// RefreshTokenStore.Rotate are covered rather than one.
+		// Replaying a consumed refresh token must burn the whole grant family,
+		// or a stolen token keeps working alongside the legitimate one and the
+		// user is never re-prompted. Driven with the RFC 8707 `resource`
+		// parameter, which is mandatory by default.
 		replay := driveRefreshReplay(
 			t, proc, discovery, oauthGranted, "e2e-theft", discovery.resource,
 		)
@@ -1737,13 +1688,10 @@ func TestMCPOAuthFlow(t *testing.T) {
 	})
 
 	t.Run("a_cimd_client_id_is_fetched_and_ssrf_guarded", func(t *testing.T) {
-		// CIMD cannot be driven to a successful fetch from here: the guard
-		// blocks loopback and private addresses, and AllowLoopback is a
-		// test-only field on CIMDFetcher that no configuration exposes. What
-		// can be proven end to end is that an https:// client_id takes the
-		// CIMD path at all — the only way to reach this error — and that the
-		// SSRF guard is live in the shipped binary rather than only in the
-		// package's own tests.
+		// CIMD cannot be driven to a successful fetch from here: the SSRF guard
+		// blocks loopback and private addresses. What can be proven end to end
+		// is that an https:// client_id takes the CIMD path at all, and that the
+		// guard is live in the shipped binary.
 		_, challenge := pkcePair(t)
 
 		request := newAuthorizeRequest(
@@ -1778,16 +1726,10 @@ func TestMCPOAuthFlow(t *testing.T) {
 }
 
 // TestMCPOAuthTheftDetectionWithoutTheResourceIndicator drives the same replay
-// as TestMCPOAuthFlow/theft_detection_burns_the_grant_family down the one path
-// that still reaches RefreshTokenStore.Rotate: a refresh that carries no
-// `resource` parameter, which only a server with
-// mcp.require_resource_indicator switched off will accept.
-//
-// It is the other half of finding D-5. On its own, the quarantined case cannot
-// tell "theft detection is broken" from "theft detection was never
-// implemented"; this one shows the store's detection is live and correct, and
-// so that what D-5 describes is an ordering bug in the handler in front of it
-// rather than a missing feature. It keeps passing after D-5 is fixed.
+// down the one path that still reaches RefreshTokenStore.Rotate: a refresh
+// carrying no `resource` parameter, which only a server with
+// mcp.require_resource_indicator switched off will accept. It shows the store's
+// detection is live, so D-5 is an ordering bug in the handler in front of it.
 func TestMCPOAuthTheftDetectionWithoutTheResourceIndicator(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -1818,12 +1760,10 @@ func TestMCPOAuthTheftDetectionWithoutTheResourceIndicator(t *testing.T) {
 	}
 }
 
-// TestMCPOAuthDCRRateLimit drives the per-IP registration limit at a
-// configured value. /oauth/register is unauthenticated by necessity — a client
-// registers precisely because it has no credentials yet — so the rate limit is
-// the only thing standing between it and an unbounded stream of registrations.
-// It runs on its own SUT because exhausting a bucket is not something the
-// other cases can share: the window is an hour and nothing resets it.
+// TestMCPOAuthDCRRateLimit drives the per-IP registration limit at a configured
+// value. /oauth/register is unauthenticated by necessity, so the rate limit is
+// the only thing between it and an unbounded stream of registrations. It runs
+// on its own SUT: the window is an hour and nothing resets it.
 func TestMCPOAuthDCRRateLimit(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -1865,12 +1805,10 @@ func TestMCPOAuthDCRRateLimit(t *testing.T) {
 	}
 }
 
-// TestMCPOAuthStateSurvivesARestart is the second half of the rotation
-// property: mcp-tokens.json holds the live tokens, the grant families *and*
-// their rotation history, written as one unit. History that failed to persist
-// would disable theft detection silently — every token would still work, and
-// a replayed one would simply be rejected as unknown rather than burning the
-// family — so this drives both directions across a restart.
+// TestMCPOAuthStateSurvivesARestart drives the second half of the rotation
+// property: mcp-tokens.json holds the live tokens, the grant families and their
+// rotation history, written as one unit. History that failed to persist would
+// disable theft detection silently, with every token still working.
 func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -1879,13 +1817,10 @@ func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 	dataDir := t.TempDir()
 
 	// Both processes run with mcp.require_resource_indicator off, and every
-	// refresh below omits the parameter. That is not the default, and it is
-	// deliberate: finding D-5 means a refresh carrying `resource` is answered
-	// before RefreshTokenStore.Rotate is ever consulted, so the persisted
-	// rotation history this test exists to observe would be unobservable —
-	// the replay would be refused as unknown whether the history survived or
-	// not. Omitting the parameter is the only path that still reaches the
-	// store. When D-5 is fixed, this configuration can go back to the default.
+	// refresh below omits the parameter: under D-5 a refresh carrying
+	// `resource` is answered before RefreshTokenStore.Rotate is consulted, so
+	// the persisted rotation history would be unobservable. Revert to the
+	// default once D-5 is fixed.
 	withoutIndicator := map[string]string{
 		"CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR": "false",
 	}
@@ -1964,10 +1899,8 @@ func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 }
 
 // TestMCPOAuthWithoutDCROrCIMD asserts the two client-identification paths can
-// actually be switched off: an operator who disables them is removing attack
-// surface (an unauthenticated registration endpoint, and outbound fetches to
-// URLs clients choose), and the server must both stop advertising them and
-// stop serving them.
+// be switched off: an operator disabling them is removing attack surface, and
+// the server must both stop advertising them and stop serving them.
 func TestMCPOAuthWithoutDCROrCIMD(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -1992,11 +1925,9 @@ func TestMCPOAuthWithoutDCROrCIMD(t *testing.T) {
 	})
 
 	t.Run("the_registration_endpoint_is_gone", func(t *testing.T) {
-		// RegisterRoutes attaches /oauth/register only when DCR is enabled,
-		// so with it off the request reaches the mux's catch-all, which
-		// answers a write to an unregistered path 404 rather than serving the
-		// dashboard's HTML with a 200 that reads as a successful
-		// registration.
+		// RegisterRoutes attaches /oauth/register only when DCR is enabled, so
+		// with it off the request reaches the mux's catch-all, which answers a
+		// write to an unregistered path 404 rather than serving the dashboard.
 		outcome := oauthPostJSON(t, proc, oauthIssuer+"/oauth/register", map[string]any{
 			"client_name":   "e2e-disabled-dcr",
 			"redirect_uris": []string{oauthRedirectURI},
@@ -2026,10 +1957,8 @@ func TestMCPOAuthWithoutDCROrCIMD(t *testing.T) {
 		}
 
 		// An absence is only meaningful once the log this request produced has
-		// actually arrived. The request logger runs after the handler returns
-		// and writes through the same stream, so this request's own record
-		// being present proves any CIMD warning it would have emitted is
-		// already in the buffer.
+		// arrived; this request's own record being present proves any CIMD
+		// warning it would have emitted is already in the buffer.
 		written := awaitLog(t, proc, mark, page.outcome.header.Get("Request-Id"))
 
 		// Refused *before* the fetch: the point of disabling CIMD is that the

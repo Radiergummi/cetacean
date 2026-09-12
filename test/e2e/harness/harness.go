@@ -41,15 +41,12 @@ var (
 )
 
 // Up brings the environment up and returns it. The environment is shared by
-// every test in a run — bringing up a fresh engine per test would cost more
-// than the isolation is worth, and fixtures are namespaced instead.
+// every test in a run, with fixtures namespaced instead.
 //
 // Up does NOT register a t.Cleanup teardown, and must not: the environment is
-// shared process-wide through sync.Once, so a Cleanup scoped to whichever
-// test happened to call Up first would tear it down under its sibling tests.
-// Teardown is owned by the `make test-stack` recipe instead, which brings the
-// environment down on a successful run and deliberately leaves it running on
-// failure, so a failed case stays available for inspection.
+// shared process-wide through sync.Once, so a Cleanup scoped to whichever test
+// called Up first would tear it down under its siblings. `make test-stack` owns
+// teardown, and leaves the environment up on failure for inspection.
 func Up(t *testing.T) *Env {
 	t.Helper()
 
@@ -109,12 +106,9 @@ func UpCLI() (*Env, error) {
 // waitForCerts blocks until cert-init has finished. The container exits when
 // done, so `--wait` does not cover it.
 //
-// It gates on the `ready` sentinel as well as the chain, because the chain
-// existing is not the same as cert-init being done: the script writes
-// client.pem and only then fixes the modes on every key it wrote. Returning
-// on client.pem's appearance handed the cert lane a chain whose key files
-// still carried whatever mode the container created them with — so cert-init
-// touches `ready` after that chmod, and this waits for it.
+// It gates on the `ready` sentinel as well as the chain: the script writes
+// client.pem and only then fixes the modes on every key it wrote, so returning
+// on client.pem's appearance hands out a chain with the wrong key modes.
 func waitForCerts(dir string) error {
 	deadline := time.Now().Add(upTimeout)
 	want := []string{
@@ -143,13 +137,10 @@ func waitForCerts(dir string) error {
 	return fmt.Errorf("cert-init did not finish writing %s within %s", dir, upTimeout)
 }
 
-// engineLabel is set on the DinD engine's own dockerd (compose.e2e.yaml's
-// `--label` flag) so waitForEngine can tell this engine apart from whatever
-// else might already be listening on dockerHost. Without it, an empty or
-// misconfigured CETACEAN_DOCKER_HOST elsewhere that happened to resolve here
-// — or literally anything else answering Ping on this loopback port — would
-// pass for "our" engine, and the suite's mutations (including
-// removeStack's deletions) would land on a stranger's cluster.
+// engineLabel is set on the DinD engine's own dockerd so waitForEngine can tell
+// this engine apart from whatever else might already be listening on dockerHost.
+// Without it, anything answering Ping on this loopback port would pass for
+// "our" engine and the suite's mutations would land on a stranger's cluster.
 const engineLabel = "cetacean-e2e=true"
 
 func waitForEngine(docker *client.Client) error {

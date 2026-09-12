@@ -9,15 +9,9 @@ import (
 
 // compareInventories is the pure comparison at the heart of the drift check:
 // given a route inventory, an operation inventory and the two excuse maps, it
-// reports every asymmetry that is not excused (undocumented, unregistered) and
-// every excuse that is no longer needed (staleUndoc, staleUnreg) as one message
-// per finding. It touches no file and calls no other package function, so it
-// can be driven directly with synthetic inventories to prove the check can
-// fail — see TestCompareInventoriesDetectsDrift below — without registering a
-// route or documenting an operation anywhere.
-//
-// TestEveryRegisteredRouteIsDocumented and TestEveryDocumentedOperationIsRegistered
-// are thin wrappers that call this with the real inventories.
+// reports every unexcused asymmetry and every excuse that is no longer needed,
+// one message per finding. It touches no file, so it can be driven with
+// synthetic inventories to prove the check can fail.
 func compareInventories(
 	routes []Route,
 	operations []Operation,
@@ -104,11 +98,9 @@ func compareInventories(
 }
 
 // TestEveryRegisteredRouteIsDocumented walks the router → spec direction, which
-// TestEveryReadEndpointMatchesSpec in internal/api does not: it walks spec →
-// router, so a route registered and never documented is invisible to it.
-//
-// Both directions are asserted here. An asymmetry that is legitimate belongs in
-// excused.go with a reason; an asymmetry that is drift fails.
+// internal/api's spec → router check cannot see: a route registered and never
+// documented is invisible to it. A legitimate asymmetry belongs in excused.go
+// with a reason; drift fails.
 func TestEveryRegisteredRouteIsDocumented(t *testing.T) {
 	routes, err := Routes()
 	if err != nil {
@@ -178,12 +170,10 @@ func TestSpecOperationsCoversTheDocumentedPaths(t *testing.T) {
 	}
 }
 
-// TestCompareInventoriesDetectsDrift drives compareInventories directly with
-// synthetic inventories — no route is registered and no operation is
-// documented anywhere on disk — proving the four failure shapes the drift
-// check exists to catch: a route the spec doesn't document, an operation the
-// router doesn't register, and a stale excuse on each side. It also proves a
-// properly excused asymmetry on either side stays silent.
+// TestCompareInventoriesDetectsDrift drives compareInventories with synthetic
+// inventories, proving the four failure shapes the drift check exists to catch —
+// an undocumented route, an unregistered operation, and a stale excuse on each
+// side — and that a properly excused asymmetry stays silent.
 func TestCompareInventoriesDetectsDrift(t *testing.T) {
 	routes := []Route{
 		{Method: "GET", Pattern: "/documented"},

@@ -32,17 +32,13 @@ var (
 )
 
 // Representations maps each content-negotiated route, keyed by Route.String(),
-// to the representations its registration declares.
+// to the representations its registration declares. Derived from router.go's
+// dispatch wiring in two forms: the dispatch helpers, whose media coverage is
+// fixed by the helper and its feedHandlers argument, and the handful that
+// negotiate by hand and name their ContentType constants lexically.
 //
-// It is derived from router.go's own dispatch wiring, in two forms that have
-// to be read together. Most routes are registered through contentNegotiated or
-// contentNegotiatedWithSSE, whose media coverage is fixed by the helper and by
-// whether its feedHandlers argument carries anything. A few negotiate by hand,
-// switching on ContentTypeFromContext; those name their ContentType constants
-// lexically, which is what the second form reads.
-//
-// A dispatch-helper call whose feed argument is in neither recognised shape is
-// an error rather than a route quietly reported as serving less than it does.
+// A feed argument in neither shape is an error, not a route quietly reported
+// as serving less than it does.
 func Representations() (map[string][]Representation, error) {
 	repsOnce.Do(func() {
 		fset := token.NewFileSet()

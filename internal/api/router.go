@@ -27,13 +27,9 @@ type Resyncer interface {
 }
 
 // ResourceRefresher re-reads a single resource from the engine into the cache.
-// Backed by the watcher's Refresh method, and decoupled for the same reason
-// Resyncer is.
-//
-// The If-Match precondition needs it: the cache is filled asynchronously from
-// the event stream while every writer applies against the engine, so a
-// validator compared against the cache describes a moment the engine has
-// already moved past — which is exactly the window the header exists to close.
+// Backed by the watcher's Refresh method, decoupled like Resyncer. The
+// If-Match precondition needs it: a validator compared against the
+// asynchronously filled cache describes a moment the engine has moved past.
 type ResourceRefresher interface {
 	Refresh(ctx context.Context, kind, id string) error
 }
@@ -199,14 +195,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		mux.Handle("GET /-/metrics", metrics.Handler())
 	}
 	if cfg.Resyncer != nil {
-		// Authenticated and grant-gated, but deliberately not tiered: this is
-		// the one /-/ route internal/auth's isExempt does not exempt, because
-		// each call is a full sweep of the Docker API and leaving it open let
-		// anyone who could reach the port amplify one cheap request into a
-		// cluster enumeration. The operations level is not the right gate —
-		// it says what a deployment may do to the *cluster*, and a resync only
-		// re-reads it, so a read-only deployment keeps the dashboard's refresh
-		// button.
+		// The one /-/ route isExempt does not exempt: each call sweeps the
+		// whole Docker API, so leaving it open amplifies one cheap request
+		// into a cluster enumeration. Not tiered, though -- the operations
+		// level says what a deployment may do to the cluster, and a resync
+		// only re-reads it.
 		mux.HandleFunc("POST /-/resync", h.withAnyGrant(HandleResync(cfg.Resyncer)))
 	}
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
@@ -809,15 +802,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		requireReady(h),
 		discoveryLinks,
 		requestLogger,
-		// Innermost, so requestLogger wraps it: this middleware answers a
-		// name-addressed request itself instead of calling through, and
-		// anything it sits outside of therefore never runs for a redirect.
-		// Placed outside requestLogger, every 307 was missing from the request
-		// log and from the cetacean_http_* metrics alike — invisible exactly
-		// when a client is looping on one. It stays after requireReady for the
-		// opposite reason: a server whose cache is not filled yet resolves
-		// every name to nothing, and answering ENG001 is more honest than
-		// reporting the resource missing.
+		// Innermost, so requestLogger wraps it: this answers a name-addressed
+		// request itself rather than calling through, so anything outside it
+		// never runs for a redirect. After requireReady for the opposite
+		// reason: an unfilled cache resolves every name to nothing, and
+		// ENG001 is more honest than reporting the resource missing.
 		h.canonicalIdentifier,
 	)
 

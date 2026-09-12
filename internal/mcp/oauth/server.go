@@ -384,15 +384,10 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Confirm the bound resource matches BEFORE rotation, again so a client
-	// typo doesn't revoke the entire family.
-	//
-	// A token that does not validate is deliberately *not* refused here. It
-	// may be a replay of one already rotated, and only Rotate can tell that
-	// from a token nobody ever issued — refusing early made theft detection
-	// unreachable on every conforming refresh, since the default
-	// configuration makes `resource` mandatory. Rotate answers an unknown
-	// token with the same invalid_grant below.
+	// Confirm the bound resource before rotation, so a client typo does not
+	// revoke the family. A token that does not validate is deliberately not
+	// refused here: it may be a replay of one already rotated, and only Rotate
+	// can tell that from a token nobody ever issued.
 	if resourceForm != "" {
 		if bound, live := s.refreshTokens.Validate(refreshTokenRaw); live &&
 			resourceForm != bound.Resource {
@@ -505,13 +500,9 @@ func writeTokenResponse(w http.ResponseWriter, resp tokenResponse) {
 
 // HandleRevoke handles POST {base}/oauth/revoke (RFC 7009).
 //
-// Limitation: revocation only applies to refresh tokens. Access tokens are
-// stateless HMAC JWTs and continue to validate until their `exp` claim
-// (default 1h via CETACEAN_MCP_ACCESS_TOKEN_TTL). Per RFC 7009 §2.2 the
-// server still returns 200 OK regardless of token type so the client cannot
-// distinguish "unknown token" from "no-op". Adding real access-token
-// revocation would require a JTI denylist sized to AccessTokenTTL — not
-// implemented today because short-lived tokens make this acceptable.
+// Refresh tokens only: access tokens are stateless JWTs and stay valid until
+// `exp`. RFC 7009 §2.2 requires 200 regardless, so a client cannot tell an
+// unknown token from a no-op.
 func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, tokenEndpointMaxBytes)
 	if err := r.ParseForm(); err != nil {
@@ -593,14 +584,9 @@ func (s *Server) issueCodeAndRedirect(
 	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
 }
 
-// renderConsentPage completes a partly-built consentData with the fields only
-// the server can supply — the action URL and a fresh CSRF nonce bound to this
-// page's state and fingerprint — and renders the form. Both the initial GET and
-// the POST that finds the client changed mid-decision go through it, so the
-// second prompt is built exactly like the first.
-//
-// The caller sets Fingerprint to the hash of the metadata it just rendered
-// from, rather than this recomputing it, so the value bound into the CSRF
+// renderConsentPage completes a partly-built consentData with the action URL
+// and a CSRF nonce bound to this page's state and fingerprint. The caller sets
+// Fingerprint rather than this recomputing it, so the value bound into the
 // token is provably the one the caller compared against.
 func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 	data.ActionURL = s.cfg.BasePath + "/oauth/authorize"
@@ -682,29 +668,17 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fingerprint the metadata exactly once, here, from the document the page
-	// is about to be rendered from. It travels to the POST in a hidden field
-	// covered by the CSRF HMAC, because a record must be bound to what the
-	// user was *shown*: resolving the client again on POST and fingerprinting
-	// that would record a document the user may never have seen, whenever the
-	// CIMD cache entry lapsed in between.
-	//
-	// Computed for unverified clients too. Nothing is remembered for them, but
-	// the fingerprint costs a hash, and covering it uniformly means the POST
-	// re-prompts whenever the name or redirect URI on screen went stale — for
-	// DCR that is an LRU eviction and re-registration rather than a document
-	// edit, but the user is equally owed a page describing the client that is
-	// about to receive the code.
+	// Fingerprint the metadata once, from the document the page is rendered
+	// from, and carry it to the POST under the CSRF HMAC: a record must be
+	// bound to what the user was shown, and re-resolving on POST could record
+	// a document they never saw. Computed for unverified clients too, so the
+	// POST re-prompts whenever the name or redirect URI on screen went stale.
 	fingerprint := consentFingerprint(meta)
 
-	// A remembered approval skips the page. Only for verified clients, and only
-	// when the metadata still hashes to what the user was shown — a CIMD client
-	// controls its own document and could otherwise redirect an inherited
-	// approval somewhere the user never saw.
-	//
-	// Issuing a code from a GET is ordinary for an authorization endpoint, and
-	// redirect_uri was exact-matched against the client's registered set above,
-	// so a silently issued code still lands only where the client registered.
+	// A remembered approval skips the page: verified clients only, and only
+	// while the metadata still hashes to what the user was shown -- a CIMD
+	// client controls its own document and could otherwise redirect an
+	// inherited approval somewhere the user never saw.
 	consentKey := ConsentKey{
 		Subject:  identity.Subject,
 		ClientID: clientID,
@@ -818,15 +792,10 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The client's metadata changed between rendering the page and this
-	// submission — a CIMD document edited, or its cache entry lapsed and the
-	// re-fetch returned something else. The user approved a name and a set of
-	// redirect URIs that no longer describe this client, so their approval
-	// does not cover this request: prompt again from the fresh metadata rather
-	// than issue a code or record anything against a document they never saw.
-	//
-	// The cookie is deliberately not cleared here; renderConsentPage replaces
-	// it with a nonce bound to the new fingerprint.
+	// The metadata changed between rendering the page and this submission, so
+	// the approval describes a client this no longer is: prompt again from the
+	// fresh document. renderConsentPage replaces the cookie with a nonce bound
+	// to the new fingerprint.
 	if fingerprint := consentFingerprint(meta); fingerprint != shownFingerprint {
 		s.renderConsentPage(w, consentData{
 			ClientName:          meta.ClientName,
@@ -849,13 +818,9 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	// Clear the CSRF cookie — the flow is complete.
 	clearCSRFCookie(w, secure)
 
-	// Remembering is limited to verified clients. A DCR client's metadata is
-	// self-reported and its client_id does not survive a restart, so a record
-	// keyed on one would be worthless at best.
-	//
-	// The recorded fingerprint is the one the page displayed, proven current
-	// by the comparison above — not a fresh resolution, which could differ
-	// from what the user actually approved.
+	// Verified clients only: a DCR client's metadata is self-reported and its
+	// client_id does not survive a restart. The recorded fingerprint is the
+	// one the page displayed, proven current by the comparison above.
 	if verified {
 		s.consent.Remember(ConsentKey{
 			Subject:  identity.Subject,

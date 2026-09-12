@@ -168,14 +168,9 @@ func TestETagRoundTripReturns304(t *testing.T) {
 }
 
 // TestTopologyRenderingsAgree checks the three renderings of /topology against
-// each other. This is the case unit tests cannot express: three independent
-// serializers must agree about one live graph.
-//
-// The JSON response is a JGF Document ({"graphs": [...]}) holding two graphs —
-// "network" and "placement" — but the DOT and GraphML renderers only ever
-// render the network graph (see internal/api/topology.go's
-// buildACLFilteredNetworkGraph), so only that graph's node URNs are checked
-// against the alternate renderings.
+// each other -- the case unit tests cannot express. The JSON response holds
+// two JGF graphs, "network" and "placement", but DOT and GraphML render only
+// the network graph, so only that graph's node URNs are compared.
 func TestTopologyRenderingsAgree(t *testing.T) {
 	_, proc := startNone(t, "")
 
@@ -236,19 +231,11 @@ func TestTopologyRenderingsAgree(t *testing.T) {
 }
 
 // TestAllowHeaderReflectsOperationsLevel checks the Allow header on a service
-// DETAIL endpoint, not the list: setAllowList (internal/api/allow.go) is what
-// answers GET /services, and it only adds POST for config/secret/plugin — not
-// service — so /services' Allow header is "GET, HEAD" at every operations
-// level and can't tell tier gating from a broken one. setAllow, which reads
-// resourceWriteMethods["service"] (PUT/POST at tier 1, PATCH at tier 2), is
-// what GET /services/{id} uses, so that is the endpoint that actually
-// reflects the tier.
-//
-// Both halves are asserted deliberately: tier 0 having no PUT/POST is
-// unfalsifiable on its own (an empty header or a 404 would pass it too), so
-// tier 1 having both PUT and POST present is checked as well, proving the
-// header is genuinely populated from the tier and that the request reached
-// the handler under test.
+// DETAIL endpoint, not the list: setAllowList adds POST only for
+// config/secret/plugin, so /services' Allow header is "GET, HEAD" at every
+// level and cannot tell tier gating from a broken one. Both halves are
+// asserted: tier 0 having no PUT/POST is unfalsifiable on its own, so tier 1
+// having both is checked too, proving the header is populated from the tier.
 func TestAllowHeaderReflectsOperationsLevel(t *testing.T) {
 	t.Run("ops level 0 denies writes", func(t *testing.T) {
 		_, proc := startNone(t, "0")

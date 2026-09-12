@@ -21,13 +21,8 @@ import (
 
 // This file drives the two log endpoints — GET /services/{id}/logs and
 // GET /tasks/{id}/logs — against containers whose output this suite wrote
-// itself: Docker's multiplexed frame decoding, the stream and cursor
-// parameters and their refusals, the SSE tail and its resume, and the
-// 128-stream cap. It reserves port 19015 (see README.md's reserved-ports
-// table).
-//
-// TestEveryLogRouteIsDriven is the gate: any further route ending in /logs
-// has to appear in drivenLogRoutes.
+// itself: frame decoding, the stream and cursor parameters and their refusals,
+// the SSE tail and its resume, and the 128-stream cap. It reserves port 19015.
 
 const logsPort = 19015
 
@@ -266,16 +261,11 @@ func TestLogStreamFilterPartitionsTheOutput(t *testing.T) {
 }
 
 // TestLogCursorsAreEnforcedAfterParsing drives the rule internal/logs.FilterSince
-// exists for: Docker ignores Since for service logs, so the cursor is applied
-// to the parsed lines instead. Every form the spec documents is driven,
-// because each takes a different path through logs.ParseCursor — and comparing
-// any of them against a Docker timestamp as a raw string would be wrong in a
-// different way.
-//
-// The expectation is computed from the unfiltered read by the same rule the
-// contract states, so it holds whether the cursor lands inside the burst or
-// outside it. A burst is written in well under a second, so a cursor at second
-// precision legitimately filters nothing.
+// exists for: Docker ignores Since for service logs, so the cursor is applied to
+// the parsed lines instead. Every documented form is driven, because each takes
+// a different path through logs.ParseCursor. The expectation is computed from
+// the unfiltered read by the same rule the contract states, so it holds whether
+// the cursor lands inside the burst or outside it.
 func TestLogCursorsAreEnforcedAfterParsing(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -347,11 +337,10 @@ func TestLogCursorsAreEnforcedAfterParsing(t *testing.T) {
 	})
 }
 
-// linesBeyond selects the lines strictly on one side of the cutoff: newer for
-// a lower bound, older for an upper one. Both rules are strict, so a line
-// stamped exactly at the cursor belongs to neither read; a line whose
-// timestamp cannot be placed belongs to both, which is what
-// internal/logs.Newer and Older decide for one.
+// linesBeyond selects the lines strictly on one side of the cutoff: newer for a
+// lower bound, older for an upper one. Both rules are strict, so a line stamped
+// exactly at the cursor belongs to neither read; one whose timestamp cannot be
+// placed belongs to both.
 func linesBeyond(lines []logLine, cutoff time.Time, newer bool) []string {
 	var want []string
 
@@ -579,9 +568,8 @@ func decodeLogFrame(t *testing.T, frame sseFrame) logLine {
 
 // TestLogSSETailsLiveOutputAndResumes drives the follow stream: a fresh tail
 // starts at now and carries an id per line, and a stream resumed from that id
-// delivers only what came after it. The id is the whole resume contract —
-// EventSource sends it back as Last-Event-ID, which the handler reads as the
-// cursor when no ?after= is given.
+// delivers only what came after. EventSource sends the id back as
+// Last-Event-ID, which the handler reads as the cursor when no ?after= is given.
 func TestLogSSETailsLiveOutputAndResumes(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -634,16 +622,12 @@ func TestLogSSETailsLiveOutputAndResumes(t *testing.T) {
 	}
 }
 
-// TestLogSSEConnectionCapRefusesWithRetryAfter drives the limit api/openapi.yaml
-// and docs/api.md both publish.
-//
+// TestLogSSEConnectionCapRefusesWithRetryAfter drives the published stream cap.
 // The counter is incremented before the Docker call that precedes the response
-// head, so a stream whose headers have arrived is one the handler is already
-// counting — and stays counting until the handler returns. Holding cap-1 of
-// them therefore leaves room for exactly one more, whether they were opened
-// serially or all at once. The last two are opened serially anyway: the one
-// that must still be admitted proves the cap is not lower than published, and
-// the one after it proves it is not higher.
+// head, so a stream whose headers have arrived is already counted, and stays so
+// until the handler returns. The last two are opened serially: the one that
+// must still be admitted proves the cap is not lower than published, the one
+// after it that it is not higher.
 func TestLogSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

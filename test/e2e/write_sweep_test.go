@@ -30,15 +30,10 @@ import (
 
 // This file drives Cetacean's write endpoints beyond scale and restart
 // (covered in write_test.go): image update, rollback, node drain, task
-// removal, a genuine concurrent-write conflict, and the service-spec PATCHes
-// the fixture image supports. It reserves port 19006 (see README.md's
-// reserved-ports table).
-//
-// drivenWriteRoutes and excusedWriteRoutes together are the self-enforcing
-// gate: TestEveryWriteRouteIsDrivenOrExcused requires every mutating route
-// contract.Routes() reports to appear in one or the other, so a new write
-// endpoint added to the router fails this test instead of silently going
-// untested.
+// removal, a concurrent-write conflict, and the service-spec PATCHes the
+// fixture image supports. drivenWriteRoutes and excusedWriteRoutes must
+// between them name every mutating route contract.Routes() reports.
+// Reserves port 19006 (see README.md's reserved-ports table).
 
 const writeSweepPort = 19006
 
@@ -94,11 +89,9 @@ func inspectService(t *testing.T, env *harness.Env, name string) swarm.Service {
 	return svc
 }
 
-// cleanupTaggedImage registers a t.Cleanup that removes a local image tag
-// this file created on the shared DinD engine (via ImageTag), tolerating a
-// not-found error so a passing test can never fail on cleanup. Without this,
-// the sweep-image/sweep-rollback tags it creates accumulate on the shared
-// engine across runs.
+// cleanupTaggedImage registers a t.Cleanup removing a local image tag this
+// file created on the shared DinD engine, tolerating not-found so a passing
+// test cannot fail on cleanup.
 func cleanupTaggedImage(t *testing.T, env *harness.Env, tag string) {
 	t.Helper()
 
@@ -133,13 +126,9 @@ func waitForServiceImage(t *testing.T, env *harness.Env, service, wantPrefix str
 }
 
 // waitForCachedServiceImage polls Cetacean's own GET /services/{id} — not the
-// engine — until it reflects wantPrefix. Used before a route that reads a
-// resource from Cetacean's cache (like rollback's PreviousSpec check) rather
-// than the engine directly: a change made straight against the engine is
-// visible there immediately, but Cetacean only learns of it once its watcher
-// processes the corresponding Docker event, and driving the route before
-// that catches up fails on a precondition the write sweep didn't intend to
-// exercise.
+// engine — until it reflects wantPrefix. A change made straight against the
+// engine reaches the cache only once the watcher processes the Docker event,
+// so a route that reads it from the cache must wait for that.
 func waitForCachedServiceImage(t *testing.T, proc *sut.Process, id, wantPrefix string) {
 	t.Helper()
 
@@ -247,13 +236,10 @@ func sweepRequest(
 }
 
 // sweepWriteAfterWrite issues a service write that closely follows another,
-// retrying while it loses a version race.
-//
-// Swarm bumps a service's version itself as a change rolls out, so a write
-// whose inspect straddles that bump is refused 409 (SVC001). docs/api.md
-// documents that as "re-read the resource and retry", which is what a client
-// does and what these cases do: the contract under test is the write, not who
-// wins the race against the orchestrator's own bookkeeping.
+// retrying while it loses a version race. Swarm bumps a service's version
+// itself as a change rolls out, so a write whose inspect straddles that bump
+// is refused 409 (SVC001); docs/api.md documents re-reading and retrying,
+// which is what a client does.
 func sweepWriteAfterWrite(
 	t *testing.T,
 	proc *sut.Process,
@@ -304,12 +290,9 @@ func problemType(t *testing.T, resp *http.Response) string {
 }
 
 // contractRoutes returns the router's route inventory. contract.Routes()
-// parses a path relative to internal/contract's own directory, but `go test`
-// runs this package's binary with test/e2e as the working directory — so the
-// call is bracketed with a chdir into internal/contract and back. This file
-// runs serially (no t.Parallel, and the suite requires -p 1 across packages),
-// so the brief change of process-wide working directory cannot race any
-// other test in this binary.
+// parses a path relative to internal/contract's own directory, so the call
+// is bracketed with a chdir there and back; this file runs serially, so the
+// process-wide working-directory change cannot race another test.
 func contractRoutes(t *testing.T) []contract.Route {
 	t.Helper()
 
@@ -362,11 +345,9 @@ func inContractDir(t *testing.T, read func()) {
 type driveFunc func(t *testing.T, env *harness.Env, proc *sut.Process)
 
 // drivenWriteRoutes is the single source of truth for what this file
-// exercises: TestWriteSweepMutatesTheCluster runs every entry against a real
-// engine, TestWriteSweepRefusedAtReadOnlyLevel replays every entry's route at
-// operations level 0, and TestEveryWriteRouteIsDrivenOrExcused requires every
-// other mutating route in the inventory to carry a reason in
-// excusedWriteRoutes instead.
+// exercises: every entry is run against a real engine and replayed at
+// operations level 0, and every other mutating route in the inventory must
+// carry a reason in excusedWriteRoutes instead.
 var drivenWriteRoutes = map[string]driveFunc{
 	"PUT /services/{id}/image":             driveServiceImage,
 	"POST /services/{id}/rollback":         driveServiceRollback,
@@ -412,11 +393,9 @@ var drivenWriteRoutes = map[string]driveFunc{
 }
 
 // excusedWriteRoutes carries a reason for every mutating route this file does
-// not drive. "gap: ..." marks a route simply out of scope for this slice, not
-// yet covered — see write-sweep-report.md for the full count. Every other
-// reason is meant to hold permanently: driving that route would be
-// destructive to the shared single-node engine every lane in this test
-// binary depends on, or is already covered elsewhere.
+// not drive. "gap: ..." marks one out of scope for this slice; every other
+// reason is permanent — driving that route would be destructive to the
+// shared single-node engine, or it is covered elsewhere.
 //
 //nolint:gosec // G101: keys are route patterns (e.g. "POST /secrets"), not credentials.
 var excusedWriteRoutes = map[string]string{
@@ -471,11 +450,9 @@ var excusedWriteRoutes = map[string]string{
 func driveServiceImage(t *testing.T, env *harness.Env, proc *sut.Process) {
 	ctx := context.Background()
 
-	// Registered before the throwaway stack below, so t.Cleanup's LIFO order
-	// removes the service (and the container still using this tag) first and
-	// the image tag second — the other way round, ImageRemove would fail
-	// with "image is being used by running container" while the test itself
-	// still passed.
+	// Registered before the throwaway stack below so t.Cleanup's LIFO order
+	// removes the service before the image tag; the other way round,
+	// ImageRemove fails with "image is being used by running container".
 	newTag := "cetacean-e2e-fixture:sweep-image"
 	cleanupTaggedImage(t, env, newTag)
 
@@ -511,12 +488,8 @@ func driveServiceImage(t *testing.T, env *harness.Env, proc *sut.Process) {
 func driveServiceRollback(t *testing.T, env *harness.Env, proc *sut.Process) {
 	ctx := context.Background()
 
-	// Registered before the throwaway stack below, so t.Cleanup's LIFO order
-	// removes the service first and the image tag second — see the same
-	// comment in driveServiceImage. The route under test reverts the
-	// service off this tag before the test returns, but registering the
-	// same way keeps this case safe even if an earlier assertion fails
-	// first.
+	// Registered before the throwaway stack below so t.Cleanup's LIFO order
+	// removes the service before the image tag, as in driveServiceImage.
 	altTag := "cetacean-e2e-fixture:sweep-rollback"
 	cleanupTaggedImage(t, env, altTag)
 
@@ -718,10 +691,9 @@ func driveServiceLogDriver(t *testing.T, env *harness.Env, proc *sut.Process) {
 }
 
 // driveNodeAvailability drains the environment's single node, verifies the
-// engine reports it drained AND that the throwaway service's task was
-// actually evicted (there is nowhere else to schedule it), then restores the
-// node to active — required because this environment has exactly one node,
-// so leaving it drained would strand every other lane sharing this engine.
+// engine reports it drained and the throwaway service's task evicted, then
+// restores it to active — this environment has one node, so leaving it
+// drained would strand every other lane sharing the engine.
 func driveNodeAvailability(t *testing.T, env *harness.Env, proc *sut.Process) {
 	ctx := context.Background()
 	service := deployThrowawayService(t, env, "drain")
@@ -846,11 +818,9 @@ func driveTaskRemoval(t *testing.T, env *harness.Env, proc *sut.Process) {
 		break
 	}
 
-	// The task IDs above come from the engine, but HandleRemoveTask resolves
-	// its target through the cache (lookupOr404), which the watcher fills
-	// asynchronously. Deleting inside that window answers 404 — a latent race
-	// this case carried until enough other engine churn ran alongside it to
-	// make the window matter.
+	// HandleRemoveTask resolves its target through the cache, which the
+	// watcher fills asynchronously; the IDs above come from the engine, so
+	// deleting inside that window answers 404.
 	awaitCached(t, proc, "/tasks/"+taskID)
 
 	resp := sweepRequest(t, proc, http.MethodDelete, "/tasks/"+taskID, "", nil)
@@ -899,9 +869,7 @@ var routeParam = regexp.MustCompile(`\{[^}]+\}`)
 // placeholderRequest turns a Route.String() such as
 // "PUT /services/{id}/image" into a method and a concrete path with every
 // path parameter replaced by a placeholder. The operations-level gate runs
-// before any resource lookup (requireLevel wraps the handler outside
-// requireWriteACL's own lookup — see TestScaleRefusedAtReadOnlyLevel in
-// write_test.go), so the resource named need not exist.
+// before any resource lookup, so the resource named need not exist.
 func placeholderRequest(route string) (method, path string) {
 	method, pattern, _ := strings.Cut(route, " ")
 
@@ -909,10 +877,8 @@ func placeholderRequest(route string) (method, path string) {
 }
 
 // TestWriteSweepRefusedAtReadOnlyLevel replays every driven route's request
-// at operations level 0 and asserts OPS001, mirroring
-// TestScaleRefusedAtReadOnlyLevel in write_test.go for the routes this file
-// adds. This is where the suite would catch a write that succeeds when the
-// tier forbids it.
+// at operations level 0 and asserts OPS001 — where the suite would catch a
+// write that succeeds when the tier forbids it.
 func TestWriteSweepRefusedAtReadOnlyLevel(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -937,20 +903,12 @@ func TestWriteSweepRefusedAtReadOnlyLevel(t *testing.T) {
 	}
 }
 
-// TestWriteSweepConcurrentScaleProducesAStaleVersionConflict is the 409
-// case: Cetacean's own writers always inspect the service immediately before
-// writing (see internal/docker/client.go's ScaleService), so a client cannot
-// hand it a stale version directly — there is no version field on the
-// request. The only way to make Cetacean itself produce a genuine version
-// conflict is to race it against itself: fire many concurrent scale requests
-// at one service and let two of them read the same version before either
-// commits. No test anywhere in this repository pins this contract today.
-//
-// The race is retried a bounded number of times rather than asserted on a
-// single attempt: the assertion itself (a real 409 naming SVC001, alongside
-// a real 200, alongside the engine reflecting exactly one of the requested
-// values) is never weakened, but a race that fails to manifest on one
-// attempt is a timing miss, not a passing result.
+// TestWriteSweepConcurrentScaleProducesAStaleVersionConflict is the 409 case.
+// Cetacean's writers inspect the service immediately before writing and a
+// client cannot hand it a stale version, so the only way to produce a genuine
+// conflict is to race Cetacean against itself. The race is retried a bounded
+// number of times: failing to manifest on one attempt is a timing miss, not a
+// passing result, and the assertion itself is never weakened.
 func TestWriteSweepConcurrentScaleProducesAStaleVersionConflict(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -1036,12 +994,10 @@ func TestWriteSweepConcurrentScaleProducesAStaleVersionConflict(t *testing.T) {
 			continue
 		}
 
-		// The race manifested — at least one request lost it. What the loser
-		// got back is the assertion this test exists to make: docs/api.md
-		// documents a version race as 409 naming SVC001, and Swarmkit raises
-		// it with gRPC code Unknown, which Docker renders as a bare 500 —
-		// so a mapping that goes by error class alone answers ENG004 and a
-		// client cannot tell a lost race from a broken server.
+		// Swarmkit raises a version conflict with gRPC code Unknown, which
+		// Docker renders as a bare 500 — so a mapping that goes by error class
+		// alone answers ENG004 and a client cannot tell a lost race from a
+		// broken server.
 		for i, status := range statuses {
 			if status == http.StatusOK || status == http.StatusConflict {
 				continue
@@ -1106,11 +1062,8 @@ func TestWriteSweepConcurrentScaleProducesAStaleVersionConflict(t *testing.T) {
 
 // TestEveryWriteRouteIsDrivenOrExcused requires every POST/PUT/PATCH/DELETE
 // route contract.Routes() reports to appear in drivenWriteRoutes or
-// excusedWriteRoutes. A new write endpoint added to internal/api/router.go
-// then fails this test instead of silently going untested. It also fails on
-// a stale entry in either map — one naming a route the inventory no longer
-// has — since a stale excuse hides the next real drift as surely as a
-// missing one does.
+// excusedWriteRoutes, and fails on a stale entry in either map: a stale
+// excuse hides the next real drift as surely as a missing one does.
 func TestEveryWriteRouteIsDrivenOrExcused(t *testing.T) {
 	routes := contractRoutes(t)
 

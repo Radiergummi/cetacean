@@ -71,12 +71,9 @@ var canonicalResolvers = map[string]canonicalResolver{
 
 // splitResourcePath splits a request path into its collection segment, the
 // identifier addressing one member of it, and whatever follows. The remainder
-// keeps its leading slash so it can be concatenated back on unchanged.
-// A single trailing slash is dropped rather than carried into the redirect:
-// `/services/shop_web/` used to produce `Location: /services/<id>/`, which
-// matches no registered pattern — Go's ServeMux treats the trailing slash as
-// part of the path — so it fell to the SPA handler and answered a JSON client
-// with index.html.
+// keeps its leading slash so it concatenates back unchanged. A single trailing
+// slash is dropped: ServeMux treats it as part of the path, so a redirect
+// carrying one matches no registered pattern.
 func splitResourcePath(path string) (collection, identifier, rest string) {
 	trimmed := strings.TrimPrefix(path, "/")
 	if trimmed != "" {
@@ -96,27 +93,15 @@ func splitResourcePath(path string) (collection, identifier, rest string) {
 	return collection, identifier, rest
 }
 
-// canonicalIdentifier answers a request that addresses a resource by name with
-// a 307 to the same path spelled with the resource's canonical ID.
+// canonicalIdentifier answers a request addressing a resource by name with a
+// 307 to the same path spelled with the canonical ID, so one resource keeps one
+// URL -- the one ETags, `@id`, Link headers and the history feed all name.
 //
-// It exists because the two transports disagreed about what an identifier
-// means: internal/mcp resolves through cache.Resolve*, which tries the ID and
-// then scans names, while REST looked up the ID-keyed map alone — so
-// `GET /services/shop_web` answered 404 while the equivalent MCP read
-// succeeded, and the note on cache/resolve.go claiming both transports cannot
-// disagree was false. Redirecting rather than serving the resource under the
-// name keeps one URL per resource: ETags, `@id`, Link headers and the history
-// feed all continue to name the ID, and a client that follows the redirect
-// lands on the representation it would have got by addressing the ID itself.
+// 307 preserves the method and body, so writes may be addressed by name too.
+// 308 is cacheable indefinitely and a name can move; 301 and 302 let clients
+// rewrite the method to GET.
 //
-// 307, specifically: it preserves the method and the body, so the same rule can
-// cover writes — `PUT /services/shop_web/scale` reaches the scale handler with
-// its payload intact. 308 would be wrong because it is cacheable indefinitely
-// and a name can be moved to another resource; 301 and 302 would be worse still,
-// since clients are permitted to rewrite the method to GET.
-//
-// It deliberately does nothing for HTML. Those requests are the SPA's own
-// routing surface, and the dashboard's URLs are its to decide.
+// HTML requests are left alone: those paths are the SPA's routing surface.
 func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if ContentTypeFromContext(r.Context()) == ContentTypeHTML {
@@ -138,13 +123,9 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 
 		var ambiguous *cache.AmbiguousNameError
 		if errors.As(err, &ambiguous) {
-			// The report names every candidate ID, so it is a disclosure in
-			// its own right. A caller who could not read any resource of this
-			// type is told nothing and falls through to the handler, which
-			// answers the unresolved name with its ordinary 404. The question
-			// is type-level because an ambiguous name resolves to no single
-			// resource to check, and acl.TypeGrants answers it from one policy
-			// read.
+			// The report names every candidate ID, so it is a disclosure.
+			// Type-level, because an ambiguous name resolves to no single
+			// resource to check.
 			access := h.acl.TypeGrants(auth.IdentityFromContext(r.Context()))
 			if !access.Can("read", singularType[collection]) {
 				next.ServeHTTP(w, r)
@@ -167,11 +148,8 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 			return
 		}
 
-		// A redirect is a statement that the named resource exists, and it
-		// hands over its ID. Answering it for a caller with no read grant
-		// would turn every detail path into a way to enumerate names and
-		// discover IDs behind the policy, so the request falls through to the
-		// handler instead, which answers exactly as it does for the ID.
+		// A redirect states the named resource exists and hands over its ID,
+		// so without a read grant the request falls through to the handler.
 		if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", resource) {
 			next.ServeHTTP(w, r)
 

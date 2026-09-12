@@ -57,10 +57,9 @@ const (
 	stackLabel = "com.docker.stack.namespace"
 
 	// BaselineSentinel is a config created as the very last step of
-	// DeployBaseline. baselinePresent tests only for this, not for any
-	// individual resource, so a run that fails partway through leaves no
-	// sentinel and the next call re-drives the whole baseline rather than
-	// silently adopting a half-built one.
+	// DeployBaseline. baselinePresent tests only for this, so a run that fails
+	// partway leaves no sentinel and the next call re-drives the whole
+	// baseline.
 	BaselineSentinel = "e2e-baseline-complete"
 )
 
@@ -377,13 +376,10 @@ func baselinePresent(ctx context.Context, env *harness.Env) (bool, error) {
 }
 
 // isConflict tolerates a resource that already exists. cerrdefs.IsConflict
-// covers the Docker daemon's own conflict response, but the swarm raft
-// allocator raises a differently-shaped error for the same situation ("rpc
-// error: code = Unknown desc = name conflicts with an existing object") when
-// two callers race to create the same object -- e.g. two test packages
-// running DeployBaseline's check-then-act sentinel guard concurrently,
-// without -p 1. Recognizing both keeps that race a harness constraint rather
-// than a false failure.
+// covers the daemon's own conflict response, but the swarm raft allocator
+// raises a differently-shaped error for the same situation ("rpc error: code
+// = Unknown desc = name conflicts with an existing object") when two callers
+// race to create one object.
 func isConflict(err error) bool {
 	return cerrdefs.IsConflict(err) ||
 		strings.Contains(err.Error(), "name conflicts with an existing object")
@@ -654,20 +650,11 @@ func runningTasks(ctx context.Context, env *harness.Env, serviceID string) (int,
 
 // removeStack removes every service and network carrying the stack's label.
 // It runs from t.Cleanup, where t.Context() is already canceled, so it uses
-// independent, bounded contexts rather than the test's own — one per stage,
-// so a slow service teardown cannot leave the network stage with an expired
-// context and no time to run in.
-//
-// Both stages have to wait, not just fire once: ServiceRemove and the task
-// teardown it triggers are asynchronous, so a network can still show "active
-// endpoints" for a moment after its services are gone. removeStack first
-// polls ServiceList to confirm the stack's services have actually left the
-// engine (not just that ServiceRemove was accepted), then retries each
-// NetworkRemove with a bounded backoff to ride out the remaining endpoint-
-// detachment lag. A failure that survives the deadline is reported with
-// t.Errorf, not logged: a leaked network collides with the next run's
-// same-named create, and a t.Logf nobody reads is how that leak went
-// unnoticed before.
+// independent bounded contexts, one per stage. Both stages wait rather than
+// firing once: teardown is asynchronous, so a network can still show active
+// endpoints after its services are gone. A failure that survives the deadline
+// is a t.Errorf, since a leaked network collides with the next run's
+// same-named create.
 func removeStack(t *testing.T, env *harness.Env, stack string) {
 	t.Helper()
 
@@ -745,15 +732,10 @@ func waitServicesGone(
 }
 
 // removeNetworkWithRetry retries NetworkRemove until it succeeds or deadline
-// passes, to ride out the endpoint-detachment lag that follows service
-// removal. A network still standing when the deadline expires is reported
-// against the test that leaked it, since it will collide with the next run's
-// attempt to create a network of the same name.
-//
-// It attempts the removal before consulting the deadline, so the report names
-// a real failure: a deadline already spent on an earlier stage used to skip
-// the loop body entirely, leaving lastErr nil and announcing a leaked network
-// with a <nil> cause for a removal that was never tried.
+// passes, riding out the endpoint-detachment lag that follows service
+// removal. A network still standing at the deadline is reported against the
+// test that leaked it. The removal is attempted before the deadline is
+// consulted, so an already-spent deadline still reports a real cause.
 func removeNetworkWithRetry(
 	t *testing.T,
 	ctx context.Context,

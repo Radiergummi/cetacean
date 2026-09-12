@@ -63,12 +63,9 @@ func TestMain(m *testing.M) {
 }
 
 // uncoveredRoutes returns the routes that no sweep reached and no excuse
-// covers, given an inventory, the patterns reached so far, and the excuse map.
-// It takes all three as parameters — rather than reading Routes(),
-// exercisedRoutes() and excusedUncovered directly — so the two directions of
-// the gate (a real gap, and a stale excuse) can be proven on synthetic inputs
-// without touching a product file. See TestUncoveredRoutesReportsAGenuineGap
-// and its siblings below.
+// covers. It takes the inventory, the reached patterns and the excuse map as
+// parameters — rather than reading them directly — so both directions of the
+// gate can be proven on synthetic inputs without touching a product file.
 func uncoveredRoutes(routes []Route, reached []string, excuses map[string]string) []string {
 	var out []string
 
@@ -127,21 +124,10 @@ func TestRecorderObservesRequests(t *testing.T) {
 }
 
 // TestEventsReturnsImmediatelyForAPlainJSONRequest proves GET /events belongs
-// on the "reached" list rather than excused as a stream that "holds the
-// connection open": router.go's "GET /events" handler switches on the
-// negotiated content type, and only the ContentTypeSSE branch calls
-// broadcaster.ServeSSE (which blocks). Every other sweep in this package,
-// including World.REST, sends Accept: application/json, which resolves to
-// ContentTypeJSON — a type this route cannot produce, since there is no JSON
-// snapshot of a stream — and is refused 406 immediately. So a plain JSON
-// request is not a workaround; it is the same request every other route in
-// this package already exercises, and it is genuinely non-blocking here.
-//
-// The 2s deadline is the assertion that matters: if a future change made the
-// default branch fall through to the SSE path instead, this request would
-// hang past it and fail with a context-deadline error rather than silently
-// passing, which a bare status-code check after an unbounded call would not
-// catch.
+// on the "reached" list rather than excused as a stream that holds the
+// connection open: only the ContentTypeSSE branch blocks, and an
+// Accept: application/json request is refused 406 immediately. The 2s
+// deadline fails loudly if the default branch ever falls through to SSE.
 func TestEventsReturnsImmediatelyForAPlainJSONRequest(t *testing.T) {
 	w := NewWorld(t)
 

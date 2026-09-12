@@ -15,24 +15,11 @@ import (
 )
 
 // mcpCall issues one JSON-RPC request against the stateless MCP transport.
-// Protocol 2026-07-28 has no initialize handshake and no session id, so every
-// call is a standalone POST — but it is not a bare JSON-RPC envelope. mcp-go's
-// transport-level validation (server/streamable_http_modern.go's
-// validateModernRequest, per SEP-2567/SEP-2575) requires the protocol version
-// stated in BOTH the Mcp-Protocol-Version header AND params._meta's
-// "io.modelcontextprotocol/protocolVersion" field, matching; the brief's
-// header-only version was rejected with "missing or invalid _meta field
-// io.modelcontextprotocol/protocolVersion". Every modern request also needs
-// params._meta's "io.modelcontextprotocol/clientCapabilities" field
-// (server/protocol.go's extractRequestProtocolInfo) — an empty object
-// declares no optional capabilities and is accepted. Standard-headers validation
-// (SEP-2243, mcp/headers.go's ValidateStandardHeaders, invoked automatically
-// once Mcp-Protocol-Version is present) further requires an Mcp-Method header
-// mirroring the JSON-RPC method, and — for methods that carry a name
-// (tools/call, resources/read, prompts/get; see MethodRequiresNameHeader) —
-// an Mcp-Name header matching params.name. tools/list needs no name header;
-// tools/call does, so the tool name travels in the header as well as the
-// body.
+// Protocol 2026-07-28 has no handshake and no session id, but a modern
+// request still needs the protocol version in both the Mcp-Protocol-Version
+// header and params._meta, a clientCapabilities object, an Mcp-Method header
+// mirroring the JSON-RPC method, and — for tools/call, resources/read and
+// prompts/get — an Mcp-Name header matching params.name.
 func mcpCall(
 	t *testing.T,
 	proc *sut.Process,
@@ -108,11 +95,8 @@ func mcpCall(
 }
 
 // startMCP brings up the shared environment with CETACEAN_MCP=true and no
-// auth, on the `none` lane's reserved port. Auth mode "none" means main.go's
-// setupMCP never builds an OAuth server (see main.go's setupMCP), so
-// internal/mcp.Server.Handler skips bearerAuth entirely and /mcp is reachable
-// with a bare request — matching how the other no-auth lanes drive the REST
-// API.
+// auth, on the `none` lane's reserved port. Auth mode "none" means setupMCP
+// never builds an OAuth server, so /mcp is reachable with a bare request.
 func startMCP(t *testing.T) (*harness.Env, *sut.Process) {
 	t.Helper()
 
@@ -132,13 +116,10 @@ func startMCP(t *testing.T) (*harness.Env, *sut.Process) {
 	return env, proc
 }
 
-// TestMCPToolsListIsGatedByOperationsLevel checks tools/list against the
-// default operations level (1, Operational — internal/config.OpsOperational,
-// unset by startMCP). The assertion is two-sided on purpose: a tier-0 tool
-// (find) must be present and a tier-3 tool (remove_service, tier
-// config.OpsImpactful per internal/mcp/tools_impactful.go) must be absent. A
-// one-sided absence check would pass vacuously if tools/list came back empty
-// or errored without this test noticing.
+// TestMCPToolsListIsGatedByOperationsLevel checks tools/list at the default
+// operations level (1, Operational). The assertion is two-sided on purpose:
+// a tier-0 tool must be present and a tier-3 tool absent, where a one-sided
+// absence check would pass vacuously on an empty or errored list.
 func TestMCPToolsListIsGatedByOperationsLevel(t *testing.T) {
 	_, proc := startMCP(t)
 
@@ -171,25 +152,10 @@ func TestMCPToolsListIsGatedByOperationsLevel(t *testing.T) {
 }
 
 // TestMCPFindAndDescribeAgree checks find and describe against the same live
-// service.
-//
-// find's `type` argument is plural ("services"); describe's is singular
-// ("service") — internal/mcp/find.go's listableResourceTypes vs.
-// internal/mcp/describe.go's describableResourceTypes. find's result embeds
-// its rows under "items", not "rows" (internal/mcp.findResult); describe's
-// result embeds cluster.Digest inline, so its fields (id, name, type, state,
-// ...) sit at the top level of structuredContent rather than nested.
-//
-// The comparison is deliberately on State, not just identity fields: ID is
-// the describe lookup key and Name is find's own field, so agreeing on those
-// would only prove the two calls addressed the same record. State is
-// computed independently on each path — cluster.RowsForServices derives it
-// from cache.RunningTaskCounts (one aggregate pass over the whole task
-// table), while cluster.ServiceDigest recomputes the running count by
-// iterating this service's own tasks one at a time
-// (internal/cluster/view.go). Neither call was keyed on it, so agreement
-// here is a genuine cross-check that the two independent projections of one
-// resource describe the same reality.
+// service: find's `type` is plural and its rows sit under "items", describe's
+// is singular and its digest is inlined at the top level. The comparison is
+// on State rather than identity, since State is computed independently on
+// each path and so agreement is a genuine cross-check.
 func TestMCPFindAndDescribeAgree(t *testing.T) {
 	_, proc := startMCP(t)
 

@@ -1,13 +1,8 @@
 package contract
 
-// The excuse lists are the honest record of what this package does not hold the
-// product to. Every entry carries a reason a reader can evaluate, and "not yet"
-// is not one — an entry that means "we have not got round to it" is a coverage
-// gap wearing a disguise, and should be a defect on the list instead.
-//
-// A stale entry is worse than a missing one: it hides the next real drift. The
-// drift tests therefore fail on an excuse that is no longer needed, not only on
-// one that is missing.
+// The excuse lists record what this package does not hold the product to.
+// Every entry carries a reason a reader can evaluate; "not yet" is not one.
+// The drift tests fail on an excuse no longer needed, not only a missing one.
 
 // excusedUndocumented holds routes that are registered but deliberately absent
 // from api/openapi.yaml. Keys are Route.String(), e.g. "GET /nodes".
@@ -72,13 +67,12 @@ var excusedUnregistered = map[string]string{
 	"POST /auth/logout":  "registered by auth.OIDCProvider.RegisterRoutes, not router.go",
 }
 
-// excusedUncovered holds routes no sweep in this package exercises. Keys are
-// Route.String(). It lives here rather than beside the other two excuse lists
-// because .golangci.yml enables `unused`: a package variable nothing reads
-// fails the lint gate of whichever task declares it.
+// excusedUncovered holds routes no sweep in this package exercises, keyed by
+// Route.String(). Here rather than beside the other excuse lists because
+// `unused` fails a package variable nothing reads.
 //
-// gosec flags this map on the "secrets" substring in its route-pattern keys
-// (e.g. "POST /secrets"); the values are excuse reasons, not credentials.
+// gosec flags the "secrets" substring in the route keys; the values are excuse
+// reasons, not credentials.
 //
 //nolint:gosec // G101
 var excusedUncovered = map[string]string{
@@ -87,13 +81,9 @@ var excusedUncovered = map[string]string{
 	// treatment in excusedUndocumented above.
 	"/": "serves the embedded SPA",
 
-	// GET /events is deliberately NOT excused here: router.go's handler only
-	// blocks on broadcaster.ServeSSE for an SSE Accept header. Every sweep in
-	// this package (World.REST included) asks for application/json, which
-	// falls into the handler's default branch (serve the SPA) and returns
-	// immediately — TestEventsReturnsImmediatelyForAPlainJSONRequest covers it
-	// and proves the non-blocking claim with a deadline, rather than excusing
-	// it as a stream nothing here ever asks to open.
+	// GET /events is deliberately not excused: the handler only blocks for an
+	// SSE Accept header, and every sweep here asks for application/json, which
+	// returns immediately.
 
 	// Prometheus-backed: verified against source — each of these hard-errors
 	// (MTR001) when h.promClient or metricsProxy is nil, which it is in this

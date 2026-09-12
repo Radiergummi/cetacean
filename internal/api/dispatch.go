@@ -20,14 +20,10 @@ func (f feedHandlers) hasFeed() bool {
 	return f.atom != nil || f.jsonFeed != nil
 }
 
-// contentNegotiated wraps a JSON handler to dispatch based on content type.
-// HTML requests go to the SPA, SSE gets 406 (not supported here).
-//
-// A type this route cannot produce is refused rather than answered with
-// another one. The negotiate middleware can only rule out a type *no* route
-// serves — the graph formats are supported globally because /topology serves
-// them — so what a particular route can produce is decided here, where its
-// handlers are, and nowhere else knows it.
+// contentNegotiated wraps a JSON handler to dispatch on content type. HTML
+// goes to the SPA, SSE gets 406. A type this route cannot produce is refused
+// rather than answered with another: the negotiate middleware can only rule
+// out a type no route serves, so this is the only place that knows.
 func contentNegotiated(
 	jsonHandler http.HandlerFunc,
 	feeds feedHandlers,

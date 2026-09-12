@@ -27,23 +27,19 @@ import (
 // completions capability, and the tasks extension a mutation is augmented
 // with. It reserves port 19016 (see README.md's reserved-ports table).
 //
-// The valuable half is the security one. A notification is the one thing the
-// server sends unasked, so a delivery that ignores the caller's grants
-// discloses that a resource exists and just changed. Completions are the same
-// hazard in the other direction: a list of names the caller cannot read.
+// A notification is the one thing the server sends unasked, so a delivery that
+// ignores the caller's grants discloses that a resource exists and just
+// changed; completions are the same hazard in reverse.
 //
-// Identity arrives through CETACEAN_MCP_AUTH_BYPASS=headers, as in
-// mcp_sweep_test.go — a supported deployment, and the same reasoning applies:
-// this file tests what an established identity may receive, not how it was
-// established. The OAuth flow is oauth_test.go's lane.
+// Identity arrives through CETACEAN_MCP_AUTH_BYPASS=headers: this file tests
+// what an established identity may receive, not how it was established.
 
 const mcpStreamPort = 19016
 
 // mcpStreamPolicy separates three callers by what they may read, which is what
-// makes a withheld notification distinguishable from one that simply never
-// fired: "all" reads everything, "services" reads services (and, through the
-// resolver, their tasks) and nothing else, and "nobody" matches no grant at
-// all.
+// makes a withheld notification distinguishable from one that never fired:
+// "all" reads everything, "services" reads services (and, through the
+// resolver, their tasks), and "nobody" matches no grant at all.
 const mcpStreamPolicy = `grants:
   - resources: ["*"]
     audience: ["group:stream-all"]
@@ -184,10 +180,9 @@ type listenStream struct {
 }
 
 // openListen opens a subscriptions/listen stream as persona and blocks until
-// the server acknowledges it. The acknowledgement is the first message on the
-// stream by protocol, and waiting for it is what makes a later event
-// impossible to miss: a subscription established after the mutation would see
-// nothing, and the test would read that as a withheld notification.
+// the server acknowledges it — the first message on the stream by protocol.
+// A subscription established after the mutation would see nothing, which would
+// read as a withheld notification.
 func openListen(
 	t *testing.T,
 	proc *sut.Process,
@@ -383,11 +378,10 @@ func (s listenStream) drain() []mcpNotification {
 	}
 }
 
-// touchService writes a label to a service on the engine, which is what makes
-// the watcher emit a service update the cache turns into a notification. The
-// change is made through Docker rather than through Cetacean so the
-// notification path is driven by a third party's write, as it would be in
-// production.
+// touchService writes a label to a service on the engine, making the watcher
+// emit a service update the cache turns into a notification. The write goes
+// through Docker rather than Cetacean so the path is driven by a third party,
+// as in production.
 func touchService(t *testing.T, env *harness.Env, name, value string) {
 	t.Helper()
 
@@ -411,9 +405,8 @@ func touchService(t *testing.T, env *harness.Env, name, value string) {
 	}
 }
 
-// TestMCPSubscriptionsDeliverAndRespectReadGrants drives the property a
-// notification stream lives or dies by: a resources/updated reaches a
-// subscriber that may read the resource and no one else. Both callers
+// TestMCPSubscriptionsDeliverAndRespectReadGrants: a resources/updated reaches
+// a subscriber that may read the resource and no one else. Both callers
 // subscribe to the same two URIs, so a withheld notification is the ACL's
 // doing and not a missing subscription.
 func TestMCPSubscriptionsDeliverAndRespectReadGrants(t *testing.T) {
@@ -449,12 +442,9 @@ func TestMCPSubscriptionsDeliverAndRespectReadGrants(t *testing.T) {
 		return n.Method == "notifications/resources/updated" && n.uri() == serviceURI
 	}
 
-	// The config is touched first and waited for, and only then the service.
-	// Dispatch walks every session in one pass per cache event, so once the
-	// all-reading stream has the config notification, every session that was
-	// going to receive one already has — and the service change that follows
-	// is strictly later, which makes it a usable barrier for the absence
-	// asserted below.
+	// The config is touched first and waited for, then the service. Dispatch
+	// walks every session in one pass per cache event, so the later service
+	// change is a usable barrier for the absence asserted below.
 	touchConfig(t, env, config, configName)
 
 	all.await(t, 90*time.Second, isConfig)
@@ -499,10 +489,8 @@ func touchConfig(t *testing.T, env *harness.Env, id, name string) {
 
 // TestMCPNotificationTypesAreOptIn drives the rule 2026-07-28 states directly:
 // a server MUST NOT send a notification type the client did not request. The
-// subscriber below asks only for resource subscriptions, so a
-// resources/list_changed on its stream is a violation however much the cluster
-// is churning — and its own resources/updated is the barrier proving the
-// window it is asserted over was a live one.
+// subscriber below asks only for resource subscriptions; its own
+// resources/updated is the barrier proving the window was a live one.
 func TestMCPNotificationTypesAreOptIn(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -548,16 +536,12 @@ func TestMCPNotificationTypesAreOptIn(t *testing.T) {
 }
 
 // TestMCPListChangedIsWithheldFromACallerWithNoGrants drives the coarser half
-// of the same boundary. resources/list_changed carries no resource URI, so
-// what it discloses is timing: that something of a type just appeared or went
-// away. A caller matching no grant reads nothing of any type, so the
-// notification must never reach it.
+// of the same boundary. resources/list_changed carries no resource URI, so what
+// it discloses is timing; a caller matching no grant must never receive it.
 //
-// Both streams also name a resource subscription. That is not decoration:
-// see TestMCPListChangedReachesAFilterOnlySubscriber, which pins finding
-// D-11 — a stream opting into list_changed alone never has an identity
-// recorded, so this assertion would hold for a reason that has nothing to do
-// with the grant being checked.
+// Both streams also name a resource subscription: a stream opting into
+// list_changed alone never has an identity recorded, so the assertion would
+// otherwise hold for a reason unrelated to the grant being checked.
 func TestMCPListChangedIsWithheldFromACallerWithNoGrants(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -587,11 +571,9 @@ func TestMCPListChangedIsWithheldFromACallerWithNoGrants(t *testing.T) {
 
 	granted.await(t, 90*time.Second, isListChanged)
 
-	// The dispatcher writes to every matching session in one pass over one
-	// cache event, so by the time the granted stream has read its copy off the
-	// wire, an ungranted delivery would already have been written. The extra
-	// second covers the trip through the two SSE writers, not a race in the
-	// dispatch itself.
+	// The dispatcher writes to every matching session in one pass over one cache
+	// event, so an ungranted delivery would already have been written. The extra
+	// second covers the trip through the two SSE writers.
 	time.Sleep(time.Second)
 
 	for _, n := range ungranted.drain() {
@@ -601,21 +583,17 @@ func TestMCPListChangedIsWithheldFromACallerWithNoGrants(t *testing.T) {
 	}
 }
 
-// TestMCPListChangedReachesAFilterOnlySubscriber drives the subscription form
-// 2026-07-28 makes ordinary: opting into a list_changed notification without
-// naming any resource to watch. The revision's filter has four independent
-// fields and nothing couples them, so a client that only wants to know when to
-// refetch is a conforming client.
+// TestMCPListChangedReachesAFilterOnlySubscriber drives a conforming client that
+// opts into a list_changed notification without naming any resource to watch —
+// the revision's filter has four independent fields and nothing couples them.
 //
 // Both halves of the subscriptions/listen hook therefore have to record the
 // caller's identity: Subscribe runs once per requested URI, so a filter-only
 // stream reaches SetFilter and nothing else, and a session record without an
-// identity hands a nil one to every ACL check at dispatch — which under a
-// policy matches no grant and withholds the notification.
+// identity hands a nil one to every ACL check at dispatch.
 //
-// The witness stream holds the same grants and the same opt-in and differs
-// only in naming a URI, so a silence here would be attributable rather than
-// merely observed.
+// The witness stream holds the same grants and opt-in and differs only in
+// naming a URI, so a silence here is attributable.
 func TestMCPListChangedReachesAFilterOnlySubscriber(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -687,11 +665,9 @@ func complete(
 	return result
 }
 
-// TestMCPCompletionsAreFilteredByReadGrants drives the disclosure hazard
-// completion.go's own comment names: the values it offers are inserted
+// TestMCPCompletionsAreFilteredByReadGrants: completion values are inserted
 // literally, so they have to be names the caller could have read anyway.
-// Reading the cache directly would make a dropdown an enumeration of
-// everything.
+// Reading the cache directly would make a dropdown an enumeration.
 func TestMCPCompletionsAreFilteredByReadGrants(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -850,12 +826,9 @@ func getTask(
 	return task, true
 }
 
-// awaitTerminalTask polls a task record until it reports a terminal status.
-//
-// The deadline sits above cluster.ConvergenceTimeout on purpose: a converging
-// mutation waits up to five minutes for the cluster to settle, so a shorter
-// deadline here would give up while the server was still legitimately working
-// and report a loaded machine as a defect.
+// awaitTerminalTask polls a task record until it reports a terminal status. The
+// deadline sits above cluster.ConvergenceTimeout on purpose: a shorter one would
+// give up while the server was still legitimately working.
 func awaitTerminalTask(t *testing.T, proc *sut.Process, id string) mcpTask {
 	t.Helper()
 
@@ -884,16 +857,14 @@ func awaitTerminalTask(t *testing.T, proc *sut.Process, id string) mcpTask {
 	return last
 }
 
-// TestMCPTaskAugmentedMutationRunsToConvergence drives the four converging
-// tools' reason for existing: a task-augmented scale returns immediately with
-// a working task, and the task reaches completed only once the service has
-// actually settled on the cluster.
+// TestMCPTaskAugmentedMutationRunsToConvergence: a task-augmented scale returns
+// immediately with a working task, and the task reaches completed only once the
+// service has settled on the cluster.
 //
 // The whole path runs on a goroutine holding the HTTP request context, which
 // net/http cancels the moment the create-task response is written — so
-// registerTools detaches it for a task-augmented call. Without that, the
-// Docker write's opening inspect fails with "context canceled" before any
-// write is issued and the caller is told the task was cancelled.
+// registerTools detaches it. Without that, the Docker write's opening inspect
+// fails with "context canceled" and the caller is told the task was cancelled.
 func TestMCPTaskAugmentedMutationRunsToConvergence(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -952,11 +923,10 @@ func engineReplicas(t *testing.T, env *harness.Env, name string) uint64 {
 	return *svc.Spec.Mode.Replicated.Replicas
 }
 
-// TestMCPTaskRetentionIsBounded drives what tasks.go documents mcp-go cannot
-// do for itself: a call omitting params.task.ttl would otherwise pin its
-// result for the life of the process, and one naming an enormous ttl would be
-// taken at its word. Both are bounded by configuration, so the lane runs
-// against a SUT whose bounds are seconds rather than the default quarter hour.
+// TestMCPTaskRetentionIsBounded: a call omitting params.task.ttl would otherwise
+// pin its result for the life of the process, and one naming an enormous ttl
+// would be taken at its word. The lane runs against a SUT whose bounds are
+// seconds rather than the default quarter hour.
 func TestMCPTaskRetentionIsBounded(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -986,10 +956,8 @@ func TestMCPTaskRetentionIsBounded(t *testing.T) {
 			t.Errorf("ttl = %dms, want the configured ceiling of 5000ms", *task.TTL)
 		}
 
-		// What the mutation then does is
-		// TestMCPTaskAugmentedMutationRunsToConvergence's business. The clamp
-		// is decided before the handler runs — installTaskTTLHook fills the
-		// field in on AddBeforeCallTool — so it is observable whatever becomes
+		// The clamp is decided before the handler runs — installTaskTTLHook fills
+		// the field in on AddBeforeCallTool — so it is observable whatever becomes
 		// of the call.
 	})
 
@@ -1023,11 +991,10 @@ func TestMCPTaskRetentionIsBounded(t *testing.T) {
 
 // ─── the gate ───────────────────────────────────────────────────────────
 
-// drivenNotificationTypes names the subscription filter fields this lane
-// drives, and excusedNotificationTypes carries a reason for the rest. The
-// inventory itself comes from the server: a subscriptions/listen request
-// asking for everything is answered with the subset it actually established,
-// after mcp-go intersects the request with the advertised capabilities.
+// drivenNotificationTypes names the subscription filter fields this lane drives,
+// and excusedNotificationTypes carries a reason for the rest. The inventory comes
+// from the server: a subscriptions/listen request asking for everything is
+// answered with the subset it actually established.
 var (
 	drivenNotificationTypes = map[string]string{
 		"resourceSubscriptions": "TestMCPSubscriptionsDeliverAndRespectReadGrants",
@@ -1047,10 +1014,9 @@ var (
 )
 
 // TestEveryEstablishedNotificationTypeIsDrivenOrExcused fails when the server
-// starts establishing a notification type this lane neither drives nor
-// excuses. Asking for every field and reading back what was established is
-// what makes this an inventory rather than a restatement: a capability turned
-// on in internal/mcp/server.go shows up here without anyone editing a list.
+// starts establishing a notification type this lane neither drives nor excuses.
+// Asking for every field and reading back what was established makes this an
+// inventory rather than a restatement.
 func TestEveryEstablishedNotificationTypeIsDrivenOrExcused(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

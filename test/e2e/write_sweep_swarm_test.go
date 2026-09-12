@@ -21,15 +21,11 @@ import (
 // Cluster-level write drivers for the write sweep: the three reversible
 // /swarm/* tuning patches and the join-token rotation.
 //
-// Unlike every other driver in this sweep, these mutate the one thing all the
-// lanes in this test binary share — the swarm itself. There is no throwaway
-// fixture to work on. Each therefore reads the current value, changes it to
-// something it can recognise, verifies the change reached the engine, and
-// restores what was there, so a lane that runs afterwards finds the cluster it
-// expected. `PATCH /swarm/encryption` stays permanently excused for exactly
-// the reason the others do not: enabling autolock means a manager restart
-// needs an unlock key, and the harness restarts SUTs but has nowhere to keep
-// one.
+// These mutate the one thing every lane in this binary shares, with no throwaway
+// fixture to work on, so each reads the current value, changes it to something
+// recognisable, verifies it reached the engine, and restores what was there.
+// `PATCH /swarm/encryption` stays permanently excused: enabling autolock means a
+// manager restart needs an unlock key, and the harness has nowhere to keep one.
 
 // swarmSpec reads the live swarm spec off the engine.
 func swarmSpec(t *testing.T, env *harness.Env) swarm.Spec {
@@ -193,17 +189,14 @@ func driveSwarmRotateToken(t *testing.T, env *harness.Env, proc *sut.Process) {
 	}
 }
 
-// TestResyncIsAuthenticatedAndGated drives `POST /-/resync`, the one route
-// under the `/-/` prefix that does work on request rather than reporting
-// state: each call is a full seven-goroutine sweep of the Docker API,
-// unbounded and unthrottled, so an uncredentialed caller able to reach the
-// port could amplify one cheap request into a cluster enumeration at will.
+// TestResyncIsAuthenticatedAndGated drives `POST /-/resync`, the one route under
+// `/-/` that does work rather than reporting state: each call sweeps the whole
+// Docker API, so an uncredentialed caller could amplify one cheap request into a
+// cluster enumeration.
 //
-// It is the one `/-/` path internal/auth's isExempt does not exempt, and it
-// additionally requires the caller to hold a grant. It is deliberately not
-// gated on the operations level: that says what a deployment may do to the
-// cluster, and a resync only re-reads it, so a read-only deployment keeps the
-// dashboard's refresh button.
+// It is the one `/-/` path isExempt does not exempt, and it additionally requires
+// a grant. It is deliberately not gated on the operations level: a resync only
+// re-reads the cluster, so a read-only deployment keeps its refresh button.
 func TestResyncIsAuthenticatedAndGated(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

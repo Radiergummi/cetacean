@@ -7,18 +7,11 @@ import (
 )
 
 // FuzzDecodeClientCert exercises decodeClientCert, which decodes the RFC 9440
-// Client-Cert header — an RFC 8941 byte sequence carrying the DER certificate
-// a trusted proxy forwarded after terminating TLS. Its content authenticates
-// the caller, and on a misconfigured deployment it is attacker-supplied.
-//
-// Two properties hold regardless of input:
-//   - decodeClientCert never returns bytes alongside an error. A caller
-//     reading the bytes on error would authenticate from input the decoder
-//     itself refused.
-//   - A successful decode must yield something x509.ParseCertificate can
-//     rule on without panicking. Whether it parses is downstream's problem
-//     (verification against the CA happens there); the decoder's job is only
-//     to hand over bytes, not to crash doing it.
+// Client-Cert header -- an RFC 8941 byte sequence carrying the DER certificate
+// a trusted proxy forwarded. Its content authenticates the caller, and on a
+// misconfigured deployment it is attacker-supplied. Two properties hold for
+// any input: bytes are never returned alongside an error, and a successful
+// decode yields something x509.ParseCertificate can rule on without panicking.
 func FuzzDecodeClientCert(f *testing.F) {
 	f.Add(":aGVsbG8gd29ybGQ=:") // well-formed colon-wrapped base64
 	f.Add("aGVsbG8gd29ybGQ=")   // same payload, no colons

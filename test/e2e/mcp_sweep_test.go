@@ -25,50 +25,20 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file closes the gap README.md's Deferred section names: "MCP
-// grant-based tools/list filtering (only tier gating is covered)". It drives
-// the MCP catalog (tools/list, prompts/list, resources/templates/list) per
-// persona against a real cluster and asserts the two-way property that makes
-// a catalog trustworthy: a tool a persona is offered must not refuse with an
-// ACL error, and a tool withheld from a persona must not succeed if invoked
-// directly. Reserves port 19008 (see README.md's reserved-ports table).
-//
-// This is explicitly NOT a test of the OAuth flow. DCR, CIMD, PKCE, refresh
-// rotation and theft detection are a separate, larger lane and are out of
-// scope here — see startMCPSweep's doc comment for what CETACEAN_MCP_AUTH_BYPASS
-// stands in for instead.
-//
-// drivenMCPTools is the self-enforcing gate: TestEveryMCPToolIsDrivenOrExcused
-// requires every one of the 27 tools in the catalog to appear in it. Unlike
-// the read and write sweeps, nothing here needed an excuse — even the
-// destructive tier-3 removals are driven safely, against throwaway resources
-// this file creates and owns, with the one exception noted on
-// driveUpdateNode (the environment's single node cannot safely be given a
-// real availability/role change).
+// This file drives the MCP catalog (tools/list, prompts/list,
+// resources/templates/list) per persona against a real cluster and asserts
+// the two-way property: a tool a persona is offered must not refuse with an
+// ACL error, and a tool withheld must not succeed if invoked directly. The
+// OAuth flow is out of scope. Reserves port 19008.
 
 const mcpSweepPort = 19008
 
-// startMCPSweep brings up a real cluster with MCP enabled, headers auth, and
-// readSweepPolicy's ACL policy (the same four personas as the read sweep, so
-// findings from both lanes describe the same people), plus
-// CETACEAN_MCP_AUTH_BYPASS=headers.
-//
-// That bypass is a supported production configuration
-// (internal/config/mcp.go's AuthBypass, and internal/mcp/server.go's
-// bypassActive/bearerAuth, whose comment names "headers" as safe because it
-// never writes on the success path): it makes the upstream headers provider
-// supply identity directly, skipping OAuth token minting and verification
-// entirely. That is deliberate here — this file tests the ACL boundary once
-// an identity is established, not how that identity got established. DCR,
-// CIMD, PKCE, refresh-token rotation and theft detection belong to a
-// separate, larger OAuth-flow lane and are not exercised by anything in this
-// file.
-//
-// Operations level is 3 (impactful, the ceiling) so every one of the 27
-// tools is tier-eligible regardless of persona — tier gating is already
-// covered by TestMCPToolsListIsGatedByOperationsLevel in mcp_test.go, so
-// fixing the tier at its highest value here isolates the ACL grant boundary
-// this file exists to check from the tier boundary that file already checks.
+// startMCPSweep brings up a real cluster with MCP enabled, headers auth and
+// readSweepPolicy's four personas, plus CETACEAN_MCP_AUTH_BYPASS=headers so
+// identity comes from the headers provider rather than OAuth -- this file
+// tests the ACL boundary once an identity exists, not how it was
+// established. Operations level is 3 so every tool is tier-eligible and only
+// the ACL grant boundary is in play.
 func startMCPSweep(t *testing.T, env *harness.Env) *sut.Process {
 	t.Helper()
 
@@ -95,10 +65,7 @@ func startMCPSweep(t *testing.T, env *harness.Env) *sut.Process {
 
 // mcpNameHeader mirrors mcp-go's ExtractHeaderName (mcp/headers.go): the
 // Mcp-Name header carries params.name for tools/call and prompts/get, and
-// params.uri for resources/read. test/e2e/mcp_test.go's own mcpCall helper
-// only ever calls tools/list and tools/call, so it never needed the
-// resources/read case; this file does, to drive the templated
-// cetacean://<type>/{id} resource reads per persona.
+// params.uri for resources/read.
 func mcpNameHeader(method string, params map[string]any) (string, bool) {
 	switch method {
 	case "tools/call", "prompts/get":
@@ -181,17 +148,10 @@ func mcpAs(
 		t.Fatalf("read body: %v", err)
 	}
 
-	// A refused call (a tool tools/list would not advertise to this caller,
-	// or a malformed request) still comes back as a JSON-RPC envelope, just
-	// over a non-200 status and with an "error" object instead of a
-	// "result" -- mcp-go maps a JSON-RPC protocol error (e.g. "tool ... not
-	// found", code -32602) to HTTP 400 rather than 200. Returning early here
-	// on a non-200 status without reading it discarded exactly the
-	// information this file's denial assertions need; that early return was
-	// a placeholder from before this file called tools/call on a hidden
-	// tool for the first time; the body is always attempted, and a status
-	// this file did not anticipate is reported with what came back instead
-	// of failing the test outright.
+	// A refused call still comes back as a JSON-RPC envelope, just over a
+	// non-200 status with an "error" object -- mcp-go maps a protocol error
+	// (e.g. "tool ... not found", code -32602) to HTTP 400. The body is
+	// always read, since the denial assertions need it.
 	var raw struct {
 		Result json.RawMessage `json:"result"`
 		Error  *struct {
@@ -220,9 +180,7 @@ func mcpAs(
 
 // toolCallResult is the shape every tools/call result shares: mcp-go reports
 // a refused or failed call as isError:true with the reason in Content, not
-// as a JSON-RPC error — see internal/mcp's acl.go checkRead/checkWrite,
-// whose messages ("read access denied for ...", "write access denied for
-// ...") are what isErrorMessageDenies looks for below.
+// as a JSON-RPC error.
 type toolCallResult struct {
 	IsError bool `json:"isError"`
 	Content []struct {
@@ -244,11 +202,9 @@ func decodeToolCall(t *testing.T, env mcpEnvelope) toolCallResult {
 }
 
 // isACLDenial reports whether a tool call's error content names an ACL
-// denial (internal/mcp/acl.go's checkRead/checkWrite error text) rather than
-// some other failure (a bad argument, a missing resource, an unconfigured
-// dependency like Prometheus). The two-way check in this file hinges on
-// telling those apart: a hidden tool must fail this way specifically, not
-// merely fail somehow.
+// denial (internal/mcp/acl.go's checkRead/checkWrite text) rather than some
+// other failure: a hidden tool must fail this way specifically, not merely
+// fail somehow.
 func isACLDenial(call toolCallResult) bool {
 	if !call.IsError {
 		return false
@@ -262,29 +218,12 @@ func isACLDenial(call toolCallResult) bool {
 }
 
 // toolCallOutcome captures how a tools/call attempt concluded. A denial
-// surfaces two different ways depending on why the caller lacks access:
-//
-//   - A tool absent from tools/list is unreachable at all: mcp-go's own tool
-//     filter (internal/mcp/server.go's filterToolsForIdentity, wired as
-//     WithToolFilter) applies to tools/call as well as tools/list, so calling
-//     a hidden tool never reaches the handler -- it comes back as the
-//     JSON-RPC protocol error "tool '<name>' not found" (code -32602), which
-//     mcp-go's HTTP transport reports as 400 Bad Request rather than 200.
-//     This was not documented anywhere this file's author found before
-//     running it against a real server, and the first version of this file
-//     assumed every denial looked like the second case below.
-//   - A tool that IS listed but whose specific target the caller's real
-//     grant does not cover reaches the handler and is refused there, which
-//     surfaces as an ordinary 200 response with isError:true and an "access
-//     denied" message (internal/mcp/acl.go's checkRead/checkWrite). This is
-//     what happens for frontend on a service/task/config/secret/network/
-//     volume-gated tool outside a frontend-* stack -- see
-//     driveFrontendStackOwnership for why tools/list still advertises it.
-//
-// Both are legitimate denials; which one a given call produces depends on
-// whether the tool is visible to the caller, which is why every assertion
-// in this file checks visibility and the call outcome together rather than
-// either alone.
+// surfaces two ways: a tool absent from tools/list is unreachable at all
+// (mcp-go's tool filter applies to tools/call too, so the call comes back as
+// the protocol error "tool '<name>' not found" over HTTP 400), while a
+// listed tool whose specific target the caller's grant does not cover
+// reaches the handler and is refused there with isError:true. Both are
+// legitimate, so every assertion checks visibility and outcome together.
 type toolCallOutcome struct {
 	httpStatus int
 	rpcError   string
@@ -461,11 +400,8 @@ func assertVisibleAndCallable(
 	}
 }
 
-// assertHiddenAndRefused is the "withheld must not succeed" half — the
-// security-critical direction: name must be absent from tools/list, AND
-// calling it directly must be denied (either mcp-go's own "tool ... not
-// found" for a name the filter never advertised, or an in-band isError if
-// something upstream still let the call through).
+// assertHiddenAndRefused is the "withheld must not succeed" half: name must
+// be absent from tools/list, and calling it directly must be denied.
 func assertHiddenAndRefused(
 	t *testing.T,
 	proc *sut.Process,
@@ -495,12 +431,10 @@ func assertHiddenAndRefused(
 	}
 }
 
-// assertVisibleButDenied is the coarse-widening case documented on
-// driveFrontendStackOwnership: the tool IS advertised (a stack grant's
-// implied types reach it regardless of the grant's name pattern) but the
-// caller's real access does not cover this specific target, so the call
-// must still be refused -- from inside the handler (isError), since
-// tools/call itself will let it through.
+// assertVisibleButDenied is the coarse-widening case: the tool IS advertised
+// (a stack grant's implied types reach it regardless of the grant's name
+// pattern) but the caller's access does not cover this target, so the call
+// must still be refused from inside the handler.
 func assertVisibleButDenied(
 	t *testing.T,
 	proc *sut.Process,
@@ -532,14 +466,10 @@ func assertVisibleButDenied(
 
 // assertDenied picks the right one of assertHiddenAndRefused /
 // assertVisibleButDenied for the persona and resource type. frontend's
-// stack:frontend-* grant is coarsely projected (by
-// internal/acl/evaluator.go's impliedTypes) onto every type a stack grant
-// reaches -- service, task, config, secret, network, volume -- so a tool
-// gated on one of those types is visible to frontend even for a target
-// outside any frontend-* stack, and denied only once the call reaches the
-// handler. stackImplied names that case; every other denied persona, and
-// frontend itself on a node-gated tool (node is not in
-// impliedTypes["stack"]), is denied by not being offered the tool at all.
+// stack:frontend-* grant is projected onto every type a stack grant reaches
+// (internal/acl/evaluator.go's impliedTypes), so a tool gated on one of
+// those is visible to frontend even outside a frontend-* stack and denied
+// only in the handler; stackImplied names that case.
 func assertDenied(
 	t *testing.T,
 	proc *sut.Process,
@@ -561,12 +491,9 @@ func assertDenied(
 
 // ─── baseline resolution over MCP ──────────────────────────────────────
 
-// mcpFindID resolves a resource's ID by name via the find tool, as ops (who
-// reads everything). Polled for up to 10s: a resource just created directly
-// against the engine (fixtures.DeployStack) or via a tool this same test
-// just called (create_config, create_secret) is only findable once
-// Cetacean's watcher has processed the corresponding Docker event, which is
-// asynchronous.
+// mcpFindID resolves a resource's ID by name via the find tool, as ops.
+// Polled: a just-created resource is only findable once Cetacean's watcher
+// has processed the Docker event.
 func mcpFindID(t *testing.T, proc *sut.Process, resourceType, name string) string {
 	t.Helper()
 
@@ -636,12 +563,9 @@ func driveReadTool(spec readToolSpec) mcpDriveFunc {
 					return
 				}
 
-				// Every granted persona reads every service under this
-				// policy, and every tier-0 tool not gated on service:read is
-				// always visible regardless of grants (it filters its own
-				// results) -- so every persona lands in the "visible and
-				// callable without an ACL denial" branch except anonymous on
-				// the two service-gated tools above.
+				// Every granted persona reads every service, and every tier-0
+				// tool not gated on service:read is visible regardless of
+				// grants -- so only anonymous is denied here.
 				assertVisibleAndCallable(t, proc, p, visible, spec.name, spec.args(ids))
 			})
 		}
@@ -748,10 +672,8 @@ func driveDescribeAndResource(t *testing.T, env *harness.Env, proc *sut.Process,
 }
 
 // driveResourceTemplateList checks resources/templates/list is reachable for
-// every persona and advertises the nine templated resource types
-// (README.md/CLAUDE.md's inventory), regardless of grants -- the template
-// list itself carries no per-resource content, so there is nothing here for
-// ACL to filter.
+// every persona and advertises the nine templated resource types regardless
+// of grants -- the template list carries no per-resource content to filter.
 func driveResourceTemplateList(t *testing.T, env *harness.Env, proc *sut.Process, _ baselineIDs) {
 	want := []string{
 		"cetacean://configs/{id}",
@@ -782,12 +704,10 @@ func driveResourceTemplateList(t *testing.T, env *harness.Env, proc *sut.Process
 	}
 }
 
-// drivePromptList checks prompts/list's boundary: anonymous, who fails
-// allTypesReadable for every prompt (it holds no read grant on anything),
-// must see zero; ops, who holds every driven tool and every read type, must
-// see the most of any persona -- the ceiling every other persona's count is
-// compared against, rather than a hardcoded total that would drift the
-// moment a prompt is added.
+// drivePromptList checks prompts/list's boundary: anonymous holds no read
+// grant and must see zero; ops holds every driven tool and read type, so its
+// count is the ceiling every other persona is compared against rather than a
+// hardcoded total.
 func drivePromptList(t *testing.T, env *harness.Env, proc *sut.Process, _ baselineIDs) {
 	counts := map[string]int{}
 	for _, p := range readPersonas {
@@ -826,10 +746,8 @@ func drivePromptList(t *testing.T, env *harness.Env, proc *sut.Process, _ baseli
 // ─── mutating tools: node ───────────────────────────────────────────────
 
 // driveUpdateNodeLabels checks update_node_labels (tier 2, node:write): ops
-// (holds write:* ) can set and revert a harmless label on the environment's
-// only node; viewers, frontend and oncall (none holds node:write under this
-// policy) and anonymous must be refused when they try the same thing, and
-// the tool must not even be listed for them.
+// can set and revert a harmless label; every other persona must be refused
+// and must not see the tool listed.
 func driveUpdateNodeLabels(t *testing.T, env *harness.Env, proc *sut.Process, ids baselineIDs) {
 	const labelKey = "cetacean-mcp-sweep"
 
@@ -870,13 +788,9 @@ func driveUpdateNodeLabels(t *testing.T, env *harness.Env, proc *sut.Process, id
 }
 
 // driveUpdateNode checks visibility and denial for update_node (tier 3,
-// node:write) across every persona, but excuses the ops-positive ("visible
-// implies callable") half: the environment's swarm has exactly one node, and
-// update_node's destructiveHint covers role and availability both -- the
-// same reason write_sweep_test.go excuses PUT /nodes/{id}/role and
-// DELETE /nodes/{id} against this environment. The withheld direction (the
-// security-critical one) is still checked for every persona that must not
-// have it.
+// node:write), but excuses the ops-positive half: the swarm has exactly one
+// node and update_node's destructiveHint covers role and availability both.
+// The withheld direction is still checked for every persona.
 func driveUpdateNode(t *testing.T, env *harness.Env, proc *sut.Process, ids baselineIDs) {
 	t.Run("ops_visible_only", func(t *testing.T) {
 		visible := listToolNames(t, proc, opsPersona)
@@ -907,9 +821,7 @@ func driveUpdateNode(t *testing.T, env *harness.Env, proc *sut.Process, ids base
 
 // driveCreateAndRemoveConfig checks create_config and remove_config
 // together: ops creates a throwaway config, every other persona is refused
-// (both to create one and, once ops's exists, to remove it), and ops's own
-// removal at the end confirms the positive direction for both tools using a
-// resource this file owns rather than the shared baseline.
+// both to create one and to remove ops's, and ops removes it at the end.
 func driveCreateAndRemoveConfig(t *testing.T, env *harness.Env, proc *sut.Process, _ baselineIDs) {
 	name := fmt.Sprintf("mcp-sweep-config-%d", time.Now().UnixNano())
 
@@ -1177,20 +1089,11 @@ func driveRemoveVolume(t *testing.T, env *harness.Env, proc *sut.Process, _ base
 // ─── mutating tools: service / task ─────────────────────────────────────
 
 // driveServiceTools exercises every service- and task-scoped mutating tool
-// (scale_service, update_service_image, rollback_service, restart_service,
-// update_service, update_service_secrets, update_service_configs,
-// update_service_mounts, remove_task, remove_service) against one throwaway
-// service this test owns, plus the frontend persona's own throwaway
-// frontend-*-stack service -- the one place this file exercises frontend's
-// TRUE positive case rather than the coarse, documented widening in
-// internal/acl/evaluator.go's impliedTypes (see the comment on
-// driveFrontendStackOwnership below for what that widening is and why it is
-// not, by itself, a defect).
-//
-// oncall holds write:service:*/task:* for real (an exact wildcard, not a
-// name pattern needing stack resolution), so its positive case is checked
-// against the same throwaway service ops uses -- both personas genuinely
-// have it.
+// against one throwaway service this test owns, plus the frontend persona's
+// own frontend-* stack service -- the one place frontend's true positive is
+// exercised rather than the coarse widening in impliedTypes (see
+// driveFrontendStackOwnership). oncall holds write:service:*/task:* for
+// real, so its positive case runs against the same throwaway service.
 func driveServiceTools(t *testing.T, env *harness.Env, proc *sut.Process, ids baselineIDs) {
 	service := fixtures.DeployStack(t, env, "mcp-sweep", []fixtures.ServiceSpec{
 		{Name: "app", Replicas: 1, Command: []string{"sleep infinity"}},
@@ -1198,11 +1101,9 @@ func driveServiceTools(t *testing.T, env *harness.Env, proc *sut.Process, ids ba
 	serviceName := service + "_app"
 	serviceID := mcpFindID(t, proc, "services", serviceName)
 
-	// viewers and anonymous hold no service write under this policy at all;
-	// frontend's write is scoped to stack:frontend-*, which this throwaway
-	// stack's name never matches -- so all three must be refused on every
-	// one of these tools, and none of them may even see the tools in
-	// tools/list.
+	// viewers and anonymous hold no service write; frontend's is scoped to
+	// stack:frontend-*, which this throwaway stack never matches -- all three
+	// must be refused and must not see the tools at all.
 	deniedPersonas := []readPersona{}
 	for _, p := range readPersonas {
 		if p.name == "ops" || p.name == "oncall" {
@@ -1389,29 +1290,13 @@ func driveServiceTools(t *testing.T, env *harness.Env, proc *sut.Process, ids ba
 	_ = ids
 }
 
-// driveFrontendStackOwnership resolves the disclosure question the coverage
-// brief calls out by name for the frontend persona specifically: with this
-// policy, frontend's write grant is `stack:frontend-*`, but
-// internal/acl/evaluator.go's TypeGrants -- the projection tools/list
-// filtering uses -- expands a stack grant to the service/task/config/
-// secret/network/volume types it can reach WITHOUT checking the grant's name
-// pattern at all (see impliedTypes and the comment above it: "the direction
-// this projection is already allowed to err in"). That means frontend's
-// tools/list is expected, BY DESIGN, to advertise service-write tools it
-// cannot actually invoke on the shop/platform fixture stacks -- confirmed
-// directly in driveServiceTools above, where frontend sits in
-// deniedPersonas and every service tool there is checked as hidden-and-
-// refused... except it will NOT be hidden, only refused. That specific,
-// asymmetric outcome (visible, but correctly refused) is asserted here by
-// name, against the fixture's real "shop" stack, so this test documents the
-// known widening with a live repro rather than silently tolerating whatever
-// assertHiddenAndRefused's visibility half reports.
-//
-// This function then gives frontend a stack it actually owns
-// (frontend-<timestamp>, matching stack:frontend-*) and confirms the
-// opposite, TRUE positive case: on ITS OWN service, frontend's write
-// genuinely works end-to-end -- the only place in this file frontend
-// completes a real mutation.
+// driveFrontendStackOwnership pins the frontend persona's asymmetric case:
+// internal/acl/evaluator.go's TypeGrants expands a stack grant to the types
+// it can reach without checking the grant's name pattern, so frontend's
+// tools/list advertises service-write tools it cannot invoke on the shop
+// fixture stack -- visible, but correctly refused. It then gives frontend a
+// stack it owns (frontend-<timestamp>) and confirms the true positive: on
+// its own service frontend's write genuinely works end to end.
 func driveFrontendStackOwnership(t *testing.T, env *harness.Env, proc *sut.Process, _ baselineIDs) {
 	frontend := readPersonaByName("frontend")
 
@@ -1419,18 +1304,11 @@ func driveFrontendStackOwnership(t *testing.T, env *harness.Env, proc *sut.Proce
 		serviceID := mcpFindID(t, proc, "services", "shop_web")
 		visible := listToolNames(t, proc, frontend)
 
-		// assertVisibleButDenied asserts BOTH halves of the known widening
-		// directly, against a real cluster: scale_service is listed for
-		// frontend (the coarse TypeGrants projection reaches the service
-		// type through stack:frontend-*, regardless of the pattern -- see
-		// internal/acl/evaluator.go's impliedTypes comment) AND calling it
-		// on shop_web, which is in the "shop" stack rather than any
-		// frontend-* stack, is still refused once the call reaches the
-		// handler. If a future change to TypeGrants makes this precise
-		// (hiding the tool from frontend entirely), the visibility half of
-		// this assertion starts failing -- which is the point: this test
-		// pins the current, documented behavior with a live repro rather
-		// than silently tolerating whatever tools/list happens to report.
+		// Both halves of the known widening: scale_service is listed for
+		// frontend (TypeGrants reaches the service type through
+		// stack:frontend-* regardless of the pattern) yet calling it on
+		// shop_web is refused in the handler. Making TypeGrants precise would
+		// fail the visibility half, which is the point.
 		assertVisibleButDenied(t, proc, frontend, visible, "scale_service", map[string]any{
 			"id": serviceID, "replicas": 2,
 		})
@@ -1470,16 +1348,10 @@ func mustServiceInspectID(t *testing.T, env *harness.Env, name string) string {
 	return svc.ID
 }
 
-// waitForCachedServiceImageAsOps polls Cetacean's own GET /services/{id} --
-// as the "ops" persona, since this SUT runs headers auth -- until it
-// reflects wantPrefix. write_sweep_test.go's waitForCachedServiceImage
-// issues its request with no auth headers at all, which is correct for that
-// file's no-auth SUT but gets 403 ACL001 (never 200) against this file's
-// headers-auth one; reusing it here polled a request that could never
-// succeed until its 30s deadline. Needed before rollback_service, whose
-// PreviousSpec check reads the same cache a direct-to-engine seed (there,
-// none here: the seed is update_service_image, run through this same SUT)
-// only reaches once the watcher has processed the event.
+// waitForCachedServiceImageAsOps polls GET /services/{id} as the "ops"
+// persona -- this SUT runs headers auth, so write_sweep_test.go's unauthed
+// waitForCachedServiceImage can only ever get 403 here. Needed before
+// rollback_service, whose PreviousSpec check reads the same cache.
 func waitForCachedServiceImageAsOps(t *testing.T, proc *sut.Process, id, wantPrefix string) {
 	t.Helper()
 
@@ -1517,11 +1389,9 @@ func waitForCachedServiceImageAsOps(t *testing.T, proc *sut.Process, id, wantPre
 
 // ─── the sweep table ────────────────────────────────────────────────────
 
-// drivenMCPTools names every one of the 27 tools this file checks and how:
-// most map to one of the functions above; the handful sharing a throwaway
-// resource (driveServiceTools) are named here too even though one call
-// drives all of them, so the self-enforcing gate below still requires each
-// to be accounted for individually.
+// drivenMCPTools names every tool this file checks and how; the handful
+// sharing a throwaway resource (driveServiceTools) are named individually so
+// the gate below still requires each to be accounted for.
 var drivenMCPTools = map[string]bool{
 	// tier 0 -- read, safe for every persona.
 	"get_logs":            true,
@@ -1620,12 +1490,9 @@ func (spec readToolSpec) testFunc(
 	}
 }
 
-// TestEveryMCPToolIsDrivenOrExcused requires every one of the 27 tools in
-// the catalog to appear in drivenMCPTools. There are only 27 and they are
-// hand-enumerated (unlike contract.Routes(), there is no cheap static
-// inventory to parse for MCP tools outside a running server), so this test
-// also fails if the count drifts, which is the signal that a tool was added
-// or removed without this file's attention.
+// TestEveryMCPToolIsDrivenOrExcused requires every tool in the catalog to
+// appear in drivenMCPTools. The list is hand-enumerated, so this also fails
+// if the count drifts -- the signal that a tool was added or removed.
 func TestEveryMCPToolIsDrivenOrExcused(t *testing.T) {
 	const wantTotal = 27
 

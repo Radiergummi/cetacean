@@ -45,13 +45,10 @@ func etagMatch(header, etag string) bool {
 	return false
 }
 
-// negotiateCoding picks the content-coding this response body will be served
-// under and stamps the headers describing it. It returns the coding rather than
-// encoding anything, so a caller can suffix its ETag and answer a 304 without
-// spending a compression pass on a body it will not send.
-//
-// Vary is added whether or not anything was compressed, with Add rather than
-// Set so it extends a Vary another layer already wrote.
+// negotiateCoding picks the content-coding for this response and stamps the
+// headers, returning the coding rather than encoding anything -- so a caller
+// can suffix its ETag and answer a 304 without a compression pass. Vary is
+// added either way, with Add so it extends one another layer wrote.
 func negotiateCoding(w http.ResponseWriter, r *http.Request, body []byte) Encoding {
 	w.Header().Add("Vary", "Accept-Encoding")
 
