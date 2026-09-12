@@ -138,7 +138,7 @@ func (r *ClientRegistry) Snapshot() []ClientRegistration {
 }
 
 // Restore replaces the registry's clients from a snapshot, keeping the newest
-// when the file holds more than mcp.oauth.dcr.max_clients now allows. Nothing
+// when the file holds more than mcp.oauth.dcr_max_clients now allows. Nothing
 // is re-validated, so a forged redirect URI in a hand-edited file outlives a
 // restart — the integrity mode 0600 protects, as for the consent records.
 func (r *ClientRegistry) Restore(registrations []ClientRegistration) {
