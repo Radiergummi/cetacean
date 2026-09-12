@@ -627,3 +627,37 @@ func awaitReady(t *testing.T, proc *sut.Process) {
 		time.Sleep(200 * time.Millisecond)
 	}
 }
+
+// TestACLPolicyWithoutAuthIsCalledOut pins a configuration that looks
+// deliberate and enforces nothing: auth mode "none" resolves every caller to
+// the same anonymous identity, so the grants are ignored outright.
+func TestACLPolicyWithoutAuthIsCalledOut(t *testing.T) {
+	env := harness.Up(t)
+	env.SwarmInit(t)
+
+	policy := filepath.Join(t.TempDir(), "policy.json")
+
+	if err := os.WriteFile(policy, []byte(`{
+		"grants": [
+			{"resources": ["service:*"], "audience": ["user:*"], "permissions": ["read"]}
+		]
+	}`), 0o600); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
+
+	proc := sut.Start(t, sut.Config{
+		Port:       deploymentPort,
+		DockerHost: env.DockerHost,
+		Env: map[string]string{
+			"CETACEAN_AUTH_MODE":       "none",
+			"CETACEAN_ACL_POLICY_FILE": policy,
+		},
+	})
+
+	if !strings.Contains(proc.Logs(), "no grant will be enforced") {
+		t.Errorf(
+			"a policy configured under auth mode none started without a word about it\nlogs:\n%s",
+			proc.Logs(),
+		)
+	}
+}

@@ -328,6 +328,17 @@ func main() {
 	// ACL
 	var aclEval *acl.Evaluator
 	var stopPolicyWatch func()
+
+	// Auth mode "none" resolves every caller to the same anonymous identity,
+	// so a configured policy is not applied at all.
+	if authCfg.Mode == "none" && (aclCfg.Policy != "" || aclCfg.PolicyFile != "") {
+		slog.Warn(
+			"an ACL policy is configured but auth.mode is none, so no grant will be enforced; "+
+				"set auth.mode to identify callers, or remove the policy",
+			"policy_file", aclCfg.PolicyFile,
+		)
+	}
+
 	if authCfg.Mode != "none" {
 		aclEval = acl.NewEvaluator()
 		aclEval.SetResolver(stateCache)
