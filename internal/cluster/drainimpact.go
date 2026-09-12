@@ -23,34 +23,11 @@ const (
 )
 
 // DrainImpactGraph answers "if I drain this node, what moves — and what
-// cannot?" as a bipartite graph of the affected services against the nodes
-// that could take them.
-//
-// This is steps 3 and 4 of the drain_node prompt done server-side. The prompt
-// currently instructs the model to page a task listing, list the nodes, and
-// compare each service's placement constraints against them by eye — a join
-// the model pays for in its context and can get wrong, on a question where
-// being wrong means draining a node and stranding the work.
-//
-// An affected service with no edge is stranded, and Detail carries the filter
-// that blocked it: a state without its cause is exactly what this view must
-// not return. Which filters those are is nodeCanHost's answer — the three
-// Swarm enforces exactly. Capacity is deliberately not among them: spare
-// reservations after a drain are a moving target, and cluster capacity is
-// already reported by the cluster status read.
-//
-// tasks must cover the cluster, not just the target: the per-node replica cap
-// is measured against the tasks a *candidate* already carries, so a node-scoped
-// slice would report every candidate empty and call a capped service movable
-// onto nodes that are full.
-//
-// clusterNodes, tasks and services must already be filtered to what the caller
-// may read; a service whose tasks reference nothing visible simply does not
-// appear, the same rule the other two views follow. That cuts both ways here,
-// unlike in the other two: the candidates are the nodes the caller may read,
-// so a service this reports as stranded may be placeable on one they cannot
-// see. A caller that narrowed the list is expected to say so in the graph's
-// Note — internal/mcp's drainImpact does.
+// cannot?" as a bipartite graph of affected services against the nodes that
+// could take them. A service with no edge is stranded, and Detail names the
+// filter nodeCanHost blocked it on. tasks must cover the cluster, not just the
+// target: the per-node cap is measured against what each candidate carries.
+// Every slice must be ACL-filtered, so the candidates are only readable nodes.
 func DrainImpactGraph(
 	target swarm.Node,
 	clusterNodes []swarm.Node,
@@ -150,26 +127,12 @@ func DrainImpactGraph(
 	return graph
 }
 
-// placementFor decides where one affected service could go, returning its
-// state, the detail line for its vertex, and the candidate node IDs to draw an
-// edge to. running is how many of its tasks the drained node carries — the
-// amount of work actually in question.
-//
-// The blocking reason reported for a stranded service is the one that failed
-// on the *last* candidate examined rather than a summary of all of them: every
-// candidate failing on the same filter is the usual case, and naming one a
-// caller can act on beats listing the same string once per node.
-//
-// A service whose work only *partly* fits elsewhere is reported stranded with
-// no edges, not movable. "Movable" claims the whole vertex can leave — the
-// detail says "N task(s) here; M node(s) can take them" — and an operator
-// draining on that basis is left with pending replicas, so the state a caller
-// acts on has to be the pessimistic one. The detail then says how much room
-// there actually is.
-//
-// placed maps a candidate node ID to how many of this service's live tasks it
-// already runs, which is what nodeCanHost measures the per-node replica cap
-// against. A nil map is a service with no tasks anywhere else.
+// placementFor decides where one affected service could go: its state, its
+// detail line, and the candidates to draw an edge to. A stranded service
+// reports why the *last* candidate failed, since they usually all fail alike.
+// Work that only partly fits elsewhere is stranded rather than movable, or an
+// operator is left with pending replicas. placed is each candidate's existing
+// live-task count for this service; nil means it has tasks nowhere else.
 func placementFor(
 	svc swarm.Service,
 	running int,
@@ -196,11 +159,9 @@ func placementFor(
 	}
 
 	if len(accepted) > 0 {
-		// A candidate with one free slot is not the same as room for all the
-		// work. Under a per-node cap the slots have to add up across every
-		// candidate, or the surplus replicas sit pending after the drain —
-		// which is the same wrong answer as naming a node that would refuse
-		// the task outright, arrived at one replica later.
+		// A candidate with one free slot is not room for all the work: under a
+		// per-node cap the slots have to add up across every candidate, or the
+		// surplus replicas sit pending after the drain.
 		if placement != nil && placement.MaxReplicas > 0 {
 			var free uint64
 

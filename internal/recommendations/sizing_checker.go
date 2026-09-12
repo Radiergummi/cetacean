@@ -134,21 +134,11 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 	return recs
 }
 
-// measured pairs a service's CPU and memory results, and reports nil unless
-// both are actually present.
-//
-// A query that succeeds but returns no series for a service is silence, not a
-// measurement: there may be no cAdvisor, it may not have scraped this service
-// yet, or the service may be too new to have history. Reading the absent key
-// straight out of the map yielded 0, and 0 sits under every over-provisioned
-// threshold, so a cluster with no container metrics told every service to
-// shrink to the floor — the same failure get_metrics guards against with
-// requireExporter, and one that right_size_service is instructed to act on.
-//
-// Both must be present because absence is per-service in practice: an exporter
-// emits the CPU and memory families together, so a service missing from one is
-// missing from the other, and a service missing from just one has told us
-// something is wrong rather than something is idle.
+// measured pairs a service's CPU and memory results, reporting nil unless both
+// are present. A query that succeeds but returns no series is silence, not a
+// measurement, and 0 sits under every over-provisioned threshold. Both are
+// required because an exporter emits the two families together: a service
+// missing from just one means something is wrong, not idle.
 func measured(cpuData, memData map[string]float64, service string) *serviceMetrics {
 	cpu, hasCPU := cpuData[service]
 	mem, hasMem := memData[service]

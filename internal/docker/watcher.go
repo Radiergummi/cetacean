@@ -175,12 +175,9 @@ func (w *Watcher) fullSync(ctx context.Context) error {
 }
 
 // sync re-fetches the cluster and replaces the cache with the result.
-//
-// tracksConnection says whether this sync speaks for the event stream's
-// health. A watcher-driven sync does; a manual resync does not — it runs
-// beside a healthy stream, and letting a transient failure there report the
-// engine as unreachable left /-/health and the dashboard claiming "Cetacean
-// cannot reach Docker" until the next periodic sync, five minutes later.
+// tracksConnection says whether this sync speaks for the event stream's health:
+// a watcher-driven one does, a manual resync does not — it runs beside a
+// healthy stream, and a transient failure there is not the engine going away.
 func (w *Watcher) sync(ctx context.Context, tracksConnection bool) error {
 	start := time.Now()
 	slog.Info("starting full sync")
@@ -450,12 +447,10 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	}
 }
 
-// scheduleSettle re-reads a task shortly after its container started or
-// exited. Docker emits no task events, and Swarm reconciles the task record
-// after the container it wraps -- so the inspect on the event reads a record
-// that has not caught up, in either direction: a dead container still reads
-// running, a started one still reads starting. Each read waits twice as long
-// as the last, and the series stops as soon as the record catches up.
+// scheduleSettle re-reads a task shortly after its container started or exited.
+// Docker emits no task events, and Swarm reconciles the record after the
+// container it wraps, so the inspect on the event reads one that has not caught
+// up in either direction. Each read waits twice as long as the last.
 func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action string) {
 	if task, ok := w.store.GetTask(key.id); !ok || taskCaughtUp(task, action) {
 		return
@@ -546,9 +541,8 @@ func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
 	if err != nil {
 		// A not-found that outlived every retry is the daemon's answer, not a
 		// race: Swarm garbage-collects a task's record without emitting a
-		// removal event, so this is the only signal it went. Decided here
-		// rather than in inspectWithRetry because the retries are what tell
-		// that from "not registered yet" during a stack deploy.
+		// removal event, so this is the only signal it went. The retries are
+		// what tell it from "not registered yet" during a stack deploy.
 		if cerrdefs.IsNotFound(err) {
 			slog.Debug(
 				"resource no longer exists; dropping cached record",
@@ -618,10 +612,9 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 }
 
 // inspectWithRetry retries transient inspect failures with capped exponential
-// backoff. Rapid stack deploys often race: an event arrives for a resource the
-// daemon hasn't fully registered yet (404), or a network glitch surfaces. The
-// previous one-shot inspect would silently drop the event and leave the cache
-// stale until the periodic 5-minute re-sync.
+// backoff. Rapid stack deploys race: an event arrives for a resource the daemon
+// has not registered yet. A one-shot inspect drops the event and leaves the
+// cache stale until the periodic re-sync.
 func (w *Watcher) inspectWithRetry(ctx context.Context, key eventKey) (any, error) {
 	const maxAttempts = 4
 	backoff := 100 * time.Millisecond
