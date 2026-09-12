@@ -761,7 +761,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, h.searchFeeds(), spa))
 
 	// Profile
-	mux.HandleFunc("GET /profile", contentNegotiated(h.HandleProfile, feedHandlers{}, spa))
+	mux.HandleFunc("GET "+profilePath, contentNegotiated(h.HandleProfile, feedHandlers{}, spa))
 
 	// Topology
 	mux.HandleFunc("GET /topology", func(w http.ResponseWriter, r *http.Request) {
@@ -875,20 +875,22 @@ func requireReady(h *Handlers, mux *routeRecorder) func(http.Handler) http.Handl
 }
 
 // readsClusterState reports whether the endpoint answering this request reads
-// the cache. The path alone cannot say: what no route matches falls through to
-// the SPA catch-all, which serves the built frontend off the embedded
-// filesystem — the web manifest and the icons sit at its root, beside every
-// client-side route — so the mux is asked which pattern it matches. The meta,
-// docs and auth routes are matched but read no cluster state either.
+// the cache. Path shape cannot say: what matches no route falls through to the
+// SPA catch-all, which serves the frontend — manifest and icons included — off
+// the embedded filesystem, so the mux is asked. The rest answer from the
+// request alone.
 func readsClusterState(mux *routeRecorder, r *http.Request) bool {
+	path := r.URL.Path
+
 	switch pattern := mux.route(r); {
 	case pattern == "" || pattern == "/":
 		return false
-	case strings.HasPrefix(r.URL.Path, "/-/"):
-		return false
-	case strings.HasPrefix(r.URL.Path, "/api"):
-		return false
-	case strings.HasPrefix(r.URL.Path, "/auth/"):
+	case strings.HasPrefix(path, "/-/"),
+		strings.HasPrefix(path, "/api"),
+		strings.HasPrefix(path, "/auth/"),
+		strings.HasPrefix(path, "/.well-known/"),
+		path == openSearchPath,
+		path == profilePath:
 		return false
 	default:
 		return true

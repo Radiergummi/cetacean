@@ -227,6 +227,19 @@ func TestUnreadySharesTheFrontendButNotTheCluster(t *testing.T) {
 		t.Errorf("manifest body = %q, want the file from the embedded filesystem", got)
 	}
 
+	// Registered routes that answer from the request rather than the cache. A
+	// client probing a server it cannot reach is when the discovery documents
+	// are worth most, and identity says who you are, not what the cluster is.
+	for _, path := range []string{apiCatalogPath, openSearchPath, profilePath} {
+		t.Run(path, func(t *testing.T) {
+			rec := get(t, path)
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("GET %s = %d, want %d", path, rec.Code, http.StatusOK)
+			}
+		})
+	}
+
 	for _, resource := range []string{"/nodes", "/services", "/nodes/abc"} {
 		t.Run(resource, func(t *testing.T) {
 			rec := get(t, resource)
