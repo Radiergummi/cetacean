@@ -156,7 +156,13 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 			return
 		}
 
-		target := absPath(r.Context(), "/"+collection+"/"+url.PathEscape(id)+rest)
+		// The extension suffix goes back on: negotiate stripped it before this
+		// ran, and a request that named its representation in the path has no
+		// reason to carry an Accept header saying the same thing — dropping it
+		// would answer the redirect from whatever the client's Accept does say,
+		// which for a browser is the SPA.
+		target := absPath(r.Context(), "/"+collection+"/"+url.PathEscape(id)+rest) +
+			extensionFromContext(r.Context())
 		if r.URL.RawQuery != "" {
 			target += "?" + r.URL.RawQuery
 		}

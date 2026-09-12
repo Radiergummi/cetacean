@@ -25,7 +25,7 @@ type methodSpec struct {
 
 // resourceWriteMethods maps resource types to their write methods and the
 // minimum operations tier required. For methods that appear at multiple tiers
-// (e.g. service PUT at tier1 for scale/image and tier3 for mode/endpoint-mode),
+// (e.g. service PUT at tier1 for scale/image and tier3 for endpoint-mode),
 // the lowest tier is used so the method appears in Allow whenever any of its
 // uses are enabled.
 var resourceWriteMethods = map[string][]methodSpec{
@@ -33,7 +33,7 @@ var resourceWriteMethods = map[string][]methodSpec{
 		{
 			"PUT",
 			config.OpsOperational,
-		}, // scale, image (tier1); mode, endpoint-mode are tier3 but PUT is available if tier1 is enabled
+		}, // scale, image (tier1); endpoint-mode is tier3 but PUT is available if tier1 is enabled
 		{"POST", config.OpsOperational},    // rollback, restart
 		{"PATCH", config.OpsConfiguration}, // env, labels, resources, etc.
 		{"DELETE", config.OpsImpactful},    // remove

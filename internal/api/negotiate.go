@@ -66,6 +66,8 @@ func (ct ContentType) mediaType() string {
 
 type contentTypeKey struct{}
 
+type extensionKey struct{}
+
 // ContentTypeFromContext returns the negotiated content type, defaulting to JSON.
 func ContentTypeFromContext(ctx context.Context) ContentType {
 	if ct, ok := ctx.Value(contentTypeKey{}).(ContentType); ok {
@@ -74,13 +76,24 @@ func ContentTypeFromContext(ctx context.Context) ContentType {
 	return ContentTypeJSON
 }
 
+// extensionFromContext returns the extension suffix negotiate stripped from
+// the path, or "" when the type came from the Accept header instead. Anything
+// rebuilding the request's URI has to put it back: the suffix is the only
+// thing naming the representation, so a redirect that dropped it would be
+// re-negotiated from an Accept header that may say something else entirely.
+func extensionFromContext(ctx context.Context) string {
+	ext, _ := ctx.Value(extensionKey{}).(string)
+
+	return ext
+}
+
 // negotiate resolves the effective content type from an extension suffix or
 // Accept header and stores it in the request context for downstream handlers.
 func negotiate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Accept")
 
-		ct := resolveExtension(r)
+		ct, ext := resolveExtension(r)
 		if ct == ContentTypeUnsupported {
 			ct = parseAccept(r.Header.Get("Accept"))
 		}
@@ -91,6 +104,10 @@ func negotiate(next http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(r.Context(), contentTypeKey{}, ct)
+		if ext != "" {
+			ctx = context.WithValue(ctx, extensionKey{}, ext)
+		}
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -130,17 +147,18 @@ var extensionTypes = []struct {
 }
 
 // resolveExtension checks for a known extension suffix on the request path.
-// If found, it strips the suffix from r.URL.Path and returns the content type.
-// Returns ContentTypeUnsupported if no extension matches.
-func resolveExtension(r *http.Request) ContentType {
+// If found, it strips the suffix from r.URL.Path and returns the content type
+// along with the suffix it removed. Returns ContentTypeUnsupported if no
+// extension matches.
+func resolveExtension(r *http.Request) (ContentType, string) {
 	path := r.URL.Path
 	for _, ext := range extensionTypes {
 		if trimmed, ok := strings.CutSuffix(path, ext.ext); ok {
 			r.URL.Path = trimmed
-			return ext.ct
+			return ext.ct, ext.ext
 		}
 	}
-	return ContentTypeUnsupported
+	return ContentTypeUnsupported, ""
 }
 
 // mediaRange is a parsed Accept header entry.

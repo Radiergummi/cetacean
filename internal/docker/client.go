@@ -1141,6 +1141,14 @@ func (c *Client) UpdateServiceContainerConfig(
 	if err != nil {
 		return swarm.Service{}, err
 	}
+	// Guarded like every other writer reaching into the container spec: apply
+	// dereferences it, so a service without one panicked inside the handler
+	// rather than answering.
+	if svc.Spec.TaskTemplate.ContainerSpec == nil {
+		return swarm.Service{}, errdefs.InvalidParameter(
+			fmt.Errorf("service has no container spec"),
+		)
+	}
 	apply(svc.Spec.TaskTemplate.ContainerSpec)
 	_, err = c.docker.ServiceUpdate(
 		ctx,

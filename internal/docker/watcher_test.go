@@ -1063,3 +1063,42 @@ func TestLivenessDropsWhenTheStreamEnds(t *testing.T) {
 		t.Error("still connected after the event stream ended")
 	}
 }
+
+// TestManualResyncFailureLeavesTheStreamVerdictAlone: POST /-/resync shares
+// the sync path with the watcher, but it runs beside a healthy event stream.
+// Letting its failure clear the connection verdict made /-/health and the
+// dashboard report "Cetacean cannot reach Docker" until the next periodic
+// sync, five minutes later, over a cluster nothing was wrong with.
+func TestManualResyncFailureLeavesTheStreamVerdictAlone(t *testing.T) {
+	mc := newMockClient()
+
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	if err := w.fullSync(context.Background()); err != nil {
+		t.Fatalf("fullSync: %v", err)
+	}
+
+	connected, lastSync := w.Liveness()
+	if !connected {
+		t.Fatal("not connected after a successful sync")
+	}
+
+	for _, kind := range []string{
+		"nodes", "services", "tasks", "configs", "secrets", "networks", "volumes",
+	} {
+		mc.listErrors[kind] = errors.New("connection refused")
+	}
+
+	if err := w.Resync(context.Background()); err == nil {
+		t.Fatal("Resync succeeded with a list failing")
+	}
+
+	connected, stale := w.Liveness()
+	if !connected {
+		t.Error("a failed manual resync reported the event stream as disconnected")
+	}
+
+	if !stale.Equal(lastSync) {
+		t.Errorf("a failed resync moved lastSync from %v to %v", lastSync, stale)
+	}
+}

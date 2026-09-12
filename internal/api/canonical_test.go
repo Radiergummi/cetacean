@@ -103,6 +103,42 @@ func TestCanonicalIdentifierPreservesQueryString(t *testing.T) {
 	}
 }
 
+// The extension suffix is the only thing naming the representation a client
+// asked for, and negotiate strips it before this middleware sees the path. A
+// redirect that dropped it would be re-negotiated from the Accept header —
+// which for a browser means the dashboard instead of the JSON that was asked
+// for.
+func TestCanonicalIdentifierPreservesExtensionSuffix(t *testing.T) {
+	router := newTestRouterWithCache(t, canonicalTestCache())
+
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"/services/shop_web.json", "/services/svc1234567890.json"},
+		{"/services/shop_web/env.json", "/services/svc1234567890/env.json"},
+		{"/services/shop_web.atom", "/services/svc1234567890.atom"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.Header.Set("Accept", "text/html")
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusTemporaryRedirect {
+				t.Fatalf("status = %d, want 307; body: %s", w.Code, w.Body.String())
+			}
+
+			if got := w.Header().Get("Location"); got != tc.want {
+				t.Errorf("Location = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // An identifier that is already canonical must reach its handler untouched;
 // a redirect here would cost every well-behaved client a second round trip.
 func TestCanonicalIdentifierLeavesIDsAlone(t *testing.T) {

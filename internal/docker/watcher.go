@@ -167,7 +167,21 @@ func (w *Watcher) writeSnapshot() {
 	}
 }
 
+// fullSync re-reads the cluster on the watcher's own schedule — at startup, on
+// reconnect, and on the five-minutely tick inside watchEvents — so its outcome
+// speaks for whether the engine is reachable at all.
 func (w *Watcher) fullSync(ctx context.Context) error {
+	return w.sync(ctx, true)
+}
+
+// sync re-fetches the cluster and replaces the cache with the result.
+//
+// tracksConnection says whether this sync speaks for the event stream's
+// health. A watcher-driven sync does; a manual resync does not — it runs
+// beside a healthy stream, and letting a transient failure there report the
+// engine as unreachable left /-/health and the dashboard claiming "Cetacean
+// cannot reach Docker" until the next periodic sync, five minutes later.
+func (w *Watcher) sync(ctx context.Context, tracksConnection bool) error {
 	start := time.Now()
 	slog.Info("starting full sync")
 
@@ -175,15 +189,24 @@ func (w *Watcher) fullSync(ctx context.Context) error {
 	if err != nil {
 		slog.Error("full sync failed", "error", err)
 		metrics.RecordSyncFailure()
-		w.setConnected(false)
+
+		if tracksConnection {
+			w.setConnected(false)
+		}
+
 		return err
 	}
 
+	done := time.Now()
+
 	w.store.ReplaceAll(data)
-	metrics.ObserveSyncDuration(time.Since(start).Seconds())
-	metrics.RecordSyncSuccess(time.Now())
-	w.lastSync.Store(time.Now().UnixNano())
-	w.setConnected(true)
+	metrics.ObserveSyncDuration(done.Sub(start).Seconds())
+	metrics.RecordSyncSuccess(done)
+	w.lastSync.Store(done.UnixNano())
+
+	if tracksConnection {
+		w.setConnected(true)
+	}
 
 	snap := w.store.Snapshot()
 	slog.Info(
@@ -205,7 +228,7 @@ func (w *Watcher) fullSync(ctx context.Context) error {
 // Exposed for manual recovery from drift via the admin API; the watcher's
 // regular event-stream path remains independent of this call.
 func (w *Watcher) Resync(ctx context.Context) error {
-	if err := w.fullSync(ctx); err != nil {
+	if err := w.sync(ctx, false); err != nil {
 		return err
 	}
 	w.writeSnapshot()
