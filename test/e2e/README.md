@@ -83,6 +83,11 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19018` | Deployment shape: base path, TLS in the binary, the MCP Origin guard, cache snapshots |
 | `19019` | `?filter=` on every list endpoint: each env field, the FLT codes, and the pipeline order |
 | `19020` | Metrics, against a real Prometheus seeded with generated TSDB blocks |
+| `19021` | Shutdown: what happens to a request in flight when the process is signalled |
+| `19022` | Connectivity: the Docker API going away underneath a running SUT, and coming back |
+| `19023` | Tracing: CETACEAN_OTEL_ENDPOINT, driven against a stand-in OTLP collector |
+| `19024` | Goroutine leaks: what streaming connections leave behind once they close |
+| `19025` | SSE fan-out isolation: what a client that has stopped reading costs the others |
 | `19090` | Prometheus (the metrics lane's, published for the host-side SUT) |
 | `19104` | Caddy, mTLS termination |
 
@@ -109,6 +114,20 @@ against it and records its PID in `test/e2e/.sut.pid`. It runs with `CETACEAN_CO
 change this environment — it did, in testing, until this was added) and
 `CETACEAN_OPERATIONS_LEVEL=3`, because `frontend/e2e`'s specs check for write affordances (Remove
 buttons, inline editors) being present unconditionally, not gated on `CETACEAN_E2E_WRITE`.
+
+It then adds what the browser suite needs beyond the baseline (`fixtures/browser.go`), which the Go
+lanes must not see:
+
+- **Page fillers.** Sixty configs named `zz-page-filler-NNN`, so a list is longer than the
+  dashboard's fifty-item page and the load-more sentinel has something to do. They sort last, so
+  the first row every detail spec clicks is still a real fixture.
+- **A relabelling pass**, run *after* the SUT reports ready — `e2eenv -history`. The cache records
+  history from watcher events, and the initial full sync applies `ReplaceAll`, which records none:
+  a fixture deployed before startup has an empty activity feed forever. Touching each one
+  afterwards is what gives the dashboard's Recent Activity sections anything to show.
+
+`fixtures.DeployBaseline` removes the fillers, so a `make test-stack` run that adopts an
+environment `e2e-up` left behind still sees the baseline the lanes assert over.
 
 **Bring it down when you are done with it.** The baseline includes `shop_flaky`, a service that
 crash-loops on purpose so failed tasks and the restart counter have real input, and `e2e-up` leaves
@@ -142,29 +161,60 @@ CETACEAN_E2E_URL=http://localhost:19001 make test-e2e
 make e2e-down
 ```
 
-(That's `CETACEAN_E2E_URL`, matching `playwright.config.ts`'s `baseURL` resolution.) Specs gated on
-Prometheus (via `/metrics/status`) skip, since this environment has none — see
-[Deferred](#deferred) below. Specs gated behind `CETACEAN_E2E_WRITE` also skip unless you set that
-variable; the baseline fixtures are shared and idempotent, so mutating them isn't the default.
+(That's `CETACEAN_E2E_URL`, matching `playwright.config.ts`'s `baseURL` resolution.) `e2e-up`
+seeds Prometheus, so the specs gated on `/metrics/status` run rather than skip. Specs gated behind
+`CETACEAN_E2E_WRITE` still skip unless you set that variable; the baseline fixtures are shared and
+idempotent, so mutating them isn't the default.
 
 ### Keeping it honest
 
-The browser suite passes in full against this environment: **141 passed, 13 skipped** with
-`CETACEAN_E2E_WRITE=1`, and 133 passed with it unset. The sixteen failures a previous pass
-catalogued here are gone — they were fixed in the dashboard since, and the list had outlived them.
+The browser suite passes in full against this environment: **159 passed, 3 skipped** with
+`CETACEAN_E2E_WRITE=1`, repeatably (seven consecutive runs). Only three skips remain, and each is a fact about the environment rather
+than about the suite: the profile page's authenticated half (this SUT runs `none`, and its
+unauthenticated half runs), the monitoring banner's partially-configured state (monitoring here is
+fully healthy), and plugin detail (a DinD engine has no plugins — the Go lanes excuse the same
+route for the same reason).
 
-What replaced them is worth knowing, because the same thing will happen again. Every spec that had
-been skipping — the metrics specs, which had no Prometheus until `e2eenv` seeded one, and the
-write-gated ones behind `CETACEAN_E2E_WRITE` — failed the first time it actually ran. Not one was a
-product defect. They were assertions about a page nobody had watched: locators that matched twice
-once a second MetricsPanel appeared, a section header addressed as a heading when this app renders
-a disclosure button, a keyboard test that clicked the middle of `<main>` and relied on the table
-being under it, a shortcut pressed before the component that registers it had mounted, and a name
-shared by four different buttons.
+**A skipped spec is not a passing spec**, and the thirteen that were skipping got there the same
+way: each decided whether it could run by probing the DOM the instant `page.goto` resolved. The
+dashboard fills itself in after mount, so "absent" and "not fetched yet" look identical at that
+moment, and `test.skip` makes the wrong answer silent. The worst case was `auth.spec.ts`, a
+mutually exclusive pair in which the branch written for `none` mode skipped and the branch written
+for authenticated mode ran — asserting only that *some* heading existed, which after the redirect
+was the Cluster Overview it had been sent to. Both halves were dead, in every mode.
 
-**A skipped spec is not a passing spec.** Each of these could only pass in the environment that
-declined to run it, and each went stale unobserved for months. If you add a gate, plan to run what
-is behind it.
+One spec is a known flake, undiagnosed: `service-editors.spec.ts`'s "labels: Cancel returns to read
+mode" failed once in eight consecutive full runs and could not be reproduced — in isolation, or in
+seven runs after. The specs each get their own browser context, so the only thing they share is the
+cluster; `write-outcomes.spec.ts` already targets `shop_lonely` specifically so that "the first
+service" specs are not read while it mutates one. It is recorded here rather than papered over with a
+retry: a retry would hide it, and guessing at a mechanism would be the same mistake as the skips
+above.
+
+The rule that replaced it: **ask the server, not the DOM.** Whether a resource has history, whether
+a stack has configs, whether recommendations exist, whether a write is offered — the API answers
+all of these, and `fixtures.ts` exports the helpers (`apiJson`, `hasHistory`, `allowedMethods`,
+`authProvider`) that do the asking. A `test.skip` is then a statement about the cluster, which is
+what it was always meant to be. Where a spec must watch something transient — the load-more
+sentinel, which exists only while a page is outstanding — hold the response open with `page.route`
+rather than racing it.
+
+## Running it against the race detector
+
+```bash
+make test-stack-race
+```
+
+Builds the SUT with `-race` and drives every lane against it, with
+`GORACE=halt_on_error=1` so the first race kills the process rather than being logged and outlived by
+the run that provoked it. `sut.assertExitedCleanly` then reports it against the case that caused it —
+which is also what catches a panic, or any non-zero exit, on a teardown path nothing used to look at.
+
+CI's `go test -race ./...` covers the packages in isolation. This is the only thing that races the
+real server's concurrency: the watcher goroutines, the cache mutex, the SSE fan-out, the MCP
+notification manager and the ACL hot reload, against real Docker events. It takes roughly twice as
+long as `make test-stack` and reports no coverage, so it is a thing to run before a release rather
+than on every change.
 
 ## Constraints
 
@@ -194,13 +244,16 @@ there is otherwise no `up` for the cAdvisor detection to find.
 ## Deferred
 
 This pass shipped less than the design doc's [Coverage][coverage] table describes.
-Nothing below is exercised by this suite, and — except where noted — nothing else pins it either:
+Nothing below is exercised by this suite, and — except where noted — nothing else pins it either.
+Struck-through entries have since been covered and are kept so the list reads as a record rather
+than a standing claim:
 
 - The `headers` lane's Caddy half (real header injection) and its nginx half (an XFF-only
   misconfiguration, no `Forwarded`) — see [Reserved ports](#reserved-ports) above. The lane's
   hostile-input cases (malformed/duplicate headers) still run, against the in-process proxy.
-- Write-lane coverage beyond scale and restart: image update, rollback, drain, task removal, and
-  the 409 stale-version conflict.
+- ~~Write-lane coverage beyond scale and restart: image update, rollback, drain, task removal, and
+  the 409 stale-version conflict.~~ Covered: `write_sweep_test.go` drives all five, the conflict by
+  `TestWriteSweepConcurrentScaleProducesAStaleVersionConflict`.
 - ~~MCP grant-based `tools/list` filtering (only tier gating is covered), a task-augmented mutation
   polled to convergence, and cache-event notifications.~~ Covered: `tools/list` filtering by
   `mcp_sweep_test.go`, and the rest by `mcp_stream_test.go`, which drives the `subscriptions/listen`
@@ -217,6 +270,10 @@ Nothing below is exercised by this suite, and — except where noted — nothing
   `oauth_test.go` does cover is that an `https://` client_id takes the CIMD path and that the guard is
   live in the shipped binary.
 - The ACL case that a digest never names a resource behind a grant.
+- ~~The OTLP tracing wiring.~~ Covered by `tracing_test.go`, which drives `CETACEAN_OTEL_ENDPOINT`
+  against a stand-in collector. Driving it is what found that the documented endpoint exported
+  nowhere: `WithEndpointURL` appends no signal path, so a collector base URL posted to `/` and the
+  exporter dropped the 404 — startup logged "distributed tracing enabled" and nothing arrived.
 - Two halves of the `If-Match` lane (`precondition_test.go`). `DELETE /plugins/{name}` is driven
   only for the no-representation case: there is no installed plugin to read a validator from, and
   its representation comes from a daemon inspect rather than the cache. `DELETE /nodes/{id}` is
