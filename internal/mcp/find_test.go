@@ -129,12 +129,10 @@ func TestFindResultMatchesItsOutputSchema(t *testing.T) {
 	}
 }
 
-// findResultItemSchemaKeys reads find's outputSchema down to the element
-// schema mcp-go generates for each entry in `items` — required keys, and the
-// full set of keys the element declares (the schema also sets
-// additionalProperties: false, so any key outside this set is a violation
-// too). Reading the schema itself, rather than hardcoding cluster.Row's field
-// names, means a caller of this helper tracks the type if Row ever changes.
+// findResultItemSchemaKeys reads find's outputSchema down to the element schema
+// mcp-go generates for each `items` entry: the required keys and the full
+// declared set, since the schema also sets additionalProperties: false. Read
+// from the schema rather than hardcoded, so it tracks cluster.Row.
 func findResultItemSchemaKeys(
 	t *testing.T,
 	td toolDef,
@@ -170,15 +168,10 @@ func findResultItemSchemaKeys(
 	return element.Required, allowed
 }
 
-// TestFindCompactItemsMatchTheirElementSchema is the check
-// TestFindResultMatchesItsOutputSchema does not do: that check only compares
-// the envelope's own top-level required keys (type/items/total) against the
-// payload, which findRawResult — a completely different shape — also
-// satisfies. This drives the real, output-schema-validating dispatch (the
-// same one TestCuratedToolOutputsValidate uses) and checks each returned Row
-// against the *element* schema advertised for `items`: every key the element
-// schema requires must be present, and no key outside what the element schema
-// declares may appear (mirroring its additionalProperties: false).
+// Checks each returned Row against the *element* schema advertised for `items`,
+// which the envelope check does not: that compares only the top-level required
+// keys, which a completely different shape also satisfies. Every required key
+// must be present and no undeclared one may appear.
 func TestFindCompactItemsMatchTheirElementSchema(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
@@ -237,14 +230,10 @@ func TestFindCompactItemsMatchTheirElementSchema(t *testing.T) {
 	}
 }
 
-// TestFindRawModeReturnsConformingStructuredContent guards the contract raw
-// mode used to break: a tool that advertises an outputSchema must return
-// structuredContent conforming to it, whatever its arguments. raw once
-// answered with text content and no structuredContent at all, which the
-// server's own validator was happy with — it skips a result that has none —
-// and which the reference client rejects outright ("has an output schema but
-// did not return structured content"). The untouched records ride under `raw`
-// beside the compact rows instead, which the schema declares.
+// A tool advertising an outputSchema must return conforming structuredContent
+// whatever its arguments. The server's own validator skips a result that has
+// none, but the reference client rejects it outright — so the untouched records
+// ride under `raw` beside the compact rows, which the schema declares.
 func TestFindRawModeReturnsConformingStructuredContent(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
@@ -293,11 +282,10 @@ func TestFindRawModeReturnsConformingStructuredContent(t *testing.T) {
 	}
 }
 
-// seedFilterFixture puts two of everything a post-filter test needs to tell
-// apart into the cache: two services (different stacks, images and labels),
-// two nodes (different states), and one task on each node against each
-// service, so query/state/stack/node/image/label each have exactly one match
-// to find and one to exclude.
+// seedFilterFixture puts two of everything a post-filter test must tell apart
+// into the cache: two services differing in stack, image and labels, two nodes
+// in different states, and a task per node per service — so every filter has
+// exactly one match to find and one to exclude.
 func seedFilterFixture(t *testing.T) *cache.Cache {
 	t.Helper()
 
@@ -457,11 +445,9 @@ func TestFindImageFilterNarrowsServiceRows(t *testing.T) {
 	}
 }
 
-// TestFindLabelFilterSupportsPresenceAndExactValue pins both forms Docker's
-// own label-filter syntax supports: `key` alone tests presence, `key=value`
-// tests an exact value — cluster.Row carries no label data at all, so this is
-// the only filter that reads the pre-conversion record (labelsFor) rather
-// than a Row field.
+// Pins both forms Docker's label-filter syntax supports: `key` alone tests
+// presence, `key=value` an exact value. cluster.Row carries no labels, so this
+// is the only filter reading the pre-conversion record.
 func TestFindLabelFilterSupportsPresenceAndExactValue(t *testing.T) {
 	srv := newToolTestServer(t, seedFilterFixture(t), &fakeWriteClient{}, config.OpsReadOnly)
 
@@ -484,13 +470,10 @@ func TestFindLabelFilterSupportsPresenceAndExactValue(t *testing.T) {
 	}
 }
 
-// TestFindRawModeHonoursFilters is the regression test for the bug where raw
-// mode returned early, before rowFilters was built, and so ignored every
-// post-filter — silently returning the whole type instead of just the
-// caller's stack. raw only changes the *shape* of what comes back, never the
-// scope, so the filtered set must be identical either way; this pins that the
-// raw item surviving is genuinely the untouched record for the row that
-// matched, not a coincidence of both being named "web".
+// raw changes the *shape* of what comes back, never the scope, so the filtered
+// set must be identical either way. Pins that the surviving raw item is
+// genuinely the untouched record for the row that matched, rather than a
+// coincidence of both being named "web".
 func TestFindRawModeHonoursFilters(t *testing.T) {
 	srv := newToolTestServer(t, seedFilterFixture(t), &fakeWriteClient{}, config.OpsReadOnly)
 
@@ -754,12 +737,10 @@ func TestToolFindRejectsEmptyQueryWithoutType(t *testing.T) {
 	}
 }
 
-// find and describe must disclose the same thing about the same task. A task
-// row names its parent service and the node it runs on, and describe routes
-// both through the caller's read grants (readableService/readableNode) so a
-// digest cannot become a side channel for a resource the caller may not list.
-// find passed the unfiltered cache listings into RowsForTasks, so it named a
-// service describe withheld — one tool answering around the other's grants.
+// find and describe must disclose the same thing about the same task. A task row
+// names its parent service and its node, and describe routes both through the
+// caller's read grants — so find must pass filtered listings into RowsForTasks
+// or one tool answers around the other's grants.
 func TestFindNamesATasksParentsOnlyWhenDescribeWould(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
@@ -807,11 +788,9 @@ func TestFindNamesATasksParentsOnlyWhenDescribeWould(t *testing.T) {
 }
 
 // A cross-type search reports a total the caller cannot reach the tail of:
-// `limit` caps the hits per type, there is no offset, and one figure over
-// eight types says nothing about where the matches are. Counts — the per-type
-// breakdown cluster.Search already computes, and the field the HTTP search
-// response carries — is what makes "137 matches, showing 6" legible instead of
-// looking like a listing that lost most of itself.
+// `limit` caps hits per type, there is no offset, and one figure over eight
+// types says nothing about where the matches are. Counts is what makes "137
+// matches, showing 6" legible rather than a listing that lost most of itself.
 func TestFindAcrossTypesReportsPerTypeCounts(t *testing.T) {
 	c := cache.New(nil)
 

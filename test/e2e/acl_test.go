@@ -28,17 +28,10 @@ const writePolicy = `grants:
     permissions: ["read", "write"]
 `
 
-// A grant listing only "read" must gate writes; adding "write" to the same
-// audience, without a restart, must lift the gate. This is fsnotify's only
-// honest test: a unit test can prove the parser works, not that the watcher
-// is wired to the evaluator that answers real requests.
-//
-// The Allow header is asserted on a DETAIL endpoint (not a list endpoint).
-// /services always answers "GET, HEAD" regardless of ACL or operations
-// level -- "service" is absent from listCreateMethods in
-// internal/api/allow.go, so POST never appears there. A detail endpoint's
-// PUT/PATCH availability does depend on write permission, so it is the only
-// place this behavior is observable.
+// A grant listing only "read" must gate writes, and adding "write" to the same
+// audience without a restart must lift the gate — a unit test proves the parser
+// works, not that the watcher is wired to the evaluator. The Allow header is
+// asserted on a detail endpoint, since /services always answers "GET, HEAD".
 func TestACLPolicyHotReload(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -87,18 +80,10 @@ func TestACLPolicyHotReload(t *testing.T) {
 		"a write grant written in place did not take effect",
 	)
 
-	// The same change again, written the other way: a temporary file renamed
-	// over the top, which replaces the inode. That is how a deployment and
-	// several editors update a file, and a watch on the policy file itself
-	// stayed pointed at the old unlinked inode and stopped reloading here,
-	// permanently and silently. Asserting the reverse direction also proves
-	// the watch survives more than one swap.
-	//
-	// Whether this specific write pattern can distinguish the defect depends
-	// on the platform — fsnotify's kqueue backend watches the parent
-	// directory anyway, so on a macOS host it reloads either way. The
-	// per-platform proof lives in internal/acl's own tests; what this covers
-	// is that the watcher is wired to the evaluator answering real requests.
+	// The same change written the other way: a temporary file renamed over the
+	// top, replacing the inode — how a deployment and several editors update a
+	// file, and what a watch on the file itself stops seeing. Whether this can
+	// distinguish the defect is platform-dependent; internal/acl has the proof.
 	replacePolicyViaRename(t, policy, readOnlyPolicy)
 
 	waitForAllow(
@@ -222,11 +207,9 @@ func TestACLFiltersListings(t *testing.T) {
 		}
 	}
 
-	// The two-sided half of the assertion: an empty or wrongly-scoped filter
-	// could still pass the loop above if it happened to admit zero items, or
-	// items outside "shop" that don't collide with a real stack name. Naming
-	// a known shop-stack service confirms the grant is doing more than
-	// denying by default.
+	// The two-sided half of the assertion: an empty or wrongly-scoped filter could
+	// still pass the loop above by admitting zero items. Naming a known shop-stack
+	// service confirms the grant is doing more than denying by default.
 	if !sawShopWeb {
 		t.Error("shop_web missing from a shop-only grant's listing")
 	}

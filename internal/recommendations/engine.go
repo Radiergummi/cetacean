@@ -50,14 +50,10 @@ func (e *Engine) Run(ctx context.Context) {
 	e.RunAfter(ctx, nil)
 }
 
-// RunAfter is Run, held until `ready` closes.
-//
-// The startup tick is forced, and a checker that has just run does not run
-// again until its own interval has elapsed — five minutes for the sizing and
-// operational checkers. So a tick taken before the cache has been filled from
-// Docker does not merely report an empty cluster for a moment: it reports one
-// until that interval comes round, and those two are the checkers a user opens
-// the recommendations page for.
+// RunAfter is Run, held until `ready` closes. The startup tick is forced and a
+// checker that has just run waits out its own interval, so a tick taken before
+// the cache is filled reports an empty cluster until that interval comes
+// round.
 func (e *Engine) RunAfter(ctx context.Context, ready <-chan struct{}) {
 	if e == nil {
 		return

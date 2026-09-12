@@ -26,12 +26,10 @@ type ClientRegistration struct {
 	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
 	ClientIDIssuedAt        int64    `json:"client_id_issued_at"`
 
-	// ApplicationType is the OpenID Connect application type, "native" or
-	// "web". It governs which redirect URIs are acceptable: "web" requires
-	// https and forbids loopback, "native" permits loopback and custom
-	// schemes. 2026-07-28 requires clients to state it (SEP-837); we default
-	// to "native", because that is what MCP clients overwhelmingly are and
-	// because the OIDC default of "web" would reject their redirect URIs.
+	// ApplicationType is the OIDC application type, "native" or "web", and
+	// governs which redirect URIs are acceptable: "web" requires https and
+	// forbids loopback. It defaults to "native" rather than OIDC's "web",
+	// which would reject the redirect URIs MCP clients overwhelmingly use.
 	ApplicationType string `json:"application_type,omitempty"`
 }
 
@@ -99,13 +97,10 @@ func (r *ClientRegistry) register(reg *ClientRegistration) {
 	r.order = append(r.order, reg.ClientID)
 }
 
-// checkRateLimit returns true if the IP is allowed to make a registration request.
-//
-// Inline sweep: every call evicts expired buckets while the lock is already
-// held. Without this, the map grows unbounded for the lifetime of the process —
-// every distinct source IP (scanners, NATed clients, rotating proxies) leaves
-// a permanent entry. The sweep is O(n) per call but the map stays bounded to
-// the active-IP working set.
+// checkRateLimit reports whether the IP may make a registration request. Every
+// call evicts expired buckets while the lock is already held: without it, each
+// distinct source IP leaves a permanent entry. O(n) per call, but the map
+// stays bounded to the active-IP working set.
 func (r *ClientRegistry) checkRateLimit(ip string) bool {
 	r.rateMu.Lock()
 	defer r.rateMu.Unlock()
@@ -174,11 +169,9 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Per-IP rate limiting. r.RemoteAddr is the real client IP when the
-	// server.trusted_proxies allowlist is configured — the realIP middleware
-	// (internal/api/realip.go) rewrites it from X-Forwarded-For before this
-	// handler runs. Behind a reverse proxy with no trusted_proxies set, every
-	// caller shares the proxy's bucket; document this dependency for operators.
+	// r.RemoteAddr is the real client IP when server.trusted_proxies is
+	// configured, since realIP rewrites it before this handler runs. Behind a
+	// proxy with no allowlist set, every caller shares the proxy's bucket.
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		ip = r.RemoteAddr

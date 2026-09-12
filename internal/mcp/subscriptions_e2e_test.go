@@ -18,14 +18,9 @@ import (
 )
 
 // listenStream drives subscriptions/listen against a real HTTP server the way a
-// 2026-07-28 client does, and reports the notification methods and resource
-// URIs that arrive on the held-open response stream.
-//
-// Everything here goes through the transport on purpose. Calling the hooks
-// directly with a synthetic session is what let a completely broken
-// implementation look correct: the real transport mints no session at all for a
-// modern client, and a stub that supplies one hides exactly the bug that
-// matters.
+// 2026-07-28 client does, reporting the notification methods and resource URIs
+// that arrive on the held-open stream. Everything goes through the transport on
+// purpose: it mints no session for a modern client, and a stub's hides the bug.
 type listenStream struct {
 	notifications chan mcplib.JSONRPCNotification
 	cancel        context.CancelFunc

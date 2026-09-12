@@ -93,12 +93,10 @@ func (c *countingChecker) Check(_ context.Context) []Recommendation {
 	return nil
 }
 
-// TestRunAfterHoldsTheStartupTick pins the ordering the recommendations page
-// depends on at boot. The startup tick is forced and a checker that has just
-// run does not run again until its own interval elapses, which for the sizing
-// and operational checkers is five minutes — so a tick taken before the cache
-// has been filled from Docker reports an empty cluster for five minutes, not
-// for an instant.
+// Pins the ordering the recommendations page depends on at boot. The startup
+// tick is forced and a checker that has just run does not run again until its
+// interval elapses, which for the sizing and operational checkers is five
+// minutes — so a tick before the cache is filled reports an empty cluster.
 func TestRunAfterHoldsTheStartupTick(t *testing.T) {
 	checker := &countingChecker{interval: time.Minute}
 	engine := NewEngine(checker)

@@ -408,14 +408,10 @@ func TestExpiryDoesNotClearConsent(t *testing.T) {
 	}
 }
 
-// grantedAt rewinds a remembered approval's grant time, standing in for one
-// recorded that long ago. The store has no clock to inject and Remember always
-// stamps time.Now(), so the record is edited in place.
-//
-// Deliberately not a Snapshot/Restore round-trip: Restore prunes what has
-// lapsed, so aging a record that way would leave the store empty and the test
-// would pass on the record being *absent* rather than on Allows judging it
-// expired. Restore's pruning has its own test.
+// grantedAt rewinds a remembered approval's grant time, editing the record in
+// place because the store has no clock to inject. Deliberately not a
+// Snapshot/Restore round-trip: Restore prunes what has lapsed, so the test
+// would pass on the record being absent rather than on Allows judging it expired.
 func grantedAt(t *testing.T, s *ConsentStore, age time.Duration) {
 	t.Helper()
 
@@ -573,12 +569,9 @@ func TestVersion1FileLoadsWithoutConsent(t *testing.T) {
 	path := t.TempDir() + "/mcp-tokens.json"
 
 	// A file written before consent records existed, holding a live refresh
-	// token. The token is what makes this fixture worth having: v2 moved
-	// tokens, consumed and grants into an embedded RefreshTokenSnapshot, and
-	// an embedding that nested them under a key instead of flattening would
-	// drop every operator's refresh tokens on upgrade. An empty token map
-	// cannot see that, because the round-trip helpers are symmetric and would
-	// round-trip a nested shape just as happily.
+	// token — which is what makes the fixture worth having: v2 moved the token
+	// maps into an embedded snapshot, and nesting rather than flattening them
+	// would drop every operator's tokens on upgrade.
 	const raw = "v1-fixture-refresh-token"
 
 	now := time.Now().UTC()
@@ -822,13 +815,10 @@ func TestApprovingThroughTheConsentPageIsRemembered(t *testing.T) {
 	}
 }
 
-// postRefreshGrant drives a refresh_token grant through the real token
-// endpoint.
-//
-// No resource parameter: when one is supplied the handler validates it against
-// the live token before rotating, so a replayed token is rejected as unknown
-// and never reaches the theft branch. RequireResourceIndicator is off in
-// newTestServer, so omitting it is a legitimate request.
+// postRefreshGrant drives a refresh_token grant through the real token endpoint,
+// with no resource parameter: supplying one has the handler validate it against
+// the live token first, so a replay is rejected as unknown and never reaches the
+// theft branch. RequireResourceIndicator is off, so omitting it is legitimate.
 func postRefreshGrant(t *testing.T, s *Server, token string) *httptest.ResponseRecorder {
 	t.Helper()
 
@@ -904,11 +894,10 @@ func TestMetadataChangedMidFlowRePrompts(t *testing.T) {
 		t.Fatalf("GET status = %d, want the consent page: %s", page.Code, page.Body.String())
 	}
 
-	// The client edits its document while the user is deciding, and the
-	// fetcher's cached copy lapses — a consent tab left open longer than an
-	// hour, a restart, an eviction. Without the fingerprint travelling from
-	// the GET, the POST would fingerprint this new document and record an
-	// approval for a client the user never saw.
+	// The client edits its document while the user is deciding and the cached
+	// copy lapses — a tab left open past the TTL, a restart, an eviction.
+	// Without the fingerprint travelling from the GET, the POST would record
+	// an approval for a client the user never saw.
 	mu.Lock()
 	published.ClientName = "Totally Different"
 	mu.Unlock()

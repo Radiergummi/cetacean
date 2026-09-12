@@ -7,14 +7,10 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 )
 
-// TestTasksExtensionMatchesWiring holds the advertisement and the capability
-// together: if server/discover names the Tasks extension, tasks/get must work.
-//
-// The check is behavioural on purpose. mcp-go gates every tasks/* method on
-// WithTaskCapabilities, which is a separate option from WithExtensions, so the
-// two can drift silently — a host would read the extension, call tasks/get, and
-// be told the method does not exist. This test starts passing for the right
-// reason when the Tasks phase wires both, and fails if it wires only one.
+// Holds the advertisement and the capability together: if server/discover names
+// the Tasks extension, tasks/get must work. The check is behavioural on purpose,
+// since mcp-go gates every tasks/* method on a separate option from the one that
+// advertises — so a host could read the extension and be told the method is gone.
 func TestTasksExtensionMatchesWiring(t *testing.T) {
 	handler := newTestServer(t).Handler()
 

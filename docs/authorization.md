@@ -58,7 +58,6 @@ Two inheritance rules widen a grant beyond a literal match:
 Task patterns match task IDs, which change every time a replica is replaced. Grant the parent service or the stack
 instead of naming tasks.
 
-
 ### Audience
 
 `user:pattern` matches the identity's subject or email. `group:pattern` matches any of its groups. Patterns are globs

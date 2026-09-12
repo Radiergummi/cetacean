@@ -156,10 +156,8 @@ function composeSignals(caller: AbortSignal | undefined, timeout: AbortSignal): 
 }
 
 /**
- * Issues a read request and hands back the response once it is known good.
- * The 401-Bearer redirect and the timeout live here so every reader gets them
- * on the same terms; callers differ only in the Accept they ask for and how
- * they decode the body.
+ * Issues a read request and hands back the response once it is known good. The
+ * 401-Bearer redirect and the timeout live here so every reader gets them.
  */
 async function request(
   path: string,
@@ -195,11 +193,8 @@ function endpointOf(path: string): string {
 
 /**
  * Reports a response that is not the shape the dashboard was written against.
- *
- * Deliberately does not throw. The dashboard renders a server it disagrees with
- * exactly as it did before — a missing field was already going to show as a
- * blank cell — and this makes the reason visible instead of leaving it to be
- * guessed at from the symptom.
+ * Deliberately does not throw: it makes the reason visible without changing how
+ * the dashboard renders a server it disagrees with.
  */
 function reportSchemaDrift(path: string, error: z.ZodError): void {
   const endpoint = endpointOf(path);
@@ -311,10 +306,8 @@ async function mutationFetch<T>(
 }
 
 /**
- * The one deliberately unshaped read: `ServiceSubResource` renders whichever of
- * the fourteen service sub-resources the URL names, so the shape is chosen at
- * runtime and there is no single schema to hold it to. Everything else names
- * one.
+ * The one deliberately unshaped read: `ServiceSubResource` renders whichever
+ * sub-resource the URL names, so there is no single schema to hold it to.
  */
 export function get<T>(path: string, signal?: AbortSignal): Promise<FetchResult<T>> {
   return fetchJSON(path, signal, z.unknown());

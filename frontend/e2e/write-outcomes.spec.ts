@@ -2,23 +2,12 @@ import { test, expect, writesEnabled } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 /**
- * Outcome assertions for the dashboard's write paths.
- *
- * The rest of this suite asserts affordances — that an Edit button opens edit
- * mode, that Cancel closes it. None of it saves anything, which is how a
- * control that could only ever fail survived from March to September: the spec
- * that covered `PUT /services/{id}/mode` checked the switch was on the page,
- * and the endpoint behind it answered an engine error on every Docker version
- * ever shipped.
- *
- * So each case here ends by reading the resource back from the API and
- * asserting the cluster changed. A page that renders the new value optimistically
- * and a cluster that accepted it are different claims, and only the second one
- * is what the user asked for.
- *
- * The cases mutate shared fixture state, so they run serially and each reverts
- * what it did — the revert asserted as well, since a test that leaves a cluster
- * dirty is one the next run inherits.
+ * Outcome assertions for the dashboard's write paths. The rest of this suite
+ * asserts affordances only — an Edit button opens edit mode, Cancel closes it
+ * — and saves nothing, so each case here ends by reading the resource back
+ * from the API and asserting the cluster changed. They mutate shared fixture
+ * state, so they run serially and each reverts what it did, the revert
+ * asserted too.
  */
 test.describe("Write outcomes", () => {
   test.skip(!writesEnabled, "Write operations disabled (set CETACEAN_E2E_WRITE=1)");
@@ -101,11 +90,9 @@ test.describe("Write outcomes", () => {
   });
 
   test("service environment: saving writes the variable to the service spec", async ({ page }) => {
-    // shop_lonely, not the first row: the specs that navigate to "the first
-    // service" cannot be reading it while this one changes it underneath them.
-    // The list renders a service's stack and name as separate cells, so a row
-    // never holds the Docker name "shop_lonely" as a substring — "lonely" is
-    // the part that distinguishes it from the other three.
+    // shop_lonely, not the first row, so the specs navigating to "the first
+    // service" are not reading it while this one changes it. The list renders
+    // stack and name as separate cells, so "lonely" is what distinguishes it.
     await page.goto("/services");
 
     const row = page.locator("table tbody tr").filter({ hasText: "lonely" }).first();
@@ -202,11 +189,9 @@ test.describe("Write outcomes", () => {
     await confirmIn(page, /^Restart$/i);
 
     // A restart is a forced update: Docker starts a replacement task and winds
-    // the old one down. Asserting the identity of the tasks is what separates a
-    // restart that happened from a button that merely reported one — and the
-    // claim is that a task the service did not have before is now running, not
-    // that the old one has already gone, since the two overlap while the
-    // replacement comes up.
+    // the old one down. The claim is that a task the service did not have
+    // before is now running, not that the old one has gone — the two overlap
+    // while the replacement comes up.
     await expect
       .poll(
         async () => {

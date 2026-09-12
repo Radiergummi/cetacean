@@ -386,11 +386,10 @@ func TestToolVisibilityForAppliesGrants(t *testing.T) {
 	}
 }
 
-// TestToolVisibilityForExpandsStackGrants is the reason the projection moved
-// into acl.TypeGrants. A stack grant covers the stack's services at call time,
-// so an operator holding one can run get_logs — but the old projection
-// compared literal type prefixes, saw only "stack", and hid the tool (and
-// every prompt driving it) from someone who could use it.
+// The reason the projection moved into acl.TypeGrants. A stack grant covers the
+// stack's services at call time, so an operator holding one can run get_logs —
+// but a projection comparing literal type prefixes sees only "stack" and hides
+// the tool, and every prompt driving it, from someone who could use it.
 func TestToolVisibilityForExpandsStackGrants(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(readOnlyPolicy("stack:web"))
@@ -415,11 +414,10 @@ func TestToolVisibilityForExpandsStackGrants(t *testing.T) {
 	}
 }
 
-// TestCanReadAnyOfTypeSharesTheProjection pins the second consumer. Before,
-// notification fan-out did its own prefix comparison, so the same stack-granted
-// caller got no service list_changed notifications — and a caller matching no
-// grant at all got every one of them, because PermissionsFor returns nil for
-// "no policy" and "matched nothing" alike.
+// Pins the second consumer. A notification fan-out doing its own prefix
+// comparison gives the same stack-granted caller no service list_changed
+// notifications — and gives a caller matching no grant every one of them, since
+// PermissionsFor returns nil for "no policy" and "matched nothing" alike.
 func TestCanReadAnyOfTypeSharesTheProjection(t *testing.T) {
 	identity := &auth.Identity{Subject: "tester"}
 

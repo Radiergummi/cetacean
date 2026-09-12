@@ -356,11 +356,10 @@ func TestDrainImpactAllowsAMatchingPlatform(t *testing.T) {
 	}
 }
 
-// A free slot somewhere is not room for everything leaving. Two replicas on
-// the drained node and one candidate holding one of a two-replica cap leaves
-// exactly one slot — so one of the two would sit pending, and calling the
-// service movable is the same wrong answer as naming a node that would refuse
-// the task outright.
+// A free slot somewhere is not room for everything leaving. Two replicas on the
+// drained node and one candidate holding one of a two-replica cap leaves exactly
+// one slot, so one of the two sits pending — and calling the service movable is
+// as wrong as naming a node that would refuse the task outright.
 func TestDrainImpactStrandsWhenCandidatesCannotAbsorbEveryTask(t *testing.T) {
 	drained := readyNode("n1", "worker-1", nil)
 	spare := readyNode("n2", "worker-2", nil)

@@ -38,12 +38,8 @@ import (
 var frontendDist embed.FS
 
 // widgetDist holds the MCP Apps widget bundles, one self-contained HTML
-// document per widget. Built by `npm run build:widgets` into
-// frontend/dist-widgets/; internal/mcp serves each as a ui://cetacean/<name>
-// resource.
-//
-// Like frontend/dist above, this must exist before `go build` — `make build`,
-// the Dockerfile and CI all run the widget build first.
+// document per widget, built by `npm run build:widgets`. Like frontend/dist
+// above, it must exist before `go build`.
 //
 //go:embed frontend/dist-widgets/*
 var widgetDist embed.FS
@@ -55,16 +51,8 @@ var openapiSpec []byte
 var asyncapiSpec []byte
 
 // scalarJS is the Scalar API reference bundle served at /api/scalar.js, copied
-// out of node_modules into frontend/dist by the frontend build's postbuild
-// step. It comes from npm rather than a copy committed here so that one
-// dependency declaration governs it: Dependabot watches the version, the SBOM
-// and THIRD_PARTY_LICENSES pick it up with the rest of the frontend's
-// production dependencies, and there is no 3.5MB blob in the tree to go stale
-// unnoticed — the committed one had reached six months and 613 releases behind
-// before anything noticed, because nothing was watching it.
-//
-// Embedded by its own directive rather than read out of frontendDist so a
-// missing file fails `go build`, the way the two directives above do.
+// out of node_modules by the frontend build's postbuild step, so Dependabot,
+// the SBOM and THIRD_PARTY_LICENSES govern it. A missing file fails the build.
 //
 //go:embed frontend/dist/scalar.js
 var scalarJS []byte
@@ -450,12 +438,10 @@ func main() {
 		}
 	}
 
-	// Distributed tracing is opt-in: with no collector configured the MCP
-	// server keeps mcp-go's noop tracer and nothing is allocated.
-	//
-	// The MCP server is the only thing that emits spans today, so building the
-	// pipeline without it would leave a batch processor and its goroutine alive
-	// for the life of the process with nothing able to feed them.
+	// Opt-in: with no collector configured the MCP server keeps mcp-go's noop
+	// tracer. The MCP server is the only thing emitting spans, so building the
+	// pipeline without it would leave a batch processor and its goroutine
+	// alive for the life of the process with nothing able to feed them.
 	var mcpTracer oteltrace.Tracer
 
 	if cfg.OTelEndpoint != "" && !cfg.MCP.Enabled {
@@ -745,25 +731,18 @@ type mcpDeps struct {
 	tracer       oteltrace.Tracer
 }
 
-// setupMCP builds the MCP HTTP handler and the OAuth route registrar when
-// CETACEAN_MCP=true. The first two return values are nil when MCP is
-// disabled; the OAuth registrar is also nil when auth mode is "none" (no
-// token issuance is possible without a user identity). The third return is
-// a cleanup function the caller must invoke at shutdown so the MCP server's
-// cache change listener detaches before the cache itself is torn down.
-//
-// Startup fails when MCP OAuth is in play and no reachable issuer could be
-// derived; see Config.MCPIssuer and Config.MCPIssuerRequired.
+// setupMCP builds the MCP HTTP handler and the OAuth route registrar. Both are
+// nil when MCP is disabled, and the registrar is also nil under auth mode
+// "none". The third return detaches the cache listener at shutdown.
 func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string), func()) {
 	if !d.cfg.MCP.Enabled {
 		return nil, nil, func() {}
 	}
 
-	// Hand the MCP server the built widget bundles. fs.Sub strips the embed
-	// prefix so internal/mcp sees one directory per widget at the root, which is
-	// how it derives widget names. A build that skipped `npm run build:widgets`
-	// yields an empty FS, and the server then advertises no UI extension rather
-	// than promising widgets it cannot serve.
+	// fs.Sub strips the embed prefix, so internal/mcp sees one directory per
+	// widget at the root, which is how it derives widget names. A build that
+	// skipped `npm run build:widgets` yields an empty FS, and the server then
+	// advertises no UI extension rather than promising what it cannot serve.
 	if widgets, err := fs.Sub(widgetDist, "frontend/dist-widgets"); err != nil {
 		slog.Warn("widget bundles unavailable; MCP Apps widgets disabled", "error", err)
 	} else {
@@ -807,11 +786,9 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 				"MCP signing key auto-generated; tokens won't survive restarts. Set CETACEAN_MCP_SIGNING_KEY, or CETACEAN_MCP_SIGNING_KEY_FILE to read it from a file, for stable tokens.",
 			)
 		}
-		// Refresh tokens outlive the process only if the data directory is
-		// writable. It is created here rather than relying on the snapshot
-		// path, since token durability is not tied to storage.snapshot: an
-		// operator who turns cache snapshots off still gets clients that stay
-		// authorized across a restart.
+		// Created here rather than relying on the snapshot path: token
+		// durability is not tied to storage.snapshot, so an operator who turns
+		// cache snapshots off still gets clients authorized across a restart.
 		statePath := filepath.Join(d.cfg.DataDir, "mcp-tokens.json")
 		//nolint:gosec // DataDir is operator-configured, not user input
 		if err := os.MkdirAll(d.cfg.DataDir, 0700); err != nil {

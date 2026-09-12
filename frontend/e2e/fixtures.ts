@@ -43,17 +43,10 @@ export const writesEnabled = !!process.env.CETACEAN_E2E_WRITE;
 
 /**
  * Click a list row the way a person clicking "the row" does — on the row
- * itself, not on something sitting inside it.
- *
- * A bare `row.click()` targets the row's bounding-box centre, and list rows
- * carry links to related resources: on `/tasks` the centre lands inside the
- * Node column's hostname link, so the click navigates to that node instead of
- * the row's own detail page. That is the links working as intended — they call
- * `stopPropagation` precisely so a link click beats the row click — but it
- * means the centre point is not a measurement of the row's own handler.
- *
- * So the click goes to the first cell holding no link and no button, which
- * belongs to the row alone and bubbles to its handler.
+ * itself, not on something sitting inside it. A bare `row.click()` targets
+ * the bounding-box centre, which on `/tasks` lands inside the Node column's
+ * link and navigates there instead. So the click goes to the first cell
+ * holding no link and no button, which belongs to the row alone.
  */
 export async function clickRow(row: import("@playwright/test").Locator) {
   const inert = row.locator("td:not(:has(a)):not(:has(button))").first();

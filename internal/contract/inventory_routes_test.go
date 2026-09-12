@@ -60,11 +60,10 @@ func TestRoutesAreDeduplicatedAndSorted(t *testing.T) {
 }
 
 func TestRoutesScopesRangeResolutionToTheEnclosingLoop(t *testing.T) {
-	// Two range loops share the loop-variable name "removed". The real
-	// registration sits in the first loop; the second, unrelated loop reuses
-	// the name with different elements. Resolution must use the loop the
-	// call is lexically inside, not whichever same-named loop happens to be
-	// visited last.
+	// Two range loops share the loop-variable name "removed": the real
+	// registration is in the first, and the second reuses the name with
+	// different elements. Resolution must use the loop the call is lexically
+	// inside, not whichever same-named one is visited last.
 	source := `package api
 
 func NewRouter() {

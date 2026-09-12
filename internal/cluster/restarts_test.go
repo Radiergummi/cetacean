@@ -6,16 +6,10 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 )
 
-// TestServiceDigestReportsRestartCounts pins what the live evaluation found
-// missing: a service whose command exits every few seconds described as
-// `"state": "running"` with a single recent failure, because
-// DeriveServiceState reports "running" whenever a replica happens to be up and
-// ServiceDigest deliberately drops tasks the orchestrator has already replaced
-// (they explain history, not the current state).
-//
-// Both of those are right on their own terms, and together they hide a
-// restart loop completely. The counts are the fact that does not: they are
-// what "is this flapping?" actually asks.
+// Pins what the live evaluation found missing: a service whose command exits
+// every few seconds described as "running" with a single recent failure, because
+// DeriveServiceState reports running whenever a replica is up and ServiceDigest
+// drops tasks the orchestrator has replaced. Together they hide a restart loop.
 func TestServiceDigestReportsRestartCounts(t *testing.T) {
 	svc := swarm.Service{
 		ID:   "svc1",

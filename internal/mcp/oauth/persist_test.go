@@ -369,18 +369,10 @@ func TestStateFileSerializesConcurrentWriters(t *testing.T) {
 	tokens := NewRefreshTokenStore()
 	consent := persisting(tokens, path)
 
-	// Two independent stores now write the same file from their own hooks.
+	// Two independent stores write the same file from their own hooks.
 	// Unserialized, each snapshots at its own moment and opens the same temp
-	// path, so the rename publishes either a stale snapshot — silently losing
-	// a token or an approval still live in memory — or structurally mixed
-	// bytes that fail to parse at the next start, costing every client a
-	// re-authorization.
-	//
-	// This exercises that path rather than proving it: the corruption is in
-	// the file, not in memory, so the race detector cannot see it and the
-	// interleaving does not reproduce on demand. It is a regression guard on
-	// the invariant — a published file always parses and always holds both
-	// stores — not a reproduction of the unserialized failure.
+	// path, so the rename publishes a stale snapshot or mixed bytes. This
+	// guards the invariant that a published file parses and holds both stores.
 	const rounds = 25
 
 	var wg sync.WaitGroup

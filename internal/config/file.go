@@ -10,14 +10,10 @@ import (
 
 const configFileName = "cetacean.toml"
 
-// DiscoverConfigFile searches standard locations for a config file and
-// returns the path to the first one found. Returns "" if none exists.
-//
-// Search order:
-//  1. ./cetacean.toml (working directory)
-//  2. $XDG_CONFIG_HOME/cetacean/cetacean.toml (or ~/.config/cetacean/cetacean.toml)
-//  3. $HOME/.cetacean.toml
-//  4. /etc/cetacean/cetacean.toml
+// DiscoverConfigFile returns the first config file it finds, or "" if none
+// exists: ./cetacean.toml, then $XDG_CONFIG_HOME/cetacean/cetacean.toml (or
+// ~/.config/cetacean/cetacean.toml), then $HOME/.cetacean.toml, then
+// /etc/cetacean/cetacean.toml.
 func DiscoverConfigFile() string {
 	candidates := []string{
 		configFileName,

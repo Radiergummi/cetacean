@@ -13,22 +13,14 @@ import (
 )
 
 // oauthStateVersion is the on-disk format version. Bump it whenever the shape
-// below changes incompatibly; readState refuses anything newer.
-//
-// v2 added consent records. A v1 file loads and yields none, which is exactly
-// the pre-upgrade behaviour: every client is prompted once more, then
-// remembered.
+// below changes incompatibly; readState refuses anything newer. A v1 file
+// loads and yields no consent records, so every client is prompted once more.
 const oauthStateVersion = 2
 
-// RefreshTokenSnapshot is the serializable state of a RefreshTokenStore.
-//
-// The store's own types are unexported, and deliberately stay that way: this
-// is a separate, explicit shape so the file format is not hostage to a field
-// rename inside the store.
-//
-// What lands on disk is not a credential. Tokens are keyed by their SHA-256
-// hash exactly as they are in memory, so the file holds an identity mapping —
-// who a hash belongs to — and never anything a client could present.
+// RefreshTokenSnapshot is the serializable state of a RefreshTokenStore, kept
+// separate so the file format is not hostage to a field rename inside the
+// store. What lands on disk is not a credential: tokens are keyed by their
+// SHA-256 hash, so the file holds who a hash belongs to and nothing more.
 type RefreshTokenSnapshot struct {
 	Tokens   map[string]RefreshTokenSnapEntry `json:"tokens"`
 	Consumed map[string]string                `json:"consumed"`
@@ -95,13 +87,9 @@ func (s *RefreshTokenStore) Snapshot() RefreshTokenSnapshot {
 }
 
 // Restore replaces the store's state from a snapshot, dropping grant families
-// whose live token has already expired.
-//
-// A family holds exactly one live token — rotation deletes the old hash as it
-// adds the new one — so a family with no unexpired token can never rotate
-// again. Carrying its rotation history forward would only grow the file, since
-// nothing can ever match those consumed hashes but a replay of a token that
-// would fail on expiry anyway.
+// whose live token has expired. A family holds exactly one live token, so one
+// with none can never rotate again, and carrying its consumed hashes forward
+// would only grow the file.
 func (s *RefreshTokenStore) Restore(snap RefreshTokenSnapshot) {
 	now := time.Now()
 
@@ -114,9 +102,8 @@ func (s *RefreshTokenStore) Restore(snap RefreshTokenSnapshot) {
 	for hash, entry := range snap.Tokens {
 		// Rotate caps a token's expiry at its family's, so in memory the
 		// second check is implied by the first. The file is a trust boundary
-		// the invariant does not cross: it can be stale, hand-edited or from
-		// an older build, and a family past its absolute expiry must not come
-		// back regardless of what a token entry claims.
+		// that invariant does not cross: it can be stale, hand-edited or from
+		// an older build.
 		if now.After(entry.ExpiresAt) || now.After(entry.GrantExpiresAt) {
 			continue
 		}
@@ -158,14 +145,10 @@ func writeState(path string, state oauthState) error {
 		return fmt.Errorf("marshal oauth state: %w", err)
 	}
 
-	// The temp file gets a unique name rather than a fixed path + ".tmp".
-	// stateFile's mutex already serializes writers inside this process, but
-	// two processes pointed at one data directory would otherwise open and
-	// truncate the same temp file and interleave their bytes into it, and the
-	// rename would publish something that fails to parse — costing every
-	// client a re-authorization. A lost update between two processes is
-	// survivable; unparseable bytes are not. The cost is that an unclean kill
-	// mid-write leaves an orphan file behind instead of reusing one slot.
+	// A unique name rather than a fixed path + ".tmp": the mutex serializes
+	// writers in this process, but two processes on one data directory would
+	// interleave their bytes into the same file and publish something that
+	// fails to parse. A lost update is survivable; unparseable bytes are not.
 	tmpPath, err := writeTempSynced(path, data)
 	if err != nil {
 		return fmt.Errorf("write oauth state tmp: %w", err)
@@ -187,14 +170,10 @@ func writeState(path string, state oauthState) error {
 	return nil
 }
 
-// writeTempSynced creates a uniquely named sibling of path, writes data to it
-// and flushes it to the disk before returning, so the caller can treat a nil
-// error as "this survives a crash". It returns the path it created, which the
-// caller owns: on error it is removed here, on success the caller renames it.
-//
-// os.CreateTemp already creates with mode 0600, which is what this file needs.
-// The name it picks matches tempFileSuffix, so sweepTempFiles can recognise an
-// orphan left behind by an unclean kill.
+// writeTempSynced writes data to a uniquely named sibling of path and flushes
+// it to disk, so a nil error means "this survives a crash". The caller owns
+// the returned path and renames it. The name matches tempFileSuffix, so
+// sweepTempFiles can recognise an orphan.
 func writeTempSynced(path string, data []byte) (string, error) {
 	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+tempFileSuffix)
 	if err != nil {
@@ -290,11 +269,9 @@ func (n *changeNotifier) writeThrough() {
 	n.onChange()
 }
 
-// sweepTempFiles removes temp files orphaned by an unclean kill mid-write.
-// Each holds a full copy of the state, so leaving them to accumulate would
-// both fill the data directory and scatter extra copies of it around. Called
-// once at startup, where a stray readdir costs nothing and no writer is racing
-// it: a temp file that a live writer still owns cannot exist yet.
+// sweepTempFiles removes temp files orphaned by an unclean kill mid-write,
+// each of which holds a full copy of the state. Called once at startup, where
+// no writer is racing it: a temp file a live writer owns cannot exist yet.
 func sweepTempFiles(path string) {
 	orphans, err := filepath.Glob(path + tempFileSuffix)
 	if err != nil {
@@ -311,21 +288,14 @@ func sweepTempFiles(path string) {
 	}
 }
 
-// stateFile owns the OAuth server's durable state on disk.
-//
-// The stores cannot each hold their own writer: they share one file, so each
-// would serialize the whole thing from its own view and drop the other's. The
-// file is the single writer, and every store points its change hook here.
+// stateFile owns the OAuth server's durable state on disk. The stores cannot
+// each hold their own writer: they share one file, so each would serialize the
+// whole of it from its own view and drop the other's.
 type stateFile struct {
-	// mu makes "the single writer" true rather than aspirational. Two stores
-	// mutating concurrently each call write, and unserialized they would
-	// snapshot at different moments and rename in either order — publishing a
-	// snapshot taken before the other's mutation and silently dropping a token
-	// or an approval that is still live in memory. Held across the whole of
-	// write so the snapshot and the rename that publishes it stay one step.
-	//
-	// Neither store's mutex is held while its hook runs, so taking this one
-	// here cannot deadlock against them.
+	// Held across the whole of write, so the snapshot and the rename that
+	// publishes it stay one step: two stores snapshotting at different moments
+	// and renaming in either order would drop a token still live in memory.
+	// No store's mutex is held while its hook runs, so this cannot deadlock.
 	mu sync.Mutex
 
 	path    string
@@ -335,9 +305,8 @@ type stateFile struct {
 
 // write serializes every store's current state. A failed write is logged and
 // swallowed: the state is already live in memory, so refusing to serve would
-// turn a durability problem into an outage. The operator learns that a restart
-// will cost a re-authorization, which is the behaviour they had before this
-// file existed.
+// turn a durability problem into an outage, and the cost is a
+// re-authorization after the next restart.
 func (f *stateFile) write() {
 	f.mu.Lock()
 	defer f.mu.Unlock()

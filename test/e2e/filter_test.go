@@ -27,14 +27,9 @@ import (
 )
 
 // This file drives `?filter=`, the expr-lang expression language every list
-// endpoint accepts, against a real cluster. It reserves port 19019 (see
-// README.md's reserved-ports table).
-//
-// filterCases and the env builders in internal/filter are held together by
-// TestEveryFilterFieldIsDriven: a field added to an env builder and to nothing
-// else fails that test rather than shipping undriven. The endpoints are held
-// to the same rule from the other side — every type with a filterEnv appears
-// in filterPaths.
+// endpoint accepts, against a real cluster on port 19019. filterCases and the
+// env builders are held together both ways: every env-builder field must be
+// driven, and every type with a filterEnv must appear in filterPaths.
 
 const filterPort = 19019
 
@@ -532,10 +527,9 @@ func TestFilterRefusesMalformedExpressions(t *testing.T) {
 }
 
 // TestFilterSharesOneCompileCacheAcrossTypes covers internal/filter's
-// process-wide program cache, which is keyed by expression text alone. The
-// same expression evaluated against two different resource types must answer
-// for each of them, and the cache's eviction — one random entry once 64 are
-// held — must not be able to turn a filter into a wrong answer.
+// process-wide program cache, keyed by expression text alone: the same
+// expression evaluated against two resource types must answer for each, and
+// the random single-entry eviction at 64 entries must not change an answer.
 func TestFilterSharesOneCompileCacheAcrossTypes(t *testing.T) {
 	proc := startFilterLane(t)
 

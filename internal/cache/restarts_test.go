@@ -284,14 +284,10 @@ func TestCache_ReplaceAll_ForgetsRemovedServices(t *testing.T) {
 	}
 }
 
-// The counts are labelled by the window they cover, but a tracker can only
-// answer for as long as it has been watching. It is built at startup, so a
-// freshly-restarted Cetacean reports "107 failures in the last week" for a
-// service that has failed twenty thousand times over two days — and, worse,
-// reports the same figure for the hour and the week, which is exactly the
-// signal a reader uses to tell a new fault from a chronic one. Reporting the
-// horizon is what stops "since I started counting" reading as "in the last
-// seven days".
+// The counts are labelled by the window they cover, but a tracker can only answer
+// for as long as it has been watching, and it starts with the process. A young
+// one reports the same figure for the hour and the week, which is the signal a
+// reader uses to tell a new fault from a chronic one.
 func TestRestartTrackerReportsHowFarBackItCanAccountFor(t *testing.T) {
 	rt := NewRestartTracker(7*24*time.Hour, time.Hour)
 

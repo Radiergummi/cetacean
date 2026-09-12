@@ -40,11 +40,9 @@ type openSearchURL struct {
 }
 
 // HandleOpenSearch serves the description document that lets a browser search
-// the cluster from the address bar.
-//
-// Templates are absolute because a URL template is used with no document to
-// resolve against — which is why this is served by the server while the web
-// app manifest is a static file.
+// the cluster from the address bar. Templates are absolute because a URL
+// template is used with no document to resolve against, which is why this is
+// served rather than shipped as a static file like the web app manifest.
 func HandleOpenSearch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	origin := originOf(r)

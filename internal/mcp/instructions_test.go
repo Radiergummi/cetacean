@@ -8,12 +8,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// TestDiscoverAdvertisesInstructionsAndDescription drives server/discover — the
-// 2026-07-28 replacement for the initialize handshake — through the MCP HTTP
-// handler and asserts the result carries both the server instructions and the
-// implementation description. It checks against
-// the production constants (single source of truth) and that they are non-empty,
-// so the test fails if either option is dropped or the constant is blanked.
+// Drives server/discover — the 2026-07-28 replacement for the initialize
+// handshake — through the MCP HTTP handler and asserts the result carries both
+// the server instructions and the implementation description. It checks against
+// the production constants, so a dropped option or a blanked constant fails.
 func TestDiscoverAdvertisesInstructionsAndDescription(t *testing.T) {
 	if mcpInstructions == "" || mcpDescription == "" {
 		t.Fatal("mcpInstructions and mcpDescription must be non-empty")

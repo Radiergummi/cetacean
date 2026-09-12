@@ -411,13 +411,9 @@ func ValidateCertMode(tlsEnabled bool, certCA string, trustedProxies []netip.Pre
 }
 
 // ResolveTrustedProxies settles which list headers mode authenticates against.
-// Headers mode cannot authenticate anyone without one: every claim arrives in a
-// header that any client could have sent, so the list is what separates a proxy
-// Cetacean believes from one it does not.
-//
-// auth.headers.trusted_proxies is the older spelling and applies only where
-// server.trusted_proxies is unset, since that one also governs realIP and a
-// deployment setting both means the two to agree.
+// Without one it cannot authenticate anyone: every claim arrives in a header any
+// client could have sent. auth.headers.trusted_proxies is the older spelling and
+// applies only where server.trusted_proxies is unset, since that governs realIP too.
 func ResolveTrustedProxies(
 	current, deprecated []netip.Prefix,
 ) (resolved []netip.Prefix, warnings []string, err error) {

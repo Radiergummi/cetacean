@@ -48,12 +48,10 @@ func TestOTelTracerRecordsSpan(t *testing.T) {
 	}
 }
 
-// TestTracerPublishesSpanToContext pins the half of the Tracer contract that is
-// easy to miss: mcp-go's tool middleware reaches for the enclosing span with
-// tracing.SpanFromContext, and nothing inside mcp-go ever calls
-// tracing.ContextWithSpan. If Start does not publish the span itself, the
-// middleware's parent is a noop and the mcp.tool.name attribute plus the error
-// status it sets on the parent are silently dropped.
+// Pins the half of the Tracer contract that is easy to miss: mcp-go's tool
+// middleware reaches for the enclosing span with tracing.SpanFromContext, and
+// nothing inside mcp-go ever publishes one. If Start does not, the middleware's
+// parent is a noop and everything it sets there is silently dropped.
 func TestTracerPublishesSpanToContext(t *testing.T) {
 	provider := sdktrace.NewTracerProvider()
 

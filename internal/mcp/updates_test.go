@@ -44,14 +44,9 @@ func serviceWithSecrets() swarm.Service {
 }
 
 // dispatchedServiceSections is one valid argument per section update_service
-// dispatches, driven end to end by TestSpecEditingToolsNeverReturnSecrets.
-//
-// It is package-level so TestEveryAdvertisedSectionIsDispatched can hold it
-// against updateServiceSections in both directions. Dispatch itself is no
-// longer what it guards — the advertised list is serviceSectionWriters' own
-// keys, so a section cannot be advertised without a writer — but coverage
-// still is: a section nobody calls is a section whose result shape, and so
-// whose disclosure, nothing checks.
+// dispatches, package-level so the advertised list can be held against it both
+// ways. What it guards is coverage: a section nobody calls is one whose result
+// shape, and so whose disclosure, nothing checks.
 var dispatchedServiceSections = map[string]string{
 	sectionResources:      `{"Limits":{"NanoCPUs":1000000000}}`,
 	sectionPlacement:      `{"Constraints":["node.role==worker"]}`,
@@ -274,14 +269,10 @@ func TestNodeUpdateReportsRoleAndAvailability(t *testing.T) {
 	}
 }
 
-// The attachment editors answer through serviceUpdate, so they need an entry
-// in the projection table — but they are tools of their own, taking a list of
-// references rather than a spec fragment, and update_service cannot dispatch
-// them. Validating the section against the projection table conflated the two:
-// update_service accepted section "secrets", matched no case in the switch,
-// and returned a zero-valued serviceUpdateResult that reads as a successful
-// write. A model told the rotation landed would move on and remove the old
-// secret.
+// The attachment editors answer through serviceUpdate, so they need an entry in
+// the projection table — but they are tools of their own and update_service
+// cannot dispatch them. Validating against that table conflates the two: the
+// call matches no case and returns a zero result that reads as a write.
 func TestUpdateServiceRefusesTheAttachmentSections(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(serviceWithSecrets())
@@ -314,10 +305,8 @@ func TestUpdateServiceRefusesTheAttachmentSections(t *testing.T) {
 }
 
 // Every section update_service advertises must reach a case in its switch. The
-// table in TestSpecEditingToolsNeverReturnSecrets drives them for real and
-// would catch a section that falls through — it asserts the identity survives,
-// which a zero-valued result fails — but only for the sections it lists, and
-// it listed six of ten.
+// table that drives them for real would catch one falling through, since it
+// asserts the identity survives — but only for the sections it lists.
 func TestEveryAdvertisedSectionIsDispatched(t *testing.T) {
 	for _, section := range updateServiceSections {
 		if _, ok := dispatchedServiceSections[section]; !ok {
@@ -343,16 +332,9 @@ func TestEveryAdvertisedSectionIsDispatched(t *testing.T) {
 }
 
 // The shape describe emits and the shape update_service accepts are not the
-// same: describe renders a port as {"published":8099,"target":80} while
-// swarm.PortConfig wants PublishedPort and TargetPort. Go's decoder matches
-// field names case-insensitively, so "protocol" landed and those two did not
-// — they decoded to zero, and Docker accepted a port config publishing
-// nothing, silently replacing a working *:8099->80 with *:30000->0.
-//
-// Read-modify-write is the natural way to edit a section a caller is told to
-// replace wholesale, so the round trip has to fail loudly rather than quietly
-// produce a different service. This pins every section at once: an argument
-// carrying a key the target type has no field for is rejected.
+// same, and Go's decoder matches field names case-insensitively — so a key with
+// no field decodes to zero and Docker accepts a port publishing nothing. The
+// round trip must fail loudly: an argument carrying an unknown key is rejected.
 func TestDecodeSectionRejectsKeysTheSectionHasNoFieldFor(t *testing.T) {
 	req := newCallToolRequest("update_service", map[string]any{
 		"value": []any{map[string]any{

@@ -473,12 +473,10 @@ func TestRefusalNamesOnlyWhatTheEndpointServes(t *testing.T) {
 	}
 }
 
-// TestSingleRepresentationDocumentsNeedNoTableRow holds both halves of the
-// claim together: neither media type resolves against supportedTypes, and each
-// document still answers a client asking for it. Asserting only the second
-// half is satisfied by putting the row back, which is the thing being removed.
-//
-// The fetch helpers assert the status and the content type.
+// Holds both halves of the claim together: neither media type resolves against
+// supportedTypes, and each document still answers a client asking for it.
+// Asserting only the second half is satisfied by putting the row back, which is
+// the thing being removed.
 func TestSingleRepresentationDocumentsNeedNoTableRow(t *testing.T) {
 	router := newTestRouterWithCache(t, cache.New(nil))
 

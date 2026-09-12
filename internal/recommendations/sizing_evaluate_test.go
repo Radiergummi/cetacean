@@ -389,12 +389,10 @@ func TestRoundMemory(t *testing.T) {
 	}
 }
 
-// TestOverProvisionedCPUReportsNanoCPUs — a recommendation's three numbers must
-// share a unit, or a caller cannot compare them. The memory findings are bytes
-// throughout; CPU reported Current and Configured as percent-of-a-core while
-// Suggested was NanoCPUs, so one record read "configured 25, suggested
-// 50000000". NanoCPUs is the unit that stays: it is what the fixAction's PATCH
-// body takes, and what the dashboard already divides by 1e9 to render.
+// A recommendation's three numbers must share a unit, or a caller cannot compare
+// them. Reporting Current and Configured as percent-of-a-core while Suggested is
+// NanoCPUs reads "configured 25, suggested 50000000". NanoCPUs is the unit that
+// stays: the fixAction's PATCH body takes it, and the dashboard divides it.
 func TestOverProvisionedCPUReportsNanoCPUs(t *testing.T) {
 	spec := serviceSpec{
 		id:                "svc1",
