@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func TestContentNegotiatedAtom(t *testing.T) {
@@ -335,4 +337,60 @@ func TestContentNegotiatedCSV(t *testing.T) {
 			t.Errorf("expected a text/csv alternate in Link, got %q", links)
 		}
 	})
+
+	// The CSV comes off the list the JSON handler prepared, so an alternate
+	// that dropped the query would hand back every row instead of the ones
+	// the caller is looking at.
+	t.Run("the CSV alternate carries the parameters the CSV reads", func(t *testing.T) {
+		handler := contentNegotiated(
+			jsonH,
+			feedHandlers{csv: true, csvParams: listCSVParams},
+			spa,
+		)
+		req := withContentType(
+			httptest.NewRequest("GET", "/services?search=web&sort=name&nonsense=x", nil),
+			ContentTypeJSON,
+		)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		links := strings.Join(rec.Header().Values("Link"), ", ")
+
+		for _, want := range []string{"search=web", "sort=name"} {
+			if !strings.Contains(links, want) {
+				t.Errorf("the CSV alternate drops %q: %q", want, links)
+			}
+		}
+
+		// Only the declared parameters: the rest of the raw query is not
+		// reflected back into a compressed response.
+		if strings.Contains(links, "nonsense") {
+			t.Errorf("the CSV alternate reflects an undeclared parameter: %q", links)
+		}
+	})
+}
+
+// TestAssembledRouterCarriesCSVParams drives the real router, because the test
+// above builds feedHandlers itself and so cannot see a route that forgot to
+// declare csvParams — which is exactly what a rebase dropped once.
+func TestAssembledRouterCarriesCSVParams(t *testing.T) {
+	router := newTestRouterWithCache(t, cache.New(nil))
+
+	for path, want := range map[string]string{
+		"/services?search=web&sort=name": "search=web",
+		"/history?type=service":          "type=service",
+	} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest("GET", path, nil)
+			req.Header.Set("Accept", "application/json")
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			links := strings.Join(rec.Header().Values("Link"), ", ")
+			if !strings.Contains(links, want) {
+				t.Errorf("the CSV alternate drops %q: %q", want, links)
+			}
+		})
+	}
 }

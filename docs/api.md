@@ -539,6 +539,15 @@ curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step
 
 Append `point` events to the data you already hold to build a rolling window.
 
+### Stream contract
+
+`GET /api/asyncapi` describes all twenty streams as an [AsyncAPI 3.0](https://www.asyncapi.com/) document: their
+channels, messages and cursor semantics. Add `.json` or `.yaml`, or negotiate on `Accept`. Browse it in
+[AsyncAPI Studio](https://studio.asyncapi.com/).
+
+Two details the examples above don't show: a `batch` payload is an **array** of envelopes, and a **replayed** event
+carries no `resource`.
+
 ## Connection limits
 
 There is no general rate limiting. Concurrent streams are capped, and a request over the cap returns
@@ -687,10 +696,11 @@ Every response outside the `/-/` meta endpoints carries [RFC 8631](https://www.r
 headers:
 
 ```http
-Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
+Link: </api>; rel="service-desc"; type="application/json", </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0", </api/context.jsonld>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"
 ```
 
-`service-desc` points at the OpenAPI spec, `describedby` at the JSON-LD context document, and `api-catalog` at the
+The two `service-desc` links are told apart by `type`: `/api` describes the request/response API, `/api/asyncapi`
+the event streams. `describedby` points at the JSON-LD context document, and `api-catalog` at the
 [API catalogue](#api-catalogue).
 
 ### Browser search

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 
 	"github.com/radiergummi/cetacean/internal/api/sbom"
@@ -154,6 +155,43 @@ func TestEveryReadEndpointMatchesSpec(t *testing.T) {
 		"validated=%d non-2xx=%d unresolved-params=%d",
 		validated, nonSuccess, unresolved,
 	)
+}
+
+// kin-openapi has no decoder for the descriptions' own media types, and would
+// call them undecodable bodies rather than validate them. Registering these is
+// what keeps the three /api documents in the walk.
+func init() {
+	yamlDecoder := func(
+		body io.Reader,
+		_ http.Header,
+		_ *openapi3.SchemaRef,
+		_ openapi3filter.EncodingFn,
+	) (any, error) {
+		raw, err := io.ReadAll(body)
+		if err != nil {
+			return nil, err
+		}
+
+		return string(raw), nil
+	}
+
+	jsonDecoder := func(
+		body io.Reader,
+		_ http.Header,
+		_ *openapi3.SchemaRef,
+		_ openapi3filter.EncodingFn,
+	) (any, error) {
+		var decoded any
+		if err := json.NewDecoder(body).Decode(&decoded); err != nil {
+			return nil, err
+		}
+
+		return decoded, nil
+	}
+
+	openapi3filter.RegisterBodyDecoder(openAPIYAMLMediaType, yamlDecoder)
+	openapi3filter.RegisterBodyDecoder("application/vnd.aai.asyncapi+yaml", yamlDecoder)
+	openapi3filter.RegisterBodyDecoder(asyncAPIMediaTypeBase, jsonDecoder)
 }
 
 // skipEndpoint returns true for paths that can't be exercised by a generic

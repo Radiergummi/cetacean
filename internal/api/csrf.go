@@ -44,6 +44,11 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if carriesItsOwnProof(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Check rather than Handler: the stdlib's own deny path writes a
 			// plain-text 403, and its error names which branch refused the
 			// request, which is what an operator needs to fix the deployment.
@@ -54,5 +59,18 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+// carriesItsOwnProof names endpoints that authenticate from the request body
+// rather than a cookie, so there is no ambient credential to protect.
+// /oauth/authorize is absent: consent runs under the session cookie.
+func carriesItsOwnProof(path string) bool {
+	// Spelled out because internal/api does not import internal/mcp.
+	switch path {
+	case "/mcp", "/oauth/token", "/oauth/revoke", "/oauth/register":
+		return true
+	default:
+		return false
 	}
 }

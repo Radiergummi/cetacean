@@ -85,6 +85,10 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 						Href:  link("/api"),
 						Type:  "application/json",
 						Title: "OpenAPI description",
+					}, {
+						Href:  link(asyncAPIPath),
+						Type:  asyncAPIMediaTypeBase,
+						Title: "AsyncAPI description of the event streams",
 					}},
 					"service-doc": {{
 						Href:  link("/api"),
