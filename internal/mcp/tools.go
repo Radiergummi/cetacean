@@ -601,7 +601,7 @@ type serviceMutationResult struct {
 	Mode     string  `json:"mode"`
 	Replicas *uint64 `json:"replicas,omitempty"`
 	Running  int     `json:"running"`
-	// State is the same derivation the REST API and the dashboard report, via
+	// State is the same derivation the web API and the dashboard report, via
 	// cluster.DeriveServiceState.
 	State string `json:"state"`
 	// Version is the service's Swarm version index, for a caller doing its own

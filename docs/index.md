@@ -12,7 +12,7 @@ cluster through the Docker socket and keeps the page current on its own—there 
 refresh.
 
 Every resource in your swarm—nodes, services, tasks, stacks, configs, secrets, networks, volumes—is browsable,
-cross-referenced and editable in place. The same data is available over a REST API and to AI agents over an
+cross-referenced and editable in place. The same data is available over a web API and to AI agents over an
 embedded MCP server. Add Prometheus and you get CPU and memory charts, capacity bars and sizing
 recommendations.
 

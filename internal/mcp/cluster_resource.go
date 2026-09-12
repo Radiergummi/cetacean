@@ -17,7 +17,7 @@ import (
 // asking "how much of the cluster is reserved?" divides the two as spelled and
 // is wrong by nine orders of magnitude.
 //
-// The snapshot's field names stay as they are because the REST API publishes
+// The snapshot's field names stay as they are because the web API publishes
 // them and the dashboard string-matches on that contract; the correction is
 // made here, at the one boundary where the reader is a model rather than code
 // that was written against the quirk.

@@ -57,7 +57,7 @@ See [Getting started](docs/getting-started.md) for the monitoring and authentica
 - Metrics via optional Prometheus integration, plus a PromQL console and sizing recommendations
 - Write operations (scale, restart, rollback, image and spec edits, node drain) gated by an operations level
 - Pluggable authentication: anonymous, OIDC, Tailscale, mTLS, or trusted proxy headers, with per-resource RBAC
-- REST API with search, filtering, pagination, JSON-LD, OpenAPI, SSE, and Atom feeds
+- Web API with search, filtering, pagination, JSON-LD, OpenAPI, SSE, and Atom feeds
 - Embedded MCP server, so an AI agent reads and operates the cluster through the same permissions
 
 ## Comparison

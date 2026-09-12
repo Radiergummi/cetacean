@@ -49,7 +49,7 @@ export const generatedPages: GeneratedPage[] = [
   {
     path: "/api/explorer",
     title: "API Reference",
-    description: "Interactive API reference for the Cetacean REST API.",
+    description: "Interactive API reference for the Cetacean web API.",
     sourcePath: "api/openapi.yaml",
   },
   {

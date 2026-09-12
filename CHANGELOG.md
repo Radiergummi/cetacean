@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The dashboard is installable as an app, with icons and a theme colour that follows its own background
 - The cluster can be searched from the browser's address bar, via the OpenSearch description at `/opensearch.xml`
 - `/.well-known/api-catalog` (RFC 9727) lists the APIs this process serves; every response links to it
+- `GET /` answers a JSON client with an entry point naming every collection, so a deployment's address is enough to find the rest of the API; browsers still get the dashboard
 - Write operations accept an optional `If-Match` header and refuse with 412 if the resource changed since you read it
 - `Prefer: wait=30` holds a service write open until the cluster settles, answering `202 Accepted` with the rollout's progress if it runs out. `Prefer: respond-async` acknowledges immediately
 - JSON, Atom feeds and topology exports above a kilobyte are served as zstd or gzip when the client accepts one
@@ -41,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A recommendation that measured zero no longer reads as one that measured nothing — a service using essentially no CPU reported an empty `current`
 - Header-based authentication works behind a reverse proxy again; it was answering 401 to every request
 - Asking an endpoint for a format it does not serve now says so, instead of answering with JSON
+- An address matching no route answers `404` with a problem document, rather than `200` and the dashboard, when the client said it cannot use a web page
+- A format an `Accept` header rules out with `;q=0` is refused with `406` instead of served anyway
+- `/favicon.ico` and the dashboard's other static files are no longer refused with `406` when a client asks for them as an image
+- Deep links into a service whose name contains a dot, such as `/services/web.api/logs`, open instead of answering 404
 - Relabelling a node needs operations level 2 over the API, matching MCP. It was gated with draining and demoting
 - An Atom feed identifies itself by the same host its links use. Set `server.public_url` to keep that identity stable across proxies, since nothing derived from a request can be
 - Feed alternate links carry only the parameters the feed they point at reads

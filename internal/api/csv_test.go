@@ -30,7 +30,7 @@ func TestNegotiateCSV(t *testing.T) {
 	t.Run("a csv suffix resolves to CSV and leaves the path", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/services.csv", nil)
 
-		if got := resolveExtension(req); got != ContentTypeCSV {
+		if got, _ := resolveExtension(req); got != ContentTypeCSV {
 			t.Errorf("resolveExtension(/services.csv) = %v, want CSV", got)
 		}
 

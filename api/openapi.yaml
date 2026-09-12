@@ -649,6 +649,62 @@ paths:
 
   # ── Documentation ────────────────────────────────────────────────────
 
+  /:
+    get:
+      operationId: getEntrypoint
+      tags: [Documentation]
+      summary: Web API entry point
+      description: |
+        Content-negotiated. HTML requests get the dashboard; JSON requests get
+        a JSON-LD document naming every top-level collection, so a client that
+        knows only the origin can find the rest of the API from here.
+
+        The RFC 9727 catalog at `/.well-known/api-catalog` is unauthenticated
+        and points at this document, which is not: discovery is public, the
+        API behind it is not.
+      responses:
+        "200":
+          description: Entry point
+          content:
+            application/json:
+              schema:
+                type: object
+              example:
+                "@context": /api/context.jsonld
+                "@id": /
+                "@type": EntryPoint
+                name: Cetacean
+                resources:
+                  nodes:
+                    "@id": /nodes
+                  services:
+                    "@id": /services
+                version: 0.11.0
+            text/html:
+              schema:
+                type: string
+                description: The dashboard
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+
+  /index:
+    get:
+      operationId: getEntrypointAlias
+      tags: [Documentation]
+      summary: Web API entry point (alias)
+      description: |
+        Redirects to `/`, keeping any `.json` or `.html` suffix: the suffix is
+        the only thing naming the representation, so a target without it would
+        be re-negotiated from an `Accept` header that may disagree.
+      responses:
+        "301":
+          description: Moved permanently to `/`
+          headers:
+            Location:
+              schema:
+                type: string
+                example: /.json
+
   /api:
     get:
       operationId: getApiDoc
@@ -834,7 +890,7 @@ paths:
                   - anchor: "https://cetacean.example.com/.well-known/api-catalog"
                     item:
                       - href: "https://cetacean.example.com/"
-                        title: "Cetacean REST API"
+                        title: "Cetacean web API"
                   - anchor: "https://cetacean.example.com/"
                     service-desc:
                       - href: "https://cetacean.example.com/api"
