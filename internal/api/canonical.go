@@ -10,11 +10,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// canonicalResolver resolves one resource type's identifier — an ID or a name
-// — to the canonical ID the type is keyed by, together with the ACL resource
-// expression naming what it found. It reports found=false for an identifier
-// that matches nothing, and an *cache.AmbiguousNameError for a name that
-// matches more than one resource.
+// canonicalResolver resolves one type's identifier — an ID or a name — to the
+// canonical ID it is keyed by, with the ACL expression naming what it found.
+// found=false means nothing matched; a name matching several yields an
+// *cache.AmbiguousNameError.
 type canonicalResolver func(
 	c *cache.Cache,
 	identifier string,
@@ -31,16 +30,10 @@ var singularType = map[string]string{
 	"networks": "network",
 }
 
-// canonicalResolvers lists the resource collections whose detail paths accept
-// a name as well as an ID.
-//
-// Volumes and stacks are deliberately absent: both are keyed by name already,
-// so the identifier in the path is the canonical one and there is nothing to
-// redirect to. Tasks are absent too — a task has no name of its own, only the
-// `<service>.<slot>` form internal/cluster derives from its parent, and the
-// cache has no resolver for it (internal/mcp builds that one from its own
-// resolveTask). Adding tasks means giving the cache that resolver first, so
-// both transports keep agreeing on what a task identifier means.
+// canonicalResolvers lists the collections whose detail paths accept a name as
+// well as an ID. Volumes and stacks are absent because both are keyed by name
+// already; tasks because a task's name is derived from its parent and the
+// cache has no resolver for it. Adding tasks means adding that resolver first.
 var canonicalResolvers = map[string]canonicalResolver{
 	"services": func(c *cache.Cache, identifier string) (string, string, bool, error) {
 		svc, found, err := c.ResolveService(identifier)
@@ -70,10 +63,9 @@ var canonicalResolvers = map[string]canonicalResolver{
 }
 
 // splitResourcePath splits a request path into its collection segment, the
-// identifier addressing one member of it, and whatever follows. The remainder
-// keeps its leading slash so it concatenates back unchanged. A single trailing
-// slash is dropped: ServeMux treats it as part of the path, so a redirect
-// carrying one matches no registered pattern.
+// identifier addressing one member, and the remainder, which keeps its leading
+// slash so it concatenates back unchanged. A single trailing slash is dropped:
+// ServeMux treats it as part of the path, so a redirect carrying one matches nothing.
 func splitResourcePath(path string) (collection, identifier, rest string) {
 	trimmed := strings.TrimPrefix(path, "/")
 	if trimmed != "" {
@@ -93,15 +85,10 @@ func splitResourcePath(path string) (collection, identifier, rest string) {
 	return collection, identifier, rest
 }
 
-// canonicalIdentifier answers a request addressing a resource by name with a
-// 307 to the same path spelled with the canonical ID, so one resource keeps one
-// URL -- the one ETags, `@id`, Link headers and the history feed all name.
-//
-// 307 preserves the method and body, so writes may be addressed by name too.
-// 308 is cacheable indefinitely and a name can move; 301 and 302 let clients
-// rewrite the method to GET.
-//
-// HTML requests are left alone: those paths are the SPA's routing surface.
+// canonicalIdentifier answers a name-addressed request with a 307 to the same
+// path spelled with the canonical ID, so one resource keeps one URL. 307
+// preserves method and body; 308 is cacheable forever and a name can move,
+// while 301 and 302 let clients rewrite to GET. HTML is left to the SPA.
 func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if ContentTypeFromContext(r.Context()) == ContentTypeHTML {
@@ -156,11 +143,10 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 			return
 		}
 
-		// The extension suffix goes back on: negotiate stripped it before this
-		// ran, and a request that named its representation in the path has no
-		// reason to carry an Accept header saying the same thing — dropping it
-		// would answer the redirect from whatever the client's Accept does say,
-		// which for a browser is the SPA.
+		// The extension suffix goes back on: negotiate stripped it, and a
+		// request naming its representation in the path has no reason to
+		// repeat it in Accept — so dropping it answers the redirect from
+		// whatever Accept does say, which for a browser is the SPA.
 		target := absPath(r.Context(), "/"+collection+"/"+url.PathEscape(id)+rest) +
 			extensionFromContext(r.Context())
 		if r.URL.RawQuery != "" {

@@ -209,10 +209,9 @@ func (h *Handlers) writeServiceMutation(
 }
 
 // awaitPreferred applies the RFC 7240 wait and respond-async preferences to an
-// accepted mutation, returning the service to render and whether it wrote the
-// response itself. The version to converge to comes from the write, not the
-// asynchronously filled cache. The request context passes through, so a client
-// hanging up cancels its own wait.
+// accepted mutation, returning the service to render and whether it answered
+// itself. The version to converge to comes from the write, not the
+// asynchronously filled cache; the request context passes through.
 func (h *Handlers) awaitPreferred(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -311,13 +310,9 @@ func (e *specPatchError) Error() string { return e.message }
 var errNoContainerSpec = &specPatchError{"ENG003", "service has no container spec"}
 
 // structMergePatch reads a merge-patch body and returns a function merging it
-// into a current value, unmarshalling the result into target. Returns false
-// and writes an error when the request itself is unusable.
-//
-// Parsing and applying are separate so the merge runs inside the writer,
-// against the spec the engine currently holds: merging into the asynchronously
-// filled cache discards whatever was written in between, and nothing
-// downstream can catch it.
+// into a current value, unmarshalling into target; false means the request was
+// unusable and the error is written. Parsing and applying are separate so the
+// merge runs inside the writer, against the spec the engine currently holds.
 func structMergePatch(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -393,14 +388,10 @@ func requireMergePatch(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// parsePatchMutator validates Content-Type, reads the body, and returns a
-// MapMutator applying the JSON Patch (RFC 6902) or Merge Patch (RFC 7396) to
-// whatever current-state map the writer hands it -- invoked inside the writer
-// against a live inspect, since pre-merging against the cache would drop
-// concurrent changes.
-//
-// Request failures are written to w. Patch application failures bubble up so
-// the caller can decide the status; see writePatchError.
+// parsePatchMutator validates Content-Type, reads the body and returns a
+// MapMutator applying the JSON Patch or Merge Patch to whatever map the writer
+// hands it, against a live inspect — pre-merging against the cache would drop
+// concurrent changes. Request failures are written to w; patch failures bubble up.
 func parsePatchMutator(
 	w http.ResponseWriter,
 	r *http.Request,

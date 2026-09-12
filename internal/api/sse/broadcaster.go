@@ -95,10 +95,9 @@ func (b *Broadcaster) fanOut() {
 				case c.events <- e:
 				default:
 					// Slow client: drop the event rather than block the
-					// broadcaster goroutine. The drop is otherwise invisible
-					// to the client and the operator, so surface it as a
-					// counter — a steady non-zero rate is the only signal
-					// that a UI is silently missing live updates.
+					// broadcaster goroutine. The drop is otherwise invisible,
+					// so it is counted — a steady rate is the only signal that
+					// a UI is silently missing live updates.
 					metrics.RecordSSEClientDrop()
 				}
 			}

@@ -12,9 +12,8 @@ import (
 
 // realIP records the request's peer and, when that peer is a trusted proxy,
 // rewrites r.RemoteAddr to the client address the proxy reported. The verdict
-// is recorded on the original peer and recorded always, so downstream code can
-// tell "untrusted" from "nobody decided" -- read it with auth.FromTrustedProxy,
-// never RemoteAddr.
+// is recorded on the original peer, and always, so downstream can tell
+// "untrusted" from "nobody decided" — read it with auth.FromTrustedProxy.
 func realIP(trusted []netip.Prefix) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -51,10 +50,9 @@ func peerOf(r *http.Request, trusted []netip.Prefix) (auth.Peer, string) {
 }
 
 // resolveClientIP returns the rightmost node in the forwarding chain that is
-// not a trusted proxy, joined with the peer's port. Forwarded (RFC 7239) is
-// preferred over X-Forwarded-For, both ordered first proxy first. A header
-// naming no address says nothing about the client, so the fallback turns on a
-// missing address rather than a missing header.
+// not a trusted proxy, joined with the peer's port. Forwarded (RFC 7239) wins
+// over X-Forwarded-For, both ordered first proxy first. The fallback turns on
+// a missing address rather than a missing header.
 func resolveClientIP(r *http.Request, peerPort string, trusted []netip.Prefix) (string, bool) {
 	nodes := forwardedNodes(r.Header.Values("Forwarded"))
 	if !namesAnyAddr(nodes) {

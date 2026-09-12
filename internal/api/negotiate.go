@@ -65,11 +65,10 @@ func ContentTypeFromContext(ctx context.Context) ContentType {
 	return ContentTypeJSON
 }
 
-// extensionFromContext returns the extension suffix negotiate stripped from
-// the path, or "" when the type came from the Accept header instead. Anything
-// rebuilding the request's URI has to put it back: the suffix is the only
-// thing naming the representation, so a redirect that dropped it would be
-// re-negotiated from an Accept header that may say something else entirely.
+// extensionFromContext returns the extension suffix negotiate stripped from the
+// path, or "" when the type came from Accept instead. Anything rebuilding the
+// URI has to put it back: it is the only thing naming the representation, so a
+// redirect dropping it is re-negotiated from an Accept that may disagree.
 func extensionFromContext(ctx context.Context) string {
 	ext, _ := ctx.Value(extensionKey{}).(string)
 
@@ -77,10 +76,9 @@ func extensionFromContext(ctx context.Context) string {
 }
 
 // negotiate resolves the effective content type from an extension suffix or
-// Accept header and stores it in the request context for downstream handlers.
-//
-// It resolves and records; it does not refuse. 406 is a statement about one
-// endpoint, and the route is not known here.
+// Accept header and stores it in the request context. It resolves and records;
+// it does not refuse. 406 is a statement about one endpoint, and the route is
+// not known here.
 func negotiate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Accept")

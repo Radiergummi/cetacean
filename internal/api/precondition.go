@@ -12,12 +12,8 @@ import (
 
 // precond evaluates RFC 9110 §13.1.1 If-Match against the representation a GET
 // at the same URI would return, which is what gives networks, volumes, tasks,
-// stacks and plugins a precondition despite carrying no Docker version.
-// Optional everywhere: a request without the header passes through.
-//
-// The subject is made current from the engine first. Representations are built
-// from the asynchronously filled cache while writers apply against the engine,
-// so without it the header could only refuse a change the cache already saw.
+// stacks and plugins a precondition at all. The subject is made current from
+// the engine first, or the header could only refuse what the cache already saw.
 func (h *Handlers) precond(rep representationFunc) Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

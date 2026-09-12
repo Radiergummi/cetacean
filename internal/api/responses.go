@@ -30,17 +30,10 @@ type ServiceResponse struct {
 }
 
 // AcceptedServiceResponse is the payload for the 202 a service mutation answers
-// when the caller asked to wait and the cluster has not settled (RFC 7240 wait /
-// respond-async). It carries the service the 200 would, plus the last
-// convergence line the wait observed.
-//
-// It repeats ServiceResponse's service field rather than embedding it, and must
-// keep doing so: goccy/go-json v0.10.6 SIGSEGVs marshalling an embedded struct
-// carrying both a large nested struct (swarm.Service) and a nil omitempty slice
-// (integrations) when the outer struct has a sibling field of its own. The crash
-// lands after the 202 status line is written, so recovery cannot turn it into a
-// 500. The mutation path never populates changes or integrations, so nothing is
-// lost by the repetition.
+// when the caller asked to wait and the cluster has not settled. It repeats
+// ServiceResponse's service field rather than embedding it, and must keep doing
+// so: goccy/go-json v0.10.6 SIGSEGVs on that embedding, after the status line
+// is written, so recovery cannot turn the crash into a 500.
 type AcceptedServiceResponse struct {
 	Service  swarm.Service `json:"service"`
 	Progress string        `json:"progress,omitempty"`

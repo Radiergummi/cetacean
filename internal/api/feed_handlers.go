@@ -452,8 +452,7 @@ var feedPaginationParams = []string{"before", "limit"}
 var searchFeedParams = []string{"q"}
 
 // feedQuery returns the subset of r's query a feed's links may carry: the
-// pagination pair every feed reads, plus whatever else the caller declares.
-//
+// pagination pair every feed reads, plus whatever the caller declares.
 // Reflecting the rest of the raw query into a compressed feed beside
 // ACL-filtered resource names is the BREACH shape.
 func feedQuery(r *http.Request, extra []string) url.Values {

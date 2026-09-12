@@ -74,12 +74,9 @@ func negotiateCoding(w http.ResponseWriter, r *http.Request, body []byte) Encodi
 }
 
 // codedETag marks a validator with the content-coding its representation was
-// served under, per RFC 9110 §8.8.3: two codings of one resource are two
-// representations and cannot share a strong validator.
-//
-// The suffix is appended to a hash of the identity bytes, never of the encoded
-// ones, so stripCodingSuffix can recover the underlying validator when a client
-// hands back an If-Match obtained under a different negotiation.
+// served under, per RFC 9110 §8.8.3: two codings are two representations and
+// cannot share a strong validator. The suffix is appended to a hash of the
+// identity bytes, so stripCodingSuffix can recover the underlying validator.
 func codedETag(etag string, coding Encoding) string {
 	if coding == EncodingIdentity {
 		return etag
@@ -97,9 +94,7 @@ func writeRawWithETag(w http.ResponseWriter, r *http.Request, data []byte) {
 }
 
 // writeRawWithPrecomputedETag is writeRawWithETag for bodies fixed at build
-// time, whose ETag the caller hashed once at startup rather than on every
-// request — including the 304s, which never touch the body at all.
-//
+// time, whose ETag the caller hashed once at startup rather than per request.
 // The precomputed tag is the identity validator: compression suffixes it and
 // hashes nothing.
 func writeRawWithPrecomputedETag(
