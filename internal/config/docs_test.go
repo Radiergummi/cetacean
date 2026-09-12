@@ -1,19 +1,9 @@
 package config
 
-// docs_test.go holds internal/config's CETACEAN_* environment-variable surface
-// against what docs/configuration.mdx and CLAUDE.md promise: derive both sides
-// from source, then assert both directions through the excuse map in
-// internal/contract/excused.go.
-//
-// # Deriving what the product reads
-//
-// Every CETACEAN_* variable this package consults reaches it as a literal
-// string argument to a `resolve*` helper, to os.Getenv, or via a local
-// `envKey` constant. The scan is go/ast over whole string-literal nodes, not a
-// regexp over source text: comments and flag descriptions here mention several
-// of these names in prose, and only a whole-literal scan excludes them. Which
-// settings resolveSecret also wires for a `_FILE` variant needs a second,
-// call-site-aware pass.
+// Holds internal/config's CETACEAN_* surface against what
+// docs/configuration.mdx promises, deriving both sides from source. Every
+// variable reaches this package as a literal string argument, so the scan is
+// go/ast over whole string-literal nodes rather than a regexp.
 
 import (
 	"go/ast"
@@ -143,12 +133,8 @@ func forEachSourceFile(t *testing.T, fn func(*ast.File)) {
 	}
 }
 
-// # Deriving what the docs promise
-//
-// docs/configuration.mdx documents each setting as a `<ConfigParam>`
-// component, read through its `env` attribute. CLAUDE.md's copy is a plain
-// markdown table, read keyed by column so a value one column over cannot be
-// mistaken for the one asked about.
+// docs/configuration.mdx documents each setting as a `<ConfigParam>` component,
+// read through its `env` attribute.
 
 const configDocsPath = "../../docs/configuration.mdx"
 

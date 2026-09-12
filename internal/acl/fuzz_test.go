@@ -7,24 +7,15 @@ import (
 )
 
 // globMeta holds the characters path.Match treats specially: '*', '?' and '['
-// open a wildcard term, and '\' escapes the next character. All four reach
-// further, or differently, than their literal text — pattern `\0` escapes to
-// the literal '0', which also breaks self-match, so both properties below key
-// off this set rather than just "*?[".
+// open a wildcard term, and '\' escapes the next. All four reach further, or
+// differently, than their literal text, so both properties below key off this
+// set rather than just "*?[".
 const globMeta = `*?[\`
 
-// FuzzMatchResource exercises matchResource, which decides whether a policy
-// grant covers a resource. The resource side is derived from a request path, so
-// this sees attacker-influenced input on every authorization decision.
-//
-// Two properties hold regardless of input:
-//   - An expression with none of globMeta matches only itself. Anything
-//     broader is a grant reaching past what it names.
-//   - An expression identical to the resource always matches. This holds only
-//     for a well-formed "type:name" resource whose pattern half is a valid,
-//     metacharacter-free glob: validateGrant rejects an invalid glob on every
-//     path that admits one, so matchResource never sees it in production, and
-//     a pattern containing '\' is not generally a match for its own text.
+// Exercises matchResource, which decides whether a policy grant covers a
+// resource derived from a request path. An expression with none of globMeta
+// matches only itself, since anything broader reaches past what it names; and
+// one identical to a well-formed, metacharacter-free resource always matches.
 func FuzzMatchResource(f *testing.F) {
 	f.Add("service:web", "service:web")
 	f.Add("service:*", "service:web")

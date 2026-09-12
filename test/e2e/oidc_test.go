@@ -19,18 +19,15 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// oidcHost is used for every request in this lane. It must be "localhost", not
-// proc.BaseURL's "127.0.0.1": the auth-flow cookies OIDCProvider sets are
-// host-only per RFC 6265 and CETACEAN_AUTH_OIDC_REDIRECT_URL names
-// "localhost:19002", so a flow started against 127.0.0.1 never presents them
-// back to the callback.
+// Used for every request in this lane. It must be "localhost", not
+// proc.BaseURL's "127.0.0.1": the auth-flow cookies are host-only per RFC 6265
+// and the redirect URL names "localhost:19002", so a flow started against
+// 127.0.0.1 never presents them back to the callback.
 const oidcBaseURL = "http://localhost:19002"
 
-// dexIssuer must resolve identically for the SUT and for this test's HTTP
-// client, or the ID token's iss claim won't validate against what the SUT's
-// OIDC discovery recorded. sut.Start runs the real binary as a host process
-// rather than inside the compose network, so both resolve "localhost:19010"
-// through Dex's published port.
+// Must resolve identically for the SUT and this test's HTTP client, or the ID
+// token's iss claim will not validate against what discovery recorded. sut.Start
+// runs the binary as a host process, so both resolve through Dex's published port.
 const dexIssuer = "http://localhost:19010/dex"
 
 // sessionCookieName mirrors the unexported cookieName in internal/auth's
@@ -43,11 +40,10 @@ const sessionCookieName = "__Host-cetacean_session"
 // "login" and "password".
 var loginFormPattern = regexp.MustCompile(`<form[^>]*\baction="([^"]*)"`)
 
-// TestOIDCLoginEstablishesASession drives the full authorization-code flow
-// against a real Dex issuer. The static client sets oauth2.skipApprovalScreen,
-// so the login POST goes straight to the callback. That callback sets the
-// signed session cookie, which this test's cookiejar carries to /auth/whoami —
-// so a pass covers the cookie round-trip, not just the token exchange.
+// Drives the full authorization-code flow against a real Dex issuer. The static
+// client skips the approval screen, so the login POST goes straight to the
+// callback, which sets the signed session cookie this test's cookiejar carries
+// to /auth/whoami — covering the cookie round-trip, not just the exchange.
 func TestOIDCLoginEstablishesASession(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

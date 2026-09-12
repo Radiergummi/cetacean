@@ -18,14 +18,10 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// Cluster-level write drivers for the write sweep: the three reversible
-// /swarm/* tuning patches and the join-token rotation.
-//
-// These mutate the one thing every lane in this binary shares, with no throwaway
-// fixture to work on, so each reads the current value, changes it to something
-// recognisable, verifies it reached the engine, and restores what was there.
-// `PATCH /swarm/encryption` stays permanently excused: enabling autolock means a
-// manager restart needs an unlock key, and the harness has nowhere to keep one.
+// Cluster-level write drivers for the write sweep. These mutate the one thing
+// every lane shares, with no throwaway fixture, so each reads the current value,
+// changes it recognisably, verifies it reached the engine and restores it.
+// `PATCH /swarm/encryption` stays excused: autolock needs an unlock key.
 
 // swarmSpec reads the live swarm spec off the engine.
 func swarmSpec(t *testing.T, env *harness.Env) swarm.Spec {
@@ -189,14 +185,10 @@ func driveSwarmRotateToken(t *testing.T, env *harness.Env, proc *sut.Process) {
 	}
 }
 
-// TestResyncIsAuthenticatedAndGated drives `POST /-/resync`, the one route under
-// `/-/` that does work rather than reporting state: each call sweeps the whole
-// Docker API, so an uncredentialed caller could amplify one cheap request into a
-// cluster enumeration.
-//
-// It is the one `/-/` path isExempt does not exempt, and it additionally requires
-// a grant. It is deliberately not gated on the operations level: a resync only
-// re-reads the cluster, so a read-only deployment keeps its refresh button.
+// Drives `POST /-/resync`, the one route under `/-/` that does work rather than
+// reporting state: each call sweeps the whole Docker API. It is the one path
+// isExempt does not exempt and additionally requires a grant, but is deliberately
+// not tiered — a resync only re-reads, so a read-only deployment keeps it.
 func TestResyncIsAuthenticatedAndGated(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

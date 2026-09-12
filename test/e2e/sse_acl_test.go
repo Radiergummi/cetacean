@@ -20,14 +20,10 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file closes the two SSE contracts nothing else in the repository
-// observes. Reserves port 19013 (see README.md's reserved-ports table).
-//
-//   - `GET /events` ACL filtering, which runs inside aclMatchWrap on the
-//     streaming path only — observing it needs a client holding the stream
-//     open while the cluster changes underneath it.
-//   - The broadcaster's connection cap: that a client arriving at a full
-//     broadcaster is told to come back rather than left hanging.
+// This file closes the two SSE contracts nothing else observes, on port 19013:
+// `GET /events` ACL filtering, which runs on the streaming path only and needs a
+// client holding the stream open while the cluster changes underneath it, and
+// the broadcaster's connection cap telling a late client to come back.
 
 const sseACLPort = 19013
 
@@ -208,12 +204,10 @@ func awaitEvent(t *testing.T, recorder *eventRecorder, eventType, id, what strin
 	}
 }
 
-// TestEventsStreamAppliesTheACL drives the SSE authorization boundary: a
-// subscriber must be given events only for resources it could also read over
-// HTTP. The withheld event is pinned from two sides — the fully granted persona
-// must receive it, establishing it was broadcast, and the narrow persona must
-// receive a different event from the same window, establishing its stream was
-// live throughout.
+// Drives the SSE authorization boundary: a subscriber must be given events only
+// for resources it could also read over HTTP. The withheld event is pinned from
+// two sides — the granted persona must receive it, and the narrow one must
+// receive a different event from the same window.
 func TestEventsStreamAppliesTheACL(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

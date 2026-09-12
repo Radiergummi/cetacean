@@ -27,10 +27,9 @@ import (
 )
 
 // This file drives `?filter=`, the expr-lang expression language every list
-// endpoint accepts, against a real cluster. It reserves port 19019.
-// filterCases and the env builders in internal/filter are held together in
-// both directions: every env-builder field must be driven, and every type with
-// a filterEnv must appear in filterPaths.
+// endpoint accepts, against a real cluster on port 19019. filterCases and the
+// env builders are held together both ways: every env-builder field must be
+// driven, and every type with a filterEnv must appear in filterPaths.
 
 const filterPort = 19019
 

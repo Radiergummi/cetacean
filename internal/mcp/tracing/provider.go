@@ -23,11 +23,9 @@ type Provider struct {
 }
 
 // NewProvider builds a trace pipeline exporting to an OTLP/HTTP collector at
-// endpoint. The caller owns Shutdown.
-//
-// The endpoint is validated here rather than left to the exporter, which logs
-// a malformed URL to the OTel global error handler and then quietly falls back
-// to localhost:4318 — configuration that looks accepted and exports nowhere.
+// endpoint; the caller owns Shutdown. The endpoint is validated here rather
+// than left to the exporter, which logs a malformed URL to the OTel global
+// error handler and then quietly falls back to localhost:4318.
 func NewProvider(ctx context.Context, endpoint, serviceVersion string) (*Provider, error) {
 	if err := validateEndpoint(endpoint); err != nil {
 		return nil, err

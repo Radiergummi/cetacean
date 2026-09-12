@@ -163,11 +163,10 @@ func NewWorld(t *testing.T) *World {
 		evaluator,
 	)
 
-	// Handler installs its bearer-token middleware only when OAuth is
-	// non-nil, so without a Server here /mcp is served unauthenticated and
-	// every ACL persona reads everything. This one never mints or verifies a
-	// token -- AuthBypass sends every request through the upstream provider --
-	// so the config only needs to be valid enough to construct.
+	// Handler installs its bearer-token middleware only when OAuth is non-nil,
+	// so without a Server here /mcp is unauthenticated and every ACL persona
+	// reads everything. This one never mints or verifies a token, since
+	// AuthBypass routes every request through the upstream provider.
 	oauthSrv := oauth.NewServer(oauth.ServerConfig{
 		Issuer:      "https://cetacean.test",
 		MCPResource: "https://cetacean.test/mcp",

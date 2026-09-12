@@ -14,16 +14,10 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file covers the `tailscale` auth mode. Reserves port 19012.
-//
-// A successful authentication is out of reach: Authenticate asks the local
-// daemon's WhoIs API who owns the peer address, which needs a real tailnet --
-// so CapMap group extraction, acl.TailscaleSource and the tsnet dual-listener
-// topology stay covered by internal/auth's unit tests alone. What is reachable
-// is validateTailscaleAddr, refusing any peer outside Tailscale's CGNAT
-// (100.64.0.0/10) and ULA (fd7a:115c:a1e0::/48) ranges. Both refusals look
-// like an indistinguishable 401/AUT001, so these cases read the binary's log
-// to tell "refused on the range" from "refused by the daemon".
+// This file covers the `tailscale` auth mode on port 19012. A successful
+// authentication is out of reach, since WhoIs needs a real tailnet, so what is
+// reachable is validateTailscaleAddr refusing a peer outside Tailscale's ranges.
+// Both refusals look alike, so these cases read the binary's log to tell them apart.
 
 const tailscalePort = 19012
 
@@ -235,12 +229,10 @@ func TestTailscaleRefusesEveryPeerOutsideTheTailnet(t *testing.T) {
 	})
 }
 
-// TestTailscaleBehindATrustedProxyDefersToTheDaemon records what changes when
-// an operator configures server.trusted_proxies in tailscale mode: realIP
-// rewrites RemoteAddr to the address the proxy named, so a peer the proxy
-// calls a tailnet address clears validateTailscaleAddr and only the daemon
-// decides whether it is real. That is the configuration in which the range
-// check stops being a boundary.
+// Records what changes when an operator configures server.trusted_proxies in
+// tailscale mode: realIP rewrites RemoteAddr to the address the proxy named, so
+// a peer the proxy calls a tailnet address clears validateTailscaleAddr and only
+// the daemon decides. That is where the range check stops being a boundary.
 func TestTailscaleBehindATrustedProxyDefersToTheDaemon(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

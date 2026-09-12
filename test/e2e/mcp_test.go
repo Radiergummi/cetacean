@@ -15,11 +15,9 @@ import (
 )
 
 // mcpCall issues one JSON-RPC request against the stateless MCP transport.
-// Protocol 2026-07-28 has no handshake and no session id, but a modern
-// request still needs the protocol version in both the Mcp-Protocol-Version
-// header and params._meta, a clientCapabilities object, an Mcp-Method header
-// mirroring the JSON-RPC method, and — for tools/call, resources/read and
-// prompts/get — an Mcp-Name header matching params.name.
+// 2026-07-28 has no handshake and no session id, but a modern request still
+// needs the protocol version in both the header and params._meta, a
+// clientCapabilities object, an Mcp-Method header, and often an Mcp-Name one.
 func mcpCall(
 	t *testing.T,
 	proc *sut.Process,
@@ -151,11 +149,10 @@ func TestMCPToolsListIsGatedByOperationsLevel(t *testing.T) {
 	}
 }
 
-// TestMCPFindAndDescribeAgree checks find and describe against the same live
-// service: find's `type` is plural and its rows sit under "items", describe's
-// is singular and its digest is inlined at the top level. The comparison is
-// on State rather than identity, since State is computed independently on
-// each path and so agreement is a genuine cross-check.
+// Checks find and describe against the same live service: find's `type` is
+// plural with rows under "items", describe's is singular with the digest
+// inlined. The comparison is on State rather than identity, since State is
+// computed independently on each path.
 func TestMCPFindAndDescribeAgree(t *testing.T) {
 	_, proc := startMCP(t)
 

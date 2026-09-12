@@ -232,14 +232,10 @@ func TestFeedLinkHeaders(t *testing.T) {
 	})
 }
 
-// TestSearchFeedReachesFeedQueryOnBothPaths drives the real registered route
-// and checks that ?q= survives, and an unread parameter does not, on both
-// paths that build a feed link: the alternate Link header, built at
-// registration, and the links inside the feed itself, built at render.
-//
-// Both read searchFeedParams, so they cannot disagree about the value — this
-// is a wiring check, not a drift guard. It fails if /search stops using
-// searchFeeds(), or if either path stops going through feedQuery.
+// Drives the real registered route and checks that ?q= survives, and an unread
+// parameter does not, on both paths that build a feed link: the alternate Link
+// header at registration, and the links inside the feed at render. Both read
+// searchFeedParams, so this is a wiring check rather than a drift guard.
 func TestSearchFeedReachesFeedQueryOnBothPaths(t *testing.T) {
 	router := newSeededTestRouter(t)
 	const target = "/search?q=app&limit=5&unread=whatever"

@@ -23,12 +23,10 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// Resource lifecycle drivers for the write sweep: creating and removing the
-// data resources, and removing the four resource types Cetacean can remove but
-// not create. Registered in drivenWriteRoutes, so both of the sweep's
-// top-level tests pick them up. Every case verifies through the engine, never
-// through Cetacean's own response -- a handler that answers 201 or 204 without
-// touching the cluster must not pass.
+// Resource lifecycle drivers for the write sweep: creating and removing the data
+// resources, and removing the four types Cetacean can remove but not create.
+// Every case verifies through the engine, never through Cetacean's own response
+// — a handler answering 201 or 204 without touching the cluster must not pass.
 
 // sweepRunID distinguishes the resources these drivers create from those of
 // any earlier run: the harness containers outlive a `go test` invocation, so a

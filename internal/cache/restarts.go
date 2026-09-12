@@ -45,9 +45,8 @@ func NewRestartTracker(horizon, bucket time.Duration) *RestartTracker {
 
 // TrackingSince is the earliest moment the tracker can account for, and so the
 // start of the only window its counts honestly describe: a count is labelled by
-// the window asked for, but the tracker starts with the process, so a young one
-// reports the same figure for the hour and the week. It is the later of that
-// start and the retention horizon, since buckets past the horizon are pruned.
+// the window asked for, but a young process reports the same figure for the
+// hour and the week. It is the later of that start and the retention horizon.
 func (rt *RestartTracker) TrackingSince() time.Time {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()

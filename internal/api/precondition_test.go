@@ -148,11 +148,10 @@ type preconditionEndpoint struct {
 	wantStatus int
 }
 
-// pairedEndpoints is every path in the router carrying both a GET and a write
-// method, and so every path declaring an If-Match precondition. The three
-// collection creates are absent: their paired GET is a collection whose ETag
-// turns over on any member change, so no caller could satisfy the precondition.
-// /services/{id}/healthcheck appears twice, for the PUT and the PATCH.
+// pairedEndpoints is every path carrying both a GET and a write method, and so
+// every path declaring an If-Match precondition. The three collection creates
+// are absent: their paired GET is a collection whose ETag turns over on any
+// member change. /services/{id}/healthcheck appears twice, for PUT and PATCH.
 var pairedEndpoints = []preconditionEndpoint{
 	{
 		"service env", "/services/svc1/env", "PATCH", "/services/svc1/env",
@@ -282,12 +281,10 @@ var pairedEndpoints = []preconditionEndpoint{
 	},
 }
 
-// TestPreconditionRoundTripsForEveryPairedEndpoint reads each endpoint that
-// declares a precondition, then drives its write twice: once with the ETag the
-// read returned, once with a strong tag that cannot match. The mismatched row
-// catches a route that never got its precond wrapper; the matching row proves
-// the route is conditioned on this URI's representation. Neither can prove a
-// builder still renders what its GET rendered.
+// Reads each endpoint declaring a precondition, then drives its write twice:
+// with the ETag the read returned, and with a strong tag that cannot match. The
+// mismatched row catches a route that never got its precond wrapper; the
+// matching row proves it is conditioned on this URI's representation.
 func TestPreconditionRoundTripsForEveryPairedEndpoint(t *testing.T) {
 	write := func(t *testing.T, router http.Handler, tc preconditionEndpoint, ifMatch string) int {
 		t.Helper()
@@ -508,12 +505,9 @@ func seededWriteClient() *mockWriteClient {
 	}
 }
 
-// newSeededTestRouter builds a router over a cache holding one of every
-// resource type the paired endpoints address, plus clients accepting every
-// write in pairedEndpoints. Each subtest gets its own.
-// TestPreconditionDistinguishesAnUnreachableBackend covers the one builder that
-// reads the daemon rather than the cache: a plugin genuinely gone is a 412, but
-// a daemon that could not be reached leaves the condition unevaluable.
+// Covers the one builder that reads the daemon rather than the cache: a plugin
+// genuinely gone is a 412, but a daemon that could not be reached leaves the
+// condition unevaluable.
 func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 	cases := []struct {
 		name       string

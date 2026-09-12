@@ -837,11 +837,9 @@ func TestCallback_TokenExchangeFails_ClearsCookies(t *testing.T) {
 	assertAuthFlowCookiesCleared(t, resp)
 }
 
-// TestLogout_ThroughRegisteredRoute pins that RegisterRoutes reaches the
-// logout handler, so it fails if the route is dropped or registered under
-// another method. What the handler does is TestLogout_ClearsSession's
-// business, in oidc_callback_test.go; the cross-origin check this route used
-// to carry is TestCrossOriginProtection's, in internal/api.
+// Pins that RegisterRoutes reaches the logout handler, so it fails if the route
+// is dropped or registered under another method. What the handler does, and the
+// cross-origin check this route used to carry, are other tests' business.
 func TestLogout_ThroughRegisteredRoute(t *testing.T) {
 	server := newMockOIDCServer(t)
 	p := newTestOIDCProvider(t, server.URL)

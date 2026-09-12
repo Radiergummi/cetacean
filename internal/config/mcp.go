@@ -38,9 +38,8 @@ type MCPConfig struct {
 	RefreshTokenTTL time.Duration
 
 	// ConsentTTL is how long a remembered approval keeps letting a client skip
-	// the consent screen. It must outlive RefreshTokenTTL to be useful, but
-	// cannot be unbounded: an approval is revocable only through its grant
-	// family, so a record outliving that one authorizes silently forever.
+	// the consent screen. It must outlive RefreshTokenTTL to be useful, but not
+	// be unbounded: an approval is revocable only through its grant family.
 	// Zero or negative disables remembering, prompting every authorization.
 	ConsentTTL time.Duration
 
@@ -425,8 +424,7 @@ func resolveMCPOpsLevel(file *int) (OperationsLevel, error) {
 // MCPIssuer returns the canonical external base URL clients reach this
 // deployment at: mcp.issuer, then server.public_url, then a derivation from
 // server.listen_addr. The second return is false when that derivation reaches
-// nothing — an empty or wildcard host. The string comes back either way, since
-// only OAuth truly breaks on it.
+// nothing — an empty or wildcard host — though the string comes back either way.
 func (c *Config) MCPIssuer(tlsEnabled bool) (string, bool) {
 	if c.MCP.Issuer != "" {
 		return c.MCP.Issuer, true

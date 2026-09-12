@@ -425,14 +425,10 @@ func refuse(t *testing.T, router http.Handler, path, accept string) ProblemDetai
 	return problem
 }
 
-// TestUnservedTypeIsRefusedByTheEndpoint: an endpoint refuses every type it
-// does not serve, including one another endpoint does — a graph format
-// resolves successfully here and is no more servable for it.
-//
-// /services and /cluster differ in whether they carry a stream, /api, /events
-// and /topology dispatch without the helpers, and the dashboard fallback
-// refuses only what nothing serves: */* resolves to JSON, so JSON on that
-// route means "unknown" and every static file arrives that way.
+// An endpoint refuses every type it does not serve, including one another
+// endpoint does. The rows differ in how they dispatch: with a stream, without
+// the helpers, and the dashboard fallback, which refuses only what nothing
+// serves — */* resolves to JSON, so JSON there means "unknown".
 func TestUnservedTypeIsRefusedByTheEndpoint(t *testing.T) {
 	router := newTestRouterWithCache(t, cache.New(nil))
 
@@ -472,12 +468,10 @@ func TestRefusalNamesOnlyWhatTheEndpointServes(t *testing.T) {
 	}
 }
 
-// TestSingleRepresentationDocumentsNeedNoTableRow holds both halves of the
-// claim together: neither media type resolves against supportedTypes, and each
-// document still answers a client asking for it. Asserting only the second
-// half is satisfied by putting the row back, which is the thing being removed.
-//
-// The fetch helpers assert the status and the content type.
+// Holds both halves of the claim together: neither media type resolves against
+// supportedTypes, and each document still answers a client asking for it.
+// Asserting only the second half is satisfied by putting the row back, which is
+// the thing being removed.
 func TestSingleRepresentationDocumentsNeedNoTableRow(t *testing.T) {
 	router := newTestRouterWithCache(t, cache.New(nil))
 

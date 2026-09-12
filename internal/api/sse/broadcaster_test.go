@@ -266,11 +266,9 @@ func TestResourceType(t *testing.T) {
 }
 
 // recordedError captures what the broadcaster asked its ErrorWriter to write.
-// The real writer is internal/api's writeErrorCode, which this package cannot
-// import — internal/api imports it, which is the whole reason ErrorWriter is a
-// callback — so the concrete status for a code is asserted there
-// (TestWriteErrorCodeSSE001Is429) and what the broadcaster itself decides is
-// asserted here.
+// The real writer is internal/api's, which this package cannot import — that is
+// the whole reason ErrorWriter is a callback — so the concrete status for a code
+// is asserted there and what the broadcaster decides is asserted here.
 type recordedError struct {
 	code   string
 	detail string

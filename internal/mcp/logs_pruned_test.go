@@ -16,10 +16,8 @@ import (
 )
 
 // dockerNotFound is the error shape the daemon returns for a task whose record
-// Swarm has already retired: the message verbatim from a live cluster, wrapped
-// in the errdefs sentinel the Docker client attaches to every 404. The wrap is
-// the part that matters — isNotFound classifies on the sentinel, so a fixture
-// carrying only the text would pin the message rather than the rule.
+// Swarm has retired: the message verbatim, wrapped in the errdefs sentinel that
+// isNotFound classifies on, so a text-only fixture would pin the wrong thing.
 //
 //nolint:staticcheck // ST1005: quoted verbatim from the daemon, not authored here.
 var dockerNotFound = fmt.Errorf(
@@ -27,13 +25,10 @@ var dockerNotFound = fmt.Errorf(
 	cerrdefs.ErrNotFound,
 )
 
-// TestTaskLogsExplainAPrunedRecord pins the fix for what the live evaluation
-// hit: get_logs advertises a task read as "the only way to reach a replica
-// that has already exited", and the most valuable moment to use it — right
-// after a replica died — is exactly when Swarm has retired the record. The
-// caller got the daemon's raw "task not found" and could not tell a pruned
-// record from a mistyped ID, so the sensible next move (read the service, or
-// describe it for its failures) was not discoverable from the failure.
+// get_logs advertises a task read as the only way to reach a replica that has
+// already exited, and the most valuable moment to use it is exactly when Swarm
+// has retired the record. The daemon's raw "task not found" cannot be told from
+// a mistyped ID, so the sensible next move is not discoverable from the failure.
 func TestTaskLogsExplainAPrunedRecord(t *testing.T) {
 	c := cache.New(nil)
 	// The cache still holds the task, so this is a real ID whose output the

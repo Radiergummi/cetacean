@@ -28,14 +28,10 @@ const writePolicy = `grants:
     permissions: ["read", "write"]
 `
 
-// A grant listing only "read" must gate writes; adding "write" to the same
-// audience, without a restart, must lift the gate. A unit test can prove the
-// parser works, not that the watcher is wired to the evaluator answering real
-// requests.
-//
-// The Allow header is asserted on a detail endpoint: /services always answers
-// "GET, HEAD" regardless of ACL, so only a detail endpoint's PUT/PATCH
-// availability is observable.
+// A grant listing only "read" must gate writes, and adding "write" to the same
+// audience without a restart must lift the gate — a unit test proves the parser
+// works, not that the watcher is wired to the evaluator. The Allow header is
+// asserted on a detail endpoint, since /services always answers "GET, HEAD".
 func TestACLPolicyHotReload(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -84,14 +80,10 @@ func TestACLPolicyHotReload(t *testing.T) {
 		"a write grant written in place did not take effect",
 	)
 
-	// The same change again, written the other way: a temporary file renamed over
-	// the top, which replaces the inode — how a deployment and several editors
-	// update a file, and what a watch on the file itself stops seeing. The
-	// reverse direction also proves the watch survives more than one swap.
-	//
-	// Whether this pattern can distinguish the defect is platform-dependent
-	// (kqueue watches the parent directory anyway); the per-platform proof lives
-	// in internal/acl.
+	// The same change written the other way: a temporary file renamed over the
+	// top, replacing the inode — how a deployment and several editors update a
+	// file, and what a watch on the file itself stops seeing. Whether this can
+	// distinguish the defect is platform-dependent; internal/acl has the proof.
 	replacePolicyViaRename(t, policy, readOnlyPolicy)
 
 	waitForAllow(

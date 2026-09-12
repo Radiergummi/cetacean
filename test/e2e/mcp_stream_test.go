@@ -22,17 +22,10 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file drives the MCP surfaces that stream or span more than one request:
-// the subscriptions/listen notification stream and its ACL filtering, the
-// completions capability, and the tasks extension a mutation is augmented
-// with. It reserves port 19016 (see README.md's reserved-ports table).
-//
-// A notification is the one thing the server sends unasked, so a delivery that
-// ignores the caller's grants discloses that a resource exists and just
-// changed; completions are the same hazard in reverse.
-//
-// Identity arrives through CETACEAN_MCP_AUTH_BYPASS=headers: this file tests
-// what an established identity may receive, not how it was established.
+// This file drives the MCP surfaces that stream or span more than one request,
+// on port 19016: subscriptions/listen and its ACL filtering, completions, and
+// the tasks extension. A notification is the one thing the server sends unasked,
+// so a delivery ignoring the caller's grants discloses a resource just changed.
 
 const mcpStreamPort = 19016
 
@@ -535,13 +528,10 @@ func TestMCPNotificationTypesAreOptIn(t *testing.T) {
 	}
 }
 
-// TestMCPListChangedIsWithheldFromACallerWithNoGrants drives the coarser half
-// of the same boundary. resources/list_changed carries no resource URI, so what
-// it discloses is timing; a caller matching no grant must never receive it.
-//
-// Both streams also name a resource subscription: a stream opting into
-// list_changed alone never has an identity recorded, so the assertion would
-// otherwise hold for a reason unrelated to the grant being checked.
+// The coarser half of the same boundary: resources/list_changed carries no URI,
+// so what it discloses is timing, and a caller matching no grant must never
+// receive it. Both streams also name a resource subscription, or the assertion
+// would hold for a reason unrelated to the grant being checked.
 func TestMCPListChangedIsWithheldFromACallerWithNoGrants(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -583,17 +573,10 @@ func TestMCPListChangedIsWithheldFromACallerWithNoGrants(t *testing.T) {
 	}
 }
 
-// TestMCPListChangedReachesAFilterOnlySubscriber drives a conforming client that
-// opts into a list_changed notification without naming any resource to watch —
-// the revision's filter has four independent fields and nothing couples them.
-//
-// Both halves of the subscriptions/listen hook therefore have to record the
-// caller's identity: Subscribe runs once per requested URI, so a filter-only
-// stream reaches SetFilter and nothing else, and a session record without an
-// identity hands a nil one to every ACL check at dispatch.
-//
-// The witness stream holds the same grants and opt-in and differs only in
-// naming a URI, so a silence here is attributable.
+// Drives a conforming client that opts into list_changed without naming any
+// resource to watch, which the revision's independent filter fields allow. Both
+// halves of the subscriptions/listen hook must record the caller's identity,
+// since a filter-only stream reaches SetFilter and nothing else.
 func TestMCPListChangedReachesAFilterOnlySubscriber(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -857,14 +840,10 @@ func awaitTerminalTask(t *testing.T, proc *sut.Process, id string) mcpTask {
 	return last
 }
 
-// TestMCPTaskAugmentedMutationRunsToConvergence: a task-augmented scale returns
-// immediately with a working task, and the task reaches completed only once the
-// service has settled on the cluster.
-//
-// The whole path runs on a goroutine holding the HTTP request context, which
-// net/http cancels the moment the create-task response is written — so
-// registerTools detaches it. Without that, the Docker write's opening inspect
-// fails with "context canceled" and the caller is told the task was cancelled.
+// A task-augmented scale returns immediately with a working task, which reaches
+// completed only once the service has settled. The whole path runs on a
+// goroutine holding the HTTP request context, which net/http cancels once the
+// create-task response is written — so registerTools detaches it.
 func TestMCPTaskAugmentedMutationRunsToConvergence(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

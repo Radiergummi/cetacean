@@ -8,23 +8,19 @@ import (
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
-// recommendationsResult is the envelope the recommendations widget renders.
-//
-// The same data is already readable at cetacean://recommendations, but a host
-// can only push a *tool* result into a widget — so this exists for the same
-// reason find does, and delegates to the resource read rather than
-// reaching for the engine itself, keeping ACL filtering on one path.
+// recommendationsResult is the envelope the recommendations widget renders. The
+// same data is readable at cetacean://recommendations, but a host can only push
+// a *tool* result into a widget — so this delegates to that resource read
+// rather than reaching for the engine, keeping ACL filtering on one path.
 type recommendationsResult struct {
 	Items   []mcpRecommendation     `json:"items"`
 	Total   int                     `json:"total"`
 	Summary recommendations.Summary `json:"summary"`
 }
 
-// toolGetRecommendations returns the recommendations the caller may see.
-//
-// Total and Summary count the filtered set, not the engine's: a caller with
-// grants over one stack should be told how many findings *they* have, not how
-// many exist in a cluster they cannot see.
+// toolGetRecommendations returns the recommendations the caller may see. Total
+// and Summary count the filtered set, not the engine's: a caller granted one
+// stack is told how many findings they have, not how many the cluster holds.
 func (s *Server) toolGetRecommendations(
 	ctx context.Context,
 	req mcplib.CallToolRequest,

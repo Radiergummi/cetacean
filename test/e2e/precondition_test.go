@@ -19,13 +19,10 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file drives the conditional-request contract: the If-Match precondition
-// on every mutating route that carries one, and the If-None-Match conditional
-// GET on the representation it compares against. It reserves port 19014.
-//
-// preconditionTargets and excusedPreconditionRoutes together are the
-// self-enforcing gate: every route contract.PreconditionedRoutes() reports
-// must appear in one or the other.
+// This file drives the conditional-request contract on port 19014: the If-Match
+// precondition on every mutating route carrying one, and the If-None-Match
+// conditional GET on the representation it compares against. Every route
+// contract.PreconditionedRoutes() reports must appear in a target or an excuse.
 
 const preconditionPort = 19014
 
@@ -365,11 +362,10 @@ func TestPreconditionSweep(t *testing.T) {
 				return
 			}
 
-			// RFC 9110 §13.1.1: a validator that is not the current one does not
-			// satisfy If-Match. Driven ahead of the baseline because evaluating a
-			// precondition refreshes its subject from the asynchronously filled
-			// cache, so a validator read beforehand could move under the sweep
-			// without anything being written.
+			// RFC 9110 §13.1.1: a validator that is not the current one does
+			// not satisfy If-Match. Driven ahead of the baseline because
+			// evaluating a precondition refreshes its subject, so a validator
+			// read beforehand could move without anything being written.
 			assertPreconditionFailed(t, "stale validator", precondRequest(
 				t, proc, target.method, target.uri,
 				map[string]string{"If-Match": staleValidator}, "", "",
@@ -678,12 +674,10 @@ func TestUnpreconditionedWriteIgnoresIfMatch(t *testing.T) {
 	t.Errorf("service %s never reached 2 replicas on the engine", name)
 }
 
-// TestIfMatchAcceptsAValidatorObtainedUnderContentEncoding drives RFC 9110
-// §8.8.3 as Cetacean resolves it: the coding suffix on an ETag distinguishes
-// two cached representations, but a precondition asserts resource state, so a
-// gzip validator must satisfy an If-Match on an identity-negotiated write. The
-// oversized label is there because the rule only engages past the 1 KiB
-// compression threshold.
+// Drives RFC 9110 §8.8.3 as Cetacean resolves it: the coding suffix on an ETag
+// distinguishes two cached representations, but a precondition asserts resource
+// state, so a gzip validator must satisfy an identity-negotiated write. The
+// oversized label is there because the rule engages past the 1 KiB threshold.
 func TestIfMatchAcceptsAValidatorObtainedUnderContentEncoding(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -738,16 +732,10 @@ func TestIfMatchAcceptsAValidatorObtainedUnderContentEncoding(t *testing.T) {
 	}
 }
 
-// TestConditionalWriteIsEvaluatedAgainstTheEngine drives the case If-Match
-// exists to refuse with no third party involved: a validator the server itself
-// superseded, replayed on the next write.
-//
-// The window is the one the cache cannot see — representations are built from
-// the asynchronously filled cache while every writer re-inspects the engine for
-// a fresh Version — so the precondition refreshes its subject from the engine
-// before evaluating, and the replay is refused even though a GET in the same
-// instant still answers the superseded validator. The replay is sent as the
-// sweep's probe, so the outcome reports the precondition's verdict alone.
+// Drives the case If-Match exists to refuse with no third party involved: a
+// validator the server itself superseded, replayed on the next write. The
+// precondition refreshes its subject from the engine and refuses the replay,
+// even though a GET in the same instant still answers the old validator.
 func TestConditionalWriteIsEvaluatedAgainstTheEngine(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

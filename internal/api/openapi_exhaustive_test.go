@@ -42,11 +42,10 @@ var licenseTextID = func() string {
 	return ""
 }()
 
-// TestEveryReadEndpointMatchesSpec walks every GET operation in the OpenAPI
-// spec, issues a request with substituted path parameters, and validates the
-// response body against the spec's response schema. Operations whose path
-// parameters can't be resolved from fixtures are skipped with a log line so
-// gaps are visible.
+// Walks every GET operation in the OpenAPI spec, issues a request with
+// substituted path parameters and validates the body against the response
+// schema. An operation whose parameters cannot be resolved from fixtures is
+// skipped with a log line, so the gap stays visible.
 func TestEveryReadEndpointMatchesSpec(t *testing.T) {
 	specBytes, doc, specRouter := loadTestSpec(t)
 
@@ -248,12 +247,10 @@ func resolvePath(template string) (string, bool) {
 	return template, false
 }
 
-// TestSpecFixtureIDsResolve drives the detail endpoint of every specFixtureIDs
-// entry against both fixtures that claim to seed it. Neither walk that reads
-// the table would notice an id gone stale: the contract walk logs a non-2xx
-// and moves on, and the operations-level probe reads its tier off the gate,
-// which answers before the resource is ever looked up. Coverage would drain
-// away in silence.
+// Drives the detail endpoint of every specFixtureIDs entry against both fixtures
+// that claim to seed it. Neither walk reading the table would notice a stale id:
+// the contract walk logs a non-2xx and moves on, and the tier probe answers
+// before the resource is looked up, so coverage would drain away in silence.
 func TestSpecFixtureIDsResolve(t *testing.T) {
 	specBytes, _, _ := loadTestSpec(t)
 
@@ -411,12 +408,10 @@ var writeEndpointChecksExcluded = map[string]string{
 		"— it falls through to the SPA handler instead.",
 }
 
-// TestEveryWriteEndpointDocumentsPreconditions holds the spec and the router
-// together in both directions: the spec-internal pass checks that every
-// non-GET operation documents a 412 iff it documents an If-Match parameter,
-// and the behavioural pass drives each against the router with a bogus
-// If-Match, requiring 412 exactly when the spec documents the precondition.
-// The 412 body shape is not validated.
+// Holds the spec and the router together in both directions: the spec-internal
+// pass checks that a non-GET operation documents a 412 iff it documents an
+// If-Match, and the behavioural pass drives each with a bogus If-Match,
+// requiring 412 exactly where the spec documents the precondition.
 func TestEveryWriteEndpointDocumentsPreconditions(t *testing.T) {
 	_, doc, _ := loadTestSpec(t)
 

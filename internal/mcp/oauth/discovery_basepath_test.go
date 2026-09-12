@@ -16,11 +16,10 @@ import (
 // Cetacean is mounted under a base path: Issuer + BasePath.
 const wantBasePathIssuer = "https://cetacean.test/cetacean"
 
-// TestDiscoveryIssuerIncludesBasePath reproduces E-5: when CETACEAN_BASE_PATH
-// is non-empty, every advertised/claimed issuer identifier must be the URL the
-// well-known documents are actually served from (Issuer + BasePath), so a
-// client that derives the metadata location from the issuer resolves it
-// instead of hitting a base-path-less 404.
+// Reproduces E-5: with a non-empty base path, every advertised issuer identifier
+// must be the URL the well-known documents are actually served from, so a client
+// deriving the metadata location from the issuer resolves it rather than hitting
+// a base-path-less 404.
 func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 	cfg := ServerConfig{
 		Issuer:      "https://cetacean.test",

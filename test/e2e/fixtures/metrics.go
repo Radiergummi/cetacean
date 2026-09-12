@@ -34,10 +34,9 @@ func NodeIdentityCLI(env *harness.Env) (address, hostname string, err error) {
 }
 
 // This file describes the fixture cluster's metrics the way fixtures.go
-// describes its resources: what a Prometheus scraping this cluster would hold,
-// if one were scraping it. harness.SeedPrometheus writes it, and both the Go
-// lane and `make e2e-up` seed the same numbers, so the browser suite and
-// metrics_test.go are looking at one cluster.
+// describes its resources: what a Prometheus scraping this cluster would hold.
+// The Go lane and `make e2e-up` seed the same numbers, so the browser suite and
+// metrics_test.go look at one cluster.
 
 // The seeded utilisation. Distinct on purpose: were they equal, a query
 // reading the wrong metric family would still produce the expected number.

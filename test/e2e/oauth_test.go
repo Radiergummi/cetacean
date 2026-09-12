@@ -280,11 +280,10 @@ type prmDocument struct {
 // authParamPattern reads `key="value"` pairs out of a WWW-Authenticate header.
 var authParamPattern = regexp.MustCompile(`([a-zA-Z_-]+)="([^"]*)"`)
 
-// discoverOAuth follows the chain a real MCP client follows, starting from
-// nothing but the endpoint URL: an unauthenticated call to /mcp yields a 401
-// whose WWW-Authenticate names the protected-resource metadata document (RFC
-// 9728 §5.1), which names the authorization servers, each serving RFC 8414
-// metadata naming the endpoints.
+// discoverOAuth follows the chain a real MCP client follows from nothing but the
+// endpoint URL: an unauthenticated call yields a 401 whose WWW-Authenticate
+// names the protected-resource metadata, which names the authorization servers,
+// each serving RFC 8414 metadata naming the endpoints.
 func discoverOAuth(t *testing.T, proc *sut.Process) oauthDiscovery {
 	t.Helper()
 
@@ -1725,10 +1724,9 @@ func TestMCPOAuthFlow(t *testing.T) {
 	})
 }
 
-// TestMCPOAuthTheftDetectionWithoutTheResourceIndicator drives the same replay
-// down the one path that still reaches RefreshTokenStore.Rotate: a refresh
-// carrying no `resource` parameter, which only a server with
-// mcp.require_resource_indicator switched off will accept. It shows the store's
+// Drives the same replay down the one path that still reaches
+// RefreshTokenStore.Rotate: a refresh carrying no `resource` parameter, which
+// only a server with mcp.require_resource_indicator off accepts. The store's
 // detection is live, so D-5 is an ordering bug in the handler in front of it.
 func TestMCPOAuthTheftDetectionWithoutTheResourceIndicator(t *testing.T) {
 	env := harness.Up(t)
@@ -1816,11 +1814,10 @@ func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 
 	dataDir := t.TempDir()
 
-	// Both processes run with mcp.require_resource_indicator off, and every
-	// refresh below omits the parameter: under D-5 a refresh carrying
-	// `resource` is answered before RefreshTokenStore.Rotate is consulted, so
-	// the persisted rotation history would be unobservable. Revert to the
-	// default once D-5 is fixed.
+	// Both processes run with mcp.require_resource_indicator off and every
+	// refresh below omits it: under D-5 a refresh carrying `resource` is
+	// answered before Rotate is consulted, so the persisted rotation history
+	// would be unobservable. Revert to the default once D-5 is fixed.
 	withoutIndicator := map[string]string{
 		"CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR": "false",
 	}

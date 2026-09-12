@@ -300,18 +300,10 @@ func TestDescribeRejectsUnknownAndMissingArguments(t *testing.T) {
 	}
 }
 
-// TestDescribeStackOmitsMemberSecretData holds the end of the chain that keeps
-// secret payloads out of a stack read: a stack rolls up whole member records,
-// so reading one by name must not be the way around the redaction the secret
-// endpoints apply.
-//
-// Nothing in this package does that redacting, and deliberately so — the cache
-// nils Spec.Data on every write path (cache.go's secret ResourceMap onSet,
-// replaceSecrets, and the snapshot load), and GetStackDetail says in as many
-// words that re-walking here would duplicate the contract and invite it to
-// drift. This test is therefore the transport-side guard on that invariant: it
-// fails if a future change lets a payload reach the cache, and it covers both
-// the digest and the raw record, which is the shape describe added.
+// Holds the end of the chain keeping secret payloads out of a stack read: a
+// stack rolls up whole member records, so reading one by name must not be the
+// way around the secret endpoints' redaction. Nothing in this package redacts,
+// so this is the transport-side guard on the cache's invariant.
 func TestDescribeStackOmitsMemberSecretData(t *testing.T) {
 	const payload = "super-secret"
 
@@ -382,11 +374,10 @@ func TestDescribeStackOmitsMemberSecretData(t *testing.T) {
 	}
 }
 
-// TestDescribeStackUnderStackOnlyGrant holds what the unfiltered stack members
-// rest on: an ACL stack grant reaches the member types (acl.impliedTypes),
-// including the task:<id> resources readableTasksMatching keys on. Were that to
-// regress, a stack digest would quietly report zero running replicas rather
-// than fail.
+// Holds what the unfiltered stack members rest on: an ACL stack grant reaches
+// the member types, including the task:<id> resources readableTasksMatching
+// keys on. A regression there has a stack digest quietly report zero running
+// replicas rather than fail.
 func TestDescribeStackUnderStackOnlyGrant(t *testing.T) {
 	c := seededDescribeCache()
 

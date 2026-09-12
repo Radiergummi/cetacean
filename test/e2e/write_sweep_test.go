@@ -28,12 +28,10 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file drives Cetacean's write endpoints beyond scale and restart
-// (covered in write_test.go): image update, rollback, node drain, task
-// removal, a concurrent-write conflict, and the service-spec PATCHes the
-// fixture image supports. drivenWriteRoutes and excusedWriteRoutes must
-// between them name every mutating route contract.Routes() reports.
-// Reserves port 19006 (see README.md's reserved-ports table).
+// This file drives the write endpoints beyond scale and restart, which
+// write_test.go covers: image update, rollback, node drain, task removal, a
+// concurrent-write conflict, and the service-spec PATCHes. drivenWriteRoutes
+// and excusedWriteRoutes must between them name every mutating route. Port 19006.
 
 const writeSweepPort = 19006
 
@@ -235,11 +233,10 @@ func sweepRequest(
 	return resp
 }
 
-// sweepWriteAfterWrite issues a service write that closely follows another,
-// retrying while it loses a version race. Swarm bumps a service's version
-// itself as a change rolls out, so a write whose inspect straddles that bump
-// is refused 409 (SVC001); docs/api.md documents re-reading and retrying,
-// which is what a client does.
+// sweepWriteAfterWrite issues a service write closely following another,
+// retrying while it loses a version race. Swarm bumps a service's version as a
+// change rolls out, so a write whose inspect straddles that bump is refused
+// 409 — and re-reading and retrying is what a client does.
 func sweepWriteAfterWrite(
 	t *testing.T,
 	proc *sut.Process,
@@ -394,8 +391,7 @@ var drivenWriteRoutes = map[string]driveFunc{
 
 // excusedWriteRoutes carries a reason for every mutating route this file does
 // not drive. "gap: ..." marks one out of scope for this slice; every other
-// reason is permanent — driving that route would be destructive to the
-// shared single-node engine, or it is covered elsewhere.
+// reason is permanent.
 //
 //nolint:gosec // G101: keys are route patterns (e.g. "POST /secrets"), not credentials.
 var excusedWriteRoutes = map[string]string{
@@ -903,12 +899,10 @@ func TestWriteSweepRefusedAtReadOnlyLevel(t *testing.T) {
 	}
 }
 
-// TestWriteSweepConcurrentScaleProducesAStaleVersionConflict is the 409 case.
-// Cetacean's writers inspect the service immediately before writing and a
-// client cannot hand it a stale version, so the only way to produce a genuine
-// conflict is to race Cetacean against itself. The race is retried a bounded
-// number of times: failing to manifest on one attempt is a timing miss, not a
-// passing result, and the assertion itself is never weakened.
+// The 409 case. Cetacean's writers inspect the service immediately before
+// writing and a client cannot hand them a stale version, so the only way to
+// produce a genuine conflict is to race Cetacean against itself. The race is
+// retried a bounded number of times; the assertion is never weakened.
 func TestWriteSweepConcurrentScaleProducesAStaleVersionConflict(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

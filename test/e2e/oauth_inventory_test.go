@@ -14,20 +14,17 @@ import (
 )
 
 // This file is the OAuth lane's self-enforcing gate. contract.Routes() cannot
-// supply the inventory: internal/api/router.go registers the authorization
-// server's endpoints through cfg.OAuthRoutes, so the patterns never appear as
-// literals there. They appear in oauth.Server.RegisterRoutes instead, which
-// is what this file parses.
+// supply the inventory: router.go registers the authorization server's
+// endpoints through cfg.OAuthRoutes, so the patterns appear as literals only in
+// oauth.Server.RegisterRoutes, which is what this file parses.
 
 // oauthRoutesSource is the file the OAuth endpoint inventory is parsed from,
 // relative to this package's directory.
 const oauthRoutesSource = "../../internal/mcp/oauth/server.go"
 
 // oauthEndpoints returns every pattern Server.RegisterRoutes attaches to the
-// mux, as "METHOD /path". Patterns read `"GET " + basePath + "/oauth/..."`;
-// basePath is elided because the router registers them with an empty one,
-// which is what this lane's SUT runs with. Only an identifier literally named
-// basePath is treated that way, so a pattern built from another variable
+// mux, as "METHOD /path". basePath is elided because the router registers them
+// with an empty one — and only an identifier by that name, so another variable
 // fails to parse rather than silently yielding a shortened path.
 func oauthEndpoints(t *testing.T) []string {
 	t.Helper()

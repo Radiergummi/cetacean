@@ -37,11 +37,10 @@ func TestDeployBaselineConverges(t *testing.T) {
 	}
 }
 
-// TestDeployBaselineIsIdempotent removes the completion sentinel before the
-// second call: with it in place both calls short-circuit in baselinePresent and
-// the assertion compares two ServiceList calls with no operation between them.
-// Deleting it forces the re-drive over existing resources, which is the
-// recovery path a partially-failed run depends on.
+// Removes the completion sentinel before the second call: with it in place both
+// calls short-circuit and the assertion compares two ServiceList calls with no
+// operation between them. Deleting it forces the re-drive over existing
+// resources, which is the recovery path a partially-failed run depends on.
 func TestDeployBaselineIsIdempotent(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

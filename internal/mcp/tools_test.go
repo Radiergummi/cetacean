@@ -443,11 +443,9 @@ func TestTierThreeNodeToolsCarryDestructiveHint(t *testing.T) {
 	}
 }
 
-// TestToolAnnotationsCompleteness pins the catalog against Anthropic's
-// pre-submission checklist: every tool needs a human-readable title, every
-// read tool needs readOnlyHint=true, every write needs an explicit
-// destructiveHint, and tools that interrupt running tasks (restart, rollback,
-// remove, port/placement updates, node drain) need destructiveHint=true.
+// Pins the catalog against Anthropic's pre-submission checklist: every tool
+// needs a title, every read readOnlyHint=true, every write an explicit
+// destructiveHint — and every tool that interrupts running tasks must set it true.
 func TestToolAnnotationsCompleteness(t *testing.T) {
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsImpactful)
 
@@ -513,19 +511,10 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 	}
 }
 
-// restTierParity names every tool whose operation REST also exposes, with
-// the tier both transports must gate it at. The operations level has to mean
-// one thing whichever transport an operator reaches for, and this is the
-// list of places that has been checked.
-//
-// It exists because the rule kept being restated one tool at a time, each
-// row added after someone noticed a mismatch — three separate tests before
-// this one. A table makes the next mismatch a row rather than a function,
-// and makes the set of checked tools readable in one place.
-//
-// update_node is here without a REST counterpart of its own: it is the
-// reason update_node_labels is separate, and the split buys nothing if the
-// two ever meet at the same tier.
+// restTierParity names every tool whose operation REST also exposes, with the
+// tier both transports must gate it at: the operations level has to mean one
+// thing whichever transport an operator reaches for. update_node is here
+// without a REST counterpart because it is why update_node_labels is separate.
 var restTierParity = map[string]config.OperationsLevel{
 	"create_secret":          config.OpsConfiguration,
 	"create_config":          config.OpsConfiguration,
@@ -536,39 +525,22 @@ var restTierParity = map[string]config.OperationsLevel{
 	"update_node":            config.OpsImpactful,
 }
 
-// restTierMismatches records a tool whose tier is known to differ from the one
-// REST gates the same operation at, with the REST tier it differs from. Listed
-// rather than left out of restTierParity so the debt is visible and cannot grow
-// quietly — the same bargain knownBypasses strikes in
-// internal/api/validator_coverage_test.go: the mismatch is asserted to still
-// exist, so whichever way it is resolved the entry fails as stale and closing
-// the gap is a deletion.
-//
-// Which side of a mismatch is wrong is a decision rather than a typo, so
-// recording one here is not endorsing it.
+// restTierMismatches records a tool whose tier is known to differ from REST's
+// for the same operation. Listed rather than left out of restTierParity so the
+// debt stays visible: the mismatch is asserted to still exist, so whichever way
+// it is resolved the entry fails as stale and closing the gap is a deletion.
 var restTierMismatches = map[string]config.OperationsLevel{
-	// remove_task is OpsOperational while DELETE /tasks/{id} is gated at
-	// OpsImpactful (taskTier3 in internal/api/router.go, and the task DELETE
-	// row in allow.go). At level 1 an agent can force-reschedule any task
-	// while the dashboard answers OPS001 for the same edit — the drift this
-	// table was built for, pointing the other way, and in the direction that
-	// matters more: MCP is the permissive side. See #224.
+	// remove_task is OpsOperational while DELETE /tasks/{id} is OpsImpactful:
+	// at level 1 an agent force-reschedules any task while the dashboard
+	// answers OPS001 for the same edit. MCP is the permissive side here,
+	// which is the direction that matters more. See #224.
 	"remove_task": config.OpsImpactful,
 }
 
-// TestToolTiersMatchTheRESTRoutes fails when a tool drifts from the tier its
-// REST equivalent is gated at. update_node_labels is the case that prompted
-// the table: REST gated PATCH /nodes/{id}/labels at tier 3 while this sat at
-// tier 2, so at level 2 an agent could relabel a node while the dashboard
-// refused the same edit.
-//
-// The REST side is pinned by TestEveryOperationIsGatedAtItsDeclaredTier in
-// internal/api. The two packages deliberately do not import each other, so
-// this is two tests naming one rule rather than one driving both.
-//
-// A tool in restTierMismatches is held to the opposite assertion: the gap is
-// recorded, so closing it has to delete the entry rather than silently drift
-// past it.
+// Fails when a tool drifts from the tier its REST equivalent is gated at. The
+// REST side is pinned in internal/api, which deliberately does not import this
+// package. A tool in restTierMismatches is held to the opposite assertion, so
+// closing the gap deletes the entry rather than drifting past it.
 func TestToolTiersMatchTheRESTRoutes(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil))
 
@@ -880,12 +852,10 @@ func TestToolUpdateServiceEnvMergePatchDeletesNull(t *testing.T) {
 	}
 }
 
-// TestToolUpdateServiceEnvMergesAgainstFreshSpec locks in the M-42 contract:
-// the merge happens against the live (writer-side) view of the env, not
-// against an in-memory cache snapshot. Here the cache is *deliberately stale*
-// (missing CONCURRENT_NEW), but simulatedEnv reflects Docker's actual current
-// state. The resulting merge must preserve CONCURRENT_NEW even though no
-// caller ever saw it through the cache.
+// The merge happens against the live writer-side view of the env, not an
+// in-memory cache snapshot. The cache here is deliberately stale while
+// simulatedEnv reflects Docker's current state, so the merge must preserve
+// CONCURRENT_NEW even though no caller ever saw it through the cache.
 func TestToolUpdateServiceEnvMergesAgainstFreshSpec(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{

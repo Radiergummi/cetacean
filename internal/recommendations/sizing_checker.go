@@ -136,9 +136,8 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 
 // measured pairs a service's CPU and memory results, reporting nil unless both
 // are present. A query that succeeds but returns no series is silence, not a
-// measurement, and 0 sits under every over-provisioned threshold. Both are
-// required because an exporter emits the two families together: a service
-// missing from just one means something is wrong, not idle.
+// measurement, and 0 sits under every over-provisioned threshold. An exporter
+// emits the two families together, so one alone means wrong, not idle.
 func measured(cpuData, memData map[string]float64, service string) *serviceMetrics {
 	cpu, hasCPU := cpuData[service]
 	mem, hasMem := memData[service]

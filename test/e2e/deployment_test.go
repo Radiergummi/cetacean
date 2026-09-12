@@ -17,10 +17,9 @@ import (
 )
 
 // This file drives four things a real deployment changes that no other lane
-// varies: serving under a base path, terminating TLS in the binary, the MCP
-// Origin guard, and persisting the cache to disk. Every other lane runs at
-// the root of a plain HTTP listener with snapshots off. Reserves port 19018
-// (see README.md's reserved-ports table).
+// varies, on port 19018: serving under a base path, terminating TLS in the
+// binary, the MCP Origin guard, and persisting the cache to disk. Every other
+// lane runs at the root of a plain HTTP listener with snapshots off.
 
 const deploymentPort = 19018
 

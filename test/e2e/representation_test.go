@@ -17,12 +17,10 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file drives the representation matrix: every content type each
-// negotiated route declares, reached through both the Accept header and the
-// extension suffix, refused when a route cannot provide it, and stable across
-// identical requests. It reserves port 19017. The inventory behind the gate is
-// parsed from router.go's own dispatch wiring, so a route gaining a
-// representation has to be accounted for.
+// This file drives the representation matrix on port 19017: every content type
+// each negotiated route declares, reached through both the Accept header and the
+// extension suffix, refused when a route cannot provide it. The inventory is
+// parsed from router.go's own dispatch wiring, so a new one is accounted for.
 
 const representationPort = 19017
 
@@ -568,13 +566,10 @@ func TestRepresentationSuffixesMatchTheAcceptHeader(t *testing.T) {
 	}
 }
 
-// TestUndeclaredRepresentationsAreRefused drives the other half of negotiation,
-// without which the matrix above could pass on a server answering every request
-// with the same thing. A route that cannot produce a media type must say so:
-// API003 / 406, or API001 for the SSE special case.
-//
-// Quarantined per finding D-13: a media type the route cannot produce is
-// answered with a representation of some other type instead, in two shapes.
+// Drives the other half of negotiation, without which the matrix above could
+// pass on a server answering every request with the same thing: a route that
+// cannot produce a media type must say so. Quarantined per finding D-13, where
+// such a type is answered with a representation of some other one.
 func TestUndeclaredRepresentationsAreRefused(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

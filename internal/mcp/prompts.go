@@ -12,10 +12,9 @@ import (
 )
 
 // promptDef is a prompt plus the tools it walks and the resource types it
-// reads. drives decides both the prompt's tier and half its visibility, so it
-// cannot advertise below the tier of a mutation it instructs. reads is the
-// other half: "callable" is not "will return anything", since the ungated
-// cross-type reads stay visible to every caller.
+// reads. drives decides both its tier and half its visibility, so it cannot
+// advertise below the tier of a mutation it instructs. reads is the other half:
+// "callable" is not "will return anything" for the ungated cross-type reads.
 type promptDef struct {
 	prompt  mcplib.Prompt
 	drives  []string

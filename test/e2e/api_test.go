@@ -230,12 +230,10 @@ func TestTopologyRenderingsAgree(t *testing.T) {
 	}
 }
 
-// TestAllowHeaderReflectsOperationsLevel checks the Allow header on a service
-// DETAIL endpoint, not the list: setAllowList adds POST only for
-// config/secret/plugin, so /services' Allow header is "GET, HEAD" at every
-// level and cannot tell tier gating from a broken one. Both halves are
-// asserted: tier 0 having no PUT/POST is unfalsifiable on its own, so tier 1
-// having both is checked too, proving the header is populated from the tier.
+// Checks the Allow header on a service *detail* endpoint: setAllowList adds POST
+// only for config/secret/plugin, so /services answers "GET, HEAD" at every level
+// and cannot tell tier gating from a broken one. Both halves are asserted, since
+// tier 0 having no PUT/POST is unfalsifiable on its own.
 func TestAllowHeaderReflectsOperationsLevel(t *testing.T) {
 	t.Run("ops level 0 denies writes", func(t *testing.T) {
 		_, proc := startNone(t, "0")

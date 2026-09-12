@@ -53,11 +53,8 @@ func (s Series) PerSecond() float64 {
 
 // SeedPrometheus writes series into the lane's Prometheus as TSDB blocks and
 // restarts it onto them. Blocks rather than scraping: promtool builds the same
-// week of history from the same input every run, which is what makes an
-// assertion on an exact rate() possible.
-//
-// The last sample is written at the moment of the call, so a lane that sits for
-// more than five minutes before querying falls outside Prometheus's lookback.
+// week of history every run, which is what makes an exact rate() assertion
+// possible. The last sample lands at call time, inside Prometheus's lookback.
 func SeedPrometheus(t *testing.T, series []Series) time.Time {
 	t.Helper()
 

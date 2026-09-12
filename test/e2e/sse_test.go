@@ -30,11 +30,10 @@ type sseFrame struct {
 	id string
 }
 
-// readSSEFrames scans r for blank-line-terminated SSE frames and sends each
-// one on frames, closing frames once r is exhausted or the scan errors. done
-// releases it from a send no one will receive: closing the response body does
-// not unblock a blocked channel send, so without it the goroutine and the
-// close(frames) it owes outlive the test.
+// readSSEFrames scans r for blank-line-terminated SSE frames and sends each on
+// frames, closing it once r is exhausted. done releases it from a send no one
+// will receive: closing the response body does not unblock a blocked channel
+// send, so the goroutine and the close it owes would outlive the test.
 func readSSEFrames(r io.Reader, frames chan<- sseFrame, done <-chan struct{}) {
 	defer close(frames)
 

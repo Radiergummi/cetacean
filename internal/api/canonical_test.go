@@ -105,9 +105,8 @@ func TestCanonicalIdentifierPreservesQueryString(t *testing.T) {
 
 // The extension suffix is the only thing naming the representation a client
 // asked for, and negotiate strips it before this middleware sees the path. A
-// redirect that dropped it would be re-negotiated from the Accept header —
-// which for a browser means the dashboard instead of the JSON that was asked
-// for.
+// redirect dropping it is re-negotiated from Accept, which for a browser means
+// the dashboard instead of the JSON that was asked for.
 func TestCanonicalIdentifierPreservesExtensionSuffix(t *testing.T) {
 	router := newTestRouterWithCache(t, canonicalTestCache())
 
@@ -194,11 +193,10 @@ func TestCanonicalIdentifierAmbiguousNameIs409(t *testing.T) {
 	}
 }
 
-// The redirect states that a named resource exists and hands over its ID, so
-// it must not answer a caller who could not read the resource anyway —
-// otherwise every detail path becomes a way to enumerate names behind the
-// policy. Such a request falls through to the handler, which denies it exactly
-// as it does for the ID.
+// The redirect states that a named resource exists and hands over its ID, so it
+// must not answer a caller who could not read the resource anyway — otherwise
+// every detail path enumerates names behind the policy. Such a request falls
+// through to the handler, which denies it as it does for the ID.
 func TestCanonicalIdentifierDoesNotRedirectWithoutReadGrant(t *testing.T) {
 	evaluator := acl.NewEvaluator()
 	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{
@@ -454,10 +452,9 @@ func TestCanonicalRedirectIsRecordedAsARequest(t *testing.T) {
 }
 
 // countHTTPRequests sums cetacean_http_requests_total across every series
-// carrying this status. The handler label is deliberately ignored: a redirect
-// is answered before the mux resolves a pattern, so it records as "unknown",
-// and asserting on that would pin an implementation detail rather than the
-// behaviour under test.
+// carrying this status. The handler label is ignored: a redirect is answered
+// before the mux resolves a pattern, so it records as "unknown", and asserting
+// on that pins an implementation detail rather than the behaviour.
 func countHTTPRequests(t *testing.T, status int) float64 {
 	t.Helper()
 

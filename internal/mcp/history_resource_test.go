@@ -10,15 +10,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// TestHistoryNamesTasksAfterTheirService pins the fix for what the live
-// evaluation found in cetacean://history: a task's history entry carried its
-// own ID as its name, so a reader looking at sixty task events could not tell
-// which service any of them belonged to. "What broke overnight" was
-// unanswerable from the one resource that exists to answer it.
-//
-// The ID stays in resourceId — it is what addresses the task — while the name
-// becomes the one Swarm shows, so the entry reads the way `docker service ps`
-// does. Compare a network event, which already carried a real name.
+// A task's history entry carrying its own ID as its name leaves a reader of
+// sixty task events unable to tell which service any belonged to. The ID stays
+// in resourceId, which addresses the task, while the name becomes the one Swarm
+// shows. Compare a network event, which already carried a real name.
 func TestHistoryNamesTasksAfterTheirService(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{

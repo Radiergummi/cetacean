@@ -25,20 +25,17 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file drives the MCP catalog (tools/list, prompts/list,
-// resources/templates/list) per persona against a real cluster and asserts
-// the two-way property: a tool a persona is offered must not refuse with an
-// ACL error, and a tool withheld must not succeed if invoked directly. The
-// OAuth flow is out of scope. Reserves port 19008.
+// This file drives the MCP catalog per persona against a real cluster and
+// asserts the two-way property: a tool a persona is offered must not refuse
+// with an ACL error, and a tool withheld must not succeed if invoked directly.
+// The OAuth flow is out of scope. Reserves port 19008.
 
 const mcpSweepPort = 19008
 
 // startMCPSweep brings up a real cluster with MCP enabled, headers auth and
-// readSweepPolicy's four personas, plus CETACEAN_MCP_AUTH_BYPASS=headers so
-// identity comes from the headers provider rather than OAuth -- this file
-// tests the ACL boundary once an identity exists, not how it was
-// established. Operations level is 3 so every tool is tier-eligible and only
-// the ACL grant boundary is in play.
+// readSweepPolicy's four personas, bypassing OAuth so identity comes from the
+// headers provider: this file tests the ACL boundary once an identity exists.
+// Operations level 3, so only the grant boundary is in play.
 func startMCPSweep(t *testing.T, env *harness.Env) *sut.Process {
 	t.Helper()
 
@@ -217,13 +214,10 @@ func isACLDenial(call toolCallResult) bool {
 	return false
 }
 
-// toolCallOutcome captures how a tools/call attempt concluded. A denial
-// surfaces two ways: a tool absent from tools/list is unreachable at all
-// (mcp-go's tool filter applies to tools/call too, so the call comes back as
-// the protocol error "tool '<name>' not found" over HTTP 400), while a
-// listed tool whose specific target the caller's grant does not cover
-// reaches the handler and is refused there with isError:true. Both are
-// legitimate, so every assertion checks visibility and outcome together.
+// toolCallOutcome captures how a tools/call attempt concluded. A denial surfaces
+// two ways: a tool absent from tools/list comes back as a protocol error, while
+// a listed tool whose target the grant does not cover is refused in the handler.
+// Both are legitimate, so every assertion checks visibility and outcome together.
 type toolCallOutcome struct {
 	httpStatus int
 	rpcError   string
@@ -464,12 +458,10 @@ func assertVisibleButDenied(
 	}
 }
 
-// assertDenied picks the right one of assertHiddenAndRefused /
-// assertVisibleButDenied for the persona and resource type. frontend's
-// stack:frontend-* grant is projected onto every type a stack grant reaches
-// (internal/acl/evaluator.go's impliedTypes), so a tool gated on one of
-// those is visible to frontend even outside a frontend-* stack and denied
-// only in the handler; stackImplied names that case.
+// assertDenied picks between assertHiddenAndRefused and assertVisibleButDenied
+// for the persona and resource type. frontend's stack grant is projected onto
+// every type a stack grant reaches, so a tool gated on one of those is visible
+// even outside a frontend-* stack and denied only in the handler.
 func assertDenied(
 	t *testing.T,
 	proc *sut.Process,
@@ -1089,11 +1081,9 @@ func driveRemoveVolume(t *testing.T, env *harness.Env, proc *sut.Process, _ base
 // ─── mutating tools: service / task ─────────────────────────────────────
 
 // driveServiceTools exercises every service- and task-scoped mutating tool
-// against one throwaway service this test owns, plus the frontend persona's
-// own frontend-* stack service -- the one place frontend's true positive is
-// exercised rather than the coarse widening in impliedTypes (see
-// driveFrontendStackOwnership). oncall holds write:service:*/task:* for
-// real, so its positive case runs against the same throwaway service.
+// against one throwaway service this test owns, plus the frontend persona's own
+// stack service — the one place frontend's true positive is exercised rather
+// than the coarse widening in impliedTypes. oncall holds its grants for real.
 func driveServiceTools(t *testing.T, env *harness.Env, proc *sut.Process, ids baselineIDs) {
 	service := fixtures.DeployStack(t, env, "mcp-sweep", []fixtures.ServiceSpec{
 		{Name: "app", Replicas: 1, Command: []string{"sleep infinity"}},
@@ -1291,12 +1281,9 @@ func driveServiceTools(t *testing.T, env *harness.Env, proc *sut.Process, ids ba
 }
 
 // driveFrontendStackOwnership pins the frontend persona's asymmetric case:
-// internal/acl/evaluator.go's TypeGrants expands a stack grant to the types
-// it can reach without checking the grant's name pattern, so frontend's
-// tools/list advertises service-write tools it cannot invoke on the shop
-// fixture stack -- visible, but correctly refused. It then gives frontend a
-// stack it owns (frontend-<timestamp>) and confirms the true positive: on
-// its own service frontend's write genuinely works end to end.
+// TypeGrants expands a stack grant to the types it reaches without checking the
+// name pattern, so tools/list advertises service-write tools frontend cannot
+// invoke. It then gives frontend a stack it owns and confirms the true positive.
 func driveFrontendStackOwnership(t *testing.T, env *harness.Env, proc *sut.Process, _ baselineIDs) {
 	frontend := readPersonaByName("frontend")
 
@@ -1305,10 +1292,9 @@ func driveFrontendStackOwnership(t *testing.T, env *harness.Env, proc *sut.Proce
 		visible := listToolNames(t, proc, frontend)
 
 		// Both halves of the known widening: scale_service is listed for
-		// frontend (TypeGrants reaches the service type through
-		// stack:frontend-* regardless of the pattern) yet calling it on
-		// shop_web is refused in the handler. Making TypeGrants precise would
-		// fail the visibility half, which is the point.
+		// frontend, since TypeGrants reaches the service type through the
+		// stack grant regardless of its pattern, yet calling it on shop_web
+		// is refused in the handler.
 		assertVisibleButDenied(t, proc, frontend, visible, "scale_service", map[string]any{
 			"id": serviceID, "replicas": 2,
 		})

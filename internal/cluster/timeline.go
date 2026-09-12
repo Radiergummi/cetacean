@@ -8,9 +8,8 @@ import (
 
 // TimelineEntry is one thing that happened, whether Cetacean observed it as a
 // resource change or a container wrote it to stdout; Kind says which. Only the
-// change side is on this shape so far — the log reads still answer with
-// logs.LogLine — but both stamp the same fixed-width time format, so merging
-// the two on their timestamps needs no reconciliation.
+// change side is on this shape so far, but both it and logs.LogLine stamp the
+// same fixed-width time format, so merging on timestamps needs no work.
 type TimelineEntry struct {
 	// At is RFC 3339, always UTC, at fixed nanosecond width so string
 	// comparison is time comparison and a cursor can be a plain string.

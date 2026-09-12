@@ -31,9 +31,8 @@ type ServiceResponse struct {
 
 // AcceptedServiceResponse is the payload for the 202 a service mutation answers
 // when the caller asked to wait and the cluster has not settled. It repeats
-// ServiceResponse's service field rather than embedding it, and must keep doing
-// so: goccy/go-json v0.10.6 SIGSEGVs on that embedding, after the status line
-// is written, so recovery cannot turn the crash into a 500.
+// ServiceResponse's service field rather than embedding it, and must: goccy/
+// go-json v0.10.6 SIGSEGVs on that embedding, past the point recovery helps.
 type AcceptedServiceResponse struct {
 	Service  swarm.Service `json:"service"`
 	Progress string        `json:"progress,omitempty"`

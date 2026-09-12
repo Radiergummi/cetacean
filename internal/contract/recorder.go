@@ -32,11 +32,10 @@ var patternMux = sync.OnceValues(func() (*http.ServeMux, error) {
 	return mux, nil
 })
 
-// recordPatterns wraps the router and records which inventory route each
-// request matches. It cannot read http.Request.Pattern off the served request
-// -- the middleware chain shallow-copies it, so the real mux sets Pattern on a
-// copy -- so it routes against a second mux built from the inventory's own
-// patterns. A pattern a real mux will not accept then panics here.
+// recordPatterns wraps the router and records which inventory route each request
+// matches. It cannot read http.Request.Pattern off the served request — the
+// middleware chain shallow-copies it — so it routes against a second mux built
+// from the inventory's patterns. One a real mux would reject panics here.
 func recordPatterns(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if mux, err := patternMux(); err == nil {

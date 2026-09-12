@@ -737,10 +737,9 @@ func TestBuildNetworkJGFSeesDNSRRAttachments(t *testing.T) {
 }
 
 // After a rolling update the node still holds the shutdown task alongside its
-// replacement. cluster.PlacementGraph drops it — the orchestrator no longer
-// intends it to run — and the JGF projection must too, or the dashboard counts
-// the same replica twice and a node holding only a replaced task is reported
-// as running the service.
+// replacement. cluster.PlacementGraph drops it and the JGF projection must too,
+// or the dashboard counts the same replica twice and a node holding only a
+// replaced task is reported as running the service.
 func TestBuildPlacementJGFIgnoresReplacedTasks(t *testing.T) {
 	c := cache.New(nil)
 	c.SetTask(swarm.Task{
@@ -788,10 +787,9 @@ func TestBuildPlacementJGFIgnoresReplacedTasks(t *testing.T) {
 }
 
 // Two services sharing several overlays produce one edge carrying all of them,
-// and that array was filled by ranging a map — so two calls over identical
-// state serialised differently and flipped the response's ETag, turning every
-// conditional request into a 200. The edges themselves are sorted for exactly
-// this reason; the networks inside them must be too.
+// and an array filled by ranging a map serialises differently on two calls over
+// identical state — flipping the ETag and turning every conditional request
+// into a 200. The edges are sorted for this reason; their networks must be too.
 func TestBuildNetworkJGFOrdersSharedNetworksDeterministically(t *testing.T) {
 	attach := func(id, name string, targets ...string) swarm.Service {
 		configs := make([]swarm.NetworkAttachmentConfig, 0, len(targets))
@@ -864,9 +862,7 @@ func TestBuildNetworkJGFOrdersSharedNetworksDeterministically(t *testing.T) {
 
 // The removed projections need routes of their own. Without them the SPA
 // catch-all answers both paths with 200 and an HTML page, so a JSON client of
-// the old endpoint receives a rendered dashboard rather than an error — and
-// the e2e test asserting the endpoint no longer serves a graph passes only
-// because it never ran against a real server.
+// the old endpoint receives a rendered dashboard rather than an error.
 func TestRemovedTopologyProjectionsAreGone(t *testing.T) {
 	c := cache.New(nil)
 	h := newTestHandlers(t, withCache(c))

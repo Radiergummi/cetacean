@@ -237,11 +237,10 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 		limit = 50
 	}
 
-	// Fast path: a resource-ID filter reads the per-resource index instead of
-	// scanning the ring — but only when the index can prove it answered the
-	// whole question, since it holds the newest indexRingSize entries and runs
-	// out both on a larger limit and on a cursor paging off its end. Anything
-	// else falls through to the scan below.
+	// Fast path: a resource-ID filter reads the per-resource index rather than
+	// scanning the ring, but only when the index can prove it answered the
+	// whole question — it holds the newest indexRingSize entries, and runs out
+	// both on a larger limit and on a cursor paging off its end.
 	if q.ResourceID != "" {
 		if found, complete := h.listByResource(q, limit); complete {
 			return found

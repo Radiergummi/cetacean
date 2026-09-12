@@ -260,12 +260,10 @@ func TestLogStreamFilterPartitionsTheOutput(t *testing.T) {
 	}
 }
 
-// TestLogCursorsAreEnforcedAfterParsing drives the rule internal/logs.FilterSince
-// exists for: Docker ignores Since for service logs, so the cursor is applied to
-// the parsed lines instead. Every documented form is driven, because each takes
-// a different path through logs.ParseCursor. The expectation is computed from
-// the unfiltered read by the same rule the contract states, so it holds whether
-// the cursor lands inside the burst or outside it.
+// Drives the rule internal/logs.FilterSince exists for: Docker ignores Since for
+// service logs, so the cursor applies to the parsed lines instead. Every
+// documented form is driven, since each takes a different path through
+// ParseCursor, and the expectation is computed from the unfiltered read.
 func TestLogCursorsAreEnforcedAfterParsing(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -622,12 +620,10 @@ func TestLogSSETailsLiveOutputAndResumes(t *testing.T) {
 	}
 }
 
-// TestLogSSEConnectionCapRefusesWithRetryAfter drives the published stream cap.
-// The counter is incremented before the Docker call that precedes the response
-// head, so a stream whose headers have arrived is already counted, and stays so
-// until the handler returns. The last two are opened serially: the one that
-// must still be admitted proves the cap is not lower than published, the one
-// after it that it is not higher.
+// Drives the published stream cap. The counter increments before the Docker call
+// that precedes the response head, so a stream whose headers arrived is already
+// counted. The last two are opened serially: one proves the cap is not lower
+// than published, the next that it is not higher.
 func TestLogSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

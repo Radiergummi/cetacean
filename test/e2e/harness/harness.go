@@ -40,13 +40,10 @@ var (
 	upErr  error
 )
 
-// Up brings the environment up and returns it. The environment is shared by
-// every test in a run, with fixtures namespaced instead.
-//
-// Up does NOT register a t.Cleanup teardown, and must not: the environment is
-// shared process-wide through sync.Once, so a Cleanup scoped to whichever test
-// called Up first would tear it down under its siblings. `make test-stack` owns
-// teardown, and leaves the environment up on failure for inspection.
+// Up brings the environment up and returns it, shared by every test in a run
+// with fixtures namespaced instead. It registers no t.Cleanup teardown and must
+// not: the environment is process-wide through sync.Once, so a Cleanup scoped
+// to the first caller would tear it down under its siblings.
 func Up(t *testing.T) *Env {
 	t.Helper()
 
@@ -103,12 +100,10 @@ func UpCLI() (*Env, error) {
 	return &Env{DockerHost: dockerHost, CertDir: certDir, Docker: docker}, nil
 }
 
-// waitForCerts blocks until cert-init has finished. The container exits when
-// done, so `--wait` does not cover it.
-//
-// It gates on the `ready` sentinel as well as the chain: the script writes
-// client.pem and only then fixes the modes on every key it wrote, so returning
-// on client.pem's appearance hands out a chain with the wrong key modes.
+// waitForCerts blocks until cert-init has finished; the container exits when
+// done, so `--wait` does not cover it. It gates on the `ready` sentinel as well
+// as the chain, since the script writes client.pem and only then fixes the
+// modes on every key it wrote.
 func waitForCerts(dir string) error {
 	deadline := time.Now().Add(upTimeout)
 	want := []string{

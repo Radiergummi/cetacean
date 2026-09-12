@@ -208,13 +208,10 @@ func hiddenFields(page string) url.Values {
 	return fields
 }
 
-// consentForm rebuilds the form a browser would resubmit from a rendered
-// consent page: every hidden input the template emitted, plus the decision.
-//
-// Reading the fields back off the page rather than restating them is what keeps
-// these tests in step with the template. A field added to the form is carried
-// automatically — which is exactly what the consent fingerprint was not, having
-// cost an edit in all three places that submit this form.
+// consentForm rebuilds the form a browser would resubmit from a rendered consent
+// page: every hidden input the template emitted, plus the decision. Reading the
+// fields back off the page rather than restating them keeps these tests in step
+// with the template, and carries a newly added field automatically.
 func consentForm(page, decision string, overrides url.Values) url.Values {
 	form := hiddenFields(page)
 	form.Set("decision", decision)

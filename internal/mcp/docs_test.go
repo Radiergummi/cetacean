@@ -11,24 +11,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// These tests hold docs/mcp-tools.mdx against the catalog it documents. The
-// page states an operations level, an argument list and a set of accepted
-// values for each of 27 tools, a table of prompts, a table of widgets, and four
-// counts — all typed by hand against this package.
-//
-// They live here, in `package mcp`, because everything they read is unexported:
-// a script outside the package would need toolCatalog, toolDef.tier,
-// promptCatalog, promptTier and uiResources exported first, which is a new
-// public surface on a domain package for the docs site's sake. That also puts
-// them in `go test ./...`, which `ci.yml` runs on every pull request including
-// a documentation-only one — and over this repository's history the catalog
-// files moved in 8 commits where `docs/` moved in 178, so a prose rewrite
-// dropping an argument is the likelier drift by far.
-//
-// Most rules run in both directions: the page must state every fact the catalog
-// holds, and must state no fact it does not. The exception is the value rule,
-// which reads a whole card and would otherwise flag every tool the prose names
-// in passing. See docs/specs/2026-09-09-mcp-catalog-drift-check-design.md.
+// These tests hold docs/mcp-tools.mdx against the catalog it documents, and live
+// in `package mcp` because everything they read is unexported. Most rules run
+// both ways: the page must state every fact the catalog holds and no fact it
+// does not. See docs/specs/2026-09-09-mcp-catalog-drift-check-design.md.
 const catalogPath = "../../docs/mcp-tools.mdx"
 
 var (
@@ -91,13 +77,9 @@ func toolCards(t *testing.T) map[string]card {
 }
 
 // documentedNames reads the arguments fact with parenthesised groups removed,
-// which is the page's convention: an argument is named bare, and the values it
-// accepts go in parentheses after it.
-//
-// Both narrowings are load-bearing. Reading the whole card would let a property
-// named after one of update_service's ten sections pass on that card's section
-// table without being documented as an argument; keeping parentheses would let
-// a new `service` argument on get_metrics pass on an enum value of `target`.
+// the page's convention: an argument is named bare and its accepted values
+// follow in parentheses. Both narrowings are load-bearing — reading the whole
+// card, or keeping the parentheses, each lets an undocumented argument pass.
 func documentedNames(c card) map[string]bool {
 	return backticked(parenPattern.ReplaceAllString(c.arguments, ""))
 }
@@ -164,10 +146,8 @@ func TestEveryToolHasACardAtItsTier(t *testing.T) {
 }
 
 // Rule 3: a card's arguments fact names every argument its tool accepts, and
-// names nothing else. The second direction is what keeps the first honest. It
-// costs no false positives — a fact naming a value bare would be claiming that
-// value is an argument — and it catches the reflow that moves a value out of
-// its parentheses, which would otherwise quietly widen what counts as named.
+// nothing else. The second direction keeps the first honest at no cost in false
+// positives, and catches the reflow that moves a value out of its parentheses.
 func TestEveryToolArgumentIsDocumented(t *testing.T) {
 	srv := newTestServer(t)
 	cards := toolCards(t)
@@ -264,11 +244,10 @@ func markdownTable(t *testing.T, headings ...string) []map[string]string {
 	return nil
 }
 
-// tableRows reads rows until the table ends at a blank line. A line that is not
-// a row and not blank continues the previous row's last cell: the page is
-// hand-wrapped, and its own section table wraps rows this way, so a reflow of
-// either table read here would otherwise truncate it — reporting every row past
-// the wrap as missing, which reads exactly like drift that is not there.
+// tableRows reads rows until the table ends at a blank line. A line that is
+// neither a row nor blank continues the previous row's last cell: the page is
+// hand-wrapped, so a reflow would otherwise truncate the table and report every
+// row past the wrap as missing.
 func tableRows(header, lines []string) []map[string]string {
 	var rows []map[string]string
 
@@ -421,12 +400,10 @@ func TestPromptsTableMatchesTheCatalog(t *testing.T) {
 	}
 }
 
-// Rule 5b: the apps table matches the widgets that exist, in both directions.
-// It reads uiResources rather than the widget source directories, because that
-// is the registry the server serves from — a widget whose source is present but
-// whose bundle did not emit is not one a host can render, and the page
-// documents what a host can reach. ui_test.go's TestMain points that at
-// frontend/dist-widgets for the whole package.
+// Rule 5b: the apps table matches the widgets that exist, in both directions. It
+// reads uiResources rather than the source directories, since that is the
+// registry the server serves from — a widget whose bundle did not emit is not
+// one a host can render, and the page documents what a host can reach.
 func TestAppsTableMatchesTheWidgets(t *testing.T) {
 	served := uiResources()
 	if len(served) == 0 {

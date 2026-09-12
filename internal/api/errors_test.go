@@ -160,12 +160,10 @@ func TestErrorDefsAreCompleteAndSorted(t *testing.T) {
 	}
 }
 
-// TestWriteErrorCodeSSE001Is429 pins the other half of the SSE
-// connection-limit contract. internal/api/sse sets Retry-After and asks for
-// the SSE001 code (TestSSE_429OnConnectionLimit there), but it cannot see the
-// status that code maps to: the real writer lives here, and sse cannot import
-// this package. Both endpoints document a 429, so the mapping is asserted
-// rather than left to the registry entry nobody reads.
+// Pins the other half of the SSE connection-limit contract. internal/api/sse
+// sets Retry-After and asks for the SSE001 code, but cannot see the status that
+// code maps to: the writer lives here, and sse cannot import this package. Both
+// endpoints document a 429, so the mapping is asserted rather than assumed.
 func TestWriteErrorCodeSSE001Is429(t *testing.T) {
 	for _, code := range []string{"SSE001", "LOG001"} {
 		t.Run(code, func(t *testing.T) {

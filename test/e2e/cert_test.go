@@ -107,10 +107,9 @@ func TestDirectMutualTLSAuthenticates(t *testing.T) {
 }
 
 // The SUT listens plain; Caddy terminates TLS, verifies the client certificate
-// itself, and forwards it in the RFC 9440 Client-Cert header. The SUT trusts
-// Caddy's address and builds the same identity from the forwarded certificate
-// that direct mTLS builds from a presented one. Every failure path below
-// includes the SUT's own log, since a bare status mismatch gives no hint why.
+// and forwards it in the RFC 9440 Client-Cert header. The SUT trusts Caddy's
+// address and builds the same identity direct mTLS builds from a presented
+// certificate. Every failure path below includes the SUT's own log.
 func TestProxyForwardedClientCertAuthenticates(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -170,18 +169,9 @@ func TestProxyForwardedClientCertAuthenticates(t *testing.T) {
 }
 
 // A forged Client-Cert header must be ignored when it did not arrive through a
-// trusted proxy: an ordinary client presenting no certificate of its own, but
-// naming someone else's real one in a header, must not be believed.
-//
-// CETACEAN_TRUSTED_PROXIES is 10.0.0.0/8 rather than unset because
-// config.ValidateCertMode refuses to start cert mode with neither TLS nor any
-// trusted proxy; a non-matching CIDR is the only way to get a running server
-// whose trust verdict for this peer is still false. It covers the empty list
-// too — isTrusted returns false by the same loop finding no match.
-//
-// The forged header carries the real, CA-signed e2e-client certificate: naming
-// a certificate the SUT's own CA would otherwise accept is the actual attack,
-// and nonsense bytes would be rejected for the wrong reason.
+// trusted proxy. The allowlist is a non-matching CIDR rather than unset, since
+// cert mode refuses to start with neither TLS nor a proxy, and the header
+// carries the real certificate: nonsense bytes would fail for the wrong reason.
 func TestUntrustedPeerClientCertIsIgnored(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -290,11 +280,10 @@ func tlsClientFor(t *testing.T, env *harness.Env) *http.Client {
 	}
 }
 
-// waitCaddyReady blocks until Caddy answers a real request over the same path
-// the test uses: a TLS handshake presenting the e2e client certificate against
-// the "localhost" host name (Caddy enforces SNI-Host strictly). A bare TCP
-// dial is not enough — Docker's published-port forwarder accepts the
-// connection before Caddy is listening behind it.
+// waitCaddyReady blocks until Caddy answers a real request over the path the
+// test uses: a TLS handshake presenting the client certificate against the
+// "localhost" host name, which Caddy enforces strictly. A bare TCP dial is not
+// enough, since Docker's forwarder accepts before Caddy is listening.
 func waitCaddyReady(t *testing.T, env *harness.Env) {
 	t.Helper()
 

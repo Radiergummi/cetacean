@@ -17,12 +17,10 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file drives every GET/HEAD route contract.Routes() reports against a
-// real headers-auth SUT with a file ACL policy, asserting that each route ×
-// persona is served, empty-filtered, or refused (403 ACL001) as the policy
-// implies. drivenReadRoutes and excusedReadRoutes must between them name
-// every such route. Reserves port 19007 (see README.md's reserved-ports
-// table).
+// This file drives every GET/HEAD route contract.Routes() reports against a real
+// headers-auth SUT with a file ACL policy, asserting each route × persona is
+// served, empty-filtered or refused as the policy implies. drivenReadRoutes and
+// excusedReadRoutes must between them name every such route. Port 19007.
 
 const readSweepPort = 19007
 
@@ -348,11 +346,10 @@ func readListFindTaskID(t *testing.T, proc *sut.Process, serviceName string) str
 
 type readDriveFunc func(t *testing.T, proc *sut.Process, ids baselineIDs)
 
-// driveList checks a standard list endpoint: every granted persona must see
-// at least one item, and anonymous exactly zero — the filter denying
-// everything, not the endpoint refusing. alsoEmpty names granted personas
-// holding no grant on this resource type, which must see zero too (oncall
-// on stacks is the only such case in this policy).
+// driveList checks a standard list endpoint: every granted persona must see at
+// least one item and anonymous exactly zero — the filter denying everything,
+// not the endpoint refusing. alsoEmpty names granted personas holding no grant
+// on this type, which must see zero too.
 func driveList(path string, alsoEmpty ...string) readDriveFunc {
 	empty := map[string]bool{"anonymous": true}
 	for _, name := range alsoEmpty {
@@ -508,11 +505,10 @@ func driveSwarm(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	}
 }
 
-// driveSwarmUnlockKey checks GET /swarm/unlock-key, the one read route whose
-// authorization boundary is a write grant: requireWriteACL runs outside the
-// tier check, so a caller without write:swarm:cluster gets ACL002 whatever
-// the operations level, and ops — the only holder — is then refused by the
-// tier gate, this lane running at level 2 and the route requiring 3.
+// driveSwarmUnlockKey checks the one read route whose authorization boundary is
+// a write grant: requireWriteACL runs outside the tier check, so a caller
+// without write:swarm:cluster gets ACL002 at any level, and ops — the only
+// holder — is then refused by the tier gate, this lane running one below it.
 func driveSwarmUnlockKey(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	for _, p := range readPersonas {
 		t.Run(p.name, func(t *testing.T) {
@@ -573,11 +569,10 @@ func driveProfile(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	}
 }
 
-// drivePlugins checks GET /plugins (and GET /swarm/plugins, same handler):
-// filtered like every other list endpoint and never gated by
-// requireAnyGrant, so even anonymous gets 200. This engine has no plugins
-// installed, so the assertion is that no persona is refused, not that
-// anything is listed.
+// drivePlugins checks GET /plugins, and /swarm/plugins on the same handler:
+// filtered like every other list endpoint and never gated by requireAnyGrant,
+// so even anonymous gets 200. This engine has no plugins, so the assertion is
+// that no persona is refused rather than that anything is listed.
 func drivePlugins(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	for _, p := range readPersonas {
 		t.Run(p.name, func(t *testing.T) {

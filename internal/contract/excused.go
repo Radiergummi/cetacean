@@ -66,9 +66,8 @@ var excusedUnregistered = map[string]string{
 }
 
 // excusedUncovered holds routes no sweep in this package exercises, keyed by
-// Route.String(). It lives here rather than beside the other excuse lists
-// because `unused` fails a package variable nothing reads. gosec flags the
-// "secrets" substring in the keys; the values are excuses, not credentials.
+// Route.String(). It lives here because `unused` fails a package variable
+// nothing reads. gosec flags the "secrets" substring in the keys.
 //
 //nolint:gosec // G101
 var excusedUncovered = map[string]string{

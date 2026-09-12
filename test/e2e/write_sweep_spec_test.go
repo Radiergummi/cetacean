@@ -21,15 +21,10 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// Service spec-editing drivers for the write sweep: the five attachment
-// PATCHes, placement, the two mode switches, and the healthcheck pair. The
-// sibling of write_sweep_lifecycle_test.go, registered in drivenWriteRoutes and
-// verified by reading the spec back off the engine, never off Cetacean.
-//
-// A config, secret or network in use by a service cannot be removed while the
-// service holds it, so every case creates its attachment target before
-// deploying the service that references it and Go's LIFO cleanup tears the
-// service down first.
+// Service spec-editing drivers for the write sweep, verified by reading the spec
+// back off the engine rather than off Cetacean. A config, secret or network in
+// use cannot be removed while a service holds it, so every case creates its
+// target before the service, and LIFO cleanup tears the service down first.
 
 // ─── attachments ────────────────────────────────────────────────────────
 
@@ -427,12 +422,10 @@ func engineNetworkEventuallyRemovable(t *testing.T, env *harness.Env, name strin
 	return created.ID
 }
 
-// TestWriteSweepMergePatchMergesAgainstTheLiveSpec drives the merge-patch
-// contract across the write the cache cannot see: a field written moments
-// earlier must survive a patch that never mentions it. A merge base taken from
-// the asynchronously filled cache cannot do that, and nothing downstream
-// catches it — the writer reads the version it writes with in the same breath
-// as the spec, so the engine accepts the lost update with a 200 (M-42).
+// Drives the merge-patch contract across the write the cache cannot see: a field
+// written moments earlier must survive a patch that never mentions it. A merge
+// base from the asynchronously filled cache cannot do that, and nothing catches
+// it — the engine accepts the lost update with a 200.
 func TestWriteSweepMergePatchMergesAgainstTheLiveSpec(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

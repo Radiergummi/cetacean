@@ -8,11 +8,10 @@ import (
 	"testing"
 )
 
-// TestUIResourcesAreSelfContained pins the two things an MCP Apps resource must
-// be: present, and standalone. A widget is delivered as one text payload with
-// no base URL, so anything it loads from a relative path is unreachable in the
-// host's sandbox — a bundle that slipped back to emitting a <script src> would
-// render blank with nothing in any log to say why.
+// Pins the two things an MCP Apps resource must be: present, and standalone. A
+// widget is delivered as one text payload with no base URL, so anything it
+// loads from a relative path is unreachable in the host's sandbox — a bundle
+// emitting a <script src> renders blank with nothing in any log to say why.
 func TestUIResourcesAreSelfContained(t *testing.T) {
 	resources := uiResources()
 	if len(resources) == 0 {
@@ -50,10 +49,9 @@ func TestUIResourceURIsUseTheAppsScheme(t *testing.T) {
 	}
 }
 
-// TestToolUIMetaCarriesBothResourceURIKeys is the wire shape mcp-go cannot
-// check for us. The MCP Apps SDK reads a tool's widget from the nested
-// _meta.ui.resourceUri, but older hosts read the flat _meta["ui/resourceUri"],
-// and the SDK's own registerAppTool writes both. Emitting only one silently
+// The wire shape mcp-go cannot check for us. The MCP Apps SDK reads a tool's
+// widget from the nested _meta.ui.resourceUri while older hosts read the flat
+// key, and the SDK's own registerAppTool writes both. Emitting one silently
 // hides the widget from half the hosts that support it.
 func TestToolUIMetaCarriesBothResourceURIKeys(t *testing.T) {
 	meta := toolUIMeta("table")

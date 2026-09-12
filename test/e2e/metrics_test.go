@@ -25,11 +25,9 @@ import (
 )
 
 // This file drives the metrics domain against a real Prometheus holding
-// generated history. It reserves port 19020.
-//
-// Everything the lane asserts is a number it put there: the series below are
-// counters rising by a fixed step every harness.SeedInterval, so `rate()` over
-// the [5m] window every product query uses yields an exact value.
+// generated history, on port 19020. Everything it asserts is a number it put
+// there: the series below are counters rising by a fixed step every
+// harness.SeedInterval, so `rate()` over a [5m] window yields an exact value.
 
 const metricsPort = 19020
 
@@ -170,11 +168,10 @@ func TestMetricsStatusDetectsBothExporters(t *testing.T) {
 	}
 }
 
-// TestMetricsStatusReportsCadvisorMissing covers a cAdvisor scraped under any
-// job name but `cadvisor`, which detection misses because it asks
-// `up{job="cadvisor"}` rather than for the metric family the way the
-// node-exporter half does. The container series are all still here, so every
-// chart has data while the banner reports the exporter as missing.
+// Covers a cAdvisor scraped under any job name but `cadvisor`, which detection
+// misses because it asks `up{job="cadvisor"}` rather than for the metric family
+// as the node-exporter half does. The container series are all still here, so
+// every chart has data while the banner reports the exporter missing.
 func TestMetricsStatusReportsCadvisorMissing(t *testing.T) {
 	proc, _ := startMetricsLaneWith(t, func(s harness.Series) bool {
 		return s.Name != "up" || s.Labels["job"] != "cadvisor"
@@ -642,12 +639,10 @@ func covers(recs []recommendation, want map[string]string) bool {
 
 // ─── the MCP transport over the same seed ───────────────────────────────
 
-// TestMCPGetMetricsReadsTheSameSeed drives `get_metrics`, the tool behind the
-// metrics widget. Its queries are a second copy of the ones the dashboard
-// composes in the browser, so a copy that has drifted answers with a different
-// number than the REST side does against the same seed. It also covers id
-// resolution: the target resolves against the cache and the cached name is
-// what reaches the query.
+// Drives `get_metrics`, the tool behind the metrics widget. Its queries are a
+// second copy of the ones the dashboard composes in the browser, so a drifted
+// copy answers differently from REST against the same seed. It also covers id
+// resolution: the cached name is what reaches the query.
 func TestMCPGetMetricsReadsTheSameSeed(t *testing.T) {
 	env, address, hostname := metricsCluster(t)
 
@@ -892,11 +887,10 @@ func rankedNames(t *testing.T, proc *sut.Process, args map[string]any) []string 
 	return names
 }
 
-// TestMCPRankMetricsOrdersTheSeededMembers drives the ranking form of
-// get_metrics, which has its own PromQL catalog because the aggregation
-// differs. The seed ranks the services in one order by CPU and the exact
-// reverse by memory, so a ranking that read the wrong metric could not come
-// back in the right order by luck.
+// Drives the ranking form of get_metrics, which has its own PromQL catalog
+// because the aggregation differs. The seed ranks the services in one order by
+// CPU and the exact reverse by memory, so a ranking that read the wrong metric
+// could not come back in the right order by luck.
 func TestMCPRankMetricsOrdersTheSeededMembers(t *testing.T) {
 	env, address, hostname := metricsCluster(t)
 
@@ -1183,11 +1177,10 @@ func findCategory(recs []recommendation, category string) (recommendation, bool)
 
 // ─── the SSE form of GET /metrics ───────────────────────────────────────
 
-// TestMetricsStreamPushesTheSeededValue drives `GET /metrics` with
-// `Accept: text/event-stream`, which every live chart opens after its first
-// JSON fetch — a different handler from the proxy the same URL serves to a
-// JSON client. The two events are asserted apart: `initial` carries the whole
-// range as a matrix, each `point` one instant value.
+// Drives `GET /metrics` with `Accept: text/event-stream`, which every live chart
+// opens after its first JSON fetch — a different handler from the proxy the
+// same URL serves a JSON client. The two events are asserted apart: `initial`
+// carries the whole range as a matrix, each `point` one instant value.
 func TestMetricsStreamPushesTheSeededValue(t *testing.T) {
 	proc, _ := startMetricsLane(t)
 

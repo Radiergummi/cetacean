@@ -207,10 +207,9 @@ func TestUpdateServiceConfigsRepointsAService(t *testing.T) {
 	}
 }
 
-// TestUpdateServiceConfigsDefaultsToTheRESTPath pins the half of the mount
-// rule that was wrong: a config with no target defaulted to the bare name,
-// which Swarm reads as relative to the container's working directory, while
-// REST's PATCH /services/{id}/configs defaults to /<name>. The same config
+// Pins the half of the mount rule that was wrong: a config with no target
+// defaulting to the bare name, which Swarm reads as relative to the container's
+// working directory, while REST defaults to /<name> — so the same config
 // attached over the two transports mounted at two different paths.
 func TestUpdateServiceConfigsDefaultsToTheRESTPath(t *testing.T) {
 	var got []*swarm.ConfigReference
@@ -241,13 +240,10 @@ func TestUpdateServiceConfigsDefaultsToTheRESTPath(t *testing.T) {
 	}
 }
 
-// The tier is *not* where the danger of a host bind is communicated —
-// update_service_mounts sits at the configuration level like the REST route,
-// which restTierParity in tools_test.go pins. Binding /var/run/docker.sock into a container is a root shell
-// on the host and control of the whole cluster; the tool does not refuse it —
-// an operator at this level may legitimately want it, and Cetacean does not
-// decide for the caller — so the description is the only place a model reads
-// what it is about to do.
+// The tier is *not* where the danger of a host bind is communicated:
+// update_service_mounts sits at the configuration level like the REST route.
+// Binding the Docker socket in is a root shell on the host and the tool does
+// not refuse it, so the description is the only place a model reads that.
 func TestUpdateServiceMountsWarnsAboutHostBinds(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil))
 

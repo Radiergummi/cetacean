@@ -123,11 +123,10 @@ func TestRecorderObservesRequests(t *testing.T) {
 	}
 }
 
-// TestEventsReturnsImmediatelyForAPlainJSONRequest proves GET /events belongs
-// on the "reached" list rather than excused as a stream that holds the
-// connection open: only the ContentTypeSSE branch blocks, and an
-// Accept: application/json request is refused 406 immediately. The 2s
-// deadline fails loudly if the default branch ever falls through to SSE.
+// Proves GET /events belongs on the "reached" list rather than excused as a
+// stream that holds the connection open: only the SSE branch blocks, and a JSON
+// request is refused 406 at once. The deadline fails loudly if the default
+// branch ever falls through to SSE.
 func TestEventsReturnsImmediatelyForAPlainJSONRequest(t *testing.T) {
 	w := NewWorld(t)
 

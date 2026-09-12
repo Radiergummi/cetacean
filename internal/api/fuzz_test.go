@@ -10,12 +10,10 @@ import (
 	"testing"
 )
 
-// FuzzForwardedNodes drives forwardedNodes with attacker-controlled RFC 7239
-// Forwarded header values. forwardedNodes makes no claim about which nodes are
-// addresses; what must hold is nodeAddr's contract on whatever it is handed —
-// never panic, an accepted address is a valid netip.Addr, and reparsing its own
-// string form reproduces it exactly. Drift there means the address a trust
-// decision is made against is not the one presented in the header.
+// Drives forwardedNodes with attacker-controlled RFC 7239 header values. What
+// must hold is nodeAddr's contract on whatever it is handed: never panic, an
+// accepted address is a valid netip.Addr, and reparsing its own string form
+// reproduces it — or a trust decision is made against a different address.
 func FuzzForwardedNodes(f *testing.F) {
 	seeds := []string{
 		`for=192.0.2.1`,
@@ -55,12 +53,10 @@ func FuzzForwardedNodes(f *testing.F) {
 	})
 }
 
-// FuzzResolveClientIP drives peerOf with a fuzzed Forwarded header,
-// X-Forwarded-For header and RemoteAddr against a fixed trusted-proxy set.
-// peerOf takes the whole request, but its verdict must depend solely on
-// r.RemoteAddr — a header is what a client sends, and so must never forge
-// trust. The verdict must always agree with isTrusted applied directly to the
-// parsed RemoteAddr, with an unparseable RemoteAddr necessarily untrusted.
+// Drives peerOf with a fuzzed Forwarded header, X-Forwarded-For and RemoteAddr
+// against a fixed trusted-proxy set. peerOf takes the whole request, but its
+// verdict must depend solely on RemoteAddr — a header is what a client sends —
+// so it must agree with isTrusted applied to the parsed RemoteAddr alone.
 func FuzzResolveClientIP(f *testing.F) {
 	type seed struct{ forwarded, xff, remoteAddr string }
 
@@ -113,11 +109,10 @@ func FuzzResolveClientIP(f *testing.F) {
 	})
 }
 
-// FuzzApplyJSONPatch drives applyJSONPatch with fuzzed RFC 6902 operations over
-// a fuzzed flat string map, both supplied as JSON so the fuzzer can mutate
-// structure and not just values. Malformed JSON is skipped — decoding it is the
-// handler's problem. A failed patch must leave the input map untouched, and the
-// function must never return both an error and a non-nil result.
+// Drives applyJSONPatch with fuzzed RFC 6902 operations over a fuzzed flat
+// string map, both as JSON so the fuzzer can mutate structure. Malformed JSON is
+// skipped. A failed patch must leave the input untouched, and the function must
+// never return both an error and a non-nil result.
 func FuzzApplyJSONPatch(f *testing.F) {
 	type seed struct{ mapJSON, opsJSON string }
 

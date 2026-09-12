@@ -226,9 +226,8 @@ func TestFilterSince(t *testing.T) {
 
 // A multi-line log entry arrives as one frame whose continuation lines carry
 // neither Docker's timestamp prefix nor its detail labels. Without inheriting
-// them they cannot be ordered or cursored, so every reconnect re-sent every
-// stack trace in the resume window, and a page whose surviving lines were all
-// continuations produced no cursor at all.
+// them they cannot be ordered or cursored: every reconnect re-sends every stack
+// trace in the window, and an all-continuation page produces no cursor at all.
 func TestParseDockerLogs_ContinuationLinesInheritTheirParent(t *testing.T) {
 	data := buildFrame(
 		1,
@@ -387,20 +386,10 @@ func TestBacklogFilter(t *testing.T) {
 	})
 }
 
-// TestFilterSinceAndBacklogFilterAgree pins the two entry points to one
-// comparison rule.
-//
-// The paginated path filters with FilterSince and the follow path with
-// BacklogFilter, and they are deliberately not interchangeable: BacklogFilter
-// only screens the replayed backlog, since live output may carry a clock the
-// cursor never saw. But they must agree on *whether a given line is past a
-// given cursor*, because that is the rule the cursors themselves are built on
-// — and the two comparisons living in separate functions is exactly how they
-// drifted apart before (#150).
-//
-// The fixture is one task's backlog in chronological order, which is what
-// BacklogFilter is specified against, so any disagreement is a difference in
-// the rule rather than in the latch.
+// Pins the two entry points to one comparison rule. They are not
+// interchangeable — BacklogFilter screens only the replayed backlog, since live
+// output may carry a clock the cursor never saw — but they must agree on whether
+// a line is past a cursor. The fixture is one task's ordered backlog.
 func TestFilterSinceAndBacklogFilterAgree(t *testing.T) {
 	const task = "task-1"
 
@@ -415,11 +404,10 @@ func TestFilterSinceAndBacklogFilterAgree(t *testing.T) {
 		}
 	}
 
-	// Chronological, but deliberately not all in Docker's canonical form. A
-	// fixture of canonical timestamps cannot tell the two rules apart: the
+	// Chronological, but deliberately not all in Docker's canonical form: the
 	// cursor is canonicalized on the way in, so against canonical lines a raw
 	// string compare agrees with Newer by accident. The offset and
-	// reduced-precision lines are the ones that separate them.
+	// reduced-precision lines are what separate them.
 	lines := []LogLine{
 		line("2026-08-28T09:59:59.000000000Z", "a"),
 		line("2026-08-28T12:00:00.000000000+02:00", "b"),
@@ -436,13 +424,10 @@ func TestFilterSinceAndBacklogFilterAgree(t *testing.T) {
 		{"non-UTC offset", "2026-08-28T12:00:00+02:00"},
 		{"nanosecond precision", "2026-08-28T10:00:00.999999999Z"},
 
-		// A duration is resolved against time.Now() separately by each side,
-		// so the two cursors differ by the microseconds between the calls.
-		// That only matters for a line sitting inside that window, and this
-		// one resolves to well over a century before now, leaving every
-		// fixture line clear of the boundary by an enormous margin. Kept
-		// because a duration is one of the three accepted cursor forms and
-		// belongs in a parity check.
+		// A duration resolves against time.Now() separately on each side, so
+		// the two cursors differ by the microseconds between the calls. This
+		// one resolves over a century before now, leaving every fixture line
+		// clear of that window. Kept because a duration is an accepted form.
 		{"duration", "1000000h"},
 
 		{"unparseable", "not-a-cursor"},

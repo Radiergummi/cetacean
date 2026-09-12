@@ -427,12 +427,10 @@ func (p *Process) waitReady() error {
 	return fmt.Errorf("binary not ready at %s within %s", p.BaseURL+p.readyPath, readyTimeout)
 }
 
-// waitPortFree blocks until the address the child is about to bind is free.
-// It probes by binding, not by dialing: http.Server stops accepting before
-// its listener fd closes, so a refused dial reads as free during that window
-// and the next child's bind loses the race. It binds ":<port>", the wildcard
-// address the child receives, since a probe on a narrower address can succeed
-// where the child's own bind would fail.
+// waitPortFree blocks until the address the child is about to bind is free. It
+// probes by binding, not dialing: http.Server stops accepting before its
+// listener fd closes, so a refused dial reads as free. It binds the same
+// wildcard ":<port>" the child gets, since a narrower probe can lie.
 func waitPortFree(t *testing.T, port int) {
 	t.Helper()
 

@@ -24,10 +24,8 @@ const (
 
 // DrainImpactGraph answers "if I drain this node, what moves — and what
 // cannot?" as a bipartite graph of affected services against the nodes that
-// could take them. A service with no edge is stranded, and Detail names the
-// filter nodeCanHost blocked it on. tasks must cover the cluster, not just the
-// target: the per-node cap is measured against what each candidate carries.
-// Every slice must be ACL-filtered, so the candidates are only readable nodes.
+// could take them; a service with no edge is stranded and Detail says why.
+// tasks must cover the cluster, and every slice must be ACL-filtered.
 func DrainImpactGraph(
 	target swarm.Node,
 	clusterNodes []swarm.Node,
@@ -129,10 +127,8 @@ func DrainImpactGraph(
 
 // placementFor decides where one affected service could go: its state, its
 // detail line, and the candidates to draw an edge to. A stranded service
-// reports why the *last* candidate failed, since they usually all fail alike.
-// Work that only partly fits elsewhere is stranded rather than movable, or an
-// operator is left with pending replicas. placed is each candidate's existing
-// live-task count for this service; nil means it has tasks nowhere else.
+// reports why the *last* candidate failed, since they usually fail alike. Work
+// that only partly fits elsewhere is stranded, not movable.
 func placementFor(
 	svc swarm.Service,
 	running int,

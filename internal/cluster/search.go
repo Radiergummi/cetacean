@@ -21,28 +21,20 @@ type SearchResult struct {
 	State  string `json:"state,omitempty"`
 }
 
-// SearchResults is the structured result of a global search.
-//
-// Hits is keyed by resource type plural ("services", "nodes", ...) and is
-// capped at `limit` per type. Counts is the pre-cap total of matches per type
-// — clients use Counts to render "X matches, showing N" affordances. Total is
-// the sum of Counts.
-// The JSON names match the REST search response (`results`/`counts`/`total`)
-// so the same search reads identically over both transports. Without tags
-// these marshalled as the Go field names, and an MCP client saw `Hits` where
-// an HTTP client saw `results`.
+// SearchResults is the structured result of a global search. Hits is keyed by
+// plural resource type and capped at `limit` per type; Counts is the pre-cap
+// total per type and Total their sum. The JSON names match the REST search
+// response, so the same search reads identically over both transports.
 type SearchResults struct {
 	Hits   map[string][]SearchResult `json:"results"`
 	Counts map[string]int            `json:"counts"`
 	Total  int                       `json:"total"`
 }
 
-// Search returns matches across all swarm resource types.
-//
-// Each per-type slice in Hits is capped at limit (0 means up to 1000), while
-// Counts always reports the pre-cap total so callers can show "X matches" even
-// when displaying a small subset. Secret data is never returned; RedactSecret
-// is applied where applicable.
+// Search returns matches across all swarm resource types. Each slice in Hits is
+// capped at limit (0 means up to 1000) while Counts reports the pre-cap total,
+// so a caller can show "X matches" over a small subset. Secret data is never
+// returned.
 func Search(ctx context.Context, c *cache.Cache, query string, limit int) SearchResults {
 	if limit == 0 || limit > 1000 {
 		limit = 1000
@@ -387,13 +379,10 @@ func ContainsFold(s, substrLower string) bool {
 	return SegmentPrefixMatch(strings.ToLower(s), substrLower)
 }
 
-// ContainsFoldNoAlloc reports whether s contains substr (which must be
-// lowercased) using case-insensitive comparison without allocating.
-// Only handles ASCII case folding; non-ASCII letters are compared as-is.
-//
-// Exported for internal/mcp's log grep, which needs plain case-insensitive
-// containment over a large body of text and specifically not ContainsFold's
-// segment-prefix matching — that rule is about names, not messages.
+// ContainsFoldNoAlloc reports whether s contains substr, which must be
+// lowercased, without allocating. ASCII case folding only. Exported for
+// internal/mcp's log grep, which wants plain containment over a large body of
+// text and specifically not ContainsFold's segment-prefix rule, which is about names.
 func ContainsFoldNoAlloc(s, substrLower string) bool {
 	if len(substrLower) == 0 {
 		return true
@@ -430,12 +419,10 @@ var separatorReplacer = strings.NewReplacer("_", "", "-", "")
 
 func isSeparator(r rune) bool { return r == '_' || r == '-' }
 
-// SegmentPrefixMatch checks if query matches target using segment-prefix
-// matching. The target is split by '_' and '-' into segments, and each group
-// of query characters must match the prefix of a segment, in order, with
-// segments skippable. Uses memoized backtracking for ambiguous boundaries.
-//
-// Both arguments must already be lowercased.
+// SegmentPrefixMatch checks query against target by segment prefix: the target
+// splits on '_' and '-', and each group of query characters must prefix a
+// segment, in order, with segments skippable. Memoized backtracking handles
+// ambiguous boundaries. Both arguments must already be lowercased.
 func SegmentPrefixMatch(targetLower, queryLower string) bool {
 	if len(queryLower) == 0 {
 		return true
@@ -454,11 +441,9 @@ func SegmentPrefixMatch(targetLower, queryLower string) bool {
 		return false
 	}
 
-	// TODO(perf): this allocates a fresh memo map per call on a hot path —
-	// SegmentPrefixMatch runs against every label key/value of every resource
-	// across parallel search goroutines. Benchmark and, if the GC pressure is
-	// material, replace recursive memoised backtracking with an iterative DP
-	// using a preallocated [len(query)+1][len(segments)+1]bool array.
+	// TODO(perf): a fresh memo map per call, on a path that runs against every
+	// label of every resource. If the GC pressure proves material, replace the
+	// memoised backtracking with an iterative DP over a preallocated array.
 	type key struct{ qi, si int }
 	memo := map[key]bool{}
 

@@ -15,11 +15,9 @@ import (
 )
 
 // A proxy that adds rather than replaces Client-Cert hands the real one and a
-// forged one to the provider; reading only the first would authenticate the
-// attacker. /auth/whoami answers 401 for any identity failure at all, so the
-// positive half below drives the same SUT and proxy with a SINGLE Client-Cert
-// header — that is what makes the negative half's 401 attributable to the
-// duplication check rather than to the header never arriving.
+// forged one to the provider, and reading only the first authenticates the
+// attacker. /auth/whoami answers 401 for any identity failure, so the positive
+// half drives the same SUT with a single header to make the negative attributable.
 func TestDuplicateClientCertIsRejected(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -135,11 +133,10 @@ func TestForwardedWithoutAddressFallsBackToXFF(t *testing.T) {
 // response, and the poll returns as soon as it lands.
 const logWaitTimeout = 10 * time.Second
 
-// waitForLog polls the binary's output until it contains want, reporting
-// whether it arrived within logWaitTimeout. Reading Logs() once right after
-// the response races the line into existence: requestLogger emits after the
-// handler returns, and the record still has to cross the child's stderr, the
-// pipe and the copier goroutine.
+// waitForLog polls the binary's output until it contains want, reporting whether
+// it arrived in time. Reading Logs() once right after the response races the
+// line into existence: requestLogger emits after the handler returns, and the
+// record still has to cross stderr, the pipe and the copier goroutine.
 func waitForLog(t *testing.T, proc *sut.Process, want string) bool {
 	t.Helper()
 

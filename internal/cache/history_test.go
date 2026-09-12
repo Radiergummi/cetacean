@@ -338,11 +338,10 @@ func TestHistoryListBeforeIDByResource(t *testing.T) {
 	}
 }
 
-// TestHistoryListAfterBoundsBothPaths pins HistoryQuery.After on the indexed
-// and the scanning path alike. get_events reads the whole ring so its type and
-// `until` filters are not starved by a page of task churn, which made the time
-// bound the one thing worth pushing into the walk — and a bound honoured on
-// only one of the two paths would make one query mean two things.
+// Pins HistoryQuery.After on the indexed and the scanning path alike. get_events
+// reads the whole ring so its filters are not starved by a page of task churn,
+// which makes the time bound the one worth pushing into the walk — and one
+// honoured on only one path would make a single query mean two things.
 func TestHistoryListAfterBoundsBothPaths(t *testing.T) {
 	h := NewHistory(10)
 
@@ -378,11 +377,10 @@ func TestHistoryListAfterBoundsBothPaths(t *testing.T) {
 	}
 }
 
-// The per-resource index holds only indexRingSize entries, so a query asking
-// for more than that has to come off the main ring instead. Answering out of
-// the index would hand back 64 entries and let the caller report them as
-// everything the resource ever did — internal/mcp's get_events computes its
-// `truncated` flag from exactly this count.
+// The per-resource index holds only indexRingSize entries, so a query asking for
+// more has to come off the main ring. Answering out of the index would let the
+// caller report those entries as everything the resource ever did, which is
+// exactly what get_events computes its `truncated` flag from.
 func TestListByResourceBeyondTheIndexRing(t *testing.T) {
 	const entries = indexRingSize * 3
 
@@ -448,10 +446,9 @@ func TestListByResourceBeyondTheIndexRing(t *testing.T) {
 }
 
 // Paging a single resource with a cursor must not stop at the index window
-// either. The Atom detail feeds page at 50 — comfortably under indexRingSize —
-// so gating the index on the limit alone left them reporting a resource's
-// history exhausted after 64 entries, and made the behaviour depend on a
-// number the caller happened to pick.
+// either. The Atom detail feeds page well under indexRingSize, so gating the
+// index on the limit alone left them reporting a resource's history exhausted
+// after one window, on a number the caller happened to pick.
 func TestListByResourcePagesPastTheIndexRingWithACursor(t *testing.T) {
 	const entries = indexRingSize * 4
 
@@ -577,13 +574,10 @@ func TestListByResourceHonoursTypesAndUpperTimeBound(t *testing.T) {
 	}
 }
 
-// The ring is the whole of Cetacean's memory of what changed, and it is built
-// at startup: after a restart it begins at the moment the process came up, and
-// once it wraps it begins wherever the oldest surviving entry does. Neither is
-// visible in a query's result, so "one service changed in the last twelve
-// hours" and "I have only been watching for half an hour" answer identically —
-// and the narrow query even reports truncated:false, asserting completeness
-// over a window it never held.
+// The ring is the whole of Cetacean's memory of what changed, and it starts with
+// the process. Without the horizon in the result, "one service changed in the
+// last twelve hours" and "I have only been watching for half an hour" answer
+// identically — and the narrow query reports truncated:false besides.
 func TestHistoryOldestReportsTheHorizonItCanAnswerFor(t *testing.T) {
 	h := NewHistory(3)
 

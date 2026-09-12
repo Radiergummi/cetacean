@@ -8,10 +8,9 @@ import (
 )
 
 // compareInventories is the pure comparison at the heart of the drift check:
-// given a route inventory, an operation inventory and the two excuse maps, it
-// reports every unexcused asymmetry and every excuse that is no longer needed,
-// one message per finding. It touches no file, so it can be driven with
-// synthetic inventories to prove the check can fail.
+// given two inventories and the excuse maps, it reports every unexcused
+// asymmetry and every excuse no longer needed. It touches no file, so it can be
+// driven with synthetic inventories to prove the check can fail.
 func compareInventories(
 	routes []Route,
 	operations []Operation,
