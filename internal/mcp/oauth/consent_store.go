@@ -23,9 +23,8 @@ const consentKeyDomain = "cetacean-consent-key-v1"
 
 // hashField writes a length-prefixed field, so the hash is an unambiguous
 // encoding of its inputs. A separator byte is not enough: client_name comes
-// from a JSON document the client controls, and JSON can encode any byte
-// including the separator, letting one field's content spill into the next
-// and two different clients share a fingerprint.
+// from a client-controlled JSON document, which can encode any byte including
+// the separator, letting two different clients share a fingerprint.
 func hashField(h hash.Hash, field string) {
 	var length [8]byte
 	binary.BigEndian.PutUint64(length[:], uint64(len(field)))
@@ -48,16 +47,10 @@ func hashFields(domain string, fields ...string) string {
 	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 }
 
-// consentFingerprint hashes what the consent page showed the user: the
-// client's name, and the exact set of URIs it may receive a code at.
-//
-// A CIMD client controls its own metadata document and may change it at any
-// time. Binding a remembered approval to this hash means a rename or a new
-// redirect_uri re-prompts, so an approval can never be inherited by a client
-// the user would not recognise, or redirect somewhere they never saw.
-//
-// The URIs are sorted because array order in a client-controlled document
-// carries no meaning; re-prompting on a reordering would be noise.
+// consentFingerprint hashes what the consent page showed the user: the client's
+// name and the URIs it may receive a code at. A CIMD client can change its
+// metadata at any time, so binding an approval to this means a rename or a new
+// redirect_uri re-prompts. The URIs are sorted; their order carries no meaning.
 func consentFingerprint(meta *ClientMetadata) string {
 	uris := slices.Clone(meta.RedirectURIs)
 	slices.Sort(uris)
@@ -75,15 +68,10 @@ type ConsentKey struct {
 	Resource string `json:"resource"`
 }
 
-// hash identifies the approval, without the fingerprint: the fingerprint lives
-// in the value, so a client whose metadata changed replaces its stale record
-// rather than accumulating a second one alongside it.
-//
-// A subject can originate from an OIDC token claim, and JSON can encode any
-// byte including NUL, so a plain separator-joined string cannot rule out one
-// triple's bytes spelling another's — e.g. ("a\x00b", "c", "d") and
-// ("a", "b\x00c", "d") would join identically. hashFields length-prefixes each
-// field, so the composition is unambiguous whatever bytes a field contains.
+// hash identifies the approval, without the fingerprint: that lives in the
+// value, so a client whose metadata changed replaces its stale record rather
+// than accumulating a second. The fields are length-prefixed, since a subject
+// can come from an OIDC claim and one triple's bytes could spell another's.
 func (k ConsentKey) hash() string {
 	return hashFields(consentKeyDomain, k.Subject, k.ClientID, k.Resource)
 }
@@ -109,28 +97,16 @@ type ConsentRecord struct {
 }
 
 // ConsentStore remembers approvals so an already-approved client does not
-// re-prompt on every authorization request.
-//
-// Unlike the refresh token store, whose file holds only hashes and is
-// therefore a confidentiality concern, a consent record is a capability:
-// anyone able to write it can pre-approve a client and complete an
-// authorization with no human in the loop. The file is mode 0600 and the
-// caveat is the usual one — an attacker with host access has already won —
-// but the property being protected is integrity, not secrecy.
+// re-prompt on every authorization request. Unlike the refresh token store's
+// file of hashes, a consent record is a capability: anyone who can write one
+// pre-approves a client with no human in the loop. Integrity, not secrecy.
 type ConsentStore struct {
 	changeNotifier
 
-	// ttl bounds how long a record keeps skipping the consent screen.
-	//
-	// The store needs a lifetime of its own because it cannot borrow the token
-	// store's. An approval is only reachable for revocation by presenting a
-	// token from its grant family, and a family is torn down once its token
-	// expires — so an unbounded record outlives the only handle anyone had on
-	// it and keeps authorizing silently with no way left to withdraw it. A
-	// max-age is what makes "remembered" a lease rather than a one-way door.
-	//
-	// Zero or negative disables remembering: nothing is recorded and nothing
-	// is honoured, so every authorization reaches a human.
+	// ttl bounds how long a record keeps skipping the consent screen. An
+	// approval is revocable only by presenting a token from its grant family,
+	// which is torn down when its token expires — so an unbounded record
+	// outlives the only handle on it. Zero or negative disables remembering.
 	ttl time.Duration
 
 	mu      sync.Mutex
@@ -165,11 +141,10 @@ func (s *ConsentStore) expired(grantedAt time.Time, now time.Time) bool {
 	return now.Sub(grantedAt) >= s.ttl
 }
 
-// Allows reports whether this exact approval was remembered — same user, same
-// client, same MCP endpoint, and the same client metadata they were shown.
-// A lapsed record is reported as not allowed but deliberately left in place:
-// this is the read path, and deleting here would turn every authorization into
-// a potential file write. Restore drops them at the next start.
+// Allows reports whether this exact approval was remembered — same user,
+// client, endpoint and metadata. A lapsed record is reported as not allowed
+// but left in place: this is the read path, and deleting would turn every
+// authorization into a potential file write. Restore drops them at next start.
 func (s *ConsentStore) Allows(key ConsentKey, fingerprint string) bool {
 	if !s.Enabled() {
 		return false

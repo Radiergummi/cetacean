@@ -9,13 +9,10 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// WatchPolicyFile watches a policy file and hot-reloads the evaluator's
-// policy, returning a stop function. Warns if the file is world-readable.
-//
-// It watches the file's directory, not the file: fsnotify follows the inode,
-// so a rename-over-write -- how editors and deployments replace a config file
-// -- leaves the watch on the old one and reload stops silently. A directory
-// watch survives any number of swaps, and a policy file absent at startup.
+// WatchPolicyFile watches a policy file and hot-reloads the evaluator's policy,
+// returning a stop function. It watches the file's *directory*: fsnotify
+// follows the inode, so a rename-over-write leaves the watch on the old file
+// and reload stops silently. A directory watch survives any number of swaps.
 func WatchPolicyFile(e *Evaluator, path string) (func(), error) {
 	warnFilePermissions(path)
 
@@ -37,12 +34,10 @@ func WatchPolicyFile(e *Evaluator, path string) (func(), error) {
 		return nil, err
 	}
 
-	// A Kubernetes ConfigMap (and a Docker secret) does not rewrite the
-	// mounted file at all: the name is a symlink into a timestamped directory
-	// and an update swaps a `..data` symlink beside it, so no event ever names
-	// the file and a basename filter alone would miss every update. The
-	// resolved path is therefore tracked as well, and a change to it is itself
-	// a reload — the same pair of conditions viper and client-go settled on.
+	// A ConfigMap or Docker secret does not rewrite the mounted file at all:
+	// the name is a symlink and an update swaps a `..data` link beside it, so
+	// no event ever names the file. The resolved path is tracked too, and a
+	// change to it is itself a reload.
 	linkTarget, _ := filepath.EvalSymlinks(target)
 
 	stop := make(chan struct{})
@@ -59,12 +54,10 @@ func WatchPolicyFile(e *Evaluator, path string) (func(), error) {
 			})
 		}
 
-		// kqueue (macOS, the BSDs) delivers nothing at all for the swap above:
-		// it reports a directory by diffing its listing, which a replaced name
-		// does not change, and the per-entry watch it keeps for a symlink is
-		// opened on the symlink's target, which the swap does not touch. So the
-		// resolved path is re-read on a tick as well. inotify reports the swap
-		// and reloads long before the first one arrives.
+		// kqueue delivers nothing for the swap above: it diffs a directory
+		// listing, which a replaced name does not change, and its per-entry
+		// symlink watch is opened on the target the swap does not touch. So
+		// the resolved path is re-read on a tick as well.
 		poll := time.NewTicker(2 * time.Second)
 		defer poll.Stop()
 
@@ -75,12 +68,10 @@ func WatchPolicyFile(e *Evaluator, path string) (func(), error) {
 					return
 				}
 
-				// Write covers a truncate-in-place write; Create covers a
-				// rename-over-write, which inotify reports as IN_MOVED_TO and
-				// fsnotify maps to Create. Rename is deliberately absent: on
-				// the watched name it means the file moved *away*, so acting
-				// on it would only log a failure to read what is no longer
-				// there. The Create for whatever replaced it is the trigger.
+				// Write covers a truncate-in-place write, Create a
+				// rename-over-write, which fsnotify maps from IN_MOVED_TO.
+				// Rename is deliberately absent: on the watched name it means
+				// the file moved *away*, and the Create is the trigger.
 				named := filepath.Clean(event.Name) == target &&
 					event.Op&(fsnotify.Write|fsnotify.Create) != 0
 

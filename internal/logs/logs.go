@@ -20,15 +20,10 @@ type LogLine struct {
 	Attrs     map[string]string `json:"attrs,omitempty"`
 }
 
-// readDockerLogFrames reads Docker multiplexed log frames and calls emit for each parsed line.
-// Docker multiplex frame: [stream_type(1)][padding(3)][size(4 big-endian)][payload].
-// Stream types: 1=stdout, 2=stderr.
-//
-// Docker's ServiceLogs with Follow=false may not close the stream after
-// sending all data. To avoid blocking for the full context timeout, we
-// use an idle-timeout wrapper: after receiving the first frame, if no
-// new data arrives within 2 seconds, the wrapper closes the stream so
-// the read returns immediately.
+// readDockerLogFrames reads Docker's multiplexed frames —
+// [stream_type(1)][padding(3)][size(4 BE)][payload], 1=stdout, 2=stderr — and
+// calls emit per line. ServiceLogs with Follow=false may never close the
+// stream, so an idle-timeout wrapper closes it 2s after the last frame.
 func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
 	header := make([]byte, 8)
 
@@ -68,12 +63,9 @@ func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
 		}
 
 		// Docker prefixes only the first line of a multi-line message with a
-		// timestamp and its detail labels; the continuation lines of a stack
-		// trace or a pretty-printed JSON object carry neither. They belong to
-		// the message they continue, so they inherit its identity — without
-		// one they cannot be ordered, cursored, or attributed to a task.
-		// Inheritance stops at the frame boundary, which is where Docker's
-		// message boundary is: the next frame may well be another task's.
+		// timestamp and detail labels, so continuation lines inherit the
+		// identity of what they continue — without one they cannot be ordered,
+		// cursored or attributed. Inheritance stops at the frame boundary.
 		var parent LogLine
 
 		raw := strings.TrimRight(string(payload), "\n")
@@ -225,14 +217,9 @@ func Canonical(timestamp string) (string, bool) {
 }
 
 // ParseCursor resolves a log cursor to Docker's canonical timestamp format.
-//
-// Cursors reach us as RFC 3339 timestamps at any precision and in any offset,
-// or as Go durations meaning "this long ago" — all three documented and
-// accepted. Comparing any of them against a Docker timestamp as a raw string
-// is wrong: "30m" sorts below every timestamp, "…T12:00:00+02:00" above the
-// same instant in UTC, and a second-precision cursor above the sub-second
-// lines that follow it. Returns false when the cursor is empty or unusable,
-// meaning no filtering should happen at all.
+// Cursors arrive as RFC 3339 at any precision or offset, or as a Go duration
+// meaning "this long ago"; comparing any of them as a raw string is wrong in
+// three different directions. False means no filtering should happen at all.
 func ParseCursor(cursor string) (string, bool) {
 	if cursor == "" {
 		return "", false
@@ -296,18 +283,9 @@ func FilterSince(lines []LogLine, since string) []LogLine {
 }
 
 // BacklogFilter drops the lines a resumed follow stream has already delivered.
-//
-// A follow stream opens with a backlog — the lines Docker replays out of its
-// tail before it catches up to live output — and only that backlog can hold
-// lines the client already has. So only the backlog is filtered; live output
-// is passed through whatever its timestamp says. That distinction matters
-// because a task's timestamps come from the clock of the node running it,
-// which need not agree with the clock that produced the cursor, and because a
-// cursor can legitimately be expressed relative to now.
-//
-// One task's backlog is chronologically ordered, so the first of its lines to
-// clear the cursor ends it: everything that task emits afterwards is newer
-// still. Tasks are tracked apart because Docker interleaves them.
+// Only the replayed backlog can hold them, so live output passes through
+// whatever its timestamp says: a task's clock is its node's. A task's backlog
+// is ordered, so its first line to clear the cursor ends it.
 type BacklogFilter struct {
 	cursor string
 	caught map[string]bool

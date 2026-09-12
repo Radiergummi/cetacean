@@ -137,11 +137,10 @@ func renderErrorPage(w http.ResponseWriter, status int, message string) {
 	_ = errorTemplate.Execute(w, map[string]string{"Message": message})
 }
 
-// setConsentHeaders sets security headers that prevent framing and caching.
-// The consent page carries the CSRF token, OAuth state, code_challenge,
-// redirect_uri and authenticated user identity in hidden form fields — any
-// shared cache or browser back-button cache would replay that to a different
-// user. Cache-Control: no-store matches the token-response handler.
+// setConsentHeaders sets the headers preventing framing and caching. The page
+// carries the CSRF token, OAuth state, code_challenge, redirect_uri and the
+// user's identity in hidden fields, which any shared or back-button cache
+// would replay to a different user.
 func setConsentHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
@@ -154,23 +153,10 @@ func setConsentHeaders(w http.ResponseWriter) {
 // the CSRF HMAC over it is what makes it unforgeable.
 const consentFingerprintField = "consent_fingerprint"
 
-// csrfMAC derives the CSRF token from the nonce and the request parameters it
-// must stay bound to. Both issuing and verifying go through here so the two
-// cannot drift apart.
-//
-// The fingerprint is covered because the recorded approval must be bound to
-// what the user was *shown*: the metadata is resolved on GET to render the
-// page and again on POST to act on it, and a CIMD document can change (or its
-// cache entry lapse) in between. Folding it into the MAC that is already
-// verified on every POST carries the GET's view forward without adding a
-// second piece of trust machinery.
-//
-// Fields are length-prefixed via hashField rather than joined with a
-// separator. state is client-chosen and may contain any byte, so a plain
-// "nonce|state|fingerprint" would let one field's content spell another's and
-// a token issued for one pair verify for a different one. This is the same
-// discipline consentFingerprint and consentKey already apply, for the same
-// reason.
+// csrfMAC derives the CSRF token from the nonce and the parameters it must stay
+// bound to; issuing and verifying both go through here. The fingerprint is
+// covered so the approval is bound to what the user was *shown*, since the
+// metadata is resolved separately on GET and POST. Fields are length-prefixed.
 func csrfMAC(signingKey []byte, nonce, state, fingerprint string) string {
 	mac := hmac.New(sha256.New, signingKey)
 	hashField(mac, nonce)
@@ -180,11 +166,10 @@ func csrfMAC(signingKey []byte, nonce, state, fingerprint string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// issueCSRFNonce generates a random nonce, sets a short-lived signed cookie,
-// and returns the CSRF token (an HMAC over nonce, state and the client
-// metadata fingerprint the page is being rendered from). The cookie is
-// HttpOnly and SameSite=Strict. When secure is true (issuer is HTTPS) the
-// cookie is also marked Secure.
+// issueCSRFNonce generates a random nonce, sets a short-lived signed cookie and
+// returns the CSRF token: an HMAC over the nonce, the state and the metadata
+// fingerprint the page renders from. The cookie is HttpOnly and
+// SameSite=Strict, and Secure when the issuer is HTTPS.
 func issueCSRFNonce(
 	w http.ResponseWriter,
 	signingKey []byte,
