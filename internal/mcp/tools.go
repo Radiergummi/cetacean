@@ -188,10 +188,9 @@ var toolIconCategory = map[string]string{
 }
 
 // icon builds a single-element icon set pointing at
-// {base}/assets/mcp-icons/{group}/{name}.svg, or nil when icons are disabled
-// (no base URL). The `src` is an absolute URL under the un-authed /assets/
-// prefix so MCP clients can fetch it without a bearer token; per the MCP spec
-// icons must be an HTTPS or data URI, never relative.
+// {base}/assets/mcp-icons/{group}/{name}.svg, or nil when no base URL is set.
+// The `src` is absolute under the un-authed /assets/ prefix, so a client can
+// fetch it without a bearer token; the spec forbids a relative one.
 func (s *Server) icon(group, name string) []mcplib.Icon {
 	if s.iconBaseURL == "" {
 		return nil
@@ -574,10 +573,8 @@ type removalResult struct {
 }
 
 // serviceMutationResult is what the four lifecycle mutations return: where the
-// service ended up, rather than its whole specification. A task's result is
-// retained for as long as the task lives, and after a scale or rollback an
-// agent wants the outcome, not the spec it just supplied. The spec-editing
-// tools return the full service, because there the spec is the answer.
+// service ended up, not its whole specification. After a scale or rollback an
+// agent wants the outcome, not the spec it just supplied.
 type serviceMutationResult struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -601,11 +598,10 @@ type serviceMutationResult struct {
 // cache is the fresher of the two, and taking spec, running count and state
 // from one source keeps them mutually consistent.
 func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
-	// svc is Docker's own post-mutation view, so spec and version come from
-	// the write itself. Only the running count is read from the cache, which
-	// the service object does not carry -- and which the watcher fills
-	// asynchronously, so reading the rest from there reports the state before
-	// the write.
+	// svc is Docker's own post-mutation view, so spec and version come from the
+	// write itself. Only the running count comes from the cache, which the
+	// watcher fills asynchronously — reading the rest there reports the state
+	// before the write.
 	running := s.cache.RunningTaskCount(svc.ID)
 
 	out := serviceMutationResult{
@@ -678,8 +674,7 @@ func attachResourceLinks(ctx context.Context, links []mcplib.ResourceLink) {
 
 // structuredToolResult wraps a handler's JSON text into a result carrying both
 // the text representation and structuredContent. The bytes pass through as
-// json.RawMessage rather than being decoded and re-encoded, which would rewrite
-// the payload -- integers above 2^53 lose precision through float64. A text
+// json.RawMessage: decoding and re-encoding loses precision above 2^53. A text
 // that is not a JSON object degrades to text-only.
 func structuredToolResult(text string) *mcplib.CallToolResult {
 	if trimmed := strings.TrimLeft(text, " \t\r\n"); trimmed == "" || trimmed[0] != '{' {
@@ -723,11 +718,10 @@ func requireStringMapPatch(req mcplib.CallToolRequest, key string) (map[string]*
 	}
 }
 
-// mergePatchMutator returns a MapMutator that applies a JSON Merge Patch
-// (RFC 7396) to the live map handed to it by the writer. Nil entries delete,
-// non-nil entries set. The mutator runs against the freshly-inspected spec
-// inside the Docker writer, so concurrent third-party mutations to other keys
-// are preserved.
+// mergePatchMutator returns a MapMutator applying a JSON Merge Patch (RFC 7396)
+// to the live map the writer hands it: nil entries delete, non-nil set. It runs
+// against the freshly-inspected spec, so a concurrent third-party mutation to
+// another key survives.
 func mergePatchMutator(
 	patch map[string]*string,
 ) func(map[string]string) (map[string]string, error) {

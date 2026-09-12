@@ -14,17 +14,13 @@ import (
 
 // NotificationManager tracks per-session resource subscriptions and matches
 // cache events against them. It owns no goroutines; dispatch is driven by the
-// cache's OnChange listener.
-//
-// Sessions are keyed by ClientSession value, not by ID: 2026-07-28 has no
-// session IDs, so every modern client would collapse onto the empty string.
+// cache's OnChange listener. Sessions are keyed by ClientSession value, since
+// 2026-07-28 has no session IDs and every client would collapse onto "".
 type NotificationManager struct {
 	mu sync.RWMutex
-	// sessions holds per-session subscription state. Each session record stores
-	// the subscribed URIs, the *auth.Identity captured at subscribe time (used
-	// by dispatch to ACL-filter notifications per-session), and — for modern
-	// clients — the notification filter the subscriptions/listen stream
-	// established.
+	// sessions holds per-session subscription state: the subscribed URIs, the
+	// *auth.Identity captured at subscribe time so dispatch can ACL-filter, and
+	// the notification filter the subscriptions/listen stream established.
 	sessions map[mcpserver.ClientSession]*sessionState
 }
 
@@ -198,10 +194,9 @@ func (nm *NotificationManager) listChangedTargets() []delivery {
 }
 
 // matchingDeliveries walks every session's subscriptions under a single RLock
-// and returns the (session, uri, identity) tuples that need notification for
-// this event. The identity is included so the dispatcher can ACL-check without
-// re-acquiring the lock. The lock is released before the caller dispatches so
-// a slow send cannot block subscribe/unsubscribe.
+// and returns the tuples needing notification for this event. The identity
+// rides along so the dispatcher can ACL-check without re-acquiring the lock,
+// which is released before dispatch so a slow send cannot block subscribe.
 func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery {
 	prefix := eventTypeToURIPrefix(event.Type)
 	if prefix == "" || event.ID == "" {
@@ -279,9 +274,8 @@ func (s *Server) startNotifications() func() {
 
 // dispatchCacheEvent fans an event out to subscribed sessions. Detail
 // subscribers get resources/updated; create and remove additionally broadcast
-// resources/list_changed. Deliveries are ACL-checked, so a policy tightened
-// after a subscription still applies. list_changed carries no resource URI and
-// stays a broadcast.
+// resources/list_changed, which carries no URI. Deliveries are ACL-checked, so
+// a policy tightened after a subscription still applies.
 func (s *Server) dispatchCacheEvent(event cache.Event) {
 	if event.Type == cache.EventSync {
 		// The full-resync event isn't useful as a single notification.
@@ -421,9 +415,8 @@ func (s *Server) installSubscriptionHooks() *mcpserver.Hooks {
 
 	// mcp-go tracks subscriptions by type-asserting the session to
 	// SessionWithResourceSubscriptions, which its streamable-HTTP session does
-	// not implement -- so tracking happens here, or a client subscribes
-	// successfully and is never notified. The filter is recorded alongside the
-	// URIs because notification types are opt-in from this revision on.
+	// not implement — so tracking happens here, or a client subscribes
+	// successfully and is never notified. The filter rides along: types opt in.
 	h.AddBeforeSubscriptionsListen(
 		func(ctx context.Context, _ any, msg *mcplib.SubscriptionsListenRequest) {
 			session := mcpserver.ClientSessionFromContext(ctx)

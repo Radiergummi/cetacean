@@ -15,18 +15,15 @@ import (
 // taskSupportOptional marks a service mutation as pollable: convergence takes
 // far longer than the Docker call that starts it. Optional, so a plain call
 // still returns as soon as Swarm accepts. Every tool declaring it must call
-// awaitServiceConvergence, or it reports complete while the cluster catches
-// up.
+// awaitServiceConvergence, or it reports complete while the cluster catches up.
 func taskSupportOptional() mcplib.ToolOption {
 	return mcplib.WithTaskSupport(mcplib.TaskSupportOptional)
 }
 
-// awaitServiceConvergence waits for a mutated service to reach the state it
-// was asked for, but only when the mutation was issued as a task -- a plain
-// call returns as soon as Docker accepts, and the predicate is not even built.
-//
-// tasks/cancel cannot interrupt it: the context is detached, so
-// cluster.ConvergenceTimeout is the real bound.
+// awaitServiceConvergence waits for a mutated service to reach the state it was
+// asked for, but only when the mutation was issued as a task — a plain call
+// returns as soon as Docker accepts, and the predicate is not even built.
+// tasks/cancel cannot interrupt it: the context is detached.
 func (s *Server) awaitServiceConvergence(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -50,9 +47,8 @@ func (s *Server) awaitServiceConvergence(
 
 // awaitServiceConvergenceFor waits up to timeout for svcID to settle, writing
 // the last progress line into observed. watch needs the same wait with its own
-// bound and no task early-return, and one wait keeps the two from drifting.
-// The rule itself lives in cluster.AwaitService, so REST and MCP cannot
-// disagree on what "settled" means.
+// bound and no task early-return. The rule lives in cluster.AwaitService, so
+// REST and MCP cannot disagree on what "settled" means.
 func (s *Server) awaitServiceConvergenceFor(
 	ctx context.Context,
 	svcID string,
@@ -79,14 +75,9 @@ func (s *Server) awaitServiceConvergenceFor(
 }
 
 // boundTaskTTL fills in and caps how long mcp-go retains a task's result,
-// reporting whether it cut the client's request down. mcp-go starts its
-// cleanup only when the client supplied a TTL, so an omitted one pins a full
-// result for the life of the process.
-//
-// A zero default leaves an absent TTL absent, and a zero ceiling clamps
-// nothing, so an operator can disable either half. The fill-in is clamped
-// along with everything else, so a default configured above the ceiling cannot
-// escape it.
+// reporting whether it cut the request down: mcp-go starts its cleanup only
+// when the client supplied a TTL. A zero default or ceiling disables that half,
+// and the fill-in is clamped too, so it cannot escape the ceiling.
 func boundTaskTTL(task *mcplib.TaskParams, def, ceiling time.Duration) bool {
 	// A call that carried no task augmentation must stay that way. Inventing
 	// params here would turn every ordinary synchronous tools/call into a
@@ -110,21 +101,10 @@ func boundTaskTTL(task *mcplib.TaskParams, def, ceiling time.Duration) bool {
 	return true
 }
 
-// installTaskTTLHook bounds the retention of every task-augmented tool call.
-//
-// mcp-go has no server-side default TTL and no exported way into its task map:
-// scheduleTaskCleanup is private and starts only when the client supplied
-// params.task.ttl, so a client that omits it pins a full CallToolResult for the
-// life of the process. What mcp-go does give us is this hook, called with a
-// pointer to the request it passes to handleToolCall on the very next line
-// (server/request_handler.go:520-521) — so filling the field in here is
-// indistinguishable, to everything downstream, from the client having sent it.
-//
-// That adjacency is the assumption the whole mechanism rests on, and it is not
-// a documented contract. TestTaskWithoutTTLIsStillReleased drives a real
-// tools/call and waits for the record to go, so a future bump that reorders or
-// copies between those two lines fails the build rather than quietly restoring
-// the leak.
+// installTaskTTLHook bounds the retention of every task-augmented tool call:
+// mcp-go has no server-side default TTL and starts its cleanup only for a TTL
+// the client sent. This hook gets a pointer to the request handleToolCall
+// receives on the next line — an adjacency nothing documents.
 func (s *Server) installTaskTTLHook(h *mcpserver.Hooks) {
 	h.AddBeforeCallTool(func(_ context.Context, _ any, msg *mcplib.CallToolRequest) {
 		if !boundTaskTTL(msg.Params.Task, s.config.TaskTTL, s.config.MaxTaskTTL) {
