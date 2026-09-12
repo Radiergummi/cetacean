@@ -63,9 +63,10 @@ type RouterConfig struct {
 // them renders its rows as CSV.
 func (h *Handlers) listFeeds(title string, eventType cache.EventType) feedHandlers {
 	return feedHandlers{
-		atom:     h.feedListHandler(title, eventType, renderAtom),
-		jsonFeed: h.feedListHandler(title, eventType, renderJSONFeed),
-		csv:      true,
+		atom:      h.feedListHandler(title, eventType, renderAtom),
+		jsonFeed:  h.feedListHandler(title, eventType, renderJSONFeed),
+		csv:       true,
+		csvParams: listCSVParams,
 	}
 }
 
@@ -598,9 +599,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 
 	// History
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
-		atom:     h.feedHistoryHandler(renderAtom),
-		jsonFeed: h.feedHistoryHandler(renderJSONFeed),
-		csv:      true,
+		atom:      h.feedHistoryHandler(renderAtom),
+		jsonFeed:  h.feedHistoryHandler(renderJSONFeed),
+		csv:       true,
+		csvParams: historyCSVParams,
 	}, spa))
 
 	// Stacks

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document — the channels, the messages each carries, and which cursor dialect its `id:` uses. Sixteen streams were previously described nowhere
+- Both API descriptions are served as YAML as well as JSON, at `/api/openapi.yaml` and `/api/asyncapi.yaml` or by negotiating on `Accept`
 - Any list can be downloaded as CSV — add `.csv` to the URL or ask for `text/csv`. Search, filters and sorting apply; a download that asks for no page gets every row
 - The dashboard is installable as an app, with icons and a theme colour that follows its own background
 - The cluster can be searched from the browser's address bar, via the OpenSearch description at `/opensearch.xml`
@@ -22,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 
 ### Changed
+- **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
 - The dashboard's first load is about a third of its former size, and hashed assets are cached permanently
 - The API reference at `/api` is six months newer, and now follows Scalar releases automatically
 - MCP access tokens follow the RFC 9068 `at+jwt` profile. Clients holding an older token refresh automatically
@@ -32,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Everything that does not describe the cluster keeps working while the Docker daemon is unreachable — the dashboard's own icons and manifest, the API catalogue, the OpenSearch description and `/profile`
+- The CSV alternate a filtered listing advertises downloads the rows you are looking at; it dropped the query, so following the link returned everything
+- A browser-based MCP client can complete its OAuth flow again — cross-origin protection covered the endpoints that authenticate from the request body, where there is no ambient credential to defend
+- The dashboard can be installed as an app under OIDC authentication; the browser's manifest request was made without credentials and rejected
+- A recommendation that measured zero no longer reads as one that measured nothing — a service using essentially no CPU reported an empty `current`
 - Header-based authentication works behind a reverse proxy again; it was answering 401 to every request
 - Asking an endpoint for a format it does not serve now says so, instead of answering with JSON
 - Relabelling a node needs operations level 2 over the API, matching MCP. It was gated with draining and demoting
