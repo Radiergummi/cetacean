@@ -122,8 +122,8 @@ func decodeClientCert(value string) ([]byte, error) {
 	value = strings.TrimSpace(value)
 	if len(value) < 2 || value[0] != ':' || value[len(value)-1] != ':' {
 		return nil, fmt.Errorf(
-			"Client-Cert is not a byte sequence; expected :base64:, got %q",
-			truncate(value),
+			"Client-Cert is not an RFC 8941 byte sequence; expected :base64: (%d bytes)",
+			len(value),
 		)
 	}
 
@@ -136,14 +136,6 @@ func decodeClientCert(value string) ([]byte, error) {
 }
 
 // truncate shortens a header value for an error message.
-func truncate(s string) string {
-	const limit = 32
-	if len(s) <= limit {
-		return s
-	}
-	return s[:limit] + "…"
-}
-
 // extractSPIFFEID returns the SPIFFE ID from the URI SANs, or "" if none
 // present. Returns an error if the cert contains multiple SPIFFE URIs
 // (per X.509-SVID spec: exactly one required) or a malformed SPIFFE ID.
