@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // parsedOpenSearch is the document read back off the wire, declared separately
@@ -183,4 +185,46 @@ func TestOpenSearchIsAbsoluteUnderABasePath(t *testing.T) {
 			t.Errorf("the %s template %q does not carry the base path", u.Type, u.Template)
 		}
 	}
+}
+
+// TestDiscoveryDocumentsAnswerWhileDockerIsDown: these read no cluster state,
+// and a client probing a server it cannot reach is exactly when they are worth
+// having. requireReady used to refuse them with ENG001.
+func TestDiscoveryDocumentsAnswerWhileDockerIsDown(t *testing.T) {
+	// A ready channel nobody closes is a server whose first sync has not
+	// landed, which is what an unreachable Docker socket looks like.
+	notReady := make(chan struct{})
+
+	router := newTestRouterWithCache(t, cache.New(nil), withReady(notReady))
+
+	for _, path := range []string{openSearchPath, apiCatalogPath} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Header.Set("Accept", "*/*")
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+			}
+
+			if strings.Contains(rec.Body.String(), "ENG001") {
+				t.Errorf("refused as unready: %s", rec.Body.String())
+			}
+		})
+	}
+
+	// The exemption is for the discovery documents, not a hole in readiness.
+	t.Run("a resource path is still refused", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+		req.Header.Set("Accept", "application/json")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if !strings.Contains(rec.Body.String(), "ENG001") {
+			t.Errorf("a resource path answered while unready: %d %s", rec.Code, rec.Body.String())
+		}
+	})
 }

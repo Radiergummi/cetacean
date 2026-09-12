@@ -175,17 +175,21 @@ func TestDiscoveryLinks_AddedToAPIRoutes(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	links := w.Header().Values("Link")
-	if len(links) != 3 {
-		t.Fatalf("expected 3 Link headers, got %d: %v", len(links), links)
+	if len(links) != 4 {
+		t.Fatalf("expected 4 Link headers, got %d: %v", len(links), links)
 	}
 	found := map[string]bool{
-		"service-desc": false,
-		"describedby":  false,
-		"api-catalog":  false,
+		"service-desc":          false,
+		"service-desc-asyncapi": false,
+		"describedby":           false,
+		"api-catalog":           false,
 	}
 	for _, link := range links {
-		if link == `</api>; rel="service-desc"` {
+		if link == `</api>; rel="service-desc"; type="application/json"` {
 			found["service-desc"] = true
+		}
+		if link == `</api/asyncapi>; rel="service-desc"; type="`+asyncAPIMediaType+`"` {
+			found["service-desc-asyncapi"] = true
 		}
 		if link == `</api/context.jsonld>; rel="describedby"` {
 			found["describedby"] = true
@@ -311,6 +315,7 @@ func TestNewRouter_Smoke(t *testing.T) {
 		MetricsProxy:      prom,
 		SPA:               spa,
 		OpenAPISpec:       []byte("openapi: '3.1.0'"),
+		AsyncAPISpec:      []byte("asyncapi: '3.0.0'"),
 		EnableSelfMetrics: true,
 		AuthProvider:      &auth.NoneProvider{},
 	})
@@ -395,6 +400,7 @@ func TestVaryAccumulatesAcrossMiddleware(t *testing.T) {
 		Broadcaster:       b,
 		SPA:               spa,
 		OpenAPISpec:       []byte("openapi: '3.1.0'"),
+		AsyncAPISpec:      []byte("asyncapi: '3.0.0'"),
 		EnableSelfMetrics: true,
 		AuthProvider:      &auth.NoneProvider{},
 		CORS:              &CORSConfig{AllowedOrigins: []string{"https://example.test"}},

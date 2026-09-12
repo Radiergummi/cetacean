@@ -49,8 +49,9 @@ type Recommendation struct {
 	TargetName string   `json:"targetName"`
 	Resource   string   `json:"resource,omitempty"`
 	Message    string   `json:"message"`
-	Current    float64  `json:"current,omitempty"`
-	Configured float64  `json:"configured,omitempty"`
+	// nil is "not measured"; zero is a measurement.
+	Current    *float64 `json:"current,omitempty"`
+	Configured *float64 `json:"configured,omitempty"`
 	Suggested  *float64 `json:"suggested,omitempty"`
 	FixAction  *string  `json:"fixAction,omitempty"`
 }

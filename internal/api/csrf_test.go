@@ -232,3 +232,45 @@ func TestPublicURLIsTrusted(t *testing.T) {
 		})
 	}
 }
+
+// TestMachineEndpointsAreNotCrossOriginChecked: the OAuth machine endpoints
+// and the MCP transport authenticate from the request body, so there is no
+// ambient credential for a cross-origin page to borrow — and refusing them
+// breaks the browser-based MCP client the authorization profile expects.
+// /oauth/authorize is the opposite case and has to stay checked.
+func TestMachineEndpointsAreNotCrossOriginChecked(t *testing.T) {
+	for _, path := range []string{"/mcp", "/oauth/token", "/oauth/revoke", "/oauth/register"} {
+		t.Run(path, func(t *testing.T) {
+			if !carriesItsOwnProof(path) {
+				t.Errorf("%s is cross-origin checked; a browser-based client cannot reach it", path)
+			}
+		})
+	}
+
+	for _, path := range []string{"/oauth/authorize", "/services/svc1/restart", "/auth/logout"} {
+		t.Run("still checked: "+path, func(t *testing.T) {
+			if carriesItsOwnProof(path) {
+				t.Errorf("%s runs under an ambient credential and must stay checked", path)
+			}
+		})
+	}
+}
+
+// TestExemptMachineEndpointPassesTheAssembledChain drives the composed router,
+// so a cross-site POST to an exempt path is visibly not refused by CSR001.
+func TestExemptMachineEndpointPassesTheAssembledChain(t *testing.T) {
+	router := newCSRFTestRouter(t)
+
+	req := httptest.NewRequest("POST", "/oauth/token", nil)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Origin", "https://inspector.example.com")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	// MCP is off in this fixture, so the route is absent — 404 is fine. What
+	// must not happen is a cross-origin refusal.
+	if rec.Code == http.StatusForbidden {
+		t.Errorf("the token endpoint was refused cross-origin: %s", rec.Body.String())
+	}
+}

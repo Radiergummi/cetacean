@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"gopkg.in/yaml.v3"
@@ -16,10 +18,19 @@ const apiPlaygroundHTML = `<!DOCTYPE html>
 </body>
 </html>`
 
-// HandleAPIDoc serves the API documentation. HTML requests get the Scalar
-// playground; JSON requests (including default */* negotiation) get the spec
-// as JSON; explicit application/yaml requests get YAML.
-func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
+// openAPIYAMLMediaType is the type OAI registered for an OpenAPI document in
+// YAML; the +json suffix names the JSON form.
+const (
+	openAPIYAMLPath = "/api/openapi.yaml"
+
+	openAPIYAMLMediaType = "application/vnd.oai.openapi"
+)
+
+// HandleAPIDoc returns the negotiated handler and the one behind the .yaml
+// address. HTML gets the Scalar playground, */* and JSON get the spec as JSON,
+// and a YAML type gets the source file verbatim. Both come from one call so
+// they share the bodies, each hashed and compressed once.
+func HandleAPIDoc(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 	// Convert YAML to JSON once at startup.
 	var parsed any
 	if err := yaml.Unmarshal(specYAML, &parsed); err != nil {
@@ -34,8 +45,14 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 	// once and compressed at most once per coding.
 	playground := newStaticBody([]byte(apiPlaygroundHTML))
 	spec := newStaticBody(specJSON)
+	source := newStaticBody(specYAML)
 
-	return func(w http.ResponseWriter, r *http.Request) {
+	serveYAML := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", openAPIYAMLMediaType)
+		source.serve(w, r)
+	}
+
+	negotiated = func(w http.ResponseWriter, r *http.Request) {
 		ct := ContentTypeFromContext(r.Context())
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		switch ct {
@@ -48,10 +65,22 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 			// The default for content negotiation, including */*.
 			w.Header().Set("Content-Type", "application/json")
 			spec.serve(w, r)
+		case ContentTypeYAML:
+			serveYAML(w, r)
 		default:
-			notAcceptable(w, r, "application/json, text/html")
+			notAcceptable(
+				w, r,
+				"application/json, text/html, "+openAPIYAMLMediaType,
+			)
 		}
 	}
+
+	yamlOnly = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		serveYAML(w, r)
+	}
+
+	return negotiated, yamlOnly
 }
 
 // HandleScalarJS serves the embedded Scalar API reference JavaScript bundle.
@@ -63,6 +92,22 @@ func HandleScalarJS(js []byte) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		bundle.serve(w, r)
 	}
+}
+
+// yamlDocument parses a spec into the JSON-shaped object both descriptions
+// are served from.
+func yamlDocument(raw []byte) (map[string]any, error) {
+	var parsed any
+	if err := yaml.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("not valid YAML: %w", err)
+	}
+
+	doc, ok := convertYAMLToJSON(parsed).(map[string]any)
+	if !ok {
+		return nil, errors.New("does not parse to an object")
+	}
+
+	return doc, nil
 }
 
 // convertYAMLToJSON recursively converts yaml.v3 map[string]any types to

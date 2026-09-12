@@ -32,6 +32,7 @@ type RouterConfig struct {
 	MetricsProxy      *prometheus.Proxy
 	SPA               http.Handler
 	OpenAPISpec       []byte
+	AsyncAPISpec      []byte
 	ScalarJS          []byte
 	EnablePprof       bool
 	EnableSelfMetrics bool
@@ -62,9 +63,10 @@ type RouterConfig struct {
 // them renders its rows as CSV.
 func (h *Handlers) listFeeds(title string, eventType cache.EventType) feedHandlers {
 	return feedHandlers{
-		atom:     h.feedListHandler(title, eventType, renderAtom),
-		jsonFeed: h.feedListHandler(title, eventType, renderJSONFeed),
-		csv:      true,
+		atom:      h.feedListHandler(title, eventType, renderAtom),
+		jsonFeed:  h.feedListHandler(title, eventType, renderJSONFeed),
+		csv:       true,
+		csvParams: listCSVParams,
 	}
 }
 
@@ -248,9 +250,14 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	))
 
 	// API documentation (content-negotiated)
-	mux.HandleFunc("GET /api", HandleAPIDoc(cfg.OpenAPISpec))
+	apiDoc, openAPIYAML := HandleAPIDoc(cfg.OpenAPISpec)
+	mux.HandleFunc("GET /api", apiDoc)
+	mux.HandleFunc("GET "+openAPIYAMLPath, openAPIYAML)
 	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(cfg.ScalarJS))
 	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
+	asyncAPI, asyncAPIYAML := HandleAsyncAPI(cfg.AsyncAPISpec)
+	mux.HandleFunc("GET "+asyncAPIPath, asyncAPI)
+	mux.HandleFunc("GET "+asyncAPIYAMLPath, asyncAPIYAML)
 	mux.HandleFunc("GET "+openSearchPath, HandleOpenSearch)
 	mux.HandleFunc("GET "+apiCatalogPath, HandleAPICatalog(catalogMounts{
 		mcp:           cfg.MCPHandler != nil,
@@ -592,9 +599,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 
 	// History
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
-		atom:     h.feedHistoryHandler(renderAtom),
-		jsonFeed: h.feedHistoryHandler(renderJSONFeed),
-		csv:      true,
+		atom:      h.feedHistoryHandler(renderAtom),
+		jsonFeed:  h.feedHistoryHandler(renderJSONFeed),
+		csv:       true,
+		csvParams: historyCSVParams,
 	}, spa))
 
 	// Stacks

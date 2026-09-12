@@ -21,6 +21,9 @@ const (
 	ContentTypeDOT
 	ContentTypeCSV
 
+	// ContentTypeYAML is served by the two specification documents only.
+	ContentTypeYAML
+
 	// ContentTypeUnsupported means no supported media type matched. What to
 	// do about it is the endpoint's to decide.
 	ContentTypeUnsupported ContentType = -1
@@ -46,6 +49,8 @@ func (ct ContentType) String() string {
 		return "DOT"
 	case ContentTypeCSV:
 		return "CSV"
+	case ContentTypeYAML:
+		return "YAML"
 	case ContentTypeUnsupported:
 		return "Unsupported"
 	default:
@@ -110,6 +115,28 @@ var supportedTypes = []struct {
 	{"text", "vnd.graphviz", ContentTypeDOT},
 	// After text/html, so a text/* wildcard still resolves to HTML.
 	{"text", "csv", ContentTypeCSV},
+	// The specification documents, served by /api and /api/asyncapi only.
+	// After application/json, so an application/* wildcard still resolves to
+	// JSON.
+	//
+	// Both halves of each pair are named. Registering only the +yaml spelling
+	// would resolve `Accept: …+json, …+yaml` — the pair an AsyncAPI tool sends
+	// — to YAML, since the JSON half would match nothing and the YAML half
+	// would win by default; and it would leave /api answering 406 to the
+	// registered JSON type for an OpenAPI document.
+	{"application", "vnd.oai.openapi+json", ContentTypeJSON},
+	{"application", "openapi+json", ContentTypeJSON},
+	{"application", "vnd.aai.asyncapi+json", ContentTypeJSON},
+	{"application", "asyncapi+json", ContentTypeJSON},
+	{"application", "vnd.oai.openapi", ContentTypeYAML},
+	{"application", "openapi+yaml", ContentTypeYAML},
+	{"application", "vnd.aai.asyncapi+yaml", ContentTypeYAML},
+	{"application", "asyncapi+yaml", ContentTypeYAML},
+	{"application", "yaml", ContentTypeYAML},
+	{"application", "x-yaml", ContentTypeYAML},
+	// After text/html and text/csv, for the same wildcard reason.
+	{"text", "yaml", ContentTypeYAML},
+	{"text", "x-yaml", ContentTypeYAML},
 }
 
 // extensionTypes maps URL extension suffixes to content types.
