@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
+- MCP clients that registered dynamically stay registered across a restart, instead of having to register and be approved again
+- `/oauth/register` rejects oversized client metadata: a client name over 256 bytes, more than 10 redirect URIs, or a redirect URI over 2048 bytes
 - The dashboard's first load is about a third of its former size, and hashed assets are cached permanently
 - The API reference at `/api` is six months newer, and now follows Scalar releases automatically
 - MCP access tokens follow the RFC 9068 `at+jwt` profile. Clients holding an older token refresh automatically

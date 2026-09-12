@@ -45,10 +45,9 @@ type ServerConfig struct {
 	// HTTPClient is an optional HTTP client for CIMD fetches.
 	HTTPClient *http.Client
 
-	// StatePath is where the OAuth server's durable state — refresh tokens and
-	// remembered approvals — is persisted, so a restart does not force every
-	// client to re-authorize. Empty keeps both stores in memory only, which is
-	// what happens when the data directory is not writable.
+	// StatePath persists refresh tokens, remembered approvals and client
+	// registrations, so a restart does not force every client to authorize
+	// again. Empty keeps all three in memory, as an unwritable data dir does.
 	StatePath string
 }
 
@@ -102,6 +101,8 @@ func NewServer(cfg ServerConfig) *Server {
 	refreshTokens := NewRefreshTokenStore()
 	consent := NewConsentStore(cfg.MCP.ConsentTTL)
 
+	var carriedClients []ClientRegistration
+
 	if cfg.StatePath != "" {
 		sweepTempFiles(cfg.StatePath)
 
@@ -123,15 +124,36 @@ func NewServer(cfg ServerConfig) *Server {
 		} else {
 			refreshTokens.Restore(state.RefreshTokenSnapshot)
 			consent.Restore(state.Consent)
+
+			// Restore is a no-op with DCR disabled; carriedClients is what
+			// keeps the file's registrations from being rewritten away in
+			// that case, and is read only then.
+			clients.Restore(state.Clients)
+
+			if clients == nil {
+				carriedClients = state.Clients
+			}
+
 			slog.Info("loaded MCP OAuth state",
 				"grants", len(state.Grants),
 				"approvals", len(state.Consent),
+				"clients", len(state.Clients),
 			)
 		}
 
-		file := &stateFile{path: cfg.StatePath, tokens: refreshTokens, consent: consent}
+		file := &stateFile{
+			path:           cfg.StatePath,
+			tokens:         refreshTokens,
+			consent:        consent,
+			clients:        clients,
+			carriedClients: carriedClients,
+		}
 		refreshTokens.SetOnChange(file.write)
 		consent.SetOnChange(file.write)
+
+		if clients != nil {
+			clients.SetOnChange(file.write)
+		}
 	}
 
 	return &Server{
@@ -727,7 +749,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	// Computed for unverified clients too. Nothing is remembered for them, but
 	// the fingerprint costs a hash, and covering it uniformly means the POST
 	// re-prompts whenever the name or redirect URI on screen went stale — for
-	// DCR that is an LRU eviction and re-registration rather than a document
+	// DCR that is an eviction and re-registration rather than a document
 	// edit, but the user is equally owed a page describing the client that is
 	// about to receive the code.
 	fingerprint := consentFingerprint(meta)
@@ -885,8 +907,8 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	clearCSRFCookie(w, secure)
 
 	// Remembering is limited to verified clients. A DCR client's metadata is
-	// self-reported and its client_id does not survive a restart, so a record
-	// keyed on one would be worthless at best.
+	// self-reported, so a record keyed on it would attest to nothing but what
+	// the client claimed about itself.
 	//
 	// The recorded fingerprint is the one the page displayed, proven current
 	// by the comparison above — not a fresh resolution, which could differ

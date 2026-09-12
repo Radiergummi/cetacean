@@ -767,7 +767,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		//nolint:gosec // DataDir is operator-configured, not user input
 		if err := os.MkdirAll(d.cfg.DataDir, 0700); err != nil {
 			slog.Warn(
-				"could not create data dir; MCP tokens and approvals will not survive a restart",
+				"could not create data dir; MCP OAuth state will not survive a restart",
 				"error", err,
 				"path", d.cfg.DataDir,
 			)

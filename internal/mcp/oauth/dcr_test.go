@@ -201,10 +201,10 @@ func TestDCRRateLimit(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestDCRLRUEviction
+// TestDCROldestRegistrationEviction
 // ---------------------------------------------------------------------------
 
-func TestDCRLRUEviction(t *testing.T) {
+func TestDCROldestRegistrationEviction(t *testing.T) {
 	// Max 2 clients.
 	cfg := ServerConfig{
 		Issuer:      "https://cetacean.test",
@@ -240,7 +240,7 @@ func TestDCRLRUEviction(t *testing.T) {
 
 	// The first registered client should be evicted.
 	if s.clients.Get(ids[0]) != nil {
-		t.Error("first client should have been evicted by LRU")
+		t.Error("the oldest registration should have been evicted at the cap")
 	}
 	// The second and third should still be present.
 	if s.clients.Get(ids[1]) == nil {
@@ -344,5 +344,153 @@ func TestDCRNativeApplicationTypeAllowsLoopback(t *testing.T) {
 	}`)
 	if status != http.StatusCreated {
 		t.Fatalf("native client with a loopback redirect was rejected: status %d", status)
+	}
+}
+
+// TestClientRegistrySnapshotIsInEvictionOrder — the snapshot's order is what
+// Restore rebuilds the eviction queue from, so it has to be the registry's own
+// order rather than whatever the map iterates.
+func TestClientRegistrySnapshotIsInEvictionOrder(t *testing.T) {
+	registry := newClientRegistry(10, 10)
+
+	for _, id := range []string{"first", "second", "third"} {
+		registry.register(&ClientRegistration{ClientID: id})
+	}
+
+	snapshot := registry.Snapshot()
+	if len(snapshot) != 3 {
+		t.Fatalf("snapshot holds %d registrations, want 3", len(snapshot))
+	}
+
+	for i, want := range []string{"first", "second", "third"} {
+		if snapshot[i].ClientID != want {
+			t.Errorf("snapshot[%d] = %q, want %q", i, snapshot[i].ClientID, want)
+		}
+	}
+}
+
+// TestRestoredRegistryEvictsInTheOrderItWasWritten — a restored registry must
+// drop the same client the pre-restart one would have. Restoring in any other
+// order would silently re-target eviction at a client that had just been
+// registered.
+func TestRestoredRegistryEvictsInTheOrderItWasWritten(t *testing.T) {
+	registry := newClientRegistry(2, 10)
+	registry.Restore([]ClientRegistration{{ClientID: "older"}, {ClientID: "newer"}})
+
+	registry.register(&ClientRegistration{ClientID: "newest"})
+
+	if registry.Get("older") != nil {
+		t.Error("the oldest restored client should have been evicted first")
+	}
+	if registry.Get("newer") == nil || registry.Get("newest") == nil {
+		t.Error("the newer restored client and the fresh one should both remain")
+	}
+}
+
+// TestRestoreTruncatesToCurrentCapacity — the cap is read from config at every
+// start, so a file written under a larger one must not restore over it.
+func TestRestoreTruncatesToCurrentCapacity(t *testing.T) {
+	registry := newClientRegistry(2, 10)
+	registry.Restore([]ClientRegistration{
+		{ClientID: "oldest"},
+		{ClientID: "middle"},
+		{ClientID: "newest"},
+	})
+
+	if registry.Get("oldest") != nil {
+		t.Error("restoring past the cap should drop the oldest registration")
+	}
+	if registry.Get("middle") == nil || registry.Get("newest") == nil {
+		t.Error("restoring past the cap should keep the newest registrations")
+	}
+}
+
+// TestRestoreIgnoresRepeatedClientIDs — a hand-edited or future-written file
+// can repeat an ID, and the registry's two halves must still agree: otherwise
+// the cap under-counts and an eviction drops a client that is not the oldest.
+func TestRestoreIgnoresRepeatedClientIDs(t *testing.T) {
+	registry := newClientRegistry(10, 10)
+	registry.Restore([]ClientRegistration{
+		{ClientID: "first"},
+		{ClientID: "second"},
+		{ClientID: "first"},
+	})
+
+	registry.mu.Lock()
+	clients, order := len(registry.clients), len(registry.order)
+	registry.mu.Unlock()
+
+	if clients != 2 || order != 2 {
+		t.Fatalf("registry holds %d clients and %d order entries, want 2 and 2", clients, order)
+	}
+
+	if registry.Get("first") == nil || registry.Get("second") == nil {
+		t.Error("both distinct registrations should have survived")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestDCRRejectsOversizedMetadata
+// ---------------------------------------------------------------------------
+
+func TestDCRRejectsOversizedMetadata(t *testing.T) {
+	longURI := "https://example.test/" + strings.Repeat("a", dcrMaxRedirectURILen)
+	manyURIs := make([]string, 0, dcrMaxRedirectURIs+1)
+	for range dcrMaxRedirectURIs + 1 {
+		manyURIs = append(manyURIs, `"https://example.test/cb"`)
+	}
+
+	tests := map[string]struct {
+		body string
+		code string
+	}{
+		"client_name": {
+			body: `{
+				"client_name": "` + strings.Repeat("n", dcrMaxClientNameLen+1) + `",
+				"redirect_uris": ["https://example.test/cb"]
+			}`,
+			code: "invalid_client_metadata",
+		},
+		"redirect_uri length": {
+			body: `{"redirect_uris": ["` + longURI + `"]}`,
+			code: "invalid_redirect_uri",
+		},
+		"redirect_uri count": {
+			body: `{"redirect_uris": [` + strings.Join(manyURIs, ",") + `]}`,
+			code: "invalid_client_metadata",
+		},
+		"repeated grant_types": {
+			body: `{
+				"redirect_uris": ["https://example.test/cb"],
+				"grant_types": ["authorization_code","authorization_code"]
+			}`,
+			code: "invalid_client_metadata",
+		},
+		"repeated response_types": {
+			body: `{
+				"redirect_uris": ["https://example.test/cb"],
+				"response_types": ["code","code"]
+			}`,
+			code: "invalid_client_metadata",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			s := newTestServer(t)
+			rec := httptest.NewRecorder()
+			s.HandleRegister(rec, newDCRRequest(t, tc.body))
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+			}
+			var errResp dcrErrorResponse
+			if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if errResp.Error != tc.code {
+				t.Errorf("error = %q, want %q", errResp.Error, tc.code)
+			}
+		})
 	}
 }

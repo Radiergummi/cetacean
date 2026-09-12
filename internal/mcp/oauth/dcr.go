@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -15,6 +16,16 @@ import (
 // 64 KiB leaves comfortable headroom for unusual but legitimate inputs while
 // preventing a single client from forcing the server to buffer megabytes.
 const dcrMaxBodyBytes = 64 * 1024
+
+// A registration outlives its request: it is held in memory and rewritten to
+// disk on every later change, so the body cap alone does not bound it. RFC 7591
+// sets no limits; these keep one record near a kilobyte, far above what real
+// client metadata needs.
+const (
+	dcrMaxClientNameLen  = 256
+	dcrMaxRedirectURIs   = 10
+	dcrMaxRedirectURILen = 2048
+)
 
 // ClientRegistration holds a dynamically registered OAuth client.
 type ClientRegistration struct {
@@ -35,6 +46,17 @@ type ClientRegistration struct {
 	ApplicationType string `json:"application_type,omitempty"`
 }
 
+// clone returns a copy sharing no slice with the original, so a registration
+// handed out of the registry's lock cannot be mutated through the live one, or
+// the reverse.
+func (r ClientRegistration) clone() ClientRegistration {
+	r.RedirectURIs = slices.Clone(r.RedirectURIs)
+	r.GrantTypes = slices.Clone(r.GrantTypes)
+	r.ResponseTypes = slices.Clone(r.ResponseTypes)
+
+	return r
+}
+
 // dcrRequest is the incoming JSON body for RFC 7591 registration.
 type dcrRequest struct {
 	ClientName              string   `json:"client_name"`
@@ -52,11 +74,15 @@ type ipBucket struct {
 	windowSec int
 }
 
-// ClientRegistry stores dynamically registered clients with LRU eviction.
+// ClientRegistry stores dynamically registered clients, evicting the oldest
+// once maxClients is reached. A nil registry is the DCR-disabled case, and its
+// persistence methods tolerate that receiver.
 type ClientRegistry struct {
+	changeNotifier
+
 	mu         sync.Mutex
 	clients    map[string]*ClientRegistration
-	order      []string // insertion-order for LRU eviction (oldest first)
+	order      []string // registration order; the oldest is evicted first
 	maxClients int
 
 	rateMu    sync.Mutex
@@ -84,7 +110,6 @@ func (r *ClientRegistry) Get(clientID string) *ClientRegistration {
 // register adds a client, evicting the oldest if at capacity.
 func (r *ClientRegistry) register(reg *ClientRegistration) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	// Evict oldest if at capacity.
 	if len(r.clients) >= r.maxClients && r.maxClients > 0 {
@@ -97,6 +122,61 @@ func (r *ClientRegistry) register(reg *ClientRegistration) {
 
 	r.clients[reg.ClientID] = reg
 	r.order = append(r.order, reg.ClientID)
+	r.mu.Unlock()
+
+	r.writeThrough()
+}
+
+// Snapshot returns the registrations in the registry's own eviction order,
+// oldest first. The order is state, not presentation: it decides who the next
+// registration at capacity drops, so do not sort it.
+func (r *ClientRegistry) Snapshot() []ClientRegistration {
+	if r == nil {
+		return nil
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	registrations := make([]ClientRegistration, 0, len(r.clients))
+	for _, clientID := range r.order {
+		if reg, ok := r.clients[clientID]; ok {
+			registrations = append(registrations, reg.clone())
+		}
+	}
+
+	return registrations
+}
+
+// Restore replaces the registry's clients from a snapshot, keeping the newest
+// when the file holds more than mcp.oauth.dcr_max_clients now allows. Nothing
+// is re-validated, so a forged redirect URI in a hand-edited file outlives a
+// restart — the integrity mode 0600 protects, as for the consent records.
+func (r *ClientRegistry) Restore(registrations []ClientRegistration) {
+	if r == nil {
+		return
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.maxClients > 0 && len(registrations) > r.maxClients {
+		registrations = registrations[len(registrations)-r.maxClients:]
+	}
+
+	r.clients = make(map[string]*ClientRegistration, len(registrations))
+	r.order = make([]string, 0, len(registrations))
+
+	// A repeated client_id would leave order longer than clients, and the next
+	// eviction would then delete an ID a later order entry still names.
+	for _, reg := range registrations {
+		if _, seen := r.clients[reg.ClientID]; seen {
+			continue
+		}
+
+		r.clients[reg.ClientID] = new(reg.clone())
+		r.order = append(r.order, reg.ClientID)
+	}
 }
 
 // checkRateLimit returns true if the IP is allowed to make a registration request.
@@ -210,6 +290,12 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.ClientName) > dcrMaxClientNameLen {
+		writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
+			"client_name must be at most "+strconv.Itoa(dcrMaxClientNameLen)+" bytes")
+		return
+	}
+
 	// Validate redirect_uris.
 	if len(req.RedirectURIs) == 0 {
 		writeDCRError(
@@ -220,7 +306,17 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
+	if len(req.RedirectURIs) > dcrMaxRedirectURIs {
+		writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
+			"redirect_uris must hold at most "+strconv.Itoa(dcrMaxRedirectURIs)+" entries")
+		return
+	}
 	for _, uri := range req.RedirectURIs {
+		if len(uri) > dcrMaxRedirectURILen {
+			writeDCRError(w, http.StatusBadRequest, "invalid_redirect_uri",
+				"redirect_uri must be at most "+strconv.Itoa(dcrMaxRedirectURILen)+" bytes")
+			return
+		}
 		if !isValidRedirectURI(uri) {
 			writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
 				"redirect_uri must be https:// or loopback http://: "+uri)
@@ -267,8 +363,9 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if len(grantTypes) == 0 {
 		grantTypes = []string{"authorization_code", "refresh_token"}
 	}
-	for _, gt := range grantTypes {
-		if gt != "authorization_code" && gt != "refresh_token" {
+	for i, gt := range grantTypes {
+		known := gt == "authorization_code" || gt == "refresh_token"
+		if !known || slices.Contains(grantTypes[:i], gt) {
 			writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
 				"grant_types must be a subset of [authorization_code, refresh_token]")
 			return
@@ -279,8 +376,8 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if len(responseTypes) == 0 {
 		responseTypes = []string{"code"}
 	}
-	for _, rt := range responseTypes {
-		if rt != "code" {
+	for i, rt := range responseTypes {
+		if rt != "code" || slices.Contains(responseTypes[:i], rt) {
 			writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
 				"response_types must be a subset of [code]")
 			return

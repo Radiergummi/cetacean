@@ -18,6 +18,10 @@ import (
 // v2 added consent records. A v1 file loads and yields none, which is exactly
 // the pre-upgrade behaviour: every client is prompted once more, then
 // remembered.
+//
+// An additive key needs no bump: it loads as absent in both directions, and a
+// bump would make a rollback discard the whole file rather than the one key
+// the older build cannot use.
 const oauthStateVersion = 2
 
 // RefreshTokenSnapshot is the serializable state of a RefreshTokenStore.
@@ -47,6 +51,12 @@ type oauthState struct {
 	// avoids inventing an encoding for a composite key built from three
 	// free-form strings.
 	Consent []ConsentRecord `json:"consent,omitempty"`
+
+	// Clients are the RFC 7591 registrations in eviction order, oldest first —
+	// see ClientRegistry.Snapshot. The live type is safe on disk here, unlike
+	// the token snapshot above, because every tag is an RFC 7591 field name and
+	// cannot move without breaking the wire format first.
+	Clients []ClientRegistration `json:"clients,omitempty"`
 }
 
 // RefreshTokenSnapEntry is one live token: the claims bound to it plus both
@@ -331,6 +341,14 @@ type stateFile struct {
 	path    string
 	tokens  *RefreshTokenStore
 	consent *ConsentStore
+
+	// clients is nil when DCR is disabled.
+	clients *ClientRegistry
+
+	// carriedClients is what the file held at startup, written back verbatim
+	// while there is no registry to snapshot, so turning DCR off for a window
+	// does not let a token rotation erase the registrations.
+	carriedClients []ClientRegistration
 }
 
 // write serializes every store's current state. A failed write is logged and
@@ -342,16 +360,23 @@ func (f *stateFile) write() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	registrations := f.carriedClients
+	if f.clients != nil {
+		registrations = f.clients.Snapshot()
+	}
+
 	state := oauthState{
 		Version:              oauthStateVersion,
 		Timestamp:            time.Now(),
 		RefreshTokenSnapshot: f.tokens.Snapshot(),
 		Consent:              f.consent.Snapshot(),
+		Clients:              registrations,
 	}
 
 	if err := writeState(f.path, state); err != nil {
 		slog.Warn(
-			"MCP OAuth state write failed; tokens and approvals will not survive a restart",
+			"MCP OAuth state write failed; tokens, approvals and client "+
+				"registrations will not survive a restart",
 			"error", err,
 			"path", f.path,
 		)
