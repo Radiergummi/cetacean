@@ -59,12 +59,24 @@ type contentTypeKey struct{}
 // Recorded only when true, so the zero value is the permissive one.
 type htmlUnacceptableKey struct{}
 
+type extensionKey struct{}
+
 // ContentTypeFromContext returns the negotiated content type, defaulting to JSON.
 func ContentTypeFromContext(ctx context.Context) ContentType {
 	if ct, ok := ctx.Value(contentTypeKey{}).(ContentType); ok {
 		return ct
 	}
 	return ContentTypeJSON
+}
+
+// extensionFromContext returns the suffix negotiate stripped from the path, or
+// "" when the type came from Accept instead. Anything rebuilding the URI puts
+// it back: it is the only thing naming the representation, so a redirect that
+// drops it is re-negotiated from an Accept that may disagree.
+func extensionFromContext(ctx context.Context) string {
+	ext, _ := ctx.Value(extensionKey{}).(string)
+
+	return ext
 }
 
 // htmlUnacceptable reports whether the client ruled out text/html — by naming
@@ -85,7 +97,7 @@ func negotiate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Accept")
 
-		ct := resolveExtension(r)
+		ct, ext := resolveExtension(r)
 		acceptsHTML := ct == ContentTypeHTML
 
 		if ct == ContentTypeUnsupported {
@@ -95,6 +107,10 @@ func negotiate(next http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(r.Context(), contentTypeKey{}, ct)
+		if ext != "" {
+			ctx = context.WithValue(ctx, extensionKey{}, ext)
+		}
+
 		if !acceptsHTML {
 			ctx = context.WithValue(ctx, htmlUnacceptableKey{}, true)
 		}
@@ -164,17 +180,18 @@ func hasMidPathExtension(path string) bool {
 }
 
 // resolveExtension checks for a known extension suffix on the request path.
-// If found, it strips the suffix from r.URL.Path and returns the content type.
-// Returns ContentTypeUnsupported if no extension matches.
-func resolveExtension(r *http.Request) ContentType {
+// If found, it strips the suffix from r.URL.Path and returns the content type
+// along with the suffix it removed. Returns ContentTypeUnsupported if no
+// extension matches.
+func resolveExtension(r *http.Request) (ContentType, string) {
 	path := r.URL.Path
 	for _, ext := range extensionTypes {
 		if trimmed, ok := strings.CutSuffix(path, ext.ext); ok {
 			r.URL.Path = trimmed
-			return ext.ct
+			return ext.ct, ext.ext
 		}
 	}
-	return ContentTypeUnsupported
+	return ContentTypeUnsupported, ""
 }
 
 // rangesAcceptHTML reports whether the ranges admit text/html at a usable

@@ -821,6 +821,25 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		cfg.OAuthRoutes(mux.mux, "")
 	}
 
+	// The web API's entry point. /{$} matches "/" alone, so the catch-all
+	// below still answers every other unmatched path, and text/html still
+	// reaches the dashboard — which is what a browser at the origin wants.
+	mux.HandleFunc("GET /{$}", contentNegotiated(HandleEntrypoint, feedHandlers{}, spa))
+
+	// The same resource under the name static hosting taught clients to
+	// expect. negotiate has already stripped any suffix, so one route covers
+	// /index, /index.html and /index.json — and the suffix goes back on the
+	// target, which would otherwise re-negotiate from a disagreeing Accept.
+	mux.HandleFunc("GET /index", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		http.Redirect(
+			w, r,
+			absPath(ctx, "/")+extensionFromContext(ctx),
+			http.StatusMovedPermanently,
+		)
+	})
+
 	// SPA fallback (must be last). It answers 404 and never 406: a file it has
 	// is one representation with nothing to negotiate, and a path it does not
 	// have is no resource to hold representations at all.
@@ -891,6 +910,8 @@ func readsClusterState(mux *routeRecorder, r *http.Request) bool {
 		strings.HasPrefix(path, "/api"),
 		strings.HasPrefix(path, "/auth/"),
 		strings.HasPrefix(path, "/.well-known/"),
+		path == "/",
+		path == "/index",
 		path == openSearchPath,
 		path == profilePath:
 		return false

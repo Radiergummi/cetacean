@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The dashboard is installable as an app, with icons and a theme colour that follows its own background
 - The cluster can be searched from the browser's address bar, via the OpenSearch description at `/opensearch.xml`
 - `/.well-known/api-catalog` (RFC 9727) lists the APIs this process serves; every response links to it
+- `GET /` answers a JSON client with an entry point naming every collection, so a deployment's address is enough to find the rest of the API; browsers still get the dashboard
 - Write operations accept an optional `If-Match` header and refuse with 412 if the resource changed since you read it
 - `Prefer: wait=30` holds a service write open until the cluster settles, answering `202 Accepted` with the rollout's progress if it runs out. `Prefer: respond-async` acknowledges immediately
 - JSON, Atom feeds and topology exports above a kilobyte are served as zstd or gzip when the client accepts one
