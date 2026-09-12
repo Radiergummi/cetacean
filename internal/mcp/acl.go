@@ -126,14 +126,9 @@ func (s *Server) filterServices(ctx context.Context, items []swarm.Service) []sw
 }
 
 // filterRawTasks keeps the tasks the caller may read, without enriching them.
-//
-// The ACL key is "task:<id>", a field swarm.Task already carries, so nothing
-// has to be enriched to make the decision — and the digest and row builders
-// resolve parent names from the slices they are given rather than from
-// enriched fields. Enriching first would resolve a service name and a node
-// hostname per task only to discard them, on a path (resources/read) that a
-// subscription re-drives after every cache event, and would resolve them from
-// behind the caller's grants besides.
+// The ACL key is "task:<id>", which swarm.Task already carries, and the
+// builders resolve parents from the slices they are given — so enriching first
+// would resolve names only to discard them, from behind the caller's grants.
 func (s *Server) filterRawTasks(ctx context.Context, items []swarm.Task) []swarm.Task {
 	return acl.Filter(
 		s.acl,
@@ -206,11 +201,10 @@ func (s *Server) filterVolumes(ctx context.Context, items []volume.Volume) []vol
 	)
 }
 
-// filterServiceRefs drops the services an identity may not read from one of
-// the cache's reverse indexes (ServicesUsingConfig and friends). A digest's
-// "used by" list is built from those, and would otherwise name services the
-// caller cannot see just because they can read the config those services
-// mount.
+// filterServiceRefs drops the services an identity may not read from one of the
+// cache's reverse indexes. A digest's "used by" list is built from those, and
+// would otherwise name services the caller cannot see merely because they can
+// read the config those services mount.
 func (s *Server) filterServiceRefs(
 	ctx context.Context,
 	items []cache.ServiceRef,
@@ -271,14 +265,9 @@ func (s *Server) filterHistory(
 }
 
 // readableEnrichedTasks filters tasks to the ones the caller may read, then
-// names their parents from the services and nodes the caller may read too.
-//
-// The enrichment has to be ACL-aware because ServiceName and NodeHostname are
-// the enriched task's whole point, and cluster.EnrichTasks resolves them
-// straight out of the cache: a caller holding a bare `task:*` grant was told
-// the name of every service and node in the cluster, which is exactly what
-// TaskDigest goes out of its way not to do. Filtering the tasks first also
-// keeps the work proportional to what is actually returned.
+// names their parents from the services and nodes they may read too. The
+// enrichment has to be ACL-aware: cluster.EnrichTasks resolves straight out of
+// the cache, so a bare `task:*` grant would name every service in the cluster.
 func (s *Server) readableEnrichedTasks(
 	ctx context.Context,
 	tasks []swarm.Task,
@@ -311,10 +300,9 @@ func (s *Server) readableEnrichedTask(
 }
 
 // checkWrite enforces the "write" permission on resourceType:resourceName for
-// the identity in ctx. Returns nil if ACL is disabled or no identity is on the
-// context (the bearer middleware would have rejected the request earlier in
-// that case). All MCP tool handlers route through this helper so denial errors
-// have a uniform shape.
+// the identity in ctx, returning nil when ACL is disabled or no identity is on
+// the context — the bearer middleware would have rejected the request already.
+// Every tool handler routes through it, so denials have one shape.
 func (s *Server) checkWrite(ctx context.Context, resourceType, resourceName string) error {
 	if s.acl == nil {
 		return nil
@@ -395,16 +383,10 @@ func (s *Server) checkTaskWrite(ctx context.Context, id string) error {
 	return s.checkWrite(ctx, "service", svc.Spec.Name)
 }
 
-// checkServiceRead resolves the service Spec.Name from the cache so the ACL
-// key is `service:<name>` rather than `service:<id>`, matching the resource
-// read path in lookupResource. Used by toolGetLogs which doesn't go through
-// lookupResource.
-//
-// It resolves rather than looking the ID up, because get_logs advertises its
-// `service` argument as "Service ID or name" and Docker honours both — so a
-// plain GetService turned a name, the identifier find and the completions
-// hand back, into "service not found" on every cluster that has an ACL policy
-// and into a working call on every cluster that has not.
+// checkServiceRead resolves Spec.Name from the cache so the ACL key is
+// `service:<name>`, matching lookupResource; get_logs does not go through it.
+// It resolves rather than looking the ID up because get_logs accepts either,
+// and a plain GetService turns a name into "service not found" under a policy.
 func (s *Server) checkServiceRead(ctx context.Context, id string) error {
 	if s.acl == nil {
 		return nil
@@ -420,14 +402,9 @@ func (s *Server) checkServiceRead(ctx context.Context, id string) error {
 }
 
 // checkTaskRead enforces the read permission on a task, keyed as `task:<id>`.
-//
-// It does not walk to the parent service the way checkTaskWrite does, because
-// the evaluator already does: acl.grantMatchesResource resolves a task through
-// its parent service and that service's stack, so the task's own key is
-// strictly the broader check. It is also the key every other task read passes
-// — REST's HandleTaskLogs and the cetacean://tasks/{id} resource both do — and
-// walking to the parent here would leave a `task:*` grant able to read task
-// logs on every path except this tool.
+// It does not walk to the parent the way checkTaskWrite does, because
+// acl.grantMatchesResource already resolves a task through its service and
+// stack — and every other task read passes this same key.
 func (s *Server) checkTaskRead(ctx context.Context, id string) error {
 	return s.checkRead(ctx, "task", id)
 }
