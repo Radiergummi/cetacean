@@ -270,13 +270,28 @@ func main() {
 	}
 	defer dockerClient.Close() //nolint:errcheck // best-effort shutdown close
 
+	// Created once, for whichever feature needs it: the cache snapshot, the
+	// authorization server's token store, or both. Token durability is
+	// deliberately not tied to storage.snapshot, so either reason alone is
+	// enough — and one call means one place that can fail and one warning when
+	// it does.
+	dataDirReady := false
+	if cfg.Snapshot || cfg.OAuth.Enabled {
+		//nolint:gosec // DataDir is operator-configured, not user input
+		if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
+			slog.Warn(
+				"could not create data dir; snapshots and OAuth state will not persist",
+				"error", err,
+				"path", cfg.DataDir,
+			)
+		} else {
+			dataDirReady = true
+		}
+	}
+
 	snapshotPath := ""
 	if cfg.Snapshot {
 		snapshotPath = filepath.Join(cfg.DataDir, "snapshot.json")
-		//nolint:gosec // DataDir is operator-configured, not user input
-		if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
-			slog.Warn("could not create data dir", "error", err)
-		}
 		if err := stateCache.LoadFromDisk(snapshotPath); err != nil {
 			slog.Info("no snapshot loaded", "error", err)
 		} else {
@@ -500,6 +515,7 @@ func main() {
 		authProvider: authProvider,
 		tlsEnabled:   tlsCfg.Enabled(),
 		issuer:       issuer,
+		dataDirReady: dataDirReady,
 		cache:        stateCache,
 		writeClient:  dockerClient,
 		logs:         dockerClient,
@@ -740,6 +756,11 @@ type mcpDeps struct {
 	// deriving it and hoping they agree.
 	issuer string
 
+	// dataDirReady reports whether main managed to create storage.data_dir, so
+	// the authorization server is told whether its store can persist rather
+	// than finding out by trying again.
+	dataDirReady bool
+
 	cache       *cache.Cache
 	writeClient mcp.DockerWriteClient
 	logs        mcp.LogStreamer
@@ -771,22 +792,13 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 		)
 	}
 
-	// Refresh tokens outlive the process only if the data directory is
-	// writable. It is created here rather than relying on the snapshot
-	// path, since token durability is not tied to storage.snapshot: an
-	// operator who turns cache snapshots off still gets clients that stay
-	// authorized across a restart.
-	statePath := filepath.Join(d.cfg.DataDir, "oauth-tokens.json")
-	legacyStatePath := filepath.Join(d.cfg.DataDir, "mcp-tokens.json")
-	//nolint:gosec // DataDir is operator-configured, not user input
-	if err := os.MkdirAll(d.cfg.DataDir, 0700); err != nil {
-		slog.Warn(
-			"could not create data dir; OAuth tokens and approvals will not survive a restart",
-			"error", err,
-			"path", d.cfg.DataDir,
-		)
-		statePath = ""
-		legacyStatePath = ""
+	// Refresh tokens outlive the process only if the data directory is writable.
+	// Empty paths keep both stores in memory, which is what an unwritable one
+	// means; main has already warned about it.
+	statePath, legacyStatePath := "", ""
+	if d.dataDirReady {
+		statePath = filepath.Join(d.cfg.DataDir, "oauth-tokens.json")
+		legacyStatePath = filepath.Join(d.cfg.DataDir, "mcp-tokens.json")
 	}
 
 	resource := d.issuer + d.cfg.BasePath + "/mcp"
