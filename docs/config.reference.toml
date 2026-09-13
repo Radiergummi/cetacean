@@ -132,3 +132,4 @@
 # max_task_ttl = "1h"                       # Ceiling on the retention a call may ask for; "0s" disables the cap
 # auth_bypass = []                          # Auth modes whose identity is accepted at /mcp without a bearer token (e.g. ["cert"])
 #                                           # A listed mode authenticates /mcp on its own, so oauth.enabled can stay off
+#                                           # Only "cert", "headers" and "tailscale"; anything else is refused at startup

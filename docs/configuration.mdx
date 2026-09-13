@@ -313,7 +313,7 @@ default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token
 </ConfigParam>
 
 <ConfigParam name="mcp.auth_bypass" env="CETACEAN_MCP_AUTH_BYPASS">
-  Comma-separated authentication modes that skip the bearer check at `/mcp`, e.g. `cert`. Use it where the transport already carries a verified identity. Authorization still applies; only the OAuth handshake is skipped. A mode listed here is authenticated by its own provider on every request, so it satisfies `/mcp` on its own and [`oauth.enabled`][oauth.enabled] can stay off. Only list modes that authenticate without writing a response — `cert`, `headers`, `tailscale`; `oidc` redirects, and would refuse every request.
+  Comma-separated authentication modes that skip the bearer check at `/mcp`, e.g. `cert`. Use it where the transport already carries a verified identity. Authorization still applies; only the OAuth handshake is skipped. A mode listed here is authenticated by its own provider on every request, so it satisfies `/mcp` on its own and [`oauth.enabled`][oauth.enabled] can stay off. Only `cert`, `headers` and `tailscale` may be listed, and Cetacean refuses to start on anything else: those carry identity in the transport, where `oidc` authenticates from a session cookie — an ambient credential that `/mcp`'s exemption from cross-origin protection assumes is absent.
 </ConfigParam>
 
 See [MCP][mcp] for the tools, resources, prompts and widgets the server exposes.
