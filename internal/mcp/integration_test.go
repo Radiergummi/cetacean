@@ -238,11 +238,7 @@ func newOAuthIntegrationServer(
 	}
 	t.Cleanup(srv.Close)
 
-	issuer, err := oauth.NewTokenIssuer(
-		key,
-		"https://cetacean.example.com",
-		"https://cetacean.example.com/mcp",
-	)
+	issuer, err := oauth.NewTokenIssuer(key, testIssuer)
 	if err != nil {
 		t.Fatalf("NewTokenIssuer: %v", err)
 	}
@@ -274,6 +270,7 @@ func TestMCPIntegration_ResourcesReadHonoursACL(t *testing.T) {
 
 	token, err := issuer.IssueAccessToken(
 		oauth.AccessTokenClaims{Subject: "agent@example.com", ClientID: "agent-client"},
+		testResource,
 		5*time.Minute,
 	)
 	if err != nil {
@@ -329,6 +326,7 @@ func TestMCPIntegration_FindToolFiltersByACL(t *testing.T) {
 
 	token, err := issuer.IssueAccessToken(
 		oauth.AccessTokenClaims{Subject: "agent@example.com", ClientID: "agent-client"},
+		testResource,
 		5*time.Minute,
 	)
 	if err != nil {
@@ -370,7 +368,12 @@ func TestMCPIntegration_UnauthorizedHeaderUsesRFC7230Quoting(t *testing.T) {
 	// Go-syntax escapes for legal characters. The PRM URL has no special
 	// characters, so the rendered form must contain the URL verbatim
 	// between double quotes.
-	want := `resource_metadata="https://cetacean.example.com/.well-known/oauth-protected-resource"`
+	//
+	// The URL is this transport's own document, not the one at the root: a
+	// client sent to the root would discover the API resource and come back
+	// with a token this endpoint refuses.
+	want := `resource_metadata="https://cetacean.example.com` +
+		`/.well-known/oauth-protected-resource` + MountPath + `"`
 	if !strings.Contains(www, want) {
 		t.Errorf("WWW-Authenticate = %q, want substring %q", www, want)
 	}

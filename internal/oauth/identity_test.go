@@ -15,12 +15,12 @@ func TestIdentifyCarriesTheClaimsAndNothingElse(t *testing.T) {
 		Subject:  "alice@example.com",
 		Groups:   []string{"ops", "sre"},
 		ClientID: "test-client",
-	}, s.cfg.OAuth.AccessTokenTTL)
+	}, s.cfg.defaultIdentifier(), s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}
 
-	got, err := s.Identify(token)
+	got, err := s.Identify(token, s.cfg.defaultIdentifier())
 	if err != nil {
 		t.Fatalf("Identify: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestIdentifyCarriesTheClaimsAndNothingElse(t *testing.T) {
 func TestIdentifyReturnsTheVerifierErrorUnwrapped(t *testing.T) {
 	s := newTestServer(t)
 
-	if _, err := s.Identify("not-a-jwt"); !errors.Is(err, ErrMalformedToken) {
+	if _, err := s.Identify("not-a-jwt", s.cfg.defaultIdentifier()); !errors.Is(err, ErrMalformedToken) {
 		t.Errorf("err = %v, want ErrMalformedToken", err)
 	}
 }

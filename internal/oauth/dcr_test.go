@@ -163,8 +163,8 @@ func TestDCRMissingRedirectURIs(t *testing.T) {
 func TestDCRRateLimit(t *testing.T) {
 	// Configure a small rate limit (3/hour) for testing.
 	cfg := ServerConfig{
-		Issuer:   "https://cetacean.test",
-		Resource: "https://cetacean.test/resource",
+		Issuer:    "https://cetacean.test",
+		Resources: []Resource{{Path: "/resource", Realm: "cetacean"}},
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  10 * 60 * 1e9, // 10m in nanoseconds
 			RefreshTokenTTL: 720 * 3600 * 1e9,
@@ -207,8 +207,8 @@ func TestDCRRateLimit(t *testing.T) {
 func TestDCRLRUEviction(t *testing.T) {
 	// Max 2 clients.
 	cfg := ServerConfig{
-		Issuer:   "https://cetacean.test",
-		Resource: "https://cetacean.test/resource",
+		Issuer:    "https://cetacean.test",
+		Resources: []Resource{{Path: "/resource", Realm: "cetacean"}},
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  3600 * 1e9,
 			RefreshTokenTTL: 720 * 3600 * 1e9,

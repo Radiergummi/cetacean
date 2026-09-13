@@ -69,32 +69,32 @@ type jwtPayload struct {
 	ClientID string `json:"client_id"`
 }
 
+// The audience is per token, not per issuer: one server issues for several
+// protected resources and a token must name the one it was bound to.
 type TokenIssuer struct {
-	signer   *ecdsa.PrivateKey
-	header   string
-	Issuer   string
-	Audience string
+	signer *ecdsa.PrivateKey
+	header string
+	Issuer string
 }
 
-func NewTokenIssuer(root []byte, issuer, audience string) (*TokenIssuer, error) {
+func NewTokenIssuer(root []byte, issuer string) (*TokenIssuer, error) {
 	km, err := deriveKeys(root)
 	if err != nil {
 		return nil, err
 	}
 
-	return newTokenIssuer(km, issuer, audience), nil
+	return newTokenIssuer(km, issuer), nil
 }
 
 // For a caller that has already derived, so it does not derive twice.
-func newTokenIssuer(km *keyMaterial, issuer, audience string) *TokenIssuer {
+func newTokenIssuer(km *keyMaterial, issuer string) *TokenIssuer {
 	return &TokenIssuer{
 		signer: km.signer,
 		// kid is base64url of a hash, so it needs no JSON escaping.
 		header: base64.RawURLEncoding.EncodeToString([]byte(
 			`{"alg":"ES256","kid":"` + km.kid + `","typ":"` + accessTokenType + `"}`,
 		)),
-		Issuer:   issuer,
-		Audience: audience,
+		Issuer: issuer,
 	}
 }
 
@@ -135,8 +135,11 @@ func verifyES256(pub *ecdsa.PublicKey, input, sig string) bool {
 	)
 }
 
+// audience is the identifier of the resource the grant was bound to, stamped
+// as aud so a resource server can refuse a token minted for another one.
 func (t *TokenIssuer) IssueAccessToken(
 	claims AccessTokenClaims,
+	audience string,
 	ttl time.Duration,
 ) (string, error) {
 	if t.signer == nil {
@@ -153,6 +156,12 @@ func (t *TokenIssuer) IssueAccessToken(
 		return "", fmt.Errorf("%w: client_id is required (RFC 9068 §2.2)", ErrIncompleteClaims)
 	}
 
+	// An unaudienced token would verify against every resource this server
+	// serves, which is the confusion the audience exists to stop.
+	if audience == "" {
+		return "", fmt.Errorf("%w: aud is required (RFC 9068 §2.2)", ErrIncompleteClaims)
+	}
+
 	jtiBytes := make([]byte, 16)
 	if _, err := rand.Read(jtiBytes); err != nil {
 		panic(fmt.Sprintf("jwt: crypto/rand.Read failed (host RNG broken): %v", err))
@@ -161,7 +170,7 @@ func (t *TokenIssuer) IssueAccessToken(
 	now := time.Now()
 	payload := jwtPayload{
 		Issuer:    t.Issuer,
-		Audience:  t.Audience,
+		Audience:  audience,
 		IssuedAt:  now.Unix(),
 		ExpiresAt: now.Add(ttl).Unix(),
 		JTIID:     base64.RawURLEncoding.EncodeToString(jtiBytes),
@@ -188,7 +197,12 @@ func (t *TokenIssuer) IssueAccessToken(
 	return signingInput + "." + sig, nil
 }
 
-func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
+// audience is the identifier of the resource doing the verifying. Comparison is
+// exact: a token for a neighbouring resource, or for one whose path contains
+// this one, is refused with ErrAudienceMismatch.
+func (t *TokenIssuer) VerifyAccessToken(
+	token, audience string,
+) (*AccessTokenClaims, error) {
 	if t.signer == nil {
 		return nil, ErrMissingKey
 	}
@@ -232,12 +246,12 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 		return nil, fmt.Errorf("%w: got %q, want %q", ErrIssuerMismatch, payload.Issuer, t.Issuer)
 	}
 
-	if payload.Audience != t.Audience {
+	if payload.Audience != audience {
 		return nil, fmt.Errorf(
 			"%w: got %q, want %q",
 			ErrAudienceMismatch,
 			payload.Audience,
-			t.Audience,
+			audience,
 		)
 	}
 

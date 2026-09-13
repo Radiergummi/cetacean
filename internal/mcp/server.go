@@ -33,9 +33,14 @@ import (
 // TokenVerifier is the narrow surface of the OAuth authorization server this
 // transport consumes: the identity a bearer token carries, and the 401 that
 // tells a client where to go for one. *oauth.Server satisfies it.
+//
+// The resource identifier is threaded through both calls because the server
+// issues tokens for more than one protected resource. A token minted for
+// another is refused here, which is the whole point of asking for it by name.
 type TokenVerifier interface {
-	Identify(token string) (*auth.Identity, error)
-	WriteUnauthorized(w http.ResponseWriter, errorCode string)
+	Identify(token, resource string) (*auth.Identity, error)
+	WriteUnauthorized(w http.ResponseWriter, resource, errorCode string)
+	ResourceIdentifier(path string) string
 }
 
 // guardMode is what stands in front of /mcp. The endpoint is exempt from the
@@ -136,6 +141,11 @@ type RecommendationEngine interface {
 	Results() []recommendations.Recommendation
 }
 
+// MountPath is where the endpoint is served under the deployment's base path.
+// It is also this transport's protected resource, so a token for the deployment
+// root does not open it.
+const MountPath = "/mcp"
+
 // Server is the Cetacean MCP server.
 type Server struct {
 	cache          *cache.Cache
@@ -145,8 +155,13 @@ type Server struct {
 	config         config.MCPConfig
 	globalOpsLevel config.OperationsLevel
 	oauth          TokenVerifier // nil unless an OAuth server was configured
-	authMode       string        // upstream auth mode ("cert", "oidc", ...); used for bypass match
-	authProvider   auth.Provider // upstream auth provider; used when bypass is active
+
+	// resource is this transport's resource identifier, resolved once from the
+	// verifier for the same reason guard is: which audience /mcp accepts is a
+	// property of the deployment, not of a request.
+	resource     string
+	authMode     string        // upstream auth mode ("cert", "oidc", ...); used for bypass match
+	authProvider auth.Provider // upstream auth provider; used when bypass is active
 
 	// guard is settled in New from the configuration, not re-derived per
 	// request. Which middleware protects /mcp is a property of the deployment,
@@ -258,6 +273,13 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		return nil, err
 	}
 
+	// Asked of the verifier rather than assembled here: it owns the issuer and
+	// the base path the identifier is built from.
+	resource := ""
+	if opts.OAuth != nil {
+		resource = opts.OAuth.ResourceIdentifier(MountPath)
+	}
+
 	srv := &Server{
 		guard:          guard,
 		cache:          c,
@@ -267,6 +289,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		config:         opts.Config,
 		globalOpsLevel: opts.GlobalOpsLevel,
 		oauth:          opts.OAuth,
+		resource:       resource,
 		authMode:       opts.AuthMode,
 		authProvider:   opts.AuthProvider,
 		recEngine:      opts.Recommendations,
@@ -499,13 +522,13 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 
 		token := auth.ExtractBearerToken(r)
 		if token == "" {
-			s.oauth.WriteUnauthorized(w, "invalid_token")
+			s.oauth.WriteUnauthorized(w, s.resource, "invalid_token")
 			return
 		}
 
-		identity, err := s.oauth.Identify(token)
+		identity, err := s.oauth.Identify(token, s.resource)
 		if err != nil {
-			s.oauth.WriteUnauthorized(w, "invalid_token")
+			s.oauth.WriteUnauthorized(w, s.resource, "invalid_token")
 			return
 		}
 

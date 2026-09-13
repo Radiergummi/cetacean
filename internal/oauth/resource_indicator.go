@@ -1,22 +1,34 @@
 package oauth
 
-import "errors"
+import (
+	"errors"
+	"slices"
+)
 
-// ValidateResourceIndicator checks the RFC 8707 resource indicator from a
-// token request against the expected server resource URL.
+// ValidateResourceIndicator checks the RFC 8707 resource indicator from a token
+// request against the resource identifiers this server issues tokens for.
 //
-// If raw is empty and required is false, the expected value is returned as the
-// effective resource (lenient mode). If raw is empty and required is true, an
-// error is returned. If raw is non-empty it must match expected exactly.
-func ValidateResourceIndicator(raw string, expected string, required bool) (string, error) {
+// If raw is empty and required is false, fallback is returned as the effective
+// resource (lenient mode). If raw is empty and required is true, an error is
+// returned. If raw is non-empty it must equal one of known exactly — a prefix
+// match would make a token for one resource reach another mounted beneath it.
+func ValidateResourceIndicator(
+	raw string,
+	known []string,
+	fallback string,
+	required bool,
+) (string, error) {
 	if raw == "" {
 		if required {
 			return "", errors.New("resource parameter is required")
 		}
-		return expected, nil
+
+		return fallback, nil
 	}
-	if raw != expected {
-		return "", errors.New("resource does not match this server")
+
+	if !slices.Contains(known, raw) {
+		return "", errors.New("resource is not one this server issues tokens for")
 	}
+
 	return raw, nil
 }

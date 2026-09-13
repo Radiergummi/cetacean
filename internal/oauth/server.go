@@ -31,9 +31,10 @@ type ServerConfig struct {
 	// BasePath is an optional URL prefix, e.g. "" or "/cetacean".
 	BasePath string
 
-	// Resource is the canonical URL of the protected resource this server issues
-	// tokens for — both the PRM resource identifier and the JWT audience.
-	Resource string
+	// Resources are the protected resources this server issues tokens for.
+	// The first is the default a token request carrying no RFC 8707 resource
+	// indicator resolves to. Empty means one resource at the deployment root.
+	Resources []Resource
 
 	// OAuth holds the server's own settings: TTLs, DCR knobs, CIMD and the
 	// require_resource_indicator flag.
@@ -78,6 +79,10 @@ func (c ServerConfig) issuerID() string {
 // NewServer constructs a fully wired Server from cfg. No separate init step
 // is required; call RegisterRoutes to attach handlers to a mux.
 func NewServer(cfg ServerConfig) *Server {
+	for i := range cfg.Resources {
+		cfg.Resources[i].Path = trimmedPath(cfg.Resources[i].Path)
+	}
+
 	// Without a root, issuing and verifying answer ErrMissingKey.
 	km, err := deriveKeys(cfg.SigningKey)
 	if err != nil {
@@ -86,9 +91,9 @@ func NewServer(cfg ServerConfig) *Server {
 
 	var issuer *TokenIssuer
 	if km != nil {
-		issuer = newTokenIssuer(km, cfg.issuerID(), cfg.Resource)
+		issuer = newTokenIssuer(km, cfg.issuerID())
 	} else {
-		issuer = &TokenIssuer{Issuer: cfg.issuerID(), Audience: cfg.Resource}
+		issuer = &TokenIssuer{Issuer: cfg.issuerID()}
 	}
 
 	cimd := &CIMDFetcher{
@@ -152,10 +157,12 @@ func NewServer(cfg ServerConfig) *Server {
 func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/.well-known/oauth-authorization-server", s.HandleMetadata)
 	mux.HandleFunc("GET "+basePath+"/.well-known/openid-configuration", s.HandleMetadata)
-	mux.HandleFunc(
-		"GET "+basePath+"/.well-known/oauth-protected-resource",
-		s.HandleProtectedResourceMetadata,
-	)
+	for _, resource := range s.cfg.resources() {
+		mux.HandleFunc(
+			"GET "+resource.metadataPath(basePath),
+			s.protectedResourceMetadataHandler(resource),
+		)
+	}
 	mux.HandleFunc("GET "+basePath+jwksPath, s.HandleJWKS)
 	mux.HandleFunc("GET "+basePath+"/oauth/authorize", s.HandleAuthorize)
 	mux.HandleFunc("POST "+basePath+"/oauth/authorize", s.HandleAuthorize)
@@ -296,7 +303,8 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 	// RFC 8707 resource indicator validation.
 	if _, err := ValidateResourceIndicator(
 		resourceForm,
-		s.cfg.Resource,
+		s.cfg.knownIdentifiers(),
+		s.cfg.defaultIdentifier(),
 		s.cfg.OAuth.RequireResourceIndicator,
 	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
@@ -364,7 +372,7 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		DisplayName: codeData.DisplayName,
 		Groups:      codeData.Groups,
 		ClientID:    codeData.ClientID,
-	}, s.cfg.OAuth.AccessTokenTTL)
+	}, codeData.Resource, s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
 		writeTokenError(
 			w,
@@ -407,7 +415,8 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// triggers Rotate's Theft branch on its second presentation.
 	if _, err := ValidateResourceIndicator(
 		resourceForm,
-		s.cfg.Resource,
+		s.cfg.knownIdentifiers(),
+		s.cfg.defaultIdentifier(),
 		s.cfg.OAuth.RequireResourceIndicator,
 	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
@@ -477,7 +486,7 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		DisplayName: result.Data.DisplayName,
 		Groups:      result.Data.Groups,
 		ClientID:    result.Data.ClientID,
-	}, s.cfg.OAuth.AccessTokenTTL)
+	}, result.Data.Resource, s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
 		writeTokenError(
 			w,
@@ -727,7 +736,8 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 
 	effectiveResource, err := ValidateResourceIndicator(
 		resourceParam,
-		s.cfg.Resource,
+		s.cfg.knownIdentifiers(),
+		s.cfg.defaultIdentifier(),
 		s.cfg.OAuth.RequireResourceIndicator,
 	)
 	if err != nil {
@@ -888,7 +898,8 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 
 	effectiveResource, err := ValidateResourceIndicator(
 		resourceParam,
-		s.cfg.Resource,
+		s.cfg.knownIdentifiers(),
+		s.cfg.defaultIdentifier(),
 		s.cfg.OAuth.RequireResourceIndicator,
 	)
 	if err != nil {
@@ -1034,14 +1045,22 @@ func (s *Server) redirectWithError(
 // WWW-Authenticate helper
 // ---------------------------------------------------------------------------
 
-// WriteUnauthorized writes a 401 response with a WWW-Authenticate header
-// that includes the protected resource metadata URL and the error code.
-// Used by a resource server's handler when a bearer token is missing or invalid.
-func (s *Server) WriteUnauthorized(w http.ResponseWriter, errorCode string) {
-	prmURL := s.cfg.issuerID() + "/.well-known/oauth-protected-resource"
+// WriteUnauthorized writes a 401 response with a WWW-Authenticate header naming
+// the metadata document of the resource that was challenged, so a client
+// following RFC 9728 discovers the resource it was refused from rather than a
+// neighbouring one. resource is the identifier the resource server verifies
+// against; an unknown one falls back to the default.
+func (s *Server) WriteUnauthorized(w http.ResponseWriter, resource, errorCode string) {
+	target, ok := s.cfg.resourceFor(resource)
+	if !ok {
+		target = s.cfg.defaultResource()
+	}
+
 	w.Header().Set("WWW-Authenticate", fmt.Sprintf(
-		`Bearer realm="cetacean", resource_metadata=%s, error=%s`,
-		httpQuotedString(prmURL), httpQuotedString(errorCode),
+		`Bearer realm=%s, resource_metadata=%s, error=%s`,
+		httpQuotedString(target.Realm),
+		httpQuotedString(s.cfg.metadataURL(target)),
+		httpQuotedString(errorCode),
 	))
 	w.WriteHeader(http.StatusUnauthorized)
 }
