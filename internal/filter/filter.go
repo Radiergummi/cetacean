@@ -85,9 +85,9 @@ func NodeEnv(n swarm.Node, m map[string]any) map[string]any {
 	}
 	m["id"] = n.ID
 	m["name"] = n.Description.Hostname
-	m["state"] = string(n.Status.State)
-	m["role"] = string(n.Spec.Role)
-	m["availability"] = string(n.Spec.Availability)
+	m["state"] = boxedOr(nodeStates, n.Status.State)
+	m["role"] = boxedOr(nodeRoles, n.Spec.Role)
+	m["availability"] = boxedOr(nodeAvailabilities, n.Spec.Availability)
 	return m
 }
 
@@ -96,11 +96,11 @@ func ServiceEnv(s swarm.Service, m map[string]any) map[string]any {
 	if m == nil {
 		m = make(map[string]any, 5)
 	}
-	mode := "replicated"
+	mode := modeReplicated
 	if s.Spec.Mode.Global != nil {
-		mode = "global"
+		mode = modeGlobal
 	}
-	var image string
+	image := emptyString
 	if s.Spec.TaskTemplate.ContainerSpec != nil {
 		image = s.Spec.TaskTemplate.ContainerSpec.Image
 	}
@@ -117,20 +117,20 @@ func TaskEnv(t swarm.Task, m map[string]any) map[string]any {
 	if m == nil {
 		m = make(map[string]any, 9)
 	}
-	var image string
+	image := emptyString
 	if t.Spec.ContainerSpec != nil {
 		image = t.Spec.ContainerSpec.Image
 	}
 	// ExitCode is meaningless until the task reaches a terminal state — Docker
 	// often reports -1 mid-run. Suppressing it here keeps filters like
 	// `exit_code != "0"` from matching every running task.
-	var exitCode string
+	exitCode := emptyString
 	if t.Status.ContainerStatus != nil && cache.IsTerminalState(t.Status.State) {
 		exitCode = strconv.Itoa(t.Status.ContainerStatus.ExitCode)
 	}
 	m["id"] = t.ID
-	m["state"] = string(t.Status.State)
-	m["desired_state"] = string(t.DesiredState)
+	m["state"] = boxedOr(taskStates, t.Status.State)
+	m["desired_state"] = boxedOr(taskStates, t.DesiredState)
 	m["image"] = image
 	m["exit_code"] = exitCode
 	m["error"] = t.Status.Err
