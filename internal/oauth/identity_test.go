@@ -15,7 +15,7 @@ func TestIdentifyCarriesTheClaimsAndNothingElse(t *testing.T) {
 		Subject:  "alice@example.com",
 		Groups:   []string{"ops", "sre"},
 		ClientID: "test-client",
-	}, s.cfg.MCP.AccessTokenTTL)
+	}, s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}

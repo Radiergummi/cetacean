@@ -17,7 +17,7 @@ type protectedResourceMetadata struct {
 func (s *Server) HandleProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
 	iss := s.cfg.issuerID()
 	doc := protectedResourceMetadata{
-		Resource:               s.cfg.MCPResource,
+		Resource:               s.cfg.Resource,
 		AuthorizationServers:   []string{iss},
 		BearerMethodsSupported: []string{"header"},
 	}

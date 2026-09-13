@@ -225,13 +225,7 @@ func newOAuthIntegrationServer(
 	cfg.Enabled = true
 	key := []byte("integration-test-signing-key-32B!")
 
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  key,
-	})
+	oauthSrv := oauthServerFor(key)
 
 	srv, err := New(c, Options{
 		Config:         cfg,

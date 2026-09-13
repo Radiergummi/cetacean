@@ -33,6 +33,19 @@ func (p *fakeAuthProvider) Authenticate(
 
 func (p *fakeAuthProvider) RegisterRoutes(_ *http.ServeMux) {}
 
+// oauthServerFor builds an authorization server the way main.go does, sharing
+// the root key so a token minted against it verifies. The tests want the real
+// verifier, not a stand-in.
+func oauthServerFor(key []byte) *oauth.Server {
+	return oauth.NewServer(oauth.ServerConfig{
+		Issuer:     "https://cetacean.example.com",
+		BasePath:   "",
+		Resource:   "https://cetacean.example.com/mcp",
+		OAuth:      config.DefaultOAuthConfig(),
+		SigningKey: key,
+	})
+}
+
 func TestNew(t *testing.T) {
 	c := cache.New(nil)
 	cfg := config.DefaultMCPConfig()
@@ -67,13 +80,7 @@ func TestHandlerEmits401WithoutBearerWhenOAuthConfigured(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
 
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  []byte("test-secret-32-bytes-long-padding"),
-	})
+	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
 	srv, err := New(c, Options{
 		Config: cfg,
@@ -107,13 +114,7 @@ func TestHandlerAcceptsValidBearer(t *testing.T) {
 	cfg.Enabled = true
 
 	key := []byte("test-secret-32-bytes-long-padding")
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  key,
-	})
+	oauthSrv := oauthServerFor(key)
 
 	issuer, err := oauth.NewTokenIssuer(
 		key,
@@ -127,7 +128,7 @@ func TestHandlerAcceptsValidBearer(t *testing.T) {
 		Subject:  "user@example.com",
 		Groups:   []string{"ops"},
 		ClientID: "test-client",
-	}, cfg.AccessTokenTTL)
+	}, config.DefaultOAuthConfig().AccessTokenTTL)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
@@ -166,13 +167,7 @@ func TestHandlerAuthBypassUsesUpstreamIdentity(t *testing.T) {
 	cfg.Enabled = true
 	cfg.AuthBypass = []string{"cert"}
 
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  []byte("test-secret-32-bytes-long-padding"),
-	})
+	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
 	provider := &fakeAuthProvider{id: &auth.Identity{
 		Subject:  "spiffe://example.org/agent/runner",
@@ -212,13 +207,7 @@ func TestHandlerAuthBypassFallsBackWhenUpstreamFails(t *testing.T) {
 	cfg.Enabled = true
 	cfg.AuthBypass = []string{"cert"}
 
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  []byte("test-secret-32-bytes-long-padding"),
-	})
+	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
 	provider := &fakeAuthProvider{err: errors.New("no client certificate")}
 
@@ -275,13 +264,7 @@ func TestHandlerAuthBypassIgnoredWhenModeNotListed(t *testing.T) {
 	cfg.Enabled = true
 	cfg.AuthBypass = []string{"cert"} // listed mode
 
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  []byte("test-secret-32-bytes-long-padding"),
-	})
+	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
 	// Provider would succeed, but the active mode (oidc) is NOT in AuthBypass.
 	provider := &fakeAuthProvider{id: &auth.Identity{Subject: "u", Provider: "oidc"}}
@@ -317,13 +300,7 @@ func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
 	cfg.Enabled = true
 
 	key := []byte("test-secret-32-bytes-long-padding")
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  key,
-	})
+	oauthSrv := oauthServerFor(key)
 
 	issuer, err := oauth.NewTokenIssuer(
 		key,
@@ -337,7 +314,7 @@ func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
 		Subject:  "user@example.com",
 		Groups:   []string{"ops"},
 		ClientID: "test-client",
-	}, cfg.AccessTokenTTL)
+	}, config.DefaultOAuthConfig().AccessTokenTTL)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}

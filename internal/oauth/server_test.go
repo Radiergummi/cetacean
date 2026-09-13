@@ -19,10 +19,10 @@ import (
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	cfg := ServerConfig{
-		Issuer:      "https://cetacean.test",
-		BasePath:    "",
-		MCPResource: "https://cetacean.test/mcp",
-		MCP: config.MCPConfig{
+		Issuer:   "https://cetacean.test",
+		BasePath: "",
+		Resource: "https://cetacean.test/mcp",
+		OAuth: config.OAuthConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,
 			ConsentTTL:               testConsentTTL,
@@ -46,9 +46,9 @@ func newPersistingServer(t *testing.T, path, resource string) *Server {
 	t.Helper()
 
 	s := NewServer(ServerConfig{
-		Issuer:      "https://cetacean.test",
-		MCPResource: resource,
-		MCP: config.MCPConfig{
+		Issuer:   "https://cetacean.test",
+		Resource: resource,
+		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  time.Hour,
 			RefreshTokenTTL: 720 * time.Hour,
 			ConsentTTL:      testConsentTTL,
@@ -122,7 +122,7 @@ func TestASMetadata(t *testing.T) {
 
 	// DCR disabled: registration_endpoint must be absent.
 	s2 := newTestServer(t)
-	s2.cfg.MCP.DCREnabled = false
+	s2.cfg.OAuth.DCREnabled = false
 	s2.clients = nil
 	rec2 := httptest.NewRecorder()
 	s2.HandleMetadata(
@@ -155,7 +155,7 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost:8080/callback",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.MCPResource,
+		Resource:      s.cfg.Resource,
 		Subject:       "user@example.com",
 		Groups:        []string{"admin"},
 	})
@@ -212,7 +212,7 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost/cb",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.MCPResource,
+		Resource:      s.cfg.Resource,
 		Subject:       "user",
 	})
 
@@ -246,7 +246,7 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 
 func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
 	s := newTestServer(t)
-	s.cfg.MCP.RequireResourceIndicator = false
+	s.cfg.OAuth.RequireResourceIndicator = false
 
 	verifier := "test-verifier-for-resource"
 	challenge := computeS256Challenge(verifier)
@@ -254,7 +254,7 @@ func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost/cb",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.MCPResource,
+		Resource:      s.cfg.Resource,
 		Subject:       "user",
 	})
 
@@ -295,7 +295,7 @@ func TestTokenExchangeRefreshHappy(t *testing.T) {
 		Subject:  "user",
 		Groups:   []string{"g1"},
 		ClientID: "test-client",
-		Resource: s.cfg.MCPResource,
+		Resource: s.cfg.Resource,
 	}, time.Hour)
 
 	form := url.Values{
@@ -341,7 +341,7 @@ func TestTokenExchangeRefreshTheft(t *testing.T) {
 	refreshToken := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user",
 		ClientID: "test-client",
-		Resource: s.cfg.MCPResource,
+		Resource: s.cfg.Resource,
 	}, time.Hour)
 
 	// First rotation — consumes the original token.
@@ -388,7 +388,7 @@ func TestRevocation(t *testing.T) {
 	token := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user",
 		ClientID: "test-client",
-		Resource: s.cfg.MCPResource,
+		Resource: s.cfg.Resource,
 	}, time.Hour)
 
 	form := url.Values{"token": {token}}
@@ -464,7 +464,7 @@ func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 	rt := srv.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "u@e",
 		ClientID: "https://example.com/client",
-		Resource: srv.cfg.MCPResource,
+		Resource: srv.cfg.Resource,
 	}, time.Hour)
 
 	form := url.Values{

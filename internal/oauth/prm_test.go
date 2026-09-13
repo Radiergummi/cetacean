@@ -27,8 +27,8 @@ func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 		t.Fatalf("decode PRM: %v", err)
 	}
 
-	if doc.Resource != s.cfg.MCPResource {
-		t.Errorf("resource = %q, want %q", doc.Resource, s.cfg.MCPResource)
+	if doc.Resource != s.cfg.Resource {
+		t.Errorf("resource = %q, want %q", doc.Resource, s.cfg.Resource)
 	}
 	if len(doc.AuthorizationServers) != 1 || doc.AuthorizationServers[0] != s.cfg.Issuer {
 		t.Errorf("authorization_servers = %v, want [%q]", doc.AuthorizationServers, s.cfg.Issuer)

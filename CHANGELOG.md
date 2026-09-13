@@ -25,12 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 
 ### Changed
+- **Breaking:** the OAuth authorization server is opt-in — set `oauth.enabled`. MCP under any auth mode but `none` requires it, and startup refuses that combination without it
+- **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
+- **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`; it stays an MCP setting
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
 - The dashboard's first load is about a third of its former size, and hashed assets are cached permanently
 - The API reference at `/api` is six months newer, and now follows Scalar releases automatically
 - MCP access tokens follow the RFC 9068 `at+jwt` profile. Clients holding an older token refresh automatically
 - The Cetacean API description moved to `/api/openapi.yaml`; `/openapi.json` now describes the documentation site itself
-- **Breaking:** `CETACEAN_MCP_SIGNING_KEY` is now a root secret both keys derive from, and must be 32 bytes of hex or base64 — generate one with `openssl rand -hex 32`. Leaving it unset still generates a key at startup
+- **Breaking:** `CETACEAN_OAUTH_SIGNING_KEY` is now a root secret both keys derive from, and must be 32 bytes of hex or base64 — generate one with `openssl rand -hex 32`. Leaving it unset still generates a key at startup
 - MCP access tokens are signed with ES256 rather than HMAC. Clients refresh once on upgrade; stop every replica before starting the new version
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
 

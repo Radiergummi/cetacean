@@ -20,7 +20,7 @@ func runConsent(t *testing.T, s *Server, decision string, overrides url.Values) 
 
 	getReq := httptest.NewRequest(
 		http.MethodGet,
-		authorizeURL(clientID, redirectURI, challenge, "stateISS", s.cfg.MCPResource),
+		authorizeURL(clientID, redirectURI, challenge, "stateISS", s.cfg.Resource),
 		nil,
 	)
 	getReq = withIdentity(getReq, "bob", "bob@example.com")

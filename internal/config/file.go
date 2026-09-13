@@ -58,6 +58,7 @@ type fileConfig struct {
 	Sizing  *fileSizing  `toml:"sizing"`
 	ACL     *fileACL     `toml:"acl"`
 	MCP     *fileMCP     `toml:"mcp"`
+	OAuth   *fileOAuth   `toml:"oauth"`
 	Tracing *fileTracing `toml:"tracing"`
 }
 
@@ -69,31 +70,36 @@ type fileTracing struct {
 }
 
 type fileMCP struct {
-	Enabled         *bool   `toml:"enabled"`
-	OperationsLevel *int    `toml:"operations_level"`
-	Issuer          *string `toml:"issuer"`
-	SigningKey      *string `toml:"signing_key"`
-	AccessTokenTTL  *string `toml:"access_token_ttl"`
-	RefreshTokenTTL *string `toml:"refresh_token_ttl"`
-	ConsentTTL      *string `toml:"consent_ttl"`
+	Enabled         *bool `toml:"enabled"`
+	OperationsLevel *int  `toml:"operations_level"`
 
 	// MaxConcurrentTasks caps in-flight task-augmented tool calls.
 	MaxConcurrentTasks *int `toml:"max_concurrent_tasks"`
 
 	// TaskTTL and MaxTaskTTL bound how long a task's result is retained when
 	// the client does not say, and however long it does say.
-	TaskTTL    *string       `toml:"task_ttl"`
-	MaxTaskTTL *string       `toml:"max_task_ttl"`
-	OAuth      *fileMCPOAuth `toml:"oauth"`
+	TaskTTL    *string `toml:"task_ttl"`
+	MaxTaskTTL *string `toml:"max_task_ttl"`
+
+	// AuthBypass is MCP's, not the authorization server's: it names the
+	// upstream auth modes accepted at /mcp without a bearer token.
+	AuthBypass []string `toml:"auth_bypass"`
 }
 
-type fileMCPOAuth struct {
-	RequireResourceIndicator *bool    `toml:"require_resource_indicator"`
-	DCREnabled               *bool    `toml:"dcr_enabled"`
-	DCRRateLimit             *int     `toml:"dcr_rate_limit"`
-	DCRMaxClients            *int     `toml:"dcr_max_clients"`
-	CIMDEnabled              *bool    `toml:"cimd_enabled"`
-	AuthBypass               []string `toml:"auth_bypass"`
+// fileOAuth mirrors the [oauth] section. The server is opt-in, so a deployment
+// that never sets Enabled issues no tokens at all.
+type fileOAuth struct {
+	Enabled                  *bool   `toml:"enabled"`
+	Issuer                   *string `toml:"issuer"`
+	SigningKey               *string `toml:"signing_key"`
+	AccessTokenTTL           *string `toml:"access_token_ttl"`
+	RefreshTokenTTL          *string `toml:"refresh_token_ttl"`
+	ConsentTTL               *string `toml:"consent_ttl"`
+	RequireResourceIndicator *bool   `toml:"require_resource_indicator"`
+	DCREnabled               *bool   `toml:"dcr_enabled"`
+	DCRRateLimit             *int    `toml:"dcr_rate_limit"`
+	DCRMaxClients            *int    `toml:"dcr_max_clients"`
+	CIMDEnabled              *bool   `toml:"cimd_enabled"`
 }
 
 type fileSizing struct {
