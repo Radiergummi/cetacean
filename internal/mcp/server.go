@@ -513,13 +513,13 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 
 		token := auth.ExtractBearerToken(r)
 		if token == "" {
-			s.writeUnauthorized(w)
+			s.writeUnauthorized(w, "")
 			return
 		}
 
 		identity, err := s.oauth.Identify(token, s.resource)
 		if err != nil {
-			s.writeUnauthorized(w)
+			s.writeUnauthorized(w, "invalid_token")
 			return
 		}
 
@@ -531,11 +531,12 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 // writeUnauthorized answers a missing or unusable bearer token. JSON-RPC has no
 // envelope for a transport-level refusal, so this is a bare 401 carrying the
 // challenge that names where a token for this resource comes from.
-func (s *Server) writeUnauthorized(w http.ResponseWriter) {
-	w.Header().Set(
-		"WWW-Authenticate",
-		s.oauth.UnauthorizedHeader(s.resource, "invalid_token"),
-	)
+//
+// An empty errorCode omits the error parameter, which is what RFC 6750 §3.1 asks
+// for when the request carried no credential: there is nothing wrong with a token
+// that was never sent.
+func (s *Server) writeUnauthorized(w http.ResponseWriter, errorCode string) {
+	w.Header().Set("WWW-Authenticate", s.oauth.UnauthorizedHeader(s.resource, errorCode))
 	w.WriteHeader(http.StatusUnauthorized)
 }
 

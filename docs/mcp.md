@@ -150,6 +150,13 @@ through to `/mcp`'s host alongside the endpoint itself:
 /oauth/authorize   /oauth/token   /oauth/revoke   /oauth/register
 ```
 
+Under a [`server.base_path`][server.base_path], forward `/.well-known/*` from the host root as well
+as from under the prefix. RFC 9728 §3.1 has a client build the metadata URL by inserting
+`/.well-known/oauth-protected-resource` **after the host**, so it asks for
+`https://host/.well-known/oauth-protected-resource/prefix/mcp` — a path that never reaches Cetacean
+if the proxy only forwards `https://host/prefix/*`. Both spellings are served; only the first is the
+one a conformant client derives on its own.
+
 ## How it works
 
 Cetacean is its own OAuth 2.1 authorization server for `/mcp`, implementing the MCP `2026-07-28` authorization profile.
@@ -200,6 +207,7 @@ replica is required: the file is node-local, and an unset signing key would leav
 
 [api]: api
 [api-tokens]: authentication#api-access-tokens
+[server.base_path]: configuration#server.base_path
 [authorization]: authorization
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools

@@ -17,14 +17,20 @@ type Resource struct {
 	Realm string
 }
 
-// metadataPath is where this resource's RFC 9728 document is served.
-//
-// RFC 9728 §3.1 inserts the well-known segment after the authority, which for a
-// base-path deployment would place the document outside the prefix Cetacean is
-// mounted under — and often outside what the operator controls at all. The base
-// path therefore precedes the well-known segment here, matching where the
-// authorization server metadata has always been served.
+// metadataPath is the RFC 9728 §3.1 location of this resource's document: the
+// well-known segment sits between the authority and the resource's whole path,
+// base path included. This is the URL a conformant client derives from the
+// resource identifier, so it is the one that has to answer.
 func (r Resource) metadataPath(basePath string) string {
+	return wellKnownPRM + basePath + r.Path
+}
+
+// mountedMetadataPath is the same document beneath the deployment's own prefix.
+// Served as well as the conformant location, because a reverse proxy forwarding
+// only {base_path}/* never delivers a request to the authority root, and an
+// operator cannot always change that. It is what this server advertised before
+// the conformant location existed.
+func (r Resource) mountedMetadataPath(basePath string) string {
 	return basePath + wellKnownPRM + r.Path
 }
 
@@ -40,11 +46,14 @@ func (c ServerConfig) identifierOf(r Resource) string {
 	return c.issuerID() + r.Path
 }
 
-// metadataURL is the absolute URL of a resource's RFC 9728 document, for the
-// resource_metadata parameter of a WWW-Authenticate challenge.
+// metadataURL is the absolute URL a WWW-Authenticate challenge points at.
+//
+// The mounted location, not the conformant one, because this URL is followed
+// rather than derived: it must resolve through whatever proxy already forwards
+// this deployment. Both are served, so a client that derives instead — as RFC
+// 9728 §3.1 says to — reaches the same document.
 func (c ServerConfig) metadataURL(r Resource) string {
-	// The base path is already part of issuerID, so it must not be added twice.
-	return c.Issuer + r.metadataPath(c.BasePath)
+	return c.Issuer + r.mountedMetadataPath(c.BasePath)
 }
 
 // resourceSet is everything about the configured resources that is settled once
@@ -90,15 +99,26 @@ func (s resourceSet) resourceFor(identifier string) Resource {
 	return s.def
 }
 
-// effectiveResource resolves the RFC 8707 resource indicator from a token
-// request to the identifier the grant will be bound to.
+// effectiveResource resolves the RFC 8707 resource indicators from a token
+// request to the one identifier the grant will be bound to.
 //
 // An absent indicator resolves to the default resource unless the deployment
 // requires one. A present indicator must equal a configured identifier exactly:
 // a prefix match would let a token for one resource reach another mounted
 // beneath it.
-func (s resourceSet) effectiveResource(raw string, required bool) (string, error) {
-	if raw == "" {
+//
+// RFC 8707 §2 lets the parameter repeat, to ask for a token valid at several
+// resources. This server binds a token to exactly one, so it refuses rather than
+// honouring the first and dropping the rest: a token whose audience is not the
+// one the client asked for is the confusion the indicator exists to prevent.
+func (s resourceSet) effectiveResource(raw []string, required bool) (string, error) {
+	if len(raw) > 1 {
+		return "", errors.New(
+			"only one resource parameter is supported: a token is bound to one resource",
+		)
+	}
+
+	if len(raw) == 0 || raw[0] == "" {
 		if required {
 			return "", errors.New("resource parameter is required")
 		}
@@ -106,9 +126,9 @@ func (s resourceSet) effectiveResource(raw string, required bool) (string, error
 		return s.fallback, nil
 	}
 
-	if _, ok := s.byID[raw]; !ok {
+	if _, ok := s.byID[raw[0]]; !ok {
 		return "", errors.New("resource is not one this server issues tokens for")
 	}
 
-	return raw, nil
+	return raw[0], nil
 }

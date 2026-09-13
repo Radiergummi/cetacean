@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
 
 ### Fixed
+- Protected resource metadata is served at the address RFC 9728 has a client derive — the well-known segment after the host — as well as under `server.base_path`. Behind a proxy, forward `/.well-known/*` from the host root too
+- A repeated RFC 8707 `resource` parameter is refused with `invalid_target` instead of binding the token to whichever came first
+- A 401 for a request carrying no credential no longer reports `invalid_token`, per RFC 6750
 - An access token cannot authorize a new client: consent requires the identity your auth provider established, not one a token carries
 - An ACL grant written against an email address matches a token as well as a browser session. MCP clients were silently denied everything such a grant allowed
 - Everything that does not describe the cluster keeps working while the Docker daemon is unreachable — the dashboard's own icons and manifest, the API catalogue, the OpenSearch description and `/profile`

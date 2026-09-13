@@ -166,10 +166,18 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/.well-known/oauth-authorization-server", s.HandleMetadata)
 	mux.HandleFunc("GET "+basePath+"/.well-known/openid-configuration", s.HandleMetadata)
 	for _, resource := range s.cfg.Resources {
-		mux.HandleFunc(
-			"GET "+resource.metadataPath(basePath),
-			s.protectedResourceMetadataHandler(resource),
-		)
+		handler := s.protectedResourceMetadataHandler(resource)
+
+		// Two locations, one document. The first is what RFC 9728 §3.1 derives
+		// from the identifier; the second is beneath this deployment's prefix,
+		// where a proxy that forwards only that prefix can reach it. They are the
+		// same path when there is no base path, so only register once.
+		conformant := resource.metadataPath(s.cfg.BasePath)
+		mux.HandleFunc("GET "+conformant, handler)
+
+		if mounted := resource.mountedMetadataPath(basePath); mounted != conformant {
+			mux.HandleFunc("GET "+mounted, handler)
+		}
 	}
 	mux.HandleFunc("GET "+basePath+jwksPath, s.HandleJWKS)
 	mux.HandleFunc("GET "+basePath+"/oauth/authorize", s.HandleAuthorize)
@@ -307,10 +315,11 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 	clientID := r.FormValue("client_id")         // #nosec G120 -- bounded in HandleToken
 	codeVerifier := r.FormValue("code_verifier") // #nosec G120 -- bounded in HandleToken
 	resourceForm := r.FormValue("resource")      // #nosec G120 -- bounded in HandleToken
+	resourceAll := r.Form["resource"]            // RFC 8707 §2 allows a repeat
 
 	// RFC 8707 resource indicator validation.
 	if _, err := s.resources.effectiveResource(
-		resourceForm,
+		resourceAll,
 		s.cfg.OAuth.RequireResourceIndicator,
 	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
@@ -412,6 +421,7 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// per-function analysis.
 	refreshTokenRaw := r.FormValue("refresh_token") // #nosec G120 -- bounded in HandleToken
 	resourceForm := r.FormValue("resource")         // #nosec G120 -- bounded in HandleToken
+	resourceAll := r.Form["resource"]               // RFC 8707 §2 allows a repeat
 	clientID := r.FormValue("client_id")            // #nosec G120 -- bounded in HandleToken
 
 	// RFC 8707 resource indicator validation against the server's resource.
@@ -420,7 +430,7 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// Theft detection still works because a replay of an already-rotated token
 	// triggers Rotate's Theft branch on its second presentation.
 	if _, err := s.resources.effectiveResource(
-		resourceForm,
+		resourceAll,
 		s.cfg.OAuth.RequireResourceIndicator,
 	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
@@ -722,6 +732,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	codeChallengeMethod := q.Get("code_challenge_method")
 	state := q.Get("state")
 	resourceParam := q.Get("resource")
+	resourceAll := q["resource"]
 
 	// Resolve client metadata and validate redirect_uri BEFORE any redirect.
 	meta, verified, errMsg := s.resolveClientMeta(r, clientID)
@@ -756,7 +767,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	}
 
 	effectiveResource, err := s.resources.effectiveResource(
-		resourceParam,
+		resourceAll,
 		s.cfg.OAuth.RequireResourceIndicator,
 	)
 	if err != nil {
@@ -848,6 +859,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	codeChallenge := r.FormValue("code_challenge")
 	codeChallengeMethod := r.FormValue("code_challenge_method")
 	resourceParam := r.FormValue("resource")
+	resourceAll := r.Form["resource"]
 	decision := r.FormValue("decision")
 	responseType := r.FormValue("response_type")
 
@@ -916,7 +928,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	effectiveResource, err := s.resources.effectiveResource(
-		resourceParam,
+		resourceAll,
 		s.cfg.OAuth.RequireResourceIndicator,
 	)
 	if err != nil {
@@ -1063,6 +1075,9 @@ func (s *Server) redirectWithError(
 // ---------------------------------------------------------------------------
 
 // UnauthorizedHeader is the WWW-Authenticate value for a 401 from resource,
+// omitting the error parameter when errorCode is empty — which is what RFC 6750
+// §3.1 asks for on a request that carried no credential at all, where there is
+// no error to report beyond the challenge itself.
 // naming that resource's own metadata document so a client following RFC 9728
 // discovers what it was refused from rather than a neighbouring resource whose
 // token this one would also reject. An unknown resource falls back to the
@@ -1074,12 +1089,16 @@ func (s *Server) redirectWithError(
 func (s *Server) UnauthorizedHeader(resource, errorCode string) string {
 	target := s.resources.resourceFor(resource)
 
-	return fmt.Sprintf(
-		`Bearer realm=%s, resource_metadata=%s, error=%s`,
+	challenge := fmt.Sprintf(
+		`Bearer realm=%s, resource_metadata=%s`,
 		httpQuotedString(target.Realm),
 		httpQuotedString(s.cfg.metadataURL(target)),
-		httpQuotedString(errorCode),
 	)
+	if errorCode == "" {
+		return challenge
+	}
+
+	return challenge + `, error=` + httpQuotedString(errorCode)
 }
 
 // httpQuotedString wraps s in an RFC 7230 quoted-string. Per RFC 7230 §3.2.6

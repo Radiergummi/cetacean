@@ -606,6 +606,7 @@ response schemas.
 [oauth.enabled]: configuration#oauth.enabled
 [oidc]: configuration#oidc
 [rfc9440]: https://www.rfc-editor.org/rfc/rfc9440
+[server.base_path]: configuration#server.base_path
 [server.listen_addr]: configuration#server.listen_addr
 [storage.data_dir]: configuration#storage.data_dir
 [server.public_url]: configuration#server.public_url
