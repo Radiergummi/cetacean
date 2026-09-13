@@ -1,7 +1,7 @@
 package compose
 
 import (
-	"strconv"
+	"fmt"
 	"strings"
 
 	"github.com/docker/docker/api/types/mount"
@@ -14,66 +14,47 @@ import (
 // deploy.labels/labels already say that, so it is redundant on the document.
 const stackNamespaceLabel = "com.docker.stack.namespace"
 
+// notAContainerService suffixes the warning both entry points emit for a
+// plugin or network-attachment task.
+const notAContainerService = ": not a container service, omitted"
+
 // identity is the shortening a single-service export applies: none. Nothing is
 // owned, so no prefix is the stack's to strip.
 func identity(s string) string { return s }
-
-// set writes value at key, creating the map on first use.
-func set[T any](m *map[string]T, key string, value T) {
-	if *m == nil {
-		*m = map[string]T{}
-	}
-	(*m)[key] = value
-}
-
-func externalRef(m *map[string]ExternalRef, name string) {
-	if name == "" {
-		return
-	}
-	set(m, name, ExternalRef{External: true})
-}
-
-func externalNetwork(m *map[string]Network, name string) {
-	if name == "" {
-		return
-	}
-	set(m, name, Network{External: true})
-}
-
-func externalVolume(m *map[string]Volume, name string) {
-	if name == "" {
-		return
-	}
-	set(m, name, Volume{External: true})
-}
 
 // FromService renders one service as a one-service document. Everything it
 // references is external, because a service creates none of it. A service
 // with no ContainerSpec (a plugin or network-attachment task) is not a
 // compose service at all, so nothing about it is emitted.
 func FromService(svc swarm.Service) (File, []string) {
-	spec, warnings := serviceSpec(svc, identity)
-
 	c := svc.Spec.TaskTemplate.ContainerSpec
 	if c == nil {
-		return File{}, warnings
+		return File{}, []string{svc.Spec.Name + notAContainerService}
 	}
 
-	f := File{Services: map[string]Service{svc.Spec.Name: spec}}
+	spec, warnings := serviceSpec(svc, identity)
+
+	f := File{
+		Services: map[string]Service{svc.Spec.Name: spec},
+		Networks: make(map[string]Network, len(svc.Spec.TaskTemplate.Networks)),
+		Volumes:  make(map[string]Volume, len(c.Mounts)),
+		Secrets:  make(map[string]ExternalRef, len(c.Secrets)),
+		Configs:  make(map[string]ExternalRef, len(c.Configs)),
+	}
 
 	for _, n := range svc.Spec.TaskTemplate.Networks {
-		externalNetwork(&f.Networks, n.Target)
+		f.Networks[n.Target] = Network{External: true}
 	}
 	for _, m := range c.Mounts {
-		if m.Type == mount.TypeVolume {
-			externalVolume(&f.Volumes, m.Source)
+		if m.Type == mount.TypeVolume && m.Source != "" {
+			f.Volumes[m.Source] = Volume{External: true}
 		}
 	}
 	for _, s := range c.Secrets {
-		externalRef(&f.Secrets, s.SecretName)
+		f.Secrets[s.SecretName] = ExternalRef{External: true}
 	}
 	for _, cfg := range c.Configs {
-		externalRef(&f.Configs, cfg.ConfigName)
+		f.Configs[cfg.ConfigName] = ExternalRef{External: true}
 	}
 
 	return f, warnings
@@ -102,12 +83,18 @@ func owns(labels map[string]string, stack string) bool {
 func FromStack(d cache.StackDetail) (File, []string) {
 	shorten := shortenFor(d.Name)
 
-	f := File{Services: map[string]Service{}}
+	f := File{
+		Services: make(map[string]Service, len(d.Services)),
+		Networks: make(map[string]Network, len(d.Networks)),
+		Volumes:  make(map[string]Volume, len(d.Volumes)),
+		Configs:  make(map[string]ExternalRef, len(d.Configs)),
+		Secrets:  make(map[string]ExternalRef, len(d.Secrets)),
+	}
 	var warnings []string
 
 	for _, svc := range d.Services {
 		if svc.Spec.TaskTemplate.ContainerSpec == nil {
-			warnings = append(warnings, svc.Spec.Name+": not a container service, omitted")
+			warnings = append(warnings, svc.Spec.Name+notAContainerService)
 			continue
 		}
 
@@ -119,42 +106,42 @@ func FromStack(d cache.StackDetail) (File, []string) {
 	for _, n := range d.Networks {
 		key := shorten(n.Name)
 		if owns(n.Labels, d.Name) {
-			set(&f.Networks, key, Network{
+			f.Networks[key] = Network{
 				Driver:     n.Driver,
 				DriverOpts: n.Options,
 				Attachable: n.Attachable,
 				Internal:   n.Internal,
 				EnableIPv6: n.EnableIPv6,
 				Labels:     stripNamespace(n.Labels),
-			})
+			}
 			continue
 		}
 
-		set(&f.Networks, key, Network{External: true, Name: n.Name})
+		f.Networks[key] = Network{External: true, Name: n.Name}
 	}
 
 	for _, v := range d.Volumes {
 		key := shorten(v.Name)
 		if owns(v.Labels, d.Name) {
-			set(&f.Volumes, key, Volume{
+			f.Volumes[key] = Volume{
 				Driver:     v.Driver,
 				DriverOpts: v.Options,
 				Labels:     stripNamespace(v.Labels),
-			})
+			}
 			continue
 		}
 
-		set(&f.Volumes, key, Volume{External: true, Name: v.Name})
+		f.Volumes[key] = Volume{External: true, Name: v.Name}
 	}
 
 	// Always external, both of them. A config's content is available and is
 	// still not inlined: compose's content: field would have the redeploy
 	// create a new config rather than reuse the one the service is mounting.
 	for _, c := range d.Configs {
-		set(&f.Configs, shorten(c.Spec.Name), ExternalRef{External: true, Name: c.Spec.Name})
+		f.Configs[shorten(c.Spec.Name)] = ExternalRef{External: true, Name: c.Spec.Name}
 	}
 	for _, s := range d.Secrets {
-		set(&f.Secrets, shorten(s.Spec.Name), ExternalRef{External: true, Name: s.Spec.Name})
+		f.Secrets[shorten(s.Spec.Name)] = ExternalRef{External: true, Name: s.Spec.Name}
 	}
 
 	return f, warnings
@@ -212,18 +199,14 @@ func configRef(source string, target *swarm.ConfigReferenceFileTarget) FileRef {
 	}
 }
 
-func itoa(n int) string { return strconv.Itoa(n) }
-
-// serviceSpec projects one service. shorten strips the stack prefix from names
-// the stack owns; a single-service export passes identity.
+// serviceSpec projects one service; callers guarantee a non-nil ContainerSpec.
+// shorten strips the stack prefix from names the stack owns; a single-service
+// export passes identity.
 func serviceSpec(svc swarm.Service, shorten func(string) string) (Service, []string) {
 	var warnings []string
 
 	spec := svc.Spec
 	container := spec.TaskTemplate.ContainerSpec
-	if container == nil {
-		return Service{}, []string{spec.Name + ": not a container service, omitted"}
-	}
 
 	out := Service{
 		Image:    container.Image,
@@ -286,12 +269,10 @@ func serviceSpec(svc swarm.Service, shorten func(string) string) (Service, []str
 	if p := spec.TaskTemplate.Placement; p != nil && len(p.Platforms) > 0 {
 		out.Platform = p.Platforms[0].OS + "/" + p.Platforms[0].Architecture
 		if len(p.Platforms) > 1 {
-			warnings = append(
-				warnings,
-				spec.Name+": only the first of "+itoa(
-					len(p.Platforms),
-				)+" platforms kept; compose takes one",
-			)
+			warnings = append(warnings, fmt.Sprintf(
+				"%s: only the first of %d platforms kept; compose takes one",
+				spec.Name, len(p.Platforms),
+			))
 		}
 	}
 
@@ -300,8 +281,7 @@ func serviceSpec(svc swarm.Service, shorten func(string) string) (Service, []str
 	return out, warnings
 }
 
-// resourceLimit renders a limit's CPU and memory figures through the
-// existing helpers; Pids is omitted for the reservation shape, which has none.
+// resourceLimit takes pids separately: the reservation shape has no such field.
 func resourceLimit(nanoCPUs, memoryBytes, pids int64) *ResourceLimit {
 	if nanoCPUs == 0 && memoryBytes == 0 && pids == 0 {
 		return nil
@@ -362,8 +342,6 @@ func restartPolicy(rp *swarm.RestartPolicy) *RestartPolicy {
 	return out
 }
 
-// deploy carries what Swarm owns and a plain container runtime does not; a
-// single-service export passes identity for shorten just as serviceSpec does.
 func deploy(svc swarm.Service, shorten func(string) string) *Deploy {
 	spec := svc.Spec
 

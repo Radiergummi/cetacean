@@ -97,7 +97,7 @@ func extraHosts(hosts []string) []string {
 // named volume; a bind source is a host path and is passed through, since
 // shortening it would rewrite the filesystem.
 func mounts(ms []mount.Mount, shorten func(string) string) []ServiceVolume {
-	var out []ServiceVolume
+	out := make([]ServiceVolume, 0, len(ms))
 	for _, m := range ms {
 		v := ServiceVolume{
 			Type:     string(m.Type),
@@ -116,7 +116,7 @@ func mounts(ms []mount.Mount, shorten func(string) string) []ServiceVolume {
 }
 
 func ports(p []swarm.PortConfig) []ServicePort {
-	var out []ServicePort
+	out := make([]ServicePort, 0, len(p))
 	for _, c := range p {
 		out = append(out, ServicePort{
 			Target:    c.TargetPort,

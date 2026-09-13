@@ -276,37 +276,30 @@ func TestFromStackNamesAdoptedResourcesExplicitly(t *testing.T) {
 }
 
 // The single most likely way to produce a file that reads right and deploys
-// wrong, so it is pinned in both directions.
+// wrong: an owned resource declared external sends the deploy looking for one
+// that does not exist, and the reverse has it create one that already does.
+// Pinned in both directions, for both kinds.
 func TestFromStackSplitsOwnedFromExternal(t *testing.T) {
 	f, _ := FromStack(testStack())
 
-	owned := f.Networks["internal"]
-	if owned.External {
+	net := f.Networks["internal"]
+	if net.External {
 		t.Error("a network carrying the stack's namespace label is owned")
 	}
-	if owned.Driver != "overlay" {
-		t.Errorf("an owned network must carry its driver, got %+v", owned)
+	if net.Driver != "overlay" {
+		t.Errorf("an owned network must carry its driver, got %+v", net)
 	}
-
 	if !f.Networks["monitoring"].External {
 		t.Error("a network without the label is external")
 	}
-}
 
-// The volume equivalent: an owned volume declared external makes the deploy
-// fail to find one that does not exist, and the reverse makes it try to
-// create one that already does.
-func TestFromStackSplitsVolumesOwnedFromExternal(t *testing.T) {
-	f, _ := FromStack(testStack())
-
-	owned := f.Volumes["data"]
-	if owned.External {
+	vol := f.Volumes["data"]
+	if vol.External {
 		t.Error("a volume carrying the stack's namespace label is owned")
 	}
-	if owned.Driver != "local" {
-		t.Errorf("an owned volume must carry its driver, got %+v", owned)
+	if vol.Driver != "local" {
+		t.Errorf("an owned volume must carry its driver, got %+v", vol)
 	}
-
 	if !f.Volumes["backups"].External {
 		t.Error("a volume without the label is external")
 	}

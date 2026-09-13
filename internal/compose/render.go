@@ -13,9 +13,7 @@ const header = `# Exported from Cetacean. Redeploys to the same state on the sam
 # them created first. This is not the file that originally created the stack.
 `
 
-// Render writes the warning comment block and then the document. Warnings are
-// a slice of strings by design — the honesty is the point, a severity model
-// would be the speculative part.
+// Render writes the header, then any warnings as comments, then the document.
 func Render(f File, warnings []string) ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteString(header)
