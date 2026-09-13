@@ -9,6 +9,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 )
@@ -69,8 +70,8 @@ func testService() swarm.Service {
 	}
 }
 
-// testStack is a stack owning the network testService's task attaches to,
-// plus a network it merely references, adopted from outside the stack.
+// testStack is a stack owning the network and volume testService's task
+// attaches to, plus one network and one volume adopted from outside it.
 func testStack() cache.StackDetail {
 	return cache.StackDetail{
 		Name:     "web",
@@ -82,6 +83,15 @@ func testStack() cache.StackDetail {
 				Labels: map[string]string{"com.docker.stack.namespace": "web"},
 			},
 			{Name: "monitoring"},
+		},
+		Volumes: []volume.Volume{
+			{
+				Name:    "web_data",
+				Driver:  "local",
+				Options: map[string]string{"type": "nfs"},
+				Labels:  map[string]string{"com.docker.stack.namespace": "web"},
+			},
+			{Name: "backups", Driver: "local"},
 		},
 		Configs: []swarm.Config{
 			{Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "web_settings"}}},
@@ -252,6 +262,17 @@ func TestFromStackNamesAdoptedResourcesExplicitly(t *testing.T) {
 	if n.Name != "monitoring" {
 		t.Errorf("name = %q, want it stated explicitly", n.Name)
 	}
+
+	v, ok := f.Volumes["backups"]
+	if !ok {
+		t.Fatalf("volume keys = %v, want backups", keys(f.Volumes))
+	}
+	if !v.External {
+		t.Error("a volume the stack does not own must be external")
+	}
+	if v.Name != "backups" {
+		t.Errorf("name = %q, want it stated explicitly", v.Name)
+	}
 }
 
 // The single most likely way to produce a file that reads right and deploys
@@ -269,6 +290,25 @@ func TestFromStackSplitsOwnedFromExternal(t *testing.T) {
 
 	if !f.Networks["monitoring"].External {
 		t.Error("a network without the label is external")
+	}
+}
+
+// The volume equivalent: an owned volume declared external makes the deploy
+// fail to find one that does not exist, and the reverse makes it try to
+// create one that already does.
+func TestFromStackSplitsVolumesOwnedFromExternal(t *testing.T) {
+	f, _ := FromStack(testStack())
+
+	owned := f.Volumes["data"]
+	if owned.External {
+		t.Error("a volume carrying the stack's namespace label is owned")
+	}
+	if owned.Driver != "local" {
+		t.Errorf("an owned volume must carry its driver, got %+v", owned)
+	}
+
+	if !f.Volumes["backups"].External {
+		t.Error("a volume without the label is external")
 	}
 }
 

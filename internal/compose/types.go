@@ -13,7 +13,9 @@ type File struct {
 }
 
 // ExternalRef is a config, secret, network or volume the deploy must not
-// create. Name is set only when it differs from the key.
+// create. Name is always stated, even when it equals the key: it is what
+// keeps the reference resolving if the file is deployed under another
+// project name.
 type ExternalRef struct {
 	External bool   `yaml:"external"`
 	Name     string `yaml:"name,omitempty"`
