@@ -115,7 +115,9 @@ func prepareList[T any](
 		items = spec.prepare(items)
 	}
 
-	items = acl.Filter(
+	// In place: items is the copy spec.list() just made, and prepareList is
+	// the only thing holding it.
+	items = acl.FilterInPlace(
 		h.acl,
 		auth.IdentityFromContext(r.Context()),
 		"read",

@@ -89,11 +89,44 @@ func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) b
 }
 
 // Filter returns only items the identity can access with the given permission.
+//
+// items is left untouched. A caller that owns the slice — one holding a copy
+// the cache just handed it, and nothing else — should use FilterInPlace, which
+// is the same walk without a second slice.
 func Filter[T any](
 	e *Evaluator,
 	id *auth.Identity,
 	permission string,
 	items []T,
+	resourceFunc func(T) string,
+) []T {
+	// Grown rather than sized for the whole input: a permissive policy pays
+	// for the growth, but sizing for every item costs a restrictive one far
+	// more — and a restrictive policy is the reason to run one at all.
+	return filterInto(e, id, permission, items, nil, resourceFunc)
+}
+
+// FilterInPlace is Filter, writing the survivors over items rather than into a
+// slice of its own. The order is the same and nothing is dropped that Filter
+// would keep, but items is reordered and must not be shared: the caller has to
+// own it outright, as prepareList does with the copy the cache gave it.
+func FilterInPlace[T any](
+	e *Evaluator,
+	id *auth.Identity,
+	permission string,
+	items []T,
+	resourceFunc func(T) string,
+) []T {
+	return filterInto(e, id, permission, items, items[:0], resourceFunc)
+}
+
+// filterInto is the walk both share. dst nil means grow a new slice.
+func filterInto[T any](
+	e *Evaluator,
+	id *auth.Identity,
+	permission string,
+	items []T,
+	dst []T,
 	resourceFunc func(T) string,
 ) []T {
 	if e == nil {
@@ -106,10 +139,7 @@ func Filter[T any](
 
 	grants := e.collectGrants(id, p)
 
-	// Grown rather than sized for the whole input: a permissive policy pays
-	// for the growth, but sizing for every item costs a restrictive one far
-	// more — and a restrictive policy is the reason to run one at all.
-	var result []T
+	result := dst
 	for _, item := range items {
 		resource := resourceFunc(item)
 		for _, g := range grants {

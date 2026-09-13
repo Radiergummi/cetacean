@@ -1,6 +1,8 @@
 package acl
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -130,5 +132,57 @@ func TestFingerprintNilAndUnconfigured(t *testing.T) {
 	}
 	if NewEvaluator().Fingerprint(nil) != 0 {
 		t.Error("an evaluator with no policy filters nothing and should fingerprint as 0")
+	}
+}
+
+// FilterInPlace must keep exactly what Filter keeps, in the same order — it is
+// only allowed to differ in what it does to the caller's backing array.
+func TestFilterInPlaceMatchesFilter(t *testing.T) {
+	policies := map[string][]Grant{
+		"wildcard":   {readGrant("service:*")},
+		"prefix":     {readGrant("service:web*")},
+		"none":       {readGrant("node:*")},
+		"two grants": {readGrant("service:web-1"), readGrant("service:web-3")},
+	}
+
+	names := make([]string, 0, 12)
+	for i := range 12 {
+		names = append(names, fmt.Sprintf("web-%d", i))
+	}
+	resource := func(s string) string { return "service:" + s }
+
+	for name, grants := range policies {
+		t.Run(name, func(t *testing.T) {
+			e := NewEvaluator()
+			e.SetPolicy(&Policy{Grants: grants})
+
+			copied := slices.Clone(names)
+			inPlace := slices.Clone(names)
+
+			want := Filter(e, nil, "read", copied, resource)
+			got := FilterInPlace(e, nil, "read", inPlace, resource)
+
+			if !slices.Equal(want, got) {
+				t.Errorf("FilterInPlace gave %v, Filter gave %v", got, want)
+			}
+			if !slices.Equal(copied, names) {
+				t.Error("Filter modified the slice it was given")
+			}
+		})
+	}
+}
+
+func TestFilterInPlaceUnconfigured(t *testing.T) {
+	items := []string{"a", "b"}
+	if got := FilterInPlace(
+		nil,
+		nil,
+		"read",
+		items,
+		func(s string) string { return s },
+	); len(
+		got,
+	) != 2 {
+		t.Errorf("a nil evaluator filtered %d of 2 items", len(got))
 	}
 }
