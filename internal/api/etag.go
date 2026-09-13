@@ -156,6 +156,24 @@ func writeCachedJSON(w http.ResponseWriter, r *http.Request, v any) {
 // If the client's If-None-Match header matches the ETag, 304 is returned
 // regardless of the requested status code (per RFC 9110 §13.1.2).
 func writeCachedJSONStatus(w http.ResponseWriter, r *http.Request, status int, v any) {
+	writeCachedJSONStatusValidated(w, r, status, v, "")
+}
+
+// writeCachedJSONStatusValidated is writeCachedJSONStatus for a caller that
+// already knows the validator. It must be the same one that caller offered the
+// client when it answered a conditional request without rendering — a response
+// whose 304 and 200 disagree on the tag makes every subsequent revalidation
+// miss.
+//
+// An empty validator means hash the body, which is the only option when the
+// representation is not a pure function of the cache.
+func writeCachedJSONStatusValidated(
+	w http.ResponseWriter,
+	r *http.Request,
+	status int,
+	v any,
+	validator string,
+) {
 	rc := http.NewResponseController(w)
 	_ = rc.SetWriteDeadline(time.Now().Add(30 * time.Second))
 
@@ -166,8 +184,12 @@ func writeCachedJSONStatus(w http.ResponseWriter, r *http.Request, status int, v
 		return
 	}
 
+	if validator == "" {
+		validator = computeETag(body)
+	}
+
 	coding := negotiateCoding(w, r, body)
-	etag := codedETag(computeETag(body), coding)
+	etag := codedETag(validator, coding)
 
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/json")

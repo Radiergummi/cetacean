@@ -389,7 +389,7 @@ func TestWriteCollectionResponse_RangePartial(t *testing.T) {
 		Offset:  0,
 	}
 
-	writeCollectionResponse(w, r, resp, p)
+	writeCollectionResponse(w, r, resp, p, "")
 
 	if w.Code != http.StatusPartialContent {
 		t.Errorf("expected 206, got %d", w.Code)
@@ -421,7 +421,7 @@ func TestWriteCollectionResponse_RangeFullCollection(t *testing.T) {
 		Offset:  0,
 	}
 
-	writeCollectionResponse(w, r, resp, p)
+	writeCollectionResponse(w, r, resp, p, "")
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200 for full collection, got %d", w.Code)
@@ -452,7 +452,7 @@ func TestWriteCollectionResponse_RangeBeyondTotal(t *testing.T) {
 		Offset:  50,
 	}
 
-	writeCollectionResponse(w, r, resp, p)
+	writeCollectionResponse(w, r, resp, p, "")
 
 	if w.Code != http.StatusRequestedRangeNotSatisfiable {
 		t.Errorf("expected 416, got %d", w.Code)
@@ -479,7 +479,7 @@ func TestWriteCollectionResponse_RangeEmptyCollection(t *testing.T) {
 		Offset:  0,
 	}
 
-	writeCollectionResponse(w, r, resp, p)
+	writeCollectionResponse(w, r, resp, p, "")
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200 for empty collection, got %d", w.Code)
@@ -505,7 +505,7 @@ func TestWriteCollectionResponse_QueryParams(t *testing.T) {
 		Offset:  0,
 	}
 
-	writeCollectionResponse(w, r, resp, p)
+	writeCollectionResponse(w, r, resp, p, "")
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
@@ -536,7 +536,7 @@ func TestRangeRequest_EndToEnd(t *testing.T) {
 		}
 
 		resp := applyPagination(r.Context(), items, p)
-		writeCollectionResponse(w, r, resp, p)
+		writeCollectionResponse(w, r, resp, p, "")
 	})
 
 	t.Run("range returns 206 with Content-Range", func(t *testing.T) {

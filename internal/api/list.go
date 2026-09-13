@@ -25,11 +25,63 @@ type listSpec[T any] struct {
 	rows         func([]T) []cluster.Row                // builds the CSV rendering; required
 }
 
+// listNotModified answers a matching conditional request with 304, and reports
+// whether it did.
+//
+// A 304 carries what a client still reads off it — the ETag, the validators'
+// Vary, and the Allow header the dashboard gates its controls on, which costs
+// nothing to compute. It does not carry the pagination Link headers or
+// Content-Range: those need the totals, and producing them is exactly the work
+// being skipped. RFC 9110 §15.4.5 asks for neither.
+func listNotModified[T any](
+	h *Handlers,
+	w http.ResponseWriter,
+	r *http.Request,
+	spec listSpec[T],
+	validator string,
+) bool {
+	if r.Header.Get("If-None-Match") == "" {
+		return false
+	}
+
+	// The coding is part of the validator, and resolving it needs a body
+	// length this path does not have. Suffixing for every coding the client
+	// would accept covers the cases a hashed body would have produced.
+	for _, coding := range append([]Encoding{EncodingIdentity}, compressibleEncodings...) {
+		if !etagMatch(r.Header.Get("If-None-Match"), codedETag(validator, coding)) {
+			continue
+		}
+
+		h.setAllowList(w, r, spec.resourceType)
+		writeLinkTemplate(w, r, spec.linkTemplate)
+		w.Header().Add("Vary", "Accept-Encoding")
+		w.Header().Set("Accept-Ranges", "items")
+		w.Header().Set("ETag", codedETag(validator, coding))
+		if w.Header().Get("Cache-Control") == "" {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		w.WriteHeader(http.StatusNotModified)
+
+		return true
+	}
+
+	return false
+}
+
 // handleList runs the full list pipeline and writes the JSON response.
 // Use this for resources that need no post-pagination transformation.
 // When spec.itemType and spec.idFunc are set, each item is wrapped with
 // JSON-LD @id and @type fields.
 func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec listSpec[T]) {
+	// A list is a pure function of the cache, the caller's grants and the
+	// request, so the validator is knowable before any of the work. Answering
+	// here skips the cache read, the filtering, the sort and the marshal that
+	// a 304 would otherwise pay for in full.
+	validator := h.derivedETag(r)
+	if listNotModified(h, w, r, spec, validator) {
+		return
+	}
+
 	items, p, ok := prepareList(h, w, r, spec)
 	if !ok {
 		return
@@ -52,12 +104,12 @@ func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec
 			Limit:   raw.Limit,
 			Offset:  raw.Offset,
 		}
-		writeCollectionResponse(w, r, wrapped, p)
+		writeCollectionResponse(w, r, wrapped, p, validator)
 		return
 	}
 
 	resp := applyPagination(r.Context(), items, p)
-	writeCollectionResponse(w, r, resp, p)
+	writeCollectionResponse(w, r, resp, p, validator)
 }
 
 // prepareList runs steps 1–7 of the list pipeline (allow header, cache fetch,

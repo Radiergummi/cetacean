@@ -75,6 +75,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 			paged.Offset,
 		),
 		p,
+		"",
 	)
 }
 

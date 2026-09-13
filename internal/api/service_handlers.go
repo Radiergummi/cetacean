@@ -95,6 +95,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 			paged.Offset,
 		),
 		p,
+		"",
 	)
 }
 

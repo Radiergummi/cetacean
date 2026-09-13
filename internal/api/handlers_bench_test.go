@@ -1264,3 +1264,28 @@ func BenchmarkHandleTopology_ColdMemo(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkHandleListNodes_WithETag sends a tag that cannot match, so it
+// measures a full response. This is the other half: the revalidation a
+// dashboard actually makes between cluster events, which answers 304 without
+// reading the cache, filtering, sorting or marshalling anything.
+func BenchmarkHandleListNodes_NotModified(b *testing.B) {
+	benchHandler(b, "ListNodes_NotModified", func(b *testing.B, h *Handlers) {
+		warm := httptest.NewRecorder()
+		h.HandleListNodes(warm, httptest.NewRequestWithContext(b.Context(), "GET", "/nodes", nil))
+		etag := warm.Header().Get("ETag")
+		if etag == "" {
+			b.Fatal("no ETag to revalidate with")
+		}
+
+		for b.Loop() {
+			req := httptest.NewRequestWithContext(b.Context(), "GET", "/nodes", nil)
+			req.Header.Set("If-None-Match", etag)
+			rec := httptest.NewRecorder()
+			h.HandleListNodes(rec, req)
+			if rec.Code != http.StatusNotModified {
+				b.Fatalf("expected 304, got %d", rec.Code)
+			}
+		}
+	})
+}
