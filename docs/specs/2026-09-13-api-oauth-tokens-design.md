@@ -217,6 +217,16 @@ the fix lands as a fix rather than as an assumption.
 > No `scope` field was reserved in the claims. JWT claim sets are open by construction, so adding
 > one later is not a token-format migration either way, and an unused field would only be dead
 > code in the meantime.
+>
+> Revisited afterwards: `offline_access` and a per-transport scope were both weighed and declined —
+> nothing is gated on either, so a scope that is asked for and granted unconditionally documents an
+> authorization boundary that does not exist. What landed instead is the conformant handling of
+> having none: both discovery documents carry an empty `scopes_supported` (RFC 8414 §2 recommends
+> the field, and absent reads as *unspecified* where `[]` says *none*), a requested scope is ignored
+> rather than met with `invalid_scope`, and the token response omits `scope` — RFC 6749 §5.1 asks
+> for it only when the granted scope differs from the requested one, and with none defined both
+> reduce to the empty set. Echoing `scope: ""` would violate the parameter's own ABNF. Defining a
+> real scope means revisiting all three together.
 
 Tempting to add `scope` and let a device hold less than its user. Resisted, for now:
 

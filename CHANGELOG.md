@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - An access token whose `aud` is an array, or whose `typ` differs only in letter case, is accepted — both are conformant shapes that were refused
 - A token carrying a future `nbf`, or no `sub`, is refused
 - The authorization server advertises that it sends `iss` on authorization responses, so a client actually enforces the mix-up check the responses already carry
+- Both discovery documents name the scopes the authorization server supports — none — so a client asks for no scope instead of guessing at one
 - A 401 from the API names where a token comes from even when the request carried no credential, which is what makes cold discovery work
 - Protected resource metadata is served at the address RFC 9728 has a client derive — the well-known segment after the host — as well as under `server.base_path`. Behind a proxy, forward `/.well-known/*` from the host root too
 - The deployment root is accepted as a resource identifier with or without its trailing slash

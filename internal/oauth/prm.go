@@ -9,7 +9,12 @@ type protectedResourceMetadata struct {
 	Resource               string   `json:"resource"`
 	AuthorizationServers   []string `json:"authorization_servers"`
 	BearerMethodsSupported []string `json:"bearer_methods_supported"`
-	ResourceDocumentation  string   `json:"resource_documentation,omitempty"`
+
+	// Empty rather than absent, for the reason the authorization server metadata
+	// says it there: this resource has no scopes, which is worth stating.
+	ScopesSupported []string `json:"scopes_supported"`
+
+	ResourceDocumentation string `json:"resource_documentation,omitempty"`
 }
 
 // protectedResourceMetadataHandler serves the RFC 9728 document for one
@@ -23,6 +28,7 @@ func (s *Server) protectedResourceMetadataHandler(r Resource) http.HandlerFunc {
 		Resource:               s.cfg.identifierOf(r),
 		AuthorizationServers:   []string{iss},
 		BearerMethodsSupported: []string{"header"},
+		ScopesSupported:        []string{},
 	}
 	if iss != "" {
 		doc.ResourceDocumentation = iss + "/api"
