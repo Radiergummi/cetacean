@@ -1130,18 +1130,6 @@ func (s *Server) redirectWithError(
 // WWW-Authenticate helper
 // ---------------------------------------------------------------------------
 
-// UnauthorizedHeader is the WWW-Authenticate value for a 401 from resource,
-// omitting the error parameter when errorCode is empty — which is what RFC 6750
-// §3.1 asks for on a request that carried no credential at all, where there is
-// no error to report beyond the challenge itself.
-// naming that resource's own metadata document so a client following RFC 9728
-// discovers what it was refused from rather than a neighbouring resource whose
-// token this one would also reject. An unknown resource falls back to the
-// default.
-//
-// The header rather than the whole response, because the two resource servers
-// answer differently: the API owes its callers an RFC 9457 problem document,
-// where JSON-RPC has no envelope for a transport-level refusal.
 // renderConsentRefusal answers a consent request that carried the wrong kind of
 // credential. RFC 9110 §15.5.2 requires a challenge on every 401, so a 401 here
 // names where a usable credential comes from; a 403 is already authenticated and
@@ -1154,6 +1142,11 @@ func (s *Server) renderConsentRefusal(w http.ResponseWriter, status int, message
 	renderErrorPage(w, status, message)
 }
 
+// UnauthorizedHeader is the WWW-Authenticate value for a 401 from resource,
+// naming that resource's own metadata document rather than a neighbouring one
+// whose token this resource would also reject. An empty errorCode omits the
+// error parameter per RFC 6750 §3.1; an unknown resource falls back to the
+// default.
 func (s *Server) UnauthorizedHeader(resource, errorCode string) string {
 	target := s.resources.resourceFor(resource)
 
