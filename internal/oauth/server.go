@@ -120,13 +120,20 @@ func NewServer(cfg ServerConfig) *Server {
 		// Neither is fatal: the server comes up empty and clients re-authorize,
 		// exactly as they did before the store existed.
 		path := cfg.StatePath
-		if cfg.LegacyStatePath != "" && !fileExists(path) && fileExists(cfg.LegacyStatePath) {
-			path = cfg.LegacyStatePath
-			slog.Info("migrating OAuth state from its former path",
-				"from", cfg.LegacyStatePath, "to", cfg.StatePath)
+		state, err := readState(path)
+
+		// Only a missing file falls back: a corrupt or unreadable one is still
+		// the file this server owns, and reaching past it to the former path
+		// would quietly restore state the operator had replaced.
+		if errors.Is(err, fs.ErrNotExist) && cfg.LegacyStatePath != "" {
+			if legacy, legacyErr := readState(cfg.LegacyStatePath); legacyErr == nil {
+				state, err, path = legacy, nil, cfg.LegacyStatePath
+				slog.Info("migrating OAuth state from its former path",
+					"from", cfg.LegacyStatePath, "to", cfg.StatePath)
+			}
 		}
 
-		if state, err := readState(path); err != nil {
+		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				slog.Info("no OAuth state yet", "path", path)
 			} else {
