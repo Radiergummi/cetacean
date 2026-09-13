@@ -25,8 +25,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
-	"github.com/radiergummi/cetacean/internal/mcp/oauth"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
+	"github.com/radiergummi/cetacean/internal/oauth"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
