@@ -44,3 +44,30 @@ func TestDerivedDiscoveryURLResolvesUnderABasePath(t *testing.T) {
 		})
 	}
 }
+
+// The passthrough is bounded to the documents whose URL a client derives from
+// the authority root. Anything else under /.well-known/ still belongs to the
+// deployment's prefix, and the SPA fallback would otherwise answer it with the
+// dashboard at the host root.
+func TestOtherWellKnownPathsStayUnderTheBasePath(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withBasePath("/cetacean"), withOAuthRoutes("/cetacean")},
+		withCache(cache.New(nil)),
+	)
+
+	for _, path := range []string{
+		"/.well-known/api-catalog",
+		"/.well-known/openid-configuration",
+		"/.well-known/acme-challenge/token",
+	} {
+		t.Run(path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("status = %d, want 404", rec.Code)
+			}
+		})
+	}
+}
