@@ -39,6 +39,7 @@ func testService() swarm.Service {
 					},
 					Mounts: []mount.Mount{
 						{Type: mount.TypeVolume, Source: "web_data", Target: "/data"},
+						{Type: mount.TypeVolume, Source: "backups", Target: "/backups"},
 					},
 					Secrets: []*swarm.SecretReference{
 						{
@@ -53,7 +54,10 @@ func testService() swarm.Service {
 				Resources: &swarm.ResourceRequirements{
 					Limits: &swarm.Limit{NanoCPUs: 500000000, MemoryBytes: 536870912},
 				},
-				Networks: []swarm.NetworkAttachmentConfig{{Target: "web_internal"}},
+				Networks: []swarm.NetworkAttachmentConfig{
+					{Target: "netid-internal"},
+					{Target: "netid-monitoring"},
+				},
 			},
 			EndpointSpec: &swarm.EndpointSpec{
 				Mode: swarm.ResolutionModeVIP,
@@ -70,19 +74,30 @@ func testService() swarm.Service {
 	}
 }
 
-// testStack is a stack owning the network and volume testService's task
-// attaches to, plus one network and one volume adopted from outside it.
+// clusterNetworks is the network list a caller hands the projection. Only this
+// resolves an attachment's ID to a name, and it covers networks outside the
+// stack as well as its own.
+func clusterNetworks() []network.Summary {
+	return []network.Summary{
+		{ID: "netid-internal", Name: "web_internal"},
+		{ID: "netid-monitoring", Name: "monitoring"},
+	}
+}
+
+// testStack is a stack owning one network and one volume. The monitoring
+// network and the backups volume its service also uses carry no namespace
+// label, so the cache never puts them in a StackDetail.
 func testStack() cache.StackDetail {
 	return cache.StackDetail{
 		Name:     "web",
 		Services: []swarm.Service{testService()},
 		Networks: []network.Summary{
 			{
+				ID:     "netid-internal",
 				Name:   "web_internal",
 				Driver: "overlay",
 				Labels: map[string]string{"com.docker.stack.namespace": "web"},
 			},
-			{Name: "monitoring"},
 		},
 		Volumes: []volume.Volume{
 			{
@@ -91,7 +106,6 @@ func testStack() cache.StackDetail {
 				Options: map[string]string{"type": "nfs"},
 				Labels:  map[string]string{"com.docker.stack.namespace": "web"},
 			},
-			{Name: "backups", Driver: "local"},
 		},
 		Configs: []swarm.Config{
 			{Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "web_settings"}}},
@@ -106,7 +120,7 @@ func testStack() cache.StackDetail {
 // declaring an owned network here would make the deploy try to create one that
 // already exists.
 func TestFromServiceDeclaresEverythingExternal(t *testing.T) {
-	f, _ := FromService(testService())
+	f, _ := FromService(testService(), clusterNetworks())
 
 	if len(f.Services) != 1 {
 		t.Fatalf("services = %d, want 1", len(f.Services))
@@ -125,9 +139,78 @@ func TestFromServiceDeclaresEverythingExternal(t *testing.T) {
 	}
 }
 
+// Swarm gives an attachment the network's ID. Emitted raw it would key the
+// document by a hex string and match no declaration at all.
+func TestNetworkAttachmentsResolveToNames(t *testing.T) {
+	f, warnings := FromStack(testStack(), clusterNetworks())
+
+	got := f.Services["api"].Networks
+	want := map[string]bool{"internal": true, "monitoring": true}
+	for _, name := range got {
+		if !want[name] {
+			t.Errorf("service networks = %v, want names, not IDs", got)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("service networks = %v, want %d entries", got, len(want))
+	}
+	if len(warnings) != 0 {
+		t.Errorf("warnings = %v, want none when every ID resolves", warnings)
+	}
+}
+
+// Every name a service references must have a declaration, or the deploy stops
+// at "refers to undefined network". The adopted ones carry no namespace label,
+// so they never reach StackDetail and only the reference closure declares them.
+func TestEveryReferenceIsDeclared(t *testing.T) {
+	f, _ := FromStack(testStack(), clusterNetworks())
+
+	for _, name := range f.Services["api"].Networks {
+		if _, ok := f.Networks[name]; !ok {
+			t.Errorf("network %q referenced but not declared in %v", name, keys(f.Networks))
+		}
+	}
+	for _, v := range f.Services["api"].Volumes {
+		if v.Type != "volume" {
+			continue
+		}
+		if _, ok := f.Volumes[v.Source]; !ok {
+			t.Errorf("volume %q referenced but not declared in %v", v.Source, keys(f.Volumes))
+		}
+	}
+	for _, sec := range f.Services["api"].Secrets {
+		if _, ok := f.Secrets[sec.Source]; !ok {
+			t.Errorf("secret %q referenced but not declared", sec.Source)
+		}
+	}
+}
+
+// An ID the caller's network list does not cover cannot be resolved. Dropping
+// it would silently change what the service attaches to, so it is reported and
+// the reference kept.
+func TestUnresolvedNetworkIDIsReported(t *testing.T) {
+	svc := testService()
+	svc.Spec.TaskTemplate.Networks = []swarm.NetworkAttachmentConfig{{Target: "netid-gone"}}
+
+	f, warnings := FromService(svc, clusterNetworks())
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "netid-gone") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("warnings = %v, want one naming the unresolved ID", warnings)
+	}
+	if got := f.Services["web_api"].Networks; len(got) != 1 || got[0] != "netid-gone" {
+		t.Errorf("networks = %v, want the ID kept rather than dropped", got)
+	}
+}
+
 // The digest is what redeploys to the same running state.
 func TestFromServiceKeepsTheImageDigest(t *testing.T) {
-	f, _ := FromService(testService())
+	f, _ := FromService(testService(), clusterNetworks())
 
 	if got := f.Services["web_api"].Image; got != "nginx:1.27@sha256:abc" {
 		t.Errorf("image = %q, want the digest kept", got)
@@ -137,7 +220,7 @@ func TestFromServiceKeepsTheImageDigest(t *testing.T) {
 // Swarm distinguishes container labels from service labels and hand-written
 // files routinely conflate them; keeping them apart is part of the value.
 func TestFromServiceSeparatesContainerAndServiceLabels(t *testing.T) {
-	f, _ := FromService(testService())
+	f, _ := FromService(testService(), clusterNetworks())
 	svc := f.Services["web_api"]
 
 	if _, ok := svc.Labels["tier"]; ok {
@@ -149,7 +232,7 @@ func TestFromServiceSeparatesContainerAndServiceLabels(t *testing.T) {
 }
 
 func TestFromServiceCarriesDeploy(t *testing.T) {
-	f, _ := FromService(testService())
+	f, _ := FromService(testService(), clusterNetworks())
 	d := f.Services["web_api"].Deploy
 
 	if d == nil || d.Replicas == nil || *d.Replicas != 3 {
@@ -172,7 +255,7 @@ func TestFromServiceDropsRuntimeState(t *testing.T) {
 	svc := testService()
 	svc.Spec.TaskTemplate.ForceUpdate = 7
 
-	f, _ := FromService(svc)
+	f, _ := FromService(svc, clusterNetworks())
 	out, err := Render(f, nil)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
@@ -195,7 +278,7 @@ func TestFromServiceOmitsServicesWithoutAContainerSpec(t *testing.T) {
 		},
 	}
 
-	f, warnings := FromService(svc)
+	f, warnings := FromService(svc, clusterNetworks())
 
 	if _, ok := f.Services["plugin_svc"]; ok {
 		t.Errorf("services = %v, want plugin_svc omitted", keys(f.Services))
@@ -224,20 +307,20 @@ func TestFromServiceOmitsServicesWithoutAContainerSpec(t *testing.T) {
 }
 
 func TestShortenStripsTheStackPrefix(t *testing.T) {
-	shorten := shortenFor("web")
+	n := forStack("web", clusterNetworks())
 
-	if got := shorten("web_api"); got != "api" {
-		t.Errorf("shorten(web_api) = %q, want api", got)
+	if got := n.short("web_api"); got != "api" {
+		t.Errorf("short(web_api) = %q, want api", got)
 	}
 	// Adopted from outside the stack: the name is not the stack's to shorten.
-	if got := shorten("monitoring"); got != "monitoring" {
-		t.Errorf("shorten(monitoring) = %q, want it unchanged", got)
+	if got := n.short("monitoring"); got != "monitoring" {
+		t.Errorf("short(monitoring) = %q, want it unchanged", got)
 	}
 }
 
 // Without stripping, redeploying the file produces web_web_api.
 func TestFromStackStripsPrefixesFromKeys(t *testing.T) {
-	f, _ := FromStack(testStack())
+	f, _ := FromStack(testStack(), clusterNetworks())
 
 	if _, ok := f.Services["api"]; !ok {
 		t.Errorf("service keys = %v, want api", keys(f.Services))
@@ -250,7 +333,7 @@ func TestFromStackStripsPrefixesFromKeys(t *testing.T) {
 // A resource adopted into the stack keeps its full name as the key and says so
 // with an explicit name:, or the reference resolves to nothing.
 func TestFromStackNamesAdoptedResourcesExplicitly(t *testing.T) {
-	f, _ := FromStack(testStack())
+	f, _ := FromStack(testStack(), clusterNetworks())
 
 	n, ok := f.Networks["monitoring"]
 	if !ok {
@@ -280,7 +363,7 @@ func TestFromStackNamesAdoptedResourcesExplicitly(t *testing.T) {
 // that does not exist, and the reverse has it create one that already does.
 // Pinned in both directions, for both kinds.
 func TestFromStackSplitsOwnedFromExternal(t *testing.T) {
-	f, _ := FromStack(testStack())
+	f, _ := FromStack(testStack(), clusterNetworks())
 
 	net := f.Networks["internal"]
 	if net.External {
@@ -309,7 +392,7 @@ func TestFromStackSplitsOwnedFromExternal(t *testing.T) {
 // would make the redeploy create a new config rather than reuse the one the
 // running service is already mounting.
 func TestFromStackNeverInlinesConfigsOrSecrets(t *testing.T) {
-	f, _ := FromStack(testStack())
+	f, _ := FromStack(testStack(), clusterNetworks())
 
 	if c := f.Configs["settings"]; !c.External {
 		t.Errorf("config = %+v, want external", c)
@@ -328,7 +411,7 @@ func TestFromStackNeverInlinesConfigsOrSecrets(t *testing.T) {
 }
 
 func TestFromStackOmitsEmptyLabelMaps(t *testing.T) {
-	f, _ := FromStack(testStack())
+	f, _ := FromStack(testStack(), clusterNetworks())
 
 	out, err := Render(f, nil)
 	if err != nil {

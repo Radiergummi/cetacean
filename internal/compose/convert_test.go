@@ -106,7 +106,7 @@ func TestMountsUseLongSyntaxAndShortenTheSource(t *testing.T) {
 	got := mounts([]mount.Mount{
 		{Type: mount.TypeVolume, Source: "web_data", Target: "/data"},
 		{Type: mount.TypeBind, Source: "/etc/hosts", Target: "/etc/hosts", ReadOnly: true},
-	}, func(s string) string { return strings.TrimPrefix(s, "web_") })
+	}, forStack("web", nil))
 
 	if got[0].Type != "volume" || got[0].Source != "data" || got[0].Target != "/data" {
 		t.Errorf("volume mount = %+v", got[0])

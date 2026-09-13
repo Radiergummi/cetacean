@@ -93,10 +93,10 @@ func extraHosts(hosts []string) []string {
 	return out
 }
 
-// mounts renders compose's long syntax. shorten strips a stack prefix from a
-// named volume; a bind source is a host path and is passed through, since
-// shortening it would rewrite the filesystem.
-func mounts(ms []mount.Mount, shorten func(string) string) []ServiceVolume {
+// mounts renders compose's long syntax. A named volume loses the stack prefix;
+// a bind source is a host path and is passed through, since shortening it
+// would rewrite the filesystem.
+func mounts(ms []mount.Mount, n names) []ServiceVolume {
 	out := make([]ServiceVolume, 0, len(ms))
 	for _, m := range ms {
 		v := ServiceVolume{
@@ -106,7 +106,7 @@ func mounts(ms []mount.Mount, shorten func(string) string) []ServiceVolume {
 			ReadOnly: m.ReadOnly,
 		}
 		if m.Type == mount.TypeVolume {
-			v.Source = shorten(m.Source)
+			v.Source = n.short(m.Source)
 		}
 
 		out = append(out, v)
