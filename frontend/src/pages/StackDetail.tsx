@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type { StackDetail as StackDetailType, Task } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
+import ComposeSection from "../components/ComposeSection";
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -247,6 +248,12 @@ export default function StackDetail() {
           />
         </CollapsibleSection>
       )}
+
+      <ComposeSection
+        name={stack.name}
+        queryKey={`stack:${stack.name}`}
+        fetcher={(signal) => api.stackCompose(stack.name, signal)}
+      />
     </div>
   );
 }

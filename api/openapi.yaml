@@ -2644,6 +2644,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/yaml:
+              schema:
+                $ref: "#/components/schemas/ComposeDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -4773,6 +4776,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/yaml:
+              schema:
+                $ref: "#/components/schemas/ComposeDocument"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -6299,6 +6305,16 @@ components:
         Pagination parameters: `?before=<cursor>&limit=<n>` (default 50, max 200).
 
     # ── CSV ────────────────────────────────────────────────────────────
+
+    ComposeDocument:
+      type: string
+      description: |
+        The resource rendered as a Compose YAML document, served as
+        `application/yaml; charset=utf-8`. Request via `Accept: application/yaml`
+        or a `.yaml` URL suffix. It redeploys to the same running state on the
+        same cluster; it is not the file that originally created the stack.
+        Secrets and configs are referenced as `external`, never exported, so
+        another cluster needs them created first.
 
     CSVDocument:
       type: string

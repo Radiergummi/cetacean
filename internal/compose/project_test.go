@@ -1,0 +1,444 @@
+package compose
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
+
+	"github.com/radiergummi/cetacean/internal/cache"
+)
+
+// testService is a fully populated service the whole suite reuses.
+func testService() swarm.Service {
+	grace := 20 * time.Second
+
+	return swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{
+				Name:   "web_api",
+				Labels: map[string]string{"com.docker.stack.namespace": "web", "tier": "front"},
+			},
+			Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: new(uint64(3))}},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Image:           "nginx:1.27@sha256:abc",
+					Labels:          map[string]string{"com.docker.stack.namespace": "web"},
+					Env:             []string{"PORT=80"},
+					Hosts:           []string{"1.2.3.4 db"},
+					StopGracePeriod: &grace,
+					Healthcheck: &container.HealthConfig{
+						Test:     []string{"CMD", "true"},
+						Interval: 30 * time.Second,
+					},
+					Mounts: []mount.Mount{
+						{Type: mount.TypeVolume, Source: "web_data", Target: "/data"},
+						{Type: mount.TypeVolume, Source: "backups", Target: "/backups"},
+					},
+					Configs: []*swarm.ConfigReference{
+						{
+							ConfigName: "web_settings",
+							File: &swarm.ConfigReferenceFileTarget{
+								Name: "settings.yml",
+								UID:  "0",
+								GID:  "0",
+								Mode: 0o444,
+							},
+						},
+					},
+					Secrets: []*swarm.SecretReference{
+						{
+							SecretName: "web_token",
+							File: &swarm.SecretReferenceFileTarget{
+								Name: "token",
+								Mode: 0o400,
+							},
+						},
+					},
+				},
+				Resources: &swarm.ResourceRequirements{
+					Limits: &swarm.Limit{NanoCPUs: 500000000, MemoryBytes: 536870912},
+				},
+				Networks: []swarm.NetworkAttachmentConfig{
+					{Target: "netid-internal"},
+					{Target: "netid-monitoring"},
+				},
+			},
+			EndpointSpec: &swarm.EndpointSpec{
+				Mode: swarm.ResolutionModeVIP,
+				Ports: []swarm.PortConfig{
+					{
+						TargetPort:    80,
+						PublishedPort: 8080,
+						Protocol:      "tcp",
+						PublishMode:   swarm.PortConfigPublishModeIngress,
+					},
+				},
+			},
+		},
+	}
+}
+
+// clusterNetworks is the network list a caller hands the projection. Only this
+// resolves an attachment's ID to a name, and it covers networks outside the
+// stack as well as its own.
+func clusterNetworks() []network.Summary {
+	return []network.Summary{
+		{ID: "netid-internal", Name: "web_internal"},
+		{ID: "netid-monitoring", Name: "monitoring"},
+	}
+}
+
+// testStack is a stack owning one network and one volume. The monitoring
+// network and the backups volume its service also uses carry no namespace
+// label, so the cache never puts them in a StackDetail.
+func testStack() cache.StackDetail {
+	return cache.StackDetail{
+		Name:     "web",
+		Services: []swarm.Service{testService()},
+		Networks: []network.Summary{
+			{
+				ID:         "netid-internal",
+				Name:       "web_internal",
+				Driver:     "overlay",
+				Attachable: true,
+				Labels:     map[string]string{"com.docker.stack.namespace": "web"},
+			},
+		},
+		Volumes: []volume.Volume{
+			{
+				Name:    "web_data",
+				Driver:  "local",
+				Options: map[string]string{"type": "nfs"},
+				Labels:  map[string]string{"com.docker.stack.namespace": "web"},
+			},
+		},
+		Configs: []swarm.Config{
+			{Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "web_settings"}}},
+		},
+		Secrets: []swarm.Secret{
+			{Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "web_token"}}},
+		},
+	}
+}
+
+// A single service creates nothing, so everything it names must be external —
+// declaring an owned network here would make the deploy try to create one that
+// already exists.
+func TestFromServiceDeclaresEverythingExternal(t *testing.T) {
+	f, _ := FromService(testService(), clusterNetworks())
+
+	if len(f.Services) != 1 {
+		t.Fatalf("services = %d, want 1", len(f.Services))
+	}
+	if _, ok := f.Services["web_api"]; !ok {
+		t.Errorf("service key = %v, want the full Swarm name", keys(f.Services))
+	}
+	if n := f.Networks["web_internal"]; !n.External {
+		t.Errorf("network = %+v, want external", n)
+	}
+	if v := f.Volumes["web_data"]; !v.External {
+		t.Errorf("volume = %+v, want external", v)
+	}
+	if s := f.Secrets["web_token"]; !s.External {
+		t.Errorf("secret = %+v, want external", s)
+	}
+}
+
+// Swarm gives an attachment the network's ID. Emitted raw it would key the
+// document by a hex string and match no declaration at all.
+func TestNetworkAttachmentsResolveToNames(t *testing.T) {
+	f, warnings := FromStack(testStack(), clusterNetworks())
+
+	got := f.Services["api"].Networks
+	want := map[string]bool{"internal": true, "monitoring": true}
+	for _, name := range got {
+		if !want[name] {
+			t.Errorf("service networks = %v, want names, not IDs", got)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("service networks = %v, want %d entries", got, len(want))
+	}
+	if len(warnings) != 0 {
+		t.Errorf("warnings = %v, want none when every ID resolves", warnings)
+	}
+}
+
+// Every name a service references must have a declaration, or the deploy stops
+// at "refers to undefined network". The adopted ones carry no namespace label,
+// so they never reach StackDetail and only the reference closure declares them.
+func TestEveryReferenceIsDeclared(t *testing.T) {
+	f, _ := FromStack(testStack(), clusterNetworks())
+
+	for _, name := range f.Services["api"].Networks {
+		if _, ok := f.Networks[name]; !ok {
+			t.Errorf("network %q referenced but not declared in %v", name, keys(f.Networks))
+		}
+	}
+	for _, v := range f.Services["api"].Volumes {
+		if v.Type != "volume" {
+			continue
+		}
+		if _, ok := f.Volumes[v.Source]; !ok {
+			t.Errorf("volume %q referenced but not declared in %v", v.Source, keys(f.Volumes))
+		}
+	}
+	for _, sec := range f.Services["api"].Secrets {
+		if _, ok := f.Secrets[sec.Source]; !ok {
+			t.Errorf("secret %q referenced but not declared", sec.Source)
+		}
+	}
+}
+
+// An ID the caller's network list does not cover cannot be resolved. Dropping
+// it would silently change what the service attaches to, so it is reported and
+// the reference kept.
+func TestUnresolvedNetworkIDIsReported(t *testing.T) {
+	svc := testService()
+	svc.Spec.TaskTemplate.Networks = []swarm.NetworkAttachmentConfig{{Target: "netid-gone"}}
+
+	f, warnings := FromService(svc, clusterNetworks())
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "netid-gone") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("warnings = %v, want one naming the unresolved ID", warnings)
+	}
+	if got := f.Services["web_api"].Networks; len(got) != 1 || got[0] != "netid-gone" {
+		t.Errorf("networks = %v, want the ID kept rather than dropped", got)
+	}
+}
+
+// The digest is what redeploys to the same running state.
+func TestFromServiceKeepsTheImageDigest(t *testing.T) {
+	f, _ := FromService(testService(), clusterNetworks())
+
+	if got := f.Services["web_api"].Image; got != "nginx:1.27@sha256:abc" {
+		t.Errorf("image = %q, want the digest kept", got)
+	}
+}
+
+// Swarm distinguishes container labels from service labels and hand-written
+// files routinely conflate them; keeping them apart is part of the value.
+func TestFromServiceSeparatesContainerAndServiceLabels(t *testing.T) {
+	f, _ := FromService(testService(), clusterNetworks())
+	svc := f.Services["web_api"]
+
+	if _, ok := svc.Labels["tier"]; ok {
+		t.Error("a service label must not appear under labels")
+	}
+	if svc.Deploy == nil || svc.Deploy.Labels["tier"] != "front" {
+		t.Errorf("deploy.labels = %v, want tier=front", svc.Deploy)
+	}
+}
+
+func TestFromServiceCarriesDeploy(t *testing.T) {
+	f, _ := FromService(testService(), clusterNetworks())
+	d := f.Services["web_api"].Deploy
+
+	if d == nil || d.Replicas == nil || *d.Replicas != 3 {
+		t.Fatalf("deploy = %+v, want 3 replicas", d)
+	}
+	if d.Mode != "replicated" {
+		t.Errorf("mode = %q, want replicated", d.Mode)
+	}
+	if d.EndpointMode != "vip" {
+		t.Errorf("endpoint_mode = %q, want vip", d.EndpointMode)
+	}
+	if d.Resources == nil || d.Resources.Limits.CPUs != "0.50" ||
+		d.Resources.Limits.Memory != "512M" {
+		t.Errorf("resources = %+v", d.Resources)
+	}
+}
+
+// Runtime state a deploy would reject or ignore.
+func TestFromServiceDropsRuntimeState(t *testing.T) {
+	svc := testService()
+	svc.Spec.TaskTemplate.ForceUpdate = 7
+
+	f, _ := FromService(svc, clusterNetworks())
+	out, err := Render(f, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+
+	for _, banned := range []string{"ForceUpdate", "VirtualIPs", "UpdateStatus", "PreviousSpec", "svc1"} {
+		if strings.Contains(string(out), banned) {
+			t.Errorf("document carries runtime state %q:\n%s", banned, out)
+		}
+	}
+}
+
+// A plugin or network-attachment task has no ContainerSpec and is not a
+// compose service; it must be omitted, not written out as an empty stanza.
+func TestFromServiceOmitsServicesWithoutAContainerSpec(t *testing.T) {
+	svc := swarm.Service{
+		Spec: swarm.ServiceSpec{
+			Annotations:  swarm.Annotations{Name: "plugin_svc"},
+			TaskTemplate: swarm.TaskSpec{Runtime: "plugin"},
+		},
+	}
+
+	f, warnings := FromService(svc, clusterNetworks())
+
+	if _, ok := f.Services["plugin_svc"]; ok {
+		t.Errorf("services = %v, want plugin_svc omitted", keys(f.Services))
+	}
+	if len(f.Services) != 0 {
+		t.Errorf("services = %d, want none", len(f.Services))
+	}
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "plugin_svc") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("warnings = %v, want one naming plugin_svc", warnings)
+	}
+
+	out, err := Render(f, warnings)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(string(out), "plugin_svc: {}") {
+		t.Errorf("document carries an empty service stanza:\n%s", out)
+	}
+}
+
+func TestShortenStripsTheStackPrefix(t *testing.T) {
+	n := forStack("web", clusterNetworks())
+
+	if got := n.short("web_api"); got != "api" {
+		t.Errorf("short(web_api) = %q, want api", got)
+	}
+	// Adopted from outside the stack: the name is not the stack's to shorten.
+	if got := n.short("monitoring"); got != "monitoring" {
+		t.Errorf("short(monitoring) = %q, want it unchanged", got)
+	}
+}
+
+// Without stripping, redeploying the file produces web_web_api.
+func TestFromStackStripsPrefixesFromKeys(t *testing.T) {
+	f, _ := FromStack(testStack(), clusterNetworks())
+
+	if _, ok := f.Services["api"]; !ok {
+		t.Errorf("service keys = %v, want api", keys(f.Services))
+	}
+	if _, ok := f.Networks["internal"]; !ok {
+		t.Errorf("network keys = %v, want internal", keys(f.Networks))
+	}
+}
+
+// A resource adopted into the stack keeps its full name as the key and says so
+// with an explicit name:, or the reference resolves to nothing.
+func TestFromStackNamesAdoptedResourcesExplicitly(t *testing.T) {
+	f, _ := FromStack(testStack(), clusterNetworks())
+
+	n, ok := f.Networks["monitoring"]
+	if !ok {
+		t.Fatalf("network keys = %v, want monitoring", keys(f.Networks))
+	}
+	if !n.External {
+		t.Error("a network the stack does not own must be external")
+	}
+	if n.Name != "monitoring" {
+		t.Errorf("name = %q, want it stated explicitly", n.Name)
+	}
+
+	v, ok := f.Volumes["backups"]
+	if !ok {
+		t.Fatalf("volume keys = %v, want backups", keys(f.Volumes))
+	}
+	if !v.External {
+		t.Error("a volume the stack does not own must be external")
+	}
+	if v.Name != "backups" {
+		t.Errorf("name = %q, want it stated explicitly", v.Name)
+	}
+}
+
+// The single most likely way to produce a file that reads right and deploys
+// wrong: an owned resource declared external sends the deploy looking for one
+// that does not exist, and the reverse has it create one that already does.
+// Pinned in both directions, for both kinds.
+func TestFromStackSplitsOwnedFromExternal(t *testing.T) {
+	f, _ := FromStack(testStack(), clusterNetworks())
+
+	net := f.Networks["internal"]
+	if net.External {
+		t.Error("a network carrying the stack's namespace label is owned")
+	}
+	if net.Driver != "overlay" {
+		t.Errorf("an owned network must carry its driver, got %+v", net)
+	}
+	if !f.Networks["monitoring"].External {
+		t.Error("a network without the label is external")
+	}
+
+	vol := f.Volumes["data"]
+	if vol.External {
+		t.Error("a volume carrying the stack's namespace label is owned")
+	}
+	if vol.Driver != "local" {
+		t.Errorf("an owned volume must carry its driver, got %+v", vol)
+	}
+	if !f.Volumes["backups"].External {
+		t.Error("a volume without the label is external")
+	}
+}
+
+// Their content is available and still not inlined: compose's content: field
+// would make the redeploy create a new config rather than reuse the one the
+// running service is already mounting.
+func TestFromStackNeverInlinesConfigsOrSecrets(t *testing.T) {
+	f, _ := FromStack(testStack(), clusterNetworks())
+
+	if c := f.Configs["settings"]; !c.External {
+		t.Errorf("config = %+v, want external", c)
+	}
+	if s := f.Secrets["token"]; !s.External {
+		t.Errorf("secret = %+v, want external", s)
+	}
+
+	out, err := Render(f, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(string(out), "content:") {
+		t.Errorf("document inlines content:\n%s", out)
+	}
+}
+
+func TestFromStackOmitsEmptyLabelMaps(t *testing.T) {
+	f, _ := FromStack(testStack(), clusterNetworks())
+
+	out, err := Render(f, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(string(out), "labels: {}") {
+		t.Errorf("empty label map rendered:\n%s", out)
+	}
+}
+
+func keys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+
+	return out
+}

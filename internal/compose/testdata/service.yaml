@@ -1,0 +1,74 @@
+# Exported from Cetacean. Redeploys to the same state on the same cluster:
+# secrets and configs are referenced, never exported, so another cluster needs
+# them created first. This is not the file that originally created the stack.
+
+services:
+  web_api:
+    image: nginx:1.27@sha256:abc
+    environment:
+      PORT: "80"
+    extra_hosts:
+      - db:1.2.3.4
+    networks:
+      - web_internal
+      - monitoring
+    volumes:
+      - type: volume
+        source: web_data
+        target: /data
+      - type: volume
+        source: backups
+        target: /backups
+    ports:
+      - target: 80
+        published: 8080
+        protocol: tcp
+        mode: ingress
+    configs:
+      - source: web_settings
+        target: settings.yml
+        uid: "0"
+        gid: "0"
+        mode: 292
+    secrets:
+      - source: web_token
+        target: token
+        mode: 256
+    healthcheck:
+      test:
+        - CMD
+        - "true"
+      interval: 30s
+    stop_grace_period: 20s
+    deploy:
+      mode: replicated
+      replicas: 3
+      labels:
+        tier: front
+      endpoint_mode: vip
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+networks:
+  monitoring:
+    external: true
+    name: monitoring
+  web_internal:
+    external: true
+    name: web_internal
+volumes:
+  backups:
+    external: true
+    name: backups
+  web_data:
+    external: true
+    name: web_data
+configs:
+  web_settings:
+    external: true
+    name: web_settings
+secrets:
+  web_token:
+    external: true
+    name: web_token
