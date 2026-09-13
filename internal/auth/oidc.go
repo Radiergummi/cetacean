@@ -507,11 +507,17 @@ func claimsToIdentity(claims map[string]any) *Identity {
 // ExtractBearerToken extracts the token from an Authorization: Bearer header.
 // The scheme comparison is case-insensitive per RFC 6750 Section 2.1.
 func ExtractBearerToken(r *http.Request) string {
+	const scheme = "bearer "
+
 	auth := r.Header.Get("Authorization")
-	if len(auth) > 7 && strings.EqualFold(auth[:7], "bearer ") {
-		return auth[7:]
+	if len(auth) <= len(scheme) || !strings.EqualFold(auth[:len(scheme)], scheme) {
+		return ""
 	}
-	return ""
+
+	// RFC 9110's credentials rule is `auth-scheme 1*SP token68`, so more than one
+	// space is legal. Returning the token with a space still attached reads as no
+	// credential at all, which would hand a valid one to a different authenticator.
+	return strings.TrimLeft(auth[len(scheme):], " ")
 }
 
 // isRelativePath returns true if s is a non-empty relative path (starts with /).

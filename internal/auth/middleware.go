@@ -75,8 +75,20 @@ func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Han
 				)
 				var authErr *AuthError
 				if errors.As(err, &authErr) && authErr.WWWAuthenticate != "" {
-					w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
+					w.Header().Add("WWW-Authenticate", authErr.WWWAuthenticate)
 				}
+
+				// A request that presented no credential gets the resource's own
+				// challenge too, or a client cannot do what RFC 9728 exists for: call
+				// the resource cold, read the 401, follow resource_metadata to the
+				// token endpoint. Added as a second field line rather than appended to
+				// the provider's, because a challenge list whose first scheme takes no
+				// parameters cannot be parsed unambiguously.
+				if challenge := tokens.Challenge(""); challenge != "" &&
+					ExtractBearerToken(r) == "" {
+					w.Header().Add("WWW-Authenticate", challenge)
+				}
+
 				writeError(w, r, http.StatusUnauthorized, "AUT001", "authentication required")
 				return
 			}

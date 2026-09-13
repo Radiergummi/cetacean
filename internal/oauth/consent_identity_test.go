@@ -58,16 +58,46 @@ func consentGET(
 // the middleware's exempt set so it runs under the upstream provider, and once a
 // bearer credential satisfies that middleware a leaked access token could
 // otherwise mint a fresh grant with no human in the loop.
+//
+// 403, not 401: the request was authenticated, and RFC 9110 §15.5.2's promise is
+// that repeating a 401 with a better credential of the same kind may work — which
+// is not true here, whatever token the caller sends.
 func TestConsentRefusesAnIdentityFromOurOwnToken(t *testing.T) {
 	s := newTestServer(t)
 
 	rec := consentGET(t, s, tokenIdentity(), "http://localhost:8612/cb")
 
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403: %s", rec.Code, rec.Body.String())
 	}
 	if loc := rec.Header().Get("Location"); loc != "" {
 		t.Errorf("refusal redirected to %q", loc)
+	}
+}
+
+// Every 401 must carry a challenge (RFC 9110 §15.5.2), and consent is reached
+// through the auth middleware, so an unauthenticated one has to say where a
+// credential comes from.
+func TestConsentWithoutAnIdentityChallenges(t *testing.T) {
+	s := newTestServer(t)
+
+	const redirectURI = "http://localhost:8616/cb"
+	target := authorizeURL(
+		registeredClient(t, s, []string{redirectURI}),
+		redirectURI,
+		computeS256Challenge("verifier-padded-to-the-RFC-7636-minimum-length"),
+		"state",
+		s.resources.fallback,
+	)
+
+	rec := httptest.NewRecorder()
+	s.HandleAuthorize(rec, httptest.NewRequest(http.MethodGet, target, nil))
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401: %s", rec.Code, rec.Body.String())
+	}
+	if challenge := rec.Header().Get("WWW-Authenticate"); challenge == "" {
+		t.Error("a 401 with no WWW-Authenticate challenge")
 	}
 }
 
@@ -102,8 +132,8 @@ func TestConsentPOSTRefusesAnIdentityFromOurOwnToken(t *testing.T) {
 	rec := httptest.NewRecorder()
 	s.HandleAuthorize(rec, req)
 
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403: %s", rec.Code, rec.Body.String())
 	}
 	if loc := rec.Header().Get("Location"); loc != "" {
 		t.Errorf("an approval redirected to %q; a code may have been issued", loc)

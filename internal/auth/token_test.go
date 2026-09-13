@@ -21,9 +21,17 @@ func (v *stubVerifier) Identify(_, _ string) (*Identity, error) {
 	return v.identity, v.err
 }
 
+// Mirrors the real verifier, which omits the error parameter for a request that
+// carried no credential (RFC 6750 §3.1). A stub that always emitted it would let
+// that conformance regress unnoticed.
 func (v *stubVerifier) UnauthorizedHeader(resource, errorCode string) string {
-	return `Bearer realm="cetacean", resource_metadata="` + resource +
-		`/.well-known/oauth-protected-resource", error="` + errorCode + `"`
+	challenge := `Bearer realm="cetacean", resource_metadata="` + resource +
+		`/.well-known/oauth-protected-resource"`
+	if errorCode == "" {
+		return challenge
+	}
+
+	return challenge + `, error="` + errorCode + `"`
 }
 
 // cookieProvider stands in for a provider that authenticates from an ambient
@@ -214,3 +222,73 @@ func TestWithoutABearerTokenNothingChanges(t *testing.T) {
 		}
 	})
 }
+
+// RFC 9728's whole point is that a client can call a protected resource cold,
+// read the 401, and follow resource_metadata to find out where a token comes
+// from. That only works if the challenge is there when no credential was sent —
+// which is the case the provider answers, not the verifier.
+func TestAColdCallIsToldWhereATokenComesFrom(t *testing.T) {
+	const resource = "https://cetacean.test"
+
+	// A provider that refuses with its own scheme, as cert and oidc modes do.
+	provider := &schemeProvider{scheme: "mutual-tls"}
+	tokens := APITokens{Verifier: &stubVerifier{}, Resource: resource}
+
+	w, _ := serve(provider, tokens, bearerRequest(""))
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", w.Code)
+	}
+
+	challenges := w.Result().Header.Values("WWW-Authenticate")
+
+	// The provider's own scheme survives: an mTLS client still learns it may
+	// present a certificate instead.
+	var named, kept bool
+	for _, c := range challenges {
+		if strings.Contains(c, "mutual-tls") {
+			kept = true
+		}
+	}
+	if !kept {
+		t.Errorf("the provider's own challenge was dropped: %q", challenges)
+	}
+
+	for _, c := range challenges {
+		if strings.Contains(c, "resource_metadata=") && strings.Contains(c, resource) {
+			named = true
+		}
+		// RFC 6750 §3.1: nothing was sent, so nothing is reported as invalid.
+		if strings.Contains(c, "error=") {
+			t.Errorf("challenge reports an error for a missing credential: %q", c)
+		}
+	}
+	if !named {
+		t.Errorf("no challenge names the resource's metadata: %q", challenges)
+	}
+}
+
+// A deployment with no authorization server has no metadata to advertise, so the
+// provider's challenge stands alone exactly as it did before tokens existed.
+func TestAColdCallWithoutAVerifierIsUnchanged(t *testing.T) {
+	w, _ := serve(&schemeProvider{scheme: "mutual-tls"}, APITokens{}, bearerRequest(""))
+
+	for _, c := range w.Result().Header.Values("WWW-Authenticate") {
+		if strings.Contains(c, "resource_metadata=") {
+			t.Errorf("advertised metadata with no authorization server: %q", c)
+		}
+	}
+}
+
+// schemeProvider refuses with a challenge of its own, the way cert mode offers
+// mutual-tls and oidc offers Bearer.
+type schemeProvider struct{ scheme string }
+
+func (p *schemeProvider) Authenticate(
+	_ http.ResponseWriter,
+	_ *http.Request,
+) (*Identity, error) {
+	return nil, &AuthError{Msg: "no credential", WWWAuthenticate: p.scheme}
+}
+
+func (p *schemeProvider) RegisterRoutes(_ *http.ServeMux) {}

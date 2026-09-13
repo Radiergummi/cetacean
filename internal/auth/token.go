@@ -42,6 +42,17 @@ type APITokens struct {
 	Resource string
 }
 
+// Challenge is the WWW-Authenticate value naming where a token for this resource
+// comes from, or "" when no verifier is configured. errorCode is empty for a
+// request that carried no credential, which RFC 6750 §3.1 asks for.
+func (t APITokens) Challenge(errorCode string) string {
+	if t.Verifier == nil {
+		return ""
+	}
+
+	return t.Verifier.UnauthorizedHeader(t.Resource, errorCode)
+}
+
 // authenticate resolves an Authorization: Bearer credential against the
 // verifier. ok is false when the request belongs to the provider instead — no
 // bearer token, no verifier, or a token that is somebody else's.
@@ -68,7 +79,7 @@ func (t APITokens) authenticate(r *http.Request) (id *Identity, err error, ok bo
 	default:
 		return nil, &AuthError{
 			Msg:             "invalid bearer token",
-			WWWAuthenticate: t.Verifier.UnauthorizedHeader(t.Resource, "invalid_token"),
+			WWWAuthenticate: t.Challenge("invalid_token"),
 		}, true
 	}
 }
