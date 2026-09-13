@@ -153,7 +153,6 @@ email = "X-Email"
 groups = "X-Groups"
 secret_header = "X-Secret"
 secret_value = "s3cret"
-trusted_proxies = "10.0.0.0/8"
 `), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -179,9 +178,6 @@ trusted_proxies = "10.0.0.0/8"
 	}
 	if fc.Auth.Headers == nil || *fc.Auth.Headers.Subject != "X-User" {
 		t.Error("Headers Subject not parsed")
-	}
-	if *fc.Auth.Headers.TrustedProxies != "10.0.0.0/8" {
-		t.Error("Headers TrustedProxies not parsed")
 	}
 }
 

@@ -118,56 +118,10 @@ func (c *Config) ValidateOAuth(authMode string) error {
 	return nil
 }
 
-// movedOAuthEnv maps each removed variable to what replaced it. Nothing reads
-// the old names, so a deployment still setting one gets the default instead of
-// what it wrote — and for the three that switch a capability off, the default
-// is on. The file needs no list: LoadFile refuses any key the schema lacks.
-var movedOAuthEnv = map[string]string{ //nolint:gosec // G101: names, not values
-	"CETACEAN_MCP_ISSUER":                     "CETACEAN_OAUTH_ISSUER",
-	"CETACEAN_MCP_SIGNING_KEY":                "CETACEAN_OAUTH_SIGNING_KEY",
-	"CETACEAN_MCP_SIGNING_KEY_FILE":           "CETACEAN_OAUTH_SIGNING_KEY_FILE",
-	"CETACEAN_MCP_ACCESS_TOKEN_TTL":           "CETACEAN_OAUTH_ACCESS_TOKEN_TTL",
-	"CETACEAN_MCP_REFRESH_TOKEN_TTL":          "CETACEAN_OAUTH_REFRESH_TOKEN_TTL",
-	"CETACEAN_MCP_CONSENT_TTL":                "CETACEAN_OAUTH_CONSENT_TTL",
-	"CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR": "CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR",
-	"CETACEAN_MCP_DCR_ENABLED":                "CETACEAN_OAUTH_DCR_ENABLED",
-	"CETACEAN_MCP_DCR_RATE_LIMIT":             "CETACEAN_OAUTH_DCR_RATE_LIMIT",
-	"CETACEAN_MCP_DCR_MAX_CLIENTS":            "CETACEAN_OAUTH_DCR_MAX_CLIENTS",
-	"CETACEAN_MCP_CIMD_ENABLED":               "CETACEAN_OAUTH_CIMD_ENABLED",
-}
-
-// checkMovedOAuthEnv refuses startup while any removed variable is still set,
-// naming every one of them at once so an operator fixes the deployment in one
-// pass rather than one restart per variable.
-func checkMovedOAuthEnv() error {
-	var moved []string
-	for old, replacement := range movedOAuthEnv {
-		if _, ok := os.LookupEnv(old); ok {
-			moved = append(moved, old+" is now "+replacement)
-		}
-	}
-	if len(moved) == 0 {
-		return nil
-	}
-
-	slices.Sort(moved)
-
-	return fmt.Errorf(
-		"the authorization server's settings moved out of CETACEAN_MCP_*, and the "+
-			"old variables are no longer read: %s. Unset them once the deployment "+
-			"carries the new names",
-		strings.Join(moved, "; "),
-	)
-}
-
 // loadOAuth builds an OAuthConfig from a file section and env vars, applying the
 // standard resolve helpers. It is called from Load() and is also directly
 // testable.
 func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
-	if err := checkMovedOAuthEnv(); err != nil {
-		return OAuthConfig{}, err
-	}
-
 	def := DefaultOAuthConfig()
 
 	// Extract file-level pointers (safely handle nil sub-struct).

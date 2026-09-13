@@ -190,13 +190,12 @@ type fileAuthCert struct {
 }
 
 type fileAuthHeaders struct {
-	Subject        *string `toml:"subject"`
-	Name           *string `toml:"name"`
-	Email          *string `toml:"email"`
-	Groups         *string `toml:"groups"`
-	SecretHeader   *string `toml:"secret_header"`
-	SecretValue    *string `toml:"secret_value"`
-	TrustedProxies *string `toml:"trusted_proxies"`
+	Subject      *string `toml:"subject"`
+	Name         *string `toml:"name"`
+	Email        *string `toml:"email"`
+	Groups       *string `toml:"groups"`
+	SecretHeader *string `toml:"secret_header"`
+	SecretValue  *string `toml:"secret_value"`
 }
 
 type fileACL struct {

@@ -214,20 +214,6 @@ func LoadAuth(flags *Flags, fc *fileConfig, publicURL, basePath string) (*AuthCo
 		if err != nil {
 			return nil, err
 		}
-		// Trusted proxies resolved separately via deprecation logic.
-		// LoadAuth still parses the legacy setting so main.go can
-		// implement the deprecation/fallback.
-		legacyTP, err := parseTrustedProxies(
-			resolve(
-				flags.HeadersTrustedProxies,
-				"CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES",
-				fileField(fh, func(h *fileAuthHeaders) *string { return h.TrustedProxies }),
-				"",
-			),
-		)
-		if err != nil {
-			return nil, err
-		}
 		cfg.Headers = HeadersConfig{
 			Subject: resolve(
 				flags.HeadersSubject,
@@ -259,8 +245,7 @@ func LoadAuth(flags *Flags, fc *fileConfig, publicURL, basePath string) (*AuthCo
 				fileField(fh, func(h *fileAuthHeaders) *string { return h.SecretHeader }),
 				"",
 			),
-			SecretValue:    secretValue,
-			TrustedProxies: legacyTP,
+			SecretValue: secretValue,
 		}
 		if cfg.Headers.Subject == "" {
 			return nil, fmt.Errorf("headers mode requires auth.headers.subject")
@@ -414,32 +399,13 @@ func ValidateCertMode(tlsEnabled bool, certCA string, trustedProxies []netip.Pre
 // Headers mode cannot authenticate anyone without one: every claim arrives in a
 // header that any client could have sent, so the list is what separates a proxy
 // Cetacean believes from one it does not.
-//
-// auth.headers.trusted_proxies is the older spelling and applies only where
-// server.trusted_proxies is unset, since that one also governs realIP and a
-// deployment setting both means the two to agree.
-func ResolveTrustedProxies(
-	current, deprecated []netip.Prefix,
-) (resolved []netip.Prefix, warnings []string, err error) {
-	switch {
-	case len(current) > 0 && len(deprecated) > 0:
-		return current, []string{
-			"auth.headers.trusted_proxies is deprecated and ignored when " +
-				"server.trusted_proxies is set; remove the old setting",
-		}, nil
-
-	case len(current) > 0:
-		return current, nil, nil
-
-	case len(deprecated) > 0:
-		return deprecated, []string{
-			"auth.headers.trusted_proxies is deprecated; use server.trusted_proxies instead",
-		}, nil
-
-	default:
-		return nil, nil, fmt.Errorf(
+func ResolveTrustedProxies(current []netip.Prefix) ([]netip.Prefix, error) {
+	if len(current) == 0 {
+		return nil, fmt.Errorf(
 			"headers auth mode requires server.trusted_proxies; " +
 				"set it to the CIDR of your reverse proxy",
 		)
 	}
+
+	return current, nil
 }

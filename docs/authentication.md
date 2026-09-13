@@ -386,10 +386,6 @@ secrets:
   - proxy_secret
 ```
 
-> [!NOTE]
-> [`auth.headers.trusted_proxies`][auth.headers.trusted_proxies] is deprecated. Use `server.trusted_proxies`,
-> which takes precedence when both are set.
-
 ### Proxy examples
 
 **[nginx](https://nginx.org/)** with OAuth2 Proxy:
@@ -553,7 +549,6 @@ response schemas.
 [api]: api
 [auth.cert.ca]: configuration#auth.cert.ca
 [auth.headers.subject]: configuration#auth.headers.subject
-[auth.headers.trusted_proxies]: configuration#auth.headers.trusted_proxies
 [auth.mode]: configuration#auth.mode
 [auth.oidc.client_id]: configuration#auth.oidc.client_id
 [auth.oidc.client_secret]: configuration#auth.oidc.client_secret
