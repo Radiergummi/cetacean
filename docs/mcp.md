@@ -25,11 +25,12 @@ environment:
   CETACEAN_PUBLIC_URL: https://cetacean.example.com
 ```
 
-Both flags are needed. Clients authenticate with a bearer token, and the
+Both flags are needed here. Clients authenticate with a bearer token, and the
 [authorization server][oauth.enabled] that issues it is opt-in on its own — it mints credentials for your
-cluster, so nothing turns it on implicitly. Under any auth mode but `none`, Cetacean refuses to start with the
-MCP server enabled and the authorization server off, because `/mcp` authenticates itself and would otherwise
-serve unauthenticated.
+cluster, so nothing turns it on implicitly. `/mcp` authenticates itself rather than going through the usual
+middleware, so under any auth mode but `none` it needs either the authorization server or the active mode
+listed in [`mcp.auth_bypass`][mcp.auth_bypass]. Cetacean refuses to start with neither, because the endpoint
+would serve unauthenticated.
 
 > [!WARNING]
 > [`server.public_url`][server.public_url] is the URL clients reach from outside the cluster, not a service name
@@ -135,7 +136,7 @@ Tracing stays off until the endpoint is set. A malformed endpoint stops startup 
 | Sign-in fails or redirects somewhere unreachable | [`server.public_url`][server.public_url] is not the URL clients reach from outside.                         |
 | A revoked agent still works for a while          | Access tokens stay valid until they expire. Lower [`oauth.access_token_ttl`][oauth.access_token_ttl].           |
 | An agent reports a change it made as gone        | Its result was discarded after [`mcp.task_ttl`][mcp.task_ttl]. The change itself still happened.            |
-| `cert` auth mode: client cannot connect          | mTLS cannot drive a browser consent screen. Set [`mcp.auth_bypass`][mcp.auth_bypass] to `cert`. |
+| `cert` auth mode: client cannot connect          | mTLS cannot drive a browser consent screen. Set [`mcp.auth_bypass`][mcp.auth_bypass] to `cert`; the authorization server can then stay off. |
 
 ## Behind a reverse proxy
 
