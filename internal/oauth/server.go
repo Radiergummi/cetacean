@@ -394,6 +394,7 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// per-function analysis.
 	refreshTokenRaw := r.FormValue("refresh_token") // #nosec G120 -- bounded in HandleToken
 	resourceForm := r.FormValue("resource")         // #nosec G120 -- bounded in HandleToken
+	clientID := r.FormValue("client_id")            // #nosec G120 -- bounded in HandleToken
 
 	// RFC 8707 resource indicator validation against the server's resource.
 	// Run BEFORE consuming the refresh token: a malformed resource parameter
@@ -409,9 +410,11 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Confirm the bound resource matches BEFORE rotation, again so a client
-	// typo doesn't revoke the entire family.
-	if resourceForm != "" {
+	// Confirm the bound resource and client match BEFORE rotation, again so a
+	// client typo doesn't revoke the entire family. Every client here is public
+	// and unauthenticated, so client_id proves nothing against a caller holding
+	// the token: RFC 6749 §6 conformance, not an attack worth catching.
+	if resourceForm != "" || clientID != "" {
 		bound, ok := s.refreshTokens.Validate(refreshTokenRaw)
 		if !ok {
 			writeTokenError(
@@ -422,12 +425,21 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 			)
 			return
 		}
-		if resourceForm != bound.Resource {
+		if resourceForm != "" && resourceForm != bound.Resource {
 			writeTokenError(
 				w,
 				http.StatusBadRequest,
 				"invalid_target",
 				"resource does not match this grant",
+			)
+			return
+		}
+		if clientID != "" && clientID != bound.ClientID {
+			writeTokenError(
+				w,
+				http.StatusBadRequest,
+				"invalid_grant",
+				"client_id does not match this grant",
 			)
 			return
 		}

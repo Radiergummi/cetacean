@@ -340,11 +340,13 @@ func TestConsentTokenIsBoundToTheWholeRequest(t *testing.T) {
 	}
 
 	swapped := map[string]func(*consentBinding){
-		"state":          func(b *consentBinding) { b.State = "other-state" },
-		"fingerprint":    func(b *consentBinding) { b.Fingerprint = "other-fingerprint" },
-		"client_id":      func(b *consentBinding) { b.ClientID = "https://attacker.example/id" },
-		"redirect_uri":   func(b *consentBinding) { b.RedirectURI = "https://attacker.example/cb" },
-		"code_challenge": func(b *consentBinding) { b.CodeChallenge = computeS256Challenge("a" + authorizeVerifier) },
+		"state":        func(b *consentBinding) { b.State = "other-state" },
+		"fingerprint":  func(b *consentBinding) { b.Fingerprint = "other-fingerprint" },
+		"client_id":    func(b *consentBinding) { b.ClientID = "https://attacker.example/id" },
+		"redirect_uri": func(b *consentBinding) { b.RedirectURI = "https://attacker.example/cb" },
+		"code_challenge": func(b *consentBinding) {
+			b.CodeChallenge = computeS256Challenge("a" + authorizeVerifier)
+		},
 	}
 
 	for field, swap := range swapped {
