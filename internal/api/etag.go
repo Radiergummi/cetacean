@@ -188,8 +188,23 @@ func writeCachedJSONStatusValidated(
 		validator = computeETag(body)
 	}
 
-	coding := negotiateCoding(w, r, body)
-	etag := codedETag(validator, coding)
+	writeRenderedJSON(w, r, status, renderedDoc{body: body, etag: validator})
+}
+
+// writeRenderedJSON sends a JSON body whose validator is already known,
+// negotiating a coding and answering a matching precondition with 304.
+//
+// This is the tail of writeCachedJSONStatusValidated, split out for a memoised
+// document: a hit there has the bytes and the hash of them already, and the
+// only thing left is to negotiate and write.
+func writeRenderedJSON(
+	w http.ResponseWriter,
+	r *http.Request,
+	status int,
+	doc renderedDoc,
+) {
+	coding := negotiateCoding(w, r, doc.body)
+	etag := codedETag(doc.etag, coding)
 
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/json")
@@ -202,7 +217,7 @@ func writeCachedJSONStatusValidated(
 		return
 	}
 
-	writeEncodedJSON(w, status, body, coding)
+	writeEncodedJSON(w, status, doc.body, coding)
 }
 
 // jsonTerminator ends every JSON body written by writeEncodedJSON.

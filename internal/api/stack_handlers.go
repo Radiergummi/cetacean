@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	json "github.com/goccy/go-json"
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -55,12 +56,43 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setAllow(w, r, "stack", name)
 
+	// Building a stack detail walks every service, task, config, secret,
+	// network and volume in it, and then marshals the lot. None of that depends
+	// on the request, so it is kept until the cache changes.
+	//
+	// The validator stays a hash of the body rather than something derived from
+	// the generation: this document is also what precond compares an If-Match
+	// against, and the two have to agree.
+	key := projectionKey{
+		generation:  h.cache.Generation(),
+		fingerprint: h.acl.Fingerprint(auth.IdentityFromContext(r.Context())),
+		scope:       name,
+	}
+	if doc, ok := h.stackDocs.get(key); ok {
+		writeRenderedJSON(w, r, http.StatusOK, doc)
+
+		return
+	}
+
 	rep, ok := representationOr404(w, r, "stack", name, h.stackRepresentation)
 	if !ok {
 		return
 	}
 
-	writeCachedJSON(w, r, rep)
+	body, err := json.Marshal(rep)
+	if err != nil {
+		w.Header().Set("Cache-Control", "no-store")
+		writeErrorCode(w, r, "API009", "failed to serialize response")
+
+		return
+	}
+
+	// Capped, so writeEncodedJSON's append for a compressed body cannot write
+	// into the array every later caller is handed.
+	doc := renderedDoc{body: body[:len(body):len(body)], etag: computeETag(body)}
+	h.stackDocs.put(key, doc)
+
+	writeRenderedJSON(w, r, http.StatusOK, doc)
 }
 
 const stackNamespaceLabel = "container_label_com_docker_stack_namespace"

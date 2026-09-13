@@ -80,3 +80,39 @@ func quoteETag(sum uint64) string {
 
 	return string(out)
 }
+
+// matchedValidator returns the coded tag the request's If-None-Match matches,
+// or "" if none does.
+//
+// The content coding is part of a validator, and resolving which one this
+// response would carry needs a body length that a caller answering before it
+// renders does not have. Trying each coding the server applies covers the tags
+// a rendered body would have produced.
+func matchedValidator(r *http.Request, validator string) string {
+	inm := r.Header.Get("If-None-Match")
+	if inm == "" {
+		return ""
+	}
+
+	for _, coding := range append([]Encoding{EncodingIdentity}, compressibleEncodings...) {
+		if tagged := codedETag(validator, coding); etagMatch(inm, tagged) {
+			return tagged
+		}
+	}
+
+	return ""
+}
+
+// writeNotModified stamps the validator headers every 304 owes a client and
+// answers it. Headers specific to a representation are the caller's to set
+// first — a list still reports its Allow and Link-Template.
+func writeNotModified(w http.ResponseWriter, tagged string) {
+	w.Header().Add("Vary", "Accept-Encoding")
+	w.Header().Set("ETag", tagged)
+
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "no-cache")
+	}
+
+	w.WriteHeader(http.StatusNotModified)
+}

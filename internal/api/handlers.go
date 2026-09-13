@@ -255,9 +255,10 @@ type Handlers struct {
 	tickerInterval     time.Duration // override for tick interval in tests; zero means use step duration
 	dockerVersionCache *dockerVersionCache
 
-	// topologyDocs memoises the rendered topology document, which is a pure
-	// function of the cache generation and what the caller may see.
+	// topologyDocs and stackDocs memoise rendered documents that are pure
+	// functions of the cache generation and what the caller may see.
 	topologyDocs *projectionCache
+	stackDocs    *projectionCache
 }
 
 func NewHandlers(
@@ -293,6 +294,7 @@ func NewHandlers(
 		acl:                aclEval,
 		dockerVersionCache: newDockerVersionCache(),
 		topologyDocs:       newProjectionCache(),
+		stackDocs:          newProjectionCache(),
 	}
 }
 

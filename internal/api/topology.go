@@ -47,7 +47,7 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 	}
 	if doc, ok := h.topologyDocs.get(key); ok {
 		w.Header().Set("Content-Type", "application/vnd.jgf+json")
-		writeRawWithETag(w, r, doc)
+		writeRawWithPrecomputedETag(w, r, doc.body, doc.etag)
 
 		return
 	}
@@ -98,10 +98,11 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.topologyDocs.put(key, body)
+	etag := computeETag(body)
+	h.topologyDocs.put(key, renderedDoc{body: body, etag: etag})
 
 	w.Header().Set("Content-Type", "application/vnd.jgf+json")
-	writeRawWithETag(w, r, body)
+	writeRawWithPrecomputedETag(w, r, body, etag)
 }
 
 // buildACLFilteredNetworkGraph builds the network JGF graph for the requesting

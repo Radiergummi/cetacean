@@ -40,32 +40,18 @@ func listNotModified[T any](
 	spec listSpec[T],
 	validator string,
 ) bool {
-	if r.Header.Get("If-None-Match") == "" {
+
+	tagged := matchedValidator(r, validator)
+	if tagged == "" {
 		return false
 	}
 
-	// The coding is part of the validator, and resolving it needs a body
-	// length this path does not have. Suffixing for every coding the client
-	// would accept covers the cases a hashed body would have produced.
-	for _, coding := range append([]Encoding{EncodingIdentity}, compressibleEncodings...) {
-		if !etagMatch(r.Header.Get("If-None-Match"), codedETag(validator, coding)) {
-			continue
-		}
+	h.setAllowList(w, r, spec.resourceType)
+	writeLinkTemplate(w, r, spec.linkTemplate)
+	w.Header().Set("Accept-Ranges", "items")
+	writeNotModified(w, tagged)
 
-		h.setAllowList(w, r, spec.resourceType)
-		writeLinkTemplate(w, r, spec.linkTemplate)
-		w.Header().Add("Vary", "Accept-Encoding")
-		w.Header().Set("Accept-Ranges", "items")
-		w.Header().Set("ETag", codedETag(validator, coding))
-		if w.Header().Get("Cache-Control") == "" {
-			w.Header().Set("Cache-Control", "no-cache")
-		}
-		w.WriteHeader(http.StatusNotModified)
-
-		return true
-	}
-
-	return false
+	return true
 }
 
 // handleList runs the full list pipeline and writes the JSON response.

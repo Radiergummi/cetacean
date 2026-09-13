@@ -9,13 +9,23 @@ import "sync"
 // gets no benefit and no regression.
 const projectionCacheSize = 16
 
-// projectionKey identifies a rendered document. Both halves are load-bearing:
-// the generation because the cluster changes underneath, and the fingerprint
-// because these documents are ACL-filtered and two identities must never be
-// handed each other's.
+// projectionKey identifies a rendered document. The generation and fingerprint
+// are both load-bearing: the generation because the cluster changes underneath,
+// and the fingerprint because these documents are ACL-filtered and two
+// identities must never be handed each other's. scope names the resource for
+// documents that have one, and is empty for cluster-wide ones.
 type projectionKey struct {
 	generation  uint64
 	fingerprint uint64
+	scope       string
+}
+
+// renderedDoc is a document and the validator for it. The validator is kept
+// rather than recomputed because it is a hash of the body — on a large document
+// that is most of what answering a repeat request would still cost.
+type renderedDoc struct {
+	body []byte
+	etag string
 }
 
 // projectionCache memoises documents that are a pure function of cache contents
@@ -25,7 +35,7 @@ type projectionKey struct {
 // to every caller. Nothing may write to a returned document.
 type projectionCache struct {
 	mu      sync.Mutex
-	entries map[projectionKey][]byte
+	entries map[projectionKey]renderedDoc
 	// order records insertion sequence for eviction. A map this small does not
 	// justify a real LRU, and the useful entry is almost always the newest
 	// generation anyway.
@@ -33,11 +43,11 @@ type projectionCache struct {
 }
 
 func newProjectionCache() *projectionCache {
-	return &projectionCache{entries: make(map[projectionKey][]byte, projectionCacheSize)}
+	return &projectionCache{entries: make(map[projectionKey]renderedDoc, projectionCacheSize)}
 }
 
 // get returns the stored document for key, if any.
-func (p *projectionCache) get(key projectionKey) ([]byte, bool) {
+func (p *projectionCache) get(key projectionKey) (renderedDoc, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -47,7 +57,7 @@ func (p *projectionCache) get(key projectionKey) ([]byte, bool) {
 }
 
 // put stores doc under key, evicting the oldest entry if the cache is full.
-func (p *projectionCache) put(key projectionKey, doc []byte) {
+func (p *projectionCache) put(key projectionKey, doc renderedDoc) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
