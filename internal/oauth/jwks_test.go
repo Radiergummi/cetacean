@@ -17,9 +17,9 @@ func newJWKSTestServer(t *testing.T) *Server {
 	t.Helper()
 
 	return NewServer(ServerConfig{
-		Issuer:      "https://swarm.example",
-		MCPResource: "https://swarm.example/mcp",
-		MCP: config.MCPConfig{
+		Issuer:   "https://swarm.example",
+		Resource: "https://swarm.example/mcp",
+		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  time.Hour,
 			RefreshTokenTTL: 720 * time.Hour,
 			DCREnabled:      true,
@@ -184,9 +184,9 @@ func TestMetadataAdvertisesTheKeySet(t *testing.T) {
 
 func TestMetadataOmitsTheKeySetWithoutAKey(t *testing.T) {
 	s := NewServer(ServerConfig{
-		Issuer:      "https://swarm.example",
-		MCPResource: "https://swarm.example/mcp",
-		MCP:         config.MCPConfig{AccessTokenTTL: time.Hour},
+		Issuer:   "https://swarm.example",
+		Resource: "https://swarm.example/mcp",
+		OAuth:    config.OAuthConfig{AccessTokenTTL: time.Hour},
 	})
 
 	rec := httptest.NewRecorder()

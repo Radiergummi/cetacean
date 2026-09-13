@@ -53,6 +53,7 @@ type Config struct {
 	CORSOrigins      []string        // CETACEAN_CORS_ORIGINS, default empty (disabled)
 	TrustedProxies   []netip.Prefix  // CETACEAN_TRUSTED_PROXIES
 	MCP              MCPConfig       // [mcp] section / CETACEAN_MCP_* env vars
+	OAuth            OAuthConfig     // [oauth] section / CETACEAN_OAUTH_* env vars
 
 	// OTelEndpoint is the OTLP/HTTP collector to export traces to.
 	// CETACEAN_OTEL_ENDPOINT / [tracing].endpoint; empty disables tracing.
@@ -205,6 +206,16 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		return nil, err
 	}
 	cfg.MCP = mcpCfg
+
+	var fOAuth *fileOAuth
+	if fc != nil {
+		fOAuth = fc.OAuth
+	}
+	oauthCfg, err := loadOAuth(fOAuth)
+	if err != nil {
+		return nil, err
+	}
+	cfg.OAuth = oauthCfg
 
 	trustedProxiesRaw := resolve(
 		flags.TrustedProxies,

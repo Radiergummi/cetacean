@@ -127,6 +127,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := config.ValidateOAuth(
+		cfg.OAuth.Enabled,
+		cfg.MCP.Enabled,
+		authCfg.Mode,
+		cfg.MCP.AuthBypass,
+	); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
 	tlsCfg := config.LoadTLS(flags, fc)
 	if err := config.ValidateTLS(tlsCfg); err != nil {
 		fmt.Fprintf(os.Stderr, "TLS configuration error: %v\n", err)
@@ -462,7 +472,7 @@ func main() {
 		slog.Info("distributed tracing enabled", "endpoint", cfg.OTelEndpoint)
 	}
 
-	mcpHandler, oauthRoutes, closeMCP := setupMCP(mcpDeps{
+	deps := mcpDeps{
 		cfg:          cfg,
 		cors:         corsConfig,
 		authMode:     authCfg.Mode,
@@ -475,8 +485,18 @@ func main() {
 		rec:          recEngine,
 		prometheus:   promClient,
 		tracer:       mcpTracer,
-	})
+	}
+
+	oauthSrv := setupOAuth(deps)
+	mcpHandler, closeMCP := setupMCP(deps, oauthSrv)
 	defer closeMCP()
+
+	// A nil *oauth.Server would be a non-nil func value, so the router would
+	// mount routes that call through nothing.
+	var oauthRoutes func(mux *http.ServeMux, basePath string)
+	if oauthSrv != nil {
+		oauthRoutes = oauthSrv.RegisterRoutes
+	}
 
 	router := api.NewRouter(api.RouterConfig{
 		Handlers:           handlers,
@@ -703,11 +723,89 @@ type mcpDeps struct {
 // a cleanup function the caller must invoke at shutdown so the MCP server's
 // cache change listener detaches before the cache itself is torn down.
 //
-// Startup fails when MCP OAuth is in play and no reachable issuer could be
-// derived; see Config.MCPIssuer and Config.MCPIssuerRequired.
-func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string), func()) {
+// The authorization server is built separately by setupOAuth and passed in, so
+// MCP is one consumer of it rather than its owner.
+// setupOAuth builds the OAuth 2.1 authorization server, or returns nil when the
+// deployment did not ask for one. It is opt-in because a token issuer should
+// never appear as a side effect of enabling something else.
+//
+// Startup fails when no reachable issuer can be derived: every client resolves
+// the endpoints from the advertised one, so an unreachable issuer is an
+// authorization server nothing can use.
+func setupOAuth(d mcpDeps) *oauth.Server {
+	if !d.cfg.OAuth.Enabled {
+		return nil
+	}
+
+	issuer, reachable := d.cfg.OAuthIssuer(d.tlsEnabled)
+	if !reachable {
+		slog.Error(
+			"the OAuth server needs an issuer clients can reach, and none could be derived from server.listen_addr. Set server.public_url to the URL clients reach from outside, or oauth.issuer to override it.",
+			"derived_issuer",
+			issuer,
+			"listen_addr",
+			d.cfg.ListenAddr,
+		)
+		os.Exit(1)
+	}
+
+	// A configured key has already been rejected unless it decodes, so it
+	// arrives here as key material or not at all.
+	signingKey, _ := config.SigningKeyBytes(d.cfg.OAuth.SigningKey)
+	if len(signingKey) == 0 {
+		signingKey = make([]byte, 32)
+		if _, err := rand.Read(signingKey); err != nil {
+			slog.Error("OAuth signing key generation failed", "error", err)
+			os.Exit(1)
+		}
+		slog.Warn(
+			"OAuth signing key auto-generated; tokens won't survive restarts. Set CETACEAN_OAUTH_SIGNING_KEY, or CETACEAN_OAUTH_SIGNING_KEY_FILE to read it from a file, for stable tokens.",
+		)
+	}
+
+	// Refresh tokens outlive the process only if the data directory is
+	// writable. It is created here rather than relying on the snapshot
+	// path, since token durability is not tied to storage.snapshot: an
+	// operator who turns cache snapshots off still gets clients that stay
+	// authorized across a restart.
+	statePath := filepath.Join(d.cfg.DataDir, "mcp-tokens.json")
+	//nolint:gosec // DataDir is operator-configured, not user input
+	if err := os.MkdirAll(d.cfg.DataDir, 0700); err != nil {
+		slog.Warn(
+			"could not create data dir; OAuth tokens and approvals will not survive a restart",
+			"error", err,
+			"path", d.cfg.DataDir,
+		)
+		statePath = ""
+	}
+
+	resource := issuer + d.cfg.BasePath + "/mcp"
+	srv := oauth.NewServer(oauth.ServerConfig{
+		Issuer:     issuer,
+		BasePath:   d.cfg.BasePath,
+		Resource:   resource,
+		OAuth:      d.cfg.OAuth,
+		SigningKey: signingKey,
+		StatePath:  statePath,
+	})
+
+	slog.Info("OAuth 2.1 authorization server enabled",
+		"issuer", issuer, "resource", resource)
+
+	// Nothing consumes it yet, which is allowed: the operator asked for it, and
+	// the REST API becomes a second resource later.
 	if !d.cfg.MCP.Enabled {
-		return nil, nil, func() {}
+		slog.Warn(
+			"the OAuth server is enabled but nothing consumes it: /mcp is the only protected resource today, and mcp.enabled is false.",
+		)
+	}
+
+	return srv
+}
+
+func setupMCP(d mcpDeps, oauthSrv *oauth.Server) (http.Handler, func()) {
+	if !d.cfg.MCP.Enabled {
+		return nil, func() {}
 	}
 
 	// Hand the MCP server the built widget bundles. fs.Sub strips the embed
@@ -721,69 +819,18 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		mcp.SetWidgetFS(widgets)
 	}
 
-	issuer, reachable := d.cfg.MCPIssuer(d.tlsEnabled)
-	if !reachable {
-		if d.cfg.MCPIssuerRequired(d.authMode) {
-			slog.Error(
-				"MCP OAuth needs an issuer clients can reach, and none could be derived from server.listen_addr. Set server.public_url to the URL clients reach from outside, or mcp.issuer to override it for MCP alone.",
-				"derived_issuer",
-				issuer,
-				"listen_addr",
-				d.cfg.ListenAddr,
-			)
-			os.Exit(1)
-		}
+	// Unreachable is only cosmetic here: without an authorization server the
+	// issuer feeds tool icon URLs alone. setupOAuth makes it fatal when tokens
+	// depend on it.
+	issuer, reachable := d.cfg.OAuthIssuer(d.tlsEnabled)
+	if !reachable && !d.cfg.OAuthIssuerRequired() {
 		slog.Warn(
-			"no reachable MCP issuer could be derived from server.listen_addr; MCP tool icons will point at an unreachable URL. Set server.public_url to the URL clients reach from outside.",
+			"no reachable issuer could be derived from server.listen_addr; MCP tool icons will point at an unreachable URL. Set server.public_url to the URL clients reach from outside.",
 			"derived_issuer",
 			issuer,
 			"listen_addr",
 			d.cfg.ListenAddr,
 		)
-	}
-	mcpResource := issuer + d.cfg.BasePath + "/mcp"
-
-	var oauthSrv *oauth.Server
-	if d.authMode != "none" {
-		// A configured key has already been rejected unless it decodes, so it
-		// arrives here as key material or not at all.
-		signingKey, _ := config.SigningKeyBytes(d.cfg.MCP.SigningKey)
-		if len(signingKey) == 0 {
-			signingKey = make([]byte, 32)
-			if _, err := rand.Read(signingKey); err != nil {
-				slog.Error("MCP signing key generation failed", "error", err)
-				os.Exit(1)
-			}
-			slog.Warn(
-				"MCP signing key auto-generated; tokens won't survive restarts. Set CETACEAN_MCP_SIGNING_KEY, or CETACEAN_MCP_SIGNING_KEY_FILE to read it from a file, for stable tokens.",
-			)
-		}
-		// Refresh tokens outlive the process only if the data directory is
-		// writable. It is created here rather than relying on the snapshot
-		// path, since token durability is not tied to storage.snapshot: an
-		// operator who turns cache snapshots off still gets clients that stay
-		// authorized across a restart.
-		statePath := filepath.Join(d.cfg.DataDir, "mcp-tokens.json")
-		//nolint:gosec // DataDir is operator-configured, not user input
-		if err := os.MkdirAll(d.cfg.DataDir, 0700); err != nil {
-			slog.Warn(
-				"could not create data dir; MCP tokens and approvals will not survive a restart",
-				"error", err,
-				"path", d.cfg.DataDir,
-			)
-			statePath = ""
-		}
-
-		oauthSrv = oauth.NewServer(oauth.ServerConfig{
-			Issuer:      issuer,
-			BasePath:    d.cfg.BasePath,
-			MCPResource: mcpResource,
-			MCP:         d.cfg.MCP,
-			SigningKey:  signingKey,
-			StatePath:   statePath,
-		})
-		slog.Info("MCP OAuth 2.1 authorization server enabled",
-			"issuer", issuer, "resource", mcpResource)
 	}
 
 	// A nil *promapi.Client stored in the interface would be a non-nil
@@ -840,8 +887,5 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		)
 	}
 
-	if oauthSrv == nil {
-		return mcpSrv.Handler(), nil, mcpSrv.Close
-	}
-	return mcpSrv.Handler(), oauthSrv.RegisterRoutes, mcpSrv.Close
+	return mcpSrv.Handler(), mcpSrv.Close
 }

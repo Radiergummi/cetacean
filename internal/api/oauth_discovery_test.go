@@ -20,10 +20,10 @@ import (
 // already stripped by the time the mux sees a request.
 func withOAuthRoutes(basePath string) routerOption {
 	srv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://swarm.example",
-		BasePath:    basePath,
-		MCPResource: "https://swarm.example" + basePath + "/mcp",
-		MCP: config.MCPConfig{
+		Issuer:   "https://swarm.example",
+		BasePath: basePath,
+		Resource: "https://swarm.example" + basePath + "/mcp",
+		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  time.Hour,
 			RefreshTokenTTL: 720 * time.Hour,
 			DCREnabled:      true,

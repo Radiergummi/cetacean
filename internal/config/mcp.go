@@ -1,14 +1,9 @@
 package config
 
 import (
-	"encoding/base64"
-	"encoding/hex"
 	"fmt"
-	"net/url"
 	"os"
-	"slices"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -20,36 +15,6 @@ type MCPConfig struct {
 	// OperationsLevel overrides the global operations level for MCP clients.
 	// OpsInherit (-1) means fall back to the global CETACEAN_OPERATIONS_LEVEL.
 	OperationsLevel OperationsLevel
-
-	// Issuer is the canonical external URL of this Cetacean instance, used as
-	// the OAuth 2.1 issuer identifier and as the base for the MCP resource
-	// audience. Empty means "derive from the listen address" — only correct
-	// when no reverse proxy sits in front. Behind a proxy, set this to the
-	// public URL (e.g. "https://cetacean.example.com").
-	Issuer string
-
-	// SigningKey is the root the token and CSRF keys derive from. Empty means
-	// a fresh root each start, which invalidates every issued token.
-	SigningKey string
-
-	// AccessTokenTTL is how long MCP access tokens remain valid.
-	AccessTokenTTL time.Duration
-
-	// RefreshTokenTTL is how long MCP refresh tokens remain valid.
-	RefreshTokenTTL time.Duration
-
-	// ConsentTTL is how long a remembered approval keeps letting a client skip
-	// the consent screen. It must outlive RefreshTokenTTL to be useful at all —
-	// the point of remembering is that an expired refresh token does not cost
-	// the operator a second prompt — but it cannot be unbounded: an approval is
-	// only revocable by presenting a token from its grant family, so once that
-	// family lapses an unbounded record would keep authorizing silently with no
-	// way left to withdraw it. Zero or negative disables remembering entirely,
-	// so every authorization is prompted.
-	ConsentTTL time.Duration
-
-	// RequireResourceIndicator requires RFC 8707 resource indicators in token requests.
-	RequireResourceIndicator bool
 
 	// MaxConcurrentTasks caps how many task-augmented tool calls may run at
 	// once. Each holds a goroutine polling the cache until the cluster
@@ -73,51 +38,26 @@ type MCPConfig struct {
 	// ceiling, not refused. Zero disables the cap.
 	MaxTaskTTL time.Duration
 
-	// DCREnabled enables Dynamic Client Registration (RFC 7591).
-	DCREnabled bool
-
-	// DCRRateLimit is the maximum number of DCR requests per IP per hour.
-	DCRRateLimit int
-
-	// DCRMaxClients is the maximum number of dynamically registered clients.
-	DCRMaxClients int
-
-	// CIMDEnabled enables Client ID Metadata Documents: an https:// client_id
-	// that Cetacean fetches and verifies. Disabling it stops the server making
-	// outbound requests on a client's behalf.
-	CIMDEnabled bool
-
 	// AuthBypass lists upstream Cetacean auth modes (e.g. "cert") whose
-	// authenticated identity is accepted at /mcp without an OAuth bearer
-	// token. When a request reaches /mcp and the active auth mode is in this
-	// list, the MCP server derives identity from the upstream provider
-	// (e.g. the mTLS client certificate) instead of validating a JWT.
-	// Modes that would issue redirects (e.g. "oidc") are unsafe to list.
+	// authenticated identity is accepted at /mcp without a bearer token: the
+	// MCP server derives identity from the upstream provider instead of
+	// validating a JWT. Modes that issue redirects (e.g. "oidc") are unsafe to
+	// list. It does not remove the need for an authorization server — the
+	// bypass runs inside the bearer middleware an absent one never installs.
 	AuthBypass []string
 }
 
 // DefaultMCPConfig returns an MCPConfig populated with sensible defaults.
 func DefaultMCPConfig() MCPConfig {
 	return MCPConfig{
-		Enabled:         false,
-		OperationsLevel: OpsInherit,
-		Issuer:          "",
-		SigningKey:      "",
-		AccessTokenTTL:  time.Hour,
-		RefreshTokenTTL: 720 * time.Hour,
-		ConsentTTL:      2160 * time.Hour, // 90d, well past the refresh token's 30d
-
-		RequireResourceIndicator: true,
-		MaxConcurrentTasks:       32,
+		Enabled:            false,
+		OperationsLevel:    OpsInherit,
+		MaxConcurrentTasks: 32,
 		// 15m covers the 5m convergence timeout with a collection window well
 		// clear of it, since the TTL runs from creation.
-		TaskTTL:       15 * time.Minute,
-		MaxTaskTTL:    time.Hour,
-		DCREnabled:    true,
-		DCRRateLimit:  10,
-		DCRMaxClients: 1000,
-		CIMDEnabled:   true,
-		AuthBypass:    nil,
+		TaskTTL:    15 * time.Minute,
+		MaxTaskTTL: time.Hour,
+		AuthBypass: nil,
 	}
 }
 
@@ -139,74 +79,20 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 
 	// Extract file-level pointers (safely handle nil sub-struct).
 	var (
-		fEnabled       *bool
-		fIssuer        *string
-		fSigningKey    *string
-		fAccessTTL     *string
-		fRefreshTTL    *string
-		fOpsLevel      *int
-		fRequireRI     *bool
-		fConsentTTL    *string
-		fTaskTTL       *string
-		fMaxTaskTTL    *string
-		fMaxTasks      *int
-		fDCREnabled    *bool
-		fDCRRateLimit  *int
-		fDCRMaxClients *int
-		fCIMDEnabled   *bool
-		fAuthBypass    []string
+		fEnabled    *bool
+		fOpsLevel   *int
+		fTaskTTL    *string
+		fMaxTaskTTL *string
+		fMaxTasks   *int
+		fAuthBypass []string
 	)
 	if fm != nil {
 		fEnabled = fm.Enabled
-		fIssuer = fm.Issuer
-		fSigningKey = fm.SigningKey
-		fAccessTTL = fm.AccessTokenTTL
-		fRefreshTTL = fm.RefreshTokenTTL
-		fConsentTTL = fm.ConsentTTL
 		fOpsLevel = fm.OperationsLevel
 		fMaxTasks = fm.MaxConcurrentTasks
 		fTaskTTL = fm.TaskTTL
 		fMaxTaskTTL = fm.MaxTaskTTL
-		if fm.OAuth != nil {
-			fRequireRI = fm.OAuth.RequireResourceIndicator
-			fDCREnabled = fm.OAuth.DCREnabled
-			fDCRRateLimit = fm.OAuth.DCRRateLimit
-			fDCRMaxClients = fm.OAuth.DCRMaxClients
-			fCIMDEnabled = fm.OAuth.CIMDEnabled
-			fAuthBypass = fm.OAuth.AuthBypass
-		}
-	}
-
-	accessTTL, err := resolveDuration(
-		nil,
-		"CETACEAN_MCP_ACCESS_TOKEN_TTL",
-		fAccessTTL,
-		def.AccessTokenTTL,
-	)
-	if err != nil {
-		return MCPConfig{}, err
-	}
-
-	refreshTTL, err := resolveDuration(
-		nil,
-		"CETACEAN_MCP_REFRESH_TOKEN_TTL",
-		fRefreshTTL,
-		def.RefreshTokenTTL,
-	)
-	if err != nil {
-		return MCPConfig{}, err
-	}
-
-	// Non-negative rather than positive: zero is the documented way to turn
-	// remembered approvals off, and ConsentStore.Enabled() honours it.
-	consentTTL, err := resolveNonNegativeDuration(
-		nil,
-		"CETACEAN_MCP_CONSENT_TTL",
-		fConsentTTL,
-		def.ConsentTTL,
-	)
-	if err != nil {
-		return MCPConfig{}, err
+		fAuthBypass = fm.AuthBypass
 	}
 
 	taskTTL, err := resolveNonNegativeDuration(
@@ -241,30 +127,6 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		return MCPConfig{}, err
 	}
 
-	dcrRateLimit, err := resolveInt(
-		nil,
-		"CETACEAN_MCP_DCR_RATE_LIMIT",
-		fDCRRateLimit,
-		def.DCRRateLimit,
-		1,
-		1<<20,
-	)
-	if err != nil {
-		return MCPConfig{}, err
-	}
-
-	dcrMaxClients, err := resolveInt(
-		nil,
-		"CETACEAN_MCP_DCR_MAX_CLIENTS",
-		fDCRMaxClients,
-		def.DCRMaxClients,
-		1,
-		1<<20,
-	)
-	if err != nil {
-		return MCPConfig{}, err
-	}
-
 	// OpsInherit (-1) is a sentinel that cannot be expressed in the [0,3] range
 	// accepted by resolveInt, so we handle it manually.
 	opsLevel, err := resolveMCPOpsLevel(fOpsLevel)
@@ -272,131 +134,14 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		return MCPConfig{}, err
 	}
 
-	issuer, err := resolveMCPIssuer(fIssuer)
-	if err != nil {
-		return MCPConfig{}, err
-	}
-
-	signingKey, err := resolveSecret(
-		nil,
-		"CETACEAN_MCP_SIGNING_KEY",
-		fSigningKey,
-		def.SigningKey,
-	)
-	if err != nil {
-		return MCPConfig{}, err
-	}
-	if err := checkSigningKey(signingKey); err != nil {
-		return MCPConfig{}, err
-	}
-
 	return MCPConfig{
 		Enabled:            resolveBool(nil, "CETACEAN_MCP", fEnabled, def.Enabled),
 		OperationsLevel:    opsLevel,
-		Issuer:             issuer,
-		SigningKey:         signingKey,
-		AccessTokenTTL:     accessTTL,
-		RefreshTokenTTL:    refreshTTL,
-		ConsentTTL:         consentTTL,
 		MaxConcurrentTasks: maxConcurrentTasks,
 		TaskTTL:            taskTTL,
 		MaxTaskTTL:         maxTaskTTL,
-		RequireResourceIndicator: resolveBool(
-			nil,
-			"CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR",
-			fRequireRI,
-			def.RequireResourceIndicator,
-		),
-		DCREnabled: resolveBool(
-			nil,
-			"CETACEAN_MCP_DCR_ENABLED",
-			fDCREnabled,
-			def.DCREnabled,
-		),
-		DCRRateLimit:  dcrRateLimit,
-		DCRMaxClients: dcrMaxClients,
-		CIMDEnabled: resolveBool(
-			nil,
-			"CETACEAN_MCP_CIMD_ENABLED",
-			fCIMDEnabled,
-			def.CIMDEnabled,
-		),
-		AuthBypass: resolveStringSlice(nil, "CETACEAN_MCP_AUTH_BYPASS", fAuthBypass),
+		AuthBypass:         resolveStringSlice(nil, "CETACEAN_MCP_AUTH_BYPASS", fAuthBypass),
 	}, nil
-}
-
-const signingKeyBytes = 32
-
-// The published public key is a deterministic function of the root and needs no
-// authentication to fetch, so anything but real key material can be ground
-// offline from it. An empty key is not a failure: it means none was configured,
-// and one is generated instead.
-func checkSigningKey(key string) error {
-	if key == "" {
-		return nil
-	}
-
-	if _, decoded := SigningKeyBytes(key); decoded {
-		return nil
-	}
-
-	return fmt.Errorf(
-		"mcp.signing_key must be %d bytes of hex or base64 — generate one with "+
-			"`openssl rand -hex 32`, or leave it unset to have one generated",
-		signingKeyBytes,
-	)
-}
-
-// A value that decodes as hex or base64 to exactly signingKeyBytes is key
-// material; anything else is not, and decoded reports which.
-func SigningKeyBytes(key string) (root []byte, decoded bool) {
-	decoders := []func(string) ([]byte, error){
-		hex.DecodeString,
-		base64.StdEncoding.DecodeString,
-		base64.RawURLEncoding.DecodeString,
-	}
-
-	for _, decode := range decoders {
-		if b, err := decode(key); err == nil && len(b) == signingKeyBytes {
-			return b, true
-		}
-	}
-
-	return []byte(key), false
-}
-
-// resolveMCPIssuer reads CETACEAN_MCP_ISSUER and the file value, validates
-// the result as an http(s) URL with a host, and strips trailing slashes.
-// Empty input is allowed and means "derive from listen address" at startup.
-func resolveMCPIssuer(file *string) (string, error) {
-	const envKey = "CETACEAN_MCP_ISSUER"
-
-	raw := os.Getenv(envKey)
-	source := envKey
-	if raw == "" && file != nil {
-		raw = *file
-		source = "config file"
-	}
-	if raw == "" {
-		return "", nil
-	}
-
-	raw = strings.TrimRight(raw, "/")
-	u, err := url.Parse(raw)
-	if err != nil {
-		return "", fmt.Errorf("invalid URL from %s %q: %w", source, raw, err)
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return "", fmt.Errorf("%s must use http or https scheme, got %q", source, u.Scheme)
-	}
-	if u.Host == "" {
-		return "", fmt.Errorf("%s must include a host, got %q", source, raw)
-	}
-	if u.Fragment != "" || u.RawQuery != "" {
-		return "", fmt.Errorf("%s must not contain a fragment or query, got %q", source, raw)
-	}
-
-	return raw, nil
 }
 
 // resolveMCPOpsLevel reads CETACEAN_MCP_OPERATIONS_LEVEL and the file value,
@@ -430,50 +175,4 @@ func resolveMCPOpsLevel(file *int) (OperationsLevel, error) {
 	}
 
 	return OpsInherit, nil
-}
-
-// MCPIssuer returns the canonical external base URL clients reach this
-// deployment at: mcp.issuer, then server.public_url, then a derivation from
-// server.listen_addr and whether TLS terminates here.
-//
-// The second return is false when that derivation reaches nothing: the
-// default ":9000" has an empty host, and a wildcard bind ("0.0.0.0", "::")
-// parses but resolves nowhere. The string is returned either way, since only
-// OAuth truly breaks on it — see MCPIssuerRequired.
-func (c *Config) MCPIssuer(tlsEnabled bool) (string, bool) {
-	if c.MCP.Issuer != "" {
-		return c.MCP.Issuer, true
-	}
-
-	if c.PublicURL != "" {
-		return c.PublicURL, true
-	}
-
-	scheme := "http"
-	if tlsEnabled {
-		scheme = "https"
-	}
-
-	issuer := scheme + "://" + c.ListenAddr
-
-	u, err := url.Parse(issuer)
-	if err != nil {
-		return issuer, false
-	}
-
-	switch u.Hostname() {
-	case "", "0.0.0.0", "::":
-		return issuer, false
-	}
-
-	return issuer, true
-}
-
-// MCPIssuerRequired reports whether /mcp needs a reachable issuer, rather than
-// one that only feeds cosmetic tool-icon URLs. OAuth is in play unless the
-// auth mode is "none" or is listed in mcp.oauth.auth_bypass: a bypassed mode
-// authenticates each request from the upstream identity and never drives the
-// authorize/token flow.
-func (c *Config) MCPIssuerRequired(authMode string) bool {
-	return authMode != "none" && !slices.Contains(c.MCP.AuthBypass, authMode)
 }
