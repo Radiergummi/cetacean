@@ -39,6 +39,10 @@ go.work.sum
 # Runtime data
 /data/
 
+# The e2e harness mints a throwaway CA and leaf certs on each run. Generated
+# key material, never fixtures: committing them would publish private keys.
+test/e2e/certs/
+
 # Design docs (local-only). Plans are ephemeral working documents: they are
 # written into docs/plans/, and the second rule catches one written beside the
 # design it implements, which is where they used to land.

@@ -144,6 +144,21 @@ var mediaForms = map[contract.Representation]mediaForm{
 			}
 		},
 	},
+	contract.RepresentationCSV: {
+		accept:      "text/csv",
+		suffix:      ".csv",
+		contentType: "text/csv",
+		verify: func(t *testing.T, body string) {
+			t.Helper()
+
+			// The header row, which a listing carries even when it has no
+			// rows: the CSV comes off the list its JSON handler prepared.
+			header, _, _ := strings.Cut(body, "\n")
+			if !strings.Contains(header, ",") {
+				t.Errorf("the CSV body has no header row: %.120s", body)
+			}
+		},
+	},
 	contract.RepresentationJGF: {
 		accept:      "application/vnd.jgf+json",
 		suffix:      ".jgf",
@@ -342,6 +357,10 @@ var routeQuery = map[string]string{
 // parameter with the fixture resource its leading segment names. A pattern
 // whose type has no fixture entry is reported, never guessed.
 func (f representationFixture) path(pattern string) (string, bool) {
+	// {$} anchors a ServeMux pattern to the exact path. It names no parameter,
+	// and the path it anchors is the one without it.
+	pattern = strings.TrimSuffix(pattern, "{$}")
+
 	segments := strings.Split(strings.TrimPrefix(pattern, "/"), "/")
 
 	for i, segment := range segments {

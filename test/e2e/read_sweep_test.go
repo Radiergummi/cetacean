@@ -3,6 +3,7 @@
 package e2e_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -568,6 +569,54 @@ func driveSwarmUnlockKey(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	}
 }
 
+// driveIdenticalDocument checks a route that authenticates but carries nothing
+// a grant could filter: every persona, anonymous included, must get the same
+// answer. The assertion is that no grant enters into it, so what the route
+// answers is left to the route — only a difference between personas fails.
+func driveIdenticalDocument(path, accept string) readDriveFunc {
+	return func(t *testing.T, proc *sut.Process, _ baselineIDs) {
+		type answer struct {
+			status int
+			body   []byte
+		}
+
+		var (
+			first answer
+			seen  bool
+		)
+
+		for _, p := range readPersonas {
+			t.Run(p.name, func(t *testing.T) {
+				resp := readAs(t, proc, p, path, accept)
+				defer resp.Body.Close()
+
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					t.Fatalf("read body: %v", err)
+				}
+
+				// A grant-shaped refusal is the one status this cannot be.
+				if resp.StatusCode == http.StatusForbidden {
+					t.Fatalf("%s refused %s with 403, but no grant governs it", path, p.name)
+				}
+
+				if !seen {
+					first, seen = answer{resp.StatusCode, body}, true
+
+					return
+				}
+
+				if resp.StatusCode != first.status || !bytes.Equal(body, first.body) {
+					t.Errorf(
+						"%s answered %s with %d and another persona with %d, so a grant filters it",
+						path, p.name, resp.StatusCode, first.status,
+					)
+				}
+			})
+		}
+	}
+}
+
 // driveProfile checks GET /profile: not a cluster-resource read at all, but
 // the identity-and-permissions echo every persona (including anonymous, who
 // is authenticated as a real subject carrying no groups — headers mode
@@ -864,9 +913,15 @@ var drivenReadRoutes = map[string]readDriveFunc{
 	"GET /swarm":            driveSwarm,
 	"GET /swarm/unlock-key": driveSwarmUnlockKey,
 	"GET /profile":          driveProfile,
-	"GET /plugins":          drivePlugins,
-	"GET /search":           driveSearch,
-	"GET /stacks/summary":   driveStacksSummary,
+	"GET /{$}":              driveIdenticalDocument("/", ""),
+	"GET /index":            driveIdenticalDocument("/index", ""),
+	"GET /opensearch.xml": driveIdenticalDocument(
+		"/opensearch.xml",
+		"application/opensearchdescription+xml",
+	),
+	"GET /plugins":        drivePlugins,
+	"GET /search":         driveSearch,
+	"GET /stacks/summary": driveStacksSummary,
 }
 
 // excusedReadRoutes carries a reason for every GET/HEAD route this file does
@@ -889,6 +944,10 @@ var excusedReadRoutes = map[string]string{
 	"GET /-/ready":                 "auth-exempt (/-/*): serves the same response to every persona, no ACL involved",
 	"GET /-/sbom.cdx":              "auth-exempt (/-/*): serves the same response to every persona, no ACL involved",
 	"GET /api":                     "auth-exempt (/api*): serves the same response to every persona, no ACL involved",
+	"GET /api/asyncapi":            "auth-exempt (/api*): serves the same response to every persona, no ACL involved",
+	"GET /api/asyncapi.yaml":       "auth-exempt (/api*): serves the same response to every persona, no ACL involved",
+	"GET /api/openapi.yaml":        "auth-exempt (/api*): serves the same response to every persona, no ACL involved",
+	"GET /.well-known/api-catalog": "auth-exempt (/.well-known/*): RFC 9727 discovery is unauthenticated by spec",
 	"GET /api/context.jsonld":      "auth-exempt (/api*): serves the same response to every persona, no ACL involved",
 	"GET /api/errors":              "auth-exempt (/api*): serves the same response to every persona, no ACL involved",
 	"GET /api/errors/{code}":       "auth-exempt (/api*): serves the same response to every persona, no ACL involved",
