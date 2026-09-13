@@ -65,7 +65,9 @@ const oauthIssuer = "http://127.0.0.1:19011"
 // warns that tokens won't survive restarts — which would make
 // TestMCPOAuthStateSurvivesARestart unable to tell a lost signing key from
 // lost persisted state. config.LoadMCP rejects anything shorter than 32 bytes.
-const oauthSigningKey = "e2e-oauth-signing-key-32-bytes!!"
+// 32 bytes of hex, which is what mcp.signing_key requires. A readable ASCII
+// string of the right length is refused at startup, not decoded.
+const oauthSigningKey = "e2e0a11de2e0a11de2e0a11de2e0a11de2e0a11de2e0a11de2e0a11de2e0a11d"
 
 // oauthPolicy grants everything to group:ops and nothing to anyone else, so
 // the lane can ask whether the `groups` claim minted at consent time actually
@@ -2092,5 +2094,46 @@ func assertSetEqual(t *testing.T, name string, got, want []string) {
 
 	if !slices.Equal(gotSorted, wantSorted) {
 		t.Errorf("%s = %v, want %v", name, gotSorted, wantSorted)
+	}
+}
+
+// The JWK Set is what lets anything verify a token Cetacean issued without
+// holding a key that could issue one, so it must be fetchable without
+// credentials and must publish only the public half.
+func TestMCPOAuthPublishesItsVerificationKey(t *testing.T) {
+	env := harness.Up(t)
+	env.SwarmInit(t)
+	fixtures.DeployBaseline(t, env)
+
+	proc := startOAuth(t, env, t.TempDir(), nil)
+
+	outcome := oauthGet(t, proc, proc.BaseURL+"/oauth/jwks", readPersona{})
+	if outcome.status != http.StatusOK {
+		t.Fatalf("GET /oauth/jwks = %d, want 200 without credentials; body: %s",
+			outcome.status, outcome.body)
+	}
+
+	var set struct {
+		Keys []map[string]any `json:"keys"`
+	}
+
+	if err := json.Unmarshal([]byte(outcome.body), &set); err != nil {
+		t.Fatalf("decode JWK Set: %v; body: %s", err, outcome.body)
+	}
+
+	if len(set.Keys) == 0 {
+		t.Fatal("the JWK Set is empty, so nothing can verify a token this server issued")
+	}
+
+	for i, key := range set.Keys {
+		if got := key["alg"]; got != "ES256" {
+			t.Errorf("keys[%d].alg = %v, want ES256", i, got)
+		}
+
+		// The private scalar of an EC key. Publishing it would let any reader
+		// mint tokens, which is the whole point of serving the set separately.
+		if _, present := key["d"]; present {
+			t.Errorf("keys[%d] carries \"d\", the private half of the key", i)
+		}
 	}
 }

@@ -6,10 +6,13 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -102,6 +105,60 @@ func oauthEndpoints(t *testing.T) []string {
 	return slices.Compact(found)
 }
 
+// oauthPackageConsts returns every string constant the oauth package declares,
+// so a pattern built from one — "GET "+basePath+jwksPath — resolves as fully as
+// a literal. Collected once: the inventory reads the same files every call.
+var oauthPackageConsts = sync.OnceValue(func() map[string]string {
+	values := map[string]string{}
+
+	entries, err := os.ReadDir(filepath.Dir(oauthRoutesSource))
+	if err != nil {
+		return values
+	}
+
+	fset := token.NewFileSet()
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+
+		file, err := parser.ParseFile(
+			fset, filepath.Join(filepath.Dir(oauthRoutesSource), entry.Name()), nil, 0,
+		)
+		if err != nil {
+			continue
+		}
+
+		for _, decl := range file.Decls {
+			gen, isGen := decl.(*ast.GenDecl)
+			if !isGen || gen.Tok != token.CONST {
+				continue
+			}
+
+			for _, spec := range gen.Specs {
+				value, isValue := spec.(*ast.ValueSpec)
+				if !isValue || len(value.Names) != len(value.Values) {
+					continue
+				}
+
+				for i, name := range value.Names {
+					lit, isLit := value.Values[i].(*ast.BasicLit)
+					if !isLit || lit.Kind != token.STRING {
+						continue
+					}
+
+					if raw, err := strconv.Unquote(lit.Value); err == nil {
+						values[name.Name] = raw
+					}
+				}
+			}
+		}
+	}
+
+	return values
+})
+
 // oauthPatternLiteral folds a `"GET " + basePath + "/oauth/authorize"`
 // expression down to the string it evaluates to with an empty base path.
 func oauthPatternLiteral(expr ast.Expr) (string, bool) {
@@ -133,14 +190,16 @@ func oauthPatternLiteral(expr ast.Expr) (string, bool) {
 		return left + right, true
 
 	case *ast.Ident:
-		// The only non-literal the patterns are allowed to name. Anything
-		// else is reported, because it would change the path this lane
-		// drives without changing the inventory.
-		if e.Name != "basePath" {
-			return "", false
+		// basePath is empty in every deployment this lane drives. Anything
+		// else must be a constant of the package's own, or it could change
+		// the path driven without changing the inventory.
+		if e.Name == "basePath" {
+			return "", true
 		}
 
-		return "", true
+		value, ok := oauthPackageConsts()[e.Name]
+
+		return value, ok
 
 	default:
 		return "", false
@@ -153,6 +212,9 @@ func oauthPatternLiteral(expr ast.Expr) (string, bool) {
 // driven many times over by the flow helpers rather than once by a single
 // case.
 var drivenOAuthEndpoints = map[string]string{
+	"GET /oauth/jwks": "TestMCPOAuthPublishesItsVerificationKey — fetched without " +
+		"credentials, asserted to carry an ES256 key and not its private half.",
+
 	"GET /.well-known/oauth-authorization-server": "TestMCPOAuthFlow/discovery — fetched by " +
 		"discoverOAuth, which follows the same chain a real client does: 401 → " +
 		"WWW-Authenticate → PRM → authorization_servers → AS metadata.",
