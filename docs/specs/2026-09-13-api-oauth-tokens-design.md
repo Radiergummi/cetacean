@@ -322,6 +322,15 @@ Mostly: it doesn't, which is the point of landing it in the middleware.
   A *browser* client holding a token is still subject to the check, which is correct —
   `carriesItsOwnProof` must not grow an entry for the API, or every REST path would lose the
   protection that Tailscale, mTLS and header modes depend on.
+> **One assumption here was wrong, and it cost a vulnerability.** "Non-exempt" was read as "the
+> provider authenticates it" — but once a token of ours satisfies the middleware first, a leaked
+> access token reaches the consent endpoint and can found a *new* grant: a 30-day refresh token,
+> under a client the user never saw, on a resource they never approved, with no provider and no
+> human involved. It crosses the API → `/mcp` audience boundary this design exists to enforce, in
+> the direction that is on by default. In `cert`, `headers` and `tailscale` modes the provider's
+> credential is bound to the transport and could not be replayed there at all before this change.
+> Consent now refuses an identity whose provider is the authorization server itself.
+
 - **`isExempt`.** No new entry. `/mcp` is exempt because it authenticates itself; the API's tokens
   are checked *by* the middleware, so the API stays non-exempt. `/oauth/authorize` stays
   non-exempt too — consent must run under a real session, which is precisely how the upstream
