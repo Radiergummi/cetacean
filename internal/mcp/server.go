@@ -26,14 +26,16 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
-	"github.com/radiergummi/cetacean/internal/oauth"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
-// ProviderName identifies identities derived from MCP bearer tokens. Stamped
-// on auth.Identity.Provider so downstream code can distinguish OAuth-vended
-// MCP identities from regular Cetacean auth provider identities.
-const ProviderName = "mcp-oauth"
+// TokenVerifier is the narrow surface of the OAuth authorization server this
+// transport consumes: the identity a bearer token carries, and the 401 that
+// tells a client where to go for one. *oauth.Server satisfies it.
+type TokenVerifier interface {
+	Identify(token string) (*auth.Identity, error)
+	WriteUnauthorized(w http.ResponseWriter, errorCode string)
+}
 
 // mcpInstructions and mcpDescription are the server-level usage contract sent
 // to clients in the initialize response (WithInstructions/WithDescription).
@@ -83,7 +85,7 @@ type Server struct {
 	acl            *acl.Evaluator
 	config         config.MCPConfig
 	globalOpsLevel config.OperationsLevel
-	oauth          *oauth.Server // nil when auth mode is "none"
+	oauth          TokenVerifier // nil unless an OAuth server was configured
 	authMode       string        // upstream auth mode ("cert", "oidc", ...); used for bypass match
 	authProvider   auth.Provider // upstream auth provider; used when bypass is active
 	mcpServer      *mcpserver.MCPServer
@@ -138,7 +140,7 @@ type Options struct {
 	ACL             *acl.Evaluator
 	Config          config.MCPConfig
 	GlobalOpsLevel  config.OperationsLevel
-	OAuth           *oauth.Server
+	OAuth           TokenVerifier
 	AuthMode        string
 	AuthProvider    auth.Provider
 	Recommendations RecommendationEngine
@@ -425,17 +427,12 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		claims, err := s.oauth.VerifyAccessToken(token)
+		identity, err := s.oauth.Identify(token)
 		if err != nil {
 			s.oauth.WriteUnauthorized(w, "invalid_token")
 			return
 		}
 
-		identity := &auth.Identity{
-			Subject:  claims.Subject,
-			Groups:   claims.Groups,
-			Provider: ProviderName,
-		}
 		ctx := auth.ContextWithIdentity(r.Context(), identity)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

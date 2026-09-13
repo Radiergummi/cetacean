@@ -359,7 +359,7 @@ func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
 	want := &auth.Identity{
 		Subject:  "user@example.com",
 		Groups:   []string{"ops"},
-		Provider: ProviderName,
+		Provider: oauth.ProviderName,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("identity = %+v, want %+v", got, want)
