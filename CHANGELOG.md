@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** the OAuth authorization server is opt-in — set `oauth.enabled`. MCP under any auth mode but `none` requires it, and startup refuses that combination without it
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
 - **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`; it stays an MCP setting
-- Refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`; an existing `mcp-tokens.json` is read once, so no client has to re-authorize
+- **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` is not read — delete it, and every client authorizes once more
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
 - Search, the resource lists and the topology view are faster on clusters with hundreds of services, and a stack's event stream costs less per connected browser
 - The dashboard's first load is about a third of its former size, and hashed assets are cached permanently

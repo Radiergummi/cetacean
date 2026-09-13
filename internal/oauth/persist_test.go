@@ -7,8 +7,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // restart round-trips a store through the on-disk format the way a process
@@ -428,102 +426,41 @@ func TestStateFileSerializesConcurrentWriters(t *testing.T) {
 	}
 }
 
-// newMigratingServer builds a server that knows both state paths, which is the
-// only shape newPersistingServer cannot express.
-func newMigratingServer(t *testing.T, current, legacy string) *Server {
-	t.Helper()
-
-	return NewServer(ServerConfig{
-		Issuer:   "https://cetacean.test",
-		Resource: testResource,
-		OAuth: config.OAuthConfig{
-			AccessTokenTTL:  time.Hour,
-			RefreshTokenTTL: 720 * time.Hour,
-			ConsentTTL:      testConsentTTL,
-		},
-		SigningKey:      []byte("test-signing-key-32bytes-padded!!"),
-		StatePath:       current,
-		LegacyStatePath: legacy,
-	})
-}
-
-// The state file was renamed when the package stopped belonging to its first
-// consumer. Reading the old name once keeps the cost of that a single token
-// refresh per client rather than a fresh authorization for every one of them:
-// access tokens stop verifying anyway when the derived keys change, but the
-// refresh tokens in here survive, and only if they are found.
-func TestLegacyStateIsReadOnceThenWrittenToTheNewPath(t *testing.T) {
+// The configured file is the only one consulted. Deleting it is how an operator
+// drops every grant at once, so a sibling in the same directory holding an older
+// copy — whatever it is named — must not bring them back.
+func TestOnlyTheConfiguredStateFileIsRead(t *testing.T) {
 	dir := t.TempDir()
-	legacy := filepath.Join(dir, "mcp-tokens.json")
 	current := filepath.Join(dir, "oauth-tokens.json")
+	sibling := filepath.Join(dir, "other-tokens.json")
 
-	// Seed a grant through a server that only knows the old path.
-	seed := newPersistingServer(t, legacy, testResource)
-	raw := seed.refreshTokens.Issue(RefreshTokenData{
+	seed := newPersistingServer(t, sibling, testResource)
+	orphaned := seed.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "alice",
 		ClientID: "client-1",
 		Resource: testResource,
 	}, time.Hour)
 
-	migrated := newMigratingServer(t, current, legacy)
-
-	if _, ok := migrated.refreshTokens.Validate(raw); !ok {
-		t.Fatal("the grant did not survive the rename")
+	if _, err := os.Stat(sibling); err != nil {
+		t.Fatalf("the seed never reached disk: %v", err)
 	}
 
-	// The first write lands at the new path; the old file stays put so a
-	// downgrade still finds it.
-	migrated.refreshTokens.Issue(RefreshTokenData{
-		Subject:  "bob",
-		ClientID: "client-2",
-		Resource: testResource,
-	}, time.Hour)
+	srv := newPersistingServer(t, current, testResource)
 
-	if _, err := os.Stat(current); err != nil {
-		t.Errorf("writes did not migrate to the new path: %v", err)
-	}
-	if _, err := os.Stat(legacy); err != nil {
-		t.Errorf("the legacy file was removed; a downgrade would lose every grant: %v", err)
+	if _, ok := srv.refreshTokens.Validate(orphaned); ok {
+		t.Error("a grant was restored from a file the server was not pointed at")
 	}
 }
 
-// Once the new file exists it is the only one that counts, or a stale legacy
-// file would resurrect grants that were deliberately dropped.
-func TestLegacyStateIsIgnoredWhenTheNewFileExists(t *testing.T) {
+// A corrupt file is still the file this server owns: it comes up empty rather
+// than reaching for a copy of the state that happens to be intact.
+func TestCorruptStateComesUpEmpty(t *testing.T) {
 	dir := t.TempDir()
-	legacy := filepath.Join(dir, "mcp-tokens.json")
 	current := filepath.Join(dir, "oauth-tokens.json")
+	sibling := filepath.Join(dir, "other-tokens.json")
 
-	stale := newPersistingServer(t, legacy, testResource)
-	staleToken := stale.refreshTokens.Issue(RefreshTokenData{
-		Subject:  "alice",
-		ClientID: "client-1",
-		Resource: testResource,
-	}, time.Hour)
-
-	// An empty-but-present current file: nothing to restore, and the legacy one
-	// must not be consulted.
-	if err := os.WriteFile(current, []byte(`{"version":1}`), 0600); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := newMigratingServer(t, current, legacy)
-
-	if _, ok := srv.refreshTokens.Validate(staleToken); ok {
-		t.Error("a grant from the legacy file was restored over the current one")
-	}
-}
-
-// A corrupt current file is still the file this server owns. Falling back to the
-// former path there would quietly restore state an operator had replaced, so
-// only a missing file migrates.
-func TestCorruptStateDoesNotFallBackToTheLegacyPath(t *testing.T) {
-	dir := t.TempDir()
-	legacy := filepath.Join(dir, "mcp-tokens.json")
-	current := filepath.Join(dir, "oauth-tokens.json")
-
-	seed := newPersistingServer(t, legacy, testResource)
-	legacyToken := seed.refreshTokens.Issue(RefreshTokenData{
+	seed := newPersistingServer(t, sibling, testResource)
+	orphaned := seed.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "alice",
 		ClientID: "client-1",
 		Resource: testResource,
@@ -533,9 +470,26 @@ func TestCorruptStateDoesNotFallBackToTheLegacyPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := newMigratingServer(t, current, legacy)
+	srv := newPersistingServer(t, current, testResource)
 
-	if _, ok := srv.refreshTokens.Validate(legacyToken); ok {
-		t.Error("a corrupt current file fell through to the legacy path")
+	if _, ok := srv.refreshTokens.Validate(orphaned); ok {
+		t.Error("a corrupt file fell through to another copy of the state")
+	}
+}
+
+// A file this build does not write is refused outright rather than read for
+// whichever fields still line up.
+func TestStateFromAnotherFormatVersionIsRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "oauth-tokens.json")
+
+	for _, version := range []int{oauthStateVersion - 1, oauthStateVersion + 1} {
+		body := fmt.Sprintf(`{"version":%d,"tokens":{},"consumed":{},"grants":{}}`, version)
+		if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := readState(path); err == nil {
+			t.Errorf("version %d was accepted", version)
+		}
 	}
 }

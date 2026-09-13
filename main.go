@@ -793,23 +793,21 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	}
 
 	// Refresh tokens outlive the process only if the data directory is writable.
-	// Empty paths keep both stores in memory, which is what an unwritable one
+	// An empty path keeps both stores in memory, which is what an unwritable one
 	// means; main has already warned about it.
-	statePath, legacyStatePath := "", ""
+	statePath := ""
 	if d.dataDirReady {
 		statePath = filepath.Join(d.cfg.DataDir, "oauth-tokens.json")
-		legacyStatePath = filepath.Join(d.cfg.DataDir, "mcp-tokens.json")
 	}
 
 	resource := d.issuer + d.cfg.BasePath + "/mcp"
 	srv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:          d.issuer,
-		BasePath:        d.cfg.BasePath,
-		Resource:        resource,
-		OAuth:           d.cfg.OAuth,
-		SigningKey:      signingKey,
-		StatePath:       statePath,
-		LegacyStatePath: legacyStatePath,
+		Issuer:     d.issuer,
+		BasePath:   d.cfg.BasePath,
+		Resource:   resource,
+		OAuth:      d.cfg.OAuth,
+		SigningKey: signingKey,
+		StatePath:  statePath,
 	})
 
 	slog.Info("OAuth 2.1 authorization server enabled",

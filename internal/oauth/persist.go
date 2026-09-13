@@ -1,9 +1,7 @@
 package oauth
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"maps"
 	"os"
@@ -15,11 +13,9 @@ import (
 )
 
 // oauthStateVersion is the on-disk format version. Bump it whenever the shape
-// below changes incompatibly; readState refuses anything newer.
-//
-// v2 added consent records. A v1 file loads and yields none, which is exactly
-// the pre-upgrade behaviour: every client is prompted once more, then
-// remembered.
+// below changes incompatibly; readState accepts this version and no other.
+// Refusing an older file costs every client one re-authorization, and costs this
+// package no compatibility branch that outlives the release it bridged.
 const oauthStateVersion = 2
 
 // RefreshTokenSnapshot is the serializable state of a RefreshTokenStore.
@@ -237,24 +233,6 @@ func syncDir(dir string) error {
 	return d.Sync()
 }
 
-// readStateOrLegacy reads current, falling back to legacy when — and only when
-// — current does not exist. A corrupt or unreadable current file is still the
-// file this server owns, so reaching past it to the former path would quietly
-// restore state the operator had replaced. The returned path names whichever
-// file answered, for the caller's log line.
-func readStateOrLegacy(current, legacy string) (oauthState, string, error) {
-	state, err := readState(current)
-	if !errors.Is(err, fs.ErrNotExist) || legacy == "" {
-		return state, current, err
-	}
-
-	if fromLegacy, legacyErr := readState(legacy); legacyErr == nil {
-		return fromLegacy, legacy, nil
-	}
-
-	return state, current, err
-}
-
 // readState reads a file written by writeState.
 func readState(path string) (oauthState, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // path is operator-configured
@@ -267,9 +245,9 @@ func readState(path string) (oauthState, error) {
 		return oauthState{}, fmt.Errorf("unmarshal oauth state: %w", err)
 	}
 
-	if state.Version < 1 || state.Version > oauthStateVersion {
+	if state.Version != oauthStateVersion {
 		return oauthState{}, fmt.Errorf(
-			"unsupported oauth state version: got %d, supported 1..%d",
+			"unsupported oauth state version: got %d, want %d",
 			state.Version,
 			oauthStateVersion,
 		)

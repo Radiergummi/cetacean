@@ -569,60 +569,51 @@ func TestConsentPageOmitsTheLeaseWhenDisabled(t *testing.T) {
 	}
 }
 
-func TestVersion1FileLoadsWithoutConsent(t *testing.T) {
+// The wire format keeps tokens, consumed and grants at the top level, where
+// RefreshTokenSnapshot is embedded rather than named. An embedding that nested
+// them under a key would drop every operator's refresh tokens, and the
+// round-trip helpers cannot see it: they are symmetric, and would round-trip a
+// nested shape just as happily. So the fixture is spelled by hand.
+func TestStateFileKeepsTheSnapshotFlat(t *testing.T) {
 	path := t.TempDir() + "/oauth-tokens.json"
 
-	// A file written before consent records existed, holding a live refresh
-	// token. The token is what makes this fixture worth having: v2 moved
-	// tokens, consumed and grants into an embedded RefreshTokenSnapshot, and
-	// an embedding that nested them under a key instead of flattening would
-	// drop every operator's refresh tokens on upgrade. An empty token map
-	// cannot see that, because the round-trip helpers are symmetric and would
-	// round-trip a nested shape just as happily.
-	const raw = "v1-fixture-refresh-token"
+	const raw = "flat-fixture-refresh-token"
 
 	now := time.Now().UTC()
 	expiry := now.Add(time.Hour).Format(time.RFC3339Nano)
 
-	v1 := fmt.Sprintf(`{
-  "version": 1,
+	fixture := fmt.Sprintf(`{
+  "version": %d,
   "timestamp": %q,
   "tokens": {
     %q: {
       "subject": %q,
       "clientId": %q,
       "resource": %q,
-      "grantId": "v1-grant",
+      "grantId": "flat-grant",
       "expiresAt": %q,
       "grantExpiresAt": %q
     }
   },
   "consumed": {},
-  "grants": {"v1-grant": [%q]}
+  "grants": {"flat-grant": [%q]}
 }`,
+		oauthStateVersion,
 		now.Format(time.RFC3339Nano),
 		hashToken(raw), testSubject, testClientID, testResource, expiry, expiry,
 		hashToken(raw),
 	)
 
-	if err := os.WriteFile(path, []byte(v1), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(fixture), 0600); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
 
-	state, err := readState(path)
-	if err != nil {
-		t.Fatalf("a v1 file should still load: %v", err)
-	}
-	if len(state.Consent) != 0 {
-		t.Errorf("consent records = %d, want none", len(state.Consent))
-	}
-
-	// Drive the load path an upgrading operator's restart actually takes.
+	// Drive the load path a restart actually takes.
 	s := newPersistingServer(t, path, testResource)
 
 	data, ok := s.refreshTokens.Validate(raw)
 	if !ok {
-		t.Fatal("a v1 refresh token must still validate after the upgrade")
+		t.Fatal("a refresh token at the top level did not survive the load")
 	}
 	if data.Subject != testSubject {
 		t.Errorf("subject = %q, want %q", data.Subject, testSubject)
