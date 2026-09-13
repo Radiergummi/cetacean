@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/docker/docker/api/types/network"
@@ -127,7 +128,21 @@ type Cache struct {
 	history        *History
 	serviceRef     serviceRefIndex
 	restarts       *RestartTracker
+
+	// generation counts every change to the cache's contents, including a full
+	// resync. It is deliberately not the history sequence: history answers
+	// "which changes have I missed", which a resync cannot, and so does not
+	// advance for one — see notify. A validator derived from that number would
+	// report a wholly replaced cache as unchanged.
+	generation atomic.Uint64
 }
+
+// Generation returns a counter that advances on every change to the cache's
+// contents. Equal values mean nothing has changed; it says nothing about what
+// did. Read without the lock, so a value taken alongside a concurrent write may
+// already be stale by the time a caller uses it — the same window a response
+// has between being rendered and being written.
+func (c *Cache) Generation() uint64 { return c.generation.Load() }
 
 func New(onChange OnChangeFunc) *Cache {
 	c := &Cache{
@@ -261,6 +276,9 @@ func (c *Cache) notify(e Event) {
 
 	// Sync events are internal bookkeeping; broadcast them to SSE clients
 	// but don't record them in history where they drown out real changes.
+	// Every event means the contents changed, a resync included.
+	c.generation.Add(1)
+
 	if e.Type != EventSync {
 		e.HistoryID = c.history.Append(HistoryEntry{
 			Type:       e.Type,
