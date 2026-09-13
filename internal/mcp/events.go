@@ -28,24 +28,16 @@ type eventsResult struct {
 	Truncated bool `json:"truncated"`
 
 	// TrackingSince is the start of the only window this timeline can answer
-	// for: the ring is built at startup and is not persisted, so after a
-	// restart it begins there, and once it wraps it begins wherever its oldest
-	// surviving entry does. Without it a `since` reaching back twelve hours
-	// answers identically whether nothing changed or the record only goes back
-	// half an hour — and the second is the common case on a cluster with a
-	// service restarting in a loop, whose churn evicts everything else.
-	// Compare it against the `since` you asked for.
+	// for: the ring starts with the process and, once it wraps, begins at its
+	// oldest surviving entry. Without it, "nothing changed" and "the record
+	// does not go back that far" are the same answer. Compare it to `since`.
 	TrackingSince string `json:"trackingSince,omitempty"`
 }
 
-// toolGetEvents serves the change timeline, filtered.
-//
-// cetacean://history exists and stays: it is subscribable, and a resource is
-// the only thing a client can subscribe to. What it cannot do is answer a
-// question — it serves a fixed 100 newest entries, which on a cluster with a
-// restarting service is minutes of wall-clock and is all task churn. Every
-// filter this tool takes is one cache.HistoryQuery already supports and the
-// Atom feeds already use; none of them were reachable from the tool surface.
+// toolGetEvents serves the change timeline, filtered. cetacean://history stays
+// because a resource is the only thing a client can subscribe to, but it
+// serves a fixed 100 newest entries — minutes of wall-clock on a cluster with
+// a restarting service. Every filter here is one cache.HistoryQuery supports.
 func (s *Server) toolGetEvents(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -71,15 +63,9 @@ func (s *Server) toolGetEvents(
 	history := s.cache.History()
 
 	// Every filter but the ACL one is pushed into the walk, so the ring copies
-	// what matched rather than everything it holds for the caller to reduce
-	// afterwards. On a busy cluster recording mostly task churn, a read for
-	// types: ["service"] used to copy ten thousand entries to keep a handful.
-	//
-	// The limit stays the whole ring, and that is deliberate rather than
-	// overlooked: the ACL filter below runs after the read, and `total` has to
-	// be how many entries the caller may actually read. Bounding the copy would
-	// mean counting entries about resources they cannot see — so an unfiltered
-	// read still walks the ring, and pays for it to keep the count honest.
+	// what matched rather than everything it holds. The limit stays the whole
+	// ring on purpose: the ACL filter runs after the read and `total` has to
+	// count what the caller may read, so bounding the copy would skew it.
 	entries := history.List(cache.HistoryQuery{
 		ResourceID: req.GetString("resource", ""),
 		Types:      requestedTypes(req),
@@ -147,12 +133,9 @@ func optionalTime(req mcplib.CallToolRequest, arg string) (time.Time, error) {
 	return parsed, nil
 }
 
-// requestedTypes reads the `types` array, or returns nil for "all".
-//
-// An unrecognised name is passed through rather than rejected: it simply
-// matches nothing, which is the same answer as filtering it out afterwards and
-// spares the caller a second list of valid types to keep in step with the
-// cache's own.
+// requestedTypes reads the `types` array, or returns nil for "all". An
+// unrecognised name is passed through rather than rejected: it matches
+// nothing, which is the same answer, and spares a second list of valid types.
 func requestedTypes(req mcplib.CallToolRequest) []cache.EventType {
 	raw := req.GetStringSlice("types", nil)
 	if len(raw) == 0 {

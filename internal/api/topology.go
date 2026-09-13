@@ -131,14 +131,10 @@ func (h *Handlers) HandleTopologyDOT(w http.ResponseWriter, r *http.Request) {
 	writeRawWithETag(w, r, data)
 }
 
-// buildNetworkJGF produces a JGF hypergraph of the network topology.
-//
-// running is the per-service count of tasks actually up, keyed by service ID,
-// as cache.RunningTaskCounts reports it. It is carried per node alongside the
-// desired count because the two together are what says whether a service is
-// healthy, and a consumer given only "replicas" has no way to tell — the
-// dashboard's card drew a green desired/desired for every service in the
-// cluster, including one running nothing at all.
+// buildNetworkJGF produces a JGF hypergraph of the network topology. running is
+// the per-service count of tasks actually up, carried per node beside the
+// desired count: the two together say whether a service is healthy, and a
+// consumer given only "replicas" has no way to tell.
 func buildNetworkJGF(
 	services []swarm.Service,
 	networks []network.Summary,

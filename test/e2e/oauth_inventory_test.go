@@ -16,31 +16,19 @@ import (
 	"testing"
 )
 
-// This file is the OAuth lane's self-enforcing gate, the counterpart to
-// TestEveryReadRouteIsDrivenOrExcused and TestEveryMCPToolIsDrivenOrExcused.
-//
-// contract.Routes() cannot supply the inventory: internal/api/router.go
-// registers the authorization server's endpoints indirectly, through
-// `cfg.OAuthRoutes(mux, "")`, so the patterns never appear as literals in the
-// file that inventory is parsed from. They appear in
-// internal/mcp/oauth.Server.RegisterRoutes instead, which is what this file
-// parses. A new OAuth endpoint therefore fails TestEveryOAuthEndpointIsDriven
-// rather than going untested.
+// This file is the OAuth lane's self-enforcing gate. contract.Routes() cannot
+// supply the inventory: router.go registers the authorization server's
+// endpoints through cfg.OAuthRoutes, so the patterns appear as literals only in
+// oauth.Server.RegisterRoutes, which is what this file parses.
 
 // oauthRoutesSource is the file the OAuth endpoint inventory is parsed from,
 // relative to this package's directory.
 const oauthRoutesSource = "../../internal/mcp/oauth/server.go"
 
 // oauthEndpoints returns every pattern Server.RegisterRoutes attaches to the
-// mux, as "METHOD /path".
-//
-// The patterns are written as `"GET " + basePath + "/oauth/authorize"`. The
-// basePath identifier contributes nothing here because internal/api/router.go
-// registers the routes with an empty base path (`cfg.OAuthRoutes(mux, "")`),
-// which is also what this lane's SUT runs with — CETACEAN_BASE_PATH is unset.
-// Only an identifier literally named basePath is treated that way, so a
-// pattern built from some other variable fails to parse rather than silently
-// yielding a shortened path.
+// mux, as "METHOD /path". basePath is elided because the router registers them
+// with an empty one — and only an identifier by that name, so another variable
+// fails to parse rather than silently yielding a shortened path.
 func oauthEndpoints(t *testing.T) []string {
 	t.Helper()
 
@@ -207,10 +195,8 @@ func oauthPatternLiteral(expr ast.Expr) (string, bool) {
 }
 
 // drivenOAuthEndpoints names, for each endpoint the inventory reports, the
-// case in this lane that drives it. The value is prose a reader can check
-// against the test it names — not a function, because several endpoints are
-// driven many times over by the flow helpers rather than once by a single
-// case.
+// case in this lane that drives it. The value is prose rather than a function
+// because several endpoints are driven by the flow helpers, not by one case.
 var drivenOAuthEndpoints = map[string]string{
 	"GET /oauth/jwks": "TestMCPOAuthPublishesItsVerificationKey — fetched without " +
 		"credentials, asserted to carry an ES256 key and not its private half.",

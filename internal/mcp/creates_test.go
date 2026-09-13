@@ -163,15 +163,10 @@ func TestCreateConfigReturnsItsIdentity(t *testing.T) {
 	}
 }
 
-// TestCreatedSecretIsImmediatelyUsable is the sequence both tools' descriptions
-// tell a caller to follow: create the replacement, then repoint the service at
-// it. It failed against a live cluster — create_secret returned an ID and the
-// very next call answered "no such secret" — because resolution reads the
-// cache and the watcher fills that asynchronously, some hundreds of
-// milliseconds later.
-//
-// A caller doing exactly what the tool says must not have to sleep and retry,
-// so a create seeds the cache with what it just made.
+// The sequence both tools' descriptions tell a caller to follow: create the
+// replacement, then repoint the service at it. Resolution reads the cache, which
+// the watcher fills a few hundred milliseconds later, so the next call answers
+// "no such secret". A create therefore seeds the cache with what it just made.
 func TestCreatedSecretIsImmediatelyUsable(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{

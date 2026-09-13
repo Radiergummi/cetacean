@@ -19,21 +19,17 @@ type Provider interface {
 // Implementations control the wire format (e.g. plain JSON vs JSON-LD).
 type WriteIdentityFunc func(http.ResponseWriter, *http.Request, *Identity)
 
-// WhoamiHandler returns an http.HandlerFunc that authenticates via the
-// provider and responds with the identity. Since /auth/* routes are exempt
-// from the auth middleware, this handler calls Authenticate directly rather
-// than reading identity from context. Callers pass writeIdentity to control
-// the response format (e.g. JSON-LD wrapping); pass WriteIdentityJSON for
-// plain JSON.
+// WhoamiHandler authenticates via the provider and responds with the identity.
+// /auth/* is exempt from the auth middleware, so this calls Authenticate
+// directly rather than reading the context. writeIdentity controls the response
+// format; WriteIdentityJSON is the plain-JSON one.
 func WhoamiHandler(p Provider, writeIdentity WriteIdentityFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := p.Authenticate(w, r)
 		if err != nil {
-			// Mirrors the middleware's own warning. /auth/* is exempt from the
-			// middleware, so this handler is the only place a failure here is
-			// observable — and the AUT001 response deliberately says nothing
-			// about the cause, so without this a diagnostic like "Client-Cert
-			// appears more than once" reached neither the response nor the log.
+			// Mirrors the middleware's own warning, which /auth/* is exempt
+			// from — so this is the only place a failure here is observable,
+			// and the AUT001 response deliberately says nothing about the cause.
 			slog.Warn("authentication failed",
 				"path", r.URL.Path,
 				"error", err,

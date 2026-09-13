@@ -10,11 +10,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// canonicalResolver resolves one resource type's identifier — an ID or a name
-// — to the canonical ID the type is keyed by, together with the ACL resource
-// expression naming what it found. It reports found=false for an identifier
-// that matches nothing, and an *cache.AmbiguousNameError for a name that
-// matches more than one resource.
+// canonicalResolver resolves one type's identifier — an ID or a name — to the
+// canonical ID it is keyed by, with the ACL expression naming what it found.
+// found=false means nothing matched; a name matching several yields an
+// *cache.AmbiguousNameError.
 type canonicalResolver func(
 	c *cache.Cache,
 	identifier string,
@@ -31,16 +30,10 @@ var singularType = map[string]string{
 	"networks": "network",
 }
 
-// canonicalResolvers lists the resource collections whose detail paths accept
-// a name as well as an ID.
-//
-// Volumes and stacks are deliberately absent: both are keyed by name already,
-// so the identifier in the path is the canonical one and there is nothing to
-// redirect to. Tasks are absent too — a task has no name of its own, only the
-// `<service>.<slot>` form internal/cluster derives from its parent, and the
-// cache has no resolver for it (internal/mcp builds that one from its own
-// resolveTask). Adding tasks means giving the cache that resolver first, so
-// both transports keep agreeing on what a task identifier means.
+// canonicalResolvers lists the collections whose detail paths accept a name as
+// well as an ID. Volumes and stacks are absent because both are keyed by name
+// already; tasks because a task's name is derived from its parent and the
+// cache has no resolver for it. Adding tasks means adding that resolver first.
 var canonicalResolvers = map[string]canonicalResolver{
 	"services": func(c *cache.Cache, identifier string) (string, string, bool, error) {
 		svc, found, err := c.ResolveService(identifier)
@@ -70,13 +63,9 @@ var canonicalResolvers = map[string]canonicalResolver{
 }
 
 // splitResourcePath splits a request path into its collection segment, the
-// identifier addressing one member of it, and whatever follows. The remainder
-// keeps its leading slash so it can be concatenated back on unchanged.
-// A single trailing slash is dropped rather than carried into the redirect:
-// `/services/shop_web/` used to produce `Location: /services/<id>/`, which
-// matches no registered pattern — Go's ServeMux treats the trailing slash as
-// part of the path — so it fell to the SPA handler and answered a JSON client
-// with index.html.
+// identifier addressing one member, and the remainder, which keeps its leading
+// slash so it concatenates back unchanged. A single trailing slash is dropped:
+// ServeMux treats it as part of the path, so a redirect carrying one matches nothing.
 func splitResourcePath(path string) (collection, identifier, rest string) {
 	trimmed := strings.TrimPrefix(path, "/")
 	if trimmed != "" {
@@ -96,27 +85,10 @@ func splitResourcePath(path string) (collection, identifier, rest string) {
 	return collection, identifier, rest
 }
 
-// canonicalIdentifier answers a request that addresses a resource by name with
-// a 307 to the same path spelled with the resource's canonical ID.
-//
-// It exists because the two transports disagreed about what an identifier
-// means: internal/mcp resolves through cache.Resolve*, which tries the ID and
-// then scans names, while REST looked up the ID-keyed map alone — so
-// `GET /services/shop_web` answered 404 while the equivalent MCP read
-// succeeded, and the note on cache/resolve.go claiming both transports cannot
-// disagree was false. Redirecting rather than serving the resource under the
-// name keeps one URL per resource: ETags, `@id`, Link headers and the history
-// feed all continue to name the ID, and a client that follows the redirect
-// lands on the representation it would have got by addressing the ID itself.
-//
-// 307, specifically: it preserves the method and the body, so the same rule can
-// cover writes — `PUT /services/shop_web/scale` reaches the scale handler with
-// its payload intact. 308 would be wrong because it is cacheable indefinitely
-// and a name can be moved to another resource; 301 and 302 would be worse still,
-// since clients are permitted to rewrite the method to GET.
-//
-// It deliberately does nothing for HTML. Those requests are the SPA's own
-// routing surface, and the dashboard's URLs are its to decide.
+// canonicalIdentifier answers a name-addressed request with a 307 to the same
+// path spelled with the canonical ID, so one resource keeps one URL. 307
+// preserves method and body; 308 is cacheable forever and a name can move,
+// while 301 and 302 let clients rewrite to GET. HTML is left to the SPA.
 func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if ContentTypeFromContext(r.Context()) == ContentTypeHTML {
@@ -138,13 +110,9 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 
 		var ambiguous *cache.AmbiguousNameError
 		if errors.As(err, &ambiguous) {
-			// The report names every candidate ID, so it is a disclosure in
-			// its own right. A caller who could not read any resource of this
-			// type is told nothing and falls through to the handler, which
-			// answers the unresolved name with its ordinary 404. The question
-			// is type-level because an ambiguous name resolves to no single
-			// resource to check, and acl.TypeGrants answers it from one policy
-			// read.
+			// The report names every candidate ID, so it is a disclosure.
+			// Type-level, because an ambiguous name resolves to no single
+			// resource to check.
 			access := h.acl.TypeGrants(auth.IdentityFromContext(r.Context()))
 			if !access.Can("read", singularType[collection]) {
 				next.ServeHTTP(w, r)
@@ -167,22 +135,18 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 			return
 		}
 
-		// A redirect is a statement that the named resource exists, and it
-		// hands over its ID. Answering it for a caller with no read grant
-		// would turn every detail path into a way to enumerate names and
-		// discover IDs behind the policy, so the request falls through to the
-		// handler instead, which answers exactly as it does for the ID.
+		// A redirect states the named resource exists and hands over its ID,
+		// so without a read grant the request falls through to the handler.
 		if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", resource) {
 			next.ServeHTTP(w, r)
 
 			return
 		}
 
-		// The extension suffix goes back on: negotiate stripped it before this
-		// ran, and a request that named its representation in the path has no
-		// reason to carry an Accept header saying the same thing — dropping it
-		// would answer the redirect from whatever the client's Accept does say,
-		// which for a browser is the SPA.
+		// The extension suffix goes back on: negotiate stripped it, and a
+		// request naming its representation in the path has no reason to
+		// repeat it in Accept — so dropping it answers the redirect from
+		// whatever Accept does say, which for a browser is the SPA.
 		target := absPath(r.Context(), "/"+collection+"/"+url.PathEscape(id)+rest) +
 			extensionFromContext(r.Context())
 		if r.URL.RawQuery != "" {

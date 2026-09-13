@@ -135,11 +135,9 @@ test.describe("Keyboard Shortcuts", () => {
 test.describe("Search", () => {
   /**
    * The shell's search trigger. Waiting for it before pressing a global
-   * shortcut is what makes the press land: both shortcuts are registered by an
-   * effect in the component behind this button, so a key pressed between
-   * `goto` resolving and that effect running goes nowhere. It reliably did
-   * land until the overview page grew Prometheus charts and took longer to
-   * mount — a race the spec had always had and had always won.
+   * shortcut is what makes the press land: both shortcuts are registered by
+   * an effect in the component behind this button, so a key pressed between
+   * `goto` resolving and that effect running goes nowhere.
    */
   async function searchTrigger(page: import("@playwright/test").Page) {
     const trigger = page.locator("button:has(svg)", { hasText: /Search/ });
@@ -149,9 +147,8 @@ test.describe("Search", () => {
   }
 
   /**
-   * Helper: open the search palette by clicking the search button.
-   * More reliable than keyboard shortcuts for tests that depend on
-   * the palette being open.
+   * Open the search palette by clicking the search button — more reliable
+   * than the keyboard shortcut for specs that need it open.
    */
   async function openPalette(page: import("@playwright/test").Page) {
     // The search button contains "Search..." text on wide viewports,

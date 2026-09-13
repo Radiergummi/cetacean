@@ -59,15 +59,10 @@ func TestNodeDigestDownBeatsDrain(t *testing.T) {
 	}
 }
 
-// RowsForNodes and NodeDigest must never disagree about the same node's
-// state: this is the exact divergence deriveNodeState was extracted to
-// prevent.
-// A task's name was being derived three different ways in this package before
-// TaskName: a list row named a task after its service alone, so every replica
-// rendered identically, while the digest and the search results named the same
-// record "<service>.<slot>". One tool answering two ways for one record is the
-// drift this package exists to prevent, so the list and the detail are held
-// against each other the way the node state already is.
+// A task's name can be derived three ways in this package, and a list row naming
+// a task after its service alone renders every replica identically while the
+// digest and the search results say "<service>.<slot>". One tool answering two
+// ways for one record is the drift this package exists to prevent.
 func TestRowsForTasksAgreesWithTaskDigest(t *testing.T) {
 	replicatedService := replicated("api", 2)
 	globalService := swarm.Service{

@@ -85,11 +85,10 @@ func Middleware(provider Provider) func(http.Handler) http.Handler {
 func isExempt(path string) bool {
 	switch {
 	case path == "/-/resync":
-		// The one /-/ route that does work on request rather than reporting
-		// state: it triggers a full seven-goroutine sweep of the Docker API,
-		// unbounded and unthrottled, so an uncredentialed caller who can
-		// reach the port could amplify one cheap request into a cluster
-		// enumeration at will.
+		// The one /-/ route that does work rather than reporting state: it
+		// sweeps the whole Docker API, unbounded and unthrottled, so an
+		// uncredentialed caller who can reach the port could amplify one
+		// cheap request into a cluster enumeration at will.
 		return false
 	case strings.HasPrefix(path, "/-/"):
 		return true

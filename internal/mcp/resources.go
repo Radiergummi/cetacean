@@ -15,11 +15,9 @@ import (
 
 const mcpMIMEType = "application/json"
 
-// namedResource describes a cetacean:// resource — either a fixed singleton
-// (cluster, recommendations, history) or an RFC 6570 URI template that mcp-go
-// dispatches via its template router. `name` is the programmatic MCP resource
-// name (stable, used by clients as a key); `title` is the human-readable label
-// MCP clients prefer for display.
+// namedResource describes a cetacean:// resource: a fixed singleton, or an RFC
+// 6570 URI template mcp-go dispatches through its template router. `name` is
+// the stable programmatic name clients key on; `title` is the display label.
 type namedResource struct {
 	uri         string
 	name        string
@@ -167,12 +165,10 @@ func (s *Server) readResource(ctx context.Context, uri string) (string, error) {
 		return "", err
 	}
 
-	// A read of one resource serves the same digest the describe tool builds,
-	// through the same function — a subscription payload and a tool result
-	// must not describe the same resource differently. The resources keep
-	// their URIs because they carry the subscriptions (NotificationManager
-	// delivers notifications/resources/updated per URI) and a tool cannot;
-	// only the payload changes.
+	// A read of one resource serves the same digest describe builds, through
+	// the same function: a subscription payload and a tool result must not
+	// differ. The URIs stay because they carry the subscriptions, which a tool
+	// cannot; only the payload changes.
 	if resourceType, ok := digestibleResourceType(uri); ok {
 		digest, err := s.digestOf(ctx, resourceType, data)
 		if err != nil {

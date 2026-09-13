@@ -17,13 +17,9 @@ import (
 )
 
 // This file drives four things a real deployment changes that no other lane
-// varies: serving under a base path, terminating TLS in the binary, the MCP
-// Origin guard, and persisting the cache to disk. It reserves port 19018 (see
-// README.md's reserved-ports table).
-//
-// Every other lane runs at the root of a plain HTTP listener with snapshots
-// off, so a defect that only appears behind a reverse proxy, or only on a
-// restart, has had nowhere to surface.
+// varies, on port 19018: serving under a base path, terminating TLS in the
+// binary, the MCP Origin guard, and persisting the cache to disk. Every other
+// lane runs at the root of a plain HTTP listener with snapshots off.
 
 const deploymentPort = 19018
 
@@ -452,12 +448,9 @@ func mcpOriginStatus(t *testing.T, proc *sut.Process, origin string) int {
 
 // ─── snapshot persistence ───────────────────────────────────────────────
 
-// TestSnapshotSurvivesARestart drives CETACEAN_SNAPSHOT, which every other
-// lane turns off: sut.Config's defaults set it to false so a case starts from
-// an empty cache, and nothing has ever exercised the write or the restore.
-//
-// What the snapshot is for is the window before the first full sync completes:
-// a restarted binary serves the cluster it last saw instead of nothing.
+// TestSnapshotSurvivesARestart drives CETACEAN_SNAPSHOT, which sut.Config
+// defaults to off. The snapshot covers the window before the first full sync
+// completes: a restarted binary serves the cluster it last saw, not nothing.
 func TestSnapshotSurvivesARestart(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

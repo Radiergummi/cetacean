@@ -59,11 +59,10 @@ func NewSessionCodecWithKey(hexKey string) (*SessionCodec, error) {
 	return &SessionCodec{key: key, now: time.Now}, nil
 }
 
-// Set serializes the identity with an expiry, signs it, and sets it as a cookie.
-// Raw claims are excluded to keep the cookie compact (browsers enforce ~4KB).
-// The optional idTokenHint is stored for RP-initiated logout (RFC 9722).
-// If the resulting cookie would exceed browser size limits, the hint is dropped
-// (id_token_hint is OPTIONAL per RFC 9722 — logout degrades gracefully).
+// Set serializes the identity with an expiry, signs it and sets it as a cookie.
+// Raw claims are excluded to stay under the browser's ~4KB limit. The optional
+// idTokenHint is kept for RP-initiated logout, and dropped if the cookie would
+// exceed that limit — RFC 9722 makes it OPTIONAL, so logout degrades.
 func (s *SessionCodec) Set(
 	w http.ResponseWriter,
 	id *Identity,

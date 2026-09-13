@@ -539,19 +539,10 @@ func TestServiceDetailsOmitsAbsentPolicyAndPorts(t *testing.T) {
 	}
 }
 
-// A crash loop is made entirely of tasks the orchestrator has already
-// replaced: Swarm marks a task for shutdown the instant it fails and starts
-// another, so by the time anything reads the digest every failure it has is a
-// replaced one. Excluding them left "why is this restarting in a loop"
-// answered with an empty list — the one question the field exists for.
-//
-// The exclusion was written for a different case, a service that failed once
-// and has since recovered, and it only ever appeared to work because the cache
-// held those tasks with a stale DesiredState that let them through. Once the
-// watcher learned to observe the terminal transition, the guard did what it
-// said and the failures vanished. What separates the two cases is the task's
-// state, not the orchestrator's intent for it: a shutdown that was clean is
-// not a failure and is excluded a few lines down regardless.
+// A crash loop is made entirely of tasks the orchestrator has already replaced:
+// Swarm marks a task for shutdown the instant it fails, so every failure the
+// digest can see is a replaced one and excluding them answers with an empty
+// list. What separates the cases is the task's state, not the intent for it.
 func TestServiceDigestReportsFailuresSwarmHasAlreadyReplaced(t *testing.T) {
 	svc := replicated("flaky", 1)
 
@@ -600,12 +591,10 @@ func TestServiceDigestIgnoresCleanlyReplacedTasks(t *testing.T) {
 	}
 }
 
-// A service mid-rolling-update must not describe as healthier than it lists.
-// The outgoing task keeps Status.State: running while it drains, and
-// cache.RunningTaskCounts — what find and every row count with — already
-// ignores it. Counting it here made describe answer "running" for a service
-// find called "failed", which is precisely the disagreement the two surfaces
-// are supposed to be free of.
+// A service mid-rolling-update must not describe as healthier than it lists. The
+// outgoing task keeps Status.State: running while it drains, and
+// cache.RunningTaskCounts — what every row counts with — already ignores it.
+// Counting it here has describe answer "running" where find says "failed".
 func TestServiceDigestCountsReplicasTheWayFindDoes(t *testing.T) {
 	svc := replicated("rolling", 1)
 
@@ -630,9 +619,7 @@ func TestServiceDigestCountsReplicasTheWayFindDoes(t *testing.T) {
 
 // Since dates the state that is reported, and a failure cannot date a healthy
 // one. Swarm keeps a terminal record for every replica it has replaced, so a
-// service that crashed once last week and has run clean since still carries
-// one — and answering "how long has this been going on" with a fault that is
-// over is worse than not answering.
+// service that crashed last week and has run clean since still carries one.
 func TestServiceDigestDoesNotDateARunningServiceFromAnOldFailure(t *testing.T) {
 	svc := replicated("recovered", 1)
 	svc.UpdatedAt = time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)

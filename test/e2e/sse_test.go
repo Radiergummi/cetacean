@@ -30,16 +30,10 @@ type sseFrame struct {
 	id string
 }
 
-// readSSEFrames scans r for blank-line-terminated SSE frames and sends each
-// one on frames, closing frames once r is exhausted or the scan errors (the
-// response body closing, on this test's timeout or on stream end, is what
-// stops it).
-//
-// done releases it from a send no one is going to receive: a consumer that
-// stops at the frame it was looking for leaves this blocked on a full
-// channel, and closing the response body does not unblock a blocked channel
-// send — so without done the goroutine, and the close(frames) it owes,
-// outlive the test that started it.
+// readSSEFrames scans r for blank-line-terminated SSE frames and sends each on
+// frames, closing it once r is exhausted. done releases it from a send no one
+// will receive: closing the response body does not unblock a blocked channel
+// send, so the goroutine and the close it owes would outlive the test.
 func readSSEFrames(r io.Reader, frames chan<- sseFrame, done <-chan struct{}) {
 	defer close(frames)
 
@@ -94,12 +88,9 @@ type sseServiceEvent struct {
 	} `json:"resource"`
 }
 
-// serviceEventsIn decodes a frame's data as either a single event (the
-// common case: only one event fell in its batch window) or a "batch" array,
-// and returns the events it carries. A frame whose SSE event name is neither
-// "service" nor "batch" yields nothing; /services' stream is already
-// server-side filtered to service-type events (see (*Handlers).streamList),
-// so this is a decode step, not a second filter.
+// serviceEventsIn decodes a frame's data as either a single event or a "batch"
+// array and returns the events it carries. /services' stream is already
+// server-side filtered, so this is a decode step, not a second filter.
 func serviceEventsIn(f sseFrame) []sseServiceEvent {
 	if f.event != "service" && f.event != "batch" {
 		return nil
@@ -128,11 +119,8 @@ func serviceEventsIn(f sseFrame) []sseServiceEvent {
 }
 
 // TestServiceCreationReachesTheSSEStream proves the watcher -> cache ->
-// broadcaster chain against a real Docker event stream: open /services as an
-// SSE subscriber, deploy a service, and confirm the create event arrives
-// live, decoded, naming the right type and action, and carrying the actual
-// service as its resource. This chain cannot be exercised in-process without
-// reimplementing the watcher, which is why it belongs here.
+// broadcaster chain against a real Docker event stream. It cannot be
+// exercised in-process without reimplementing the watcher.
 func TestServiceCreationReachesTheSSEStream(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

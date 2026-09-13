@@ -22,13 +22,10 @@ type ErrorDomain struct {
 	Label  string `json:"label"`
 }
 
-// ErrorDomains names every prefix used by errorRegistry, in the order a
-// reference presents them: protocol first, then identity, then the
-// cross-cutting subsystems, then one entry per resource type. That is not the
-// order the prefixes sort in, which is why this is a slice and not a map.
-//
-// It replaced a comment listing the same prefixes, which had already lost ACL.
-// TestErrorDomainsMatchTheRegistry now fails on that drift in both directions.
+// ErrorDomains names every prefix errorRegistry uses, in the order a reference
+// presents them: protocol, identity, the cross-cutting subsystems, then one
+// entry per resource type. That is not the order they sort in, which is why
+// this is a slice rather than a map.
 var ErrorDomains = []ErrorDomain{
 	{Prefix: "API", Label: "Protocol and content negotiation"},
 	{Prefix: "AUT", Label: "Authentication"},

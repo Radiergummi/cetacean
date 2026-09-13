@@ -218,41 +218,19 @@ func (e *Evaluator) grantMatchesResource(g Grant, resource string) bool {
 	return false
 }
 
-// impliedTypes names, for a grant's resource type, the other resource types a
-// grant on it also covers — the type-level shadow of grantMatchesResource's
-// resolver walk. A stack grant reaches every resource StackOf can place in a
-// stack; a service grant reaches that service's tasks. Nothing reaches nodes,
-// plugins or the swarm itself, which belong to no stack.
-//
-// cache.StackOf's switch is the authority on the stack list. Two tests hold
-// the rules together: TestTypeGrantsAgreesWithCan drives the real evaluator
-// over a resolver holding one resource of each type and fails if this
-// projection and Can disagree in either direction, and
-// TestImpliedStackTypesMatchTheResolver drives the real Cache, so adding a
-// case to StackOf without adding it here fails rather than silently hiding
-// the new type from every listing.
-//
-// The expansion is unconditional where grantMatchesResource's is not — that
-// walk only happens when a resolver is attached. With no resolver, TypeGrants
-// still reports a stack grant as reaching services while Can would not. That
-// widens a listing, never a call, which is the direction this projection is
-// already allowed to err in.
+// impliedTypes names, for a grant's resource type, the other types it covers —
+// the type-level shadow of grantMatchesResource's resolver walk, with
+// cache.StackOf as the authority on the stack list. The expansion is
+// unconditional where that walk is not, so it widens a listing, never a call.
 var impliedTypes = map[string][]string{
 	"stack":   {"service", "task", "config", "secret", "network", "volume"},
 	"service": {"task"},
 }
 
 // TypeAccess is the type-level projection of an identity's grants: which
-// resource *types* it may exercise a permission on, without naming a resource.
-//
-// It exists because grantMatchesResource needs a concrete resource name to
-// resolve stack membership and task parentage, while callers that filter a
-// catalog — a tool list, a notification subscription — have only a type. The
-// projection is deliberately an over-approximation in exactly the way a
-// pattern already is: "service:web-*" reports the service type whether or not
-// a matching service exists. It answers "could this identity ever read a
-// service?", never "may it read this one" — Can remains the only authority
-// for that, and every call site still checks it.
+// resource *types* it may exercise a permission on, for callers filtering a
+// catalog with no resource name to give grantMatchesResource. It answers "could
+// this identity ever read a service?", never "may it read this one".
 type TypeAccess struct {
 	// granted is keyed by permission and resource type, already expanded, so
 	// Can is a lookup rather than a rule. The "*" type means every type.

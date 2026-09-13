@@ -7,11 +7,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// readTools returns the tier 0 tools: parameterized reads, ungated by
-// operations level. Each ACL-filters its own results, so a caller with no
-// grants sees them in tools/list and gets empty answers rather than errors.
-//
-// See toolCatalog for the conventions every entry here follows.
+// readTools returns the tier 0 tools: parameterized reads, ungated by operations
+// level. Each ACL-filters its own results, so a caller with no grants still
+// sees them and gets empty answers rather than errors. See toolCatalog for the
+// conventions every entry follows.
 func (s *Server) readTools() []toolDef {
 	return []toolDef{
 		{

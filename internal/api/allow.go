@@ -24,10 +24,8 @@ type methodSpec struct {
 }
 
 // resourceWriteMethods maps resource types to their write methods and the
-// minimum operations tier required. For methods that appear at multiple tiers
-// (e.g. service PUT at tier1 for scale/image and tier3 for endpoint-mode),
-// the lowest tier is used so the method appears in Allow whenever any of its
-// uses are enabled.
+// minimum operations tier each needs. A method appearing at several tiers takes
+// the lowest, so it shows in Allow whenever any of its uses is enabled.
 var resourceWriteMethods = map[string][]methodSpec{
 	"service": {
 		{

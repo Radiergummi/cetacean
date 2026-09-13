@@ -686,7 +686,6 @@ A `412` always means the resource moved. Where the current representation cannot
 `DELETE /plugins/{name}` inspects the daemon rather than the cache — the write answers `503`
 (`ENG001`) or `500` (`ENG004`) instead, so an unreachable daemon is not reported as a stale `ETag`.
 
-
 29 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
 `PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
 `PUT /services/{id}/placement`, `PATCH /services/{id}/ports`,

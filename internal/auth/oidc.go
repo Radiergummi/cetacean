@@ -162,13 +162,10 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 	}
 }
 
-// RegisterRoutes registers the OIDC auth routes on the given mux.
-//
-// Logout carries no cross-origin protection of its own: the router applies
-// http.CrossOriginProtection to every route, and a second one here would hold
-// a different set of trusted origins from the one the router mirrors out of
-// server.cors.origins — so a configured cross-origin dashboard would pass the
-// router's check and be refused by this one.
+// RegisterRoutes registers the OIDC auth routes on the given mux. Logout
+// carries no cross-origin protection of its own: the router applies one to
+// every route, and a second here would hold a different set of trusted origins
+// — so a configured cross-origin dashboard would pass one check and fail this.
 func (p *OIDCProvider) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/login", p.handleLogin)
 	mux.HandleFunc("GET /auth/callback", p.handleCallback)
@@ -239,11 +236,9 @@ func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, r
 }
 
 func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
-	// Clear auth flow cookies immediately, before any early return can bypass
-	// them. Set-Cookie deletion headers are written before WriteHeader, so
-	// they're included in every response — both error and success paths.
-	// This prevents PKCE verifiers and state values from lingering in the
-	// browser after a failed callback.
+	// Cleared before any early return can bypass it: the deletion headers are
+	// written before WriteHeader, so they ride on every response. Otherwise a
+	// PKCE verifier and state linger in the browser after a failed callback.
 	p.clearAuthFlowCookies(w)
 
 	// Check for IdP-returned errors (e.g. access_denied).

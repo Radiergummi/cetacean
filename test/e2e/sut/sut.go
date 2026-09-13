@@ -93,10 +93,9 @@ type Process struct {
 }
 
 // reap waits for the child exactly once. It is the ONLY caller of cmd.Wait in
-// this package: cmd.Wait populates cmd.ProcessState and awaits the goroutines
-// copying stdout/stderr into output, so after it returns both the exit code
-// and the full log are available. Calling it from more than one goroutine is
-// safe.
+// this package: Wait populates cmd.ProcessState and awaits the goroutines
+// copying stdout/stderr into output, so both the exit code and the full log
+// are available once it returns. Safe to call from several goroutines.
 func (p *Process) reap() error {
 	p.waitOnce.Do(func() { p.waitErr = p.cmd.Wait() })
 
@@ -124,12 +123,9 @@ func Start(t *testing.T, cfg Config) *Process {
 			return proc
 		}
 
-		// waitPortFree already proved the port bindable before this child
-		// started; a bind failure here is the small remaining race between
-		// that probe's close and the child's own bind, not a real conflict.
-		// Retry it a bounded number of times before giving up. Any other
-		// startup failure fails immediately — a config the binary refuses
-		// must still fail fast and loudly.
+		// waitPortFree already proved the port bindable, so a bind failure
+		// here is the small race between that probe's close and the child's
+		// own bind. Any other startup failure fails immediately.
 		if attempt < maxLaunchAttempts && addrInUseOutput(proc.Logs()) {
 			continue
 		}
@@ -255,11 +251,10 @@ func buildEnv(cfg Config) []string {
 		"CETACEAN_CONFIG": "/dev/null",
 	}
 
-	// A `go build -cover` binary writes its profile to GOCOVERDIR when it
-	// exits. This environment is total — nothing is inherited — so the
-	// variable has to be carried explicitly or the SUT contributes nothing to
-	// the measured coverage. Absent when the parent does not set it: an
-	// uninstrumented binary would otherwise try to write a profile.
+	// A `go build -cover` binary writes its profile to GOCOVERDIR on exit.
+	// This environment is total, so the variable has to be carried explicitly —
+	// and only when the parent sets it, since an uninstrumented binary would
+	// otherwise try to write a profile.
 	if dir := os.Getenv("GOCOVERDIR"); dir != "" {
 		env["GOCOVERDIR"] = dir
 	}
@@ -322,11 +317,8 @@ func (p *Process) Client() *http.Client { return p.client }
 
 // StreamClient is Client without the overall timeout, for a response a case
 // intends to hold open — an SSE subscription, a log tail. http.Client.Timeout
-// covers reading the response *body*, not just the headers, so Client's 30s
-// cap tears a stream down mid-test and the closed body then reads as the
-// server having stopped sending. The request's own context is the bound on
-// these; the shared Transport (and so the connection pool and TLS config) is
-// the same one Client uses.
+// covers reading the response body too, so Client's 30s cap would tear a
+// stream down mid-test. The request's own context is the bound on these.
 func (p *Process) StreamClient() *http.Client {
 	streaming := *p.client
 	streaming.Timeout = 0
@@ -435,18 +427,10 @@ func (p *Process) waitReady() error {
 	return fmt.Errorf("binary not ready at %s within %s", p.BaseURL+p.readyPath, readyTimeout)
 }
 
-// waitPortFree blocks until the address the child is about to bind is
-// actually free. It probes by binding, not by dialing: a refused dial only
-// proves nothing is *accepting* yet, not that the previous SUT's listener
-// fd has been closed, and http.Server stops accepting before that close
-// happens — the dial probe returns "free" during that window, and the next
-// child's bind loses the race. Binding is the only proof that the child
-// could bind too, and closing that probe listener immediately reopens the
-// same window at a much smaller scale, which launch's own retry covers.
-//
-// It binds ":<port>" — the wildcard address the child receives via
-// CETACEAN_LISTEN_ADDR — rather than 127.0.0.1, since a probe on a narrower
-// address can succeed where the child's own bind would still fail.
+// waitPortFree blocks until the address the child is about to bind is free. It
+// probes by binding, not dialing: http.Server stops accepting before its
+// listener fd closes, so a refused dial reads as free. It binds the same
+// wildcard ":<port>" the child gets, since a narrower probe can lie.
 func waitPortFree(t *testing.T, port int) {
 	t.Helper()
 
@@ -469,20 +453,17 @@ func waitPortFree(t *testing.T, port int) {
 	t.Fatalf("port %d still in use after 15s", port)
 }
 
-// addrInUseOutput reports whether the child's captured output shows it
-// failed to bind its listen address. Go formats an EADDRINUSE bind failure
-// as "...: bind: address already in use" on every platform this suite
-// targets, so the substring is a cheap, reliable signature — and it is the
-// only startup failure Start/StartExpectingExit retry rather than fail on.
+// addrInUseOutput reports whether the child's captured output shows it failed
+// to bind its listen address. Go formats EADDRINUSE as "...: bind: address
+// already in use" on every platform this suite targets, and it is the only
+// startup failure Start/StartExpectingExit retry rather than fail on.
 func addrInUseOutput(output string) bool {
 	return strings.Contains(output, "address already in use")
 }
 
-// binaryPath resolves the binary the harness supervises.
-//
-// CETACEAN_E2E_BINARY overrides it so `make test-stack` can run a
-// coverage-instrumented build without replacing ./cetacean, which `make
-// e2e-up` and the Playwright suite expect to be an ordinary one.
+// binaryPath resolves the binary the harness supervises. CETACEAN_E2E_BINARY
+// overrides it so `make test-stack` can run a coverage-instrumented build
+// without replacing ./cetacean.
 func binaryPath(t *testing.T) string {
 	t.Helper()
 

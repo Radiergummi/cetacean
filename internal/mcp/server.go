@@ -1,11 +1,7 @@
 // Package mcp embeds a Model Context Protocol server in Cetacean. Resources
-// expose the cluster state (services, nodes, tasks, ...) and tools expose
-// write operations (scale, update, restart, ...) to MCP-aware agents.
-//
-// The server is mounted on Cetacean's HTTP router behind the existing auth
-// middleware. Identity flows from HTTP context to mcp-go via
-// WithHTTPContextFunc; ACL is enforced per request inside resource and tool
-// handlers.
+// expose cluster state and tools expose write operations to MCP-aware agents.
+// It mounts behind the router's auth middleware; identity reaches mcp-go via
+// WithHTTPContextFunc, and ACL is enforced per request inside each handler.
 package mcp
 
 import (
@@ -36,12 +32,9 @@ import (
 const ProviderName = "mcp-oauth"
 
 // mcpInstructions and mcpDescription are the server-level usage contract sent
-// to clients in the initialize response (WithInstructions/WithDescription).
-// Kept as package constants so the contract has a single source of truth
-// shared with the test that asserts it surfaces. mcpTitle and mcpWebsiteURL
-// are the rest of the server's identity: a host listing several servers shows
-// the title, falling back to the programmatic name ("cetacean") when there is
-// none, and offers the website as the "what is this" link beside it.
+// in the initialize response. mcpTitle is what a host listing several servers
+// shows, falling back to the programmatic name; mcpWebsiteURL is the "what is
+// this" link beside it.
 const (
 	mcpInstructions = "Cetacean is a read-mostly observability and operations interface for a Docker Swarm cluster. Resolve a resource's ID or name with the find tool before reading its details or applying a write. Reads (the cetacean:// resources and the get_logs/find tools) are subject to per-resource ACL like everything else; mutating tools are additionally gated by an operations tier, and either kind may be hidden from tools/list or rejected at call time. Prefer the cetacean:// resources for detail and cross-references; use tools to change cluster state. Tool results include structuredContent you can parse directly. Named investigation and remediation sequences over these resources and tools are available via prompts/list."
 
@@ -54,12 +47,9 @@ const (
 )
 
 // DockerWriteClient is the narrow surface of Docker write operations the MCP
-// tools invoke. The concrete docker.Client and the existing api.DockerWriteClient
-// both satisfy it via Go's structural typing.
-//
-// Tools are split across three operations tiers (see Design § Tools). The
-// interface composes one writer per tier so test fakes can implement only the
-// surface they exercise.
+// tools invoke; docker.Client and api.DockerWriteClient both satisfy it. It
+// composes one writer per operations tier, so a fake can implement only the
+// surface it exercises.
 type DockerWriteClient interface {
 	ServiceLifecycleWriter
 	ServiceSpecWriter
@@ -126,12 +116,10 @@ type Server struct {
 	closeOnce sync.Once
 }
 
-// Options bundles the dependencies for New. OAuth is optional — when nil, the
-// MCP endpoint is mounted without bearer-token validation (matching auth mode
-// "none"). Recommendations may be nil when CETACEAN_RECOMMENDATIONS=false.
-// AuthMode and AuthProvider together drive the CETACEAN_MCP_AUTH_BYPASS path:
-// when AuthMode appears in Config.AuthBypass, the MCP server derives identity
-// from AuthProvider (e.g. the mTLS cert) instead of requiring an OAuth bearer.
+// Options bundles the dependencies for New. A nil OAuth mounts /mcp without
+// bearer validation, which is only safe in auth mode "none"; Recommendations
+// is nil when the engine is off. When AuthMode appears in Config.AuthBypass,
+// identity comes from AuthProvider instead of an OAuth bearer.
 type Options struct {
 	WriteClient     DockerWriteClient
 	Logs            LogStreamer
@@ -166,21 +154,17 @@ type Options struct {
 	Tracer oteltrace.Tracer
 }
 
-// New constructs an MCP server. The returned *Server exposes Handler() for
-// mounting on an http.ServeMux. registerResources and registerTools are
-// invoked once during construction; tools and resources are then served from
-// the mcp-go shared registry.
-// Cache TTLs advertised on cacheable results. They are freshness hints, not
-// correctness guarantees: a client may serve a cached response for this long
-// before re-fetching. Both are deliberately short — Cetacean mirrors live
-// cluster state, and an agent acting on a minute-old service list can scale the
-// wrong thing. listChanged notifications remain the primary invalidation
-// signal; these hints only bound how long a client that missed one stays stale.
+// Cache TTLs advertised on cacheable results: freshness hints, not guarantees.
+// Both are short because an agent acting on a minute-old service list can
+// scale the wrong thing. listChanged remains the primary invalidation signal;
+// these only bound how long a client that missed one stays stale.
 const (
 	cacheTTLList = 30 * time.Second
 	cacheTTLRead = 10 * time.Second
 )
 
+// New constructs an MCP server, registering its resources and tools once.
+// The returned *Server exposes Handler() for mounting on an http.ServeMux.
 func New(c *cache.Cache, opts Options) (*Server, error) {
 	if c == nil {
 		return nil, errors.New("mcp: cache is required")
@@ -209,37 +193,22 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		mcpserver.WithResourceCapabilities(true, true),
 		mcpserver.WithToolCapabilities(true),
 		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
-		// registerPrompts()'s AddPrompt calls already enable this capability
-		// implicitly (AddPrompts -> implicitlyRegisterPromptCapabilities), the
-		// same mechanism mcp-go uses for tools and resources — so this option
-		// is redundant. It is declared anyway to match WithToolCapabilities and
-		// WithResourceCapabilities above, which are equally redundant against
-		// AddTool/AddResource; dropping just this one would read as though
-		// prompts were special.
-		//
-		// listChanged is false: the catalog is static and cannot change while
-		// the process runs.
+		// Redundant — AddPrompt enables the capability implicitly, as AddTool
+		// and AddResource do — but declared beside the other two so the block
+		// does not read as though prompts were special. listChanged is false:
+		// the catalog cannot change while the process runs.
 		mcpserver.WithPromptCapabilities(false),
 		mcpserver.WithPromptFilter(srv.filterPromptsForIdentity),
-		// The capability and the two providers are declared together on
-		// purpose: advertising `completions` is a promise that
-		// completion/complete will be answered, and mcp-go's default
-		// providers answer everything with an empty list. Wiring one without
-		// the other leaves a client offering a blank dropdown forever.
+		// Declared beside the two providers on purpose: mcp-go's defaults
+		// answer completion/complete with an empty list, so advertising the
+		// capability alone leaves a client with a permanently blank dropdown.
 		mcpserver.WithCompletions(),
 		mcpserver.WithResourceCompletionProvider(srv),
 		mcpserver.WithPromptCompletionProvider(srv),
-		// A panic in a tool handler must not take the process down with it.
-		// The synchronous path is already covered — /mcp is mounted behind
-		// api's recovery middleware — but a task-augmented call is not:
-		// mcp-go runs it from executeRegularToolAsTask on a bare goroutine,
-		// after the HTTP response has been written, with no recover of its
-		// own. That goroutine does apply the tool middleware chain, which is
-		// exactly what WithRecovery installs, so this is the only thing
-		// standing between a nil dereference in scale_service and a dead
-		// dashboard. WithResourceRecovery is the same guard one layer over,
-		// and turns a resource panic into a JSON-RPC error rather than a
-		// truncated 500 the client cannot correlate.
+		// Load-bearing, not defensive: a task-augmented call runs from
+		// executeRegularToolAsTask on a bare goroutine, past api's recovery
+		// middleware and with no recover of its own. That goroutine does apply
+		// the tool middleware chain, which is what this installs.
 		mcpserver.WithRecovery(),
 		mcpserver.WithResourceRecovery(),
 		mcpserver.WithHooks(srv.installSubscriptionHooks()),
@@ -252,32 +221,23 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		// spec, so without a canonical external base there is no icon to name.
 		mcpserver.WithIcons(srv.icon("server", "cetacean")...),
 		mcpserver.WithExtensions(serverExtensions()),
-		// Enforce advertised output schemas: a tool result whose
-		// structuredContent does not conform to its declared outputSchema is
-		// rejected. Only the curated-shape tools (search, get_logs, remove_*)
-		// declare a schema; Docker-passthrough mutations carry none and skip
-		// validation.
+		// A tool result whose structuredContent does not conform to its
+		// declared outputSchema is rejected.
 		mcpserver.WithOutputSchemaValidation(),
-		// SEP-2549 freshness hints, applied by mcp-go to tools/list,
-		// resources/list, resources/templates/list, resources/read and
-		// server/discover, and omitted for clients on protocol versions older
-		// than 2026-07-28, where the fields do not exist.
-		//
-		// The scope is always private: every Cetacean response is filtered by
-		// the caller's ACL grants, so a shared intermediary caching one
-		// identity's view and serving it to another would be an authorization
-		// bypass.
+		// SEP-2549 freshness hints. The scope is always private: every
+		// response is filtered by the caller's grants, so an intermediary
+		// caching one identity's view and serving it to another would be an
+		// authorization bypass.
 		mcpserver.WithCacheHints(cacheTTLList.Milliseconds(), mcplib.CacheScopePrivate),
 		mcpserver.WithMethodCacheHints(
 			mcplib.MethodResourcesRead,
 			cacheTTLRead.Milliseconds(),
 			mcplib.CacheScopePrivate,
 		),
-		// Tasks (2026-07-28). tasks/list was removed by the revision, so the
-		// extension is poll-based: tasks/get and tasks/cancel only. Must stay
-		// paired with the extensionTasks entry in serverExtensions — a host
-		// that reads the advertisement and finds tasks/get missing is worse
-		// off than one told nothing.
+		// Tasks (2026-07-28): poll-based, since the revision removed
+		// tasks/list. Must stay paired with serverExtensions' extensionTasks
+		// entry — a host told of an extension it cannot call is worse off than
+		// one told nothing.
 		mcpserver.WithTaskCapabilities(
 			false, /* list */
 			true,  /* cancel */
@@ -360,11 +320,9 @@ func (s *Server) Close() {
 	})
 }
 
-// Handler returns the http.Handler for the MCP endpoint. When OAuth is
-// configured, the handler validates the bearer token and emits
-// `WWW-Authenticate` with the protected-resource metadata URL on failure;
-// otherwise it serves the raw mcp-go handler unguarded (only safe with auth
-// mode "none").
+// Handler returns the http.Handler for the MCP endpoint. With OAuth
+// configured it validates the bearer token; without, it serves the raw mcp-go
+// handler unguarded, which is only safe in auth mode "none".
 func (s *Server) Handler() http.Handler {
 	// The protocol gate sits innermost so that origin and bearer checks answer
 	// first: an unauthenticated caller learns nothing about what we speak.
@@ -376,13 +334,10 @@ func (s *Server) Handler() http.Handler {
 	return s.originGuard(h)
 }
 
-// originGuard rejects requests bearing a forged Origin header with 403, a
-// DNS-rebinding defense the MCP Streamable HTTP transport requires (mcp-go
-// does not enforce it). Requests with no Origin (non-browser agents) pass
-// through unaffected, as does every Origin when AllowAnyOrigin is set.
-//
-// Matching is exact, to avoid importing internal/api for it; what a wildcard
-// is stays that package's ruling, arriving as AllowAnyOrigin.
+// originGuard is the DNS-rebinding defense the Streamable HTTP transport
+// requires and mcp-go does not enforce. A request with no Origin passes
+// through. Matching is exact: what counts as a wildcard stays internal/api's
+// ruling, and arrives here as AllowAnyOrigin.
 func (s *Server) originGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -396,15 +351,10 @@ func (s *Server) originGuard(next http.Handler) http.Handler {
 	})
 }
 
-// bearerAuth validates Authorization: Bearer <jwt> on each request, populates
-// an auth.Identity in the request context, and chains to next. On missing or
-// invalid tokens it emits a 401 with RFC 6750 WWW-Authenticate carrying the
-// protected-resource metadata URL.
-//
-// When CETACEAN_MCP_AUTH_BYPASS names the active upstream auth mode (typically
-// "cert"), the upstream provider's Authenticate runs first; on success its
-// identity is used and JWT verification is skipped. This lets mTLS-authenticated
-// clients reach /mcp without taking the OAuth detour.
+// bearerAuth validates Authorization: Bearer <jwt>, puts an auth.Identity in
+// the request context, and answers 401 with RFC 6750 WWW-Authenticate
+// otherwise. When Config.AuthBypass names the active upstream mode, that
+// provider runs first and its identity skips JWT verification.
 func (s *Server) bearerAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.bypassActive() {
@@ -450,16 +400,10 @@ func (s *Server) bypassActive() bool {
 	return slices.Contains(s.config.AuthBypass, s.authMode)
 }
 
-// discardingResponseWriter swallows writes from upstream providers invoked for
-// identity-only bypass checks. Providers that would normally write a redirect
-// or partial body (OIDC) end up with their output dropped — callers should
-// only list providers that don't write on the success path (cert, headers,
-// tailscale) in AuthBypass.
-//
-// Header() returns a persistent http.Header so a provider that sets a header
-// then reads it back (e.g. setting WWW-Authenticate and checking the value
-// before WriteHeader) sees consistent state. The zero value is unusable; call
-// newDiscardingResponseWriter.
+// discardingResponseWriter swallows writes from a provider invoked only for
+// its identity, so AuthBypass must name providers that write nothing on the
+// success path. Header() is persistent, so a provider setting a header and
+// reading it back sees itself. The zero value is unusable.
 type discardingResponseWriter struct{ h http.Header }
 
 func newDiscardingResponseWriter() discardingResponseWriter {
@@ -470,25 +414,19 @@ func (d discardingResponseWriter) Header() http.Header       { return d.h }
 func (discardingResponseWriter) Write(p []byte) (int, error) { return len(p), nil }
 func (discardingResponseWriter) WriteHeader(int)             {}
 
-// toolVisibility describes which tools an identity may see, and which resource
-// types it can read. Both are nil when everything is visible — no ACL wired, no
-// identity, or a nil policy, all of which mirror acl.Evaluator.Can's allow-all
-// behaviour.
-//
-// An identity matching no grant needs no special case: acl.TypeAccess answers
-// false for every type, so the gated tools fall out of tools/list while the
-// ungated ones stay (each ACL-filters its own results), and every prompt fails
-// the read check — a caller who can read nothing has nothing to investigate.
+// toolVisibility describes which tools an identity may see and which resource
+// types it can read. Both are nil when everything is visible, mirroring
+// acl.Evaluator.Can. An identity matching no grant needs no special case:
+// acl.TypeAccess answers false for every type.
 type toolVisibility struct {
 	allow    func(name string) bool
 	readable func(resourceType string) bool
 }
 
-// toolVisibilityFor turns an identity's grants into a per-tool predicate and a
-// per-type read predicate. The grant-flattening itself — "write" implies
-// "read", "*" wildcards, and a stack or service grant reaching the types it
-// covers — lives in acl.TypeGrants, beside the call-time rule it shadows; what
-// is stated here is only the mapping from tools to the keys they check.
+// toolVisibilityFor turns an identity's grants into a per-tool and a per-type
+// read predicate. The grant-flattening lives in acl.TypeGrants, beside the
+// call-time rule it shadows; only the mapping from tools to the keys they
+// check is stated here.
 func (s *Server) toolVisibilityFor(ctx context.Context) toolVisibility {
 	if s.acl == nil {
 		return toolVisibility{}
@@ -525,12 +463,10 @@ func (s *Server) toolVisibilityFor(ctx context.Context) toolVisibility {
 	}
 }
 
-// filterToolsForIdentity is wired as a WithToolFilter for tools/list. Tier
-// gating already happened at registration; this filter additionally hides
-// tools whose primary resource type the identity has zero grants on, so the
-// catalog reflects what the caller can actually invoke. The filter is
-// advisory — call-time ACL still enforces, so returning the full slice would
-// never grant anything; the goal here is a truthful list.
+// filterToolsForIdentity hides tools whose resource type the identity has no
+// grant on, so tools/list reflects what the caller can invoke. Tier gating
+// already happened at registration. The filter is advisory: call-time ACL
+// still enforces, and the goal here is only a truthful list.
 func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool) []mcplib.Tool {
 	visibility := s.toolVisibilityFor(ctx)
 	if visibility.allow == nil {
@@ -540,14 +476,10 @@ func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool
 	return filterToolsByACLSpec(tools, visibility.allow)
 }
 
-// filterPromptsForIdentity is wired as a WithPromptFilter for prompts/list.
-// mcp-go applies it at prompts/get as well, returning the same "not found" as
-// an unknown name, so a hidden prompt cannot be confirmed by guessing it.
-//
-// A prompt is a sequence, so visibility is all-or-nothing: if the caller
-// cannot perform one step, the runbook dead-ends partway — and for a
-// remediation prompt, possibly after the model has already written. One
-// unavailable tool hides the whole prompt.
+// filterPromptsForIdentity gates prompts/list, and prompts/get through the
+// same "not found", so a hidden prompt cannot be confirmed by guessing.
+// Visibility is all-or-nothing: a sequence the caller cannot finish dead-ends
+// partway, for a remediation prompt possibly after the model has written.
 func (s *Server) filterPromptsForIdentity(
 	ctx context.Context,
 	prompts []mcplib.Prompt,

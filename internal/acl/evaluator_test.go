@@ -673,14 +673,10 @@ func typeAgreementResolver() *stubResolver {
 	}
 }
 
-// TestTypeGrantsAgreesWithCan is the guard on impliedTypes. TypeGrants states
-// at the type level what grantMatchesResource works out per resource, so the
-// two rules live in different functions and would otherwise drift silently —
-// which is exactly how a stack grant came to hide the service tools it covers.
-//
-// The fixture names a real resource for every grant pattern, so the type-level
-// approximation is exact here and the two must agree in both directions: a
-// disagreement is a bug, not the approximation showing.
+// The guard on impliedTypes. TypeGrants states at the type level what
+// grantMatchesResource works out per resource, so the two rules live in
+// different functions and would otherwise drift. The fixture names a real
+// resource for every pattern, so a disagreement either way is a bug.
 func TestTypeGrantsAgreesWithCan(t *testing.T) {
 	resource := map[string]string{
 		"service": "service:api",

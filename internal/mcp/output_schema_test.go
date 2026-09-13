@@ -13,16 +13,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/prom"
 )
 
-// TestEveryToolAdvertisesOutputSchema asserts that every registered tool
-// declares an outputSchema, so a 2025-06-18+ client knows the structured shape
-// to expect before it calls.
-//
-// There is no exempt set any more. The eleven spec-editing mutations used to
-// be one, on the reasoning that their result was the raw Docker object and so
-// not a shape Cetacean owned; they now answer with the same compact projection
-// describe builds, scoped to the section they edited, and declare it. Driving
-// the whole registry rather than a list means a new tool has to decide its
-// result shape to pass, instead of quietly shipping without one.
+// Asserts that every registered tool declares an outputSchema, so a client knows
+// the structured shape to expect before it calls. There is no exempt set:
+// driving the whole registry rather than a list means a new tool has to decide
+// its result shape to pass, instead of quietly shipping without one.
 func TestEveryToolAdvertisesOutputSchema(t *testing.T) {
 	c := cache.New(nil)
 	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful)
@@ -135,20 +129,10 @@ func TestCuratedToolOutputsValidate(t *testing.T) {
 	}
 }
 
-// TestEveryToolResultConformsToItsOutputSchema drives every tool through the
-// real transport and holds the rule a strict client enforces: a tool that
-// advertises an outputSchema MUST answer with structuredContent conforming to
-// it — on every call, whatever the arguments, since one tool has one schema.
-//
-// Both halves need the transport. Conformance is checked by the server's own
-// WithOutputSchemaValidation, which turns a breach into an isError result; the
-// presence of structuredContent is decided in registerTools, where the
-// CallToolResult is assembled. A test calling td.handler directly sees
-// neither, which is how find's and describe's raw modes came to answer with
-// text content and no structuredContent at all: the server's validator skips
-// a result that has none, so nothing here failed, while the reference client
-// rejects it outright ("has an output schema but did not return structured
-// content").
+// Drives every tool through the real transport and holds the rule a strict
+// client enforces: a tool advertising an outputSchema must answer with
+// conforming structuredContent on every call. A test calling the handler
+// directly sees neither the validator nor the assembled CallToolResult.
 func TestEveryToolResultConformsToItsOutputSchema(t *testing.T) {
 	c := seededDescribeCache()
 

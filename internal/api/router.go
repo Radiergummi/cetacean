@@ -27,13 +27,9 @@ type Resyncer interface {
 }
 
 // ResourceRefresher re-reads a single resource from the engine into the cache.
-// Backed by the watcher's Refresh method, and decoupled for the same reason
-// Resyncer is.
-//
-// The If-Match precondition needs it: the cache is filled asynchronously from
-// the event stream while every writer applies against the engine, so a
-// validator compared against the cache describes a moment the engine has
-// already moved past — which is exactly the window the header exists to close.
+// Backed by the watcher's Refresh method, decoupled like Resyncer. The
+// If-Match precondition needs it: a validator compared against the
+// asynchronously filled cache describes a moment the engine has moved past.
 type ResourceRefresher interface {
 	Refresh(ctx context.Context, kind, id string) error
 }
@@ -118,15 +114,10 @@ func (h *Handlers) detailFeeds(
 	}
 }
 
-// routeRecorder is the mux NewRouter registers on: an http.ServeMux that also
-// remembers the patterns it was handed. The stdlib mux exposes no way to
-// enumerate them, and without the list nothing can hold the routes that exist
-// against the ones api/openapi.yaml documents — a walk that starts from the
-// spec cannot see a route the spec never mentions.
-//
-// Routes another component registers directly on the wrapped mux — the auth
-// provider's, the OAuth server's — are not recorded. Both sit under paths the
-// spec does not describe.
+// routeRecorder is an http.ServeMux that remembers the patterns it was handed,
+// since the stdlib mux cannot enumerate them and a walk starting from
+// api/openapi.yaml cannot see a route the spec never mentions. Routes another
+// component registers on the wrapped mux are not recorded.
 type routeRecorder struct {
 	mux      *http.ServeMux
 	patterns []string
@@ -262,14 +253,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		mux.Handle("GET /-/metrics", metrics.Handler())
 	}
 	if cfg.Resyncer != nil {
-		// Authenticated and grant-gated, but deliberately not tiered: this is
-		// the one /-/ route internal/auth's isExempt does not exempt, because
-		// each call is a full sweep of the Docker API and leaving it open let
-		// anyone who could reach the port amplify one cheap request into a
-		// cluster enumeration. The operations level is not the right gate —
-		// it says what a deployment may do to the *cluster*, and a resync only
-		// re-reads it, so a read-only deployment keeps the dashboard's refresh
-		// button.
+		// The one /-/ route isExempt does not exempt: each call sweeps the
+		// whole Docker API, so leaving it open amplifies one cheap request
+		// into a cluster enumeration. Not tiered, though: the operations level
+		// says what may be done *to* the cluster, and a resync only re-reads it.
 		mux.HandleFunc("POST /-/resync", h.withAnyGrant(HandleResync(cfg.Resyncer)))
 	}
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
@@ -586,11 +573,9 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		"GET /services/{id}/mode",
 		contentNegotiated(h.HandleGetServiceMode, feedHandlers{}, spa),
 	)
-	// There is deliberately no PUT: Swarmkit refuses every service mode
-	// change, in either direction, with gRPC Unimplemented "service mode
-	// change is not allowed" — which is also why `docker service update` has
-	// no --mode flag. The endpoint existed, was documented as working, and
-	// could only ever answer 500.
+	// There is deliberately no PUT: Swarmkit refuses every service mode change
+	// in either direction with gRPC Unimplemented, which is also why
+	// `docker service update` has no --mode flag.
 	mux.HandleFunc(
 		"GET /services/{id}/endpoint-mode",
 		contentNegotiated(h.HandleGetServiceEndpointMode, feedHandlers{}, spa),
@@ -828,12 +813,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		}
 	})
 
-	// The two projections removed in 0.13.0 need explicit routes, or the SPA
-	// catch-all on "/" answers them: neither path carries a mid-path extension,
-	// so a JSON client of the old endpoint gets 200 and a rendered dashboard
-	// instead of an error — a worse failure than the deprecation it replaced,
-	// because nothing about it looks like one. 410 rather than 404 says the
-	// path is gone for good rather than merely absent today.
+	// Explicit routes, or the SPA catch-all answers them: neither path carries
+	// a mid-path extension, so a JSON client of the old endpoint would get 200
+	// and a rendered dashboard instead of an error. 410 rather than 404 says
+	// the path is gone for good rather than merely absent today.
 	for _, removed := range []string{"/topology/networks", "/topology/placement"} {
 		mux.HandleFunc("GET "+removed, func(w http.ResponseWriter, r *http.Request) {
 			writeErrorCode(
@@ -906,15 +889,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		requireReady(h, mux),
 		discoveryLinks,
 		requestLogger,
-		// Innermost, so requestLogger wraps it: this middleware answers a
-		// name-addressed request itself instead of calling through, and
-		// anything it sits outside of therefore never runs for a redirect.
-		// Placed outside requestLogger, every 307 was missing from the request
-		// log and from the cetacean_http_* metrics alike — invisible exactly
-		// when a client is looping on one. It stays after requireReady for the
-		// opposite reason: a server whose cache is not filled yet resolves
-		// every name to nothing, and answering ENG001 is more honest than
-		// reporting the resource missing.
+		// Innermost, so requestLogger wraps it: this answers a name-addressed
+		// request itself, so anything outside never runs for a redirect. After
+		// requireReady for the opposite reason: an unfilled cache resolves
+		// every name to nothing, and ENG001 beats reporting it missing.
 		h.canonicalIdentifier,
 	)
 
@@ -944,10 +922,8 @@ func requireReady(h *Handlers, mux *routeRecorder) func(http.Handler) http.Handl
 }
 
 // readsClusterState reports whether the endpoint answering this request reads
-// the cache. Path shape cannot say: what matches no route falls through to the
-// SPA catch-all, which serves the frontend — manifest and icons included — off
-// the embedded filesystem, so the mux is asked. The rest answer from the
-// request alone.
+// the cache. Path shape cannot say — what matches no route falls through to
+// the SPA catch-all, served off the embedded filesystem — so the mux is asked.
 func readsClusterState(mux *routeRecorder, r *http.Request) bool {
 	path := r.URL.Path
 

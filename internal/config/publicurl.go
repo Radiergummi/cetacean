@@ -5,16 +5,10 @@ import (
 	"net/url"
 )
 
-// ValidatePublicURL checks server.public_url is an http(s) origin: a scheme
-// and a host, and nothing after them.
-//
-// A path is rejected rather than accepted and ignored, because
-// server.base_path already carries the external prefix in both directions —
-// basePathMiddleware strips it from inbound requests and absPath prepends it
-// to outbound links — and two settings for one concept drift apart.
-//
-// An empty value is valid and means "unset": every consumer keeps the
-// fallback it had before this setting existed.
+// ValidatePublicURL checks server.public_url is an http(s) origin: a scheme and
+// a host, and nothing after them. A path is rejected rather than ignored, since
+// server.base_path already carries the external prefix in both directions and
+// two settings for one concept drift apart. Empty means "unset".
 func ValidatePublicURL(raw string) error {
 	if raw == "" {
 		return nil

@@ -73,11 +73,9 @@ func (p *CertProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Id
 func (p *CertProvider) RegisterRoutes(_ *http.ServeMux) {}
 
 // clientCertificate returns the certificate identifying the client: the one
-// presented on this connection, or — when a trusted proxy terminated TLS
-// instead — the one it forwarded in the RFC 9440 Client-Cert header. One
-// verified here always wins; a forwarded one is gated on the edge's trust
-// verdict, which RFC 9440 §3 requires. Client-Cert-Chain is not read: it
-// carries the issuer chain for a party doing its own validation.
+// presented on this connection, or the one a trusted proxy forwarded in the RFC
+// 9440 Client-Cert header. One verified here always wins, and a forwarded one
+// is gated on the edge's trust verdict. Client-Cert-Chain is not read.
 func clientCertificate(r *http.Request) (*x509.Certificate, error) {
 	if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
 		return r.TLS.PeerCertificates[0], nil

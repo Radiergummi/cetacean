@@ -5,11 +5,9 @@ import (
 	"sync"
 )
 
-// staticBody is a response body fixed for the life of the process, served
-// with a validator hashed once and each content coding compressed once.
-//
-// Codings are compressed lazily and retained, so a body nobody requests
-// costs nothing.
+// staticBody is a response body fixed for the life of the process, served with
+// a validator hashed once and each content coding compressed once. Codings are
+// compressed lazily and retained, so a body nobody requests costs nothing.
 type staticBody struct {
 	identity []byte
 	etag     string
@@ -43,10 +41,8 @@ func (b *staticBody) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 // encode returns the body under one coding, compressing it on first use.
-//
-// negotiateCoding applies the size threshold before choosing a coding, so a
-// body it names a coding for is always one worth compressing; a coding with
-// no compressor is identity.
+// negotiateCoding applies the size threshold first, so a body it names a
+// coding for is always worth compressing; a coding with no compressor is identity.
 func (b *staticBody) encode(coding Encoding) []byte {
 	if compress := b.encoded[coding]; compress != nil {
 		return compress()

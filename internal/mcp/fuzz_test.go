@@ -13,16 +13,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// FuzzMCPEnvelope drives arbitrary bytes at the MCP streamable HTTP transport
-// as a JSON-RPC request body — this is the boundary an MCP client controls
-// entirely.
-//
-// Property: a malformed envelope is the client's fault and must come back as
-// a JSON-RPC error, never a 5xx. A 500 here means an unhandled decode path —
-// executeRegularToolAsTask's goroutine in particular is one mcp-go itself
-// does not recover from. Also: a 200 response carrying JSON must be a
-// JSON-RPC envelope ("jsonrpc":"2.0"); SSE framing is tolerated and not
-// parsed as JSON.
+// Drives arbitrary bytes at the MCP streamable HTTP transport as a JSON-RPC
+// body, the boundary a client controls entirely. A malformed envelope is the
+// client's fault and must come back as a JSON-RPC error, never a 5xx, and a 200
+// carrying JSON must be a JSON-RPC envelope. SSE framing is tolerated.
 func FuzzMCPEnvelope(f *testing.F) {
 	srv, err := New(cache.New(nil), Options{
 		Config:         config.MCPConfig{Enabled: true, OperationsLevel: config.OpsInherit},

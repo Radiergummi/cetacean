@@ -6,14 +6,10 @@ import (
 	"sync"
 )
 
-// ResourceMap is a typed map for a single resource type that shares the
-// parent Cache's RWMutex. It provides the common Set/Get/Delete/List/Replace
-// operations that every cached Docker resource needs.
-//
-// The optional onSet and onDelete hooks run inside the write lock and are used
-// by the Cache to maintain derived state (stack membership, secret scrubbing).
-// The onSet hook receives a pointer to the new value so it can mutate it
-// before storage (e.g., clearing secret data).
+// ResourceMap is a typed map for one resource type, sharing the parent Cache's
+// RWMutex and providing the Set/Get/Delete/List/Replace every cached Docker
+// resource needs. The optional onSet and onDelete hooks run inside the write
+// lock; onSet gets a pointer, which is how secret data is cleared.
 type ResourceMap[T any] struct {
 	mu       *sync.RWMutex
 	items    map[string]T
@@ -99,12 +95,10 @@ func (r *ResourceMap[T]) Delete(key string, eventType EventType) Event {
 	return Event{Type: eventType, Action: "remove", ID: key, Name: name}
 }
 
-// List returns all values as a slice, ordered by map key like list.
-//
-// The copy comes out under the read lock and is sorted after releasing it: the
-// sort is the expensive half of the call on a large cluster, and it does not
-// belong under the lock the watcher's writers are contending for. ListServices
-// and ListTasks split the work the same way.
+// List returns all values as a slice, ordered by map key. The copy comes out
+// under the read lock and is sorted after releasing it: the sort is the
+// expensive half on a large cluster and does not belong under the lock the
+// watcher's writers contend for. ListServices and ListTasks do the same.
 func (r *ResourceMap[T]) List() []T {
 	r.mu.RLock()
 	items := maps.Clone(r.items)

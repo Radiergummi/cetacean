@@ -24,12 +24,9 @@ func resolve(flag *string, envKey string, file *string, def string) string {
 	return def
 }
 
-// resolveSecret works like resolve but also checks for a _FILE variant
-// of the env var. If envKey+"_FILE" is set, the file is read and its
-// contents (trimmed) are used as the value. The _FILE variant has lower
-// precedence than the direct env var but higher than the config file.
-//
-// Precedence: flag > env > env_FILE > config file > default.
+// resolveSecret works like resolve but also reads a _FILE variant of the env
+// var, trimming the file's contents. Precedence: flag > env > env_FILE > config
+// file > default.
 func resolveSecret(flag *string, envKey string, file *string, def string) (string, error) {
 	if flag != nil {
 		return *flag, nil
@@ -103,9 +100,6 @@ func resolveDuration(
 	return d, nil
 }
 
-// resolveInt returns the first set value in precedence order:
-// flag > env > file > hardcoded default. Returns an error if any
-// explicitly set value is not a valid integer or is out of [min, max].
 // resolveNonNegativeDuration is resolveDuration for settings where zero is a
 // meaning rather than a mistake — "no default", "no ceiling" — and only a
 // negative value is wrong.

@@ -17,14 +17,9 @@ var (
 )
 
 // PreconditionedRoutes returns every route whose middleware chain includes the
-// If-Match precondition, sorted and deduplicated.
-//
-// It reads router.go for the same reason Routes does: the chain a route is
-// registered with is what a reviewer edits, and an inventory derived from it
-// fails where the drift is introduced. A route reaches the middleware either
-// directly — Append(h.precond(...)) in the registration — or through a chain
-// variable built once and registered twice, which is how the two healthcheck
-// methods share one representation.
+// If-Match precondition, sorted and deduplicated. It reads router.go for the
+// reason Routes does. A route reaches the middleware directly, or through a
+// chain variable registered twice, as the healthcheck methods do.
 func PreconditionedRoutes() ([]Route, error) {
 	precondOnce.Do(func() {
 		fset := token.NewFileSet()

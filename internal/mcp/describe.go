@@ -17,13 +17,9 @@ import (
 )
 
 // describableResourceTypes maps the singular type name describe takes to the
-// plural key the cetacean:// resource tree uses.
-//
-// It is pluralToSingularRowType read the other way, derived rather than
-// declared a second time: a compact result names its type the way
-// cluster.Digest and cluster.Row do (singular, following TopologyNode), while
-// the resource URIs it delegates to are plural, and two literals would let a
-// type become findable under one spelling and describable under neither.
+// plural key the cetacean:// resource tree uses. Derived from
+// pluralToSingularRowType rather than declared a second time, or a type could
+// become findable under one spelling and describable under neither.
 var describableResourceTypes = invertResourceTypes(pluralToSingularRowType)
 
 // invertResourceTypes swaps a plural→singular resource-type map end for end.
@@ -45,13 +41,9 @@ func describableTypeNames() []string {
 }
 
 // toolDescribe returns one resource as a cluster.Digest: its derived state,
-// the reason behind that state, and the resources it references — the answers
-// a caller would otherwise need several reads and a raw Docker object to
-// assemble.
-//
-// Identity resolution and the ACL check are delegated to lookupResource, the
-// same audited path the cetacean:// resources and find use, rather than
-// reading the cache here.
+// the reason behind it, and the resources it references. Identity resolution
+// and the ACL check are delegated to lookupResource, the audited path the
+// cetacean:// resources and find use.
 func (s *Server) toolDescribe(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
 	resourceType := strings.TrimSpace(req.GetString("type", ""))
 	if resourceType == "" {
@@ -102,33 +94,19 @@ func (s *Server) toolDescribe(ctx context.Context, req mcplib.CallToolRequest) (
 }
 
 // describeResult is what describe returns: the digest, plus the untouched
-// Docker record beside it when the caller asked for one.
-//
-// The digest is embedded rather than nested, so an ordinary describe answers
-// with exactly the object it always did — the fields sit at the top level and
-// cluster.Digest stays the shape both transports build. Raw is an addition to
-// that object rather than a replacement of it, because a tool advertising an
-// output schema must return content conforming to it, and one tool has one
-// schema whatever its arguments: returning the bare record instead, as this
-// once did, left a strict client rejecting the very call that asked for it.
+// Docker record beside it when asked for. The digest is embedded rather than
+// nested, so the fields stay at the top level, and Raw is an addition rather
+// than a replacement: a tool advertising an output schema must conform to it.
 type describeResult struct {
 	cluster.Digest
 
 	Raw any `json:"raw,omitempty"`
 }
 
-// digestOf builds the detail view of one already-resolved resource, and is the
-// single place both transports go through: describe calls it, and so does the
-// templated cetacean:// resource read, so a tool result and a subscription
-// payload cannot describe the same resource differently.
-//
-// Every slice handed to a builder is filtered to what the caller may read
-// first. A digest resolves IDs to names — a service's network attachments, a
-// node's workload, the services mounting a config — and an unfiltered slice
-// would turn it into a side channel for resources the caller cannot list. Each
-// builder falls back to the bare ID when a referenced resource is absent from
-// the slice it was given, which is what makes the filtering safe rather than
-// lossy.
+// digestOf builds the detail view of one already-resolved resource. Both
+// describe and the templated cetacean:// read go through it, so a tool result
+// and a subscription payload cannot differ. Every slice a builder gets is
+// ACL-filtered first; a builder falls back to the bare ID for anything absent.
 func (s *Server) digestOf(
 	ctx context.Context,
 	resourceType string,
@@ -202,15 +180,9 @@ func (s *Server) digestOf(
 }
 
 // readableAttachedNetworks resolves just the networks a service attaches to,
-// dropping any the caller may not read.
-//
-// ServiceDigest resolves attachment IDs to names for its related entries, so
-// it needs the networks named — but only the one to three a service actually
-// attaches to. Listing and ACL-filtering every network in the cluster to
-// resolve those few is work repaid on every resources/read, which a
-// subscription re-drives after each cache event. A network left out because
-// the caller may not read it is not an error: the builder falls back to the
-// ID, which is what keeps an unreadable name out of the digest.
+// dropping any the caller may not read. Listing and filtering every network to
+// name the one to three it uses is work a subscription repays after every
+// cache event. An omitted network is not an error: the builder falls back.
 func (s *Server) readableAttachedNetworks(
 	ctx context.Context,
 	svc swarm.Service,
@@ -239,11 +211,8 @@ func (s *Server) readableAttachedNetworks(
 }
 
 // readableServicesOf resolves the services these tasks belong to, dropping any
-// the caller may not read.
-//
-// NodeDigest needs the names of the services with tasks on this one node —
-// a handful — so resolving those by ID beats listing and ACL-filtering every
-// service in the cluster on a path a subscription re-drives per cache event.
+// the caller may not read. Resolving the handful by ID beats listing and
+// filtering every service on a path a subscription re-drives per cache event.
 func (s *Server) readableServicesOf(
 	ctx context.Context,
 	tasks []swarm.Task,
@@ -267,10 +236,9 @@ func (s *Server) readableServicesOf(
 }
 
 // readableService resolves a task's parent service, or nil when the caller may
-// not read it. TaskDigest takes a pointer precisely so this can be nil: the
-// digest then names the parent by the ID the task record itself carries,
-// rather than disclosing a name from behind the caller's grants or failing a
-// read the caller was entitled to.
+// not read it. TaskDigest takes a pointer so this can be nil: the digest then
+// names the parent by the ID the task record carries, rather than disclosing
+// a name from behind the caller's grants.
 func (s *Server) readableService(ctx context.Context, serviceID string) *swarm.Service {
 	if serviceID == "" {
 		return nil

@@ -81,12 +81,10 @@ type dataElem struct {
 	Value   string   `xml:",chardata"`
 }
 
-// Render converts a [jgf.Graph] to GraphML XML bytes.
-//
-// Stack hyperedges (kind=stack) become nested <graph> elements. Services that
-// belong to a stack are declared inside their stack subgraph. Services without
-// a stack are top-level <node> elements. Edges are always top-level.
-// Output is deterministic: stacks sorted by name, nodes sorted by URN.
+// Render converts a [jgf.Graph] to GraphML XML bytes. Stack hyperedges become
+// nested <graph> elements holding their member services; a service with no
+// stack is a top-level <node>, and edges are always top-level. Output is
+// deterministic: stacks sorted by name, nodes by URN.
 func Render(g jgf.Graph) ([]byte, error) {
 	doc := graphmlDoc{
 		XMLNS: "http://graphml.graphdrawing.org/graphml",

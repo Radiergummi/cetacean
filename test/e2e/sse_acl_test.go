@@ -20,20 +20,10 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file closes the two SSE contracts nothing in the repository observed.
-// Reserves port 19013 (see README.md's reserved-ports table).
-//
-//   - `GET /events` ACL filtering, the read sweep's one remaining gap. That
-//     lane excused it correctly: its filtering runs inside aclMatchWrap on the
-//     streaming path, and a plain GET with a JSON Accept header never reaches
-//     it. Observing it needs a client that holds the stream open while the
-//     cluster changes underneath it.
-//   - The broadcaster's connection cap. README.md's Deferred section records
-//     that no unit test pins it either — internal/api/sse's own tests
-//     substitute a noopErrorWriter rather than driving a real client past
-//     MaxClients — so until now nothing anywhere established that a client
-//     arriving at a full broadcaster is told to come back rather than left
-//     hanging.
+// This file closes the two SSE contracts nothing else observes, on port 19013:
+// `GET /events` ACL filtering, which runs on the streaming path only and needs a
+// client holding the stream open while the cluster changes underneath it, and
+// the broadcaster's connection cap telling a late client to come back.
 
 const sseACLPort = 19013
 
@@ -214,16 +204,10 @@ func awaitEvent(t *testing.T, recorder *eventRecorder, eventType, id, what strin
 	}
 }
 
-// TestEventsStreamAppliesTheACL drives the SSE authorization boundary: a
-// subscriber must be given events only for resources it could also read over
-// HTTP.
-//
-// The negative half is the point, and a negative alone proves nothing — a
-// stream that delivered nothing at all would satisfy it. So the case pins the
-// withheld event from two sides: the fully granted persona must receive it,
-// which establishes it was broadcast at all, and the narrow persona must
-// receive a *different* event from the same window, which establishes its
-// stream was live and delivering throughout.
+// Drives the SSE authorization boundary: a subscriber must be given events only
+// for resources it could also read over HTTP. The withheld event is pinned from
+// two sides — the granted persona must receive it, and the narrow one must
+// receive a different event from the same window.
 func TestEventsStreamAppliesTheACL(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -275,12 +259,10 @@ func TestEventsStreamAppliesTheACL(t *testing.T) {
 	}
 }
 
-// TestSSEConnectionCapRefusesWithRetryAfter drives the broadcaster to
-// MaxClients and asserts the next subscriber is refused in a way it can act
-// on. A cap that dropped the connection, or hung, or answered 503 would leave
-// a client with no way to distinguish "come back shortly" from "this endpoint
-// is broken" — which is why the contract is a 429 with Retry-After rather than
-// any refusal at all.
+// TestSSEConnectionCapRefusesWithRetryAfter drives the broadcaster to MaxClients
+// and asserts the next subscriber is refused in a way it can act on: a 429 with
+// Retry-After, not a dropped connection, a hang, or a 503 that reads as
+// "this endpoint is broken".
 func TestSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -377,10 +359,8 @@ func startSSEACL(t *testing.T, env *harness.Env) *sut.Process {
 			"CETACEAN_OPERATIONS_LEVEL":     "2",
 
 			// The default 100ms batch window would coalesce the config and
-			// service events these cases distinguish into one frame. They
-			// decode a batch array either way, but a shorter window keeps the
-			// two arrivals separable in time, which is what the grace period
-			// below the awaits reasons about.
+			// service events these cases distinguish into one frame; a shorter
+			// window keeps the two arrivals separable in time.
 			"CETACEAN_SSE_BATCH_INTERVAL": "20ms",
 		},
 	})

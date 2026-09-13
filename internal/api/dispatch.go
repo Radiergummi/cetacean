@@ -61,11 +61,9 @@ func contentNegotiated(
 	return contentNegotiatedWithSSE(jsonHandler, nil, feeds, spa)
 }
 
-// contentNegotiatedWithSSE is contentNegotiated with a stream. A nil
-// sseHandler is the endpoint that has none.
-//
-// Anything the endpoint does not serve — a graph format, or a type nothing
-// serves — gets 406, since negotiate resolves without refusing.
+// contentNegotiatedWithSSE is contentNegotiated with a stream; a nil sseHandler
+// is the endpoint that has none. Anything this endpoint does not serve gets
+// 406, since negotiate resolves without refusing.
 func contentNegotiatedWithSSE(
 	jsonHandler, sseHandler http.HandlerFunc,
 	feeds feedHandlers,

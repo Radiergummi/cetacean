@@ -8,17 +8,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// TestToolInputValidationIsExecutionError characterizes SEP-1303 (MCP
-// 2025-11-25) conformance: a tool's own input-validation failure must surface
-// as a Tool Execution Error — a tools/call RESULT with isError=true — and NOT
-// as a JSON-RPC protocol-level error.
-//
-// The invariant locked in for each call is: env.Error == nil (no protocol
-// error) AND IsError == true (an isError result). Cetacean already satisfies
-// this because tool handlers return a Go error and the registration wrapper in
-// tools.go converts that to mcplib.NewToolResultError; this test guards against
-// a regression that would re-route validation failures into the JSON-RPC error
-// channel.
+// Characterizes SEP-1303 conformance: a tool's own input-validation failure must
+// surface as a Tool Execution Error — a tools/call result with isError=true —
+// and not as a JSON-RPC protocol error. The invariant per call is no protocol
+// error and an isError result.
 func TestToolInputValidationIsExecutionError(t *testing.T) {
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsOperational)
 	handler := srv.Handler()

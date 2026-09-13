@@ -78,10 +78,9 @@ func NewTailscaleLocalProvider(capability string) *TailscaleProvider {
 }
 
 // Authenticate identifies the Tailscale peer by calling WhoIs on the request's
-// remote address. Returns an error if the caller is not on the tailnet.
-// As defense-in-depth, the remote address is validated against the Tailscale
-// CGNAT (100.64.0.0/10) and ULA (fd7a:115c:a1e0::/48) ranges before calling
-// WhoIs, preventing spoofed non-tailnet addresses from reaching the daemon.
+// remote address, erroring when the caller is not on the tailnet. The address is
+// first checked against the Tailscale CGNAT and ULA ranges, so a spoofed
+// non-tailnet address never reaches the daemon.
 func (p *TailscaleProvider) Authenticate(
 	_ http.ResponseWriter,
 	r *http.Request,
