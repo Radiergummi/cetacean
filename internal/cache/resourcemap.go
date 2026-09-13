@@ -136,6 +136,31 @@ func (r *ResourceMap[T]) List() []T {
 	return out
 }
 
+// Each calls yield for every value in the same order List returns them,
+// stopping early if yield returns false. Only the keys are copied, so a scan
+// that keeps few of the values — search — allocates a fraction of what listing
+// them costs.
+//
+// yield runs under the read lock and must not call back into the cache: Go's
+// RWMutex is not re-entrant for readers, so a writer arriving between the two
+// acquisitions deadlocks the second. Collect what matches and enrich after.
+func (r *ResourceMap[T]) Each(yield func(T) bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	keys := make([]string, 0, len(r.items))
+	for k := range r.items {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+
+	for _, k := range keys {
+		if !yield(r.items[k]) {
+			return
+		}
+	}
+}
+
 // Len returns the number of items.
 func (r *ResourceMap[T]) Len() int {
 	r.mu.RLock()

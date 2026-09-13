@@ -149,18 +149,31 @@ validator and nothing else.
 
 ## Search
 
-Search is not memoisable — the query is the input — but it does not need to be. Its cost is
-that eight goroutines each copy a full resource list, and the fix is for them to share one
-read rather than take eight.
+Search is not memoisable — the query is the input — but its cost is not what it looks like.
+The eight goroutines each copy a *different* resource type, so they are not duplicating one
+another's work and there is no shared snapshot to consolidate: together they copy the
+cluster exactly once. An allocation profile puts those copies at 62% of the bytes a query
+allocates, spread evenly across the types.
 
-`Search` already calls `c.ListServices()` once at the top and hands the slice to two of its
-goroutines. Extending that to the other six — one pass under a single `RLock` producing the
-lists all eight branches need — removes seven copies of the cluster per query without
-changing what search returns.
+The copy is therefore the cost, and the only way to remove it is not to take one. Search
+reads a handful of fields per resource and keeps a small result; it never needs its own
+copy of the cluster. Matching under the read lock and copying only the hits removes the
+whole 62%.
 
-This is independent of the generation counter and could land first. It is in this document
-because it is the third symptom of the same cause, and because doing it alongside the other
-two keeps the reasoning in one place.
+Two constraints make that less mechanical than it sounds. `ListX()` returns sorted output
+and search depends on it: results are appended in list order and truncated at `limit`, so
+iterating a map directly would return different subsets and a different validator on every
+call for the same query. Matches must be sorted after collection instead — cheap, because
+there are few of them.
+
+And the loop must not call back into the cache while holding the read lock. Go's `RWMutex`
+is not re-entrant for readers: a writer arriving between two `RLock`s deadlocks the second.
+The services branch calls `c.RunningTaskCount` inside its loop today, so enrichment has to
+move after the lock is released. The other seven branches call nothing.
+
+This is independent of the generation counter and lands first. It is in this document
+because it is the third symptom of the same cause — a reader with no way to look without
+taking a copy.
 
 ## Testing
 

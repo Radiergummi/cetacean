@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 )
@@ -68,19 +70,17 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	}
 	var allResults [stCount]typeResults
 
-	services := c.ListServices()
-
 	var wg sync.WaitGroup
 	wg.Add(stCount)
 
 	// Services
 	go func() {
 		defer wg.Done()
-		var matches []SearchResult
+		var hits []swarm.Service
 		count := 0
-		for _, s := range services {
+		c.EachService(func(s swarm.Service) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			hit := ContainsFold(s.Spec.Name, ql)
 			if !hit && s.Spec.TaskTemplate.ContainerSpec != nil {
@@ -90,23 +90,30 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(s.Spec.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
-			if len(matches) >= limit {
-				continue
+			if len(hits) < limit {
+				hits = append(hits, s)
 			}
+
+			return true
+		})
+
+		// RunningTaskCount takes the read lock, so it runs out here rather than
+		// inside the scan that already holds it.
+		matches := make([]SearchResult, 0, len(hits))
+		for _, s := range hits {
 			detail := ""
 			if s.Spec.TaskTemplate.ContainerSpec != nil {
 				detail = StripImageDigest(s.Spec.TaskTemplate.ContainerSpec.Image)
 			}
-			running := c.RunningTaskCount(s.ID)
 			matches = append(matches, SearchResult{
 				Type:   "services",
 				ID:     s.ID,
 				Name:   s.Spec.Name,
 				Detail: detail,
-				State:  DeriveServiceState(s, running),
+				State:  DeriveServiceState(s, c.RunningTaskCount(s.ID)),
 			})
 		}
 		allResults[stServices] = typeResults{"services", matches, count}
@@ -142,12 +149,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	// Nodes
 	go func() {
 		defer wg.Done()
-		nodes := c.ListNodes()
 		var matches []SearchResult
 		count := 0
-		for _, n := range nodes {
+		c.EachNode(func(n swarm.Node) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			hit := ContainsFold(n.Description.Hostname, ql)
 			if !hit {
@@ -157,11 +163,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(n.Spec.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
 			if len(matches) >= limit {
-				continue
+				return true
 			}
 			matches = append(matches, SearchResult{
 				Type:   "nodes",
@@ -170,35 +176,32 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				State:  deriveNodeState(n),
 				Detail: string(n.Spec.Role),
 			})
-		}
+
+			return true
+		})
 		allResults[stNodes] = typeResults{"nodes", matches, count}
 	}()
 
 	// Tasks
 	go func() {
 		defer wg.Done()
-		tasks := c.ListTasks()
-		// Task names embed the service name (svcName.slot); build the lookup
-		// once here rather than at the top level so cluster-wide searches that
-		// never hit the tasks branch don't pay the allocation.
-		svcByID := make(map[string]*swarm.Service, len(services))
-		for i := range services {
-			svcByID[services[i].ID] = &services[i]
-		}
-		var matches []SearchResult
-		count := 0
-		for _, t := range tasks {
-			if ctx.Err() != nil {
-				return
-			}
-			svc := svcByID[t.ServiceID]
-			svcName := ""
-			if svc != nil {
-				svcName = svc.Spec.Name
-			}
-			taskName := TaskName(t, svc)
+		// A task matches on its service's name, so every task needs one — but
+		// only the name. Keeping the services themselves would put a copy of
+		// every service on the heap to read one field off each.
+		svcNames := make(map[string]string)
+		c.EachService(func(s swarm.Service) bool {
+			svcNames[s.ID] = s.Spec.Name
 
-			hit := ContainsFold(svcName, ql)
+			return true
+		})
+
+		var hits []swarm.Task
+		count := 0
+		c.EachTask(func(t swarm.Task) bool {
+			if ctx.Err() != nil {
+				return false
+			}
+			hit := ContainsFold(svcNames[t.ServiceID], ql)
 			if !hit && t.Spec.ContainerSpec != nil {
 				hit = ContainsFold(t.Spec.ContainerSpec.Image, ql)
 			}
@@ -206,11 +209,24 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(t.Spec.ContainerSpec.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
-			if len(matches) >= limit {
-				continue
+			if len(hits) < limit {
+				hits = append(hits, t)
+			}
+
+			return true
+		})
+
+		// TaskName needs the whole service, and GetService takes the read lock
+		// the scan above was holding — so naming happens out here, and only for
+		// the tasks that survived.
+		matches := make([]SearchResult, 0, len(hits))
+		for _, t := range hits {
+			var svc *swarm.Service
+			if s, ok := c.GetService(t.ServiceID); ok {
+				svc = &s
 			}
 			detail := ""
 			if t.Spec.ContainerSpec != nil {
@@ -219,7 +235,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 			matches = append(matches, SearchResult{
 				Type:   "tasks",
 				ID:     t.ID,
-				Name:   taskName,
+				Name:   TaskName(t, svc),
 				Detail: detail,
 				State:  string(t.Status.State),
 			})
@@ -230,23 +246,22 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	// Configs
 	go func() {
 		defer wg.Done()
-		configs := c.ListConfigs()
 		var matches []SearchResult
 		count := 0
-		for _, cfg := range configs {
+		c.EachConfig(func(cfg swarm.Config) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			hit := ContainsFold(cfg.Spec.Name, ql)
 			if !hit {
 				hit = labelsMatch(cfg.Spec.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
 			if len(matches) >= limit {
-				continue
+				return true
 			}
 			matches = append(matches, SearchResult{
 				Type:   "configs",
@@ -254,19 +269,20 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Name:   cfg.Spec.Name,
 				Detail: cfg.CreatedAt.Format(time.RFC3339),
 			})
-		}
+
+			return true
+		})
 		allResults[stConfigs] = typeResults{"configs", matches, count}
 	}()
 
 	// Secrets
 	go func() {
 		defer wg.Done()
-		secrets := c.ListSecrets()
 		var matches []SearchResult
 		count := 0
-		for _, s := range secrets {
+		c.EachSecret(func(s swarm.Secret) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			s = RedactSecret(s)
 			hit := ContainsFold(s.Spec.Name, ql)
@@ -274,11 +290,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(s.Spec.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
 			if len(matches) >= limit {
-				continue
+				return true
 			}
 			matches = append(matches, SearchResult{
 				Type:   "secrets",
@@ -286,30 +302,31 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Name:   s.Spec.Name,
 				Detail: s.CreatedAt.Format(time.RFC3339),
 			})
-		}
+
+			return true
+		})
 		allResults[stSecrets] = typeResults{"secrets", matches, count}
 	}()
 
 	// Networks
 	go func() {
 		defer wg.Done()
-		networks := c.ListNetworks()
 		var matches []SearchResult
 		count := 0
-		for _, n := range networks {
+		c.EachNetwork(func(n network.Summary) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			hit := ContainsFold(n.Name, ql)
 			if !hit {
 				hit = labelsMatch(n.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
 			if len(matches) >= limit {
-				continue
+				return true
 			}
 			matches = append(matches, SearchResult{
 				Type:   "networks",
@@ -317,30 +334,31 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Name:   n.Name,
 				Detail: n.Driver,
 			})
-		}
+
+			return true
+		})
 		allResults[stNetworks] = typeResults{"networks", matches, count}
 	}()
 
 	// Volumes
 	go func() {
 		defer wg.Done()
-		volumes := c.ListVolumes()
 		var matches []SearchResult
 		count := 0
-		for _, v := range volumes {
+		c.EachVolume(func(v volume.Volume) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			hit := ContainsFold(v.Name, ql)
 			if !hit {
 				hit = labelsMatch(v.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
 			if len(matches) >= limit {
-				continue
+				return true
 			}
 			matches = append(matches, SearchResult{
 				Type:   "volumes",
@@ -348,7 +366,9 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Name:   v.Name,
 				Detail: v.Driver,
 			})
-		}
+
+			return true
+		})
 		allResults[stVolumes] = typeResults{"volumes", matches, count}
 	}()
 
