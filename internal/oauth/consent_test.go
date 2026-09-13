@@ -65,7 +65,7 @@ func TestConsentPageRender(t *testing.T) {
 		"http://localhost:9999/cb",
 		challenge,
 		"state123",
-		s.cfg.Resource,
+		s.cfg.defaultIdentifier(),
 	)
 	req := httptest.NewRequest(http.MethodGet, rawURL, nil)
 	req = withIdentity(req, "alice", "alice@example.com")
@@ -121,7 +121,7 @@ func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
 		"http://attacker.example.com/steal",
 		challenge,
 		"state",
-		s.cfg.Resource,
+		s.cfg.defaultIdentifier(),
 	)
 	req := httptest.NewRequest(http.MethodGet, rawURL, nil)
 	req = withIdentity(req, "alice", "")
@@ -164,7 +164,7 @@ func TestConsentApproveProducesCode(t *testing.T) {
 		"http://localhost:7777/cb",
 		challenge,
 		"stateXYZ",
-		s.cfg.Resource,
+		s.cfg.defaultIdentifier(),
 	)
 	getReq := httptest.NewRequest(http.MethodGet, rawURL, nil)
 	getReq = withIdentity(getReq, "bob", "bob@example.com")

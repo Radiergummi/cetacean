@@ -25,7 +25,10 @@ func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 	cfg := ServerConfig{
 		Issuer:   "https://cetacean.test",
 		BasePath: "/cetacean",
-		Resource: "https://cetacean.test/cetacean/resource",
+		Resources: []Resource{
+			{Path: "", Realm: "cetacean"},
+			{Path: "/resource", Realm: "cetacean-resource"},
+		},
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,
@@ -60,19 +63,37 @@ func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 		}
 	}
 
-	prmDoc := readJSONDoc(t, mux, "/cetacean/.well-known/oauth-protected-resource")
-	servers, _ := prmDoc["authorization_servers"].([]any)
-	if len(servers) != 1 || servers[0] != wantBasePathIssuer {
-		t.Errorf(
-			"PRM authorization_servers = %v, want [%q]",
-			prmDoc["authorization_servers"], wantBasePathIssuer,
-		)
+	// One document per resource, each at the location RFC 9728 §3.1 derives from
+	// its identifier's path — with the base path ahead of the well-known segment,
+	// where this deployment is actually mounted. Both are asserted because the
+	// root document describing the wrong resource is the confusion that makes a
+	// token for one reach the other.
+	for _, want := range []struct{ path, resource string }{
+		{"/cetacean/.well-known/oauth-protected-resource", wantBasePathIssuer},
+		{
+			"/cetacean/.well-known/oauth-protected-resource/resource",
+			wantBasePathIssuer + "/resource",
+		},
+	} {
+		prmDoc := readJSONDoc(t, mux, want.path)
+
+		if prmDoc["resource"] != want.resource {
+			t.Errorf("%s: resource = %v, want %q",
+				want.path, prmDoc["resource"], want.resource)
+		}
+
+		servers, _ := prmDoc["authorization_servers"].([]any)
+		if len(servers) != 1 || servers[0] != wantBasePathIssuer {
+			t.Errorf("%s: authorization_servers = %v, want [%q]",
+				want.path, prmDoc["authorization_servers"], wantBasePathIssuer)
+		}
 	}
 
 	// The token's iss claim must match the advertised issuer, or a client that
 	// validates iss against the discovered AS rejects the token.
 	tok, err := s.tokenIssuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u", ClientID: "c1"},
+		s.cfg.defaultIdentifier(),
 		time.Hour,
 	)
 	if err != nil {

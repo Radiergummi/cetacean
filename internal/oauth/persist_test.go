@@ -294,7 +294,7 @@ func TestRevokeIsWrittenThrough(t *testing.T) {
 func TestServerCarriesRefreshTokensAcrossRestart(t *testing.T) {
 	path := t.TempDir() + "/oauth-tokens.json"
 
-	before := newPersistingServer(t, path, "https://cetacean.test/resource")
+	before := newPersistingServer(t, path, testResourcePath)
 	token := before.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user@example.com",
 		ClientID: "https://example.com/client",
@@ -302,7 +302,7 @@ func TestServerCarriesRefreshTokensAcrossRestart(t *testing.T) {
 	}, 720*time.Hour)
 
 	// A second Server over the same path stands in for the process restarting.
-	after := newPersistingServer(t, path, "https://cetacean.test/resource")
+	after := newPersistingServer(t, path, testResourcePath)
 
 	if _, ok := after.refreshTokens.Validate(token); !ok {
 		t.Fatal("a refresh token issued before the restart should still validate")
@@ -434,7 +434,7 @@ func TestOnlyTheConfiguredStateFileIsRead(t *testing.T) {
 	current := filepath.Join(dir, "oauth-tokens.json")
 	sibling := filepath.Join(dir, "other-tokens.json")
 
-	seed := newPersistingServer(t, sibling, testResource)
+	seed := newPersistingServer(t, sibling, testResourcePath)
 	orphaned := seed.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "alice",
 		ClientID: "client-1",
@@ -445,7 +445,7 @@ func TestOnlyTheConfiguredStateFileIsRead(t *testing.T) {
 		t.Fatalf("the seed never reached disk: %v", err)
 	}
 
-	srv := newPersistingServer(t, current, testResource)
+	srv := newPersistingServer(t, current, testResourcePath)
 
 	if _, ok := srv.refreshTokens.Validate(orphaned); ok {
 		t.Error("a grant was restored from a file the server was not pointed at")
@@ -459,7 +459,7 @@ func TestCorruptStateComesUpEmpty(t *testing.T) {
 	current := filepath.Join(dir, "oauth-tokens.json")
 	sibling := filepath.Join(dir, "other-tokens.json")
 
-	seed := newPersistingServer(t, sibling, testResource)
+	seed := newPersistingServer(t, sibling, testResourcePath)
 	orphaned := seed.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "alice",
 		ClientID: "client-1",
@@ -470,7 +470,7 @@ func TestCorruptStateComesUpEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := newPersistingServer(t, current, testResource)
+	srv := newPersistingServer(t, current, testResourcePath)
 
 	if _, ok := srv.refreshTokens.Validate(orphaned); ok {
 		t.Error("a corrupt file fell through to another copy of the state")

@@ -11,9 +11,12 @@ import (
 func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 	s := newTestServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource"+
+		testResourcePath, nil)
 	rec := httptest.NewRecorder()
-	s.HandleProtectedResourceMetadata(rec, req)
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux, "")
+	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -27,8 +30,8 @@ func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 		t.Fatalf("decode PRM: %v", err)
 	}
 
-	if doc.Resource != s.cfg.Resource {
-		t.Errorf("resource = %q, want %q", doc.Resource, s.cfg.Resource)
+	if doc.Resource != s.cfg.defaultIdentifier() {
+		t.Errorf("resource = %q, want %q", doc.Resource, s.cfg.defaultIdentifier())
 	}
 	if len(doc.AuthorizationServers) != 1 || doc.AuthorizationServers[0] != s.cfg.Issuer {
 		t.Errorf("authorization_servers = %v, want [%q]", doc.AuthorizationServers, s.cfg.Issuer)

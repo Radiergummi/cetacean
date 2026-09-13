@@ -22,7 +22,10 @@ func withOAuthRoutes(basePath string) routerOption {
 	srv := oauth.NewServer(oauth.ServerConfig{
 		Issuer:   "https://swarm.example",
 		BasePath: basePath,
-		Resource: "https://swarm.example" + basePath + "/mcp",
+		Resources: []oauth.Resource{
+			{Path: "", Realm: "cetacean"},
+			{Path: "/mcp", Realm: "cetacean-mcp"},
+		},
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  time.Hour,
 			RefreshTokenTTL: 720 * time.Hour,

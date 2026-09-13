@@ -44,6 +44,12 @@ type OAuthConfig struct {
 	// so every authorization is prompted.
 	ConsentTTL time.Duration
 
+	// APITokens offers the REST API as a protected resource, so a client can
+	// mint a token for it. Disabling it makes the API resource undiscoverable as
+	// well as unusable: no metadata document, no catalog entry, and a refusal at
+	// the authorize endpoint rather than a token that mints and then fails.
+	APITokens bool
+
 	// RequireResourceIndicator requires RFC 8707 resource indicators in token requests.
 	RequireResourceIndicator bool
 
@@ -72,6 +78,7 @@ func DefaultOAuthConfig() OAuthConfig {
 		RefreshTokenTTL: 720 * time.Hour,
 		ConsentTTL:      2160 * time.Hour, // 90d, well past the refresh token's 30d
 
+		APITokens:                true,
 		RequireResourceIndicator: true,
 		DCREnabled:               true,
 		DCRRateLimit:             10,
@@ -132,6 +139,7 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 		fAccessTTL     *string
 		fRefreshTTL    *string
 		fConsentTTL    *string
+		fAPITokens     *bool
 		fRequireRI     *bool
 		fDCREnabled    *bool
 		fDCRRateLimit  *int
@@ -145,6 +153,7 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 		fAccessTTL = fo.AccessTokenTTL
 		fRefreshTTL = fo.RefreshTokenTTL
 		fConsentTTL = fo.ConsentTTL
+		fAPITokens = fo.APITokens
 		fRequireRI = fo.RequireResourceIndicator
 		fDCREnabled = fo.DCREnabled
 		fDCRRateLimit = fo.DCRRateLimit
@@ -233,6 +242,12 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 		AccessTokenTTL:  accessTTL,
 		RefreshTokenTTL: refreshTTL,
 		ConsentTTL:      consentTTL,
+		APITokens: resolveBool(
+			nil,
+			"CETACEAN_OAUTH_API_TOKENS",
+			fAPITokens,
+			def.APITokens,
+		),
 		RequireResourceIndicator: resolveBool(
 			nil,
 			"CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR",

@@ -38,7 +38,7 @@ func (p *fakeAuthProvider) RegisterRoutes(_ *http.ServeMux) {}
 // they are named rather than spelled at each site.
 const (
 	testIssuer   = "https://cetacean.example.com"
-	testResource = testIssuer + "/mcp"
+	testResource = testIssuer + MountPath
 )
 
 // oauthServerFor builds an authorization server the way main.go does, sharing
@@ -46,9 +46,12 @@ const (
 // verifier, not a stand-in.
 func oauthServerFor(key []byte) *oauth.Server {
 	return oauth.NewServer(oauth.ServerConfig{
-		Issuer:     testIssuer,
-		BasePath:   "",
-		Resource:   testResource,
+		Issuer:   testIssuer,
+		BasePath: "",
+		Resources: []oauth.Resource{
+			{Path: "", Realm: "cetacean"},
+			{Path: MountPath, Realm: "cetacean-mcp"},
+		},
 		OAuth:      config.DefaultOAuthConfig(),
 		SigningKey: key,
 	})
@@ -58,12 +61,16 @@ func oauthServerFor(key []byte) *oauth.Server {
 func tokenFor(t *testing.T, key []byte, claims oauth.AccessTokenClaims) string {
 	t.Helper()
 
-	issuer, err := oauth.NewTokenIssuer(key, testIssuer, testResource)
+	issuer, err := oauth.NewTokenIssuer(key, testIssuer)
 	if err != nil {
 		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 
-	token, err := issuer.IssueAccessToken(claims, config.DefaultOAuthConfig().AccessTokenTTL)
+	token, err := issuer.IssueAccessToken(
+		claims,
+		testResource,
+		config.DefaultOAuthConfig().AccessTokenTTL,
+	)
 	if err != nil {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}
