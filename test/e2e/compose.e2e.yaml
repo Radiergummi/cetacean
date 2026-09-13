@@ -9,6 +9,8 @@ services:
     command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock", "--tls=false", "--label=cetacean-e2e=true"]
     ports:
       - "12375:2375"
+    volumes:
+      - dind-data:/var/lib/docker
     networks:
       - e2e
 
@@ -63,6 +65,9 @@ services:
         echo "certs ready"
     volumes:
       - ./certs:/certs
+      # It runs the dind image for its openssl and never starts an engine, but
+      # the image's VOLUME directive makes one regardless.
+      - cert-init-docker:/var/lib/docker
 
   caddy:
     image: caddy:2
@@ -113,11 +118,22 @@ services:
     configs:
       - source: prometheus-config
         target: /etc/prometheus/prometheus.yml
+    volumes:
+      - prometheus-data:/prometheus
     networks:
       - e2e
 
 networks:
   e2e:
+
+# Named, not left anonymous. Compose orphans an anonymous volume whenever it
+# recreates the container, and nothing then identifies it as this project's, so
+# runs left standing on failure strand dind state a blanket prune could reach
+# but a targeted one cannot. A named volume is reused, and `down -v` removes it.
+volumes:
+  dind-data:
+  cert-init-docker:
+  prometheus-data:
 
 configs:
   prometheus-config:
