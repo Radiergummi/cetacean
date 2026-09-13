@@ -3,7 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -41,9 +43,8 @@ type MCPConfig struct {
 	// AuthBypass lists upstream Cetacean auth modes (e.g. "cert") whose
 	// authenticated identity is accepted at /mcp without a bearer token: the
 	// MCP server derives identity from the upstream provider instead of
-	// validating a JWT. Modes that issue redirects (e.g. "oidc") are unsafe to
-	// list. It does not remove the need for an authorization server — the
-	// bypass runs inside the bearer middleware an absent one never installs.
+	// validating a JWT. Only bypassableAuthModes may appear, and a listed mode
+	// authenticates /mcp on its own, so no authorization server is required.
 	AuthBypass []string
 }
 
@@ -134,14 +135,45 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		return MCPConfig{}, err
 	}
 
+	authBypass := resolveStringSlice(nil, "CETACEAN_MCP_AUTH_BYPASS", fAuthBypass)
+	if err := checkAuthBypass(authBypass); err != nil {
+		return MCPConfig{}, err
+	}
+
 	return MCPConfig{
 		Enabled:            resolveBool(nil, "CETACEAN_MCP", fEnabled, def.Enabled),
 		OperationsLevel:    opsLevel,
 		MaxConcurrentTasks: maxConcurrentTasks,
 		TaskTTL:            taskTTL,
 		MaxTaskTTL:         maxTaskTTL,
-		AuthBypass:         resolveStringSlice(nil, "CETACEAN_MCP_AUTH_BYPASS", fAuthBypass),
+		AuthBypass:         authBypass,
 	}, nil
+}
+
+// bypassableAuthModes are the upstream modes whose provider establishes an
+// identity from the transport rather than from an ambient credential. oidc is
+// absent on purpose: it authenticates from a session cookie, and /mcp is exempt
+// from cross-origin protection precisely because it should carry no such thing.
+var bypassableAuthModes = []string{"cert", "headers", "tailscale"}
+
+// checkAuthBypass refuses a mode the bypass cannot safely accept, so the rule
+// the documentation already states is enforced rather than trusted.
+func checkAuthBypass(modes []string) error {
+	for _, mode := range modes {
+		if slices.Contains(bypassableAuthModes, mode) {
+			continue
+		}
+
+		return fmt.Errorf(
+			"mcp.auth_bypass accepts only %s, got %q: those carry identity in the "+
+				"transport, where oidc authenticates from a session cookie that "+
+				"/mcp's exemption from cross-origin protection assumes absent",
+			strings.Join(bypassableAuthModes, ", "),
+			mode,
+		)
+	}
+
+	return nil
 }
 
 // resolveMCPOpsLevel reads CETACEAN_MCP_OPERATIONS_LEVEL and the file value,

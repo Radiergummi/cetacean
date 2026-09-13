@@ -8,21 +8,15 @@ import (
 )
 
 // This file is the one place the acronym may appear, so it names itself rather
-// than being recognised by the scan below. Both are assembled rather than
-// spelled, for the same reason as the needle.
-const (
-	selfName        = "independence_test.go"
-	legacyStateFile = "m" + "c" + "p" + "-tokens.json"
-)
+// than being recognised by the scan below.
+const selfName = "independence_test.go"
 
 // The authorization server is a standalone concern: MCP is one consumer of it,
 // and a second protected resource is planned. A mention of the first consumer
 // anywhere in here — an identifier, a comment, a log line, a fixture — is the
 // beginning of the coupling this package was extracted to remove, so the rule
-// is enforced rather than remembered.
-//
-// The needle is assembled at runtime: spelled as a literal, this test would
-// fail on itself.
+// is enforced rather than remembered, and carries no exceptions. The needle is
+// assembled at runtime: spelled as a literal, this test would fail on itself.
 func TestThePackageDoesNotNameItsConsumer(t *testing.T) {
 	needle := "m" + "c" + "p"
 
@@ -41,11 +35,9 @@ func TestThePackageDoesNotNameItsConsumer(t *testing.T) {
 			t.Fatalf("read %s: %v", name, err)
 		}
 
-		// The state file's former name is the one legitimate mention: the
-		// migration path has to name the file it migrates from, and a test
-		// covering that has to name it too. Erased once per file rather than
-		// once per line, so the passing case — every case in CI — is one pass.
-		scanned := strings.ReplaceAll(strings.ToLower(string(body)), legacyStateFile, "")
+		// One pass over the whole file first, so the passing case — every case
+		// in CI — never splits a line.
+		scanned := strings.ToLower(string(body))
 		if !strings.Contains(scanned, needle) {
 			continue
 		}

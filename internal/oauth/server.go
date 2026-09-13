@@ -51,14 +51,6 @@ type ServerConfig struct {
 	// client to re-authorize. Empty keeps both stores in memory only, which is
 	// what happens when the data directory is not writable.
 	StatePath string
-
-	// LegacyStatePath is read once, when StatePath holds nothing yet, so a
-	// rename of the file costs clients a token refresh rather than a full
-	// re-authorization. Writes always go to StatePath, which migrates the
-	// content on the first change; the old file is left where it is so a
-	// downgrade still finds it. Its orphaned temp files are deliberately not
-	// swept — sweepTempFiles follows StatePath alone.
-	LegacyStatePath string
 }
 
 // Server is the OAuth 2.1 authorization server. Use NewServer to construct.
@@ -115,27 +107,22 @@ func NewServer(cfg ServerConfig) *Server {
 		sweepTempFiles(cfg.StatePath)
 
 		// A missing file is the normal first start. Anything else — corrupt
-		// JSON, bad permissions, a version from a newer build — costs every
+		// JSON, bad permissions, a version this build does not write — costs every
 		// client a re-authorization, so it is worth an operator's attention.
 		// Neither is fatal: the server comes up empty and clients re-authorize,
 		// exactly as they did before the store existed.
-		state, path, err := readStateOrLegacy(cfg.StatePath, cfg.LegacyStatePath)
+		state, err := readState(cfg.StatePath)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				slog.Info("no OAuth state yet", "path", path)
+				slog.Info("no OAuth state yet", "path", cfg.StatePath)
 			} else {
 				slog.Warn(
 					"could not read OAuth state; clients must re-authorize",
 					"error", err,
-					"path", path,
+					"path", cfg.StatePath,
 				)
 			}
 		} else {
-			if path != cfg.StatePath {
-				slog.Info("migrating OAuth state from its former path",
-					"from", path, "to", cfg.StatePath)
-			}
-
 			refreshTokens.Restore(state.RefreshTokenSnapshot)
 			consent.Restore(state.Consent)
 			slog.Info("loaded OAuth state",
@@ -407,6 +394,7 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// per-function analysis.
 	refreshTokenRaw := r.FormValue("refresh_token") // #nosec G120 -- bounded in HandleToken
 	resourceForm := r.FormValue("resource")         // #nosec G120 -- bounded in HandleToken
+	clientID := r.FormValue("client_id")            // #nosec G120 -- bounded in HandleToken
 
 	// RFC 8707 resource indicator validation against the server's resource.
 	// Run BEFORE consuming the refresh token: a malformed resource parameter
@@ -422,9 +410,11 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Confirm the bound resource matches BEFORE rotation, again so a client
-	// typo doesn't revoke the entire family.
-	if resourceForm != "" {
+	// Confirm the bound resource and client match BEFORE rotation, again so a
+	// client typo doesn't revoke the entire family. Every client here is public
+	// and unauthenticated, so client_id proves nothing against a caller holding
+	// the token: RFC 6749 §6 conformance, not an attack worth catching.
+	if resourceForm != "" || clientID != "" {
 		bound, ok := s.refreshTokens.Validate(refreshTokenRaw)
 		if !ok {
 			writeTokenError(
@@ -435,12 +425,21 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 			)
 			return
 		}
-		if resourceForm != bound.Resource {
+		if resourceForm != "" && resourceForm != bound.Resource {
 			writeTokenError(
 				w,
 				http.StatusBadRequest,
 				"invalid_target",
 				"resource does not match this grant",
+			)
+			return
+		}
+		if clientID != "" && clientID != bound.ClientID {
+			writeTokenError(
+				w,
+				http.StatusBadRequest,
+				"invalid_grant",
+				"client_id does not match this grant",
 			)
 			return
 		}
@@ -655,8 +654,13 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 	data.CSRFToken, _ = issueCSRFNonce(
 		w,
 		s.csrfKey(),
-		data.State,
-		data.Fingerprint,
+		consentBinding{
+			State:         data.State,
+			Fingerprint:   data.Fingerprint,
+			ClientID:      data.ClientID,
+			RedirectURI:   data.RedirectURI,
+			CodeChallenge: data.CodeChallenge,
+		},
 		strings.HasPrefix(s.cfg.Issuer, "https://"),
 	)
 
@@ -847,6 +851,23 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	if identity == nil {
 		clearCSRFCookie(w, secure)
 		renderErrorPage(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	if responseType != "code" {
+		clearCSRFCookie(w, secure)
+		s.redirectWithError(w, r, redirectURIRaw, state, "unsupported_response_type",
+			"response_type must be code")
+		return
+	}
+
+	// PKCE is not optional, and an empty challenge must not reach a code: the
+	// token endpoint would refuse every verifier against it, but a code that
+	// can never be redeemed is a worse answer than a refusal here.
+	if codeChallenge == "" {
+		clearCSRFCookie(w, secure)
+		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
+			"code_challenge is required")
 		return
 	}
 

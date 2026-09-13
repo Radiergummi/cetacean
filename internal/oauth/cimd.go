@@ -27,6 +27,12 @@ var cimdDialer = &net.Dialer{
 // Expired entries are evicted on the next read; there is no background sweep.
 const cimdCacheTTL = time.Hour
 
+// cimdCacheMaxEntries bounds the cache. client_id is the caller's to choose and
+// the document is served by a host they control, so an authorize loop over
+// distinct URLs would otherwise grow this map without limit. DCR has
+// DCRMaxClients for the same reason; this is CIMD's.
+const cimdCacheMaxEntries = 512
+
 // cimdMaxRedirects is the maximum number of redirects the fetcher will follow.
 // Lower than the net/http default of 10 to bound per-fetch work.
 const cimdMaxRedirects = 5
@@ -428,5 +434,38 @@ func (f *CIMDFetcher) cachePut(clientID string, meta *ClientMetadata) {
 	if f.cache == nil {
 		f.cache = make(map[string]cachedEntry)
 	}
-	f.cache[clientID] = cachedEntry{meta: meta, fetchedAt: time.Now()}
+
+	now := time.Now()
+	if _, replacing := f.cache[clientID]; !replacing {
+		f.evictFor(now)
+	}
+
+	f.cache[clientID] = cachedEntry{meta: meta, fetchedAt: now}
+}
+
+// evictFor makes room for one new entry, called with the mutex held. Lapsed
+// entries go first, since dropping them costs nothing; only if the cache is
+// still full does a live one go, oldest first. Re-fetching an evicted client
+// costs one request, so the cap trades a cold start for a bounded map.
+func (f *CIMDFetcher) evictFor(now time.Time) {
+	if len(f.cache) < cimdCacheMaxEntries {
+		return
+	}
+
+	for id, entry := range f.cache {
+		if now.Sub(entry.fetchedAt) >= cimdCacheTTL {
+			delete(f.cache, id)
+		}
+	}
+
+	for len(f.cache) >= cimdCacheMaxEntries {
+		oldestID := ""
+		var oldest time.Time
+		for id, entry := range f.cache {
+			if oldestID == "" || entry.fetchedAt.Before(oldest) {
+				oldestID, oldest = id, entry.fetchedAt
+			}
+		}
+		delete(f.cache, oldestID)
+	}
 }

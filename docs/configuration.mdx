@@ -194,10 +194,6 @@ the config file.
   Expected value of the shared secret header. Required when [`auth.headers.secret_header`][auth.headers.secret_header] is set. Accepts the `_FILE` suffix.
 </ConfigParam>
 
-<ConfigParam name="auth.headers.trusted_proxies" flag="-auth-headers-trusted-proxies" env="CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES" deprecated>
-  Use `server.trusted_proxies` instead. This setting will be removed in v1.
-</ConfigParam>
-
 ### Authorization
 
 Authorization is grant-based RBAC layered on the active authentication mode. With no policy
@@ -231,10 +227,14 @@ already grants, and each applies only to its own authentication mode.
 
 Cetacean can run an OAuth 2.1 authorization server, which issues the bearer tokens clients present to protected
 resources. It is **disabled by default** and has to be asked for: it mints credentials for your cluster, so it
-should never appear as a side effect of enabling something else. Today `/mcp` is the only protected resource, so
-the server is needed exactly when the [MCP server][mcp.enabled] runs under an auth mode other than `none` —
-Cetacean refuses to start in that combination without it, because `/mcp` authenticates itself and would otherwise
-serve unauthenticated.
+should never appear as a side effect of enabling something else.
+
+Today `/mcp` is the only protected resource, and it authenticates itself rather than going through the
+[authentication][authentication] middleware. So under an auth mode other than `none` it needs one of two things,
+and Cetacean refuses to start with neither: this server, or the active mode listed in
+[`mcp.auth_bypass`][mcp.auth_bypass], which has the upstream provider authenticate every request instead. The
+bypass is how an mTLS deployment runs no authorization server at all — those clients cannot drive a browser
+consent screen, so one would only sit unused.
 
 <ConfigParam name="oauth.enabled" env="CETACEAN_OAUTH_ENABLED" default="false">
   Run the authorization server, mounting `/oauth/*` and the RFC 8414 and RFC 9728 discovery documents. Requires an auth mode other than `none`, since the server has no identity of its own to consent as.
@@ -309,7 +309,7 @@ default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token
 </ConfigParam>
 
 <ConfigParam name="mcp.auth_bypass" env="CETACEAN_MCP_AUTH_BYPASS">
-  Comma-separated authentication modes that skip the bearer check at `/mcp`, e.g. `cert`. Use it where the transport already carries a verified identity. Authorization still applies; only the OAuth handshake is skipped. It does not remove the need for [`oauth.enabled`][oauth.enabled] — the bypass runs inside the bearer middleware an absent authorization server never installs.
+  Comma-separated authentication modes that skip the bearer check at `/mcp`, e.g. `cert`. Use it where the transport already carries a verified identity. Authorization still applies; only the OAuth handshake is skipped. A mode listed here is authenticated by its own provider on every request, so it satisfies `/mcp` on its own and [`oauth.enabled`][oauth.enabled] can stay off. Only `cert`, `headers` and `tailscale` may be listed, and Cetacean refuses to start on anything else: those carry identity in the transport, where `oidc` authenticates from a session cookie — an ambient credential that `/mcp`'s exemption from cross-origin protection assumes is absent.
 </ConfigParam>
 
 See [MCP][mcp] for the tools, resources, prompts and widgets the server exposes.
