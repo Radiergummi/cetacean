@@ -227,6 +227,24 @@ the fix lands as a fix rather than as an assumption.
 > for it only when the granted scope differs from the requested one, and with none defined both
 > reduce to the empty set. Echoing `scope: ""` would violate the parameter's own ABNF. Defining a
 > real scope means revisiting all three together.
+>
+> **The one candidate that survives that reasoning** is a scope naming the operations tier the
+> client wants, which is this decision's own cap wearing a scope as its front end. It escapes the
+> objection above because it only ever subtracts: `min(deployment tier, transport cap, requested)`.
+> Forget to enforce it and the caller gets the deployment's tier — too much access, a bug, but not
+> an escalation, where a forgotten `mcp:use` would open a transport. It also rides an axis that
+> already exists rather than layering a second model over the ACL, makes the consent screen a real
+> decision ("read-only" vs "may delete services"), and makes RFC 6749 §5.1 live: a client asking
+> for tier 3 on a tier-1 deployment is granted a subset, so the response must echo `scope`.
+> RFC 9068 §2.2.3 already defines the claim, so no custom one is needed.
+>
+> It is still gated on the request-scoped effective level, and must follow it rather than lead:
+> a scope stored and advertised but enforced nowhere is the thing rejected above. The refresh grant
+> has to clamp too (RFC 6749 §6 forbids widening), which is the one place a miss *is* an escalation.
+> Note also that there is no per-user tier to sit in that `min` — the ACL narrows resources and
+> permissions, not tiers — so the feature is "a client may hold less than the deployment allows",
+> not "less than its user is allowed". Letting the consent screen lower the tier further is what
+> would turn it from an honest client's self-restraint into a control its user imposes.
 
 Tempting to add `scope` and let a device hold less than its user. Resisted, for now:
 
