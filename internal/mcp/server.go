@@ -544,10 +544,9 @@ func (s *Server) bypassActive() bool {
 }
 
 // discardingResponseWriter swallows writes from upstream providers invoked for
-// identity-only bypass checks. Providers that would normally write a redirect
-// or partial body (OIDC) end up with their output dropped — callers should
-// only list providers that don't write on the success path (cert, headers,
-// tailscale) in AuthBypass.
+// identity-only bypass checks. config.bypassableAuthModes already limits the
+// list to providers that establish identity without writing, so this covers a
+// provider that writes on a path the bypass does not take.
 //
 // Header() returns a persistent http.Header so a provider that sets a header
 // then reads it back (e.g. setting WWW-Authenticate and checking the value

@@ -156,7 +156,7 @@ func TestMCPConfigOpsLevelOutOfRange(t *testing.T) {
 }
 
 func TestMCPConfigAuthBypass(t *testing.T) {
-	t.Setenv("CETACEAN_MCP_AUTH_BYPASS", "client1,client2,client3")
+	t.Setenv("CETACEAN_MCP_AUTH_BYPASS", "cert,headers,tailscale")
 
 	cfg, err := Load(nil, nil)
 	if err != nil {
@@ -166,8 +166,34 @@ func TestMCPConfigAuthBypass(t *testing.T) {
 	if len(cfg.MCP.AuthBypass) != 3 {
 		t.Errorf("AuthBypass len = %d, want 3", len(cfg.MCP.AuthBypass))
 	}
-	if cfg.MCP.AuthBypass[0] != "client1" {
-		t.Errorf("AuthBypass[0] = %q, want client1", cfg.MCP.AuthBypass[0])
+	if cfg.MCP.AuthBypass[0] != "cert" {
+		t.Errorf("AuthBypass[0] = %q, want cert", cfg.MCP.AuthBypass[0])
+	}
+}
+
+// The bypass hands /mcp to the upstream provider, and /mcp is exempt from
+// cross-origin protection on the grounds that it carries no ambient credential.
+// A mode that authenticates from a session cookie makes that false, so the rule
+// the documentation states is enforced here rather than trusted.
+func TestMCPConfigAuthBypassRefusesUnsafeModes(t *testing.T) {
+	for _, mode := range []string{"oidc", "none", "not-a-mode"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("CETACEAN_MCP_AUTH_BYPASS", mode)
+
+			if _, err := Load(nil, nil); err == nil {
+				t.Fatalf("auth_bypass accepted %q", mode)
+			}
+		})
+	}
+}
+
+// Every bypassable mode must be one auth.mode actually accepts, or the list
+// names a mode no deployment can be running.
+func TestBypassableModesAreRealAuthModes(t *testing.T) {
+	for _, mode := range bypassableAuthModes {
+		if !validModes[mode] {
+			t.Errorf("bypassableAuthModes names %q, which is not an auth mode", mode)
+		}
 	}
 }
 
