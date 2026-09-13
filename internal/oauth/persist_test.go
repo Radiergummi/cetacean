@@ -428,11 +428,11 @@ func TestStateFileSerializesConcurrentWriters(t *testing.T) {
 	}
 }
 
-// The state file was renamed when the package stopped being MCP's. Reading the
-// old name once is what keeps the cost of that a single token refresh per
-// client rather than a fresh authorization for every one of them: access tokens
-// stop verifying anyway when the derived keys change, but the refresh tokens in
-// here survive, and only if they are found.
+// The state file was renamed when the package stopped belonging to its first
+// consumer. Reading the old name once keeps the cost of that a single token
+// refresh per client rather than a fresh authorization for every one of them:
+// access tokens stop verifying anyway when the derived keys change, but the
+// refresh tokens in here survive, and only if they are found.
 func TestLegacyStateIsReadOnceThenWrittenToTheNewPath(t *testing.T) {
 	dir := t.TempDir()
 	legacy := filepath.Join(dir, "mcp-tokens.json")

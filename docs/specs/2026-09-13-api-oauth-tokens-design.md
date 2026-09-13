@@ -184,6 +184,12 @@ migration, but do not implement it here.
 
 ### 6. Extract the package, as its own change, first
 
+> **Landed, with three changes.** The owner's call was that pre-1.0 makes aliases unnecessary, so the
+> settings were renamed outright and the visible names below went with them. The HKDF labels were
+> renamed too, and the goldens recomputed independently. And `internal/mcp`'s *production* code stops
+> importing the package while its tests keep importing it on purpose — they mint real ES256 tokens,
+> which is the only thing proving verification works end to end.
+
 Yes — and it is less work than it looks, because **the package does not depend on `internal/mcp`
 today**. Its only internal imports are `internal/auth` (for `IdentityFromContext`) and
 `internal/config`. Nothing in those 3,495 non-test lines reaches into MCP; it is MCP's by naming and
@@ -227,6 +233,13 @@ Then the two-resource change on top. Done in one commit, the diff that introduce
 is buried in a rename and nobody can review the part that matters.
 
 ### 7. The AS has to outlive `mcp.enabled`
+
+> **Landed here rather than later, and by a different mechanism.** The server became opt-in via
+> `oauth.enabled`, which decouples its lifecycle from `mcp.enabled` by itself — a token issuer should
+> not appear because an operator enabled something else. Three combinations are now settled at
+> startup; `mcp.enabled` under real authentication without the server is refused, because `/mcp`
+> authenticates itself and `mcp.auth_bypass` runs *inside* the bearer middleware an absent server
+> never installs.
 
 Extraction alone does not get there: the AS is *constructed* inside `setupMCP`, which returns
 `(nil, nil, noop)` when MCP is off. An operator who wants a native client but no AI agent on their

@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - MCP access tokens follow the RFC 9068 `at+jwt` profile. Clients holding an older token refresh automatically
 - The Cetacean API description moved to `/api/openapi.yaml`; `/openapi.json` now describes the documentation site itself
 - **Breaking:** `CETACEAN_OAUTH_SIGNING_KEY` is now a root secret both keys derive from, and must be 32 bytes of hex or base64 — generate one with `openssl rand -hex 32`. Leaving it unset still generates a key at startup
-- MCP access tokens are signed with ES256 rather than HMAC. Clients refresh once on upgrade; stop every replica before starting the new version
+- Access tokens are signed with ES256 rather than HMAC, and the key is derived differently, so the published `kid` changes. Clients refresh once on upgrade; stop every replica before starting the new version
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
 - **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale` and `headers` — no challenge can ask for the credential those modes read
 

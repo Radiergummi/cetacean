@@ -508,7 +508,7 @@ func TestWriteUnauthorized(t *testing.T) {
 
 	// Asserted whole rather than by substring: the realm and the parameter order
 	// are what a client parses, and a piecewise check cannot see either change.
-	want := `Bearer realm="mcp", ` +
+	want := `Bearer realm="cetacean", ` +
 		`resource_metadata="https://cetacean.test/.well-known/oauth-protected-resource", ` +
 		`error="invalid_token"`
 

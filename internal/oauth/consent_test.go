@@ -101,8 +101,8 @@ func TestConsentPageRender(t *testing.T) {
 	for _, cookie := range rec.Result().Cookies() {
 		names = append(names, cookie.Name)
 	}
-	if !slices.Contains(names, "mcp_csrf_nonce") {
-		t.Errorf("cookies = %q, want one named mcp_csrf_nonce", names)
+	if !slices.Contains(names, "oauth_csrf_nonce") {
+		t.Errorf("cookies = %q, want one named oauth_csrf_nonce", names)
 	}
 }
 
