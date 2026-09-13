@@ -1045,24 +1045,46 @@ func (s *Server) redirectWithError(
 // WWW-Authenticate helper
 // ---------------------------------------------------------------------------
 
-// WriteUnauthorized writes a 401 response with a WWW-Authenticate header naming
-// the metadata document of the resource that was challenged, so a client
-// following RFC 9728 discovers the resource it was refused from rather than a
-// neighbouring one. resource is the identifier the resource server verifies
-// against; an unknown one falls back to the default.
-func (s *Server) WriteUnauthorized(w http.ResponseWriter, resource, errorCode string) {
+// UnauthorizedHeader is the WWW-Authenticate value for a 401 from resource,
+// naming that resource's own metadata document so a client following RFC 9728
+// discovers what it was refused from rather than a neighbouring resource whose
+// token this one would also reject. An unknown resource falls back to the
+// default. Separate from WriteUnauthorized so a resource server that owes its
+// callers a structured body can set the header and write its own response.
+func (s *Server) UnauthorizedHeader(resource, errorCode string) string {
 	target, ok := s.cfg.resourceFor(resource)
 	if !ok {
 		target = s.cfg.defaultResource()
 	}
 
-	w.Header().Set("WWW-Authenticate", fmt.Sprintf(
+	return fmt.Sprintf(
 		`Bearer realm=%s, resource_metadata=%s, error=%s`,
 		httpQuotedString(target.Realm),
 		httpQuotedString(s.cfg.metadataURL(target)),
 		httpQuotedString(errorCode),
-	))
+	)
+}
+
+// WriteUnauthorized writes a bare 401 carrying that header, for a resource
+// server whose protocol has no body to put an error in.
+func (s *Server) WriteUnauthorized(w http.ResponseWriter, resource, errorCode string) {
+	w.Header().Set("WWW-Authenticate", s.UnauthorizedHeader(resource, errorCode))
 	w.WriteHeader(http.StatusUnauthorized)
+}
+
+// Foreign reports whether err means the presented token was not issued by this
+// server, so a caller with an upstream auth provider behind it should fall
+// through rather than refuse.
+//
+// The discriminator is the issuer, not the outcome of verification. A token
+// under another `iss`, and one that is not a JWT at all — which is what an
+// opaque provider token looks like — belong to someone else. Every other error
+// is a token claiming to be ours that failed to prove it: a bad signature, an
+// expiry, an audience for a different resource. Those are final, because falling
+// through on them would let a forged token reach the provider and be judged by
+// weaker evidence.
+func (s *Server) Foreign(err error) bool {
+	return errors.Is(err, ErrIssuerMismatch) || errors.Is(err, ErrMalformedToken)
 }
 
 // httpQuotedString wraps s in an RFC 7230 quoted-string. Per RFC 7230 §3.2.6

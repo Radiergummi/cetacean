@@ -57,6 +57,11 @@ type RouterConfig struct {
 	// endpoints (/.well-known/*, /oauth/*) on the mux. Wired by main.go from
 	// internal/oauth.
 	OAuthRoutes func(mux *http.ServeMux, basePath string)
+
+	// APITokens lets the auth middleware accept a bearer token this deployment's
+	// authorization server issued for the API. Its zero value accepts none, which
+	// is every deployment that runs no such server or has oauth.api_tokens off.
+	APITokens auth.APITokens
 }
 
 // listFeeds builds feedHandlers for a resource list endpoint. Every one of
@@ -871,7 +876,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		securityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),
 		cors(cfg.CORS),
 		crossOriginProtection(cfg.CORS, cfg.PublicURL),
-		auth.Middleware(authProvider),
+		auth.Middleware(authProvider, cfg.APITokens),
 		negotiate,
 		requireReady(h, mux),
 		discoveryLinks,

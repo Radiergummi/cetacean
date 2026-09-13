@@ -33,7 +33,7 @@ func TestMiddleware_NoneProvider_InjectsIdentity(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := Middleware(&NoneProvider{})(inner)
+	handler := Middleware(&NoneProvider{}, APITokens{})(inner)
 	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
@@ -72,7 +72,7 @@ func TestMiddleware_ExemptRoutes(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			handler := Middleware(&failProvider{})(inner)
+			handler := Middleware(&failProvider{}, APITokens{})(inner)
 			r := httptest.NewRequest(http.MethodGet, path, nil)
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, r)
@@ -93,7 +93,7 @@ func TestMiddleware_AuthError_Returns401(t *testing.T) {
 		called = true
 	})
 
-	handler := Middleware(&failProvider{})(inner)
+	handler := Middleware(&failProvider{}, APITokens{})(inner)
 	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
@@ -119,7 +119,7 @@ func TestMiddleware_AuthError_SetsWWWAuthenticate(t *testing.T) {
 		t.Fatal("inner handler should not be called")
 	})
 
-	handler := Middleware(&bearerProvider{})(inner)
+	handler := Middleware(&bearerProvider{}, APITokens{})(inner)
 	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
@@ -133,7 +133,7 @@ func TestMiddleware_AuthError_SetsWWWAuthenticate(t *testing.T) {
 }
 
 func TestMiddleware_PlainError_NoWWWAuthenticate(t *testing.T) {
-	handler := Middleware(&failProvider{})(http.NotFoundHandler())
+	handler := Middleware(&failProvider{}, APITokens{})(http.NotFoundHandler())
 	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
@@ -149,7 +149,7 @@ func TestMiddleware_RedirectProvider_InnerNotCalled(t *testing.T) {
 		called = true
 	})
 
-	handler := Middleware(&redirectProvider{})(inner)
+	handler := Middleware(&redirectProvider{}, APITokens{})(inner)
 	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)

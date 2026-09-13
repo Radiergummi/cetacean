@@ -48,11 +48,26 @@ func (e *AuthError) Error() string { return e.Msg }
 // Middleware returns HTTP middleware that authenticates requests using the
 // given provider. Exempt paths (meta endpoints, API docs, static assets,
 // auth callbacks) bypass authentication entirely.
-func Middleware(provider Provider) func(http.Handler) http.Handler {
+//
+// A token this deployment issued is consulted before the provider, so an
+// explicit credential outranks the ambient session cookie a browser may also be
+// carrying. tokens may be its zero value, which is every deployment without an
+// authorization server.
+func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isExempt(r.URL.Path) {
 				next.ServeHTTP(w, r)
+				return
+			}
+
+			if id, handled := tokens.authenticateBearer(w, r); handled {
+				if id == nil {
+					return
+				}
+
+				next.ServeHTTP(w, r.WithContext(ContextWithIdentity(r.Context(), id)))
+
 				return
 			}
 

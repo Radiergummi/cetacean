@@ -571,3 +571,54 @@ func TestServerDiscoverOmitsIconsWithoutABaseURL(t *testing.T) {
 		t.Errorf("icons advertised with no base URL to build them from: %s", envelope.Result)
 	}
 }
+
+// The other half of the separation: a token minted for the deployment root — the
+// credential an ordinary API client holds — must not reach this transport, and
+// the refusal must send the client to this transport's own metadata document.
+//
+// The audiences differ by one path segment and one is a prefix of the other,
+// which is exactly the pair a containment reading would conflate.
+func TestHandlerRefusesATokenForAnotherResource(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+
+	key := []byte("test-secret-32-bytes-long-padding")
+	oauthSrv := oauthServerFor(key)
+
+	issuer, err := oauth.NewTokenIssuer(key, testIssuer)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
+	}
+
+	// testIssuer alone is the deployment root, where testResource is /mcp beneath it.
+	token, err := issuer.IssueAccessToken(oauth.AccessTokenClaims{
+		Subject:  "user@example.com",
+		ClientID: "test-client",
+	}, testIssuer, config.DefaultOAuthConfig().AccessTokenTTL)
+	if err != nil {
+		t.Fatalf("IssueAccessToken: %v", err)
+	}
+
+	srv, err := New(cache.New(nil), Options{Config: cfg, OAuth: oauthSrv})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(srv.Close)
+
+	req := httptest.NewRequest(http.MethodPost, MountPath, strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401: %s", rec.Code, rec.Body.String())
+	}
+
+	challenge := rec.Header().Get("WWW-Authenticate")
+	want := `resource_metadata="` + testIssuer +
+		`/.well-known/oauth-protected-resource` + MountPath + `"`
+	if !strings.Contains(challenge, want) {
+		t.Errorf("WWW-Authenticate = %q, want substring %q", challenge, want)
+	}
+}
