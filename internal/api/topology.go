@@ -37,6 +37,21 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 	}
 
 	identity := auth.IdentityFromContext(r.Context())
+
+	// The document is a pure function of the cache contents and what this
+	// identity may see, so a repeat request rebuilds nothing. absPath is part
+	// of the key by proxy: the base path is fixed for the process.
+	key := projectionKey{
+		generation:  h.cache.Generation(),
+		fingerprint: h.acl.Fingerprint(identity),
+	}
+	if doc, ok := h.topologyDocs.get(key); ok {
+		w.Header().Set("Content-Type", "application/vnd.jgf+json")
+		writeRawWithETag(w, r, doc)
+
+		return
+	}
+
 	services := acl.Filter(
 		h.acl, identity, "read",
 		h.cache.ListServices(),
@@ -82,6 +97,8 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "API009", "failed to serialize response")
 		return
 	}
+
+	h.topologyDocs.put(key, body)
 
 	w.Header().Set("Content-Type", "application/vnd.jgf+json")
 	writeRawWithETag(w, r, body)

@@ -1240,3 +1240,27 @@ func BenchmarkHandleListServices_ACL(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkHandleTopology measures the memoised path, which is what a dashboard
+// polling between cluster events actually gets. This is the other half: a
+// mutation per iteration means every request rebuilds, so a regression in the
+// graph construction stays visible.
+func BenchmarkHandleTopology_ColdMemo(b *testing.B) {
+	for _, n := range []int{100, 1000} {
+		c := cache.New(nil)
+		populateCache(c, n)
+		h := newTestHandlers(b, withCache(c))
+
+		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
+			i := 0
+			for b.Loop() {
+				// Advances the generation, so the next request misses.
+				c.SetNode(swarm.Node{ID: fmt.Sprintf("churn-%d", i%2)})
+				i++
+
+				req := httptest.NewRequest("GET", "/api/topology", nil)
+				h.HandleTopology(httptest.NewRecorder(), req)
+			}
+		})
+	}
+}

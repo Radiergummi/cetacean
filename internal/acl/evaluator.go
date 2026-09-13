@@ -14,6 +14,21 @@ type Evaluator struct {
 	policy   atomic.Pointer[Policy]
 	source   GrantSource
 	resolver ResourceResolver
+
+	// policyGeneration advances on every SetPolicy. The policy is hot-reloaded
+	// from disk, so what an identity may see changes with no cache mutation
+	// behind it, and anything keyed on the grants has to notice.
+	policyGeneration atomic.Uint64
+}
+
+// PolicyGeneration returns a counter that advances whenever the policy is
+// replaced.
+func (e *Evaluator) PolicyGeneration() uint64 {
+	if e == nil {
+		return 0
+	}
+
+	return e.policyGeneration.Load()
 }
 
 // NewEvaluator creates a new Evaluator. All parameters are optional.
@@ -27,6 +42,7 @@ func (e *Evaluator) SetPolicy(p *Policy) {
 		return
 	}
 	e.policy.Store(p)
+	e.policyGeneration.Add(1)
 }
 
 // SetResolver sets the resource resolver for stack/task resolution.
