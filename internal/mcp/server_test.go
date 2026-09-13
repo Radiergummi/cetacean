@@ -115,8 +115,9 @@ func TestHandlerEmits401WithoutBearerWhenOAuthConfigured(t *testing.T) {
 	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
 	srv, err := New(c, Options{
-		Config: cfg,
-		OAuth:  oauthSrv,
+		Config:   cfg,
+		OAuth:    oauthSrv,
+		Resource: testResource,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -155,8 +156,9 @@ func TestHandlerAcceptsValidBearer(t *testing.T) {
 	})
 
 	srv, err := New(c, Options{
-		Config: cfg,
-		OAuth:  oauthSrv,
+		Config:   cfg,
+		OAuth:    oauthSrv,
+		Resource: testResource,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -199,6 +201,7 @@ func TestHandlerAuthBypassUsesUpstreamIdentity(t *testing.T) {
 	srv, err := New(c, Options{
 		Config:       cfg,
 		OAuth:        oauthSrv,
+		Resource:     testResource,
 		AuthMode:     "cert",
 		AuthProvider: provider,
 	})
@@ -235,6 +238,7 @@ func TestHandlerAuthBypassFallsBackWhenUpstreamFails(t *testing.T) {
 	srv, err := New(c, Options{
 		Config:       cfg,
 		OAuth:        oauthSrv,
+		Resource:     testResource,
 		AuthMode:     "cert",
 		AuthProvider: provider,
 	})
@@ -293,6 +297,7 @@ func TestHandlerAuthBypassIgnoredWhenModeNotListed(t *testing.T) {
 	srv, err := New(c, Options{
 		Config:       cfg,
 		OAuth:        oauthSrv,
+		Resource:     testResource,
 		AuthMode:     "oidc",
 		AuthProvider: provider,
 	})
@@ -329,7 +334,7 @@ func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
 		ClientID: "test-client",
 	})
 
-	srv, err := New(c, Options{Config: cfg, OAuth: oauthSrv})
+	srv, err := New(c, Options{Config: cfg, OAuth: oauthSrv, Resource: testResource})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -599,7 +604,7 @@ func TestHandlerRefusesATokenForAnotherResource(t *testing.T) {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}
 
-	srv, err := New(cache.New(nil), Options{Config: cfg, OAuth: oauthSrv})
+	srv, err := New(cache.New(nil), Options{Config: cfg, OAuth: oauthSrv, Resource: testResource})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

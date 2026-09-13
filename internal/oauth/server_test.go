@@ -156,7 +156,7 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost:8080/callback",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.defaultIdentifier(),
+		Resource:      s.resources.fallback,
 		Subject:       "user@example.com",
 		Groups:        []string{"admin"},
 	})
@@ -192,7 +192,7 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 	}
 
 	// Verify the JWT contains the expected audience.
-	claims, err := s.tokenIssuer.VerifyAccessToken(resp.AccessToken, s.cfg.defaultIdentifier())
+	claims, err := s.tokenIssuer.VerifyAccessToken(resp.AccessToken, s.resources.fallback)
 	if err != nil {
 		t.Fatalf("verify access token: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost/cb",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.defaultIdentifier(),
+		Resource:      s.resources.fallback,
 		Subject:       "user",
 	})
 
@@ -255,7 +255,7 @@ func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost/cb",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.defaultIdentifier(),
+		Resource:      s.resources.fallback,
 		Subject:       "user",
 	})
 
@@ -296,7 +296,7 @@ func TestTokenExchangeRefreshHappy(t *testing.T) {
 		Subject:  "user",
 		Groups:   []string{"g1"},
 		ClientID: "test-client",
-		Resource: s.cfg.defaultIdentifier(),
+		Resource: s.resources.fallback,
 	}, time.Hour)
 
 	form := url.Values{
@@ -379,7 +379,7 @@ func TestTokenExchangeRefreshTheft(t *testing.T) {
 	refreshToken := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user",
 		ClientID: "test-client",
-		Resource: s.cfg.defaultIdentifier(),
+		Resource: s.resources.fallback,
 	}, time.Hour)
 
 	// First rotation — consumes the original token.
@@ -427,7 +427,7 @@ func TestRevocation(t *testing.T) {
 	token := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user",
 		ClientID: "test-client",
-		Resource: s.cfg.defaultIdentifier(),
+		Resource: s.resources.fallback,
 	}, time.Hour)
 
 	form := url.Values{"token": {token}}
@@ -503,7 +503,7 @@ func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 	rt := srv.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "u@e",
 		ClientID: "https://example.com/client",
-		Resource: srv.cfg.defaultIdentifier(),
+		Resource: srv.resources.fallback,
 	}, time.Hour)
 
 	form := url.Values{
@@ -533,18 +533,13 @@ func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestWriteUnauthorized
+// TestUnauthorizedHeader
 // ---------------------------------------------------------------------------
 
-func TestWriteUnauthorized(t *testing.T) {
+func TestUnauthorizedHeader(t *testing.T) {
 	s := newTestServer(t)
 
-	rec := httptest.NewRecorder()
-	s.WriteUnauthorized(rec, s.cfg.defaultIdentifier(), "invalid_token")
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rec.Code)
-	}
+	got := s.UnauthorizedHeader(s.resources.fallback, "invalid_token")
 
 	// Asserted whole rather than by substring: the realm and the parameter order
 	// are what a client parses, and a piecewise check cannot see either change.
@@ -555,7 +550,7 @@ func TestWriteUnauthorized(t *testing.T) {
 		testResourcePath + `", ` +
 		`error="invalid_token"`
 
-	if got := rec.Header().Get("WWW-Authenticate"); got != want {
+	if got != want {
 		t.Errorf("WWW-Authenticate = %q, want %q", got, want)
 	}
 }

@@ -16,30 +16,13 @@ import (
 	"github.com/radiergummi/cetacean/internal/oauth"
 )
 
-const (
-	tokenTestIssuer = "https://cetacean.test"
-	tokenTestRoot   = "cetacean-test-root-32-bytes-ok!!"
-)
-
-// tokenTestServer is an authorization server wired as main.go wires it, serving
-// the deployment root and one resource beneath it.
-func tokenTestServer() *oauth.Server {
-	return oauth.NewServer(oauth.ServerConfig{
-		Issuer: tokenTestIssuer,
-		Resources: []oauth.Resource{
-			{Path: "", Realm: "cetacean"},
-			{Path: "/mcp", Realm: "cetacean-mcp"},
-		},
-		OAuth:      config.DefaultOAuthConfig(),
-		SigningKey: []byte(tokenTestRoot),
-	})
-}
+const tokenTestIssuer = "https://cetacean.test"
 
 // tokenFor mints a real ES256 token for resourcePath, carrying identity.
 func tokenFor(t *testing.T, resourcePath string, identity *auth.Identity) string {
 	t.Helper()
 
-	issuer, err := oauth.NewTokenIssuer([]byte(tokenTestRoot), tokenTestIssuer)
+	issuer, err := oauth.NewTokenIssuer([]byte(oauthTestRoot), tokenTestIssuer)
 	if err != nil {
 		t.Fatalf("NewTokenIssuer: %v", err)
 	}
@@ -63,7 +46,7 @@ func tokenFor(t *testing.T, resourcePath string, identity *auth.Identity) string
 func tokenRouter(t *testing.T, opts ...testHandlersOption) http.Handler {
 	t.Helper()
 
-	srv := tokenTestServer()
+	srv := tokenTestServer(tokenTestIssuer, "")
 
 	return newTestRouterWithConfig(t, []routerOption{
 		func(cfg *RouterConfig) {
@@ -90,6 +73,17 @@ func (p *refusingProvider) Authenticate(
 
 func (p *refusingProvider) RegisterRoutes(_ *http.ServeMux) {}
 
+func get(t *testing.T, router http.Handler, path string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	r := httptest.NewRequest(http.MethodGet, path, nil)
+	r.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+
+	return w
+}
+
 func getWithToken(
 	t *testing.T,
 	router http.Handler,
@@ -99,9 +93,7 @@ func getWithToken(
 
 	r := httptest.NewRequest(http.MethodGet, path, nil)
 	r.Header.Set("Accept", "application/json")
-	if token != "" {
-		r.Header.Set("Authorization", "Bearer "+token)
-	}
+	r.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)
 
@@ -177,7 +169,7 @@ func TestATokenReceivesTheSameAllowAsASession(t *testing.T) {
 		func(cfg *RouterConfig) { cfg.AuthProvider = &fixedProvider{identity: identity} },
 	}, opts...)
 
-	overSession := getWithToken(t, sessionRouter, "/services/svc-web", "")
+	overSession := get(t, sessionRouter, "/services/svc-web")
 	if overSession.Code != http.StatusOK {
 		t.Fatalf("session: status = %d, want 200: %s", overSession.Code, overSession.Body.String())
 	}

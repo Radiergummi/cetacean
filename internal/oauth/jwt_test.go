@@ -36,7 +36,7 @@ func mustTokenIssuer(t *testing.T, root []byte, issuer string) *TokenIssuer {
 }
 
 func TestJWTSignAndVerify(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	claims := AccessTokenClaims{
 		Subject:  "user@example.com",
 		Groups:   []string{"ops", "dev"},
@@ -67,7 +67,7 @@ func TestJWTSignAndVerify(t *testing.T) {
 }
 
 func TestJWTExpiredToken(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, err := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "user@example.com", ClientID: "c1"},
 		testTokenAudience,
@@ -82,14 +82,8 @@ func TestJWTExpiredToken(t *testing.T) {
 }
 
 func TestJWTWrongSigningKey(t *testing.T) {
-	issuer1 := mustTokenIssuer(t,
-		[]byte("key-one-32-bytes-long-padding!!!"),
-		"https://cetacean.example.com",
-	)
-	issuer2 := mustTokenIssuer(t,
-		[]byte("key-two-32-bytes-long-padding!!!"),
-		"https://cetacean.example.com",
-	)
+	issuer1 := mustTokenIssuer(t, []byte("key-one-32-bytes-long-padding!!!"), testIssuer)
+	issuer2 := mustTokenIssuer(t, []byte("key-two-32-bytes-long-padding!!!"), testIssuer)
 	token, _ := issuer1.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
 		testTokenAudience,
@@ -101,7 +95,7 @@ func TestJWTWrongSigningKey(t *testing.T) {
 }
 
 func TestJWTWrongAudience(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, _ := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
 		testTokenAudience,
@@ -113,7 +107,7 @@ func TestJWTWrongAudience(t *testing.T) {
 }
 
 func TestJWTWrongIssuer(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, _ := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
 		testTokenAudience,
@@ -127,7 +121,7 @@ func TestJWTWrongIssuer(t *testing.T) {
 }
 
 func TestJWTMalformedToken(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	// Each case names the sentinel it must surface, since callers map those to
 	// WWW-Authenticate error codes.
 	cases := []struct {
@@ -154,7 +148,7 @@ func TestJWTMalformedToken(t *testing.T) {
 
 func TestJWTMissingSigningKey(t *testing.T) {
 	issuer := &TokenIssuer{
-		Issuer: "https://cetacean.example.com",
+		Issuer: testIssuer,
 		// signer deliberately zero
 	}
 	if _, err := issuer.IssueAccessToken(
@@ -176,7 +170,7 @@ func TestJWTMissingSigningKey(t *testing.T) {
 }
 
 func TestJWTReusedJTIsAreDistinct(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	claims := AccessTokenClaims{Subject: "u@e", ClientID: "c1"}
 	t1, _ := issuer.IssueAccessToken(claims, testTokenAudience, time.Hour)
 	t2, _ := issuer.IssueAccessToken(claims, testTokenAudience, time.Hour)
@@ -209,7 +203,7 @@ func reheader(t *testing.T, issuer *TokenIssuer, token, header string) string {
 var requiredClaims = []string{"iss", "exp", "aud", "sub", "client_id", "iat", "jti"}
 
 func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
 		Subject:  "user@example.com",
@@ -261,7 +255,7 @@ func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
 }
 
 func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
 		Subject:  "u@e",
@@ -304,7 +298,7 @@ func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
 }
 
 func TestJWTRefusesToMintWithoutARequiredClaim(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 
 	// sub and client_id come from the caller, so they are the two that can
 	// arrive missing. No resource server may accept a token without them.
@@ -416,7 +410,7 @@ func TestPackedSignatureWithALeadingZeroInRVerifies(t *testing.T) {
 		candidate, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
 			Subject:  "alice",
 			ClientID: "https://client.example/id.json",
-		}, s.cfg.defaultIdentifier(), time.Hour)
+		}, s.resources.fallback, time.Hour)
 		if err != nil {
 			t.Fatalf("IssueAccessToken: %v", err)
 		}

@@ -344,14 +344,14 @@ func consentServer(t *testing.T) (*Server, string) {
 
 	s := newTestServer(t)
 	s.consent.Remember(
-		keyFor(testSubject, testClientID, s.cfg.defaultIdentifier()),
+		keyFor(testSubject, testClientID, s.resources.fallback),
 		testFingerprint,
 	)
 
 	token := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  testSubject,
 		ClientID: testClientID,
-		Resource: s.cfg.defaultIdentifier(),
+		Resource: s.resources.fallback,
 	}, time.Hour)
 
 	return s, token
@@ -370,7 +370,7 @@ func TestRevocationClearsConsent(t *testing.T) {
 	// silent re-authorization", which is worse than not revoking, because it
 	// appears to have worked.
 	if s.consent.Allows(
-		keyFor(testSubject, testClientID, s.cfg.defaultIdentifier()),
+		keyFor(testSubject, testClientID, s.resources.fallback),
 		testFingerprint,
 	) {
 		t.Error("revocation should have cleared the approval")
@@ -392,7 +392,7 @@ func TestTheftResultNamesTheBurnedFamily(t *testing.T) {
 
 	// Naming the burned family is what lets the caller clear its approval; the
 	// handler that does so is covered by TestTheftAtTheTokenEndpointClearsConsent.
-	want := keyFor(testSubject, testClientID, s.cfg.defaultIdentifier())
+	want := keyFor(testSubject, testClientID, s.resources.fallback)
 	if got := replay.Data.ConsentKey(); got != want {
 		t.Errorf("theft result should name the burned family, got %+v", got)
 	}
@@ -401,14 +401,14 @@ func TestTheftResultNamesTheBurnedFamily(t *testing.T) {
 func TestExpiryDoesNotClearConsent(t *testing.T) {
 	s := newTestServer(t)
 	s.consent.Remember(
-		keyFor(testSubject, testClientID, s.cfg.defaultIdentifier()),
+		keyFor(testSubject, testClientID, s.resources.fallback),
 		testFingerprint,
 	)
 
 	expired := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  testSubject,
 		ClientID: testClientID,
-		Resource: s.cfg.defaultIdentifier(),
+		Resource: s.resources.fallback,
 	}, -time.Second)
 
 	if s.refreshTokens.Rotate(expired, time.Hour).OK {
@@ -417,7 +417,7 @@ func TestExpiryDoesNotClearConsent(t *testing.T) {
 
 	// Consent outliving the refresh token is the entire point of the feature.
 	if !s.consent.Allows(
-		keyFor(testSubject, testClientID, s.cfg.defaultIdentifier()),
+		keyFor(testSubject, testClientID, s.resources.fallback),
 		testFingerprint,
 	) {
 		t.Error("expiry must not clear consent")
@@ -549,7 +549,7 @@ func TestDisabledConsentAlwaysPromptsThroughTheServer(t *testing.T) {
 	// Even a record that matches on every field must not skip the page once an
 	// operator has turned remembering off.
 	s.consent.Restore([]ConsentRecord{{
-		ConsentKey:  keyFor(testSubject, clientID, s.cfg.defaultIdentifier()),
+		ConsentKey:  keyFor(testSubject, clientID, s.resources.fallback),
 		Fingerprint: consentFingerprint(meta),
 		GrantedAt:   time.Now(),
 	}})
@@ -657,7 +657,7 @@ func authorizeGET(
 		redirectURI,
 		computeS256Challenge(authorizeVerifier),
 		"xyz",
-		s.cfg.defaultIdentifier(),
+		s.resources.fallback,
 	)
 
 	req := withIdentity(httptest.NewRequest(http.MethodGet, target, nil), testSubject, "")
@@ -700,7 +700,7 @@ func cimdServer(t *testing.T) (srv *Server, clientID, redirectURI string, meta *
 func TestApprovedClientSkipsTheConsentPage(t *testing.T) {
 	s, clientID, redirectURI, meta := cimdServer(t)
 	s.consent.Remember(
-		keyFor(testSubject, clientID, s.cfg.defaultIdentifier()),
+		keyFor(testSubject, clientID, s.resources.fallback),
 		consentFingerprint(meta),
 	)
 
@@ -728,7 +728,7 @@ func TestChangedMetadataRePrompts(t *testing.T) {
 	// An approval granted against different metadata than the client now
 	// publishes must not carry over.
 	s.consent.Remember(
-		keyFor(testSubject, clientID, s.cfg.defaultIdentifier()),
+		keyFor(testSubject, clientID, s.resources.fallback),
 		"fingerprint-from-before",
 	)
 
@@ -761,7 +761,7 @@ func TestDynamicallyRegisteredClientNeverSkipsTheConsentPage(t *testing.T) {
 		ClientName:   "Self-Registered CLI",
 		RedirectURIs: []string{redirectURI},
 	})
-	s.consent.Remember(keyFor(testSubject, clientID, s.cfg.defaultIdentifier()), fingerprint)
+	s.consent.Remember(keyFor(testSubject, clientID, s.resources.fallback), fingerprint)
 
 	w := authorizeGET(t, s, clientID, redirectURI)
 
@@ -820,7 +820,7 @@ func TestApprovingThroughTheConsentPageIsRemembered(t *testing.T) {
 	// The wiring under test: the approve handler must write the record, not
 	// merely issue a code. Seeding the store directly would prove nothing
 	// about whether the endpoint ever calls Remember.
-	approval := keyFor(testSubject, clientID, s.cfg.defaultIdentifier())
+	approval := keyFor(testSubject, clientID, s.resources.fallback)
 	if !s.consent.Allows(approval, consentFingerprint(meta)) {
 		t.Fatal("approving through the consent page recorded no approval")
 	}
@@ -880,7 +880,7 @@ func TestTheftAtTheTokenEndpointClearsConsent(t *testing.T) {
 	// A replayed token burned the family. Silently re-granting on the next
 	// authorize is exactly wrong.
 	if s.consent.Allows(
-		keyFor(testSubject, testClientID, s.cfg.defaultIdentifier()),
+		keyFor(testSubject, testClientID, s.resources.fallback),
 		testFingerprint,
 	) {
 		t.Error("a replayed refresh token should have cleared the approval")
@@ -957,7 +957,7 @@ func TestMetadataChangedMidFlowRePrompts(t *testing.T) {
 	current := published
 	mu.Unlock()
 
-	approval := keyFor(testSubject, documentURL, s.cfg.defaultIdentifier())
+	approval := keyFor(testSubject, documentURL, s.resources.fallback)
 	if !s.consent.Allows(approval, consentFingerprint(&current)) {
 		t.Error("approving the second prompt should record the metadata it displayed")
 	}

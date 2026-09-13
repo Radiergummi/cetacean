@@ -93,7 +93,7 @@ func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 	// validates iss against the discovered AS rejects the token.
 	tok, err := s.tokenIssuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u", ClientID: "c1"},
-		s.cfg.defaultIdentifier(),
+		s.resources.fallback,
 		time.Hour,
 	)
 	if err != nil {

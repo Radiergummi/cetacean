@@ -88,17 +88,13 @@ func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Han
 				return
 			}
 
-			if id, handled := tokens.authenticateBearer(w, r); handled {
-				if id == nil {
-					return
-				}
-
-				next.ServeHTTP(w, r.WithContext(ContextWithIdentity(r.Context(), id)))
-
-				return
+			// A token of ours settles the request on its own; anything else —
+			// including a token somebody else issued — goes to the provider.
+			id, err, fromToken := tokens.authenticate(r)
+			if !fromToken {
+				id, err = provider.Authenticate(w, r)
 			}
 
-			id, err := provider.Authenticate(w, r)
 			if err != nil {
 				slog.Warn("authentication failed",
 					"path", r.URL.Path,

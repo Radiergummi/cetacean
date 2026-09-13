@@ -138,7 +138,7 @@ func TestPublishedKeyVerifiesAToken(t *testing.T) {
 	token, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
 		Subject:  "alice",
 		ClientID: "https://client.example/id.json",
-	}, s.cfg.defaultIdentifier(), time.Hour)
+	}, s.resources.fallback, time.Hour)
 	if err != nil {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}

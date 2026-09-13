@@ -33,8 +33,10 @@ const (
 // mintTokenForIdentity drives the whole flow a client drives — consent under a
 // session, then the code grant — so the token carries whatever the server
 // actually propagates from the identity rather than what a test hands it.
-func mintTokenForIdentity(t *testing.T, s *Server, subject, email string) string {
+func mintTokenForIdentity(t *testing.T, s *Server) string {
 	t.Helper()
+
+	subject, email := fixtureSubject, fixtureEmail
 
 	const (
 		redirectURI = "http://localhost:8611/cb"
@@ -47,7 +49,7 @@ func mintTokenForIdentity(t *testing.T, s *Server, subject, email string) string
 	s.HandleAuthorize(page, withIdentity(
 		httptest.NewRequest(
 			http.MethodGet,
-			authorizeURL(clientID, redirectURI, challenge, "state", s.cfg.defaultIdentifier()),
+			authorizeURL(clientID, redirectURI, challenge, "state", s.resources.fallback),
 			nil,
 		),
 		subject, email,
@@ -61,11 +63,7 @@ func mintTokenForIdentity(t *testing.T, s *Server, subject, email string) string
 		t.Fatalf("POST consent: %d: %s", approved.Code, approved.Body.String())
 	}
 
-	loc, err := url.Parse(approved.Header().Get("Location"))
-	if err != nil {
-		t.Fatalf("parse Location: %v", err)
-	}
-	code := loc.Query().Get("code")
+	code := redirectedCode(t, approved)
 	if code == "" {
 		t.Fatalf("no code in redirect: %s", approved.Header().Get("Location"))
 	}
@@ -111,8 +109,8 @@ func TestATokenReachesTheSameGrantAsASession(t *testing.T) {
 	}
 
 	fromToken, err := s.Identify(
-		mintTokenForIdentity(t, s, fixtureSubject, fixtureEmail),
-		s.cfg.defaultIdentifier(),
+		mintTokenForIdentity(t, s),
+		s.resources.fallback,
 	)
 	if err != nil {
 		t.Fatalf("Identify: %v", err)
@@ -130,8 +128,8 @@ func TestATokenCarriesTheIdentityTheProviderEstablished(t *testing.T) {
 	s := newTestServer(t)
 
 	fromToken, err := s.Identify(
-		mintTokenForIdentity(t, s, fixtureSubject, fixtureEmail),
-		s.cfg.defaultIdentifier(),
+		mintTokenForIdentity(t, s),
+		s.resources.fallback,
 	)
 	if err != nil {
 		t.Fatalf("Identify: %v", err)

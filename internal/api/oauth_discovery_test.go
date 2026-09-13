@@ -16,11 +16,16 @@ import (
 	"github.com/radiergummi/cetacean/internal/oauth"
 )
 
-// The base path reaches the published URLs, not the routes: the prefix is
-// already stripped by the time the mux sees a request.
-func withOAuthRoutes(basePath string) routerOption {
-	srv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:   "https://swarm.example",
+// oauthTestRoot is the signing root every OAuth fixture in this package shares,
+// so a token minted against one server verifies against another built the same
+// way.
+const oauthTestRoot = "cetacean-test-root-32-bytes-ok!!"
+
+// tokenTestServer is an authorization server wired the way main.go wires one:
+// the deployment root and /mcp, as two separate protected resources.
+func tokenTestServer(issuer, basePath string) *oauth.Server {
+	return oauth.NewServer(oauth.ServerConfig{
+		Issuer:   issuer,
 		BasePath: basePath,
 		Resources: []oauth.Resource{
 			{Path: "", Realm: "cetacean"},
@@ -33,8 +38,14 @@ func withOAuthRoutes(basePath string) routerOption {
 			DCRRateLimit:    10,
 			DCRMaxClients:   100,
 		},
-		SigningKey: []byte("cetacean-test-root-32-bytes-ok!!"),
+		SigningKey: []byte(oauthTestRoot),
 	})
+}
+
+// The base path reaches the published URLs, not the routes: the prefix is
+// already stripped by the time the mux sees a request.
+func withOAuthRoutes(basePath string) routerOption {
+	srv := tokenTestServer("https://swarm.example", basePath)
 
 	return func(cfg *RouterConfig) {
 		cfg.OAuthRoutes = srv.RegisterRoutes
