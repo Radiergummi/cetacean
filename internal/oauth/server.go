@@ -226,6 +226,12 @@ type asMetadata struct {
 	// already carries is invisible, so a conformant client never enforces it.
 	AuthorizationResponseIssParameterSupported bool `json:"authorization_response_iss_parameter_supported"`
 
+	// Empty, and present rather than omitted: RFC 8414 §2 recommends the field,
+	// and an absent one reads as "unspecified" where an empty array says there are
+	// none to ask for. A client that consults it then sends no scope at all rather
+	// than guessing at one this server would ignore.
+	ScopesSupported []string `json:"scopes_supported"`
+
 	CodeChallengeMethodsSupported          []string `json:"code_challenge_methods_supported"`
 	GrantTypesSupported                    []string `json:"grant_types_supported"`
 	ResponseTypesSupported                 []string `json:"response_types_supported"`
@@ -257,6 +263,8 @@ func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 		TokenEndpoint:         base + "/oauth/token",
 		RevocationEndpoint:    base + "/oauth/revoke",
 		AuthorizationResponseIssParameterSupported: true,
+
+		ScopesSupported: []string{},
 
 		CodeChallengeMethodsSupported:          []string{"S256"},
 		GrantTypesSupported:                    []string{"authorization_code", "refresh_token"},
@@ -435,6 +443,10 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		Resource:    codeData.Resource,
 	}, s.cfg.OAuth.RefreshTokenTTL)
 
+	// No scope in the response, and none read from the request. RFC 6749 §5.1
+	// requires the parameter only when the granted scope differs from the
+	// requested one; this server defines none, so both reduce to the empty set.
+	// Adding a scope means revisiting that, and scopes_supported with it.
 	writeTokenResponse(w, tokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",

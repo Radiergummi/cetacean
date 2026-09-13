@@ -391,10 +391,11 @@ document and the authorize endpoint refuses to mint a token for it.
 
 ### What a token is not
 
-There are no personal access tokens and no scopes. The refresh token *is* the long-lived credential: it rotates
-single-use, survives restarts under [`storage.data_dir`][storage.data_dir], and detects reuse. A token carries its
-user's access, which the [ACL][authorization] decides — so a token cannot hold more than the person who authorized
-it, and the `Allow` header on every response reports what it may actually do.
+There are no personal access tokens and no scopes — both discovery documents say so with an empty
+`scopes_supported`, and a client that asks for a scope anyway has it ignored rather than refused. The refresh token
+*is* the long-lived credential: it rotates single-use, survives restarts under [`storage.data_dir`][storage.data_dir],
+and detects reuse. A token carries its user's access, which the [ACL][authorization] decides — so a token cannot hold
+more than the person who authorized it, and the `Allow` header on every response reports what it may actually do.
 
 > [!NOTE]
 > `cert` mode is the exception worth planning around. A consent screen needs a browser that can present a client
