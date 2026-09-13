@@ -113,7 +113,9 @@ refresh token in the Keychain. It works identically on all five providers, inclu
 configuration, and is revocable per device from the existing consent store.
 
 Worth noting this is not native-only value: the same change gives any CLI, script or third-party
-client a first-class credential, which the API does not have today.
+client a first-class credential, which the API does not have today. It is written up on its own in
+`2026-09-13-api-oauth-tokens-design.md`, which settles the resource identifiers, the protected
+resource metadata layout, and where token verification runs.
 
 Two smaller pieces fall out of it: the ACL `audience` model wants a token-derived audience so a
 device grant can be narrowed below the user's own, and `/profile` is the natural capability probe
