@@ -66,7 +66,8 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 // rather than a cookie, so there is no ambient credential to protect.
 // /oauth/authorize is absent: consent runs under the session cookie.
 func carriesItsOwnProof(path string) bool {
-	// Spelled out because internal/api does not import internal/mcp.
+	// Spelled out because internal/api imports neither internal/mcp nor
+	// internal/oauth, and these paths come from both.
 	switch path {
 	case "/mcp", "/oauth/token", "/oauth/revoke", "/oauth/register":
 		return true

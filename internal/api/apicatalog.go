@@ -11,7 +11,7 @@ import (
 const apiCatalogPath = "/.well-known/api-catalog"
 
 // oauthProtectedResourcePath is spelled again here because internal/api and
-// internal/mcp deliberately do not import each other.
+// internal/oauth deliberately do not import each other.
 const oauthProtectedResourcePath = "/.well-known/oauth-protected-resource"
 
 // catalogMounts is what the router mounted, which is what the catalog may

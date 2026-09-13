@@ -15,6 +15,7 @@ liability — it is the only part of the previous version of this file that rott
 |---|---|
 | `auth/` | Five pluggable providers behind one `Provider` interface: none, OIDC, Tailscale, cert, headers |
 | `acl/` | Grant-based RBAC. `(resources, audience, permissions)` tuples, additive only, hot-reloaded from file |
+| `oauth/` | The OAuth 2.1 authorization server: DCR, CIMD, PKCE, consent, token issuance. MCP is its only consumer today |
 | `config/` | Env/flag/TOML parsing. Everything optional |
 | `cache/` | The in-memory swarm state, its change-history ring, the restart counter, and the disk snapshot |
 | `docker/` | Engine API client and the watcher that keeps the cache current |
