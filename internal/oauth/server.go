@@ -410,21 +410,11 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Confirm the bound resource and client match BEFORE rotation, again so a
-	// client typo doesn't revoke the entire family. Every client here is public
-	// and unauthenticated, so client_id proves nothing against a caller holding
-	// the token: RFC 6749 §6 conformance, not an attack worth catching.
-	if resourceForm != "" || clientID != "" {
-		bound, ok := s.refreshTokens.Validate(refreshTokenRaw)
-		if !ok {
-			writeTokenError(
-				w,
-				http.StatusBadRequest,
-				"invalid_grant",
-				"refresh token is invalid or expired",
-			)
-			return
-		}
+	// Confirm the bound resource and client match BEFORE rotation, so a client
+	// typo doesn't revoke the family. A token that does not validate falls
+	// through to Rotate, whose theft branch is the only thing that burns a
+	// replayed family. client_id proves nothing here: every client is public.
+	if bound, ok := s.refreshTokens.Validate(refreshTokenRaw); ok {
 		if resourceForm != "" && resourceForm != bound.Resource {
 			writeTokenError(
 				w,
