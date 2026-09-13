@@ -1,9 +1,7 @@
 package oauth
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"maps"
 	"os"
@@ -235,16 +233,6 @@ func syncDir(dir string) error {
 	defer d.Close() //nolint:errcheck // read-only handle
 
 	return d.Sync()
-}
-
-// fileExists reports whether path names something readable. An error other than
-// "not exist" answers true: a file that is there but unreadable is still the
-// file this server owns, and reporting otherwise would silently reach past it to
-// a legacy path.
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-
-	return !errors.Is(err, fs.ErrNotExist)
 }
 
 // readState reads a file written by writeState.

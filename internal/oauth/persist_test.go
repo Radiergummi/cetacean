@@ -467,11 +467,11 @@ func TestLegacyStateIsReadOnceThenWrittenToTheNewPath(t *testing.T) {
 		Resource: testResource,
 	}, time.Hour)
 
-	if !fileExists(current) {
-		t.Error("writes did not migrate to the new path")
+	if _, err := os.Stat(current); err != nil {
+		t.Errorf("writes did not migrate to the new path: %v", err)
 	}
-	if !fileExists(legacy) {
-		t.Error("the legacy file was removed; a downgrade would lose every grant")
+	if _, err := os.Stat(legacy); err != nil {
+		t.Errorf("the legacy file was removed; a downgrade would lose every grant: %v", err)
 	}
 }
 
@@ -506,5 +506,38 @@ func TestLegacyStateIsIgnoredWhenTheNewFileExists(t *testing.T) {
 
 	if _, ok := srv.refreshTokens.Validate(staleToken); ok {
 		t.Error("a grant from the legacy file was restored over the current one")
+	}
+}
+
+// A corrupt current file is still the file this server owns. Falling back to the
+// former path there would quietly restore state an operator had replaced, so
+// only a missing file migrates.
+func TestCorruptStateDoesNotFallBackToTheLegacyPath(t *testing.T) {
+	dir := t.TempDir()
+	legacy := filepath.Join(dir, "mcp-tokens.json")
+	current := filepath.Join(dir, "oauth-tokens.json")
+
+	seed := newPersistingServer(t, legacy, testResource)
+	legacyToken := seed.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "alice",
+		ClientID: "client-1",
+		Resource: testResource,
+	}, time.Hour)
+
+	if err := os.WriteFile(current, []byte("{not json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := NewServer(ServerConfig{
+		Issuer:          "https://cetacean.test",
+		Resource:        testResource,
+		OAuth:           config.OAuthConfig{AccessTokenTTL: time.Hour, RefreshTokenTTL: time.Hour},
+		SigningKey:      []byte("test-signing-key-32bytes-padded!!"),
+		StatePath:       current,
+		LegacyStatePath: legacy,
+	})
+
+	if _, ok := srv.refreshTokens.Validate(legacyToken); ok {
+		t.Error("a corrupt current file fell through to the legacy path")
 	}
 }
