@@ -500,19 +500,6 @@ func TestOAuthIssuer(t *testing.T) {
 	}
 }
 
-// The predicate used to approximate "will anything drive the authorize flow"
-// from the auth mode and the bypass list. With an explicit opt-in it is the
-// opt-in, and nothing about MCP enters into it.
-func TestOAuthIssuerRequiredTracksTheOptIn(t *testing.T) {
-	for _, enabled := range []bool{true, false} {
-		cfg := &Config{OAuth: OAuthConfig{Enabled: enabled}}
-
-		if got := cfg.OAuthIssuerRequired(); got != enabled {
-			t.Errorf("OAuthIssuerRequired() = %v with Enabled=%v", got, enabled)
-		}
-	}
-}
-
 func TestValidateOAuth(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -569,7 +556,12 @@ func TestValidateOAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateOAuth(tt.oauthEnabled, tt.mcpEnabled, tt.authMode, tt.authBypass)
+			cfg := &Config{
+				MCP:   MCPConfig{Enabled: tt.mcpEnabled, AuthBypass: tt.authBypass},
+				OAuth: OAuthConfig{Enabled: tt.oauthEnabled},
+			}
+
+			err := cfg.ValidateOAuth(tt.authMode)
 
 			if tt.wantErr == "" {
 				if err != nil {

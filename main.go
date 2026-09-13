@@ -127,12 +127,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := config.ValidateOAuth(
-		cfg.OAuth.Enabled,
-		cfg.MCP.Enabled,
-		authCfg.Mode,
-		cfg.MCP.AuthBypass,
-	); err != nil {
+	if err := cfg.ValidateOAuth(authCfg.Mode); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
@@ -148,6 +143,32 @@ func main() {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
+	}
+
+	// Resolved before either setup so both read the same value, and adjudicated
+	// here because the answer depends only on configuration: the authorization
+	// server cannot work without a reachable issuer, while MCP alone only wants
+	// one for its tool icon URLs.
+	issuer, reachable := cfg.OAuthIssuer(tlsCfg.Enabled())
+	switch {
+	case reachable:
+	case cfg.OAuth.Enabled:
+		slog.Error(
+			"the OAuth server needs an issuer clients can reach, and none could be derived from server.listen_addr. Set server.public_url to the URL clients reach from outside, or oauth.issuer to override it.",
+			"derived_issuer",
+			issuer,
+			"listen_addr",
+			cfg.ListenAddr,
+		)
+		os.Exit(1)
+	case cfg.MCP.Enabled:
+		slog.Warn(
+			"no reachable issuer could be derived from server.listen_addr; MCP tool icons will point at an unreachable URL. Set server.public_url to the URL clients reach from outside.",
+			"derived_issuer",
+			issuer,
+			"listen_addr",
+			cfg.ListenAddr,
+		)
 	}
 
 	if authCfg.Mode == "headers" {
@@ -478,6 +499,7 @@ func main() {
 		authMode:     authCfg.Mode,
 		authProvider: authProvider,
 		tlsEnabled:   tlsCfg.Enabled(),
+		issuer:       issuer,
 		cache:        stateCache,
 		writeClient:  dockerClient,
 		logs:         dockerClient,
@@ -488,15 +510,20 @@ func main() {
 	}
 
 	oauthSrv := setupOAuth(deps)
-	mcpHandler, closeMCP := setupMCP(deps, oauthSrv)
-	defer closeMCP()
 
-	// A nil *oauth.Server would be a non-nil func value, so the router would
-	// mount routes that call through nothing.
-	var oauthRoutes func(mux *http.ServeMux, basePath string)
+	// One nil check for both consumers. A nil *oauth.Server is not a nil
+	// interface and not a nil func value, so assigning it unguarded would arm
+	// bearerAuth on a nil receiver and mount routes that call through nothing.
+	var (
+		tokenVerifier mcp.TokenVerifier
+		oauthRoutes   func(mux *http.ServeMux, basePath string)
+	)
 	if oauthSrv != nil {
-		oauthRoutes = oauthSrv.RegisterRoutes
+		tokenVerifier, oauthRoutes = oauthSrv, oauthSrv.RegisterRoutes
 	}
+
+	mcpHandler, closeMCP := setupMCP(deps, tokenVerifier)
+	defer closeMCP()
 
 	router := api.NewRouter(api.RouterConfig{
 		Handlers:           handlers,
@@ -707,46 +734,27 @@ type mcpDeps struct {
 	authMode     string
 	authProvider auth.Provider
 	tlsEnabled   bool
-	cache        *cache.Cache
-	writeClient  mcp.DockerWriteClient
-	logs         mcp.LogStreamer
-	acl          *acl.Evaluator
-	rec          mcp.RecommendationEngine
-	prometheus   *promapi.Client
-	tracer       oteltrace.Tracer
+
+	// issuer is resolved once in main, so the authorization server advertises
+	// the same URL the MCP tool icons are built from rather than both sides
+	// deriving it and hoping they agree.
+	issuer string
+
+	cache       *cache.Cache
+	writeClient mcp.DockerWriteClient
+	logs        mcp.LogStreamer
+	acl         *acl.Evaluator
+	rec         mcp.RecommendationEngine
+	prometheus  *promapi.Client
+	tracer      oteltrace.Tracer
 }
 
-// setupMCP builds the MCP HTTP handler and the OAuth route registrar when
-// CETACEAN_MCP=true. The first two return values are nil when MCP is
-// disabled; the OAuth registrar is also nil when auth mode is "none" (no
-// token issuance is possible without a user identity). The third return is
-// a cleanup function the caller must invoke at shutdown so the MCP server's
-// cache change listener detaches before the cache itself is torn down.
-//
-// The authorization server is built separately by setupOAuth and passed in, so
-// MCP is one consumer of it rather than its owner.
 // setupOAuth builds the OAuth 2.1 authorization server, or returns nil when the
 // deployment did not ask for one. It is opt-in because a token issuer should
 // never appear as a side effect of enabling something else.
-//
-// Startup fails when no reachable issuer can be derived: every client resolves
-// the endpoints from the advertised one, so an unreachable issuer is an
-// authorization server nothing can use.
 func setupOAuth(d mcpDeps) *oauth.Server {
 	if !d.cfg.OAuth.Enabled {
 		return nil
-	}
-
-	issuer, reachable := d.cfg.OAuthIssuer(d.tlsEnabled)
-	if !reachable {
-		slog.Error(
-			"the OAuth server needs an issuer clients can reach, and none could be derived from server.listen_addr. Set server.public_url to the URL clients reach from outside, or oauth.issuer to override it.",
-			"derived_issuer",
-			issuer,
-			"listen_addr",
-			d.cfg.ListenAddr,
-		)
-		os.Exit(1)
 	}
 
 	// A configured key has already been rejected unless it decodes, so it
@@ -781,9 +789,9 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 		legacyStatePath = ""
 	}
 
-	resource := issuer + d.cfg.BasePath + "/mcp"
+	resource := d.issuer + d.cfg.BasePath + "/mcp"
 	srv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:          issuer,
+		Issuer:          d.issuer,
 		BasePath:        d.cfg.BasePath,
 		Resource:        resource,
 		OAuth:           d.cfg.OAuth,
@@ -793,7 +801,7 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	})
 
 	slog.Info("OAuth 2.1 authorization server enabled",
-		"issuer", issuer, "resource", resource)
+		"issuer", d.issuer, "resource", resource)
 
 	// Nothing consumes it yet, which is allowed: the operator asked for it, and
 	// the REST API becomes a second resource later.
@@ -806,7 +814,14 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	return srv
 }
 
-func setupMCP(d mcpDeps, oauthSrv *oauth.Server) (http.Handler, func()) {
+// setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, returning nil
+// when MCP is disabled. The second return is a cleanup function the caller must
+// invoke at shutdown so the MCP server's cache change listener detaches before
+// the cache itself is torn down.
+//
+// The authorization server is built separately and arrives as the narrow
+// interface MCP consumes, so MCP is one of its consumers rather than its owner.
+func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier) (http.Handler, func()) {
 	if !d.cfg.MCP.Enabled {
 		return nil, func() {}
 	}
@@ -822,34 +837,12 @@ func setupMCP(d mcpDeps, oauthSrv *oauth.Server) (http.Handler, func()) {
 		mcp.SetWidgetFS(widgets)
 	}
 
-	// Unreachable is only cosmetic here: without an authorization server the
-	// issuer feeds tool icon URLs alone. setupOAuth makes it fatal when tokens
-	// depend on it.
-	issuer, reachable := d.cfg.OAuthIssuer(d.tlsEnabled)
-	if !reachable && !d.cfg.OAuthIssuerRequired() {
-		slog.Warn(
-			"no reachable issuer could be derived from server.listen_addr; MCP tool icons will point at an unreachable URL. Set server.public_url to the URL clients reach from outside.",
-			"derived_issuer",
-			issuer,
-			"listen_addr",
-			d.cfg.ListenAddr,
-		)
-	}
-
 	// A nil *promapi.Client stored in the interface would be a non-nil
 	// MetricsQuerier holding nothing, and get_metrics would call through it
 	// instead of reporting that Prometheus is unconfigured.
 	var metricsQuerier mcp.MetricsQuerier
 	if d.prometheus != nil {
 		metricsQuerier = d.prometheus
-	}
-
-	// The same trap, one step worse: an armed bearerAuth would call through a
-	// nil receiver, so an unauthenticated /mcp would panic rather than serve
-	// unguarded.
-	var tokenVerifier mcp.TokenVerifier
-	if oauthSrv != nil {
-		tokenVerifier = oauthSrv
 	}
 
 	mcpSrv, err := mcp.New(d.cache, mcp.Options{
@@ -865,7 +858,7 @@ func setupMCP(d mcpDeps, oauthSrv *oauth.Server) (http.Handler, func()) {
 		Prometheus:      metricsQuerier,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		AllowAnyOrigin:  d.cors.Wildcard(),
-		IconBaseURL:     issuer + d.cfg.BasePath,
+		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 	})
 	if err != nil {

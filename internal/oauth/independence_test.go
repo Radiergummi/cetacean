@@ -8,11 +8,12 @@ import (
 )
 
 // This file is the one place the acronym may appear, so it names itself rather
-// than being recognised by the scan below.
-const selfName = "independence_test.go"
-
-// Assembled rather than spelled, for the same reason as the needle below.
-var legacyStateFile = "m" + "c" + "p" + "-tokens.json"
+// than being recognised by the scan below. Both are assembled rather than
+// spelled, for the same reason as the needle.
+const (
+	selfName        = "independence_test.go"
+	legacyStateFile = "m" + "c" + "p" + "-tokens.json"
+)
 
 // The authorization server is a standalone concern: MCP is one consumer of it,
 // and a second protected resource is planned. A mention of the first consumer
@@ -25,14 +26,13 @@ var legacyStateFile = "m" + "c" + "p" + "-tokens.json"
 func TestThePackageDoesNotNameItsConsumer(t *testing.T) {
 	needle := "m" + "c" + "p"
 
-	entries, err := os.ReadDir(".")
+	names, err := filepath.Glob("*.go")
 	if err != nil {
-		t.Fatalf("read package dir: %v", err)
+		t.Fatalf("list package sources: %v", err)
 	}
 
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || name == selfName || filepath.Ext(name) != ".go" {
+	for _, name := range names {
+		if name == selfName {
 			continue
 		}
 
@@ -41,19 +41,19 @@ func TestThePackageDoesNotNameItsConsumer(t *testing.T) {
 			t.Fatalf("read %s: %v", name, err)
 		}
 
-		for i, line := range strings.Split(string(body), "\n") {
-			// The state file's former name is the one legitimate mention: the
-			// migration path has to name the file it migrates from, and a test
-			// covering that has to name it too.
-			scanned := strings.ReplaceAll(strings.ToLower(line), legacyStateFile, "")
+		// The state file's former name is the one legitimate mention: the
+		// migration path has to name the file it migrates from, and a test
+		// covering that has to name it too. Erased once per file rather than
+		// once per line, so the passing case — every case in CI — is one pass.
+		scanned := strings.ReplaceAll(strings.ToLower(string(body)), legacyStateFile, "")
+		if !strings.Contains(scanned, needle) {
+			continue
+		}
 
-			if strings.Contains(scanned, needle) {
-				t.Errorf(
-					"%s:%d names the consumer: %s",
-					name,
-					i+1,
-					strings.TrimSpace(line),
-				)
+		// Only now is a line-by-line pass worth it, to name the offender.
+		for i, line := range strings.Split(scanned, "\n") {
+			if strings.Contains(line, needle) {
+				t.Errorf("%s:%d names the consumer: %s", name, i+1, strings.TrimSpace(line))
 			}
 		}
 	}

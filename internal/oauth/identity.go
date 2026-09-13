@@ -10,11 +10,11 @@ import (
 const ProviderName = "oauth"
 
 // Identify returns the identity a bearer token carries, so a resource server
-// needs no knowledge of the claim set. The error is VerifyAccessToken's own,
+// needs no knowledge of the claim set. The error is the verifier's own,
 // unwrapped: callers distinguish the failure modes with errors.Is to decide
 // whether a token was ours at all.
 func (s *Server) Identify(token string) (*auth.Identity, error) {
-	claims, err := s.VerifyAccessToken(token)
+	claims, err := s.tokenIssuer.VerifyAccessToken(token)
 	if err != nil {
 		return nil, err
 	}

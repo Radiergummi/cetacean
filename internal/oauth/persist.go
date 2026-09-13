@@ -1,7 +1,9 @@
 package oauth
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"maps"
 	"os"
@@ -233,6 +235,24 @@ func syncDir(dir string) error {
 	defer d.Close() //nolint:errcheck // read-only handle
 
 	return d.Sync()
+}
+
+// readStateOrLegacy reads current, falling back to legacy when — and only when
+// — current does not exist. A corrupt or unreadable current file is still the
+// file this server owns, so reaching past it to the former path would quietly
+// restore state the operator had replaced. The returned path names whichever
+// file answered, for the caller's log line.
+func readStateOrLegacy(current, legacy string) (oauthState, string, error) {
+	state, err := readState(current)
+	if !errors.Is(err, fs.ErrNotExist) || legacy == "" {
+		return state, current, err
+	}
+
+	if fromLegacy, legacyErr := readState(legacy); legacyErr == nil {
+		return fromLegacy, legacy, nil
+	}
+
+	return state, current, err
 }
 
 // readState reads a file written by writeState.
