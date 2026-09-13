@@ -46,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale` and `headers` — no challenge can ask for the credential those modes read
 
 ### Fixed
+- Protected resource metadata is served at the address RFC 9728 has a client derive — the well-known segment after the host — as well as under `server.base_path`. Behind a proxy, forward `/.well-known/*` from the host root too
+- A repeated RFC 8707 `resource` parameter is refused with `invalid_target` instead of binding the token to whichever came first
+- A 401 for a request carrying no credential no longer reports `invalid_token`, per RFC 6750
 - An access token cannot authorize a new client: consent requires the identity your auth provider established, not one a token carries
 - An ACL grant written against an email address matches a token as well as a browser session. MCP clients were silently denied everything such a grant allowed
 - A replayed refresh token revokes the whole grant family and the remembered approval again; sending the `resource` parameter — which every conformant client does — had the request refused before theft detection could run

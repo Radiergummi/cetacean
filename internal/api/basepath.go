@@ -157,12 +157,29 @@ func publicURLMiddleware(publicURL string, next http.Handler) http.Handler {
 // basePathMiddleware strips the base path prefix from incoming requests,
 // stores the base path in context, and redirects trailing slashes.
 // If basePath is "", it is a no-op.
+// wellKnownPrefix is where standards put documents addressed from the authority
+// root, independent of where this deployment is mounted.
+const wellKnownPrefix = "/.well-known/"
+
 func basePathMiddleware(basePath string, next http.Handler) http.Handler {
 	if basePath == "" {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
+
+		// Discovery documents are the one thing addressed from the authority root
+		// rather than from this deployment's prefix: RFC 9728 §3.1 and RFC 8414 §3
+		// build their URL by inserting the well-known segment after the host, so a
+		// client derives a path the prefix check would refuse. Passed through
+		// unstripped, for the routes registered at that spelling.
+		if strings.HasPrefix(path, wellKnownPrefix) {
+			ctx := context.WithValue(r.Context(), basePathKey, basePath)
+			next.ServeHTTP(w, r.WithContext(ctx))
+
+			return
+		}
+
 		if !strings.HasPrefix(path, basePath+"/") && path != basePath {
 			http.NotFound(w, r)
 			return

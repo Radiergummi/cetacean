@@ -38,7 +38,7 @@ func TestTheFirstResourceIsTheDefault(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			s := newServerWith(c.resources...)
 
-			got, err := s.resources.effectiveResource("", false)
+			got, err := s.resources.effectiveResource(nil, false)
 			if err != nil {
 				t.Fatalf("effectiveResource: %v", err)
 			}

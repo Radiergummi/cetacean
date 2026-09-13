@@ -381,4 +381,10 @@ func TestMCPIntegration_UnauthorizedHeaderUsesRFC7230Quoting(t *testing.T) {
 	if strings.Contains(www, `\"`) {
 		t.Errorf("WWW-Authenticate contains Go-style escaped quotes: %q", www)
 	}
+
+	// RFC 6750 §3.1: this request carried no credential, so the challenge reports
+	// no error — there is nothing wrong with a token that was never sent.
+	if strings.Contains(www, "error=") {
+		t.Errorf("WWW-Authenticate names an error for a missing credential: %q", www)
+	}
 }

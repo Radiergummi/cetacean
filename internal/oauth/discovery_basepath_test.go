@@ -68,7 +68,16 @@ func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 	// where this deployment is actually mounted. Both are asserted because the
 	// root document describing the wrong resource is the confusion that makes a
 	// token for one reach the other.
+	// Each resource is reachable at both spellings: the location RFC 9728 §3.1
+	// derives from the identifier — well-known after the authority, base path
+	// inside it — and the one beneath this deployment's own prefix, which is what
+	// a proxy forwarding only that prefix can deliver.
 	for _, want := range []struct{ path, resource string }{
+		{"/.well-known/oauth-protected-resource/cetacean", wantBasePathIssuer},
+		{
+			"/.well-known/oauth-protected-resource/cetacean/resource",
+			wantBasePathIssuer + "/resource",
+		},
 		{"/cetacean/.well-known/oauth-protected-resource", wantBasePathIssuer},
 		{
 			"/cetacean/.well-known/oauth-protected-resource/resource",
