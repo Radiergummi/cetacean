@@ -118,9 +118,10 @@ func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Han
 				// A request that presented no credential gets the resource's
 				// own challenge too, or a client cannot do what RFC 9728 exists
 				// for: call the resource cold, read the 401, follow
-				// resource_metadata to the token endpoint.
+				// resource_metadata to the token endpoint. Not on /oauth/*,
+				// which refuses a token this server issued.
 				resourceChallenge := ""
-				if ExtractBearerToken(r) == "" {
+				if ExtractBearerToken(r) == "" && isProtectedResource(r.URL.Path) {
 					resourceChallenge = tokens.Challenge("")
 				}
 
@@ -137,6 +138,14 @@ func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Han
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// isProtectedResource excludes the authorization server's own endpoints from the
+// bearer challenge. /oauth/authorize is the only one the middleware reaches, and
+// it refuses a token this server issued: offering one there sends a client for a
+// credential that answers 403.
+func isProtectedResource(path string) bool {
+	return !strings.HasPrefix(path, "/oauth/")
 }
 
 // isExempt returns true for paths that should skip authentication.
