@@ -90,22 +90,19 @@ func DefaultOAuthConfig() OAuthConfig {
 func (c *Config) ValidateOAuth(authMode string) error {
 	anonymous := authMode == "none"
 
-	// /mcp is exempt from the auth middleware and authenticates itself, so with
-	// no authorization server there is no bearer check — and the bypass does not
-	// substitute for one, because it runs inside that same check.
-	if c.MCP.Enabled && !anonymous && !c.OAuth.Enabled {
-		bypass := ""
-		if len(c.MCP.AuthBypass) > 0 {
-			bypass = ". mcp.auth_bypass does not cover this — the bypass runs inside " +
-				"the bearer check it would be replacing"
-		}
-
+	// /mcp is exempt from the auth middleware and authenticates itself, so it
+	// needs something of its own: a bearer check against an authorization
+	// server, or the upstream provider for a mode named in mcp.auth_bypass.
+	// With neither it would serve the cluster's write surface unauthenticated.
+	// internal/mcp refuses the same combination — this one names the settings.
+	bypassed := slices.Contains(c.MCP.AuthBypass, authMode)
+	if c.MCP.Enabled && !anonymous && !c.OAuth.Enabled && !bypassed {
 		return fmt.Errorf(
-			"mcp.enabled with auth.mode=%q needs oauth.enabled: /mcp authenticates "+
-				"itself, so without an authorization server it would serve "+
-				"unauthenticated%s",
+			"mcp.enabled with auth.mode=%q needs either oauth.enabled or %q in "+
+				"mcp.auth_bypass: /mcp authenticates itself, so with neither it "+
+				"would serve unauthenticated",
 			authMode,
-			bypass,
+			authMode,
 		)
 	}
 

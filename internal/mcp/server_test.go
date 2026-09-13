@@ -349,23 +349,134 @@ func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
 // Without an authorization server there is no bearer middleware, which is only
 // safe because auth mode "none" is the only configuration that reaches here.
 // Many tool tests depend on it incidentally; this one says so.
-func TestHandlerWithoutOAuthServesUnguarded(t *testing.T) {
+// Unguarded is reachable only under an auth mode that establishes no identity
+// to begin with. Every other route to it is a refusal, below.
+func TestHandlerWithoutOAuthServesUnguardedUnderNone(t *testing.T) {
+	for _, mode := range []string{"", "none"} {
+		t.Run("mode="+mode, func(t *testing.T) {
+			cfg := config.DefaultMCPConfig()
+			cfg.Enabled = true
+
+			srv, err := New(cache.New(nil), Options{Config: cfg, AuthMode: mode})
+			if err != nil {
+				t.Fatalf("New: %v", err)
+			}
+
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
+			req.Header.Set("Content-Type", "application/json")
+
+			srv.Handler().ServeHTTP(rec, req)
+
+			if rec.Code == http.StatusUnauthorized {
+				t.Fatalf("status = 401 with no OAuth server configured; want unguarded")
+			}
+		})
+	}
+}
+
+// The construction that would have served the cluster's write surface to
+// anyone: a mode that establishes an identity, nothing to verify a token
+// against, and no bypass to fall back on. main's config validation refuses it
+// too; this is the same refusal in the package that owns the endpoint.
+func TestNewRefusesAConfigurationThatWouldServeUnguarded(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
 
-	srv, err := New(cache.New(nil), Options{Config: cfg})
+	_, err := New(cache.New(nil), Options{
+		Config:       cfg,
+		AuthMode:     "oidc",
+		AuthProvider: &fakeAuthProvider{id: &auth.Identity{Subject: "alice"}},
+	})
+	if err == nil {
+		t.Fatal("a mode with neither a verifier nor a bypass was accepted")
+	}
+	if !strings.Contains(err.Error(), "unauthenticated") {
+		t.Errorf("error does not say what is at stake: %v", err)
+	}
+}
+
+// A bypass names a mode; it still needs the provider that answers for it.
+// Without one the upstream guard would have nothing to call.
+func TestNewRefusesABypassWithNoProvider(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+	cfg.AuthBypass = []string{"cert"}
+
+	_, err := New(cache.New(nil), Options{Config: cfg, AuthMode: "cert"})
+	if err == nil {
+		t.Fatal("a bypass without a provider was accepted")
+	}
+}
+
+// The mTLS deployment: no authorization server at all, because these clients
+// cannot drive a browser consent screen. The upstream provider is the guard.
+func TestHandlerWithoutOAuthAuthenticatesABypassedMode(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+	cfg.AuthBypass = []string{"cert"}
+
+	provider := &fakeAuthProvider{id: &auth.Identity{
+		Subject:  "spiffe://example.org/agent/runner",
+		Provider: "cert",
+	}}
+
+	srv, err := New(cache.New(nil), Options{
+		Config:       cfg,
+		AuthMode:     "cert",
+		AuthProvider: provider,
+	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
+	body := strings.NewReader(
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}`,
+	)
+	req := httptest.NewRequest(http.MethodPost, "/mcp", body)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
 
 	srv.Handler().ServeHTTP(rec, req)
 
 	if rec.Code == http.StatusUnauthorized {
-		t.Fatalf("status = 401 with no OAuth server configured; want unguarded")
+		t.Fatalf("bypass identity rejected: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// With no authorization server there is no second chance: whatever the upstream
+// provider refuses is refused, including the identity it declines to establish
+// while writing a redirect nobody reads.
+func TestHandlerWithoutOAuthRefusesWhatUpstreamRefuses(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+	cfg.AuthBypass = []string{"cert"}
+
+	for name, provider := range map[string]*fakeAuthProvider{
+		"an error":           {err: errors.New("no client certificate")},
+		"no identity at all": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv, err := New(cache.New(nil), Options{
+				Config:       cfg,
+				AuthMode:     "cert",
+				AuthProvider: provider,
+			})
+			if err != nil {
+				t.Fatalf("New: %v", err)
+			}
+
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
+			req.Header.Set("Content-Type", "application/json")
+
+			srv.Handler().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want 401", rec.Code)
+			}
+		})
 	}
 }
 

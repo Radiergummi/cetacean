@@ -11,6 +11,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -35,6 +36,64 @@ import (
 type TokenVerifier interface {
 	Identify(token string) (*auth.Identity, error)
 	WriteUnauthorized(w http.ResponseWriter, errorCode string)
+}
+
+// guardMode is what stands in front of /mcp. The endpoint is exempt from the
+// API's auth middleware and authenticates itself, so this is the only thing
+// between an anonymous caller and the cluster's write surface.
+type guardMode int
+
+const (
+	// guardBearer verifies a token this deployment's authorization server
+	// issued, falling back to the upstream provider for a bypassed mode.
+	guardBearer guardMode = iota
+
+	// guardUpstream authenticates every request through the upstream provider
+	// alone. Reached when the active mode is bypassed and no authorization
+	// server was built — the mTLS deployment, whose clients cannot drive a
+	// browser consent screen and would leave one sitting unused.
+	guardUpstream
+
+	// guardNone serves unauthenticated, and is reachable only under an auth
+	// mode that establishes no identity to begin with.
+	guardNone
+)
+
+// resolveGuard settles what protects /mcp, refusing a configuration that would
+// leave it open. It lives here rather than only in main's config validation
+// because this package owns the endpoint. An empty AuthMode is the zero
+// Options: no upstream auth, which is the posture "none" describes.
+func resolveGuard(opts Options) (guardMode, error) {
+	if opts.OAuth != nil {
+		return guardBearer, nil
+	}
+
+	if opts.AuthMode == "" || opts.AuthMode == "none" {
+		return guardNone, nil
+	}
+
+	// No token to verify, so the upstream provider is the only thing that can
+	// answer — and it may only answer for a mode the operator bypassed on
+	// purpose.
+	if !slices.Contains(opts.Config.AuthBypass, opts.AuthMode) {
+		return guardNone, fmt.Errorf(
+			"mcp: auth mode %q needs either an authorization server (oauth.enabled) "+
+				"or %q in mcp.auth_bypass: without one of them /mcp would serve "+
+				"unauthenticated",
+			opts.AuthMode,
+			opts.AuthMode,
+		)
+	}
+
+	if opts.AuthProvider == nil {
+		return guardNone, fmt.Errorf(
+			"mcp: auth mode %q is bypassed but no auth provider was supplied, so "+
+				"nothing would authenticate /mcp",
+			opts.AuthMode,
+		)
+	}
+
+	return guardUpstream, nil
 }
 
 // mcpInstructions and mcpDescription are the server-level usage contract sent
@@ -88,10 +147,16 @@ type Server struct {
 	oauth          TokenVerifier // nil unless an OAuth server was configured
 	authMode       string        // upstream auth mode ("cert", "oidc", ...); used for bypass match
 	authProvider   auth.Provider // upstream auth provider; used when bypass is active
-	mcpServer      *mcpserver.MCPServer
-	httpServer     *mcpserver.StreamableHTTPServer
-	recEngine      RecommendationEngine
-	prom           MetricsQuerier // nil when Prometheus is not configured
+
+	// guard is settled in New from the configuration, not re-derived per
+	// request. Which middleware protects /mcp is a property of the deployment,
+	// and asking a helper at request time is how an endpoint ends up
+	// unguarded because a provider happened to be nil.
+	guard      guardMode
+	mcpServer  *mcpserver.MCPServer
+	httpServer *mcpserver.StreamableHTTPServer
+	recEngine  RecommendationEngine
+	prom       MetricsQuerier // nil when Prometheus is not configured
 
 	// allowedOrigins is the set of Origin header values the streamable HTTP
 	// endpoint accepts. originGuard rejects any other non-empty Origin with
@@ -188,7 +253,13 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		return nil, errors.New("mcp: cache is required")
 	}
 
+	guard, err := resolveGuard(opts)
+	if err != nil {
+		return nil, err
+	}
+
 	srv := &Server{
+		guard:          guard,
 		cache:          c,
 		writeClient:    opts.WriteClient,
 		logs:           opts.Logs,
@@ -371,8 +442,13 @@ func (s *Server) Handler() http.Handler {
 	// The protocol gate sits innermost so that origin and bearer checks answer
 	// first: an unauthenticated caller learns nothing about what we speak.
 	h := s.requireModernProtocol(s.httpServer)
-	if s.oauth != nil {
+
+	switch s.guard {
+	case guardBearer:
 		h = s.bearerAuth(h)
+	case guardUpstream:
+		h = s.upstreamAuth(h)
+	case guardNone:
 	}
 
 	return s.originGuard(h)
@@ -435,6 +511,26 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 
 		ctx := auth.ContextWithIdentity(r.Context(), identity)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// upstreamAuth authenticates every request through the upstream provider, for a
+// deployment that bypasses the bearer check and runs no authorization server.
+// There is no WWW-Authenticate to offer: without an authorization server there
+// is no metadata document to send a client to, and the credential this accepts
+// is one the transport below HTTP already carries.
+func (s *Server) upstreamAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A nil identity with no error means the provider wrote its own
+		// response — a redirect, say — into the writer that discards it. It
+		// established nothing, so it is a refusal like any other.
+		id, err := s.authProvider.Authenticate(newDiscardingResponseWriter(), r)
+		if err != nil || id == nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r.WithContext(auth.ContextWithIdentity(r.Context(), id)))
 	})
 }
 

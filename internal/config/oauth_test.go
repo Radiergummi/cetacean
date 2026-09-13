@@ -513,16 +513,24 @@ func TestValidateOAuth(t *testing.T) {
 			name:       "MCP under real auth without the server would serve unauthenticated",
 			mcpEnabled: true,
 			authMode:   "oidc",
-			wantErr:    "needs oauth.enabled",
+			wantErr:    "needs either oauth.enabled",
 		},
 		{
-			// The bypass lives inside the bearer middleware, so an absent
-			// server takes the bypass with it.
-			name:       "a configured bypass does not excuse it",
+			// The mTLS deployment: clients cannot drive a browser consent
+			// screen, so the upstream provider authenticates /mcp and no
+			// authorization server is built at all.
+			name:       "a bypassed mode needs no server",
 			mcpEnabled: true,
 			authMode:   "cert",
 			authBypass: []string{"cert"},
-			wantErr:    "mcp.auth_bypass does not cover this",
+		},
+		{
+			// The bypass covers the mode it names and no other.
+			name:       "a bypass for another mode does not cover this one",
+			mcpEnabled: true,
+			authMode:   "oidc",
+			authBypass: []string{"cert"},
+			wantErr:    "needs either oauth.enabled",
 		},
 		{
 			name:         "the server cannot establish an identity in none mode",
