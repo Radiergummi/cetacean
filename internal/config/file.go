@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -207,6 +209,11 @@ type fileACL struct {
 
 // LoadFile reads and parses the TOML config file at path.
 // Returns nil config (not an error) if path is empty.
+//
+// A key the schema does not know is an error, not a silent no-op: half of these
+// settings exist to *remove* capability, so a typo or a setting that moved
+// between releases would otherwise hand the operator the permissive default
+// while their file says the opposite.
 func LoadFile(path string) (*fileConfig, error) {
 	if path == "" {
 		return nil, nil
@@ -218,8 +225,25 @@ func LoadFile(path string) (*fileConfig, error) {
 	}
 
 	var fc fileConfig
-	if err := toml.Unmarshal(data, &fc); err != nil {
+	meta, err := toml.Decode(string(data), &fc)
+	if err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
+
+	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
+		keys := make([]string, 0, len(undecoded))
+		for _, key := range undecoded {
+			keys = append(keys, key.String())
+		}
+		slices.Sort(keys)
+
+		return nil, fmt.Errorf(
+			"unknown setting(s) in %s: %s — check the spelling against "+
+				"docs/configuration.mdx; settings do move between releases",
+			path,
+			strings.Join(keys, ", "),
+		)
+	}
+
 	return &fc, nil
 }

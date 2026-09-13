@@ -623,3 +623,82 @@ func TestSigningKeyBytes(t *testing.T) {
 		})
 	}
 }
+
+// The settings that moved are the ones most worth not losing quietly: three of
+// them exist to switch a capability off, and the default they fall back to is
+// on. A refusal is the only signal an environment variable can carry.
+func TestRemovedOAuthEnvVarsRefuseStartup(t *testing.T) {
+	for removed, replacement := range movedOAuthEnv {
+		t.Run(removed, func(t *testing.T) {
+			t.Setenv(removed, "whatever")
+
+			_, err := loadOAuth(nil)
+			if err == nil {
+				t.Fatalf("%s was accepted; it is no longer read", removed)
+			}
+			if !strings.Contains(err.Error(), removed) {
+				t.Errorf("error does not name %s: %v", removed, err)
+			}
+			if !strings.Contains(err.Error(), replacement) {
+				t.Errorf("error does not name the replacement %s: %v", replacement, err)
+			}
+		})
+	}
+}
+
+// Every moved variable must name one that is actually read, or the refusal
+// sends an operator to a variable nothing looks at either. Proven by setting
+// each replacement to something other than its default and watching the
+// resulting config move — a list checked against another list would only
+// restate the map.
+func TestMovedOAuthEnvVarsNameLiveReplacements(t *testing.T) {
+	const hexKey = "00112233445566778899aabbccddeeff" +
+		"00112233445566778899aabbccddeeff"
+
+	values := map[string]func(t *testing.T) string{
+		"CETACEAN_OAUTH_ISSUER":      func(*testing.T) string { return "https://elsewhere.example" },
+		"CETACEAN_OAUTH_SIGNING_KEY": func(*testing.T) string { return hexKey },
+		"CETACEAN_OAUTH_SIGNING_KEY_FILE": func(t *testing.T) string {
+			t.Helper()
+
+			path := filepath.Join(t.TempDir(), "signing-key")
+			if err := os.WriteFile(path, []byte(hexKey), 0600); err != nil {
+				t.Fatal(err)
+			}
+
+			return path
+		},
+		"CETACEAN_OAUTH_ACCESS_TOKEN_TTL":           func(*testing.T) string { return "5m" },
+		"CETACEAN_OAUTH_REFRESH_TOKEN_TTL":          func(*testing.T) string { return "48h" },
+		"CETACEAN_OAUTH_CONSENT_TTL":                func(*testing.T) string { return "0s" },
+		"CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR": func(*testing.T) string { return "false" },
+		"CETACEAN_OAUTH_DCR_ENABLED":                func(*testing.T) string { return "false" },
+		"CETACEAN_OAUTH_DCR_RATE_LIMIT":             func(*testing.T) string { return "99" },
+		"CETACEAN_OAUTH_DCR_MAX_CLIENTS":            func(*testing.T) string { return "77" },
+		"CETACEAN_OAUTH_CIMD_ENABLED":               func(*testing.T) string { return "false" },
+	}
+
+	for removed, replacement := range movedOAuthEnv {
+		t.Run(replacement, func(t *testing.T) {
+			value, known := values[replacement]
+			if !known {
+				t.Fatalf(
+					"%s points at %s, which this test does not know as a setting",
+					removed,
+					replacement,
+				)
+			}
+
+			t.Setenv(replacement, value(t))
+
+			got, err := loadOAuth(nil)
+			if err != nil {
+				t.Fatalf("loadOAuth: %v", err)
+			}
+
+			if got == DefaultOAuthConfig() {
+				t.Errorf("%s changed nothing, so nothing reads it", replacement)
+			}
+		})
+	}
+}
