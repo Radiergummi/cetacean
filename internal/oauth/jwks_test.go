@@ -18,7 +18,7 @@ func newJWKSTestServer(t *testing.T) *Server {
 
 	return NewServer(ServerConfig{
 		Issuer:   "https://swarm.example",
-		Resource: "https://swarm.example/mcp",
+		Resource: "https://swarm.example/resource",
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  time.Hour,
 			RefreshTokenTTL: 720 * time.Hour,
@@ -185,7 +185,7 @@ func TestMetadataAdvertisesTheKeySet(t *testing.T) {
 func TestMetadataOmitsTheKeySetWithoutAKey(t *testing.T) {
 	s := NewServer(ServerConfig{
 		Issuer:   "https://swarm.example",
-		Resource: "https://swarm.example/mcp",
+		Resource: "https://swarm.example/resource",
 		OAuth:    config.OAuthConfig{AccessTokenTTL: time.Hour},
 	})
 

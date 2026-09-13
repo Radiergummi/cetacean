@@ -81,7 +81,7 @@ func NewServer(cfg ServerConfig) *Server {
 	// Without a root, issuing and verifying answer ErrMissingKey.
 	km, err := deriveKeys(cfg.SigningKey)
 	if err != nil {
-		slog.Warn("MCP OAuth has no signing key; tokens cannot be issued", "error", err)
+		slog.Warn("OAuth has no signing key; tokens cannot be issued", "error", err)
 	}
 
 	var issuer *TokenIssuer
@@ -113,10 +113,10 @@ func NewServer(cfg ServerConfig) *Server {
 		// exactly as they did before the store existed.
 		if state, err := readState(cfg.StatePath); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				slog.Info("no MCP OAuth state yet", "path", cfg.StatePath)
+				slog.Info("no OAuth state yet", "path", cfg.StatePath)
 			} else {
 				slog.Warn(
-					"could not read MCP OAuth state; clients must re-authorize",
+					"could not read OAuth state; clients must re-authorize",
 					"error", err,
 					"path", cfg.StatePath,
 				)
@@ -124,7 +124,7 @@ func NewServer(cfg ServerConfig) *Server {
 		} else {
 			refreshTokens.Restore(state.RefreshTokenSnapshot)
 			consent.Restore(state.Consent)
-			slog.Info("loaded MCP OAuth state",
+			slog.Info("loaded OAuth state",
 				"grants", len(state.Grants),
 				"approvals", len(state.Consent),
 			)
@@ -933,7 +933,7 @@ func (s *Server) resolveClientMeta(
 		// etc. Log the specifics for operators and show a generic message.
 		m, err := s.cimd.Fetch(r.Context(), clientID)
 		if err != nil {
-			slog.Warn("MCP CIMD fetch failed",
+			slog.Warn("CIMD fetch failed",
 				"client_id", clientID,
 				"error", err,
 			)
@@ -990,7 +990,7 @@ func (s *Server) redirectWithError(
 // ---------------------------------------------------------------------------
 
 // VerifyAccessToken verifies a JWT signature, issuer, audience and expiry.
-// Returns the application claims on success. Exposed so the MCP HTTP handler
+// Returns the application claims on success. Exposed so a resource server
 // can validate bearer tokens without reaching into the oauth package's
 // internals.
 func (s *Server) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
@@ -999,7 +999,7 @@ func (s *Server) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
 
 // WriteUnauthorized writes a 401 response with a WWW-Authenticate header
 // that includes the protected resource metadata URL and the error code.
-// Used by the MCP HTTP handler when a bearer token is missing or invalid.
+// Used by a resource server's handler when a bearer token is missing or invalid.
 func (s *Server) WriteUnauthorized(w http.ResponseWriter, errorCode string) {
 	prmURL := s.cfg.issuerID() + "/.well-known/oauth-protected-resource"
 	w.Header().Set("WWW-Authenticate", fmt.Sprintf(

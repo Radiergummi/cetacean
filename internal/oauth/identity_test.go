@@ -27,10 +27,13 @@ func TestIdentifyCarriesTheClaimsAndNothingElse(t *testing.T) {
 
 	// Exact, because the empty fields carry meaning: a grant keyed on email
 	// matches a session and not a token, since a token has no email to match.
+	// The provider label is spelled out rather than taken from the constant:
+	// it reaches an auth.Identity that other code may compare, so changing it
+	// should be a visible decision.
 	want := &auth.Identity{
 		Subject:  "alice@example.com",
 		Groups:   []string{"ops", "sre"},
-		Provider: ProviderName,
+		Provider: "oauth",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("identity = %+v, want %+v", got, want)

@@ -194,7 +194,7 @@ func issueCSRFNonce(
 ) (token string, nonce string) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		panic("mcp/oauth: crypto/rand failure: " + err.Error())
+		panic("oauth: crypto/rand failure: " + err.Error())
 	}
 	nonce = base64.RawURLEncoding.EncodeToString(b)
 	token = csrfMAC(signingKey, nonce, state, fingerprint)

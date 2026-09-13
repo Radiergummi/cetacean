@@ -25,7 +25,7 @@ func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 	cfg := ServerConfig{
 		Issuer:   "https://cetacean.test",
 		BasePath: "/cetacean",
-		Resource: "https://cetacean.test/cetacean/mcp",
+		Resource: "https://cetacean.test/cetacean/resource",
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,

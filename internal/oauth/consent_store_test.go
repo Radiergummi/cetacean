@@ -127,7 +127,7 @@ func TestConsentFingerprintSeparatesFields(t *testing.T) {
 const (
 	testSubject     = "user@example.com"
 	testClientID    = "https://example.com/client.json"
-	testResource    = "https://cetacean.example.com/mcp"
+	testResource    = "https://cetacean.example.com/resource"
 	testFingerprint = "fingerprint-a"
 )
 
@@ -159,10 +159,10 @@ func TestConsentStoreRequiresAnExactMatch(t *testing.T) {
 			resource: testResource, fingerprint: testFingerprint,
 		},
 		{
-			// RFC 8707: an approval for one MCP endpoint must not cover another.
+			// RFC 8707: an approval for one resource must not cover another.
 			name:    "another resource",
 			subject: testSubject, clientID: testClientID,
-			resource: "https://other.example.com/mcp", fingerprint: testFingerprint,
+			resource: "https://other.example.com/resource", fingerprint: testFingerprint,
 		},
 		{
 			// The client changed its metadata after the approval.
@@ -298,7 +298,7 @@ func TestConsentKeySeparatesFields(t *testing.T) {
 }
 
 func TestConsentSurvivesRestart(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	before := newPersistingServer(t, path, testResource)
 	before.consent.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
@@ -312,7 +312,7 @@ func TestConsentSurvivesRestart(t *testing.T) {
 }
 
 func TestConsentIsWrittenThrough(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	consent := persisting(NewRefreshTokenStore(), path)
 
@@ -570,7 +570,7 @@ func TestConsentPageOmitsTheLeaseWhenDisabled(t *testing.T) {
 }
 
 func TestVersion1FileLoadsWithoutConsent(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	// A file written before consent records existed, holding a live refresh
 	// token. The token is what makes this fixture worth having: v2 moved

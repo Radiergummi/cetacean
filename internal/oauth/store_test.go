@@ -13,7 +13,7 @@ func TestAuthCodeStoreRoundTrip(t *testing.T) {
 		ClientID:      "https://example.com/client",
 		RedirectURI:   "http://localhost:8080/callback",
 		CodeChallenge: "abc123",
-		Resource:      "https://cetacean.example.com/mcp",
+		Resource:      "https://cetacean.example.com/resource",
 		Subject:       "user@example.com",
 		Groups:        []string{"ops"},
 	}, 60*time.Second)
@@ -28,7 +28,7 @@ func TestAuthCodeStoreRoundTrip(t *testing.T) {
 	if data.Subject != "user@example.com" {
 		t.Errorf("subject = %q", data.Subject)
 	}
-	if data.Resource != "https://cetacean.example.com/mcp" {
+	if data.Resource != "https://cetacean.example.com/resource" {
 		t.Errorf("resource = %q", data.Resource)
 	}
 }
@@ -67,7 +67,7 @@ func TestRefreshTokenStoreRoundTrip(t *testing.T) {
 		Subject:  "user@example.com",
 		Groups:   []string{"ops"},
 		ClientID: "https://example.com/client",
-		Resource: "https://cetacean.example.com/mcp",
+		Resource: "https://cetacean.example.com/resource",
 	}, 720*time.Hour)
 
 	data, ok := s.Validate(token)
@@ -77,7 +77,7 @@ func TestRefreshTokenStoreRoundTrip(t *testing.T) {
 	if data.Subject != "user@example.com" {
 		t.Errorf("subject = %q", data.Subject)
 	}
-	if data.Resource != "https://cetacean.example.com/mcp" {
+	if data.Resource != "https://cetacean.example.com/resource" {
 		t.Errorf("resource = %q", data.Resource)
 	}
 }

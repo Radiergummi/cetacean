@@ -65,8 +65,8 @@ func consentFingerprint(meta *ClientMetadata) string {
 	return hashFields(consentFingerprintDomain, append([]string{meta.ClientName}, uris...)...)
 }
 
-// ConsentKey identifies one approval: this user, this client, this MCP
-// endpoint. The three are all free-form strings, so they travel as a named
+// ConsentKey identifies one approval: this user, this client, this resource.
+// The three are all free-form strings, so they travel as a named
 // struct — passed positionally, a transposed pair compiles and silently keys a
 // different record.
 type ConsentKey struct {
@@ -96,7 +96,7 @@ func (d RefreshTokenData) ConsentKey() ConsentKey {
 }
 
 // ConsentRecord is one remembered approval: this user approved this client,
-// as it looked at the time, for this MCP endpoint.
+// as it looked at the time, for this resource.
 type ConsentRecord struct {
 	ConsentKey
 
@@ -166,7 +166,7 @@ func (s *ConsentStore) expired(grantedAt time.Time, now time.Time) bool {
 }
 
 // Allows reports whether this exact approval was remembered — same user, same
-// client, same MCP endpoint, and the same client metadata they were shown.
+// client, same resource, and the same client metadata they were shown.
 // A lapsed record is reported as not allowed but deliberately left in place:
 // this is the read path, and deleting here would turn every authorization into
 // a potential file write. Restore drops them at the next start.
