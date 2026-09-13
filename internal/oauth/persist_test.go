@@ -3,9 +3,12 @@ package oauth
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // restart round-trips a store through the on-disk format the way a process
@@ -422,5 +425,86 @@ func TestStateFileSerializesConcurrentWriters(t *testing.T) {
 	}
 	if got := len(state.Consent); got != rounds {
 		t.Errorf("consent records on disk = %d, want %d", got, rounds)
+	}
+}
+
+// The state file was renamed when the package stopped being MCP's. Reading the
+// old name once is what keeps the cost of that a single token refresh per
+// client rather than a fresh authorization for every one of them: access tokens
+// stop verifying anyway when the derived keys change, but the refresh tokens in
+// here survive, and only if they are found.
+func TestLegacyStateIsReadOnceThenWrittenToTheNewPath(t *testing.T) {
+	dir := t.TempDir()
+	legacy := filepath.Join(dir, "mcp-tokens.json")
+	current := filepath.Join(dir, "oauth-tokens.json")
+
+	// Seed a grant through a server that only knows the old path.
+	seed := newPersistingServer(t, legacy, testResource)
+	raw := seed.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "alice",
+		ClientID: "client-1",
+		Resource: testResource,
+	}, time.Hour)
+
+	migrated := NewServer(ServerConfig{
+		Issuer:          "https://cetacean.test",
+		Resource:        testResource,
+		OAuth:           config.OAuthConfig{AccessTokenTTL: time.Hour, RefreshTokenTTL: time.Hour},
+		SigningKey:      []byte("test-signing-key-32bytes-padded!!"),
+		StatePath:       current,
+		LegacyStatePath: legacy,
+	})
+
+	if _, ok := migrated.refreshTokens.Validate(raw); !ok {
+		t.Fatal("the grant did not survive the rename")
+	}
+
+	// The first write lands at the new path; the old file stays put so a
+	// downgrade still finds it.
+	migrated.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "bob",
+		ClientID: "client-2",
+		Resource: testResource,
+	}, time.Hour)
+
+	if !fileExists(current) {
+		t.Error("writes did not migrate to the new path")
+	}
+	if !fileExists(legacy) {
+		t.Error("the legacy file was removed; a downgrade would lose every grant")
+	}
+}
+
+// Once the new file exists it is the only one that counts, or a stale legacy
+// file would resurrect grants that were deliberately dropped.
+func TestLegacyStateIsIgnoredWhenTheNewFileExists(t *testing.T) {
+	dir := t.TempDir()
+	legacy := filepath.Join(dir, "mcp-tokens.json")
+	current := filepath.Join(dir, "oauth-tokens.json")
+
+	stale := newPersistingServer(t, legacy, testResource)
+	staleToken := stale.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "alice",
+		ClientID: "client-1",
+		Resource: testResource,
+	}, time.Hour)
+
+	// An empty-but-present current file: nothing to restore, and the legacy one
+	// must not be consulted.
+	if err := os.WriteFile(current, []byte(`{"version":1}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := NewServer(ServerConfig{
+		Issuer:          "https://cetacean.test",
+		Resource:        testResource,
+		OAuth:           config.OAuthConfig{AccessTokenTTL: time.Hour, RefreshTokenTTL: time.Hour},
+		SigningKey:      []byte("test-signing-key-32bytes-padded!!"),
+		StatePath:       current,
+		LegacyStatePath: legacy,
+	})
+
+	if _, ok := srv.refreshTokens.Validate(staleToken); ok {
+		t.Error("a grant from the legacy file was restored over the current one")
 	}
 }
