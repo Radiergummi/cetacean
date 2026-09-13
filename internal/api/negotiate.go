@@ -21,7 +21,8 @@ const (
 	ContentTypeDOT
 	ContentTypeCSV
 
-	// ContentTypeYAML is served by the two specification documents only.
+	// ContentTypeYAML is served by the two specification documents and by the
+	// compose export.
 	ContentTypeYAML
 
 	// ContentTypeUnsupported means no supported media type matched. What to
@@ -190,6 +191,16 @@ var extensionTypes = []struct {
 	{".graphml", ContentTypeGraphML},
 	{".dot", ContentTypeDOT},
 	{".csv", ContentTypeCSV},
+	{".yaml", ContentTypeYAML},
+	{".yml", ContentTypeYAML},
+}
+
+// literalDocuments are served under a filename rather than as a representation
+// of a resource: /api/openapi.yaml names the document, and stripping .yaml off
+// it would route to an /api/openapi that does not exist.
+var literalDocuments = map[string]bool{
+	openAPIYAMLPath:  true,
+	asyncAPIYAMLPath: true,
 }
 
 // hasMidPathExtension reports whether a known extension suffix appears in a
@@ -212,6 +223,10 @@ func hasMidPathExtension(path string) bool {
 // extension matches.
 func resolveExtension(r *http.Request) (ContentType, string) {
 	path := r.URL.Path
+	if literalDocuments[path] {
+		return ContentTypeUnsupported, ""
+	}
+
 	for _, ext := range extensionTypes {
 		if trimmed, ok := strings.CutSuffix(path, ext.ext); ok {
 			r.URL.Path = trimmed

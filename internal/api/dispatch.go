@@ -24,6 +24,11 @@ type feedHandlers struct {
 	// sub-collection that takes none.
 	csvParams []string
 
+	// yaml marks an endpoint that also renders a compose document. A handler
+	// rather than a flag, because it is a different projection of the
+	// resource, not the same body in another encoding.
+	yaml http.HandlerFunc
+
 	queryParams []string
 }
 
@@ -46,6 +51,10 @@ func (f feedHandlers) servedTypes(sse bool) string {
 
 	if f.csv {
 		types = append(types, "text/csv")
+	}
+
+	if f.yaml != nil {
+		types = append(types, "application/yaml")
 	}
 
 	return strings.Join(types, ", ")
@@ -98,6 +107,8 @@ func contentNegotiatedWithSSE(
 			}
 
 			jsonHandler(w, r)
+		case ContentTypeYAML:
+			dispatchFeed(w, r, feeds.yaml, served)
 		case ContentTypeJSON:
 			addFeedLinks(w, r, feeds)
 			jsonHandler(w, r)
