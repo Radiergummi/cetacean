@@ -55,13 +55,16 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tasks := h.cache.ListTasksByNode(id)
-	tasks = acl.Filter(
+	// In place and by name, as the list pipeline does: ListTasksByNode hands
+	// back a copy nothing else holds, and the matcher wants the name rather
+	// than a "task:" string built for each one.
+	tasks := acl.FilterInPlaceNamed(
 		h.acl,
 		auth.IdentityFromContext(r.Context()),
 		"read",
-		tasks,
-		func(t swarm.Task) string { return "task:" + t.ID },
+		h.cache.ListTasksByNode(id),
+		"task",
+		func(t swarm.Task) string { return t.ID },
 	)
 	enriched := cluster.EnrichTasks(h.cache, tasks)
 
