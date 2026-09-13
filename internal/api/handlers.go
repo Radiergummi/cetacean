@@ -317,7 +317,8 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 		return items
 	}
 	q := strings.ToLower(query)
-	var filtered []T
+	// In place, for the reason exprFilter gives.
+	filtered := items[:0]
 	for _, item := range items {
 		if cluster.ContainsFold(name(item), q) {
 			filtered = append(filtered, item)
@@ -347,7 +348,10 @@ func exprFilter[T any](
 		writeErrorCode(w, r, "FLT002", fmt.Sprintf("invalid filter expression: %s", err))
 		return nil, false
 	}
-	var filtered []T
+	// Filtered in place. prepareList is the only caller and items is the copy
+	// the cache handed it, so nothing else can observe the reordering; growing
+	// a second slice would copy every surviving item again.
+	filtered := items[:0]
 	var m map[string]any
 	for _, item := range items {
 		m = env(item, m)

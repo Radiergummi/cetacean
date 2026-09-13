@@ -183,10 +183,25 @@ func writeCachedJSONStatus(w http.ResponseWriter, r *http.Request, status int, v
 	writeEncodedJSON(w, status, body, coding)
 }
 
+// jsonTerminator ends every JSON body written by writeEncodedJSON.
+var jsonTerminator = []byte("\n")
+
 // writeEncodedJSON sends a JSON body and its trailing newline under coding.
 // The newline is compressed together with the body: written after it, a client
 // decoding the frame would find a stray byte past its end.
+//
+// Uncompressed it is written separately instead. json.Marshal returns a buffer
+// with no spare capacity, so appending to it copies the whole body to add one
+// byte — and uncompressed is the case where that copy buys nothing.
 func writeEncodedJSON(w http.ResponseWriter, status int, body []byte, coding Encoding) {
+	if coding == EncodingIdentity {
+		w.WriteHeader(status)
+		w.Write(body)           //nolint:errcheck
+		w.Write(jsonTerminator) //nolint:errcheck
+
+		return
+	}
+
 	// Adding a byte cannot push a body back under the threshold, so this is
 	// still the coding the ETag was suffixed with.
 	payload, _ := encodeBody(append(body, '\n'), coding)

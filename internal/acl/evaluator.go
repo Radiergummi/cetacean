@@ -89,6 +89,10 @@ func Filter[T any](
 	}
 
 	grants := e.collectGrants(id, p)
+
+	// Grown rather than sized for the whole input: a permissive policy pays
+	// for the growth, but sizing for every item costs a restrictive one far
+	// more — and a restrictive policy is the reason to run one at all.
 	var result []T
 	for _, item := range items {
 		resource := resourceFunc(item)
