@@ -359,9 +359,11 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 
 	// Issue access token.
 	accessToken, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
-		Subject:  codeData.Subject,
-		Groups:   codeData.Groups,
-		ClientID: codeData.ClientID,
+		Subject:     codeData.Subject,
+		Email:       codeData.Email,
+		DisplayName: codeData.DisplayName,
+		Groups:      codeData.Groups,
+		ClientID:    codeData.ClientID,
 	}, s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
 		writeTokenError(
@@ -375,10 +377,12 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 
 	// Issue refresh token.
 	refreshToken := s.refreshTokens.Issue(RefreshTokenData{
-		Subject:  codeData.Subject,
-		Groups:   codeData.Groups,
-		ClientID: codeData.ClientID,
-		Resource: codeData.Resource,
+		Subject:     codeData.Subject,
+		Email:       codeData.Email,
+		DisplayName: codeData.DisplayName,
+		Groups:      codeData.Groups,
+		ClientID:    codeData.ClientID,
+		Resource:    codeData.Resource,
 	}, s.cfg.OAuth.RefreshTokenTTL)
 
 	writeTokenResponse(w, tokenResponse{
@@ -467,9 +471,11 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 
 	// Issue new access token.
 	accessToken, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
-		Subject:  result.Data.Subject,
-		Groups:   result.Data.Groups,
-		ClientID: result.Data.ClientID,
+		Subject:     result.Data.Subject,
+		Email:       result.Data.Email,
+		DisplayName: result.Data.DisplayName,
+		Groups:      result.Data.Groups,
+		ClientID:    result.Data.ClientID,
 	}, s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
 		writeTokenError(
@@ -771,6 +777,8 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 			CodeChallenge: codeChallenge,
 			Resource:      effectiveResource,
 			Subject:       identity.Subject,
+			Email:         identity.Email,
+			DisplayName:   identity.DisplayName,
 			Groups:        identity.Groups,
 		}, state)
 
@@ -940,6 +948,8 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		CodeChallenge: codeChallenge,
 		Resource:      effectiveResource,
 		Subject:       identity.Subject,
+		Email:         identity.Email,
+		DisplayName:   identity.DisplayName,
 		Groups:        identity.Groups,
 	}, state)
 }

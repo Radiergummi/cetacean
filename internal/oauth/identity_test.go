@@ -25,10 +25,10 @@ func TestIdentifyCarriesTheClaimsAndNothingElse(t *testing.T) {
 		t.Fatalf("Identify: %v", err)
 	}
 
-	// Exact, because the empty fields carry meaning: a grant keyed on email
-	// matches a session and not a token, since a token has no email to match.
-	// The provider label is spelled out rather than taken from the constant:
-	// it reaches an auth.Identity that other code may compare, so changing it
+	// Exact, because nothing may be invented: a claim the token does not carry
+	// must arrive empty rather than be guessed at from another one. The
+	// provider label is spelled out rather than taken from the constant: it
+	// reaches an auth.Identity that other code may compare, so changing it
 	// should be a visible decision.
 	want := &auth.Identity{
 		Subject:  "alice@example.com",

@@ -35,8 +35,13 @@ type AuthCodeData struct {
 	RedirectURI   string
 	CodeChallenge string
 	Resource      string // RFC 8707 — the resource URL the code is bound to
-	Subject       string
-	Groups        []string
+
+	// The identity the upstream provider established at consent time, carried
+	// verbatim so the token reconstructs it rather than a thinner version.
+	Subject     string
+	Email       string
+	DisplayName string
+	Groups      []string
 }
 
 type authCodeEntry struct {
@@ -111,11 +116,13 @@ func (s *AuthCodeStore) Redeem(code string) (AuthCodeData, bool) {
 
 // RefreshTokenData carries the claims bound to a refresh token.
 type RefreshTokenData struct {
-	Subject  string
-	Groups   []string
-	ClientID string
-	Resource string // RFC 8707 — the resource URL this grant is bound to
-	grantID  string // assigned and tracked by the store; unexported
+	Subject     string
+	Email       string
+	DisplayName string
+	Groups      []string
+	ClientID    string
+	Resource    string // RFC 8707 — the resource URL this grant is bound to
+	grantID     string // assigned and tracked by the store; unexported
 }
 
 // RotateResult is returned by RefreshTokenStore.Rotate. On the theft path Data

@@ -50,7 +50,13 @@ type oauthState struct {
 // RefreshTokenSnapEntry is one live token: the claims bound to it plus both
 // expiries, the per-token one and the grant family's absolute one.
 type RefreshTokenSnapEntry struct {
-	Subject        string    `json:"subject"`
+	Subject string `json:"subject"`
+
+	// Absent in a file an older build wrote. Such a grant refreshes into a
+	// token without them until the client re-authorizes, which is a thinner
+	// identity than the ACL wants but never a wider one.
+	Email          string    `json:"email,omitempty"`
+	DisplayName    string    `json:"name,omitempty"`
 	Groups         []string  `json:"groups,omitempty"`
 	ClientID       string    `json:"clientId"`
 	Resource       string    `json:"resource"`
@@ -68,6 +74,8 @@ func (s *RefreshTokenStore) Snapshot() RefreshTokenSnapshot {
 	for hash, entry := range s.tokens {
 		tokens[hash] = RefreshTokenSnapEntry{
 			Subject:        entry.data.Subject,
+			Email:          entry.data.Email,
+			DisplayName:    entry.data.DisplayName,
 			Groups:         append([]string(nil), entry.data.Groups...),
 			ClientID:       entry.data.ClientID,
 			Resource:       entry.data.Resource,
@@ -121,11 +129,13 @@ func (s *RefreshTokenStore) Restore(snap RefreshTokenSnapshot) {
 
 		s.tokens[hash] = refreshTokenEntry{
 			data: RefreshTokenData{
-				Subject:  entry.Subject,
-				Groups:   append([]string(nil), entry.Groups...),
-				ClientID: entry.ClientID,
-				Resource: entry.Resource,
-				grantID:  entry.GrantID,
+				Subject:     entry.Subject,
+				Email:       entry.Email,
+				DisplayName: entry.DisplayName,
+				Groups:      append([]string(nil), entry.Groups...),
+				ClientID:    entry.ClientID,
+				Resource:    entry.Resource,
+				grantID:     entry.GrantID,
 			},
 			expiresAt:      entry.ExpiresAt,
 			grantExpiresAt: entry.GrantExpiresAt,
