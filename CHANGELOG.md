@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
 
 ### Fixed
+- An access token cannot authorize a new client: consent requires the identity your auth provider established, not one a token carries
 - An ACL grant written against an email address matches a token as well as a browser session. MCP clients were silently denied everything such a grant allowed
 - Everything that does not describe the cluster keeps working while the Docker daemon is unreachable — the dashboard's own icons and manifest, the API catalogue, the OpenSearch description and `/profile`
 - The CSV alternate a filtered listing advertises downloads the rows you are looking at; it dropped the query, so following the link returned everything

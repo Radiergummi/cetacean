@@ -594,6 +594,23 @@ func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 // HandleAuthorize handles GET and POST {base}/oauth/authorize.
+// consentRefusal returns why identity may not found a new authorization grant,
+// or "" when it may.
+//
+// A token this server issued must not authorize another. Consent is deliberately
+// outside the middleware's exempt set so it runs under the upstream provider —
+// which is how that provider's identity gets into a token in the first place.
+func consentRefusal(identity *auth.Identity) string {
+	switch {
+	case identity == nil:
+		return "authentication required"
+	case identity.Provider == ProviderName:
+		return "an access token cannot authorize a client; sign in first"
+	default:
+		return ""
+	}
+}
+
 func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -747,10 +764,10 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Require identity from auth middleware.
+	// Require an identity the upstream provider established.
 	identity := auth.IdentityFromContext(r.Context())
-	if identity == nil {
-		renderErrorPage(w, http.StatusUnauthorized, "authentication required")
+	if refusal := consentRefusal(identity); refusal != "" {
+		renderErrorPage(w, http.StatusUnauthorized, refusal)
 		return
 	}
 
@@ -866,11 +883,11 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Require identity.
+	// Require an identity the upstream provider established.
 	identity := auth.IdentityFromContext(r.Context())
-	if identity == nil {
+	if refusal := consentRefusal(identity); refusal != "" {
 		clearCSRFCookie(w, secure)
-		renderErrorPage(w, http.StatusUnauthorized, "authentication required")
+		renderErrorPage(w, http.StatusUnauthorized, refusal)
 		return
 	}
 
