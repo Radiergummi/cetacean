@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -632,15 +633,15 @@ func TestSigningKeyBytes(t *testing.T) {
 	}
 }
 
-// The settings that moved are the ones most worth not losing quietly: three of
-// them exist to switch a capability off, and the default they fall back to is
-// on. A refusal is the only signal an environment variable can carry.
-func TestRemovedOAuthEnvVarsRefuseStartup(t *testing.T) {
-	for removed, replacement := range movedOAuthEnv {
+// The settings that moved are the ones most worth not losing quietly: several
+// exist to switch a capability off, and the default they fall back to is on. A
+// refusal is the only signal an environment variable can carry.
+func TestReremovedEnvVarsRefuseStartup(t *testing.T) {
+	for removed, replacement := range removedEnv {
 		t.Run(removed, func(t *testing.T) {
 			t.Setenv(removed, "whatever")
 
-			_, err := loadOAuth(nil)
+			_, err := Load(nil, &Flags{})
 			if err == nil {
 				t.Fatalf("%s was accepted; it is no longer read", removed)
 			}
@@ -654,12 +655,11 @@ func TestRemovedOAuthEnvVarsRefuseStartup(t *testing.T) {
 	}
 }
 
-// Every moved variable must name one that is actually read, or the refusal
+// Every removed variable must name one that is actually read, or the refusal
 // sends an operator to a variable nothing looks at either. Proven by setting
-// each replacement to something other than its default and watching the
-// resulting config move — a list checked against another list would only
-// restate the map.
-func TestMovedOAuthEnvVarsNameLiveReplacements(t *testing.T) {
+// each replacement and watching the loaded config move — a list checked against
+// another list would only restate the map.
+func TestRemovedEnvVarsNameLiveReplacements(t *testing.T) {
 	const hexKey = "00112233445566778899aabbccddeeff" +
 		"00112233445566778899aabbccddeeff"
 
@@ -684,9 +684,15 @@ func TestMovedOAuthEnvVarsNameLiveReplacements(t *testing.T) {
 		"CETACEAN_OAUTH_DCR_RATE_LIMIT":             func(*testing.T) string { return "99" },
 		"CETACEAN_OAUTH_DCR_MAX_CLIENTS":            func(*testing.T) string { return "77" },
 		"CETACEAN_OAUTH_CIMD_ENABLED":               func(*testing.T) string { return "false" },
+		"CETACEAN_TRUSTED_PROXIES":                  func(*testing.T) string { return "10.0.0.0/8" },
 	}
 
-	for removed, replacement := range movedOAuthEnv {
+	baseline, err := Load(nil, &Flags{})
+	if err != nil {
+		t.Fatalf("baseline Load: %v", err)
+	}
+
+	for removed, replacement := range removedEnv {
 		t.Run(replacement, func(t *testing.T) {
 			value, known := values[replacement]
 			if !known {
@@ -699,12 +705,12 @@ func TestMovedOAuthEnvVarsNameLiveReplacements(t *testing.T) {
 
 			t.Setenv(replacement, value(t))
 
-			got, err := loadOAuth(nil)
+			got, err := Load(nil, &Flags{})
 			if err != nil {
-				t.Fatalf("loadOAuth: %v", err)
+				t.Fatalf("Load: %v", err)
 			}
 
-			if got == DefaultOAuthConfig() {
+			if reflect.DeepEqual(got, baseline) {
 				t.Errorf("%s changed nothing, so nothing reads it", replacement)
 			}
 		})

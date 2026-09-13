@@ -194,10 +194,6 @@ the config file.
   Expected value of the shared secret header. Required when [`auth.headers.secret_header`][auth.headers.secret_header] is set. Accepts the `_FILE` suffix.
 </ConfigParam>
 
-<ConfigParam name="auth.headers.trusted_proxies" flag="-auth-headers-trusted-proxies" env="CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES" deprecated>
-  Use `server.trusted_proxies` instead. This setting will be removed in v1.
-</ConfigParam>
-
 ### Authorization
 
 Authorization is grant-based RBAC layered on the active authentication mode. With no policy

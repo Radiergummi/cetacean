@@ -172,17 +172,10 @@ func main() {
 	}
 
 	if authCfg.Mode == "headers" {
-		proxies, warnings, err := config.ResolveTrustedProxies(
-			cfg.TrustedProxies,
-			authCfg.Headers.TrustedProxies,
-		)
+		proxies, err := config.ResolveTrustedProxies(cfg.TrustedProxies)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
-		}
-
-		for _, warning := range warnings {
-			slog.Warn(warning)
 		}
 
 		// realIP reads the one, the provider the other; they must agree.

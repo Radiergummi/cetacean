@@ -43,13 +43,12 @@ type Flags struct {
 	CertCA *string
 
 	// Headers
-	HeadersSubject        *string
-	HeadersName           *string
-	HeadersEmail          *string
-	HeadersGroups         *string
-	HeadersSecretHeader   *string
-	HeadersSecretValue    *string
-	HeadersTrustedProxies *string
+	HeadersSubject      *string
+	HeadersName         *string
+	HeadersEmail        *string
+	HeadersGroups       *string
+	HeadersSecretHeader *string
+	HeadersSecretValue  *string
 
 	// TLS
 	TLSCert *string
@@ -153,11 +152,6 @@ func ParseFlags(args []string) (*Flags, error) {
 	hGroups := fs.String("auth-headers-groups", "", "Header name for groups")
 	hSecretHeader := fs.String("auth-headers-secret-header", "", "Header name for shared secret")
 	hSecretValue := fs.String("auth-headers-secret-value", "", "Shared secret value")
-	hTrustedProxies := fs.String(
-		"auth-headers-trusted-proxies",
-		"",
-		"Trusted proxy CIDRs/IPs (comma-separated)",
-	)
 
 	// TLS
 	tlsCert := fs.String("tls-cert", "", "TLS certificate path (PEM)")
@@ -261,8 +255,6 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.HeadersSecretHeader = hSecretHeader
 		case "auth-headers-secret-value":
 			f.HeadersSecretValue = hSecretValue
-		case "auth-headers-trusted-proxies":
-			f.HeadersTrustedProxies = hTrustedProxies
 		case "tls-cert":
 			f.TLSCert = tlsCert
 		case "tls-key":
