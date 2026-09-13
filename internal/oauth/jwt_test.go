@@ -16,6 +16,13 @@ import (
 
 const testKey = "test-secret-key-32-bytes-long!!!"
 
+// The issuer and the resource a signed token is bound to, shared by the tests
+// that care about the signature rather than about either value.
+const (
+	testIssuer        = "https://swarm.example"
+	testTokenAudience = testIssuer + "/resource"
+)
+
 // None of these tests is testing the constructor's error.
 func mustTokenIssuer(t *testing.T, root []byte, issuer, audience string) *TokenIssuer {
 	t.Helper()
@@ -323,7 +330,7 @@ func TestJWTRefusesToMintWithoutARequiredClaim(t *testing.T) {
 }
 
 func TestTokenIsES256WithAKeyID(t *testing.T) {
-	issuer := mustTokenIssuer(t, testRoot, "https://swarm.example", "https://swarm.example/resource")
+	issuer := mustTokenIssuer(t, testRoot, testIssuer, testTokenAudience)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
 		Subject:  "alice",
@@ -363,7 +370,7 @@ func TestTokenIsES256WithAKeyID(t *testing.T) {
 }
 
 func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
-	issuer := mustTokenIssuer(t, testRoot, "https://swarm.example", "https://swarm.example/resource")
+	issuer := mustTokenIssuer(t, testRoot, testIssuer, testTokenAudience)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
 		Subject:  "alice",
@@ -447,7 +454,7 @@ func TestPackedSignatureWithALeadingZeroInRVerifies(t *testing.T) {
 }
 
 func TestVerifyRefusesHS256(t *testing.T) {
-	issuer := mustTokenIssuer(t, testRoot, "https://swarm.example", "https://swarm.example/resource")
+	issuer := mustTokenIssuer(t, testRoot, testIssuer, testTokenAudience)
 
 	header := base64.RawURLEncoding.EncodeToString(
 		[]byte(`{"alg":"HS256","typ":"at+jwt"}`),
