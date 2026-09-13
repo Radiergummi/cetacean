@@ -51,6 +51,14 @@ type ServerConfig struct {
 	// client to re-authorize. Empty keeps both stores in memory only, which is
 	// what happens when the data directory is not writable.
 	StatePath string
+
+	// LegacyStatePath is read once, when StatePath holds nothing yet, so a
+	// rename of the file costs clients a token refresh rather than a full
+	// re-authorization. Writes always go to StatePath, which migrates the
+	// content on the first change; the old file is left where it is so a
+	// downgrade still finds it. Its orphaned temp files are deliberately not
+	// swept — sweepTempFiles follows StatePath alone.
+	LegacyStatePath string
 }
 
 // Server is the OAuth 2.1 authorization server. Use NewServer to construct.
@@ -111,14 +119,21 @@ func NewServer(cfg ServerConfig) *Server {
 		// client a re-authorization, so it is worth an operator's attention.
 		// Neither is fatal: the server comes up empty and clients re-authorize,
 		// exactly as they did before the store existed.
-		if state, err := readState(cfg.StatePath); err != nil {
+		path := cfg.StatePath
+		if cfg.LegacyStatePath != "" && !fileExists(path) && fileExists(cfg.LegacyStatePath) {
+			path = cfg.LegacyStatePath
+			slog.Info("migrating OAuth state from its former path",
+				"from", cfg.LegacyStatePath, "to", cfg.StatePath)
+		}
+
+		if state, err := readState(path); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				slog.Info("no OAuth state yet", "path", cfg.StatePath)
+				slog.Info("no OAuth state yet", "path", path)
 			} else {
 				slog.Warn(
 					"could not read OAuth state; clients must re-authorize",
 					"error", err,
-					"path", cfg.StatePath,
+					"path", path,
 				)
 			}
 		} else {

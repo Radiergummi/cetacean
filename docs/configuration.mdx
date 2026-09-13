@@ -89,7 +89,7 @@ the config file.
 </ConfigParam>
 
 <ConfigParam name="storage.data_dir" flag="-data-dir" env="CETACEAN_DATA_DIR" default="./data">
-  Directory holding `snapshot.json` and, when the [authorization server][oauth.enabled] is enabled, `mcp-tokens.json`. The token file is written regardless of [`storage.snapshot`][storage.snapshot]. Must be writable by the Cetacean process; mount it as a volume in Docker.
+  Directory holding `snapshot.json` and, when the [authorization server][oauth.enabled] is enabled, `oauth-tokens.json`. The token file is written regardless of [`storage.snapshot`][storage.snapshot]. Must be writable by the Cetacean process; mount it as a volume in Docker.
 </ConfigParam>
 
 <ConfigParam name="tls.cert" flag="-tls-cert" env="CETACEAN_TLS_CERT">

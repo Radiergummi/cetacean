@@ -768,7 +768,8 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	// path, since token durability is not tied to storage.snapshot: an
 	// operator who turns cache snapshots off still gets clients that stay
 	// authorized across a restart.
-	statePath := filepath.Join(d.cfg.DataDir, "mcp-tokens.json")
+	statePath := filepath.Join(d.cfg.DataDir, "oauth-tokens.json")
+	legacyStatePath := filepath.Join(d.cfg.DataDir, "mcp-tokens.json")
 	//nolint:gosec // DataDir is operator-configured, not user input
 	if err := os.MkdirAll(d.cfg.DataDir, 0700); err != nil {
 		slog.Warn(
@@ -777,16 +778,18 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 			"path", d.cfg.DataDir,
 		)
 		statePath = ""
+		legacyStatePath = ""
 	}
 
 	resource := issuer + d.cfg.BasePath + "/mcp"
 	srv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:     issuer,
-		BasePath:   d.cfg.BasePath,
-		Resource:   resource,
-		OAuth:      d.cfg.OAuth,
-		SigningKey: signingKey,
-		StatePath:  statePath,
+		Issuer:          issuer,
+		BasePath:        d.cfg.BasePath,
+		Resource:        resource,
+		OAuth:           d.cfg.OAuth,
+		SigningKey:      signingKey,
+		StatePath:       statePath,
+		LegacyStatePath: legacyStatePath,
 	})
 
 	slog.Info("OAuth 2.1 authorization server enabled",
