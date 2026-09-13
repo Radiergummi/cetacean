@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // serveMetadata returns an http.HandlerFunc that serves a ClientMetadata JSON
@@ -287,5 +288,66 @@ func TestCIMDFetchBlocksCGNAT(t *testing.T) {
 		} else {
 			t.Errorf("100.63.255.255: incorrectly classified as CGNAT")
 		}
+	}
+}
+
+// The cache is bounded. client_id is the caller's to choose and the document is
+// served by a host they control, so without a cap an authorize loop over
+// distinct URLs would grow this map for as long as it ran.
+func TestCIMDCacheIsBounded(t *testing.T) {
+	f := &CIMDFetcher{}
+
+	for i := range cimdCacheMaxEntries * 2 {
+		f.cachePut(fmt.Sprintf("https://client.example/%d", i), &ClientMetadata{})
+	}
+
+	if got := len(f.cache); got > cimdCacheMaxEntries {
+		t.Errorf("cache holds %d entries, want at most %d", got, cimdCacheMaxEntries)
+	}
+}
+
+// Eviction spends the lapsed entries first: dropping one costs nothing, while
+// dropping a live one costs its client a re-fetch.
+func TestCIMDCacheEvictsLapsedEntriesFirst(t *testing.T) {
+	f := &CIMDFetcher{cache: make(map[string]cachedEntry)}
+
+	stale := time.Now().Add(-2 * cimdCacheTTL)
+	for i := range cimdCacheMaxEntries {
+		f.cache[fmt.Sprintf("https://lapsed.example/%d", i)] = cachedEntry{
+			meta:      &ClientMetadata{},
+			fetchedAt: stale,
+		}
+	}
+
+	const live = "https://live.example/id"
+	f.cachePut(live, &ClientMetadata{})
+
+	if f.cacheGet(live) == nil {
+		t.Fatal("the entry that triggered eviction was not stored")
+	}
+	if got := len(f.cache); got != 1 {
+		t.Errorf("cache holds %d entries, want only the live one", got)
+	}
+}
+
+// Re-fetching a client already cached must not spend a slot, or a single client
+// refreshing in a loop would evict every other one.
+func TestCIMDCacheReplacesWithoutEvicting(t *testing.T) {
+	f := &CIMDFetcher{cache: make(map[string]cachedEntry)}
+
+	for i := range cimdCacheMaxEntries {
+		f.cache[fmt.Sprintf("https://client.example/%d", i)] = cachedEntry{
+			meta:      &ClientMetadata{},
+			fetchedAt: time.Now(),
+		}
+	}
+
+	f.cachePut("https://client.example/0", &ClientMetadata{ClientName: "renamed"})
+
+	if got := len(f.cache); got != cimdCacheMaxEntries {
+		t.Errorf("cache holds %d entries, want %d", got, cimdCacheMaxEntries)
+	}
+	if meta := f.cacheGet("https://client.example/0"); meta == nil || meta.ClientName != "renamed" {
+		t.Error("the replacement did not land")
 	}
 }
