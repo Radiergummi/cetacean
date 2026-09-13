@@ -25,7 +25,11 @@ export default function ErrorIndex() {
         }
         return res.json();
       })
-      .then(setErrors)
+      // /api/errors answers with a JSON-LD CollectionResponse, so the
+      // definitions are under `items`. Passing the envelope itself to
+      // setErrors left the render iterating an object, which threw and put
+      // the page's ErrorBoundary on screen in place of the reference.
+      .then((body: { items: ErrorDef[] }) => setErrors(body.items))
       .catch((caught) => setError(caught.message));
   }, []);
 

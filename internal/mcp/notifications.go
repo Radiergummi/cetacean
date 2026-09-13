@@ -78,8 +78,16 @@ func (nm *NotificationManager) Subscribe(
 
 // SetFilter records the notification opt-in a subscriptions/listen stream
 // established for session, so dispatch can honour it.
+//
+// The identity is recorded here as well as in Subscribe, because the filter's
+// four fields are independent: a stream may opt into resourcesListChanged
+// without naming a single resource subscription, and Subscribe would then
+// never run. Leaving the session record without an identity handed a nil one
+// to every ACL check at dispatch, so under a policy such a stream was
+// silently never notified.
 func (nm *NotificationManager) SetFilter(
 	session mcpserver.ClientSession,
+	identity *auth.Identity,
 	filter mcplib.SubscriptionFilter,
 ) {
 	if session == nil {
@@ -95,6 +103,7 @@ func (nm *NotificationManager) SetFilter(
 		nm.sessions[session] = st
 	}
 
+	st.identity = identity
 	st.filter = &filter
 }
 
@@ -462,9 +471,10 @@ func (s *Server) installSubscriptionHooks() *mcpserver.Hooks {
 				return
 			}
 
-			s.notifications.SetFilter(session, msg.Params.Notifications)
-
 			identity := auth.IdentityFromContext(ctx)
+
+			s.notifications.SetFilter(session, identity, msg.Params.Notifications)
+
 			for _, uri := range msg.Params.Notifications.ResourceSubscriptions {
 				s.notifications.Subscribe(session, uri, identity)
 			}

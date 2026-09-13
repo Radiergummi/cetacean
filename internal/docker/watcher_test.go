@@ -37,6 +37,8 @@ type mockClient struct {
 	errCh    chan error
 
 	listErrors map[string]error // resource name -> error
+
+	fullSyncs atomic.Int64
 }
 
 func newMockClient() *mockClient {
@@ -54,6 +56,8 @@ func (m *mockClient) setNodes(nodes []swarm.Node) {
 }
 
 func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
+	m.fullSyncs.Add(1)
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var data cache.FullSyncData
@@ -766,9 +770,11 @@ func TestContainerDeathReinspectsUntilSwarmCatchesUp(t *testing.T) {
 	}
 }
 
-// An ordinary container event is not a death and must not pay for a second
-// inspect: a busy cluster produces these constantly, and doubling every one
-// would double the load the watcher puts on the daemon.
+// A container event whose task record has already caught up must not pay for a
+// second inspect: a busy cluster produces these constantly, and doubling every
+// one would double the load the watcher puts on the daemon. The re-read is
+// bought only where it is needed, which is what keeps the direction added by
+// TestContainerStartReinspectsUntilSwarmCatchesUp free on the common path.
 func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
 	var calls atomic.Int32
 
@@ -799,6 +805,114 @@ func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
 
 	if got := calls.Load(); got != 1 {
 		t.Errorf("inspected %d times for a container start; want 1", got)
+	}
+}
+
+// The same race runs at the other end of a container's life, and cost more.
+// Swarm commits a task's running status *after* the container start event that
+// announced it, so the inspect on that event reads the task as still starting.
+// Nothing further arrives, so the cache held "starting" until the five-minutely
+// re-sync: the dashboard showed a task starting for minutes, and every figure
+// built on the running count undercounted — which left cluster.ServiceConverged
+// unable to settle, hanging `Prefer: wait`, the MCP `watch` tool and every
+// task-augmented mutation behind it.
+//
+// Waiting for a terminal state would be wrong here: this direction settles at
+// running, which is precisely the state the dying direction treats as not yet
+// settled. taskCaughtUp is what tells the two apart.
+func TestContainerStartReinspectsUntilSwarmCatchesUp(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		// The first read sees Swarm's pre-reconciliation view, as production
+		// does: the container is up, the task record has not caught up.
+		if calls.Add(1) == 1 {
+			return swarm.Task{
+				ID: id, ServiceID: "svc",
+				DesiredState: swarm.TaskStateRunning,
+				Status:       swarm.TaskStatus{State: swarm.TaskStateStarting},
+			}, nil
+		}
+
+		return swarm.Task{
+			ID: id, ServiceID: "svc",
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+		}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	w.settleDelay = 10 * time.Millisecond
+
+	w.handleEvent(context.Background(), events.Message{
+		Type:   events.ContainerEventType,
+		Action: "start",
+		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
+			"com.docker.swarm.task.id": "t1",
+		}},
+	})
+
+	w.waitForSettles()
+
+	task, ok := c.GetTask("t1")
+	if !ok {
+		t.Fatal("task missing from cache")
+	}
+
+	if task.Status.State != swarm.TaskStateRunning {
+		t.Errorf(
+			"Status.State = %q, want running — the re-inspect did not land",
+			task.Status.State,
+		)
+	}
+
+	// The count is the thing that actually hung: a service cannot converge
+	// while the cache reports fewer replicas running than the engine holds.
+	if got := c.RunningTaskCount("svc"); got != 1 {
+		t.Errorf("RunningTaskCount = %d, want 1 for a task Swarm has started", got)
+	}
+}
+
+// The re-reads stop as soon as the record reads running, rather than running
+// out the bound: this direction is scheduled by every container start on the
+// cluster, so a series that always ran to completion would be four inspects
+// per started container instead of one.
+func TestContainerStartStopsReinspectingOnceRunning(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		state := swarm.TaskStateRunning
+		if calls.Add(1) == 1 {
+			state = swarm.TaskStateStarting
+		}
+
+		return swarm.Task{
+			ID: id, ServiceID: "svc",
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: state},
+		}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	w.settleDelay = time.Millisecond
+
+	w.handleEvent(context.Background(), events.Message{
+		Type:   events.ContainerEventType,
+		Action: "start",
+		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
+			"com.docker.swarm.task.id": "t1",
+		}},
+	})
+
+	w.waitForSettles()
+
+	// The event's own inspect, plus exactly one re-read.
+	if got := calls.Load(); got != 2 {
+		t.Errorf("inspects = %d, want 2 — the series did not stop at running", got)
 	}
 }
 
@@ -885,5 +999,134 @@ func TestSettleRetriesAreBounded(t *testing.T) {
 	// The event's own inspect, plus the bounded series of re-reads.
 	if want := int32(1 + settleAttempts); calls.Load() != want {
 		t.Errorf("inspects = %d, want %d", calls.Load(), want)
+	}
+}
+
+// ─── liveness ───────────────────────────────────────────────────────────
+
+// TestLivenessStartsDisconnected: a watcher that has never synced must not
+// look healthy.
+func TestLivenessStartsDisconnected(t *testing.T) {
+	w := NewWatcher(newMockClient(), cache.New(nil), "")
+
+	connected, lastSync := w.Liveness()
+	if connected {
+		t.Error("a watcher that has never synced reports connected")
+	}
+
+	if !lastSync.IsZero() {
+		t.Errorf("lastSync = %v before any sync, want zero", lastSync)
+	}
+}
+
+// TestLivenessFollowsTheEngine is the point of the signal: with the engine
+// gone, every endpoint keeps answering and readiness keeps passing.
+func TestLivenessFollowsTheEngine(t *testing.T) {
+	mc := newMockClient()
+	mc.nodes = []swarm.Node{{ID: "n1"}}
+
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	before := time.Now()
+
+	if err := w.fullSync(context.Background()); err != nil {
+		t.Fatalf("fullSync: %v", err)
+	}
+
+	connected, lastSync := w.Liveness()
+	if !connected {
+		t.Error("a watcher that just synced reports disconnected")
+	}
+
+	if lastSync.Before(before) {
+		t.Errorf("lastSync = %v, want at or after %v", lastSync, before)
+	}
+
+	// The engine goes away.
+	mc.listErrors["nodes"] = errors.New("connection refused")
+	mc.listErrors["services"] = errors.New("connection refused")
+	mc.listErrors["tasks"] = errors.New("connection refused")
+	mc.listErrors["configs"] = errors.New("connection refused")
+	mc.listErrors["secrets"] = errors.New("connection refused")
+	mc.listErrors["networks"] = errors.New("connection refused")
+	mc.listErrors["volumes"] = errors.New("connection refused")
+
+	if err := w.fullSync(context.Background()); err == nil {
+		t.Fatal("fullSync succeeded with every list failing")
+	}
+
+	connected, stale := w.Liveness()
+	if connected {
+		t.Error("a watcher whose sync just failed still reports connected")
+	}
+
+	// The timestamp is when the cache was last correct, so a failure must not
+	// advance it.
+	if !stale.Equal(lastSync) {
+		t.Errorf("a failed sync moved lastSync from %v to %v", lastSync, stale)
+	}
+}
+
+// TestLivenessDropsWhenTheStreamEnds covers the other disconnection: the sync
+// succeeded, then the stream went away.
+func TestLivenessDropsWhenTheStreamEnds(t *testing.T) {
+	mc := newMockClient()
+
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	if err := w.fullSync(context.Background()); err != nil {
+		t.Fatalf("fullSync: %v", err)
+	}
+
+	if connected, _ := w.Liveness(); !connected {
+		t.Fatal("not connected after a successful sync")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	w.watchEvents(ctx)
+
+	if connected, _ := w.Liveness(); connected {
+		t.Error("still connected after the event stream ended")
+	}
+}
+
+// TestManualResyncFailureLeavesTheStreamVerdictAlone: POST /-/resync shares
+// the sync path with the watcher, but it runs beside a healthy event stream.
+// Letting its failure clear the connection verdict made /-/health and the
+// dashboard report "Cetacean cannot reach Docker" until the next periodic
+// sync, five minutes later, over a cluster nothing was wrong with.
+func TestManualResyncFailureLeavesTheStreamVerdictAlone(t *testing.T) {
+	mc := newMockClient()
+
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	if err := w.fullSync(context.Background()); err != nil {
+		t.Fatalf("fullSync: %v", err)
+	}
+
+	connected, lastSync := w.Liveness()
+	if !connected {
+		t.Fatal("not connected after a successful sync")
+	}
+
+	for _, kind := range []string{
+		"nodes", "services", "tasks", "configs", "secrets", "networks", "volumes",
+	} {
+		mc.listErrors[kind] = errors.New("connection refused")
+	}
+
+	if err := w.Resync(context.Background()); err == nil {
+		t.Fatal("Resync succeeded with a list failing")
+	}
+
+	connected, stale := w.Liveness()
+	if !connected {
+		t.Error("a failed manual resync reported the event stream as disconnected")
+	}
+
+	if !stale.Equal(lastSync) {
+		t.Errorf("a failed resync moved lastSync from %v to %v", lastSync, stale)
 	}
 }

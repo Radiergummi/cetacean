@@ -12,11 +12,6 @@ package contract
 // excusedUndocumented holds routes that are registered but deliberately absent
 // from api/openapi.yaml. Keys are Route.String(), e.g. "GET /nodes".
 var excusedUndocumented = map[string]string{
-	// Registered but absent from api/openapi.yaml: a real drift this harness
-	// is the first thing to report. The spec entries land with the fixes.
-	"GET /swarm/plugins": "defect: registered but undocumented",
-	"POST /-/resync":     "defect: registered but undocumented",
-
 	// SPA fallback: also serves /assets/* (which never gets its own mux
 	// pattern; static assets fall through this same catch-all), verified in
 	// internal/api/router.go's "SPA fallback (must be last)" registration.
@@ -184,8 +179,6 @@ var excusedUncovered = map[string]string{
 	"PUT /services/{id}/image":              "mutates through the Docker daemon; covered by the e2e write lane",
 	"PUT /services/{id}/placement":          "mutates through the Docker daemon; covered by the e2e write lane",
 	"PUT /services/{id}/scale":              "mutates through the Docker daemon; covered by the e2e write lane",
-	// Swarm refuses every service mode change, so this can only ever fail.
-	"PUT /services/{id}/mode": "mutates through the Docker daemon; always fails, removed with the fixes",
 
 	// Genuine gaps: none of the categories above applies. A later slice adds
 	// the sweep; see the campaign defect list for the count.
@@ -262,15 +255,5 @@ var excusedUncovered = map[string]string{
 // an accepted behaviour — the entry exists so the invariant keeps guarding
 // every other combination while the disagreement stands.
 //
-// Keys are "<singular type> by <id|name>"; gosec flags the "secret" one.
-//
-//nolint:gosec // G101
-var knownTransportDivergences = map[string]string{
-	// MCP resolves a name to its resource; REST answers 404 unless given the ID,
-	// so the same identifier reads over one transport and not the other.
-	"service by name": "REST has no name addressing; MCP's find resolves it",
-	"node by name":    "REST has no name addressing; MCP's find resolves it",
-	"config by name":  "REST has no name addressing; MCP's find resolves it",
-	"secret by name":  "REST has no name addressing; MCP's find resolves it",
-	"network by name": "REST has no name addressing; MCP's find resolves it",
-}
+// Keys are "<singular type> by <id|name>".
+var knownTransportDivergences = map[string]string{}

@@ -100,6 +100,8 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 func (p *HeadersProvider) RegisterRoutes(_ *http.ServeMux) {}
 
 // validateSubject rejects an empty, over-long, or control-character subject.
+// No error quotes the value: WhoamiHandler logs the error this is wrapped
+// into, so anything echoed here puts a proxy-supplied header in the log.
 func validateSubject(s string) error {
 	if s == "" {
 		return errors.New("empty value")
@@ -111,7 +113,7 @@ func validateSubject(s string) error {
 
 	for _, r := range s {
 		if unicode.IsControl(r) {
-			return fmt.Errorf("contains control character U+%04X", r)
+			return errors.New("contains a control character")
 		}
 	}
 

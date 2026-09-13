@@ -115,7 +115,9 @@ paths:
       operationId: getHealth
       tags: [Meta]
       summary: Health check
-      description: Always returns 200 with version info. No content negotiation.
+      description: |
+        Always returns 200 with version info and, when a watcher is attached, whether the
+        cache is still being kept current. No content negotiation.
       security: []
       responses:
         "200":
@@ -138,12 +140,34 @@ paths:
                     type: integer
                     description: Configured write operations level (0=read-only, 1=operational, 2=configuration, 3=impactful)
                     example: 1
+                  watcher:
+                    type: object
+                    description: |
+                      Whether the cache behind every other endpoint is still being kept current.
+                      When the Docker connection fails, Cetacean keeps serving the state it last
+                      read and readiness keeps passing — this is what says the data has stopped
+                      moving. Absent when no watcher is attached.
+                    properties:
+                      connected:
+                        type: boolean
+                        description: Whether the Docker event stream is established.
+                      lastSyncAt:
+                        type: string
+                        format: date-time
+                        description: When a full sync last reached the engine. Absent before the first one succeeds.
+                      lastSyncAgeSeconds:
+                        type: number
+                        description: Seconds since that sync. Compare against the five-minute re-sync interval.
               example:
                 status: ok
                 version: 0.11.0
                 commit: 607a5c7
                 buildDate: "2025-03-15T10:00:00Z"
                 operationsLevel: 1
+                watcher:
+                  connected: true
+                  lastSyncAt: "2025-03-15T10:00:00Z"
+                  lastSyncAgeSeconds: 12.4
 
   /-/ready:
     get:
@@ -175,6 +199,52 @@ paths:
                   status:
                     type: string
                     example: not_ready
+
+  /-/resync:
+    post:
+      operationId: resyncCache
+      tags: [Meta]
+      summary: Re-read the whole cluster from Docker
+      description: |
+        Discards nothing, but re-fetches every resource from the Docker Engine
+        and replaces the in-memory cache with the result. Useful when the cache
+        has drifted — an event missed during a rapid stack deploy, say.
+
+        Not gated on the operations level: it re-reads the cluster and never
+        changes it, so a read-only deployment can still use it. It does require
+        authentication and a grant, unlike the other `/-/` endpoints, because
+        each call sweeps the whole Docker API.
+      responses:
+        "200":
+          description: The re-sync completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  durationMs:
+                    type: integer
+                    format: int64
+                    example: 14
+        "401":
+          description: Not authenticated
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "502":
+          description: The re-sync failed; the cache is unchanged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: error
+                  error:
+                    type: string
 
   /-/metrics:
     get:
@@ -693,17 +763,18 @@ paths:
       tags: [Documentation]
       summary: Web API entry point (alias)
       description: |
-        Redirects to `/`, keeping any `.json` or `.html` suffix: the suffix is
-        the only thing naming the representation, so a target without it would
-        be re-negotiated from an `Accept` header that may disagree.
+        The entry point under the name static hosting taught clients to expect.
+        Content-negotiated exactly as `/` is, and `@id` still names `/`, so the
+        two spellings share one identity. Served rather than redirected: the
+        root has no spelling that carries a suffix, and the `/.html` a redirect
+        would have to name is a path proxies are commonly hardened to refuse.
       responses:
-        "301":
-          description: Moved permanently to `/`
-          headers:
-            Location:
+        "200":
+          description: Entry point
+          content:
+            application/json:
               schema:
-                type: string
-                example: /.json
+                type: object
 
   /api:
     get:
@@ -1513,6 +1584,26 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+
+  /swarm/plugins:
+    get:
+      operationId: getSwarmPlugins
+      tags: [Cluster]
+      summary: Installed Docker plugins, beside the swarm's own configuration
+      description: >
+        An alias of `GET /plugins`, serving the identical response. It exists so
+        the dashboard's swarm page can read the plugin list from the path it
+        already sits under.
+      responses:
+        "200":
+          description: Plugin list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginCollection"
 
   /swarm/unlock-key:
     get:
@@ -4192,61 +4283,6 @@ paths:
           $ref: "#/components/responses/NotModified"
         "404":
           $ref: "#/components/responses/NotFound"
-    put:
-      operationId: updateServiceMode
-      x-badges:
-        - name: "operations-level:3"
-          position: after
-          color: red
-      tags: [Services]
-      summary: Change service mode
-      description: |
-        Changes the service mode between replicated and global.
-        For replicated mode, specify the initial replica count. Requires operations level 3.
-      parameters:
-        - $ref: "#/components/parameters/resourceId"
-        - $ref: "#/components/parameters/IfMatch"
-        - $ref: "#/components/parameters/Prefer"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [mode]
-              properties:
-                mode:
-                  type: string
-                  enum: [replicated, global]
-                  x-enum-descriptions:
-                    - Fixed number of replicas scheduled across the cluster
-                    - One task per node (ignores replica count)
-                replicas:
-                  type: integer
-                  minimum: 0
-                  description: Initial replica count (only for replicated mode)
-            example:
-              mode: replicated
-              replicas: 3
-      responses:
-        "200":
-          description: Updated service
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ServiceDetail"
-        "202":
-          $ref: "#/components/responses/ServiceAccepted"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "412":
-          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/endpoint-mode:
     get:

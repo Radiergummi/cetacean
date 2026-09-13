@@ -431,12 +431,10 @@ func refuse(t *testing.T, router http.Handler, path, accept string) ProblemDetai
 	return problem
 }
 
-// TestUnservedTypeIsRefusedByTheEndpoint: an endpoint refuses every type it
-// does not serve, including one another endpoint does — a graph format
-// resolves successfully here and is no more servable for it.
-//
-// /services and /cluster differ in whether they carry a stream, and /api,
-// /events and /topology dispatch without the helpers.
+// An endpoint refuses every type it does not serve, including one another
+// endpoint does: a graph format resolves here and is no more servable for it.
+// The rows differ in how they dispatch — /services and /cluster in whether
+// they carry a stream, and /api, /events and /topology without the helpers.
 func TestUnservedTypeIsRefusedByTheEndpoint(t *testing.T) {
 	router := newTestRouterWithCache(t, cache.New(nil))
 

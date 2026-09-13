@@ -206,3 +206,134 @@ func TestWatchPolicyFile_InvalidUpdateKeepsOldPolicy(t *testing.T) {
 		t.Fatal("policy should be unchanged after invalid update")
 	}
 }
+
+// replaceViaRename writes content to a temporary file beside path and renames
+// it over the top — the atomic replacement a deployment or an editor performs,
+// and the one a watch on the file's own inode cannot see.
+func replaceViaRename(t *testing.T, path, content string) {
+	t.Helper()
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Rename(tmp, path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestWatchPolicyFile_ReloadsAfterRenameOverWrite covers the write pattern the
+// previous file watch could not see at all. It swaps the policy twice on
+// purpose: a watcher that merely re-added the file after the first event would
+// pass a single-swap test and stop reloading on the second.
+func TestWatchPolicyFile_ReloadsAfterRenameOverWrite(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "policy.json")
+
+	read := `{"grants":[{"resources":["service:*"],"audience":["*"],"permissions":["read"]}]}`
+	if err := os.WriteFile(path, []byte(read), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	e := NewEvaluator()
+	reloadPolicy(e, path)
+
+	stop, err := WatchPolicyFile(e, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stop()
+
+	id := &auth.Identity{Subject: "anyone"}
+
+	replaceViaRename(
+		t,
+		path,
+		`{"grants":[{"resources":["node:*"],"audience":["*"],"permissions":["write"]}]}`,
+	)
+	pollUntil(t, 5*time.Second, 50*time.Millisecond, func() bool {
+		return e.Can(id, "write", "node:any")
+	}, "policy was not reloaded after the first rename-over-write")
+
+	replaceViaRename(
+		t,
+		path,
+		`{"grants":[{"resources":["volume:*"],"audience":["*"],"permissions":["write"]}]}`,
+	)
+	pollUntil(t, 5*time.Second, 50*time.Millisecond, func() bool {
+		return e.Can(id, "write", "volume:any")
+	}, "policy was not reloaded after the second rename-over-write")
+}
+
+// TestWatchPolicyFile_ReloadsAfterSymlinkSwap covers how a Kubernetes
+// ConfigMap and a Docker secret actually update: the mounted name is a symlink
+// into a versioned directory, and an update swaps the directory symlink beside
+// it. No filesystem event ever names the policy file, so a watch filtering on
+// its basename alone would see the update and discard it.
+func TestWatchPolicyFile_ReloadsAfterSymlinkSwap(t *testing.T) {
+	dir := t.TempDir()
+
+	first := filepath.Join(dir, "..v1")
+	if err := os.Mkdir(first, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	read := `{"grants":[{"resources":["service:*"],"audience":["*"],"permissions":["read"]}]}`
+	if err := os.WriteFile(filepath.Join(first, "policy.json"), []byte(read), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	data := filepath.Join(dir, "..data")
+	if err := os.Symlink(first, data); err != nil {
+		t.Fatal(err)
+	}
+
+	path := filepath.Join(dir, "policy.json")
+	if err := os.Symlink(filepath.Join(data, "policy.json"), path); err != nil {
+		t.Fatal(err)
+	}
+
+	e := NewEvaluator()
+	reloadPolicy(e, path)
+
+	stop, err := WatchPolicyFile(e, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stop()
+
+	// Swap in a second version directory exactly as the ConfigMap writer does:
+	// write the new content, point a temporary symlink at it, then rename that
+	// over `..data`. The `policy.json` symlink is never touched.
+	second := filepath.Join(dir, "..v2")
+	if err := os.Mkdir(second, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	write := `{"grants":[{"resources":["node:*"],"audience":["*"],"permissions":["write"]}]}`
+	if err := os.WriteFile(filepath.Join(second, "policy.json"), []byte(write), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	tmp := filepath.Join(dir, "..data_tmp")
+	if err := os.Symlink(second, tmp); err != nil {
+		t.Fatal(err)
+	}
+
+	// Creating the version directory and the temporary symlink are themselves
+	// events in the watched directory, and on kqueue they are the only ones the
+	// swap produces. Letting them drain first is what holds the watcher to
+	// noticing the swap rather than to being woken near it: without it this
+	// passed or failed on the order two goroutines happened to run in.
+	time.Sleep(300 * time.Millisecond)
+
+	if err := os.Rename(tmp, data); err != nil {
+		t.Fatal(err)
+	}
+
+	id := &auth.Identity{Subject: "anyone"}
+	pollUntil(t, 5*time.Second, 50*time.Millisecond, func() bool {
+		return e.Can(id, "write", "node:any")
+	}, "policy was not reloaded after the symlink swap")
+}

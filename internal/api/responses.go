@@ -159,6 +159,20 @@ type HealthResponse struct {
 	Commit          string                 `json:"commit"`
 	BuildDate       string                 `json:"buildDate"`
 	OperationsLevel config.OperationsLevel `json:"operationsLevel"`
+
+	// Omitted when no watcher is attached.
+	Watcher *WatcherHealth `json:"watcher,omitempty"`
+}
+
+// WatcherHealth is the cache-freshness half of GET /-/health. Status stays
+// "ok" while Connected is false: the container healthcheck polls /-/ready, and
+// restarting over an engine outage fixes nothing.
+type WatcherHealth struct {
+	Connected bool `json:"connected"`
+
+	// Absent before the first sync succeeds.
+	LastSyncAt         *time.Time `json:"lastSyncAt,omitempty"`
+	LastSyncAgeSeconds *float64   `json:"lastSyncAgeSeconds,omitempty"`
 }
 
 // --- Sub-resource responses ---
@@ -191,4 +205,20 @@ func NewHealthResponse(status string, level config.OperationsLevel) HealthRespon
 		BuildDate:       version.Date,
 		OperationsLevel: level,
 	}
+}
+
+// withWatcher attaches the cache-freshness report.
+func (h HealthResponse) withWatcher(connected bool, lastSync time.Time) HealthResponse {
+	watcher := &WatcherHealth{Connected: connected}
+
+	if !lastSync.IsZero() {
+		age := time.Since(lastSync).Seconds()
+
+		watcher.LastSyncAt = &lastSync
+		watcher.LastSyncAgeSeconds = &age
+	}
+
+	h.Watcher = watcher
+
+	return h
 }

@@ -297,6 +297,26 @@ wrap items as `{ items, total, limit, offset }` with [RFC 8288](https://www.rfc-
 for pagination. Detail responses wrap the resource with its cross-references, such as the services using a config, or
 the service and node for a task.
 
+## Resource identifiers
+
+Detail paths accept a resource's ID or its name. A name is answered with `307 Temporary Redirect` to the
+canonical, ID-addressed URL:
+
+```bash
+curl -i -H 'Accept: application/json' http://localhost:9000/services/shop_web
+# < HTTP/1.1 307 Temporary Redirect
+# < Location: /services/x3k9m2p8q1w7
+```
+
+`307` preserves the method and the body, so writes may be addressed by name too: `PUT /services/shop_web/scale`
+reaches the scale endpoint with its payload intact. Most clients follow the redirect on request (`curl -L`).
+
+Volumes and stacks are keyed by name already, so their paths never redirect. Tasks are addressable by ID only: a
+task's `<service>.<slot>` name is derived from its parent rather than stored on it.
+
+A name matching more than one resource is answered `409 Conflict` with [`API014`](api/errors#API014), whose
+detail lists every ID the request could have meant.
+
 ## Errors
 
 Errors follow [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details, with Content-Type
@@ -347,6 +367,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 | Cross-origin write from an origin that is not allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
+| Name in the path identifies more than one resource | 409 | [`API014`](api/errors#API014) | Address the resource by ID; the detail lists the candidates |
 
 ## Caching
 
@@ -585,7 +606,14 @@ There is no general rate limiting. Concurrent streams are capped, and a request 
 | Meta | `/-/health`, `/-/ready`, `/-/metrics`, `/-/licenses`, `/-/licenses/texts/{id}`, `/-/notices`, `/-/sbom.cdx`, `/-/docker-latest-version` |
 
 `GET /search` takes `q` (required, max 200 characters) and `limit` (per type, default 3; `0` or a value above 1000
-returns up to 1000). `POST /-/resync` forces a full re-fetch from the Docker socket.
+returns up to 1000). `POST /-/resync` forces a full re-fetch from the Docker socket; unlike the other
+`/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API,
+but it is not gated on the operations level — it re-reads the cluster and never changes it.
+
+`GET /-/health` carries a `watcher` object reporting whether Cetacean is still tracking the cluster:
+`connected` for the Docker event stream, and `lastSyncAt` / `lastSyncAgeSeconds` for the last
+successful read. `/-/metrics` carries the same as `cetacean_watcher_connected`,
+`cetacean_cache_last_sync_timestamp_seconds` and `cetacean_cache_sync_failures_total`.
 
 ### Writes
 
@@ -612,7 +640,6 @@ passes the per-resource [ACL][authorization] write check.
 | `PATCH /services/{id}/networks` | 2 |
 | `PATCH /services/{id}/mounts` | 2 |
 | `PATCH /services/{id}/container-config` | 2 |
-| `PUT /services/{id}/mode` | 3 |
 | `PUT /services/{id}/endpoint-mode` | 3 |
 | `DELETE /services/{id}` | 3 |
 | `PATCH /nodes/{id}/labels` | 2 |
@@ -659,14 +686,15 @@ A `412` always means the resource moved. Where the current representation cannot
 `DELETE /plugins/{name}` inspects the daemon rather than the cache — the write answers `503`
 (`ENG001`) or `500` (`ENG004`) instead, so an unreachable daemon is not reported as a stale `ETag`.
 
-30 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
+
+29 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
 `PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
 `PUT /services/{id}/placement`, `PATCH /services/{id}/ports`,
 `PATCH /services/{id}/update-policy`, `PATCH /services/{id}/rollback-policy`,
 `PATCH /services/{id}/log-driver`, `PATCH /services/{id}/configs`,
 `PATCH /services/{id}/secrets`, `PATCH /services/{id}/networks`,
 `PATCH /services/{id}/mounts`, `PATCH /services/{id}/container-config`,
-`PUT /services/{id}/mode`, `PUT /services/{id}/endpoint-mode`, `DELETE /services/{id}`,
+`PUT /services/{id}/endpoint-mode`, `DELETE /services/{id}`,
 `PATCH /nodes/{id}/labels`, `PUT /nodes/{id}/role`, `DELETE /nodes/{id}`,
 `PATCH /configs/{id}/labels`, `DELETE /configs/{id}`, `PATCH /secrets/{id}/labels`,
 `DELETE /secrets/{id}`, `DELETE /networks/{id}`, `DELETE /volumes/{name}`,

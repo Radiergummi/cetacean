@@ -47,7 +47,7 @@ func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec
 		wrapped := CollectionResponse[Item[T]]{
 			Context: raw.Context,
 			Type:    raw.Type,
-			Items:   wrapItems(raw.Items, spec.itemType, spec.idFunc),
+			Items:   wrapItems(r.Context(), raw.Items, spec.itemType, spec.idFunc),
 			Total:   raw.Total,
 			Limit:   raw.Limit,
 			Offset:  raw.Offset,

@@ -806,8 +806,6 @@ export const api = {
     ).then(({ data }) => data),
   scaleService: (id: string, replicas: number) =>
     put<ServiceDetail>(`/services/${id}/scale`, { replicas }),
-  updateServiceMode: (id: string, mode: "replicated" | "global", replicas?: number) =>
-    put<ServiceDetail>(`/services/${id}/mode`, { mode, replicas }),
   updateServiceEndpointMode: (id: string, mode: "vip" | "dnsrr") =>
     put<ServiceDetail>(`/services/${id}/endpoint-mode`, { mode }),
   updateServiceImage: (id: string, image: string) =>
