@@ -385,8 +385,11 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Match resource.
-	if resourceForm != "" && resourceForm != codeData.Resource {
+	// Match resource, on the spelling a grant binds to rather than whichever
+	// equivalent one the client sent.
+	if resourceForm != "" &&
+		s.resources.canonicalSpelling(resourceForm) !=
+			s.resources.canonicalSpelling(codeData.Resource) {
 		writeTokenError(
 			w,
 			http.StatusBadRequest,
@@ -498,7 +501,9 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// through to Rotate, whose theft branch is the only thing that burns a
 	// replayed family — refusing here instead would leave a replay undetected.
 	if bound, ok := s.refreshTokens.Validate(refreshTokenRaw); ok {
-		if resourceForm != "" && resourceForm != bound.Resource {
+		if resourceForm != "" &&
+			s.resources.canonicalSpelling(resourceForm) !=
+				s.resources.canonicalSpelling(bound.Resource) {
 			writeTokenError(
 				w,
 				http.StatusBadRequest,
