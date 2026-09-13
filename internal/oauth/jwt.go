@@ -41,10 +41,16 @@ type jwtHeaderClaims struct {
 
 // AccessTokenClaims holds the application-level claims carried by the JWT.
 // Standard claims (iss, aud, exp, iat, jti) are managed internally.
+//
+// Email and DisplayName are here because the ACL resolves a user audience
+// against subject or email: without them a grant matches one person's session
+// and not their token. Raw claims stay out, as they do from the session cookie.
 type AccessTokenClaims struct {
-	Subject  string   `json:"sub"`
-	Groups   []string `json:"groups,omitempty"`
-	ClientID string   `json:"client_id,omitempty"`
+	Subject     string   `json:"sub"`
+	Email       string   `json:"email,omitempty"`
+	DisplayName string   `json:"name,omitempty"`
+	Groups      []string `json:"groups,omitempty"`
+	ClientID    string   `json:"client_id,omitempty"`
 }
 
 type jwtPayload struct {
@@ -54,6 +60,8 @@ type jwtPayload struct {
 	IssuedAt  int64    `json:"iat"`
 	JTIID     string   `json:"jti"`
 	Subject   string   `json:"sub"`
+	Email     string   `json:"email,omitempty"`
+	Name      string   `json:"name,omitempty"`
 	Groups    []string `json:"groups,omitempty"`
 
 	// No omitempty: RFC 9068 §2.2 requires the claim, and an empty one is
@@ -158,6 +166,8 @@ func (t *TokenIssuer) IssueAccessToken(
 		ExpiresAt: now.Add(ttl).Unix(),
 		JTIID:     base64.RawURLEncoding.EncodeToString(jtiBytes),
 		Subject:   claims.Subject,
+		Email:     claims.Email,
+		Name:      claims.DisplayName,
 		Groups:    claims.Groups,
 		ClientID:  claims.ClientID,
 	}
@@ -240,8 +250,10 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 	}
 
 	return &AccessTokenClaims{
-		Subject:  payload.Subject,
-		Groups:   payload.Groups,
-		ClientID: payload.ClientID,
+		Subject:     payload.Subject,
+		Email:       payload.Email,
+		DisplayName: payload.Name,
+		Groups:      payload.Groups,
+		ClientID:    payload.ClientID,
 	}, nil
 }

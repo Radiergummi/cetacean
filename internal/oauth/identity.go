@@ -20,8 +20,10 @@ func (s *Server) Identify(token string) (*auth.Identity, error) {
 	}
 
 	return &auth.Identity{
-		Subject:  claims.Subject,
-		Groups:   claims.Groups,
-		Provider: ProviderName,
+		Subject:     claims.Subject,
+		DisplayName: claims.DisplayName,
+		Email:       claims.Email,
+		Groups:      claims.Groups,
+		Provider:    ProviderName,
 	}, nil
 }
