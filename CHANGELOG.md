@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
 
 ### Fixed
+- A replayed refresh token revokes the whole grant family and the remembered approval again; sending the `resource` parameter — which every conformant client does — had the request refused before theft detection could run
 - Everything that does not describe the cluster keeps working while the Docker daemon is unreachable — the dashboard's own icons and manifest, the API catalogue, the OpenSearch description and `/profile`
 - The CSV alternate a filtered listing advertises downloads the rows you are looking at; it dropped the query, so following the link returned everything
 - A browser-based MCP client can complete its OAuth flow again — cross-origin protection covered the endpoints that authenticate from the request body, where there is no ambient credential to defend

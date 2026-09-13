@@ -814,18 +814,16 @@ func TestApprovingThroughTheConsentPageIsRemembered(t *testing.T) {
 }
 
 // postRefreshGrant drives a refresh_token grant through the real token
-// endpoint.
-//
-// No resource parameter: when one is supplied the handler validates it against
-// the live token before rotating, so a replayed token is rejected as unknown
-// and never reaches the theft branch. RequireResourceIndicator is off in
-// newTestServer, so omitting it is a legitimate request.
+// endpoint. The resource parameter is sent because require_resource_indicator
+// defaults to on, so every conformant client sends one — and it is the path on
+// which a pre-rotation check once swallowed the replay before Rotate saw it.
 func postRefreshGrant(t *testing.T, s *Server, token string) *httptest.ResponseRecorder {
 	t.Helper()
 
 	form := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {token},
+		"resource":      {s.cfg.Resource},
 	}
 
 	req := httptest.NewRequest(
