@@ -40,6 +40,7 @@ the client asks for. There is no `/api/v1/` prefix; versioning lives in the medi
 | `application/vnd.jgf+json`         | `.jgf`      | JSON Graph Format, `/topology` only          |
 | `application/graphml+xml`          | `.graphml`  | GraphML, `/topology` only                    |
 | `text/vnd.graphviz`                | `.dot`      | Graphviz DOT, `/topology` only               |
+| `application/yaml`                 | `.yaml`, `.yml` | [Compose file](#compose-export), on a stack or a service |
 
 All negotiated responses include `Vary: Accept`. Requesting a type an endpoint cannot produce returns
 `406 Not Acceptable` with code [`API003`](api/errors#API003); asking for SSE on an endpoint without a stream
@@ -207,6 +208,38 @@ curl 'http://localhost:9000/tasks.csv?limit=100&offset=200'
 
 A [`Range` header](#range-header-pagination) is not honoured for CSV: that exchange answers `206` with a
 `Content-Range`, and a download is always a plain `200`. Ask for a page with `limit` and `offset` instead.
+
+## Compose export
+
+A stack or a single service also serves a Compose file, for the consumer no other format serves: someone who wants
+the running state as something they can read, keep in version control, or redeploy.
+
+```bash
+curl -o myapp.yaml http://localhost:9000/stacks/myapp.yaml
+curl -H 'Accept: application/yaml' http://localhost:9000/services/r8m2x5nk3p7q
+```
+
+The promise is narrow and the file says so in a header comment: it redeploys to **the same running state on the same
+cluster**. It is not the file that originally created the stack, and it is not portable on its own.
+
+### What is external, and why
+
+Secrets are never exported — that rule holds here as everywhere else. Configs are not exported either, even though
+their content is available: inlining it through Compose's `content:` field would have a redeploy create a new config
+rather than reuse the one the running service is already mounting, which would break the promise above. Both are
+referenced as `external: true`, so another cluster needs them created first.
+
+Networks and volumes split. One carrying the stack's `com.docker.stack.namespace` label is the stack's own, and is
+declared with its driver and options. Everything else — a shared `monitoring` overlay the services merely attach to —
+is `external: true` under its full name. Getting this backwards is the single most likely way to produce a file that
+reads correctly and fails to deploy, in both directions.
+
+Names are shortened by the stack's own prefix, because `docker stack deploy` adds it back: the service Swarm calls
+`myapp_api` is `api` in the file. A single-service export shortens nothing and declares everything external, because
+a service creates none of what it references.
+
+Anything the projection could not carry — a custom seccomp profile, a second platform — is listed in the header
+comment rather than dropped silently.
 
 ## Pagination
 
