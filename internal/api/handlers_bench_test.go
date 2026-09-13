@@ -17,7 +17,9 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/sse"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -1159,5 +1161,82 @@ func BenchmarkMixedWorkloadParallel(b *testing.B) {
 				}
 			})
 		})
+	}
+}
+
+// =============================================================================
+// Content coding
+//
+// Every benchmark above negotiates identity, but compressionThreshold is 1KiB
+// and a browser asks for a coding, so the pass these measure is one production
+// pays on nearly every list response.
+// =============================================================================
+
+func BenchmarkHandleListNodes_Encoded(b *testing.B) {
+	for _, n := range handlerSizes {
+		c := cache.New(nil)
+		populateCache(c, n)
+		h := newTestHandlers(b, withCache(c))
+
+		for _, coding := range []string{"identity", "gzip", "zstd"} {
+			b.Run(fmt.Sprintf("size=%d/%s", n, coding), func(b *testing.B) {
+				for b.Loop() {
+					req := httptest.NewRequest("GET", "/api/nodes?per_page=1000", nil)
+					if coding != "identity" {
+						req.Header.Set("Accept-Encoding", coding)
+					}
+					h.HandleListNodes(httptest.NewRecorder(), req)
+				}
+			})
+		}
+	}
+}
+
+// =============================================================================
+// ACL filtering
+//
+// newTestHandlers leaves the evaluator nil, which acl.Filter short-circuits, so
+// every other handler benchmark measures the unguarded path. These carry a
+// policy so the per-item grant matching is visible.
+// =============================================================================
+
+func benchACL(grants ...acl.Grant) *acl.Evaluator {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: grants})
+
+	return e
+}
+
+func BenchmarkHandleListServices_ACL(b *testing.B) {
+	policies := map[string][]acl.Grant{
+		"wildcard": {{Resources: []string{"service:*"}, Permissions: []string{"read"}}},
+		"prefix":   {{Resources: []string{"service:svc-1*"}, Permissions: []string{"read"}}},
+		"many_grants": func() []acl.Grant {
+			g := make([]acl.Grant, 0, 20)
+			for i := range 20 {
+				g = append(g, acl.Grant{
+					Resources:   []string{fmt.Sprintf("service:svc-%d", i)},
+					Permissions: []string{"read"},
+				})
+			}
+			return g
+		}(),
+	}
+
+	for name, grants := range policies {
+		for _, n := range []int{100, 1000} {
+			c := cache.New(nil)
+			populateCache(c, n)
+			h := newTestHandlers(b, withCache(c), withACL(benchACL(grants...)))
+			identity := &auth.Identity{Subject: "bench", Provider: "test"}
+
+			b.Run(fmt.Sprintf("%s/size=%d", name, n), func(b *testing.B) {
+				for b.Loop() {
+					req := httptest.NewRequest("GET", "/api/services?per_page=1000", nil)
+					req = req.WithContext(auth.ContextWithIdentity(req.Context(), identity))
+					h.HandleListServices(httptest.NewRecorder(), req)
+				}
+			})
+		}
 	}
 }
