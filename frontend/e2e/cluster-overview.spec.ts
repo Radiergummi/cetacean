@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, apiJson } from "./fixtures";
 
 test.describe("Cluster Overview", () => {
   test("page loads with Cluster Overview heading", async ({ page }) => {
@@ -111,16 +111,27 @@ test.describe("Cluster Overview", () => {
     await expect(dismissButton).not.toBeVisible();
   });
 
-  test("Recommendations summary View all link navigates to /recommendations", async ({ page }) => {
+  test("Recommendations summary View all link navigates to /recommendations", async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    // The summary fetches after mount, so whether the link appears is a
+    // question for the API.
+    const recommendations = await apiJson(request, baseURL, "/recommendations");
+    const items = recommendations.items;
+    test.skip(
+      !Array.isArray(items) || items.length === 0,
+      "No recommendations present — View all link not rendered",
+    );
+
     await page.goto("/");
 
-    // The "View all" link is only rendered when there are recommendations.
     const viewAll = page.getByRole("link", { name: /View all/i });
-    const count = await viewAll.count();
-    test.skip(count === 0, "No recommendations present — View all link not rendered");
+    await expect(viewAll).toBeVisible({ timeout: 10_000 });
 
     await viewAll.click();
-    await expect(page).toHaveURL("/recommendations");
+    await expect(page).toHaveURL(/\/recommendations$/);
   });
 
   test.describe("Resource Usage by Stack (Prometheus)", () => {

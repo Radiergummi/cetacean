@@ -33,10 +33,10 @@ test.describe("Error Pages", () => {
       timeout: 10_000,
     });
 
-    // Click the first error code link in the table
+    // The catalog is compiled in, so the table is never empty — just not
+    // rendered yet when the heading appears.
     const codeLink = page.locator("table tbody tr a").first();
-    const count = await codeLink.count();
-    test.skip(count === 0, "No error codes listed — cannot test detail page");
+    await expect(codeLink).toBeVisible({ timeout: 10_000 });
 
     await codeLink.click();
     await expect(page).toHaveURL(/\/api\/errors\/.+/);

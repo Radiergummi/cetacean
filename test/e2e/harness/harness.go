@@ -1,0 +1,230 @@
+//go:build e2e
+
+// Package harness owns the lifecycle of the end-to-end environment: the
+// compose project holding the Docker-in-Docker engine and its supporting
+// services, and a client connected to that engine.
+package harness
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/client"
+)
+
+const (
+	dockerHost   = "tcp://127.0.0.1:12375"
+	upTimeout    = 90 * time.Second
+	pollInterval = 500 * time.Millisecond
+)
+
+// Env is a running end-to-end environment.
+type Env struct {
+	DockerHost string
+	CertDir    string
+	Docker     *client.Client
+}
+
+var (
+	once   sync.Once
+	shared *Env
+	upErr  error
+)
+
+// Up brings the environment up and returns it. The environment is shared by
+// every test in a run — bringing up a fresh engine per test would cost more
+// than the isolation is worth, and fixtures are namespaced instead.
+//
+// Up does NOT register a t.Cleanup teardown, and must not: the environment is
+// shared process-wide through sync.Once, so a Cleanup scoped to whichever
+// test happened to call Up first would tear it down under its sibling tests.
+// Teardown is owned by the `make test-stack` recipe instead, which brings the
+// environment down on a successful run and deliberately leaves it running on
+// failure, so a failed case stays available for inspection.
+func Up(t *testing.T) *Env {
+	t.Helper()
+
+	once.Do(func() { shared, upErr = UpCLI() })
+
+	if upErr != nil {
+		t.Fatalf("bring up environment: %v", upErr)
+	}
+
+	return shared
+}
+
+// UpCLI is Up's non-test entry point, for callers that have no *testing.T —
+// e.g. cmd/e2eenv. It does not share Up's sync.Once: a CLI invocation brings
+// up its own environment rather than joining a test run's shared one.
+func UpCLI() (*Env, error) {
+	root, err := repoRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	composeFile := filepath.Join(root, "test", "e2e", "compose.e2e.yaml")
+
+	ctx, cancel := context.WithTimeout(context.Background(), upTimeout)
+	defer cancel()
+
+	// No --wait: cert-init is a one-shot that exits, which --wait treats as a
+	// failure. The explicit polls below are the stronger check anyway.
+	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "up", "-d")
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("docker compose up: %w", err)
+	}
+
+	certDir := filepath.Join(root, "test", "e2e", "certs")
+	if err := waitForCerts(certDir); err != nil {
+		return nil, err
+	}
+
+	docker, err := client.NewClientWithOpts(
+		client.WithHost(dockerHost),
+		client.WithVersion("1.46"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("docker client: %w", err)
+	}
+
+	if err := waitForEngine(docker); err != nil {
+		return nil, err
+	}
+
+	return &Env{DockerHost: dockerHost, CertDir: certDir, Docker: docker}, nil
+}
+
+// waitForCerts blocks until cert-init has finished. The container exits when
+// done, so `--wait` does not cover it.
+//
+// It gates on the `ready` sentinel as well as the chain, because the chain
+// existing is not the same as cert-init being done: the script writes
+// client.pem and only then fixes the modes on every key it wrote. Returning
+// on client.pem's appearance handed the cert lane a chain whose key files
+// still carried whatever mode the container created them with — so cert-init
+// touches `ready` after that chmod, and this waits for it.
+func waitForCerts(dir string) error {
+	deadline := time.Now().Add(upTimeout)
+	want := []string{
+		"ca.pem", "server.pem", "server-key.pem", "client.pem", "client-key.pem",
+		"ready",
+	}
+
+	for time.Now().Before(deadline) {
+		missing := false
+
+		for _, name := range want {
+			if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+				missing = true
+
+				break
+			}
+		}
+
+		if !missing {
+			return nil
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	return fmt.Errorf("cert-init did not finish writing %s within %s", dir, upTimeout)
+}
+
+// engineLabel is set on the DinD engine's own dockerd (compose.e2e.yaml's
+// `--label` flag) so waitForEngine can tell this engine apart from whatever
+// else might already be listening on dockerHost. Without it, an empty or
+// misconfigured CETACEAN_DOCKER_HOST elsewhere that happened to resolve here
+// — or literally anything else answering Ping on this loopback port — would
+// pass for "our" engine, and the suite's mutations (including
+// removeStack's deletions) would land on a stranger's cluster.
+const engineLabel = "cetacean-e2e=true"
+
+func waitForEngine(docker *client.Client) error {
+	deadline := time.Now().Add(upTimeout)
+
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		info, err := docker.Info(ctx)
+		cancel()
+
+		if err == nil {
+			if slices.Contains(info.Labels, engineLabel) {
+				return nil
+			}
+
+			lastErr = fmt.Errorf(
+				"engine at %s does not carry the %q label; refusing to run against a Docker "+
+					"daemon this suite did not start (is something else listening on %s?)",
+				dockerHost, engineLabel, dockerHost,
+			)
+
+			break
+		}
+
+		lastErr = err
+
+		time.Sleep(pollInterval)
+	}
+
+	return fmt.Errorf("engine at %s not usable within %s: %w", dockerHost, upTimeout, lastErr)
+}
+
+// SwarmInit makes the engine a swarm manager. It is idempotent: an engine
+// that is already a manager is left alone.
+func (e *Env) SwarmInit(t *testing.T) {
+	t.Helper()
+
+	if err := e.SwarmInitCLI(); err != nil {
+		t.Fatalf("%v", err)
+	}
+}
+
+// SwarmInitCLI is SwarmInit's non-test entry point.
+func (e *Env) SwarmInitCLI() error {
+	ctx := context.Background()
+
+	info, err := e.Docker.Info(ctx)
+	if err != nil {
+		return fmt.Errorf("info: %w", err)
+	}
+
+	if info.Swarm.ControlAvailable {
+		return nil
+	}
+
+	if _, err := e.Docker.SwarmInit(ctx, swarm.InitRequest{
+		ListenAddr:    "0.0.0.0:2377",
+		AdvertiseAddr: "127.0.0.1",
+	}); err != nil {
+		return fmt.Errorf("SwarmInit: %w", err)
+	}
+
+	return nil
+}
+
+// repoRoot walks up from this source file to the module root, so the harness
+// works regardless of which package's tests invoked it.
+func repoRoot() (string, error) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("cannot locate harness source")
+	}
+
+	// .../test/e2e/harness/harness.go -> repo root is four levels up.
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..")), nil
+}
