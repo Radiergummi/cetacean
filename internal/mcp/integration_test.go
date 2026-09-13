@@ -212,8 +212,8 @@ func TestMCPEndToEnd(t *testing.T) {
 }
 
 // newOAuthIntegrationServer wires an MCP server with OAuth + ACL identical to
-// production. Returns the handler, a TokenIssuer for minting bearer tokens, and
-// the OAuth server (kept for cleanup / future assertions).
+// production. The returned TokenIssuer shares the server's root key, so tokens
+// it mints verify — which is what makes these tests end-to-end.
 func newOAuthIntegrationServer(
 	t *testing.T,
 	c *cache.Cache,

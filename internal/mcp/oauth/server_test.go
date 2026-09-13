@@ -506,20 +506,14 @@ func TestWriteUnauthorized(t *testing.T) {
 		t.Fatalf("expected 401, got %d", rec.Code)
 	}
 
-	wwwAuth := rec.Header().Get("WWW-Authenticate")
-	if wwwAuth == "" {
-		t.Fatal("expected WWW-Authenticate header")
-	}
-	if !strings.Contains(wwwAuth, `resource_metadata=`) {
-		t.Errorf("WWW-Authenticate missing resource_metadata: %q", wwwAuth)
-	}
-	if !strings.Contains(wwwAuth, `error="invalid_token"`) {
-		t.Errorf("WWW-Authenticate missing error: %q", wwwAuth)
-	}
-	// Must contain the PRM URL.
-	expectedURL := s.cfg.Issuer + "/.well-known/oauth-protected-resource"
-	if !strings.Contains(wwwAuth, expectedURL) {
-		t.Errorf("WWW-Authenticate missing PRM URL %q: %q", expectedURL, wwwAuth)
+	// Asserted whole rather than by substring: the realm and the parameter order
+	// are what a client parses, and a piecewise check cannot see either change.
+	want := `Bearer realm="mcp", ` +
+		`resource_metadata="https://cetacean.test/.well-known/oauth-protected-resource", ` +
+		`error="invalid_token"`
+
+	if got := rec.Header().Get("WWW-Authenticate"); got != want {
+		t.Errorf("WWW-Authenticate = %q, want %q", got, want)
 	}
 }
 
