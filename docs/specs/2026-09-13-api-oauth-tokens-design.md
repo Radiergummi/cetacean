@@ -209,7 +209,7 @@ What is actually MCP-specific, in full:
 | `prm.go` | one document, one resource | one per resource, at its RFC 9728 path |
 | `WriteUnauthorized` | `realm="mcp"` hardcoded | realm per resource |
 | `consent.go` | `csrfCookieName = "mcp_csrf_nonce"` | rename is free; it only costs a re-prompt to anyone mid-flow across the deploy |
-| `persist.go` + `main.go` | `{data_dir}/mcp-tokens.json` | `oauth-tokens.json`, falling back to the old name once |
+| `persist.go` + `main.go` | `{data_dir}/mcp-tokens.json` | `oauth-tokens.json`; shipped without the fallback, so the old file is never read |
 | log and panic strings | "MCP OAuth …", `"mcp/oauth: …"` | cosmetic |
 | comments in `dcr.go`, `store.go` | "what MCP clients overwhelmingly are", "the MCP endpoint URL" | cosmetic, but they are the ones that would mislead the next reader |
 
@@ -328,4 +328,4 @@ The ones that would actually catch a mistake here:
   email-keyed grant and receiving the same `Allow` — the assertion decision 4 exists for.
 - Both PRM documents under a base path, and the `WWW-Authenticate` from each transport naming its
   own.
-- A restart with the old `mcp-tokens.json` present keeping every grant alive.
+- A restart with the old `mcp-tokens.json` present ignoring it, since no fallback shipped.
