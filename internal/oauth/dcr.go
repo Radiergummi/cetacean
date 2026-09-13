@@ -30,7 +30,7 @@ type ClientRegistration struct {
 	// "web". It governs which redirect URIs are acceptable: "web" requires
 	// https and forbids loopback, "native" permits loopback and custom
 	// schemes. 2026-07-28 requires clients to state it (SEP-837); we default
-	// to "native", because that is what MCP clients overwhelmingly are and
+	// to "native", because that is what these clients overwhelmingly are and
 	// because the OIDC default of "web" would reject their redirect URIs.
 	ApplicationType string `json:"application_type,omitempty"`
 }

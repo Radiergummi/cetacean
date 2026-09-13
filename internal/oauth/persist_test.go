@@ -67,14 +67,14 @@ func persisting(s *RefreshTokenStore, path string) *ConsentStore {
 }
 
 func TestRefreshTokenSurvivesRestart(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	token := s.Issue(RefreshTokenData{
 		Subject:  "user@example.com",
 		Groups:   []string{"ops"},
 		ClientID: "https://example.com/client",
-		Resource: "https://cetacean.example.com/mcp",
+		Resource: "https://cetacean.example.com/resource",
 	}, time.Hour)
 
 	restored := restart(t, s, path)
@@ -89,7 +89,7 @@ func TestRefreshTokenSurvivesRestart(t *testing.T) {
 	if data.ClientID != "https://example.com/client" {
 		t.Errorf("client id = %q", data.ClientID)
 	}
-	if data.Resource != "https://cetacean.example.com/mcp" {
+	if data.Resource != "https://cetacean.example.com/resource" {
 		t.Errorf("resource = %q", data.Resource)
 	}
 	if len(data.Groups) != 1 || data.Groups[0] != "ops" {
@@ -98,7 +98,7 @@ func TestRefreshTokenSurvivesRestart(t *testing.T) {
 }
 
 func TestTheftDetectionSurvivesRestart(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	first := s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
@@ -125,7 +125,7 @@ func TestTheftDetectionSurvivesRestart(t *testing.T) {
 }
 
 func TestExpiredGrantFamilyIsDroppedOnLoad(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	live := s.Issue(RefreshTokenData{Subject: "live@example.com"}, time.Hour)
@@ -180,7 +180,7 @@ func TestExpiredGrantFamilyIsDroppedOnLoad(t *testing.T) {
 
 func TestRefreshTokenFileIsPrivateAndAtomic(t *testing.T) {
 	dir := t.TempDir()
-	path := dir + "/mcp-tokens.json"
+	path := dir + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
@@ -239,7 +239,7 @@ func TestReadRefreshTokensRejectsUnreadableFiles(t *testing.T) {
 }
 
 func TestIssueIsWrittenThrough(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	persisting(s, path)
@@ -255,7 +255,7 @@ func TestIssueIsWrittenThrough(t *testing.T) {
 }
 
 func TestRotateIsWrittenThrough(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	persisting(s, path)
@@ -275,7 +275,7 @@ func TestRotateIsWrittenThrough(t *testing.T) {
 }
 
 func TestRevokeIsWrittenThrough(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	persisting(s, path)
@@ -291,17 +291,17 @@ func TestRevokeIsWrittenThrough(t *testing.T) {
 }
 
 func TestServerCarriesRefreshTokensAcrossRestart(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
-	before := newPersistingServer(t, path, "https://cetacean.test/mcp")
+	before := newPersistingServer(t, path, "https://cetacean.test/resource")
 	token := before.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user@example.com",
 		ClientID: "https://example.com/client",
-		Resource: "https://cetacean.test/mcp",
+		Resource: "https://cetacean.test/resource",
 	}, 720*time.Hour)
 
 	// A second Server over the same path stands in for the process restarting.
-	after := newPersistingServer(t, path, "https://cetacean.test/mcp")
+	after := newPersistingServer(t, path, "https://cetacean.test/resource")
 
 	if _, ok := after.refreshTokens.Validate(token); !ok {
 		t.Fatal("a refresh token issued before the restart should still validate")
@@ -325,7 +325,7 @@ func TestServerWithoutStatePathKeepsTokensInMemory(t *testing.T) {
 }
 
 func TestUnknownTokenRotationDoesNotWrite(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	persisting(s, path)
@@ -346,7 +346,7 @@ func TestUnknownTokenRotationDoesNotWrite(t *testing.T) {
 }
 
 func TestUnknownTokenRevocationDoesNotWrite(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	persisting(s, path)
@@ -364,7 +364,7 @@ func TestUnknownTokenRevocationDoesNotWrite(t *testing.T) {
 }
 
 func TestStateFileSerializesConcurrentWriters(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	tokens := NewRefreshTokenStore()
 	consent := persisting(tokens, path)

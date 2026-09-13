@@ -4,10 +4,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 )
 
-// ProviderName identifies identities derived from MCP bearer tokens. Stamped
-// on auth.Identity.Provider so downstream code can distinguish OAuth-vended
-// MCP identities from regular Cetacean auth provider identities.
-const ProviderName = "mcp-oauth"
+// ProviderName identifies identities derived from a bearer token this server
+// issued. Stamped on auth.Identity.Provider so downstream code can tell them
+// from identities an upstream auth provider established.
+const ProviderName = "oauth"
 
 // Identify returns the identity a bearer token carries, so a resource server
 // needs no knowledge of the claim set. The error is VerifyAccessToken's own,

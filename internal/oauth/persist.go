@@ -303,7 +303,7 @@ func sweepTempFiles(path string) {
 
 	for _, orphan := range orphans {
 		if err := os.Remove(orphan); err != nil {
-			slog.Warn("could not remove orphaned MCP OAuth state temp file",
+			slog.Warn("could not remove orphaned OAuth state temp file",
 				"error", err,
 				"path", orphan,
 			)
@@ -351,7 +351,7 @@ func (f *stateFile) write() {
 
 	if err := writeState(f.path, state); err != nil {
 		slog.Warn(
-			"MCP OAuth state write failed; tokens and approvals will not survive a restart",
+			"OAuth state write failed; tokens and approvals will not survive a restart",
 			"error", err,
 			"path", f.path,
 		)

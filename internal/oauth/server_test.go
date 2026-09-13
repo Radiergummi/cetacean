@@ -21,7 +21,7 @@ func newTestServer(t *testing.T) *Server {
 	cfg := ServerConfig{
 		Issuer:   "https://cetacean.test",
 		BasePath: "",
-		Resource: "https://cetacean.test/mcp",
+		Resource: "https://cetacean.test/resource",
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,
@@ -264,7 +264,7 @@ func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
 		"redirect_uri":  {"http://localhost/cb"},
 		"client_id":     {"test-client"},
 		"code_verifier": {verifier},
-		"resource":      {"https://other.server/mcp"},
+		"resource":      {"https://other.server/resource"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -460,7 +460,7 @@ func TestCodeVerifier_RFC7636Length(t *testing.T) {
 
 func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 	srv := newTestServer(t)
-	// Issue a refresh token bound to MCPResource.
+	// Issue a refresh token bound to the configured resource.
 	rt := srv.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "u@e",
 		ClientID: "https://example.com/client",
@@ -470,7 +470,7 @@ func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 	form := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {rt},
-		"resource":      {"https://other-cetacean.example.com/mcp"}, // mismatch
+		"resource":      {"https://other-cetacean.example.com/resource"}, // mismatch
 	}
 
 	rec := httptest.NewRecorder()
