@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -304,6 +305,87 @@ func TestHandlerAuthBypassIgnoredWhenModeNotListed(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401 when active mode is not in AuthBypass", rec.Code)
+	}
+}
+
+// The identity a bearer token yields is the whole input to the ACL, so every
+// field of it is load-bearing — including the ones left empty, which is why the
+// comparison is exact rather than field-by-field.
+func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
+	c := cache.New(nil)
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+
+	key := []byte("test-secret-32-bytes-long-padding")
+	oauthSrv := oauth.NewServer(oauth.ServerConfig{
+		Issuer:      "https://cetacean.example.com",
+		BasePath:    "",
+		MCPResource: "https://cetacean.example.com/mcp",
+		MCP:         cfg,
+		SigningKey:  key,
+	})
+
+	issuer, err := oauth.NewTokenIssuer(
+		key,
+		"https://cetacean.example.com",
+		"https://cetacean.example.com/mcp",
+	)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
+	}
+	token, err := issuer.IssueAccessToken(oauth.AccessTokenClaims{
+		Subject:  "user@example.com",
+		Groups:   []string{"ops"},
+		ClientID: "test-client",
+	}, cfg.AccessTokenTTL)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+
+	srv, err := New(c, Options{Config: cfg, OAuth: oauthSrv})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	var got *auth.Identity
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = auth.IdentityFromContext(r.Context())
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("Authorization", "Bearer "+token)
+	srv.bearerAuth(next).ServeHTTP(httptest.NewRecorder(), req)
+
+	want := &auth.Identity{
+		Subject:  "user@example.com",
+		Groups:   []string{"ops"},
+		Provider: ProviderName,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identity = %+v, want %+v", got, want)
+	}
+}
+
+// Without an authorization server there is no bearer middleware, which is only
+// safe because auth mode "none" is the only configuration that reaches here.
+// Many tool tests depend on it incidentally; this one says so.
+func TestHandlerWithoutOAuthServesUnguarded(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+
+	srv, err := New(cache.New(nil), Options{Config: cfg})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusUnauthorized {
+		t.Fatalf("status = 401 with no OAuth server configured; want unguarded")
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -91,6 +92,17 @@ func TestConsentPageRender(t *testing.T) {
 	csp := rec.Header().Get("Content-Security-Policy")
 	if !strings.Contains(csp, "frame-ancestors 'none'") {
 		t.Errorf("CSP = %q, want frame-ancestors 'none'", csp)
+	}
+
+	// The literal name, not the constant: a consent form in flight is matched by
+	// what is on the wire, so renaming the constant costs a re-prompt and must
+	// be a visible decision rather than a silent one.
+	var names []string
+	for _, cookie := range rec.Result().Cookies() {
+		names = append(names, cookie.Name)
+	}
+	if !slices.Contains(names, "mcp_csrf_nonce") {
+		t.Errorf("cookies = %q, want one named mcp_csrf_nonce", names)
 	}
 }
 
