@@ -61,6 +61,21 @@ Each of these looks like a simplification and is not.
   proxy named — which broke headers mode behind every proxy. The composed
   behaviour is covered in `internal/api/auth_proxy_test.go`, not in the provider
   tests, which is where it hid.
+- **The cache generation is not the history sequence.** `History.Count` does not
+  advance for a sync event, because a resync is not a list of changes a client
+  can replay — and `ReplaceAll` replaces every resource map behind exactly one of
+  those. `Cache.Generation` is the separate counter that does, and it is what
+  anything caching a response must key on.
+- **A validator derived from the generation is only as correct as its inputs.**
+  Hashing a body is correct by construction; `derivedETag` is not. Every list is
+  ACL-filtered per identity and the policy is reloaded at runtime, so a key
+  missing the caller's grants or the policy generation hands one caller a 304 for
+  another's data. Add an input to a response and it goes in the key first;
+  `TestDerivedETagVaries` fails when one stops mattering.
+- **`ResourceMap.Each` yields under the read lock.** Nothing in the loop may call
+  back into the cache: Go's `RWMutex` is not re-entrant for readers, so a writer
+  arriving between two `RLock`s wedges the second. Search collects what matches
+  and enriches afterwards for exactly this reason.
 - **A path ending `.json` never reaches the mux.** `negotiate` strips a known extension and
   rewrites the path before routing, so the SPA fallback answers it. That is why the JWK Set
   is served at `/oauth/jwks` rather than the conventional `/.well-known/jwks.json`.
