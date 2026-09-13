@@ -55,6 +55,15 @@ func readSSEFrames(t *testing.T, body string) []sseFrame {
 	return frames
 }
 
+// streamDriveDelay is how long streamUntilIdle waits before broadcasting, and
+// streamBatchWindow the broadcaster's batching interval. The window must
+// outlast the delay by a wide margin: a tick landing between two broadcasts
+// flushes a one-event batch, which WriteBatch names for its type, not `batch`.
+const (
+	streamDriveDelay  = 50 * time.Millisecond
+	streamBatchWindow = 200 * time.Millisecond
+)
+
 // streamUntilIdle opens path as a stream, runs drive once the handler is
 // serving, and returns the frames written before the context expires.
 func streamUntilIdle(
@@ -80,7 +89,7 @@ func streamUntilIdle(
 
 	if drive != nil {
 		go func() {
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(streamDriveDelay)
 			drive()
 		}()
 	}
@@ -129,7 +138,7 @@ func streamTestRouter(
 func resourceStreamRouter(t *testing.T) (http.Handler, *cache.Cache, *sse.Broadcaster) {
 	t.Helper()
 
-	return streamTestRouter(t, 50*time.Millisecond)
+	return streamTestRouter(t, streamBatchWindow)
 }
 
 // TestListStreamEmitsTheDeclaredNames drives /services, the exemplar for
