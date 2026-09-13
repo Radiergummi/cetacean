@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const csrfCookieName = "mcp_csrf_nonce"
+const csrfCookieName = "oauth_csrf_nonce"
 const csrfCookieTTL = 10 * time.Minute
 
 // consentTemplate is the minimal HTML consent page rendered for the user.

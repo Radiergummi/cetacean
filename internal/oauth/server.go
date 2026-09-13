@@ -1018,7 +1018,7 @@ func (s *Server) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
 func (s *Server) WriteUnauthorized(w http.ResponseWriter, errorCode string) {
 	prmURL := s.cfg.issuerID() + "/.well-known/oauth-protected-resource"
 	w.Header().Set("WWW-Authenticate", fmt.Sprintf(
-		`Bearer realm="mcp", resource_metadata=%s, error=%s`,
+		`Bearer realm="cetacean", resource_metadata=%s, error=%s`,
 		httpQuotedString(prmURL), httpQuotedString(errorCode),
 	))
 	w.WriteHeader(http.StatusUnauthorized)

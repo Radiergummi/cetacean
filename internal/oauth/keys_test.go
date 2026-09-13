@@ -110,8 +110,8 @@ func TestDeriveSignerRetriesPastAnInvalidScalar(t *testing.T) {
 	}
 
 	want := []string{
-		"cetacean/mcp/jwt/es256/v1/0",
-		"cetacean/mcp/jwt/es256/v1/1",
+		"cetacean/oauth/jwt/es256/v1/0",
+		"cetacean/oauth/jwt/es256/v1/1",
 	}
 
 	if len(sawInfo) != len(want) || sawInfo[0] != want[0] || sawInfo[1] != want[1] {
@@ -148,7 +148,7 @@ func TestDerivedKeyIsOnTheCurve(t *testing.T) {
 func TestGoldenKID(t *testing.T) {
 	km := mustDeriveKeys(t, testRoot)
 
-	const want = "QAn0z6mB6vabOhSWFAGGkDsTDlNWpGM2lAV-uFBl6u8"
+	const want = "hT3nJNQ9k8nHwO-v5tzGNHYfDvBXGrwYDb0Ii7CNcII"
 
 	if km.kid != want {
 		t.Errorf("kid = %q, want %q", km.kid, want)
@@ -160,7 +160,7 @@ func TestGoldenKID(t *testing.T) {
 func TestGoldenCSRFKey(t *testing.T) {
 	km := mustDeriveKeys(t, testRoot)
 
-	const want = "dgol-oeS1eCZrySpXv5JNXv-JWv8cSPkTHHxwCIZR-E"
+	const want = "f_b99rTXleiwp9gU4nGtEe3cCMJOR7mOxof73n6qOyo"
 
 	if got := base64.RawURLEncoding.EncodeToString(km.csrf); got != want {
 		t.Errorf("csrf = %q, want %q", got, want)
