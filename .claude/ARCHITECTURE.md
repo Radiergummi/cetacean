@@ -24,7 +24,7 @@ liability — it is the only part of the previous version of this file that rott
 | `api/sse/` | The broadcaster behind every stream |
 | `api/jgf/`, `api/dot/`, `api/graphml/`, `api/atom/`, `api/jsonfeed/`, `api/linkset/` | Pure serialization, no HTTP |
 | `cluster/` | The domain layer both transports share — see the boundary rule below |
-| `mcp/` | The embedded MCP server: tools, resources, prompts, widgets, OAuth, tracing |
+| `mcp/` | The embedded MCP server: tools, resources, prompts, widgets, tracing |
 | `prometheus/`, `prom/` | Query client and proxy; `prom/` is the three result types alone |
 | `recommendations/` | The checkers and the engine that schedules them |
 | `filter/`, `integrations/`, `metrics/`, `version/` | expr-lang filtering, third-party label detection, our own instrumentation, build stamps |
@@ -68,9 +68,10 @@ Each of these looks like a simplification and is not.
 - **Docker ignores the `since` option for service logs.** Every caller offering a
   cursor must filter after parsing, which is why one function owns that and no
   caller does it itself.
-- **A nil `*Client` in a non-nil interface is not nil.** The Prometheus client is
-  optional, so `main.go` guards the assignment rather than assigning and
-  nil-checking later.
+- **A nil pointer in a non-nil interface is not nil.** The Prometheus client and
+  the OAuth server are both optional, so `main.go` guards each assignment rather
+  than assigning and nil-checking later. For the OAuth one the cost is worse than
+  a wrong answer: an armed `bearerAuth` panics on every `/mcp` request.
 - **An empty Prometheus result cannot distinguish an idle service from a cluster
   with no cAdvisor.** Metrics answers probe for the exporter before reporting
   zero, because a recommendation that stops on "no usage" would otherwise fire on

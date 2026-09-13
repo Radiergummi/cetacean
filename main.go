@@ -794,13 +794,21 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		metricsQuerier = d.prometheus
 	}
 
+	// The same trap, one step worse: an armed bearerAuth would call through a
+	// nil receiver, so an unauthenticated /mcp would panic rather than serve
+	// unguarded.
+	var tokenVerifier mcp.TokenVerifier
+	if oauthSrv != nil {
+		tokenVerifier = oauthSrv
+	}
+
 	mcpSrv, err := mcp.New(d.cache, mcp.Options{
 		WriteClient:     d.writeClient,
 		Logs:            d.logs,
 		ACL:             d.acl,
 		Config:          d.cfg.MCP,
 		GlobalOpsLevel:  d.cfg.OperationsLevel,
-		OAuth:           oauthSrv,
+		OAuth:           tokenVerifier,
 		AuthMode:        d.authMode,
 		AuthProvider:    d.authProvider,
 		Recommendations: d.rec,
