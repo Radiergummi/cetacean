@@ -41,6 +41,17 @@ func testService() swarm.Service {
 						{Type: mount.TypeVolume, Source: "web_data", Target: "/data"},
 						{Type: mount.TypeVolume, Source: "backups", Target: "/backups"},
 					},
+					Configs: []*swarm.ConfigReference{
+						{
+							ConfigName: "web_settings",
+							File: &swarm.ConfigReferenceFileTarget{
+								Name: "settings.yml",
+								UID:  "0",
+								GID:  "0",
+								Mode: 0o444,
+							},
+						},
+					},
 					Secrets: []*swarm.SecretReference{
 						{
 							SecretName: "web_token",
@@ -93,10 +104,11 @@ func testStack() cache.StackDetail {
 		Services: []swarm.Service{testService()},
 		Networks: []network.Summary{
 			{
-				ID:     "netid-internal",
-				Name:   "web_internal",
-				Driver: "overlay",
-				Labels: map[string]string{"com.docker.stack.namespace": "web"},
+				ID:         "netid-internal",
+				Name:       "web_internal",
+				Driver:     "overlay",
+				Attachable: true,
+				Labels:     map[string]string{"com.docker.stack.namespace": "web"},
 			},
 		},
 		Volumes: []volume.Volume{
