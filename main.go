@@ -526,9 +526,20 @@ func main() {
 	var (
 		tokenVerifier mcp.TokenVerifier
 		oauthRoutes   func(mux *http.ServeMux, basePath string)
+		apiTokens     auth.APITokens
 	)
 	if oauthSrv != nil {
 		tokenVerifier, oauthRoutes = oauthSrv, oauthSrv.RegisterRoutes
+
+		// Only when the API is actually offered as a resource: without it there
+		// is no audience a token could carry, so a verifier here would refuse
+		// every bearer it was handed instead of leaving it to the provider.
+		if cfg.OAuth.APITokens {
+			apiTokens = auth.APITokens{
+				Verifier: oauthSrv,
+				Resource: oauthSrv.ResourceIdentifier(""),
+			}
+		}
 	}
 
 	mcpHandler, closeMCP := setupMCP(deps, tokenVerifier)
@@ -554,6 +565,7 @@ func main() {
 		Resyncer:           watcher,
 		MCPHandler:         mcpHandler,
 		OAuthRoutes:        oauthRoutes,
+		APITokens:          apiTokens,
 	})
 
 	var serverTLSConfig *tls.Config

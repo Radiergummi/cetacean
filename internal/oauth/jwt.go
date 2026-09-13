@@ -228,10 +228,6 @@ func (t *TokenIssuer) VerifyAccessToken(
 		return nil, fmt.Errorf("%w: unexpected typ %q", ErrMalformedToken, hdr.Typ)
 	}
 
-	if !verifyES256(&t.signer.PublicKey, parts[0]+"."+parts[1], parts[2]) {
-		return nil, fmt.Errorf("%w: ES256 verification failed", ErrInvalidSig)
-	}
-
 	payloadJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
 		return nil, fmt.Errorf("%w: base64 decode payload: %w", ErrMalformedToken, err)
@@ -242,8 +238,19 @@ func (t *TokenIssuer) VerifyAccessToken(
 		return nil, fmt.Errorf("%w: JSON decode payload: %w", ErrMalformedToken, err)
 	}
 
+	// Before the signature, deliberately. iss says which issuer a token claims,
+	// and a caller sharing the Authorization header with another one needs that
+	// answer to route the token at all — checked after the signature, every
+	// foreign token would report a bad signature instead, and be refused where it
+	// should have been passed on. Reading an unverified claim to route on is safe
+	// because it decides nothing else: a token that names us still has to survive
+	// every check below.
 	if payload.Issuer != t.Issuer {
 		return nil, fmt.Errorf("%w: got %q, want %q", ErrIssuerMismatch, payload.Issuer, t.Issuer)
+	}
+
+	if !verifyES256(&t.signer.PublicKey, parts[0]+"."+parts[1], parts[2]) {
+		return nil, fmt.Errorf("%w: ES256 verification failed", ErrInvalidSig)
 	}
 
 	if payload.Audience != audience {

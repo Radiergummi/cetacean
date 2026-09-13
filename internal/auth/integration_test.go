@@ -26,7 +26,7 @@ func fromTrustedProxy(r *http.Request) *http.Request {
 
 func TestIntegration_NoneMode(t *testing.T) {
 	provider := &auth.NoneProvider{}
-	mw := auth.Middleware(provider)
+	mw := auth.Middleware(provider, auth.APITokens{})
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := auth.IdentityFromContext(r.Context())
@@ -81,7 +81,7 @@ func TestIntegration_HeadersMode_ValidHeaders(t *testing.T) {
 		Email:   "X-User-Email",
 		Groups:  "X-User-Groups",
 	})
-	mw := auth.Middleware(provider)
+	mw := auth.Middleware(provider, auth.APITokens{})
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := auth.IdentityFromContext(r.Context())
@@ -125,7 +125,7 @@ func TestIntegration_HeadersMode_MissingHeaders(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
 		Subject: "X-User",
 	})
-	mw := auth.Middleware(provider)
+	mw := auth.Middleware(provider, auth.APITokens{})
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("inner handler should not be called")
@@ -150,7 +150,7 @@ func TestIntegration_HeadersMode_ValidSecret(t *testing.T) {
 		SecretHeader: "X-Proxy-Secret",
 		SecretValue:  "s3cret",
 	})
-	mw := auth.Middleware(provider)
+	mw := auth.Middleware(provider, auth.APITokens{})
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := auth.IdentityFromContext(r.Context())
@@ -182,7 +182,7 @@ func TestIntegration_HeadersMode_InvalidSecret(t *testing.T) {
 		SecretHeader: "X-Proxy-Secret",
 		SecretValue:  "s3cret",
 	})
-	mw := auth.Middleware(provider)
+	mw := auth.Middleware(provider, auth.APITokens{})
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("inner handler should not be called")
@@ -207,7 +207,7 @@ func TestIntegration_HeadersMode_MissingSecretHeader(t *testing.T) {
 		SecretHeader: "X-Proxy-Secret",
 		SecretValue:  "s3cret",
 	})
-	mw := auth.Middleware(provider)
+	mw := auth.Middleware(provider, auth.APITokens{})
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("inner handler should not be called")
@@ -231,7 +231,7 @@ func TestIntegration_HeadersMode_GroupsParsing(t *testing.T) {
 		Subject: "X-User",
 		Groups:  "X-Groups",
 	})
-	mw := auth.Middleware(provider)
+	mw := auth.Middleware(provider, auth.APITokens{})
 
 	tests := []struct {
 		name       string
@@ -288,7 +288,7 @@ func TestIntegration_HeadersMode_GroupsParsing(t *testing.T) {
 
 func TestIntegration_CertMode_ValidCert(t *testing.T) {
 	provider := &auth.CertProvider{}
-	mw := auth.Middleware(provider)
+	mw := auth.Middleware(provider, auth.APITokens{})
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := auth.IdentityFromContext(r.Context())
@@ -339,7 +339,7 @@ func TestIntegration_CertMode_ValidCert(t *testing.T) {
 
 func TestIntegration_CertMode_NoCert(t *testing.T) {
 	provider := &auth.CertProvider{}
-	mw := auth.Middleware(provider)
+	mw := auth.Middleware(provider, auth.APITokens{})
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("inner handler should not be called")
@@ -369,7 +369,7 @@ func TestIntegration_CertMode_NoCert(t *testing.T) {
 func TestIntegration_ExemptRoutes_SkipAuth(t *testing.T) {
 	// A provider that always fails authentication.
 	provider := &failingProvider{}
-	mw := auth.Middleware(provider)
+	mw := auth.Middleware(provider, auth.APITokens{})
 
 	var called bool
 	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
