@@ -119,20 +119,7 @@ func NewServer(cfg ServerConfig) *Server {
 		// client a re-authorization, so it is worth an operator's attention.
 		// Neither is fatal: the server comes up empty and clients re-authorize,
 		// exactly as they did before the store existed.
-		path := cfg.StatePath
-		state, err := readState(path)
-
-		// Only a missing file falls back: a corrupt or unreadable one is still
-		// the file this server owns, and reaching past it to the former path
-		// would quietly restore state the operator had replaced.
-		if errors.Is(err, fs.ErrNotExist) && cfg.LegacyStatePath != "" {
-			if legacy, legacyErr := readState(cfg.LegacyStatePath); legacyErr == nil {
-				state, err, path = legacy, nil, cfg.LegacyStatePath
-				slog.Info("migrating OAuth state from its former path",
-					"from", cfg.LegacyStatePath, "to", cfg.StatePath)
-			}
-		}
-
+		state, path, err := readStateOrLegacy(cfg.StatePath, cfg.LegacyStatePath)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				slog.Info("no OAuth state yet", "path", path)
@@ -144,6 +131,11 @@ func NewServer(cfg ServerConfig) *Server {
 				)
 			}
 		} else {
+			if path != cfg.StatePath {
+				slog.Info("migrating OAuth state from its former path",
+					"from", path, "to", cfg.StatePath)
+			}
+
 			refreshTokens.Restore(state.RefreshTokenSnapshot)
 			consent.Restore(state.Consent)
 			slog.Info("loaded OAuth state",
@@ -1010,14 +1002,6 @@ func (s *Server) redirectWithError(
 // ---------------------------------------------------------------------------
 // WWW-Authenticate helper
 // ---------------------------------------------------------------------------
-
-// VerifyAccessToken verifies a JWT signature, issuer, audience and expiry.
-// Returns the application claims on success. Exposed so a resource server
-// can validate bearer tokens without reaching into the oauth package's
-// internals.
-func (s *Server) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
-	return s.tokenIssuer.VerifyAccessToken(token)
-}
 
 // WriteUnauthorized writes a 401 response with a WWW-Authenticate header
 // that includes the protected resource metadata URL and the error code.

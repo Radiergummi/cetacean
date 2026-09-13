@@ -83,24 +83,32 @@ func DefaultOAuthConfig() OAuthConfig {
 // make a coherent deployment. Both failures are refusals rather than warnings:
 // one would leave the cluster's write surface open, and the other describes a
 // server that cannot answer the question it exists to answer.
-func ValidateOAuth(oauthEnabled, mcpEnabled bool, authMode string, authBypass []string) error {
+//
+// A method rather than a function of both flags, because the two are booleans
+// and adjacent: transposed, they would compile and report the wrong conflict.
+func (c *Config) ValidateOAuth(authMode string) error {
 	anonymous := authMode == "none"
 
 	// /mcp is exempt from the auth middleware and authenticates itself, so with
 	// no authorization server there is no bearer check — and the bypass does not
 	// substitute for one, because it runs inside that same check.
-	if mcpEnabled && !anonymous && !oauthEnabled {
-		msg := "mcp.enabled with auth.mode=%q needs oauth.enabled: /mcp authenticates " +
-			"itself, so without an authorization server it would serve unauthenticated"
-		if len(authBypass) > 0 {
-			msg += ". mcp.auth_bypass does not cover this — the bypass runs inside the " +
-				"bearer check it would be replacing"
+	if c.MCP.Enabled && !anonymous && !c.OAuth.Enabled {
+		bypass := ""
+		if len(c.MCP.AuthBypass) > 0 {
+			bypass = ". mcp.auth_bypass does not cover this — the bypass runs inside " +
+				"the bearer check it would be replacing"
 		}
 
-		return fmt.Errorf(msg, authMode)
+		return fmt.Errorf(
+			"mcp.enabled with auth.mode=%q needs oauth.enabled: /mcp authenticates "+
+				"itself, so without an authorization server it would serve "+
+				"unauthenticated%s",
+			authMode,
+			bypass,
+		)
 	}
 
-	if oauthEnabled && anonymous {
+	if c.OAuth.Enabled && anonymous {
 		return fmt.Errorf(
 			"oauth.enabled needs an auth.mode other than %q: the authorization server "+
 				"establishes no identity of its own, so consent would ask an anonymous "+
@@ -331,7 +339,7 @@ func resolveOAuthIssuer(file *string) (string, error) {
 // The second return is false when that derivation reaches nothing: the
 // default ":9000" has an empty host, and a wildcard bind ("0.0.0.0", "::")
 // parses but resolves nowhere. The string is returned either way, since only
-// the authorization server truly breaks on it — see OAuthIssuerRequired.
+// the authorization server truly breaks on it, which is the caller's to decide.
 func (c *Config) OAuthIssuer(tlsEnabled bool) (string, bool) {
 	if c.OAuth.Issuer != "" {
 		return c.OAuth.Issuer, true
@@ -359,12 +367,4 @@ func (c *Config) OAuthIssuer(tlsEnabled bool) (string, bool) {
 	}
 
 	return issuer, true
-}
-
-// OAuthIssuerRequired reports whether a reachable issuer is mandatory rather
-// than cosmetic. It is exactly "is the authorization server running": every
-// client of it resolves endpoints from the advertised issuer, while MCP's tool
-// icons merely look wrong without one.
-func (c *Config) OAuthIssuerRequired() bool {
-	return c.OAuth.Enabled
 }

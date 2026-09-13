@@ -428,6 +428,25 @@ func TestStateFileSerializesConcurrentWriters(t *testing.T) {
 	}
 }
 
+// newMigratingServer builds a server that knows both state paths, which is the
+// only shape newPersistingServer cannot express.
+func newMigratingServer(t *testing.T, current, legacy string) *Server {
+	t.Helper()
+
+	return NewServer(ServerConfig{
+		Issuer:   "https://cetacean.test",
+		Resource: testResource,
+		OAuth: config.OAuthConfig{
+			AccessTokenTTL:  time.Hour,
+			RefreshTokenTTL: 720 * time.Hour,
+			ConsentTTL:      testConsentTTL,
+		},
+		SigningKey:      []byte("test-signing-key-32bytes-padded!!"),
+		StatePath:       current,
+		LegacyStatePath: legacy,
+	})
+}
+
 // The state file was renamed when the package stopped belonging to its first
 // consumer. Reading the old name once keeps the cost of that a single token
 // refresh per client rather than a fresh authorization for every one of them:
@@ -446,14 +465,7 @@ func TestLegacyStateIsReadOnceThenWrittenToTheNewPath(t *testing.T) {
 		Resource: testResource,
 	}, time.Hour)
 
-	migrated := NewServer(ServerConfig{
-		Issuer:          "https://cetacean.test",
-		Resource:        testResource,
-		OAuth:           config.OAuthConfig{AccessTokenTTL: time.Hour, RefreshTokenTTL: time.Hour},
-		SigningKey:      []byte("test-signing-key-32bytes-padded!!"),
-		StatePath:       current,
-		LegacyStatePath: legacy,
-	})
+	migrated := newMigratingServer(t, current, legacy)
 
 	if _, ok := migrated.refreshTokens.Validate(raw); !ok {
 		t.Fatal("the grant did not survive the rename")
@@ -495,14 +507,7 @@ func TestLegacyStateIsIgnoredWhenTheNewFileExists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := NewServer(ServerConfig{
-		Issuer:          "https://cetacean.test",
-		Resource:        testResource,
-		OAuth:           config.OAuthConfig{AccessTokenTTL: time.Hour, RefreshTokenTTL: time.Hour},
-		SigningKey:      []byte("test-signing-key-32bytes-padded!!"),
-		StatePath:       current,
-		LegacyStatePath: legacy,
-	})
+	srv := newMigratingServer(t, current, legacy)
 
 	if _, ok := srv.refreshTokens.Validate(staleToken); ok {
 		t.Error("a grant from the legacy file was restored over the current one")
@@ -528,14 +533,7 @@ func TestCorruptStateDoesNotFallBackToTheLegacyPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := NewServer(ServerConfig{
-		Issuer:          "https://cetacean.test",
-		Resource:        testResource,
-		OAuth:           config.OAuthConfig{AccessTokenTTL: time.Hour, RefreshTokenTTL: time.Hour},
-		SigningKey:      []byte("test-signing-key-32bytes-padded!!"),
-		StatePath:       current,
-		LegacyStatePath: legacy,
-	})
+	srv := newMigratingServer(t, current, legacy)
 
 	if _, ok := srv.refreshTokens.Validate(legacyToken); ok {
 		t.Error("a corrupt current file fell through to the legacy path")

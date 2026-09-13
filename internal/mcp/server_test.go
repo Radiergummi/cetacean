@@ -33,17 +33,42 @@ func (p *fakeAuthProvider) Authenticate(
 
 func (p *fakeAuthProvider) RegisterRoutes(_ *http.ServeMux) {}
 
+// The issuer and resource the test authorization server advertises. A token
+// only verifies when its issuer and audience match these exactly, which is why
+// they are named rather than spelled at each site.
+const (
+	testIssuer   = "https://cetacean.example.com"
+	testResource = testIssuer + "/mcp"
+)
+
 // oauthServerFor builds an authorization server the way main.go does, sharing
 // the root key so a token minted against it verifies. The tests want the real
 // verifier, not a stand-in.
 func oauthServerFor(key []byte) *oauth.Server {
 	return oauth.NewServer(oauth.ServerConfig{
-		Issuer:     "https://cetacean.example.com",
+		Issuer:     testIssuer,
 		BasePath:   "",
-		Resource:   "https://cetacean.example.com/mcp",
+		Resource:   testResource,
 		OAuth:      config.DefaultOAuthConfig(),
 		SigningKey: key,
 	})
+}
+
+// tokenFor mints a bearer token the server from oauthServerFor will accept.
+func tokenFor(t *testing.T, key []byte, claims oauth.AccessTokenClaims) string {
+	t.Helper()
+
+	issuer, err := oauth.NewTokenIssuer(key, testIssuer, testResource)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
+	}
+
+	token, err := issuer.IssueAccessToken(claims, config.DefaultOAuthConfig().AccessTokenTTL)
+	if err != nil {
+		t.Fatalf("IssueAccessToken: %v", err)
+	}
+
+	return token
 }
 
 func TestNew(t *testing.T) {
@@ -116,22 +141,11 @@ func TestHandlerAcceptsValidBearer(t *testing.T) {
 	key := []byte("test-secret-32-bytes-long-padding")
 	oauthSrv := oauthServerFor(key)
 
-	issuer, err := oauth.NewTokenIssuer(
-		key,
-		"https://cetacean.example.com",
-		"https://cetacean.example.com/mcp",
-	)
-	if err != nil {
-		t.Fatalf("NewTokenIssuer: %v", err)
-	}
-	token, err := issuer.IssueAccessToken(oauth.AccessTokenClaims{
+	token := tokenFor(t, key, oauth.AccessTokenClaims{
 		Subject:  "user@example.com",
 		Groups:   []string{"ops"},
 		ClientID: "test-client",
-	}, config.DefaultOAuthConfig().AccessTokenTTL)
-	if err != nil {
-		t.Fatalf("issue token: %v", err)
-	}
+	})
 
 	srv, err := New(c, Options{
 		Config: cfg,
@@ -302,22 +316,11 @@ func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
 	key := []byte("test-secret-32-bytes-long-padding")
 	oauthSrv := oauthServerFor(key)
 
-	issuer, err := oauth.NewTokenIssuer(
-		key,
-		"https://cetacean.example.com",
-		"https://cetacean.example.com/mcp",
-	)
-	if err != nil {
-		t.Fatalf("NewTokenIssuer: %v", err)
-	}
-	token, err := issuer.IssueAccessToken(oauth.AccessTokenClaims{
+	token := tokenFor(t, key, oauth.AccessTokenClaims{
 		Subject:  "user@example.com",
 		Groups:   []string{"ops"},
 		ClientID: "test-client",
-	}, config.DefaultOAuthConfig().AccessTokenTTL)
-	if err != nil {
-		t.Fatalf("issue token: %v", err)
-	}
+	})
 
 	srv, err := New(c, Options{Config: cfg, OAuth: oauthSrv})
 	if err != nil {
