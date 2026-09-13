@@ -426,8 +426,6 @@ func ContainsFoldNoAlloc(s, substrLower string) bool {
 	return false
 }
 
-var separatorReplacer = strings.NewReplacer("_", "", "-", "")
-
 func isSeparator(r rune) bool { return r == '_' || r == '-' }
 
 // SegmentPrefixMatch checks if query matches target using segment-prefix
@@ -441,63 +439,116 @@ func SegmentPrefixMatch(targetLower, queryLower string) bool {
 		return true
 	}
 
-	// Strip separators from query (user may type "go_gc" meaning "go" + "gc")
-	query := separatorReplacer.Replace(queryLower)
+	// Both the stripped query and the segment offsets go in caller arrays, and
+	// the walk below is a function rather than a closure so they stay there.
+	// This runs against every label key and value of every resource: the query
+	// copy and the []string strings.FieldsFunc returned were together 96% of
+	// the allocations a search made.
+	var qbuf [maxStackQuery]byte
+	var sbuf [32]int32
+
+	query := stripSeparators(qbuf[:0], queryLower)
 	if len(query) == 0 {
 		return true
 	}
 
-	segments := strings.FieldsFunc(targetLower, isSeparator)
+	bounds := appendSegmentBounds(sbuf[:0], targetLower)
 
 	// Single-segment targets are already covered by substring match in ContainsFold
-	if len(segments) <= 1 {
+	if len(bounds) <= 2 {
 		return false
 	}
 
-	// TODO(perf): this allocates a fresh memo map per call on a hot path —
-	// SegmentPrefixMatch runs against every label key/value of every resource
-	// across parallel search goroutines. Benchmark and, if the GC pressure is
-	// material, replace recursive memoised backtracking with an iterative DP
-	// using a preallocated [len(query)+1][len(segments)+1]bool array.
-	type key struct{ qi, si int }
-	memo := map[key]bool{}
+	return segmentWalk(query, targetLower, bounds, map[memoKey]bool{}, 0, 0)
+}
 
-	var match func(qi, si int) bool
-	match = func(qi, si int) bool {
-		if qi >= len(query) {
-			return true
+// memoKey settles one (query offset, segment index) pair for segmentWalk.
+type memoKey struct{ qi, si int }
+
+// maxStackQuery is the longest query stripSeparators keeps in the caller's
+// array. The search endpoint refuses anything longer than 200 bytes; a caller
+// that does not enforce that just pays an allocation.
+const maxStackQuery = 256
+
+// stripSeparators appends queryLower to dst without its separators, so a user
+// typing "go_gc" means "go" + "gc". dst is normally backed by a caller's array.
+func stripSeparators(dst []byte, queryLower string) []byte {
+	for i := range len(queryLower) {
+		if c := queryLower[i]; !isSeparator(rune(c)) {
+			dst = append(dst, c)
 		}
-
-		if si >= len(segments) {
-			return false
-		}
-
-		k := key{qi, si}
-		if v, ok := memo[k]; ok {
-			return v
-		}
-
-		result := false
-		for s := si; s < len(segments) && !result; s++ {
-			seg := segments[s]
-			maxMatch := 0
-
-			for maxMatch < len(seg) && qi+maxMatch < len(query) && query[qi+maxMatch] == seg[maxMatch] {
-				maxMatch++
-			}
-
-			for take := maxMatch; take >= 1 && !result; take-- {
-				if match(qi+take, s+1) {
-					result = true
-				}
-			}
-		}
-
-		memo[k] = result
-		return result
 	}
 
-	return match(0, 0)
+	return dst
+}
+
+// segmentWalk reports whether query[qi:] can be consumed by the segments of
+// target from si onwards, taking a prefix of each and skipping any. memo keys
+// the (qi, si) pairs already settled.
+func segmentWalk(
+	query []byte,
+	target string,
+	bounds []int32,
+	memo map[memoKey]bool,
+	qi, si int,
+) bool {
+	if qi >= len(query) {
+		return true
+	}
+
+	segments := len(bounds) / 2
+	if si >= segments {
+		return false
+	}
+
+	k := memoKey{qi, si}
+	if v, ok := memo[k]; ok {
+		return v
+	}
+
+	result := false
+	for s := si; s < segments && !result; s++ {
+		seg := target[bounds[2*s]:bounds[2*s+1]]
+		maxMatch := 0
+
+		for maxMatch < len(seg) && qi+maxMatch < len(query) && query[qi+maxMatch] == seg[maxMatch] {
+			maxMatch++
+		}
+
+		for take := maxMatch; take >= 1 && !result; take-- {
+			if segmentWalk(query, target, bounds, memo, qi+take, s+1) {
+				result = true
+			}
+		}
+	}
+
+	memo[k] = result
+
+	return result
+}
+
+// appendSegmentBounds appends the [start, end) offset pair of every separator-
+// delimited segment of s to dst, skipping empty ones the way strings.FieldsFunc
+// does. dst is normally backed by a caller's array, so nothing is allocated.
+func appendSegmentBounds(dst []int32, s string) []int32 {
+	start := -1
+	for i := range len(s) {
+		if isSeparator(rune(s[i])) {
+			if start >= 0 {
+				dst = append(dst, int32(start), int32(i))
+				start = -1
+			}
+			continue
+		}
+		if start < 0 {
+			start = i
+		}
+	}
+	if start >= 0 {
+		dst = append(dst, int32(start), int32(len(s)))
+	}
+
+	return dst
 }
 
 // labelsMatch returns true if any label key or value contains the query string
