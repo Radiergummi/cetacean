@@ -3,8 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every pull request, not only those based on main. A stacked pull request is
+  # based on the branch below it, and filtering by base leaves every branch in a
+  # stack untested until it reaches the front of the queue.
   pull_request:
-    branches: [main]
   # For the chore/sbom-sync branch: a pull request opened with GITHUB_TOKEN
   # raises no pull_request event, so its required checks would never run.
   # workflow_dispatch is the documented exception, and scripts/open-sbom-pr.sh
