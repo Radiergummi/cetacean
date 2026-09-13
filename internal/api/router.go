@@ -822,9 +822,9 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		mux.Handle("/mcp", cfg.MCPHandler)
 	}
 
-	// OAuth 2.1 authorization server endpoints. Wired by main.go when MCP is
-	// enabled and an auth provider is configured; the api package itself
-	// doesn't reach into mcp/oauth.
+	// OAuth 2.1 authorization server endpoints. Wired by main.go when
+	// oauth.enabled is set; the api package itself doesn't reach into
+	// internal/oauth.
 	if cfg.OAuthRoutes != nil {
 		cfg.OAuthRoutes(mux.mux, "")
 	}
