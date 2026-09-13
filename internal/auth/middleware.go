@@ -85,7 +85,7 @@ func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Han
 				// the provider's, because a challenge list whose first scheme takes no
 				// parameters cannot be parsed unambiguously.
 				if challenge := tokens.Challenge(""); challenge != "" &&
-					ExtractBearerToken(r) == "" {
+					ExtractBearerToken(r) == "" && isProtectedResource(r.URL.Path) {
 					w.Header().Add("WWW-Authenticate", challenge)
 				}
 
@@ -102,6 +102,14 @@ func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Han
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// isProtectedResource excludes the authorization server's own endpoints from the
+// bearer challenge. /oauth/authorize is the only one the middleware reaches, and
+// it refuses a token this server issued: offering one there sends a client for a
+// credential that answers 403.
+func isProtectedResource(path string) bool {
+	return !strings.HasPrefix(path, "/oauth/")
 }
 
 // isExempt returns true for paths that should skip authentication.
