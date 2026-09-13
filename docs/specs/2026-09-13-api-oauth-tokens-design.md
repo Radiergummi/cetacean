@@ -182,23 +182,62 @@ exactly the credential a widget or a Shortcut should hold.
 Leave room for `scope` in the claims and the AS metadata so adding it later is not a token-format
 migration, but do not implement it here.
 
-### 6. The AS has to outlive `mcp.enabled`
+### 6. Extract the package, as its own change, first
 
-`setupMCP` returns `(nil, nil, noop)` when MCP is off, so there are no OAuth routes and no AS. An
-operator who wants a native client but no AI agent on their cluster gets no tokens. That cannot
-stand, and it is the largest structural piece of the work:
+Yes — and it is less work than it looks, because **the package does not depend on `internal/mcp`
+today**. Its only internal imports are `internal/auth` (for `IdentityFromContext`) and
+`internal/config`. Nothing in those 3,495 non-test lines reaches into MCP; it is MCP's by naming and
+by configuration, not by coupling. So this is a rename plus a config split, not an untangling.
 
-- Move `internal/mcp/oauth` to `internal/oauth`. It imports `internal/auth` and `internal/config`
-  and nothing from `internal/mcp`; the move is mechanical.
-- Construct it in `main.go` beside the auth provider, gated on its own setting rather than on
-  `mcp.enabled`, and pass it to both the router and `setupMCP`.
-- The knobs move out of `config.MCPConfig`. `mcp.signing_key`, `mcp.access_token_ttl`,
-  `mcp.refresh_token_ttl`, `mcp.consent_ttl`, `mcp.dcr_*`, `mcp.require_resource_indicator` and
-  `mcp.issuer` are all AS settings that happen to be spelled `mcp.*`. They are documented, so they
-  need aliases and a deprecation period, not a rename — `docs/configuration.mdx` is canonical and
-  this is the kind of change it exists to arbitrate.
-- `{data_dir}/mcp-tokens.json` becomes `oauth-tokens.json`, read from the old name once if the new
-  one is absent, so a restart does not cost every client its grant.
+The consumer surface is two methods. `internal/mcp/server.go` holds an `*oauth.Server` and calls
+`VerifyAccessToken` and `WriteUnauthorized`, both from `bearerAuth`. That is small enough that
+`internal/mcp` should take an interface it declares itself and stop importing the package at all —
+the same shape the API side gets from decision 3, and it makes the MCP tests able to fake a verifier.
+
+What is actually MCP-specific, in full:
+
+| Where | Today | Becomes |
+|---|---|---|
+| `ServerConfig.MCPResource` | one resource string | a set of resource identifiers |
+| `ServerConfig.MCP config.MCPConfig` | the AS reads `DCREnabled`, `DCRMaxClients`, `DCRRateLimit`, `CIMDEnabled`, `ConsentTTL`, `AccessTokenTTL`, `RefreshTokenTTL`, `RequireResourceIndicator` | `config.OAuthConfig` — every one of those is an AS setting that happens to be spelled `mcp.*` |
+| `prm.go` | one document, one resource | one per resource, at its RFC 9728 path |
+| `WriteUnauthorized` | `realm="mcp"` hardcoded | realm per resource |
+| `consent.go` | `csrfCookieName = "mcp_csrf_nonce"` | rename is free; it only costs a re-prompt to anyone mid-flow across the deploy |
+| `persist.go` + `main.go` | `{data_dir}/mcp-tokens.json` | `oauth-tokens.json`, falling back to the old name once |
+| log and panic strings | "MCP OAuth …", `"mcp/oauth: …"` | cosmetic |
+| comments in `dcr.go`, `store.go` | "what MCP clients overwhelmingly are", "the MCP endpoint URL" | cosmetic, but they are the ones that would mislead the next reader |
+
+**One thing must not be renamed.** `keys.go` derives every key from the configured root through HKDF
+labels spelled `cetacean/mcp/hkdf/v1`, `cetacean/mcp/csrf/v1` and `cetacean/mcp/jwt/es256/v1`, and
+already carries the comment saying what changing them costs. They are opaque labels, not API, and the
+`/mcp/` in them is historical. Renaming them to match the package would invalidate every live access
+token, change the JWKS `kid`, and refuse every consent form in flight. Refresh tokens survive — they
+are opaque random values stored hashed, independent of the key material — so the blast radius is one
+forced refresh per client rather than a re-authorization, but it buys nothing. Leave them, and say in
+the comment that they are deliberately stale so nobody tidies them later.
+
+Everything else in the package needs no change at all: `jwt.go`, `jwks.go`, `store.go`,
+`consent_store.go`, `cimd.go`, `dcr.go`, `resource_indicator.go` and `persist.go` are already
+resource-agnostic.
+
+**Sequence it as two changes.** A pure move first — `internal/mcp/oauth` → `internal/oauth`, the
+config type split out with aliases, the interface at the MCP boundary, comments de-MCP'd, and no
+behaviour change anywhere, with the existing 4,458 lines of tests moving unmodified as the proof.
+Then the two-resource change on top. Done in one commit, the diff that introduces a second audience
+is buried in a rename and nobody can review the part that matters.
+
+### 7. The AS has to outlive `mcp.enabled`
+
+Extraction alone does not get there: the AS is *constructed* inside `setupMCP`, which returns
+`(nil, nil, noop)` when MCP is off. An operator who wants a native client but no AI agent on their
+cluster would still get no tokens. So the lifecycle moves too — construct it in `main.go` beside the
+auth provider, gated on its own setting, and pass it to both the router and `setupMCP`.
+
+That is what makes the config split in decision 6 load-bearing rather than cosmetic.
+`mcp.signing_key`, `mcp.access_token_ttl`, `mcp.refresh_token_ttl`, `mcp.consent_ttl`, `mcp.dcr_*`,
+`mcp.require_resource_indicator` and `mcp.issuer` are documented in `docs/configuration.mdx`, which
+is canonical — so they need aliases and a deprecation period, not a rename. An operator running MCP
+today must not have to edit their compose file to keep it working.
 
 Keep the `authMode != "none"` guard. In `none` mode the ACL is bypassed and every identity is
 `anonymous`; a token would authenticate nobody to nothing, and a consent screen asking `anonymous`
