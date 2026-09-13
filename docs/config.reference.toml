@@ -98,30 +98,37 @@
 # at_limit = 0.95                           # Usage above this fraction of limit → critical
 # lookback = "168h"                         # Time window for p95 queries (default 7 days)
 
-# --- MCP server (Model Context Protocol) ---
-# See docs/mcp.md for the tools, resources and prompts the server exposes.
-# Disabled by default; when enabled the server mounts /mcp and (when auth
-# mode is not "none") /.well-known/oauth-* + /oauth/* endpoints.
+# --- OAuth 2.1 authorization server ---
+# Issues the bearer tokens protected resources accept. Opt-in: it mints
+# credentials for your cluster, so nothing enables it implicitly. /mcp is the
+# only protected resource today, so MCP under any auth mode but "none" needs
+# this enabled — startup refuses that combination without it.
 
-# [mcp]
-# enabled = false                           # Enable MCP server
-# operations_level = -1                     # Tier for MCP tools (0=read, 1=ops, 2=config, 3=impactful); -1 inherits CETACEAN_OPERATIONS_LEVEL
+# [oauth]
+# enabled = false                           # Run the authorization server (/oauth/* + /.well-known/oauth-*)
 # issuer = ""                               # Canonical external base URL (e.g. "https://cetacean.example.com"); required behind a reverse proxy
 # signing_key = ""                          # Root secret; the token and CSRF keys derive from it
 #                                           # Must be 32 bytes of hex or base64; auto-generated if unset
 #                                           # Generate with `openssl rand -hex 32`
-#                                           # CETACEAN_MCP_SIGNING_KEY_FILE reads it from a file (Docker secret)
+#                                           # CETACEAN_OAUTH_SIGNING_KEY_FILE reads it from a file (Docker secret)
 # access_token_ttl = "1h"                   # Access token lifetime
 # refresh_token_ttl = "720h"                # Refresh token lifetime (30 days)
 # consent_ttl = "2160h"                     # How long a remembered approval lasts (90 days); "0s" always prompts
-# max_concurrent_tasks = 32                 # Cap on in-flight task-augmented tool calls
-# task_ttl = "15m"                          # Task retention applied when a call omits task.ttl; "0s" disables the fill-in
-# max_task_ttl = "1h"                       # Ceiling on the retention a call may ask for; "0s" disables the cap
-
-# [mcp.oauth]
 # require_resource_indicator = true         # Require RFC 8707 resource parameter on authorize/token
 # dcr_enabled = true                        # Enable Dynamic Client Registration (RFC 7591)
 # dcr_rate_limit = 10                       # Max DCR registrations per IP per hour
 # dcr_max_clients = 1000                    # Global cap on registered clients
 # cimd_enabled = true                       # Enable Client ID Metadata Documents
-# auth_bypass = []                          # Comma-separated auth modes that skip OAuth (e.g. ["cert"])
+
+# --- MCP server (Model Context Protocol) ---
+# See docs/mcp.md for the tools, resources and prompts the server exposes.
+# Disabled by default; when enabled the server mounts /mcp.
+
+# [mcp]
+# enabled = false                           # Enable MCP server
+# operations_level = -1                     # Tier for MCP tools (0=read, 1=ops, 2=config, 3=impactful); -1 inherits CETACEAN_OPERATIONS_LEVEL
+# max_concurrent_tasks = 32                 # Cap on in-flight task-augmented tool calls
+# task_ttl = "15m"                          # Task retention applied when a call omits task.ttl; "0s" disables the fill-in
+# max_task_ttl = "1h"                       # Ceiling on the retention a call may ask for; "0s" disables the cap
+# auth_bypass = []                          # Auth modes whose identity is accepted at /mcp without a bearer token (e.g. ["cert"])
+#                                           # Does not replace oauth.enabled: the bypass runs inside the bearer middleware

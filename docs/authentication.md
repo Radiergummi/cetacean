@@ -84,7 +84,8 @@ These paths skip authentication in every mode:
 | `/.well-known/*`                                  | OAuth discovery documents, unauthenticated by spec       |
 | `/oauth/token`, `/oauth/revoke`, `/oauth/register` | Carry their own credentials in the request body          |
 
-`/oauth/authorize` is not exempt: a user must authenticate before granting an MCP client access.
+`/oauth/authorize` is not exempt: a user must authenticate before granting a client access. That is also why
+the authorization server cannot run under the `none` mode — there would be no one to ask.
 
 ## Refused requests
 

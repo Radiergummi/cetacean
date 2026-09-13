@@ -20,16 +20,23 @@ The server is off by default. Enable it with [`mcp.enabled`][mcp.enabled] on the
 ```yaml
 environment:
   CETACEAN_MCP: "true"
+  CETACEAN_OAUTH_ENABLED: "true"
   CETACEAN_AUTH_MODE: oidc
   CETACEAN_PUBLIC_URL: https://cetacean.example.com
 ```
 
+Both flags are needed. Clients authenticate with a bearer token, and the
+[authorization server][oauth.enabled] that issues it is opt-in on its own — it mints credentials for your
+cluster, so nothing turns it on implicitly. Under any auth mode but `none`, Cetacean refuses to start with the
+MCP server enabled and the authorization server off, because `/mcp` authenticates itself and would otherwise
+serve unauthenticated.
+
 > [!WARNING]
 > [`server.public_url`][server.public_url] is the URL clients reach from outside the cluster, not a service name
 > on the overlay network. Getting it wrong breaks sign-in, and leaving it unset behind a proxy stops startup
-> whenever MCP OAuth is in use.
+> whenever the authorization server is enabled.
 
-Also set [`mcp.signing_key`][mcp.signing_key]. Without it Cetacean generates a new key on every restart, and every agent
+Also set [`oauth.signing_key`][oauth.signing_key]. Without it Cetacean generates a new key on every restart, and every agent
 has to sign in again after a redeployment. Generate one with `openssl rand -hex 32`.
 
 ## Connect a client
@@ -52,7 +59,7 @@ On first connect the client asks you to sign in through whichever auth provider 
 consent screen naming the client. Approve it and the agent is connected. There is no client secret to
 generate and nothing to register by hand.
 
-You are asked to approve a client once, not every session. Approval lasts [`mcp.consent_ttl`][mcp.consent_ttl] (90 days
+You are asked to approve a client once, not every session. Approval lasts [`oauth.consent_ttl`][oauth.consent_ttl] (90 days
 by default) and renews each time you approve. Set it to `0s` to be asked every time. You are always asked again if the
 client changes its name or redirect URLs.
 
@@ -124,11 +131,11 @@ Tracing stays off until the endpoint is set. A malformed endpoint stops startup 
 | Symptom                                          | Cause                                                                                                       |
 |--------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
 | Client reports `unsupported protocol version`    | The client is older than MCP revision `2026-07-28`. Upgrade it; older revisions are refused.                |
-| Every agent must sign in again after a redeploy  | [`mcp.signing_key`][mcp.signing_key] is unset, so a new key was generated at startup.                       |
+| Every agent must sign in again after a redeploy  | [`oauth.signing_key`][oauth.signing_key] is unset, so a new key was generated at startup.                       |
 | Sign-in fails or redirects somewhere unreachable | [`server.public_url`][server.public_url] is not the URL clients reach from outside.                         |
-| A revoked agent still works for a while          | Access tokens stay valid until they expire. Lower [`mcp.access_token_ttl`][mcp.access_token_ttl].           |
+| A revoked agent still works for a while          | Access tokens stay valid until they expire. Lower [`oauth.access_token_ttl`][oauth.access_token_ttl].           |
 | An agent reports a change it made as gone        | Its result was discarded after [`mcp.task_ttl`][mcp.task_ttl]. The change itself still happened.            |
-| `cert` auth mode: client cannot connect          | mTLS cannot drive a browser consent screen. Set [`mcp.oauth.auth_bypass`][mcp.oauth.auth_bypass] to `cert`. |
+| `cert` auth mode: client cannot connect          | mTLS cannot drive a browser consent screen. Set [`mcp.auth_bypass`][mcp.auth_bypass] to `cert`. |
 
 ## Behind a reverse proxy
 
@@ -188,14 +195,15 @@ replica is required: the file is node-local, and an unset signing key would leav
 [authorization]: authorization
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools
-[mcp.access_token_ttl]: configuration#mcp.access_token_ttl
-[mcp.consent_ttl]: configuration#mcp.consent_ttl
+[mcp.auth_bypass]: configuration#mcp.auth_bypass
 [mcp.enabled]: configuration#mcp.enabled
 [mcp.max_concurrent_tasks]: configuration#mcp.max_concurrent_tasks
-[mcp.oauth.auth_bypass]: configuration#mcp.oauth.auth_bypass
 [mcp.operations_level]: configuration#mcp.operations_level
-[mcp.signing_key]: configuration#mcp.signing_key
 [mcp.task_ttl]: configuration#mcp.task_ttl
+[oauth.access_token_ttl]: configuration#oauth.access_token_ttl
+[oauth.consent_ttl]: configuration#oauth.consent_ttl
+[oauth.enabled]: configuration#oauth.enabled
+[oauth.signing_key]: configuration#oauth.signing_key
 [server.cors.origins]: configuration#server.cors.origins
 [server.operations_level]: configuration#server.operations_level
 [server.public_url]: configuration#server.public_url
