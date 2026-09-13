@@ -64,8 +64,14 @@ func (c ServerConfig) metadataURL(r Resource) string {
 type resourceSet struct {
 	identifiers []string
 	byID        map[string]Resource
-	def         Resource
-	fallback    string
+
+	// Every accepted spelling of an identifier mapped onto the one a grant binds
+	// to. A token's aud is compared byte-exact against the resource server's own
+	// identifier, so an equivalent spelling must be resolved before it is stored.
+	canonical map[string]string
+
+	def      Resource
+	fallback string
 }
 
 // newResourceSet indexes cfg's resources. The first is the default an
@@ -75,6 +81,7 @@ func newResourceSet(cfg ServerConfig) resourceSet {
 	set := resourceSet{
 		identifiers: make([]string, 0, len(cfg.Resources)),
 		byID:        make(map[string]Resource, len(cfg.Resources)),
+		canonical:   make(map[string]string, len(cfg.Resources)),
 		def:         cfg.Resources[0],
 	}
 
@@ -82,6 +89,7 @@ func newResourceSet(cfg ServerConfig) resourceSet {
 		id := cfg.identifierOf(r)
 		set.identifiers = append(set.identifiers, id)
 		set.byID[id] = r
+		set.canonical[id] = id
 
 		// RFC 3986 §6.2.3 makes an empty path equivalent to "/" for http and https,
 		// so a client that normalizes the identifier — or reads it off the API
@@ -89,6 +97,7 @@ func newResourceSet(cfg ServerConfig) resourceSet {
 		// the same resource is not refused for being spelled canonically.
 		if r.Path == "" {
 			set.byID[id+"/"] = r
+			set.canonical[id+"/"] = id
 		}
 	}
 
@@ -134,9 +143,22 @@ func (s resourceSet) effectiveResource(raw []string, required bool) (string, err
 		return s.fallback, nil
 	}
 
-	if _, ok := s.byID[raw[0]]; !ok {
+	id, ok := s.canonical[raw[0]]
+	if !ok {
 		return "", errors.New("resource is not one this server issues tokens for")
 	}
 
-	return raw[0], nil
+	return id, nil
+}
+
+// canonicalSpelling is identifier as a grant stores it, so a comparison against
+// a bound resource survives an equivalent spelling on either side. One this
+// server does not serve is returned unchanged, and still compares equal only to
+// itself.
+func (s resourceSet) canonicalSpelling(identifier string) string {
+	if id, ok := s.canonical[identifier]; ok {
+		return id
+	}
+
+	return identifier
 }

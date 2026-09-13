@@ -385,8 +385,11 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Match resource.
-	if resourceForm != "" && resourceForm != codeData.Resource {
+	// Match resource, on the spelling a grant binds to rather than whichever
+	// equivalent one the client sent.
+	if resourceForm != "" &&
+		s.resources.canonicalSpelling(resourceForm) !=
+			s.resources.canonicalSpelling(codeData.Resource) {
 		writeTokenError(
 			w,
 			http.StatusBadRequest,
@@ -502,7 +505,9 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 			)
 			return
 		}
-		if resourceForm != "" && resourceForm != bound.Resource {
+		if resourceForm != "" &&
+			s.resources.canonicalSpelling(resourceForm) !=
+				s.resources.canonicalSpelling(bound.Resource) {
 			writeTokenError(
 				w,
 				http.StatusBadRequest,

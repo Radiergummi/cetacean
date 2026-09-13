@@ -221,6 +221,11 @@ func TestTheRootIdentifierIsAcceptedWithATrailingSlash(t *testing.T) {
 		SigningKey: []byte("test-signing-key-32bytes-padded!!"),
 	})
 
+	// The canonical identifier is what the resource server verifies aud against,
+	// so a grant founded on either spelling has to bind to that one: a token
+	// stamped with the slashed form is refused by the resource it was minted for.
+	canonical := s.ResourceIdentifier("")
+
 	for _, spelling := range []string{"https://cetacean.test", "https://cetacean.test/"} {
 		got, err := s.resources.effectiveResource([]string{spelling}, true)
 		if err != nil {
@@ -228,9 +233,18 @@ func TestTheRootIdentifierIsAcceptedWithATrailingSlash(t *testing.T) {
 
 			continue
 		}
-		// Whichever spelling arrives, the grant binds to the canonical identifier.
-		if got != spelling {
-			t.Logf("%s resolved to %s", spelling, got)
+		if got != canonical {
+			t.Errorf("%s bound to %q, want %q", spelling, got, canonical)
+		}
+
+		token, err := s.tokenIssuer.IssueAccessToken(
+			AccessTokenClaims{Subject: "someone", ClientID: "client"}, got, time.Hour,
+		)
+		if err != nil {
+			t.Fatalf("issue access token: %v", err)
+		}
+		if _, err := s.Identify(token, canonical); err != nil {
+			t.Errorf("a token requested as %s is refused by the resource: %v", spelling, err)
 		}
 	}
 }
