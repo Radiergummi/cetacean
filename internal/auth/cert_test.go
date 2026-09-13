@@ -408,9 +408,14 @@ func TestCertProvider_DNSSANsOnly_NoSubject(t *testing.T) {
 
 func TestCertProvider_WWWAuthenticate_MiddlewareIntegration(t *testing.T) {
 	p := &CertProvider{}
-	handler := Middleware(p, APITokens{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("inner handler should not be called")
-	}))
+	handler := Middleware(
+		p,
+		APITokens{},
+	)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Fatal("inner handler should not be called")
+		}),
+	)
 
 	r := httptest.NewRequest("GET", "/nodes", nil)
 	w := httptest.NewRecorder()

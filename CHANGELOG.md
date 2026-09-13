@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Client certificate authentication works behind a TLS-terminating proxy that forwards the certificate in `Client-Cert` (RFC 9440)
 - `Forwarded` (RFC 7239) is read alongside `X-Forwarded-For` when resolving the client address behind a trusted proxy
 - The MCP authorization server publishes the public key that verifies its access tokens, as a JWK Set at `/oauth/jwks`. Anything checking a token Cetacean issued no longer needs a key that could issue one
+- The REST API accepts bearer tokens the authorization server issues, so a script or app can authenticate without a browser session — `oauth.api_tokens` turns it off
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 
 ### Changed
@@ -29,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
 - **Breaking:** `auth.headers.trusted_proxies` is gone — use `server.trusted_proxies`, which headers mode already required
 - **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`, and accepts only `cert`, `headers` and `tailscale` — a listed mode authenticates `/mcp` on its own, so `oauth.enabled` can stay off
+- **Breaking:** `/mcp`'s protected resource metadata moved to `/.well-known/oauth-protected-resource/mcp`; the root document describes the API, whose tokens do not open `/mcp`. A client following `resource_metadata` from the 401 is unaffected
 - **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` is not read — delete it, and every client authorizes once more
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
 - The dashboard's first load is about a third of its former size, and hashed assets are cached permanently
@@ -40,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
 
 ### Fixed
+- An ACL grant written against an email address matches a token as well as a browser session. MCP clients were silently denied everything such a grant allowed
 - Everything that does not describe the cluster keeps working while the Docker daemon is unreachable — the dashboard's own icons and manifest, the API catalogue, the OpenSearch description and `/profile`
 - The CSV alternate a filtered listing advertises downloads the rows you are looking at; it dropped the query, so following the link returned everything
 - A browser-based MCP client can complete its OAuth flow again — cross-origin protection covered the endpoints that authenticate from the request body, where there is no ambient credential to defend

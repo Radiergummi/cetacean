@@ -90,7 +90,11 @@ func (p *refusingProvider) Authenticate(
 
 func (p *refusingProvider) RegisterRoutes(_ *http.ServeMux) {}
 
-func getWithToken(t *testing.T, router http.Handler, path, token string) *httptest.ResponseRecorder {
+func getWithToken(
+	t *testing.T,
+	router http.Handler,
+	path, token string,
+) *httptest.ResponseRecorder {
 	t.Helper()
 
 	r := httptest.NewRequest(http.MethodGet, path, nil)

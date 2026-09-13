@@ -267,6 +267,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET "+apiCatalogPath, HandleAPICatalog(catalogMounts{
 		mcp:           cfg.MCPHandler != nil,
 		oauthMetadata: cfg.OAuthRoutes != nil,
+		apiTokens:     cfg.APITokens.Verifier != nil,
 	}))
 	mux.HandleFunc("GET /api/errors", contentNegotiated(HandleErrorIndex, feedHandlers{}, spa))
 	mux.HandleFunc(

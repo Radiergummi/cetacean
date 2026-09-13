@@ -50,7 +50,7 @@ Add `-c compose.prometheus.yaml` to join the `monitoring` network from `compose.
 
 ## Configuration
 
-66 settings, all optional, all with a TOML path, an env var and a flag.
+67 settings, all optional, all with a TOML path, an env var and a flag.
 **`docs/configuration.mdx` is canonical** — do not restate the table anywhere else, and
 name settings by their TOML path (`server.trusted_proxies`) in user-facing text.
 

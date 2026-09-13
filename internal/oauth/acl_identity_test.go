@@ -110,7 +110,10 @@ func TestATokenReachesTheSameGrantAsASession(t *testing.T) {
 		t.Fatal("the session identity misses the grant; the fixture is wrong")
 	}
 
-	fromToken, err := s.Identify(mintTokenForIdentity(t, s, fixtureSubject, fixtureEmail), s.cfg.defaultIdentifier())
+	fromToken, err := s.Identify(
+		mintTokenForIdentity(t, s, fixtureSubject, fixtureEmail),
+		s.cfg.defaultIdentifier(),
+	)
 	if err != nil {
 		t.Fatalf("Identify: %v", err)
 	}
@@ -126,7 +129,10 @@ func TestATokenReachesTheSameGrantAsASession(t *testing.T) {
 func TestATokenCarriesTheIdentityTheProviderEstablished(t *testing.T) {
 	s := newTestServer(t)
 
-	fromToken, err := s.Identify(mintTokenForIdentity(t, s, fixtureSubject, fixtureEmail), s.cfg.defaultIdentifier())
+	fromToken, err := s.Identify(
+		mintTokenForIdentity(t, s, fixtureSubject, fixtureEmail),
+		s.cfg.defaultIdentifier(),
+	)
 	if err != nil {
 		t.Fatalf("Identify: %v", err)
 	}

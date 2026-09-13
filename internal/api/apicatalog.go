@@ -11,7 +11,9 @@ import (
 const apiCatalogPath = "/.well-known/api-catalog"
 
 // oauthProtectedResourcePath is spelled again here because internal/api and
-// internal/oauth deliberately do not import each other.
+// internal/oauth deliberately do not import each other. Per RFC 9728 §3.1 a
+// resource with a path takes its document beneath this one, so the bare path
+// belongs to the deployment root — the web API — and /mcp has its own.
 const oauthProtectedResourcePath = "/.well-known/oauth-protected-resource"
 
 // catalogMounts is what the router mounted, which is what the catalog may
@@ -21,6 +23,22 @@ const oauthProtectedResourcePath = "/.well-known/oauth-protected-resource"
 type catalogMounts struct {
 	mcp           bool
 	oauthMetadata bool
+
+	// apiTokens reports whether the API is offered as a protected resource. An
+	// operator who turned it off means it to be undiscoverable as well as
+	// unusable, so the catalog must not name a document that is not served.
+	apiTokens bool
+}
+
+// protectedResourceMeta is the service-meta relation naming a resource's RFC
+// 9728 document. service-meta rather than service-desc: the document describes
+// the endpoint, not its interface.
+func protectedResourceMeta(href string) []linkset.Target {
+	return []linkset.Target{{
+		Href:  href,
+		Type:  "application/json",
+		Title: "Protected resource metadata",
+	}}
 }
 
 // HandleAPICatalog serves the RFC 9727 API catalog as an RFC 9264 linkset.
@@ -57,17 +75,49 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 				mcpContexts = []linkset.Context{{
 					Anchor: mcpAPI,
 					Relations: map[string][]linkset.Target{
-						// service-meta, not service-desc: RFC 9728 metadata
-						// describes the endpoint, not its interface, and MCP
-						// serves no interface description.
-						"service-meta": {{
-							Href:  link(oauthProtectedResourcePath),
-							Type:  "application/json",
-							Title: "Protected resource metadata",
-						}},
+						"service-meta": protectedResourceMeta(
+							link(oauthProtectedResourcePath + "/mcp"),
+						),
 					},
 				}}
 			}
+		}
+
+		restRelations := map[string][]linkset.Target{
+			// Both point at /api, which negotiates between the two; the type
+			// attribute tells them apart.
+			"service-desc": {{
+				Href:  link("/api"),
+				Type:  "application/json",
+				Title: "OpenAPI description",
+			}, {
+				Href:  link(asyncAPIPath),
+				Type:  asyncAPIMediaTypeBase,
+				Title: "AsyncAPI description of the event streams",
+			}},
+			"service-doc": {{
+				Href:  link("/api"),
+				Type:  "text/html",
+				Title: "API reference",
+			}},
+			"describedby": {{
+				Href:  link(jsonLDContext),
+				Type:  "application/ld+json",
+				Title: "JSON-LD context",
+			}},
+			"status": {{
+				Href:  link("/-/health"),
+				Type:  "application/json",
+				Title: "Health",
+			}},
+		}
+
+		// The API is a protected resource only when it is offered as one, and an
+		// operator who turned that off means the document to be absent.
+		if mounts.oauthMetadata && mounts.apiTokens {
+			restRelations["service-meta"] = protectedResourceMeta(
+				link(oauthProtectedResourcePath),
+			)
 		}
 
 		contexts := append([]linkset.Context{
@@ -77,35 +127,8 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 				Relations: map[string][]linkset.Target{"item": items},
 			},
 			{
-				Anchor: restAPI,
-				Relations: map[string][]linkset.Target{
-					// Both point at /api, which negotiates between the two;
-					// the type attribute tells them apart.
-					"service-desc": {{
-						Href:  link("/api"),
-						Type:  "application/json",
-						Title: "OpenAPI description",
-					}, {
-						Href:  link(asyncAPIPath),
-						Type:  asyncAPIMediaTypeBase,
-						Title: "AsyncAPI description of the event streams",
-					}},
-					"service-doc": {{
-						Href:  link("/api"),
-						Type:  "text/html",
-						Title: "API reference",
-					}},
-					"describedby": {{
-						Href:  link(jsonLDContext),
-						Type:  "application/ld+json",
-						Title: "JSON-LD context",
-					}},
-					"status": {{
-						Href:  link("/-/health"),
-						Type:  "application/json",
-						Title: "Health",
-					}},
-				},
+				Anchor:    restAPI,
+				Relations: restRelations,
 			},
 		}, mcpContexts...)
 

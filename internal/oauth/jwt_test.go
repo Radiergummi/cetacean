@@ -167,7 +167,10 @@ func TestJWTMissingSigningKey(t *testing.T) {
 	) {
 		t.Errorf("IssueAccessToken with empty key: got %v, want ErrMissingKey", err)
 	}
-	if _, err := issuer.VerifyAccessToken("a.b.c", testTokenAudience); !errors.Is(err, ErrMissingKey) {
+	if _, err := issuer.VerifyAccessToken("a.b.c", testTokenAudience); !errors.Is(
+		err,
+		ErrMissingKey,
+	) {
 		t.Errorf("VerifyAccessToken with empty key: got %v, want ErrMissingKey", err)
 	}
 }
@@ -391,7 +394,10 @@ func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
 
 	forged := signingInput + "." + base64.RawURLEncoding.EncodeToString(der)
 
-	if _, err := issuer.VerifyAccessToken(forged, testTokenAudience); !errors.Is(err, ErrInvalidSig) {
+	if _, err := issuer.VerifyAccessToken(forged, testTokenAudience); !errors.Is(
+		err,
+		ErrInvalidSig,
+	) {
 		t.Errorf("error = %v, want ErrInvalidSig", err)
 	}
 }

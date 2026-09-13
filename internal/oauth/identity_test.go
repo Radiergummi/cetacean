@@ -45,7 +45,10 @@ func TestIdentifyCarriesTheClaimsAndNothingElse(t *testing.T) {
 func TestIdentifyReturnsTheVerifierErrorUnwrapped(t *testing.T) {
 	s := newTestServer(t)
 
-	if _, err := s.Identify("not-a-jwt", s.cfg.defaultIdentifier()); !errors.Is(err, ErrMalformedToken) {
+	if _, err := s.Identify("not-a-jwt", s.cfg.defaultIdentifier()); !errors.Is(
+		err,
+		ErrMalformedToken,
+	) {
 		t.Errorf("err = %v, want ErrMalformedToken", err)
 	}
 }
