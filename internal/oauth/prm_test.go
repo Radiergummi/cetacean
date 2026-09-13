@@ -30,8 +30,8 @@ func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 		t.Fatalf("decode PRM: %v", err)
 	}
 
-	if doc.Resource != s.cfg.defaultIdentifier() {
-		t.Errorf("resource = %q, want %q", doc.Resource, s.cfg.defaultIdentifier())
+	if doc.Resource != s.resources.fallback {
+		t.Errorf("resource = %q, want %q", doc.Resource, s.resources.fallback)
 	}
 	if len(doc.AuthorizationServers) != 1 || doc.AuthorizationServers[0] != s.cfg.Issuer {
 		t.Errorf("authorization_servers = %v, want [%q]", doc.AuthorizationServers, s.cfg.Issuer)

@@ -527,9 +527,11 @@ func main() {
 		tokenVerifier mcp.TokenVerifier
 		oauthRoutes   func(mux *http.ServeMux, basePath string)
 		apiTokens     auth.APITokens
+		mcpResource   string
 	)
 	if oauthSrv != nil {
 		tokenVerifier, oauthRoutes = oauthSrv, oauthSrv.RegisterRoutes
+		mcpResource = oauthSrv.ResourceIdentifier(mcp.MountPath)
 
 		// Only when the API is actually offered as a resource: without it there
 		// is no audience a token could carry, so a verifier here would refuse
@@ -542,7 +544,7 @@ func main() {
 		}
 	}
 
-	mcpHandler, closeMCP := setupMCP(deps, tokenVerifier)
+	mcpHandler, closeMCP := setupMCP(deps, tokenVerifier, mcpResource)
 	defer closeMCP()
 
 	router := api.NewRouter(api.RouterConfig{
@@ -828,12 +830,8 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 		StatePath:  statePath,
 	})
 
-	identifiers := make([]string, 0, len(resources))
-	for _, r := range resources {
-		identifiers = append(identifiers, srv.ResourceIdentifier(r.Path))
-	}
 	slog.Info("OAuth 2.1 authorization server enabled",
-		"issuer", d.issuer, "resources", identifiers)
+		"issuer", d.issuer, "resources", srv.ResourceIdentifiers())
 
 	if !d.cfg.MCP.Enabled && !d.cfg.OAuth.APITokens {
 		slog.Warn(
@@ -851,7 +849,7 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 //
 // The authorization server is built separately and arrives as the narrow
 // interface MCP consumes, so MCP is one of its consumers rather than its owner.
-func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier) (http.Handler, func()) {
+func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http.Handler, func()) {
 	if !d.cfg.MCP.Enabled {
 		return nil, func() {}
 	}
@@ -882,6 +880,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier) (http.Handler, func())
 		Config:          d.cfg.MCP,
 		GlobalOpsLevel:  d.cfg.OperationsLevel,
 		OAuth:           tokenVerifier,
+		Resource:        resource,
 		AuthMode:        d.authMode,
 		AuthProvider:    d.authProvider,
 		Recommendations: d.rec,

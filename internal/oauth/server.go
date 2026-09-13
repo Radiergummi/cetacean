@@ -64,6 +64,7 @@ type Server struct {
 	consent       *ConsentStore
 	clients       *ClientRegistry // nil when DCREnabled is false
 	keys          *keyMaterial    // nil when no root was configured
+	resources     resourceSet
 }
 
 // issuerID is the external base URL clients discover this authorization server
@@ -79,8 +80,14 @@ func (c ServerConfig) issuerID() string {
 // NewServer constructs a fully wired Server from cfg. No separate init step
 // is required; call RegisterRoutes to attach handlers to a mux.
 func NewServer(cfg ServerConfig) *Server {
+	// A server configured with no resource protects the deployment root, which is
+	// what a single unnamed protected resource is. Defaulted here so every reader
+	// downstream can take the set as given.
+	if len(cfg.Resources) == 0 {
+		cfg.Resources = []Resource{{Realm: "cetacean"}}
+	}
 	for i := range cfg.Resources {
-		cfg.Resources[i].Path = trimmedPath(cfg.Resources[i].Path)
+		cfg.Resources[i].Path = config.NormalizeBasePath(cfg.Resources[i].Path)
 	}
 
 	// Without a root, issuing and verifying answer ErrMissingKey.
@@ -150,6 +157,7 @@ func NewServer(cfg ServerConfig) *Server {
 		consent:       consent,
 		clients:       clients,
 		keys:          km,
+		resources:     newResourceSet(cfg),
 	}
 }
 
@@ -157,7 +165,7 @@ func NewServer(cfg ServerConfig) *Server {
 func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/.well-known/oauth-authorization-server", s.HandleMetadata)
 	mux.HandleFunc("GET "+basePath+"/.well-known/openid-configuration", s.HandleMetadata)
-	for _, resource := range s.cfg.resources() {
+	for _, resource := range s.cfg.Resources {
 		mux.HandleFunc(
 			"GET "+resource.metadataPath(basePath),
 			s.protectedResourceMetadataHandler(resource),
@@ -301,10 +309,8 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 	resourceForm := r.FormValue("resource")      // #nosec G120 -- bounded in HandleToken
 
 	// RFC 8707 resource indicator validation.
-	if _, err := ValidateResourceIndicator(
+	if _, err := s.resources.effectiveResource(
 		resourceForm,
-		s.cfg.knownIdentifiers(),
-		s.cfg.defaultIdentifier(),
 		s.cfg.OAuth.RequireResourceIndicator,
 	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
@@ -413,10 +419,8 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// (which is almost always a client typo) should not burn the grant family.
 	// Theft detection still works because a replay of an already-rotated token
 	// triggers Rotate's Theft branch on its second presentation.
-	if _, err := ValidateResourceIndicator(
+	if _, err := s.resources.effectiveResource(
 		resourceForm,
-		s.cfg.knownIdentifiers(),
-		s.cfg.defaultIdentifier(),
 		s.cfg.OAuth.RequireResourceIndicator,
 	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
@@ -734,10 +738,8 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	effectiveResource, err := ValidateResourceIndicator(
+	effectiveResource, err := s.resources.effectiveResource(
 		resourceParam,
-		s.cfg.knownIdentifiers(),
-		s.cfg.defaultIdentifier(),
 		s.cfg.OAuth.RequireResourceIndicator,
 	)
 	if err != nil {
@@ -896,10 +898,8 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	effectiveResource, err := ValidateResourceIndicator(
+	effectiveResource, err := s.resources.effectiveResource(
 		resourceParam,
-		s.cfg.knownIdentifiers(),
-		s.cfg.defaultIdentifier(),
 		s.cfg.OAuth.RequireResourceIndicator,
 	)
 	if err != nil {
@@ -1049,13 +1049,13 @@ func (s *Server) redirectWithError(
 // naming that resource's own metadata document so a client following RFC 9728
 // discovers what it was refused from rather than a neighbouring resource whose
 // token this one would also reject. An unknown resource falls back to the
-// default. Separate from WriteUnauthorized so a resource server that owes its
-// callers a structured body can set the header and write its own response.
+// default.
+//
+// The header rather than the whole response, because the two resource servers
+// answer differently: the API owes its callers an RFC 9457 problem document,
+// where JSON-RPC has no envelope for a transport-level refusal.
 func (s *Server) UnauthorizedHeader(resource, errorCode string) string {
-	target, ok := s.cfg.resourceFor(resource)
-	if !ok {
-		target = s.cfg.defaultResource()
-	}
+	target := s.resources.resourceFor(resource)
 
 	return fmt.Sprintf(
 		`Bearer realm=%s, resource_metadata=%s, error=%s`,
@@ -1063,28 +1063,6 @@ func (s *Server) UnauthorizedHeader(resource, errorCode string) string {
 		httpQuotedString(s.cfg.metadataURL(target)),
 		httpQuotedString(errorCode),
 	)
-}
-
-// WriteUnauthorized writes a bare 401 carrying that header, for a resource
-// server whose protocol has no body to put an error in.
-func (s *Server) WriteUnauthorized(w http.ResponseWriter, resource, errorCode string) {
-	w.Header().Set("WWW-Authenticate", s.UnauthorizedHeader(resource, errorCode))
-	w.WriteHeader(http.StatusUnauthorized)
-}
-
-// Foreign reports whether err means the presented token was not issued by this
-// server, so a caller with an upstream auth provider behind it should fall
-// through rather than refuse.
-//
-// The discriminator is the issuer, not the outcome of verification. A token
-// under another `iss`, and one that is not a JWT at all — which is what an
-// opaque provider token looks like — belong to someone else. Every other error
-// is a token claiming to be ours that failed to prove it: a bad signature, an
-// expiry, an audience for a different resource. Those are final, because falling
-// through on them would let a forged token reach the provider and be judged by
-// weaker evidence.
-func (s *Server) Foreign(err error) bool {
-	return errors.Is(err, ErrIssuerMismatch) || errors.Is(err, ErrMalformedToken)
 }
 
 // httpQuotedString wraps s in an RFC 7230 quoted-string. Per RFC 7230 §3.2.6

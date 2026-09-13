@@ -16,6 +16,10 @@ const apiCatalogPath = "/.well-known/api-catalog"
 // belongs to the deployment root — the web API — and /mcp has its own.
 const oauthProtectedResourcePath = "/.well-known/oauth-protected-resource"
 
+// mcpPath is spelled here for the same reason: the mount path is load-bearing
+// for the audience split, and this handler names it twice.
+const mcpPath = "/mcp"
+
 // catalogMounts is what the router mounted, which is what the catalog may
 // claim. MCP is off by default, and its OAuth server is wired only when
 // auth.mode is not "none" — so MCP can be reachable while the metadata
@@ -64,7 +68,7 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 		var mcpContexts []linkset.Context
 
 		if mounts.mcp {
-			mcpAPI := link("/mcp")
+			mcpAPI := link(mcpPath)
 
 			items = append(items, linkset.Target{
 				Href:  mcpAPI,
@@ -76,7 +80,7 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 					Anchor: mcpAPI,
 					Relations: map[string][]linkset.Target{
 						"service-meta": protectedResourceMeta(
-							link(oauthProtectedResourcePath + "/mcp"),
+							link(oauthProtectedResourcePath + mcpPath),
 						),
 					},
 				}}

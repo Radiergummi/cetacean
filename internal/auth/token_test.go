@@ -2,16 +2,12 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
-
-// errForeign stands in for "this token belongs to somebody else". The real
-// classification is the verifier's, and is pinned where the sentinels live; here
-// it only has to be distinguishable.
-var errForeign = errors.New("another issuer")
 
 type stubVerifier struct {
 	identity *Identity
@@ -24,8 +20,6 @@ func (v *stubVerifier) Identify(_, _ string) (*Identity, error) {
 
 	return v.identity, v.err
 }
-
-func (v *stubVerifier) Foreign(err error) bool { return errors.Is(err, errForeign) }
 
 func (v *stubVerifier) UnauthorizedHeader(resource, errorCode string) string {
 	return `Bearer realm="cetacean", resource_metadata="` + resource +
@@ -108,7 +102,7 @@ func TestTheVerifiersVerdictDecidesWhoJudgesTheRequest(t *testing.T) {
 		},
 		{
 			name:         "somebody else's token falls through to the provider",
-			verifierErr:  errForeign,
+			verifierErr:  fmt.Errorf("%w: another issuer", ErrForeignToken),
 			wantStatus:   http.StatusOK,
 			wantProvider: true,
 			wantIdentity: fromProvider,
@@ -125,9 +119,6 @@ func TestTheVerifiersVerdictDecidesWhoJudgesTheRequest(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			verifier := &stubVerifier{identity: fromToken, err: c.verifierErr}
-			if c.verifierErr != nil {
-				verifier.identity = nil
-			}
 			provider := &cookieProvider{identity: fromProvider}
 
 			w, seen := serve(
@@ -195,14 +186,10 @@ func TestWithoutABearerTokenNothingChanges(t *testing.T) {
 	session := &Identity{Subject: "from-cookie", Provider: "oidc"}
 
 	t.Run("no verifier configured", func(t *testing.T) {
-		verifier := &stubVerifier{}
 		provider := &cookieProvider{identity: session}
 
 		if _, seen := serve(provider, APITokens{}, bearerRequest("a-token")); seen != session {
 			t.Errorf("identity = %+v, want %+v", seen, session)
-		}
-		if verifier.asked {
-			t.Error("a verifier that was never configured was consulted")
 		}
 		if !provider.asked {
 			t.Error("the provider was not consulted")

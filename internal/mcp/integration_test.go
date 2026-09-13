@@ -231,6 +231,7 @@ func newOAuthIntegrationServer(
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
 		OAuth:          oauthSrv,
+		Resource:       testResource,
 		ACL:            e,
 	})
 	if err != nil {

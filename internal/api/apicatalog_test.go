@@ -278,6 +278,16 @@ func TestAPICatalogOmitsUnmountedAPIs(t *testing.T) {
 			mounts:      catalogMounts{oauthMetadata: true, apiTokens: true},
 			wantAPIMeta: true,
 		},
+		{
+			// The document only exists because the authorization server mounted
+			// it, so naming it without one would advertise a 404. main.go cannot
+			// currently produce this combination; the guard is what keeps that
+			// true of the catalog rather than of the wiring.
+			name:   "API tokens without an authorization server names nothing",
+			mounts: catalogMounts{mcp: true, apiTokens: true},
+
+			wantMCPItem: true,
+		},
 	}
 
 	for _, tt := range tests {

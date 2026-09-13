@@ -30,18 +30,11 @@ import (
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
-// TokenVerifier is the narrow surface of the OAuth authorization server this
-// transport consumes: the identity a bearer token carries, and the 401 that
-// tells a client where to go for one. *oauth.Server satisfies it.
-//
-// The resource identifier is threaded through both calls because the server
-// issues tokens for more than one protected resource. A token minted for
-// another is refused here, which is the whole point of asking for it by name.
-type TokenVerifier interface {
-	Identify(token, resource string) (*auth.Identity, error)
-	WriteUnauthorized(w http.ResponseWriter, resource, errorCode string)
-	ResourceIdentifier(path string) string
-}
+// TokenVerifier is the surface of the OAuth authorization server this transport
+// consumes. It is auth.TokenVerifier because the API middleware needs exactly
+// the same thing — the identity a bearer token carries, and the challenge that
+// tells a client where to get one — and one contract cannot drift from itself.
+type TokenVerifier = auth.TokenVerifier
 
 // guardMode is what stands in front of /mcp. The endpoint is exempt from the
 // API's auth middleware and authenticates itself, so this is the only thing
@@ -215,12 +208,17 @@ type Server struct {
 // when AuthMode appears in Config.AuthBypass, the MCP server derives identity
 // from AuthProvider (e.g. the mTLS cert) instead of requiring an OAuth bearer.
 type Options struct {
-	WriteClient     DockerWriteClient
-	Logs            LogStreamer
-	ACL             *acl.Evaluator
-	Config          config.MCPConfig
-	GlobalOpsLevel  config.OperationsLevel
-	OAuth           TokenVerifier
+	WriteClient    DockerWriteClient
+	Logs           LogStreamer
+	ACL            *acl.Evaluator
+	Config         config.MCPConfig
+	GlobalOpsLevel config.OperationsLevel
+	OAuth          TokenVerifier
+
+	// Resource is the RFC 8707 identifier of this transport's protected
+	// resource, which OAuth verifies tokens against. Required with OAuth.
+	Resource string
+
 	AuthMode        string
 	AuthProvider    auth.Provider
 	Recommendations RecommendationEngine
@@ -273,13 +271,6 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		return nil, err
 	}
 
-	// Asked of the verifier rather than assembled here: it owns the issuer and
-	// the base path the identifier is built from.
-	resource := ""
-	if opts.OAuth != nil {
-		resource = opts.OAuth.ResourceIdentifier(MountPath)
-	}
-
 	srv := &Server{
 		guard:          guard,
 		cache:          c,
@@ -289,7 +280,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		config:         opts.Config,
 		globalOpsLevel: opts.GlobalOpsLevel,
 		oauth:          opts.OAuth,
-		resource:       resource,
+		resource:       opts.Resource,
 		authMode:       opts.AuthMode,
 		authProvider:   opts.AuthProvider,
 		recEngine:      opts.Recommendations,
@@ -522,19 +513,30 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 
 		token := auth.ExtractBearerToken(r)
 		if token == "" {
-			s.oauth.WriteUnauthorized(w, s.resource, "invalid_token")
+			s.writeUnauthorized(w)
 			return
 		}
 
 		identity, err := s.oauth.Identify(token, s.resource)
 		if err != nil {
-			s.oauth.WriteUnauthorized(w, s.resource, "invalid_token")
+			s.writeUnauthorized(w)
 			return
 		}
 
 		ctx := auth.ContextWithIdentity(r.Context(), identity)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// writeUnauthorized answers a missing or unusable bearer token. JSON-RPC has no
+// envelope for a transport-level refusal, so this is a bare 401 carrying the
+// challenge that names where a token for this resource comes from.
+func (s *Server) writeUnauthorized(w http.ResponseWriter) {
+	w.Header().Set(
+		"WWW-Authenticate",
+		s.oauth.UnauthorizedHeader(s.resource, "invalid_token"),
+	)
+	w.WriteHeader(http.StatusUnauthorized)
 }
 
 // upstreamAuth authenticates every request through the upstream provider, for a
