@@ -42,7 +42,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		resourceType: "network",
 		linkTemplate: "/networks/{id}",
 		list:         h.cache.ListNetworks,
-		aclResource:  func(n network.Summary) string { return "network:" + n.Name },
+		aclName:      func(n network.Summary) string { return n.Name },
 		searchName:   func(n network.Summary) string { return n.Name },
 		filterEnv:    filter.NetworkEnv,
 		sortKeys: map[string]func(network.Summary) string{

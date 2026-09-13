@@ -18,7 +18,7 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		resourceType: "node",
 		linkTemplate: "/nodes/{id}",
 		list:         h.cache.ListNodes,
-		aclResource:  nodeResource,
+		aclName:      nodeHostnameOrID,
 		searchName:   func(n swarm.Node) string { return n.Description.Hostname },
 		filterEnv:    filter.NodeEnv,
 		sortKeys: map[string]func(swarm.Node) string{

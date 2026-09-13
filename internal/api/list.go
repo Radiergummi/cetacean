@@ -15,7 +15,7 @@ type listSpec[T any] struct {
 	resourceType string                                 // for setAllowList / Allow header
 	linkTemplate string                                 // for Link-Template header (e.g. "/services/{id}")
 	list         func() []T                             // cache list method
-	aclResource  func(T) string                         // maps item → "type:name" for ACL
+	aclName      func(T) string                         // maps item → its ACL name; resourceType supplies the type
 	searchName   func(T) string                         // nil = no search support
 	filterEnv    func(T, map[string]any) map[string]any // filter.XxxEnv
 	sortKeys     map[string]func(T) string              // sort field accessors
@@ -116,13 +116,15 @@ func prepareList[T any](
 	}
 
 	// In place: items is the copy spec.list() just made, and prepareList is
-	// the only thing holding it.
-	items = acl.FilterInPlace(
+	// the only thing holding it. Named rather than by resource string, so a
+	// filtered list does not build one per item for the matcher to split.
+	items = acl.FilterInPlaceNamed(
 		h.acl,
 		auth.IdentityFromContext(r.Context()),
 		"read",
 		items,
-		spec.aclResource,
+		spec.resourceType,
+		spec.aclName,
 	)
 
 	if spec.searchName != nil {

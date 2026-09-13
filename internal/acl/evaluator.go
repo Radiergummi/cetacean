@@ -120,6 +120,41 @@ func FilterInPlace[T any](
 	return filterInto(e, id, permission, items, items[:0], resourceFunc)
 }
 
+// FilterInPlaceNamed is FilterInPlace for the common case where every item's
+// resource is the same type, so the caller can name each one rather than build
+// a "type:name" string per item that the matcher immediately splits again.
+func FilterInPlaceNamed[T any](
+	e *Evaluator,
+	id *auth.Identity,
+	permission string,
+	items []T,
+	resourceType string,
+	nameFunc func(T) string,
+) []T {
+	if e == nil {
+		return items
+	}
+	p := e.policy.Load()
+	if p == nil {
+		return items
+	}
+
+	grants := e.collectGrants(id, p)
+
+	result := items[:0]
+	for _, item := range items {
+		name := nameFunc(item)
+		for _, g := range grants {
+			if hasPermission(g, permission) && e.grantMatchesParts(g, resourceType, name) {
+				result = append(result, item)
+				break
+			}
+		}
+	}
+
+	return result
+}
+
 // filterInto is the walk both share. dst nil means grow a new slice.
 func filterInto[T any](
 	e *Evaluator,
@@ -221,47 +256,58 @@ func (e *Evaluator) collectGrants(id *auth.Identity, p *Policy) []Grant {
 // grantMatchesResource checks if a grant covers the given resource,
 // including stack resolution and task inheritance.
 func (e *Evaluator) grantMatchesResource(g Grant, resource string) bool {
-	for _, expr := range g.Resources {
-		if matchResource(expr, resource) {
-			return true
-		}
+	resType, resID, ok := splitResource(resource)
+	if !ok {
+		// Nothing to match a pattern against, but a bare wildcard still covers
+		// it — see matchResource.
+		return slices.Contains(g.Resources, "*")
+	}
+
+	return e.grantMatchesParts(g, resType, resID)
+}
+
+// grantMatchesParts is grantMatchesResource for a caller holding the two halves
+// already, so that filtering a list need not build a "type:name" string per
+// item for the direct comparison to split straight back apart.
+func (e *Evaluator) grantMatchesParts(g Grant, resType, resID string) bool {
+	if grantCovers(g, resType, resID) {
+		return true
 	}
 
 	// Stack resolution: if no direct match, check if the resource belongs
 	// to a stack that a grant covers.
-	if e.resolver != nil {
-		resType, resID, ok := splitResource(resource)
-		if ok {
-			// Task inheritance: tasks inherit from their parent service.
-			if resType == "task" {
-				if svcName := e.resolver.ServiceOfTask(resID); svcName != "" {
-					svcResource := "service:" + svcName
-					for _, expr := range g.Resources {
-						if matchResource(expr, svcResource) {
-							return true
-						}
-					}
-					// Also check the parent service's stack (task→service→stack).
-					if stackName := e.resolver.StackOf("service", svcName); stackName != "" {
-						stackResource := "stack:" + stackName
-						for _, expr := range g.Resources {
-							if matchResource(expr, stackResource) {
-								return true
-							}
-						}
-					}
-				}
-			}
+	if e.resolver == nil {
+		return false
+	}
 
-			// Stack membership: check if the resource belongs to a matching stack.
-			if stackName := e.resolver.StackOf(resType, resID); stackName != "" {
-				stackResource := "stack:" + stackName
-				for _, expr := range g.Resources {
-					if matchResource(expr, stackResource) {
-						return true
-					}
+	// Task inheritance: tasks inherit from their parent service.
+	if resType == "task" {
+		if svcName := e.resolver.ServiceOfTask(resID); svcName != "" {
+			if grantCovers(g, "service", svcName) {
+				return true
+			}
+			// Also check the parent service's stack (task→service→stack).
+			if stackName := e.resolver.StackOf("service", svcName); stackName != "" {
+				if grantCovers(g, "stack", stackName) {
+					return true
 				}
 			}
+		}
+	}
+
+	// Stack membership: check if the resource belongs to a matching stack.
+	if stackName := e.resolver.StackOf(resType, resID); stackName != "" {
+		return grantCovers(g, "stack", stackName)
+	}
+
+	return false
+}
+
+// grantCovers reports whether any of the grant's resource patterns matches.
+func grantCovers(g Grant, resType, resName string) bool {
+	for _, expr := range g.Resources {
+		if matchResourceParts(expr, resType, resName) {
+			return true
 		}
 	}
 

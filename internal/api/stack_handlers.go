@@ -24,7 +24,7 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 		resourceType: "stack",
 		linkTemplate: "/stacks/{name}",
 		list:         h.cache.ListStacks,
-		aclResource:  func(s cache.Stack) string { return "stack:" + s.Name },
+		aclName:      func(s cache.Stack) string { return s.Name },
 		searchName:   func(s cache.Stack) string { return s.Name },
 		filterEnv:    filter.StackEnv,
 		sortKeys: map[string]func(cache.Stack) string{
