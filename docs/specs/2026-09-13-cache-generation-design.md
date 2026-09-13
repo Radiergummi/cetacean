@@ -143,9 +143,11 @@ construction *and* marshalling *and* hashing — together all but a rounding err
 allocations the profile attributes to this endpoint.
 
 The same treatment applies to the GraphML and DOT renderings, which start from the same two
-graphs. It does not apply to stack detail, which is parameterised by stack name, nor to
-`HandleCluster`, which at 128µs and 46 allocations is not worth a cache key; both want the
-validator and nothing else.
+graphs, and — with the key carrying the stack's name as well — to stack detail, which turned
+out to be the second most expensive document the API builds. It does not apply to
+`HandleCluster`, which at 128µs and 46 allocations is not worth a cache key, nor to anything
+mixing in live data: `HandleStackSummary` queries Prometheus, and a memo keyed on the cache
+generation would serve yesterday's numbers.
 
 ## Search
 
@@ -251,3 +253,23 @@ now the majority of `ResourceMap.List`. Removing the cache-level sort is the rea
 it is load-bearing: `sortItems` returns items untouched when no `sort` is given, and
 otherwise uses a stable sort that relies on the incoming order for ties. Removing it needs
 `sortItems` to tie-break by ID and a contract change for the other callers of `List()`.
+
+Two things measurement since has settled, both bigger than they look:
+
+**A list copies the whole collection to return a page.** `ResourceMap.List` is 82% of the
+bytes a node listing allocates — a thousand nodes copied out of the cache to send fifty.
+Search fixed the equivalent by matching under the read lock, and a list cannot: `acl.Filter`
+reaches `grantMatchesParts`, which calls the resolver, which is the cache. A scan holding
+the read lock that filtered by ACL would deadlock on the first grant that needed a stack
+resolved. Doing this means either projecting (name, sort key, id) under the lock and
+fetching only the page afterwards, or giving the resolver a lock-free path. Both are
+design changes, not tuning.
+
+**The derived validator stops at lists.** Extending it to the detail endpoints was tried
+and reverted: an ETag there is also the token `precond` compares an `If-Match` against, and
+`precond` arrives at it by hashing the representation, so a GET that tags itself from the
+generation refuses its own DELETE. `TestPreconditionRoundTripsForEveryPairedEndpoint`
+catches it. Detail endpoints get a memoised body and keep a hashed validator instead, which
+is why the stack detail is fast without its precondition changing. Moving them onto the
+derived validator means moving `precond` with them, and deciding what a precondition means
+when the two negotiated different media types.
