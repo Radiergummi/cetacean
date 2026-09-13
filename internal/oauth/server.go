@@ -642,8 +642,13 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 	data.CSRFToken, _ = issueCSRFNonce(
 		w,
 		s.csrfKey(),
-		data.State,
-		data.Fingerprint,
+		consentBinding{
+			State:         data.State,
+			Fingerprint:   data.Fingerprint,
+			ClientID:      data.ClientID,
+			RedirectURI:   data.RedirectURI,
+			CodeChallenge: data.CodeChallenge,
+		},
 		strings.HasPrefix(s.cfg.Issuer, "https://"),
 	)
 
@@ -834,6 +839,23 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	if identity == nil {
 		clearCSRFCookie(w, secure)
 		renderErrorPage(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	if responseType != "code" {
+		clearCSRFCookie(w, secure)
+		s.redirectWithError(w, r, redirectURIRaw, state, "unsupported_response_type",
+			"response_type must be code")
+		return
+	}
+
+	// PKCE is not optional, and an empty challenge must not reach a code: the
+	// token endpoint would refuse every verifier against it, but a code that
+	// can never be redeemed is a worse answer than a refusal here.
+	if codeChallenge == "" {
+		clearCSRFCookie(w, secure)
+		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
+			"code_challenge is required")
 		return
 	}
 
