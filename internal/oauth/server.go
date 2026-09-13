@@ -533,7 +533,7 @@ func writeTokenResponse(w http.ResponseWriter, resp tokenResponse) {
 //
 // Limitation: revocation only applies to refresh tokens. Access tokens are
 // stateless HMAC JWTs and continue to validate until their `exp` claim
-// (default 1h via CETACEAN_MCP_ACCESS_TOKEN_TTL). Per RFC 7009 §2.2 the
+// (default 1h via CETACEAN_OAUTH_ACCESS_TOKEN_TTL). Per RFC 7009 §2.2 the
 // server still returns 200 OK regardless of token type so the client cannot
 // distinguish "unknown token" from "no-op". Adding real access-token
 // revocation would require a JTI denylist sized to AccessTokenTTL — not
