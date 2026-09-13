@@ -16,13 +16,13 @@ import (
 	"github.com/radiergummi/cetacean/internal/oauth"
 )
 
-const tokenTestIssuer = "https://cetacean.test"
+const testAPIIssuer = "https://cetacean.test"
 
 // tokenFor mints a real ES256 token for resourcePath, carrying identity.
 func tokenFor(t *testing.T, resourcePath string, identity *auth.Identity) string {
 	t.Helper()
 
-	issuer, err := oauth.NewTokenIssuer([]byte(oauthTestRoot), tokenTestIssuer)
+	issuer, err := oauth.NewTokenIssuer([]byte(oauthTestRoot), testAPIIssuer)
 	if err != nil {
 		t.Fatalf("NewTokenIssuer: %v", err)
 	}
@@ -33,7 +33,7 @@ func tokenFor(t *testing.T, resourcePath string, identity *auth.Identity) string
 		DisplayName: identity.DisplayName,
 		Groups:      identity.Groups,
 		ClientID:    "test-client",
-	}, tokenTestIssuer+resourcePath, time.Hour)
+	}, testAPIIssuer+resourcePath, time.Hour)
 	if err != nil {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}
@@ -46,7 +46,7 @@ func tokenFor(t *testing.T, resourcePath string, identity *auth.Identity) string
 func tokenRouter(t *testing.T, opts ...testHandlersOption) http.Handler {
 	t.Helper()
 
-	srv := tokenTestServer(tokenTestIssuer, "")
+	srv := tokenTestServer(testAPIIssuer, "")
 
 	return newTestRouterWithConfig(t, []routerOption{
 		func(cfg *RouterConfig) {
@@ -124,7 +124,7 @@ func TestATokenForAnotherResourceIsRefusedAndPointedAtTheRightDocument(t *testin
 	}
 
 	challenge := w.Header().Get("WWW-Authenticate")
-	want := `resource_metadata="` + tokenTestIssuer + `/.well-known/oauth-protected-resource"`
+	want := `resource_metadata="` + testAPIIssuer + `/.well-known/oauth-protected-resource"`
 	if !strings.Contains(challenge, want) {
 		t.Errorf("WWW-Authenticate = %q, want substring %q", challenge, want)
 	}

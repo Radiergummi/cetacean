@@ -41,49 +41,49 @@ func TestForeignSeparatesOtherIssuersFromFailedProofs(t *testing.T) {
 	// want names the sentinel as well as the verdict, because the verdict alone
 	// would still pass if two rows started reporting the same error.
 	cases := []struct {
-		name    string
-		token   string
-		want    error
-		foreign bool
+		name      string
+		presented string
+		want      error
+		foreign   bool
 	}{
 		{
-			name:    "not a JWT at all, which is what an opaque provider token looks like",
-			token:   "opaque-provider-token",
-			want:    ErrMalformedToken,
-			foreign: true,
+			name:      "not a JWT at all, which is what an opaque provider token looks like",
+			presented: "opaque-provider-token",
+			want:      ErrMalformedToken,
+			foreign:   true,
 		},
 		{
 			// Signed with a key that is not ours either, which is the ordinary
 			// case: a foreign token fails both checks. It must report the issuer,
 			// because that is the one a caller can route on.
-			name:    "a JWT under another issuer",
-			token:   mint(otherIssuer, audience, time.Hour),
-			want:    ErrIssuerMismatch,
-			foreign: true,
+			name:      "a JWT under another issuer",
+			presented: mint(otherIssuer, audience, time.Hour),
+			want:      ErrIssuerMismatch,
+			foreign:   true,
 		},
 		{
-			name:    "our issuer, signed with a key that is not ours",
-			token:   mint(otherKey, audience, time.Hour),
-			want:    ErrInvalidSig,
-			foreign: false,
+			name:      "our issuer, signed with a key that is not ours",
+			presented: mint(otherKey, audience, time.Hour),
+			want:      ErrInvalidSig,
+			foreign:   false,
 		},
 		{
-			name:    "ours, expired",
-			token:   mint(s.tokenIssuer, audience, -time.Hour),
-			want:    ErrTokenExpired,
-			foreign: false,
+			name:      "ours, expired",
+			presented: mint(s.tokenIssuer, audience, -time.Hour),
+			want:      ErrTokenExpired,
+			foreign:   false,
 		},
 		{
-			name:    "ours, minted for a different resource",
-			token:   mint(s.tokenIssuer, audience+"/elsewhere", time.Hour),
-			want:    ErrAudienceMismatch,
-			foreign: false,
+			name:      "ours, minted for a different resource",
+			presented: mint(s.tokenIssuer, audience+"/elsewhere", time.Hour),
+			want:      ErrAudienceMismatch,
+			foreign:   false,
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := s.Identify(c.token, audience)
+			_, err := s.Identify(c.presented, audience)
 			if err == nil {
 				t.Fatal("verification succeeded; this case must fail to be classified")
 			}
