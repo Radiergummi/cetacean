@@ -346,7 +346,7 @@ func TestTokenExchangeRefreshWithoutClientID(t *testing.T) {
 	refreshToken := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user",
 		ClientID: "test-client",
-		Resource: s.cfg.Resource,
+		Resource: s.resources.fallback,
 	}, time.Hour)
 
 	form := url.Values{

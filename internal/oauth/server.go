@@ -163,7 +163,17 @@ func NewServer(cfg ServerConfig) *Server {
 
 // RegisterRoutes attaches all OAuth endpoints to mux under basePath.
 func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
-	mux.HandleFunc("GET "+basePath+"/.well-known/oauth-authorization-server", s.HandleMetadata)
+	// RFC 8414 §3 inserts the well-known segment after the authority, like RFC 9728
+	// §3.1, so the AS document gets both spellings for the same reason the resource
+	// documents do. OIDC Discovery is a different rule — it appends its suffix to
+	// the issuer — so openid-configuration keeps the mounted form only.
+	const asMetadataPath = "/.well-known/oauth-authorization-server"
+
+	mux.HandleFunc("GET "+asMetadataPath+s.cfg.BasePath, s.HandleMetadata)
+	if mounted := basePath + asMetadataPath; mounted != asMetadataPath+s.cfg.BasePath {
+		mux.HandleFunc("GET "+mounted, s.HandleMetadata)
+	}
+
 	mux.HandleFunc("GET "+basePath+"/.well-known/openid-configuration", s.HandleMetadata)
 	for _, resource := range s.cfg.Resources {
 		handler := s.protectedResourceMetadataHandler(resource)
@@ -211,6 +221,11 @@ type asMetadata struct {
 	// the document never points at a path the server will refuse.
 	ClientIDMetadataDocumentSupported bool `json:"client_id_metadata_document_supported,omitempty"`
 
+	// RFC 9207 §2.4 makes a client's iss check conditional on the server saying it
+	// sends one. Without this the mix-up defence every authorization response
+	// already carries is invisible, so a conformant client never enforces it.
+	AuthorizationResponseIssParameterSupported bool `json:"authorization_response_iss_parameter_supported"`
+
 	CodeChallengeMethodsSupported          []string `json:"code_challenge_methods_supported"`
 	GrantTypesSupported                    []string `json:"grant_types_supported"`
 	ResponseTypesSupported                 []string `json:"response_types_supported"`
@@ -237,10 +252,12 @@ func writeDiscoveryDoc(w http.ResponseWriter, doc any, contentType string) {
 func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 	base := s.cfg.issuerID()
 	doc := asMetadata{
-		Issuer:                                 base,
-		AuthorizationEndpoint:                  base + "/oauth/authorize",
-		TokenEndpoint:                          base + "/oauth/token",
-		RevocationEndpoint:                     base + "/oauth/revoke",
+		Issuer:                base,
+		AuthorizationEndpoint: base + "/oauth/authorize",
+		TokenEndpoint:         base + "/oauth/token",
+		RevocationEndpoint:    base + "/oauth/revoke",
+		AuthorizationResponseIssParameterSupported: true,
+
 		CodeChallengeMethodsSupported:          []string{"S256"},
 		GrantTypesSupported:                    []string{"authorization_code", "refresh_token"},
 		ResponseTypesSupported:                 []string{"code"},
@@ -300,6 +317,11 @@ func (s *Server) HandleToken(w http.ResponseWriter, r *http.Request) {
 		s.handleAuthorizationCodeGrant(w, r)
 	case "refresh_token":
 		s.handleRefreshTokenGrant(w, r)
+	case "":
+		// A missing parameter, not an unknown value: only a grant type that is
+		// present and unsupported gets unsupported_grant_type.
+		writeTokenError(w, http.StatusBadRequest, "invalid_request",
+			"grant_type is required")
 	default:
 		writeTokenError(w, http.StatusBadRequest, "unsupported_grant_type",
 			"grant_type must be authorization_code or refresh_token")
@@ -323,6 +345,11 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		s.cfg.OAuth.RequireResourceIndicator,
 	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
+		return
+	}
+
+	if code == "" {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request", "code is required")
 		return
 	}
 
@@ -446,10 +473,18 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// REQUIRED by RFC 6749 §6, and absent is a malformed request rather than a
+	// grant that failed — the same reading client_id gets above.
+	if refreshTokenRaw == "" {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request", "refresh_token is required")
+
+		return
+	}
+
 	// Confirm the bound resource and client match BEFORE rotation, so a client
 	// typo doesn't revoke the family. A token that does not validate falls
 	// through to Rotate, whose theft branch is the only thing that burns a
-	// replayed family.
+	// replayed family — refusing here instead would leave a replay undetected.
 	if bound, ok := s.refreshTokens.Validate(refreshTokenRaw); ok {
 		if resourceForm != "" && resourceForm != bound.Resource {
 			writeTokenError(
@@ -603,20 +638,21 @@ func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 // HandleAuthorize handles GET and POST {base}/oauth/authorize.
-// consentRefusal returns why identity may not found a new authorization grant,
-// or "" when it may.
+// consentRefusal returns the status and message for an identity that may not
+// found a new authorization grant, or 0 when it may.
 //
-// A token this server issued must not authorize another. Consent is deliberately
-// outside the middleware's exempt set so it runs under the upstream provider —
-// which is how that provider's identity gets into a token in the first place.
-func consentRefusal(identity *auth.Identity) string {
+// The two refusals are different answers. No identity is 401 and carries a
+// challenge, per RFC 9110 §15.5.2. A token this server issued is 403: the request
+// was authenticated, and repeating it with the same credential will not help,
+// which is the one thing a 401 promises.
+func consentRefusal(identity *auth.Identity) (int, string) {
 	switch {
 	case identity == nil:
-		return "authentication required"
+		return http.StatusUnauthorized, "authentication required"
 	case identity.Provider == ProviderName:
-		return "an access token cannot authorize a client; sign in first"
+		return http.StatusForbidden, "an access token cannot authorize a client; sign in first"
 	default:
-		return ""
+		return 0, ""
 	}
 }
 
@@ -776,8 +812,8 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 
 	// Require an identity the upstream provider established.
 	identity := auth.IdentityFromContext(r.Context())
-	if refusal := consentRefusal(identity); refusal != "" {
-		renderErrorPage(w, http.StatusUnauthorized, refusal)
+	if status, refusal := consentRefusal(identity); status != 0 {
+		s.renderConsentRefusal(w, status, refusal)
 		return
 	}
 
@@ -896,9 +932,9 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 
 	// Require an identity the upstream provider established.
 	identity := auth.IdentityFromContext(r.Context())
-	if refusal := consentRefusal(identity); refusal != "" {
+	if status, refusal := consentRefusal(identity); status != 0 {
 		clearCSRFCookie(w, secure)
-		renderErrorPage(w, http.StatusUnauthorized, refusal)
+		s.renderConsentRefusal(w, status, refusal)
 		return
 	}
 
@@ -1085,6 +1121,18 @@ func (s *Server) redirectWithError(
 // The header rather than the whole response, because the two resource servers
 // answer differently: the API owes its callers an RFC 9457 problem document,
 // where JSON-RPC has no envelope for a transport-level refusal.
+// renderConsentRefusal answers a consent request that carried the wrong kind of
+// credential. RFC 9110 §15.5.2 requires a challenge on every 401, so a 401 here
+// names where a usable credential comes from; a 403 is already authenticated and
+// takes none.
+func (s *Server) renderConsentRefusal(w http.ResponseWriter, status int, message string) {
+	if status == http.StatusUnauthorized {
+		w.Header().Set("WWW-Authenticate", s.UnauthorizedHeader(s.resources.fallback, ""))
+	}
+
+	renderErrorPage(w, status, message)
+}
+
 func (s *Server) UnauthorizedHeader(resource, errorCode string) string {
 	target := s.resources.resourceFor(resource)
 

@@ -52,7 +52,7 @@ func (e *AuthError) Error() string { return e.Msg }
 // one — MCP's bypass falls through to its own bearer challenge. RFC 9110
 // §15.5.2 admits no 401 without a challenge, so a refusal that produced none
 // is 403; a Code names a refusal of its own. Status is the fallback's only.
-func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error) {
+func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error, extra ...string) {
 	status, code, detail := http.StatusForbidden, "AUT006", "authentication refused"
 
 	var authErr *AuthError
@@ -66,6 +66,21 @@ func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error) {
 			if authErr.Status != 0 {
 				status = authErr.Status
 			}
+		}
+	}
+
+	// A challenge the caller can act on is what separates 401 from 403, so a
+	// resource challenge added here turns a bare refusal into one. Added as its
+	// own field line rather than appended: a challenge list whose first scheme
+	// takes no parameters cannot be parsed unambiguously.
+	for _, challenge := range extra {
+		if challenge == "" {
+			continue
+		}
+
+		w.Header().Add("WWW-Authenticate", challenge)
+		if status == http.StatusForbidden {
+			status, code, detail = http.StatusUnauthorized, "AUT001", "authentication required"
 		}
 	}
 
@@ -100,7 +115,16 @@ func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Han
 					"path", r.URL.Path,
 					"error", err,
 				)
-				writeAuthFailure(w, r, err)
+				// A request that presented no credential gets the resource's
+				// own challenge too, or a client cannot do what RFC 9728 exists
+				// for: call the resource cold, read the 401, follow
+				// resource_metadata to the token endpoint.
+				resourceChallenge := ""
+				if ExtractBearerToken(r) == "" {
+					resourceChallenge = tokens.Challenge("")
+				}
+
+				writeAuthFailure(w, r, err, resourceChallenge)
 				return
 			}
 

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 )
@@ -53,12 +54,48 @@ type AccessTokenClaims struct {
 	ClientID    string   `json:"client_id,omitempty"`
 }
 
+// audience accepts both shapes RFC 7519 §4.1.3 allows — an array, or a bare
+// string for a single audience — and emits the bare string, which is what this
+// server mints. A validator that took only one shape would refuse a conformant
+// token, and ours would then misread it as another issuer's.
+type audience []string
+
+func (a *audience) UnmarshalJSON(raw []byte) error {
+	var one string
+	if err := json.Unmarshal(raw, &one); err == nil {
+		*a = audience{one}
+
+		return nil
+	}
+
+	var many []string
+	if err := json.Unmarshal(raw, &many); err != nil {
+		return err
+	}
+
+	*a = many
+
+	return nil
+}
+
+func (a audience) MarshalJSON() ([]byte, error) {
+	if len(a) == 1 {
+		return json.Marshal(a[0])
+	}
+
+	return json.Marshal([]string(a))
+}
+
 type jwtPayload struct {
 	Issuer    string   `json:"iss"`
-	Audience  string   `json:"aud"`
+	Audience  audience `json:"aud"`
 	ExpiresAt int64    `json:"exp"`
 	IssuedAt  int64    `json:"iat"`
 	JTIID     string   `json:"jti"`
+
+	// RFC 7519 §4.1.5: a token must not be accepted before nbf. Never minted
+	// here, so omitempty keeps it off the wire, but it is honoured on the way in.
+	NotBefore int64    `json:"nbf,omitempty"`
 	Subject   string   `json:"sub"`
 	Email     string   `json:"email,omitempty"`
 	Name      string   `json:"name,omitempty"`
@@ -139,7 +176,7 @@ func verifyES256(pub *ecdsa.PublicKey, input, sig string) bool {
 // as aud so a resource server can refuse a token minted for another one.
 func (t *TokenIssuer) IssueAccessToken(
 	claims AccessTokenClaims,
-	audience string,
+	aud string,
 	ttl time.Duration,
 ) (string, error) {
 	if t.signer == nil {
@@ -158,7 +195,7 @@ func (t *TokenIssuer) IssueAccessToken(
 
 	// An unaudienced token would verify against every resource this server
 	// serves, which is the confusion the audience exists to stop.
-	if audience == "" {
+	if aud == "" {
 		return "", fmt.Errorf("%w: aud is required (RFC 9068 §2.2)", ErrIncompleteClaims)
 	}
 
@@ -170,7 +207,7 @@ func (t *TokenIssuer) IssueAccessToken(
 	now := time.Now()
 	payload := jwtPayload{
 		Issuer:    t.Issuer,
-		Audience:  audience,
+		Audience:  audience{aud},
 		IssuedAt:  now.Unix(),
 		ExpiresAt: now.Add(ttl).Unix(),
 		JTIID:     base64.RawURLEncoding.EncodeToString(jtiBytes),
@@ -201,7 +238,7 @@ func (t *TokenIssuer) IssueAccessToken(
 // exact: a token for a neighbouring resource, or for one whose path contains
 // this one, is refused with ErrAudienceMismatch.
 func (t *TokenIssuer) VerifyAccessToken(
-	token, audience string,
+	token, aud string,
 ) (*AccessTokenClaims, error) {
 	if t.signer == nil {
 		return nil, ErrMissingKey
@@ -223,8 +260,11 @@ func (t *TokenIssuer) VerifyAccessToken(
 	if hdr.Alg != "ES256" {
 		return nil, fmt.Errorf("%w: unexpected alg %q", ErrMalformedToken, hdr.Alg)
 	}
-	// RFC 9068 §4: any other typ, an absent one included, is refused.
-	if hdr.Typ != accessTokenType && hdr.Typ != accessTokenTypeFull {
+	// RFC 9068 §4: any other typ, an absent one included, is refused. Compared
+	// without regard to case, because RFC 2045 makes a media type's type and
+	// subtype case-insensitive and RFC 7515 §4.1.9 carries that into typ.
+	if !strings.EqualFold(hdr.Typ, accessTokenType) &&
+		!strings.EqualFold(hdr.Typ, accessTokenTypeFull) {
 		return nil, fmt.Errorf("%w: unexpected typ %q", ErrMalformedToken, hdr.Typ)
 	}
 
@@ -253,13 +293,30 @@ func (t *TokenIssuer) VerifyAccessToken(
 		return nil, fmt.Errorf("%w: ES256 verification failed", ErrInvalidSig)
 	}
 
-	if payload.Audience != audience {
+	// Membership, still exact per element: a token may name several audiences and
+	// reach any of them, but no identifier is ever treated as containing another.
+	if !slices.Contains(payload.Audience, aud) {
 		return nil, fmt.Errorf(
 			"%w: got %q, want %q",
 			ErrAudienceMismatch,
-			payload.Audience,
-			audience,
+			[]string(payload.Audience),
+			aud,
 		)
+	}
+
+	if payload.NotBefore != 0 && time.Now().Before(time.Unix(payload.NotBefore, 0)) {
+		return nil, fmt.Errorf(
+			"%w: not valid before %v",
+			ErrTokenExpired,
+			time.Unix(payload.NotBefore, 0),
+		)
+	}
+
+	// Enforced on the way in as well as at mint: an absent sub would reach the ACL
+	// as the empty subject, which is nobody and matches nothing readable.
+	if payload.Subject == "" || payload.ClientID == "" {
+		return nil, fmt.Errorf("%w: sub and client_id are required (RFC 9068 §2.2)",
+			ErrIncompleteClaims)
 	}
 
 	if time.Unix(payload.ExpiresAt, 0).Before(time.Now()) {

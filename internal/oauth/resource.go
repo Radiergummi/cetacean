@@ -82,6 +82,14 @@ func newResourceSet(cfg ServerConfig) resourceSet {
 		id := cfg.identifierOf(r)
 		set.identifiers = append(set.identifiers, id)
 		set.byID[id] = r
+
+		// RFC 3986 §6.2.3 makes an empty path equivalent to "/" for http and https,
+		// so a client that normalizes the identifier — or reads it off the API
+		// catalog, which anchors at "/" — sends the slashed form. Indexed too, so
+		// the same resource is not refused for being spelled canonically.
+		if r.Path == "" {
+			set.byID[id+"/"] = r
+		}
 	}
 
 	set.fallback = set.identifiers[0]

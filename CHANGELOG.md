@@ -46,7 +46,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale` and `headers` — no challenge can ask for the credential those modes read
 
 ### Fixed
+- Authorization server metadata is served at the address RFC 8414 has a client derive, as well as under `server.base_path`
+- An access token whose `aud` is an array, or whose `typ` differs only in letter case, is accepted — both are conformant shapes that were refused
+- A token carrying a future `nbf`, or no `sub`, is refused
+- The authorization server advertises that it sends `iss` on authorization responses, so a client actually enforces the mix-up check the responses already carry
+- A 401 from the API names where a token comes from even when the request carried no credential, which is what makes cold discovery work
 - Protected resource metadata is served at the address RFC 9728 has a client derive — the well-known segment after the host — as well as under `server.base_path`. Behind a proxy, forward `/.well-known/*` from the host root too
+- The deployment root is accepted as a resource identifier with or without its trailing slash
+- A token request missing `grant_type`, `code` or `refresh_token` is refused with `invalid_request` rather than `invalid_grant`, which told clients to discard a working grant
 - A repeated RFC 8707 `resource` parameter is refused with `invalid_target` instead of binding the token to whichever came first
 - A 401 for a request carrying no credential no longer reports `invalid_token`, per RFC 6750
 - An access token cannot authorize a new client: consent requires the identity your auth provider established, not one a token carries

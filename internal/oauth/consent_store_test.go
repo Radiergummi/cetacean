@@ -845,7 +845,7 @@ func postRefreshGrant(t *testing.T, s *Server, token string) *httptest.ResponseR
 	form := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {token},
-		"resource":      {s.cfg.Resource},
+		"resource":      {s.resources.fallback},
 		"client_id":     {testClientID},
 	}
 
