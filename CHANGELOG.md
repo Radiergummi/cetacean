@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Client certificate authentication works behind a TLS-terminating proxy that forwards the certificate in `Client-Cert` (RFC 9440)
 - `Forwarded` (RFC 7239) is read alongside `X-Forwarded-For` when resolving the client address behind a trusted proxy
 - The MCP authorization server publishes the public key that verifies its access tokens, as a JWK Set at `/oauth/jwks`. Anything checking a token Cetacean issued no longer needs a key that could issue one
+- The REST API accepts bearer tokens the authorization server issues, so a script or app can authenticate without a browser session — `oauth.api_tokens` turns it off
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 
 ### Changed
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** startup refuses while a renamed `CETACEAN_MCP_*` or `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` variable is still set, naming every one at once
 - **Breaking:** `auth.headers.trusted_proxies` is gone — use `server.trusted_proxies`, which headers mode already required
 - **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`, and accepts only `cert`, `headers` and `tailscale` — a listed mode authenticates `/mcp` on its own, so `oauth.enabled` can stay off
+- **Breaking:** `/mcp`'s protected resource metadata moved to `/.well-known/oauth-protected-resource/mcp`; the root document describes the API, whose tokens do not open `/mcp`. A client following `resource_metadata` from the 401 is unaffected
 - **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` is not read — delete it, and every client authorizes once more
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
 - Search, the resource lists and the topology view are faster on clusters with hundreds of services, and a stack's event stream costs less per connected browser
@@ -44,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale` and `headers` — no challenge can ask for the credential those modes read
 
 ### Fixed
+- An ACL grant written against an email address matches a token as well as a browser session. MCP clients were silently denied everything such a grant allowed
 - A replayed refresh token revokes the whole grant family and the remembered approval again; sending the `resource` parameter — which every conformant client does — had the request refused before theft detection could run
 - Everything that does not describe the cluster keeps working while the Docker daemon is unreachable — the dashboard's own icons and manifest, the API catalogue, the OpenSearch description, `/profile` and the OAuth endpoints that issue a token
 - The CSV alternate a filtered listing advertises downloads the rows you are looking at; it dropped the query, so following the link returned everything

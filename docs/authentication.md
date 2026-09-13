@@ -361,6 +361,62 @@ TLS listener and is not consulted here. A certificate presented directly always 
 > The header is honoured **only** from an address in [`server.trusted_proxies`][server.trusted_proxies], so the
 > proxy must strip any `Client-Cert` its own clients send.
 
+## API access tokens
+
+Every mode above establishes identity from something the deployment already trusts — a session cookie, an IdP token,
+a client certificate, a proxy header. A script, a CLI or a native app often has none of those. With
+[`oauth.enabled`][oauth.enabled] set, Cetacean is its own OAuth 2.1 authorization server and issues access tokens
+for the API, on any auth mode, with nothing else to configure.
+
+Send one as a Bearer token:
+
+```http tab
+GET /services HTTP/1.1
+Authorization: Bearer eyJhbGci...
+Accept: application/json
+```
+
+```bash tab
+curl -H "Authorization: Bearer eyJhbGci..." \
+     -H "Accept: application/json" \
+     https://cetacean.example.com/services
+```
+
+A client obtains one the same way an [MCP][mcp] client does — discover, authorize with PKCE, exchange the code —
+and the [MCP flow diagram][mcp] applies unchanged. The difference is the resource it asks for. Getting the token is
+the client's job; obtaining it takes you through whichever provider is configured, and a consent screen naming the
+client, so the token carries **your** identity and nothing more. [Grants][authorization] apply to it exactly as they
+apply to your browser session.
+
+### Two resources, one server
+
+The API and `/mcp` are separate protected resources with separate audiences:
+
+| Resource | Identifier              | Metadata document                             |
+| -------- | ----------------------- | --------------------------------------------- |
+| Web API  | the deployment root     | `/.well-known/oauth-protected-resource`       |
+| `/mcp`   | the deployment root + `/mcp` | `/.well-known/oauth-protected-resource/mcp` |
+
+A token for one is refused by the other, even though one path lies under the other. This is deliberate: approving an
+agent for MCP is not approving it to delete your services. A client discovers which resource it is talking to from
+the `resource_metadata` parameter of the `WWW-Authenticate` header on a 401, and asks for that one by its RFC 8707
+`resource` parameter.
+
+Set [`oauth.api_tokens`][oauth.api_tokens] to `false` to offer only `/mcp`. The API resource then has no metadata
+document and the authorize endpoint refuses to mint a token for it.
+
+### What a token is not
+
+There are no personal access tokens and no scopes. The refresh token *is* the long-lived credential: it rotates
+single-use, survives restarts under [`storage.data_dir`][storage.data_dir], and detects reuse. A token carries its
+user's access, which the [ACL][authorization] decides — so a token cannot hold more than the person who authorized
+it, and the `Allow` header on every response reports what it may actually do.
+
+> [!NOTE]
+> `cert` mode is the exception worth planning around. A consent screen needs a browser that can present a client
+> certificate, which an in-app web view largely cannot. Such a client should authenticate to the API with its own
+> certificate and never touch the authorization server.
+
 ## Trusted proxy headers
 
 Reads identity from HTTP headers set by a reverse proxy (nginx, Traefik, Envoy).
@@ -562,9 +618,12 @@ response schemas.
 [configuration]: configuration
 [getting-started]: getting-started
 [mcp]: mcp
+[oauth.api_tokens]: configuration#oauth.api_tokens
+[oauth.enabled]: configuration#oauth.enabled
 [oidc]: configuration#oidc
 [rfc9440]: https://www.rfc-editor.org/rfc/rfc9440
 [server.listen_addr]: configuration#server.listen_addr
+[storage.data_dir]: configuration#storage.data_dir
 [server.public_url]: configuration#server.public_url
 [server.trusted_proxies]: configuration#server.trusted_proxies
 [tailscale]: configuration#tailscale

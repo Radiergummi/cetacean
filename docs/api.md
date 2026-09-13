@@ -14,6 +14,16 @@ Cetacean serves its cached view of the swarm over HTTP. Reads use `GET`; writes 
 The OpenAPI spec is served as JSON at `GET /api`. Browsers get an interactive playground at the same path; the
 hosted copy is the [API explorer][api-explorer].
 
+## Authentication
+
+Every endpoint below is authenticated by whichever provider [`auth.mode`][auth.mode] selects. A client that has no
+browser session can instead present an access token this deployment issued, as `Authorization: Bearer` — see
+[API access tokens][api-tokens]. A token carries its user's identity, so [grants][authorization] and the `Allow`
+header treat it exactly as they treat that person's session.
+
+A token minted for `/mcp` is refused here, and one minted for the API is refused there. The 401 names the metadata
+document for the resource you reached, so follow `resource_metadata` rather than assuming a location.
+
 ## Content negotiation
 
 Every resource URL serves JSON, HTML (the embedded [dashboard][dashboard]), SSE, or a feed format depending on what
@@ -755,6 +765,7 @@ only when [`auth.mode`][auth.mode] is not `none`.
 URIs are absolute — set [`server.public_url`][server.public_url] behind a reverse proxy.
 
 [api-explorer]: api/explorer
+[api-tokens]: authentication#api-access-tokens
 [auth.mode]: configuration#auth.mode
 [authentication]: authentication
 [authorization]: authorization

@@ -144,7 +144,7 @@ Clients discover how to sign in by fetching well-known documents from Cetacean, 
 through to `/mcp`'s host alongside the endpoint itself:
 
 ```
-/.well-known/oauth-protected-resource
+/.well-known/oauth-protected-resource/mcp
 /.well-known/oauth-authorization-server
 /.well-known/openid-configuration
 /oauth/authorize   /oauth/token   /oauth/revoke   /oauth/register
@@ -155,6 +155,12 @@ through to `/mcp`'s host alongside the endpoint itself:
 Cetacean is its own OAuth 2.1 authorization server for `/mcp`, implementing the MCP `2026-07-28` authorization profile.
 A client discovers it, sends you through your configured auth provider, and exchanges the result for an access token and
 a refresh token. Access tokens are scoped to this deployment, so one cannot be replayed against another Cetacean.
+
+`/mcp` is one of two protected resources — the [web API][api-tokens] is the other — and each has its own metadata
+document and its own audience. `/mcp`'s document is at `/.well-known/oauth-protected-resource/mcp`; the one at the
+root describes the API. A token for either is refused by the other, even though one path lies under the other:
+approving an agent for MCP is not approving it to delete your services. Clients that read the metadata URL out of the
+`WWW-Authenticate` header on the 401, as the profile requires, need no changes.
 
 Access tokens follow the JWT profile in [RFC 9068](https://www.rfc-editor.org/rfc/rfc9068): the header carries
 `typ: at+jwt`, and the token is refused unless it does, so an ID token cannot be presented where an access token
@@ -171,7 +177,7 @@ sequenceDiagram
 
     client->>cetacean: POST /mcp, no token
     cetacean-->>client: 401, WWW-Authenticate names the metadata URL
-    client->>cetacean: GET /.well-known/oauth-protected-resource
+    client->>cetacean: GET /.well-known/oauth-protected-resource/mcp
     client->>cetacean: GET /.well-known/oauth-authorization-server
     Note over client,cetacean: The client identifies itself by a published<br/>metadata URL, or registers dynamically
     client->>cetacean: GET /oauth/authorize, S256 challenge and resource
@@ -193,6 +199,7 @@ Refresh tokens and approvals are stored in `oauth-tokens.json` under [`storage.d
 replica is required: the file is node-local, and an unset signing key would leave each replica signing differently.
 
 [api]: api
+[api-tokens]: authentication#api-access-tokens
 [authorization]: authorization
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools

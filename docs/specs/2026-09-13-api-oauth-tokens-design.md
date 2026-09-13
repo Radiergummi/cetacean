@@ -1,7 +1,8 @@
 # API Access Tokens from the OAuth Server
 
 **Date:** 2026-09-13
-**Status:** Investigation. Phase 0 of `2026-09-13-native-apple-client-design.md`, written up
+**Status:** Implemented, except decision 5 (the operations-tier cap), which is deferred — see
+the note under it. Phase 0 of `2026-09-13-native-apple-client-design.md`, written up
 separately because it stands on its own: any CLI, script or third-party client wants it whether or
 not a native app is ever built.
 
@@ -45,6 +46,13 @@ Five facts about it shape everything below.
 ## Decisions
 
 ### 1. Resource identifiers, and where the PRM documents live
+
+> **Landed as recommended, with one deviation made explicit.** RFC 9728 §3.1 inserts the
+> well-known segment after the *authority*, which under a base path would put both documents
+> outside the prefix Cetacean is mounted under — often outside what the operator controls. The
+> base path therefore precedes the well-known segment, matching where the AS metadata has
+> always been served. Resources reach the package as paths with realms attached, never as named
+> consumers, so `independence_test.go` holds with no exemption.
 
 This is the part that actually needs thought, because RFC 9728 derives the metadata URL from the
 resource identifier's path, and today's single document sits at the root-path location while
@@ -90,6 +98,12 @@ the token is scoped to that path.
 
 ### 2. `aud` comes from the bound resource
 
+> **Landed.** `TokenIssuer.Audience` is gone rather than defaulted: a field would have been one
+> more thing that could disagree with the resource the grant was actually bound to.
+> `ValidateResourceIndicator` takes the known set and the fallback separately, and the fallback
+> is the first configured resource — which lets `oauth.api_tokens = false` preserve today's
+> behaviour exactly, MCP being then both the only resource and the default.
+
 `IssueAccessToken` takes the audience per call, from `codeData.Resource` / `RefreshTokenData.Resource`
 — the value already validated and stored. `VerifyAccessToken` takes the expected audience from its
 caller. `TokenIssuer.Audience` stops being a field, or becomes a default for the no-indicator case.
@@ -104,6 +118,24 @@ the REST API produces `ErrAudienceMismatch`, which the middleware must answer as
 `invalid_token` naming the *API's* PRM, not as a fall-through.
 
 ### 3. Verification runs in `internal/auth`, behind an interface
+
+> **Landed, and the trap was real but in a different place.** The discriminator is the issuer as
+> designed — but `ErrIssuerMismatch` was *unreachable*: `VerifyAccessToken` verified the
+> signature before decoding the payload, so a token from another issuer (signed with another
+> key, as any genuinely foreign token is) reported `ErrInvalidSig` and would have been refused
+> finally instead of passed to the provider. The issuer check now runs before signature
+> verification. Reading an unverified claim to *route* on is safe because it decides nothing
+> else; a token naming us still faces every check below it.
+>
+> Two smaller notes. The OIDC provider never reaches its redirect branch with a bearer present
+> (`oidc.go` checks the header before the `text/html` branch), so that half of the trap was
+> already closed. And the ordering question the design did not raise — a request carrying both a
+> cookie and a token — is settled as *token wins*: an explicit credential outranks an ambient
+> one, and the alternative silently ignores a token the client deliberately sent.
+>
+> The interface carries `UnauthorizedHeader` rather than `WriteUnauthorized`, so the API can set
+> the challenge and still answer with an RFC 9457 problem document; `/mcp`, whose protocol has
+> no body for one, keeps writing the bare 401.
 
 `internal/api` cannot import `internal/mcp`, and putting the verifier in `internal/auth` while the
 OAuth package imports `internal/auth` for `IdentityFromContext` would be a cycle.
@@ -142,6 +174,14 @@ one — the interface decouples either way.
 
 ### 4. The identity in a token must be the identity from the provider
 
+> **Landed as a fix, and it ran deeper than the claims.** `AuthCodeData` and `RefreshTokenData`
+> did not carry the fields either, so the propagation runs the full length of the flow — consent,
+> the code, the access token, the refresh token, and the persisted snapshot. The test drives
+> consent and the code grant rather than handing `IssueAccessToken` a fixture: the defect was in
+> the propagation, and a fixture would have proved the claim round-trips while the flow still
+> dropped it. A state file an older build wrote has no email, so such a grant refreshes into the
+> identity it always did until its client re-authorizes — thinner than the ACL wants, never wider.
+
 `bearerAuth` builds `&auth.Identity{Subject, Groups, Provider}` today. `DisplayName` and `Email` are
 dropped, because the claims never carried them.
 
@@ -165,6 +205,18 @@ So: add `email` and `name` to `AccessTokenClaims` and reconstruct the full ident
 the fix lands as a fix rather than as an assumption.
 
 ### 5. No scopes in this change, but reserve the tier cap
+
+> **Not implemented, and the premise below is wrong.** "`requireLevel` already enforces it,
+> `Allow` already reports it" does not hold: `requireLevel(required, configured)` decides at
+> *construction* time — `if configured >= required { return next }` — and `h.operationsLevel` is
+> a struct field. A per-caller cap needs a request-scoped effective level, which means the three
+> constructors in `router.go` and the three reads in `allow.go` (all of which already have `r` in
+> hand). Tractable, but a cross-cutting change to the write-gating path rather than a free ride
+> on existing machinery — which is why it was deferred out of this change rather than bundled.
+>
+> No `scope` field was reserved in the claims. JWT claim sets are open by construction, so adding
+> one later is not a token-format migration either way, and an unused field would only be dead
+> code in the meantime.
 
 Tempting to add `scope` and let a device hold less than its user. Resisted, for now:
 
