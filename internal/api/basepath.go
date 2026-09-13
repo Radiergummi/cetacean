@@ -154,13 +154,15 @@ func publicURLMiddleware(publicURL string, next http.Handler) http.Handler {
 	})
 }
 
+// derivedWellKnownPrefix covers the documents a client builds a URL for by
+// inserting the well-known segment after the authority, so they are addressed
+// from the host root however this deployment is mounted. Only the OAuth family
+// does that: openid-configuration appends to the issuer, and the catalog is ours.
+const derivedWellKnownPrefix = "/.well-known/oauth-"
+
 // basePathMiddleware strips the base path prefix from incoming requests,
 // stores the base path in context, and redirects trailing slashes.
 // If basePath is "", it is a no-op.
-// wellKnownPrefix is where standards put documents addressed from the authority
-// root, independent of where this deployment is mounted.
-const wellKnownPrefix = "/.well-known/"
-
 func basePathMiddleware(basePath string, next http.Handler) http.Handler {
 	if basePath == "" {
 		return next
@@ -168,12 +170,11 @@ func basePathMiddleware(basePath string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
-		// Discovery documents are the one thing addressed from the authority root
-		// rather than from this deployment's prefix: RFC 9728 §3.1 and RFC 8414 §3
-		// build their URL by inserting the well-known segment after the host, so a
-		// client derives a path the prefix check would refuse. Passed through
-		// unstripped, for the routes registered at that spelling.
-		if strings.HasPrefix(path, wellKnownPrefix) {
+		// RFC 9728 §3.1 and RFC 8414 §3 build their URL by inserting the well-known
+		// segment after the host, so a client derives a path the prefix check would
+		// refuse. Nothing wider than those: the SPA fallback answers whatever is left
+		// unrouted, which would put the dashboard under the host root too.
+		if strings.HasPrefix(path, derivedWellKnownPrefix) {
 			ctx := context.WithValue(r.Context(), basePathKey, basePath)
 			next.ServeHTTP(w, r.WithContext(ctx))
 
