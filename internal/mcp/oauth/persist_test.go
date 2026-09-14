@@ -2,10 +2,13 @@ package oauth
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // restart round-trips a store through the on-disk format the way a process
@@ -422,5 +425,143 @@ func TestStateFileSerializesConcurrentWriters(t *testing.T) {
 	}
 	if got := len(state.Consent); got != rounds {
 		t.Errorf("consent records on disk = %d, want %d", got, rounds)
+	}
+}
+
+// registrationBody is a minimal valid DCR request, so the persistence tests
+// below say what they are about rather than restating the RFC 7591 shape.
+const registrationBody = `{"client_name":"Claude Code","redirect_uris":["http://localhost:33418/callback"]}`
+
+func TestServerCarriesClientRegistrationsAcrossRestart(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	before := newPersistingServer(t, path, testResource)
+
+	status, reg := registerClient(t, before, registrationBody)
+	if status != http.StatusCreated {
+		t.Fatalf("register: status %d", status)
+	}
+
+	// A second Server over the same path stands in for the process restarting.
+	after := newPersistingServer(t, path, testResource)
+
+	restored := after.clients.Get(reg.ClientID)
+	if restored == nil {
+		t.Fatal("a client registered before the restart should still resolve")
+	}
+
+	if restored.ClientName != "Claude Code" {
+		t.Errorf("client name = %q", restored.ClientName)
+	}
+	if len(restored.RedirectURIs) != 1 ||
+		restored.RedirectURIs[0] != "http://localhost:33418/callback" {
+		t.Errorf("redirect uris = %v", restored.RedirectURIs)
+	}
+
+	// The authorize endpoint exact-matches the redirect URI, so losing it would
+	// resolve and then reject every authorization. The application type stands
+	// in for the rest of the record surviving the round trip.
+	if restored.ApplicationType != "native" {
+		t.Errorf("application type = %q, want native", restored.ApplicationType)
+	}
+}
+
+func TestRegistrationIsWrittenThrough(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	s := newPersistingServer(t, path, testResource)
+	if status, _ := registerClient(t, s, registrationBody); status != http.StatusCreated {
+		t.Fatalf("register: status %d", status)
+	}
+
+	if got := len(onDisk(t, path).Clients); got != 1 {
+		t.Errorf("registrations on disk = %d, want the new client written through", got)
+	}
+}
+
+// TestStateFileWithoutRegistrationsLoads — a file written before registrations
+// were persisted must cost a deployment nothing but the registrations
+// themselves, whose clients simply register once more.
+func TestStateFileWithoutRegistrationsLoads(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	tokens := NewRefreshTokenStore()
+	token := tokens.Issue(RefreshTokenData{
+		Subject:  "user@example.com",
+		ClientID: "cetacean-legacy",
+		Resource: testResource,
+	}, time.Hour)
+
+	if err := writeState(path, tokenState(tokens.Snapshot())); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	after := newPersistingServer(t, path, testResource)
+
+	if _, ok := after.refreshTokens.Validate(token); !ok {
+		t.Error("a token from a pre-registration state file should still validate")
+	}
+	if got := len(after.clients.Snapshot()); got != 0 {
+		t.Errorf("registrations restored from a file holding none = %d, want 0", got)
+	}
+}
+
+// TestRegistrationsDidNotBumpTheStateVersion: the key is additive and reads in
+// both directions, so bumping would only make a rollback discard the tokens and
+// approvals beside it.
+func TestRegistrationsDidNotBumpTheStateVersion(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	s := newPersistingServer(t, path, testResource)
+	if status, _ := registerClient(t, s, registrationBody); status != http.StatusCreated {
+		t.Fatalf("register: status %d", status)
+	}
+
+	state := onDisk(t, path)
+	if len(state.Clients) != 1 {
+		t.Fatalf("registrations on disk = %d, want the fixture written", len(state.Clients))
+	}
+
+	if state.Version != 2 {
+		t.Errorf("state version = %d, want 2 even with registrations present", state.Version)
+	}
+}
+
+// TestServerWithoutDCRKeepsPersistedRegistrations: with DCR off there is no
+// registry to restore into, and a token rotation in the meantime must not
+// rewrite the registrations away.
+func TestServerWithoutDCRKeepsPersistedRegistrations(t *testing.T) {
+	path := t.TempDir() + "/mcp-tokens.json"
+
+	state := tokenState(NewRefreshTokenStore().Snapshot())
+	state.Clients = []ClientRegistration{{ClientID: "cetacean-from-before"}}
+
+	if err := writeState(path, state); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	s := NewServer(ServerConfig{
+		Issuer:      "https://cetacean.test",
+		MCPResource: testResource,
+		MCP: config.MCPConfig{
+			AccessTokenTTL:  time.Hour,
+			RefreshTokenTTL: 720 * time.Hour,
+			ConsentTTL:      testConsentTTL,
+		},
+		SigningKey: []byte("test-signing-key-32bytes-padded!!"),
+		StatePath:  path,
+	})
+
+	if s.clients != nil {
+		t.Fatal("a server with DCR disabled should hold no client registry")
+	}
+
+	// The write path runs with a nil registry, and must carry through what it
+	// cannot snapshot.
+	s.refreshTokens.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
+
+	written := onDisk(t, path).Clients
+	if len(written) != 1 || written[0].ClientID != "cetacean-from-before" {
+		t.Errorf("registrations on disk = %v, want the pre-existing one kept", written)
 	}
 }
