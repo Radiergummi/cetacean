@@ -97,10 +97,10 @@ var resourceAcceptPatch = map[string]string{
 	"plugin":  AcceptMergePatch,
 }
 
-// varyByIdentity marks a response as one whose body and Allow both depend on
-// who asked. Every ACL-filtered response travels one of the setAllow* seams, so
-// setting it here is what keeps the two from drifting apart. Add rather than
-// Set, to extend a Vary another layer already wrote.
+// varyByIdentity marks a response as per-caller. Every ACL-filtered response
+// owes it: the setAllow* seams cover the ones reporting a per-identity Allow,
+// and the feed renderers cover themselves. Add rather than Set, to extend a
+// Vary another layer already wrote.
 func varyByIdentity(w http.ResponseWriter) {
 	w.Header().Add("Vary", "Authorization, Cookie")
 }

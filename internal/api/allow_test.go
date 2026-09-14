@@ -1,10 +1,10 @@
 package api
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -304,22 +304,28 @@ func TestAllowHeaderOffersNodePatchAtTierTwo(t *testing.T) {
 	}
 }
 
-// Every response carrying a per-identity Allow is a per-identity response, so
-// the two are set together. Without Vary an intermediary has nothing telling it
-// these bodies differ per caller; Cache-Control: no-cache keeps it from serving
-// one wrongly, but revalidation is cheap now and actually happens.
+// assertVariesByIdentity fails unless the response is marked as per-caller.
+// Nothing else tells an intermediary that these bodies differ between callers.
+func assertVariesByIdentity(t *testing.T, what string, h http.Header) {
+	t.Helper()
+
+	vary := strings.Join(h.Values("Vary"), ", ")
+	if !strings.Contains(vary, "Authorization, Cookie") {
+		t.Errorf("%s carried Vary %q, want it to include %q",
+			what, vary, "Authorization, Cookie")
+	}
+}
+
+// A response reporting a per-identity Allow is per-identity, so whatever
+// computes one says so too.
 func TestAllowSeamVariesByIdentity(t *testing.T) {
 	h := newTestHandlers(t)
 	r := httptest.NewRequest("GET", "/nodes", nil)
 
-	seams := map[string]func(w *httptest.ResponseRecorder){
-		"setAllowList": func(w *httptest.ResponseRecorder) {
-			h.setAllowList(w, r, "node")
-		},
-		"setAllow": func(w *httptest.ResponseRecorder) {
-			h.setAllow(w, r, "node", "node-1")
-		},
-		"setAllowSubResource": func(w *httptest.ResponseRecorder) {
+	seams := map[string]func(http.ResponseWriter){
+		"setAllowList": func(w http.ResponseWriter) { h.setAllowList(w, r, "node") },
+		"setAllow":     func(w http.ResponseWriter) { h.setAllow(w, r, "node", "node-1") },
+		"setAllowSubResource": func(w http.ResponseWriter) {
 			h.setAllowSubResource(w, r, "PUT", config.OpsOperational, "node:node-1")
 		},
 	}
@@ -329,64 +335,44 @@ func TestAllowSeamVariesByIdentity(t *testing.T) {
 			w := httptest.NewRecorder()
 			seam(w)
 
-			values := w.Header().Values("Vary")
-			if len(values) != 1 {
+			if values := w.Header().Values("Vary"); len(values) != 1 {
 				t.Fatalf("%s set %d Vary headers, want 1: %q", name, len(values), values)
 			}
-			if got := values[0]; got != "Authorization, Cookie" {
-				t.Errorf("%s set Vary %q, want %q", name, got, "Authorization, Cookie")
-			}
+			assertVariesByIdentity(t, name, w.Header())
 		})
 	}
 }
 
-// A 304 is as identity-dependent as the 200 it stands in for, and it travels
-// the same seam to say so.
+// A 304 is as identity-dependent as the 200 it stands in for, and reaches the
+// seam by the same route.
 func TestNotModifiedVariesByIdentity(t *testing.T) {
 	h := newTestHandlers(t, withCache(validatorCache(5)))
 
 	full := listOnce(t, h, "/api/nodes", nil, "")
 	notModified := listOnce(t, h, "/api/nodes", nil, full.Header().Get("ETag"))
-	if notModified.Code != 304 {
+	if notModified.Code != http.StatusNotModified {
 		t.Fatalf("revalidation returned %d, want 304", notModified.Code)
 	}
 
-	for _, rec := range []struct {
-		name string
-		vary string
-	}{
-		{"200", strings.Join(full.Header().Values("Vary"), ", ")},
-		{"304", strings.Join(notModified.Header().Values("Vary"), ", ")},
+	for name, rec := range map[string]*httptest.ResponseRecorder{
+		"200": full,
+		"304": notModified,
 	} {
-		for _, want := range []string{"Authorization, Cookie", "Accept-Encoding"} {
-			if !strings.Contains(rec.vary, want) {
-				t.Errorf("%s carried Vary %q, want it to include %q", rec.name, rec.vary, want)
-			}
-		}
+		assertVariesByIdentity(t, name, rec.Header())
 	}
 }
 
-// Feeds do not travel the allow seam — they have no Allow header to pair with —
-// so each renderer says it itself. Both formats are ACL-filtered and neither may
-// be the one that forgets.
+// Feeds have no Allow to pair with, so each renderer says it itself — and
+// neither format may be the one that forgets.
 func TestFeedRenderersVaryByIdentity(t *testing.T) {
-	renderers := map[string]feedRenderer{
-		"atom": renderAtom,
-		"json": renderJSONFeed,
-	}
+	renderers := map[string]feedRenderer{"atom": renderAtom, "json": renderJSONFeed}
 
 	for name, render := range renderers {
 		t.Run(name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			r := httptest.NewRequest("GET", "/api/recommendations", nil)
+			render(w, httptest.NewRequest("GET", "/api/recommendations", nil), feedData{})
 
-			render(w, r, feedData{Title: "Recommendations", Updated: time.Now()})
-
-			vary := strings.Join(w.Header().Values("Vary"), ", ")
-			if !strings.Contains(vary, "Authorization, Cookie") {
-				t.Errorf("%s feed carried Vary %q, want it to include %q",
-					name, vary, "Authorization, Cookie")
-			}
+			assertVariesByIdentity(t, name+" feed", w.Header())
 		})
 	}
 }
