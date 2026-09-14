@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/radiergummi/cetacean/internal/contract"
 	"github.com/radiergummi/cetacean/test/e2e/fixtures"
 	"github.com/radiergummi/cetacean/test/e2e/harness"
@@ -244,6 +246,28 @@ var mediaForms = map[contract.Representation]mediaForm{
 	contract.RepresentationSSE: {
 		accept:      "text/event-stream",
 		contentType: "text/event-stream",
+	},
+	contract.RepresentationYAML: {
+		accept:      "application/yaml",
+		suffix:      ".yaml",
+		contentType: "application/yaml",
+		verify: func(t *testing.T, body string) {
+			t.Helper()
+
+			var doc struct {
+				Services map[string]any `yaml:"services"`
+			}
+
+			if err := yaml.Unmarshal([]byte(body), &doc); err != nil {
+				t.Errorf("the YAML body does not parse: %v (%.120s)", err, body)
+
+				return
+			}
+
+			if len(doc.Services) == 0 {
+				t.Errorf("the compose document names no services: %.120s", body)
+			}
+		},
 	},
 }
 

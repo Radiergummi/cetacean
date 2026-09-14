@@ -256,6 +256,18 @@ func enclosingRangeStmt(ancestors []ast.Node) *ast.RangeStmt {
 	return nil
 }
 
+// enclosingFuncDecl returns the function declaration a node sits in, or nil
+// when it sits at file scope.
+func enclosingFuncDecl(ancestors []ast.Node) *ast.FuncDecl {
+	for i := len(ancestors) - 2; i >= 0; i-- {
+		if fn, ok := ancestors[i].(*ast.FuncDecl); ok {
+			return fn
+		}
+	}
+
+	return nil
+}
+
 // rangeStringElements returns the literal elements of rs's range expression
 // when rs ranges over an inline []string{...} literal with the given loop
 // variable name and every element is a string literal. rs may be nil (no

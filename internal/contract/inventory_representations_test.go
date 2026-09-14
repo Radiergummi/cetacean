@@ -23,6 +23,13 @@ func TestRepresentationsReadsBothNegotiationForms(t *testing.T) {
 			RepresentationAtom, RepresentationJSONFeed, RepresentationCSV,
 		}},
 
+		// A feed variable, built by a builder and then given a field the
+		// builder does not set.
+		{"GET /services/{id}", []Representation{
+			RepresentationJSON, RepresentationHTML, RepresentationSSE,
+			RepresentationAtom, RepresentationJSONFeed, RepresentationYAML,
+		}},
+
 		// A feedHandlers composite literal naming its fields.
 		{"GET /history", []Representation{
 			RepresentationJSON, RepresentationHTML,

@@ -24,6 +24,7 @@ const (
 	RepresentationGraphML  Representation = "GraphML"
 	RepresentationDOT      Representation = "DOT"
 	RepresentationCSV      Representation = "CSV"
+	RepresentationYAML     Representation = "YAML"
 )
 
 var (
@@ -104,7 +105,9 @@ func collectRepresentations(
 			return true
 		}
 
-		declared, problems := declaredRepresentations(fset, call.Args[1:])
+		declared, problems := declaredRepresentations(
+			fset, call.Args[1:], enclosingFuncDecl(ancestors),
+		)
 		bad = append(bad, problems...)
 
 		if len(declared) == 0 {
@@ -148,6 +151,7 @@ func collectRepresentations(
 func declaredRepresentations(
 	fset *token.FileSet,
 	args []ast.Expr,
+	fn *ast.FuncDecl,
 ) ([]Representation, []string) {
 	var (
 		declared []Representation
@@ -159,7 +163,7 @@ func declaredRepresentations(
 			call, ok := n.(*ast.CallExpr)
 			if ok {
 				if helper, feeds, isHelper := dispatchHelper(call); isHelper {
-					from, problem := helperRepresentations(fset, helper, feeds)
+					from, problem := helperRepresentations(fset, helper, feeds, fn)
 					if problem != "" {
 						problems = append(problems, problem)
 					}
@@ -235,6 +239,7 @@ func helperRepresentations(
 	fset *token.FileSet,
 	helper string,
 	feeds ast.Expr,
+	fn *ast.FuncDecl,
 ) ([]Representation, string) {
 	declared := []Representation{RepresentationJSON, RepresentationHTML}
 	if helper == "contentNegotiatedWithSSE" {
@@ -245,7 +250,7 @@ func helperRepresentations(
 		return declared, fmt.Sprintf("%s call with an unexpected argument count", helper)
 	}
 
-	atom, jsonFeed, csv, ok := feedFields(feeds)
+	fields, ok := feedFields(feeds, fn)
 	if !ok {
 		return declared, fmt.Sprintf(
 			"%s: %s with a feedHandlers argument this inventory cannot read",
@@ -253,76 +258,153 @@ func helperRepresentations(
 		)
 	}
 
-	if atom {
+	if fields.atom {
 		declared = append(declared, RepresentationAtom)
 	}
 
-	if jsonFeed {
+	if fields.jsonFeed {
 		declared = append(declared, RepresentationJSONFeed)
 	}
 
-	if csv {
+	if fields.csv {
 		declared = append(declared, RepresentationCSV)
+	}
+
+	if fields.yaml {
+		declared = append(declared, RepresentationYAML)
 	}
 
 	return declared, ""
 }
 
-// feedFields reports which feed handlers a feedHandlers argument carries. Both
-// builders return both; a composite literal carries whichever keys it names.
-func feedFields(expr ast.Expr) (atom, jsonFeed, csv, ok bool) {
+// feedSet reports which feed handlers a feedHandlers value carries.
+type feedSet struct {
+	atom     bool
+	jsonFeed bool
+	csv      bool
+	yaml     bool
+}
+
+// feedFields reads a feedHandlers argument in every shape router.go uses: a
+// builder call, a composite literal, or a local variable built from either and
+// then given further fields. fn may be nil, which makes a variable unreadable
+// rather than a panic.
+func feedFields(expr ast.Expr, fn *ast.FuncDecl) (fields feedSet, ok bool) {
 	switch e := expr.(type) {
 	case *ast.CallExpr:
 		sel, isSel := e.Fun.(*ast.SelectorExpr)
 		if !isSel {
-			return false, false, false, false
+			return feedSet{}, false
 		}
 
 		switch sel.Sel.Name {
 		case "listFeeds":
-			return true, true, true, true
+			return feedSet{atom: true, jsonFeed: true, csv: true}, true
 		case "detailFeeds", "searchFeeds":
-			return true, true, false, true
+			return feedSet{atom: true, jsonFeed: true}, true
 		default:
-			return false, false, false, false
+			return feedSet{}, false
 		}
 
 	case *ast.CompositeLit:
 		ident, isIdent := e.Type.(*ast.Ident)
 		if !isIdent || ident.Name != "feedHandlers" {
-			return false, false, false, false
+			return feedSet{}, false
 		}
 
 		for _, elt := range e.Elts {
 			kv, isKV := elt.(*ast.KeyValueExpr)
 			if !isKV {
-				return false, false, false, false
+				return feedSet{}, false
 			}
 
 			key, isIdent := kv.Key.(*ast.Ident)
-			if !isIdent {
-				return false, false, false, false
-			}
-
-			switch key.Name {
-			case "atom":
-				atom = true
-			case "jsonFeed":
-				jsonFeed = true
-			case "csv":
-				csv = true
-			case "csvParams":
-				// Parameterises the CSV link; it declares no representation.
-			default:
-				return false, false, false, false
+			if !isIdent || !fields.set(key.Name) {
+				return feedSet{}, false
 			}
 		}
 
-		return atom, jsonFeed, csv, true
+		return fields, true
+
+	case *ast.Ident:
+		return feedVariable(e.Name, fn)
 
 	default:
-		return false, false, false, false
+		return feedSet{}, false
 	}
+}
+
+// set records the field a feedHandlers key names, reporting whether the key is
+// one this parser knows.
+func (f *feedSet) set(key string) bool {
+	switch key {
+	case "atom":
+		f.atom = true
+	case "jsonFeed":
+		f.jsonFeed = true
+	case "csv":
+		f.csv = true
+	case "yaml":
+		f.yaml = true
+	case "csvParams", "queryParams":
+		// Parameterise a link; they declare no representation.
+	default:
+		return false
+	}
+
+	return true
+}
+
+// feedVariable resolves a feedHandlers local: the value it is assigned, plus
+// every field assigned to it afterwards. Assignment order does not matter,
+// because a field is only ever set, never cleared.
+func feedVariable(name string, fn *ast.FuncDecl) (fields feedSet, ok bool) {
+	if fn == nil {
+		return feedSet{}, false
+	}
+
+	ast.Inspect(fn, func(n ast.Node) bool {
+		assign, isAssign := n.(*ast.AssignStmt)
+		if !isAssign || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
+			return true
+		}
+
+		switch lhs := assign.Lhs[0].(type) {
+		case *ast.Ident:
+			if lhs.Name != name {
+				return true
+			}
+
+			from, readable := feedFields(assign.Rhs[0], fn)
+			if !readable {
+				ok = false
+
+				return false
+			}
+
+			fields.atom = fields.atom || from.atom
+			fields.jsonFeed = fields.jsonFeed || from.jsonFeed
+			fields.csv = fields.csv || from.csv
+			fields.yaml = fields.yaml || from.yaml
+			ok = true
+
+		case *ast.SelectorExpr:
+			target, isIdent := lhs.X.(*ast.Ident)
+			if !isIdent || target.Name != name {
+				return true
+			}
+
+			if !fields.set(lhs.Sel.Name) {
+				ok = false
+
+				return false
+			}
+		}
+
+		return true
+	})
+
+	return fields, ok
 }
 
 // representationOf maps a ContentType constant's name to its representation.
@@ -335,7 +417,8 @@ func representationOf(name string) (Representation, bool) {
 	switch r := Representation(trimmed); r {
 	case RepresentationJSON, RepresentationHTML, RepresentationSSE,
 		RepresentationAtom, RepresentationJSONFeed, RepresentationJGF,
-		RepresentationGraphML, RepresentationDOT, RepresentationCSV:
+		RepresentationGraphML, RepresentationDOT, RepresentationCSV,
+		RepresentationYAML:
 		return r, true
 	default:
 		// ContentTypeUnsupported and the context helpers land here.
