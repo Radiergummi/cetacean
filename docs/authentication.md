@@ -86,6 +86,22 @@ These paths skip authentication in every mode:
 
 `/oauth/authorize` is not exempt: a user must authenticate before granting an MCP client access.
 
+## Refused requests
+
+A `401` must name a way to authenticate, in a `WWW-Authenticate` challenge
+([RFC 9110 §15.5.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2)). Only OIDC has one to give: the
+other modes read a credential HTTP cannot ask for — a certificate in the TLS layer, a header your proxy set,
+the peer's place on your tailnet — so a refusal there is a `403`, and the [error code][api] says which.
+
+| Mode                   | Refusal      | Challenge |
+| ---------------------- | ------------ | --------- |
+| `oidc`                 | `401 AUT001` | `Bearer`  |
+| `cert`                 | `403 AUT005` | —         |
+| `tailscale`, `headers` | `403 AUT006` | —         |
+
+The reason is logged, not returned: which of "no subject header", "invalid proxy secret" or "not a trusted
+proxy" applied describes your deployment to a caller that has not authenticated.
+
 ## None
 
 Anonymous access. Every request receives a static identity with `subject: anonymous`.

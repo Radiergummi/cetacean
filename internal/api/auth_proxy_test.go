@@ -90,9 +90,12 @@ func TestHeadersAuthFromUntrustedPeer(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, proxiedRequest("203.0.113.9:1234"))
 
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("status=%d, want 401; body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403; body=%s", w.Code, w.Body.String())
 	}
+	// Pins the registry's status for the code the middleware defaults to: the
+	// two are declared in packages that cannot see each other.
+	assertACLErrorCode(t, w, "AUT006")
 }
 
 // certRequest builds a GET /nodes carrying an RFC 9440 Client-Cert header, as
@@ -138,7 +141,7 @@ func TestClientCertBehindTrustedProxy(t *testing.T) {
 		status int
 	}{
 		"trusted proxy":  {peer: "10.0.0.5:1234", status: http.StatusOK},
-		"untrusted peer": {peer: "203.0.113.9:1234", status: http.StatusUnauthorized},
+		"untrusted peer": {peer: "203.0.113.9:1234", status: http.StatusForbidden},
 	}
 
 	for name, tt := range tests {
@@ -148,6 +151,11 @@ func TestClientCertBehindTrustedProxy(t *testing.T) {
 
 			if w.Code != tt.status {
 				t.Fatalf("status=%d, want %d; body=%s", w.Code, tt.status, w.Body.String())
+			}
+			// Pins the registry's status for the code the provider names: the
+			// two are declared in packages that cannot see each other.
+			if tt.status != http.StatusOK {
+				assertACLErrorCode(t, w, "AUT005")
 			}
 		})
 	}

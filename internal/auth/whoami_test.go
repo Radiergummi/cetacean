@@ -56,7 +56,7 @@ func TestWhoamiHandler_ReturnsIdentityJSON(t *testing.T) {
 	}
 }
 
-func TestWhoamiHandler_Returns401WithoutHeaders(t *testing.T) {
+func TestWhoamiHandler_Returns403WithoutHeaders(t *testing.T) {
 	p := NewHeadersProvider(config.HeadersConfig{
 		Subject: "X-User",
 	})
@@ -68,8 +68,8 @@ func TestWhoamiHandler_Returns401WithoutHeaders(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, fromTrustedProxy(r))
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
 }
 
@@ -101,7 +101,7 @@ func TestWhoamiHandler_ValidSecret(t *testing.T) {
 	}
 }
 
-func TestWhoamiHandler_InvalidSecret_Returns401(t *testing.T) {
+func TestWhoamiHandler_InvalidSecret_Returns403(t *testing.T) {
 	p := NewHeadersProvider(config.HeadersConfig{
 		Subject:      "X-User",
 		SecretHeader: "X-Proxy-Secret",
@@ -116,8 +116,8 @@ func TestWhoamiHandler_InvalidSecret_Returns401(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, fromTrustedProxy(r))
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
 }
 

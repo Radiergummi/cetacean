@@ -139,8 +139,8 @@ func TestIntegration_HeadersMode_MissingHeaders(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, fromTrustedProxy(req))
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}
 }
 
@@ -196,8 +196,8 @@ func TestIntegration_HeadersMode_InvalidSecret(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, fromTrustedProxy(req))
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}
 }
 
@@ -221,8 +221,8 @@ func TestIntegration_HeadersMode_MissingSecretHeader(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, fromTrustedProxy(req))
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}
 }
 
@@ -352,8 +352,8 @@ func TestIntegration_CertMode_NoCert(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/services", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d for no TLS", rec.Code, http.StatusUnauthorized)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d for no TLS", rec.Code, http.StatusForbidden)
 	}
 
 	// TLS state but no peer certificates.
@@ -361,8 +361,8 @@ func TestIntegration_CertMode_NoCert(t *testing.T) {
 	req.TLS = &tls.ConnectionState{}
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d for empty peer certs", rec.Code, http.StatusUnauthorized)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d for empty peer certs", rec.Code, http.StatusForbidden)
 	}
 }
 
@@ -413,8 +413,8 @@ func TestIntegration_ExemptRoutes_SkipAuth(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, path, nil)
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
-			if rec.Code != http.StatusUnauthorized {
-				t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+			if rec.Code != http.StatusForbidden {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
 			}
 			if called {
 				t.Error("inner handler should not be called for non-exempt path")

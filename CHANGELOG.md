@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `CETACEAN_MCP_SIGNING_KEY` is now a root secret both keys derive from, and must be 32 bytes of hex or base64 — generate one with `openssl rand -hex 32`. Leaving it unset still generates a key at startup
 - MCP access tokens are signed with ES256 rather than HMAC. Clients refresh once on upgrade; stop every replica before starting the new version
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
+- **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale` and `headers` — no challenge can ask for the credential those modes read
 
 ### Fixed
 - Everything that does not describe the cluster keeps working while the Docker daemon is unreachable — the dashboard's own icons and manifest, the API catalogue, the OpenSearch description, `/profile` and the OAuth endpoints that issue a token

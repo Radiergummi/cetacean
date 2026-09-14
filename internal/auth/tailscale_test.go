@@ -384,7 +384,7 @@ func TestTailscaleProvider_Whoami_Success(t *testing.T) {
 	}
 }
 
-func TestTailscaleProvider_Whoami_Unauthenticated(t *testing.T) {
+func TestTailscaleProvider_Whoami_Refused(t *testing.T) {
 	p := &TailscaleProvider{
 		client: &mockWhoIsClient{
 			err: errors.New("not on tailnet"),
@@ -398,8 +398,8 @@ func TestTailscaleProvider_Whoami_Unauthenticated(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
 }
 

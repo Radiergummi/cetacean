@@ -144,6 +144,20 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "An internal error occurred during authentication.",
 		Suggestion:  "Retry the login flow. If the problem persists, check server logs.",
 	},
+	"AUT005": {
+		Code:        "AUT005",
+		Title:       "Client Certificate Rejected",
+		Status:      http.StatusForbidden,
+		Description: "The client certificate was absent, unreadable, or carried no usable identity.",
+		Suggestion:  "Present a certificate from a CA this deployment trusts, carrying a common name, email address or SPIFFE URI SAN.",
+	},
+	"AUT006": {
+		Code:        "AUT006",
+		Title:       "Authentication Refused",
+		Status:      http.StatusForbidden,
+		Description: "The credential this deployment authenticates with was missing or rejected, and no HTTP authentication scheme can ask for it.",
+		Suggestion:  "The credential comes from the network path — a trusted proxy's headers, or the peer's tailnet membership — not from the request. Check the server logs for which one failed.",
+	},
 
 	// ── ACL: access control ──────────────────────────────────────────
 	"ACL001": {Code: "ACL001", Title: "Access Denied", Status: http.StatusForbidden,

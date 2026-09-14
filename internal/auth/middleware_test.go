@@ -87,7 +87,7 @@ func TestMiddleware_ExemptRoutes(t *testing.T) {
 	}
 }
 
-func TestMiddleware_AuthError_Returns401(t *testing.T) {
+func TestMiddleware_PlainError_Returns403(t *testing.T) {
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -101,8 +101,8 @@ func TestMiddleware_AuthError_Returns401(t *testing.T) {
 	if called {
 		t.Error("inner handler should not be called on auth error")
 	}
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
 }
 

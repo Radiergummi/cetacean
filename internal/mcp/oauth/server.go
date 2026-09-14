@@ -1008,21 +1008,22 @@ func (s *Server) WriteUnauthorized(w http.ResponseWriter, errorCode string) {
 	w.WriteHeader(http.StatusUnauthorized)
 }
 
-// httpQuotedString wraps s in an RFC 7230 quoted-string. Per RFC 7230 §3.2.6
-// the only characters that must be escaped inside quoted-string are " and \;
-// everything else in the visible-ASCII range (and obs-text) is allowed bare.
-// Go's %q produces a Go-syntax string literal — close but wrong by spec,
-// notably for backticks and non-ASCII runes. We escape "\" and `"` only.
+// httpQuotedString wraps s in an RFC 9110 §5.6.4 quoted-string: " and \ become
+// quoted-pair, and a byte qdtext excludes — the controls and DEL — is dropped,
+// because quoted-pair cannot carry one either. Go's %q is close but wrong by
+// spec, notably for backticks and non-ASCII runes.
 func httpQuotedString(s string) string {
 	var b strings.Builder
 	b.Grow(len(s) + 2)
 	b.WriteByte('"')
 	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == '"' || c == '\\' {
+		switch c := s[i]; {
+		case c == '"' || c == '\\':
 			b.WriteByte('\\')
+			b.WriteByte(c)
+		case c == '\t' || c == ' ' || (c >= 0x21 && c <= 0x7E) || c >= 0x80:
+			b.WriteByte(c)
 		}
-		b.WriteByte(c)
 	}
 	b.WriteByte('"')
 	return b.String()

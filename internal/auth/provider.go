@@ -28,7 +28,7 @@ func WhoamiHandler(p Provider, writeIdentity WriteIdentityFunc) http.HandlerFunc
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := p.Authenticate(w, r)
 		if err != nil {
-			writeError(w, r, http.StatusUnauthorized, "AUT001", "authentication required")
+			writeAuthFailure(w, r, err)
 			return
 		}
 		if id == nil {
