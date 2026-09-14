@@ -55,8 +55,7 @@ func (e *AuthError) Error() string { return e.Msg }
 func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error) {
 	status, code, detail := http.StatusForbidden, "AUT006", "authentication refused"
 
-	var authErr *AuthError
-	if errors.As(err, &authErr) {
+	if authErr, ok := errors.AsType[*AuthError](err); ok {
 		if authErr.WWWAuthenticate != "" {
 			w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
 			status, code, detail = http.StatusUnauthorized, "AUT001", "authentication required"

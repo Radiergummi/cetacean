@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -89,7 +90,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 
 	// Capped, so writeEncodedJSON's append for a compressed body cannot write
 	// into the array every later caller is handed.
-	doc := renderedDoc{body: body[:len(body):len(body)], etag: computeETag(body)}
+	doc := renderedDoc{body: slices.Clip(body), etag: computeETag(body)}
 	h.stackDocs.put(key, doc)
 
 	writeRenderedJSON(w, r, http.StatusOK, doc)

@@ -119,8 +119,7 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 			// error, so a rejected credential never reaches the log.
 			reason := "invalid bearer token"
 
-			var expired *oidc.TokenExpiredError
-			if errors.As(err, &expired) {
+			if _, ok := errors.AsType[*oidc.TokenExpiredError](err); ok {
 				reason = "expired bearer token"
 			}
 
