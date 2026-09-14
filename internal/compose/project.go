@@ -134,7 +134,11 @@ func declareReferences(f *File, svc swarm.Service, n names) {
 	}
 	for _, m := range c.Mounts {
 		if m.Type == mount.TypeVolume && m.Source != "" {
-			declare(f.Volumes, n.short(kindVolume, m.Source), Volume{External: true, Name: m.Source})
+			declare(
+				f.Volumes,
+				n.short(kindVolume, m.Source),
+				Volume{External: true, Name: m.Source},
+			)
 		}
 	}
 	for _, sec := range c.Secrets {

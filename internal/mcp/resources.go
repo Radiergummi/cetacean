@@ -323,7 +323,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 			return s.readServiceLogs(ctx, svc.ID)
 		}
 		if subResource == "compose" {
-			return composeDoc(compose.FromService(svc, s.filterNetworks(ctx, s.cache.ListNetworks())))
+			return composeDoc(
+				compose.FromService(svc, s.filterNetworks(ctx, s.cache.ListNetworks())),
+			)
 		}
 		return svc, nil
 
@@ -355,7 +357,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 			return nil, err
 		}
 		if subResource == "compose" {
-			return composeDoc(compose.FromStack(stack, s.filterNetworks(ctx, s.cache.ListNetworks())))
+			return composeDoc(
+				compose.FromStack(stack, s.filterNetworks(ctx, s.cache.ListNetworks())),
+			)
 		}
 		return stack, nil
 
