@@ -142,12 +142,16 @@ What gets memoised is the marshalled JGF document, not the graph structure, so a
 construction *and* marshalling *and* hashing — together all but a rounding error of the
 allocations the profile attributes to this endpoint.
 
-The same treatment applies to the GraphML and DOT renderings, which start from the same two
-graphs, and — with the key carrying the stack's name as well — to stack detail, which turned
-out to be the second most expensive document the API builds. It does not apply to
+It applies too — with the key carrying the stack's name as well — to stack detail, which
+turned out to be the second most expensive document the API builds. It does not apply to
 `HandleCluster`, which at 128µs and 46 allocations is not worth a cache key, nor to anything
 mixing in live data: `HandleStackSummary` queries Prometheus, and a memo keyed on the cache
 generation would serve yesterday's numbers.
+
+The GraphML and DOT renderings were in scope here and were not done. They start from the same
+network graph and would key the same way, but they are not requested often enough to earn a
+cache key — a browser renders the JGF document, and these two exist for exporting a graph by
+hand. Left as they are deliberately.
 
 ## Search
 
@@ -165,8 +169,10 @@ whole 62%.
 Two constraints make that less mechanical than it sounds. `ListX()` returns sorted output
 and search depends on it: results are appended in list order and truncated at `limit`, so
 iterating a map directly would return different subsets and a different validator on every
-call for the same query. Matches must be sorted after collection instead — cheap, because
-there are few of them.
+call for the same query. The scan therefore yields in list order — gathering and sorting the
+keys under the lock, which copies a string per resource rather than a struct. Sorting the
+matches after collection was the plan and is worse: it reorders a page that the limit has
+already truncated from the wrong end.
 
 And the loop must not call back into the cache while holding the read lock. Go's `RWMutex`
 is not re-entrant for readers: a writer arriving between two `RLock`s deadlocks the second.
@@ -220,7 +226,8 @@ held hostage to it.
 - `internal/acl/evaluator.go` — exported grant fingerprint, policy version.
 - `internal/api/etag.go` — `validatorKey`, derivation, the writers.
 - `internal/api/topology.go` — the memo.
-- `internal/cluster/search.go` — the shared snapshot.
+- `internal/cluster/search.go` — matching under the read lock.
+- `internal/cache/resourcemap.go` — `Each`, which is how it looks without copying.
 
 ## Rejected alternatives
 
@@ -265,11 +272,23 @@ resolved. Doing this means either projecting (name, sort key, id) under the lock
 fetching only the page afterwards, or giving the resolver a lock-free path. Both are
 design changes, not tuning.
 
-**The derived validator stops at lists.** Extending it to the detail endpoints was tried
-and reverted: an ETag there is also the token `precond` compares an `If-Match` against, and
-`precond` arrives at it by hashing the representation, so a GET that tags itself from the
-generation refuses its own DELETE. `TestPreconditionRoundTripsForEveryPairedEndpoint`
-catches it. Detail endpoints get a memoised body and keep a hashed validator instead, which
-is why the stack detail is fast without its precondition changing. Moving them onto the
-derived validator means moving `precond` with them, and deciding what a precondition means
-when the two negotiated different media types.
+Two corrections to that paragraph, both from measuring it — see
+`2026-09-14-acl-resolver-index-design.md`. The deadlock only bites if ACL filtering is fused
+into the scan; projecting under the lock and filtering after it releases avoids both the copy
+and the deadlock, and trades them for a torn read between the two passes. And the bytes were
+the wrong target: the same list under a stack-scoped policy costs sixteen times what it costs
+under a wildcard one while allocating identically, because the resolver scans every service to
+resolve one name. That is being fixed first, after which this is worth re-measuring rather
+than building.
+
+**The derived validator stops at lists, and stays there.** Extending it to the detail
+endpoints was tried and reverted: an ETag there is also the token `precond` compares an
+`If-Match` against, and `precond` arrives at it by hashing the representation, so a GET that
+tags itself from the generation refuses its own DELETE.
+`TestPreconditionRoundTripsForEveryPairedEndpoint` catches it.
+
+It is not worth going back for. The memo subsumed the motivation the way it subsumed
+`jgf.URN`: a detail 304 is now a map lookup and a string compare, so deriving the validator
+would save the lookup and cost `precond` a question about what a precondition means when the
+GET and the write negotiated different media types. Detail endpoints keep a hashed validator,
+which is correct by construction and, behind a memo, no longer expensive.
