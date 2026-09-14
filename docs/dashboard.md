@@ -95,6 +95,13 @@ A detail page shows the resource, its cross-references (the services using a con
 stack a resource belongs to), and its recent change history. Cross-references are links, so you can walk from a
 secret to the services mounting it to the nodes their tasks run on.
 
+A stack's page opens with **Topology**: the networks its services attach to, and the configs, secrets and volumes
+they mount, drawn as a graph above the tables listing the same resources. A network a service attaches to but the
+stack does not own — an overlay shared with another stack — is drawn dashed; a resource nothing references stays
+visible, dimmed. Hovering a node shows the rest of its detail, and every node is a link to the resource it stands
+for. The graph pans and zooms within its own bounds, so it cannot be pushed out of view, and carries controls for
+zoom, fit and full screen.
+
 Where the operations level and your grants allow it, detail pages carry actions: scale, update image, rollback and
 restart on a service, plus inline editors for environment variables, resource reservations and limits, placement,
 ports, update and rollback policy, and the log driver; availability and labels on a node; force removal on a task.

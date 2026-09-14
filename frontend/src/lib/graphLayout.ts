@@ -6,6 +6,9 @@ export type RoutedEdgeData = {
   points: { x: number; y: number }[];
 };
 
+/** Registered by every graph so ELK's bend points are the ones drawn. */
+export const routedEdgeType = "routed";
+
 const layoutOptions = {
   "elk.algorithm": "layered",
   "elk.direction": "RIGHT",
@@ -17,30 +20,30 @@ const layoutOptions = {
   "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
 };
 
-// ELK layers by longest path, which would scatter services across the columns
-// their chains happen to end in. Traffic enters at an entrypoint and lands on a
-// service, so those two keep their own ends of the graph.
-const layerConstraint: Record<string, string | undefined> = {
-  traefikEntrypoint: "FIRST",
-  traefikService: "LAST",
-};
+/**
+ * Pins a node type to an end of the graph. ELK layers by longest path, which
+ * scatters the kinds a reader expects to find together — keyed by node type so
+ * each graph names its own ends.
+ */
+export type LayerConstraints = Record<string, "FIRST" | "LAST" | undefined>;
 
 /**
  * Lay the graph out from the sizes React Flow measured, so the boxes ELK packs
  * are the boxes on screen. Its bend points come back on each edge instead of
  * being discarded, which is what keeps a line off the nodes it passes.
  */
-export async function layoutTraefikGraph(
+export async function layoutGraph(
   nodes: Node[],
   edges: Edge[],
-): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  constraints: LayerConstraints = {},
+): Promise<{ nodes: Node[]; edges: Edge[]; bounds: { width: number; height: number } }> {
   const elk = await loadElk();
 
   const graph: ElkNode = {
-    id: "traefik",
+    id: "graph",
     layoutOptions,
     children: nodes.map((node) => {
-      const constraint = layerConstraint[node.type ?? ""];
+      const constraint = constraints[node.type ?? ""];
 
       return {
         id: node.id,
@@ -63,6 +66,7 @@ export async function layoutTraefikGraph(
   const routed = new Map((laidOut.edges ?? []).map((edge) => [edge.id, edge.sections?.[0]]));
 
   return {
+    bounds: { width: laidOut.width ?? 0, height: laidOut.height ?? 0 },
     nodes: nodes.map((node) => {
       const box = placed.get(node.id);
 
@@ -77,7 +81,7 @@ export async function layoutTraefikGraph(
 
       return {
         ...edge,
-        type: "traefikRouted",
+        type: routedEdgeType,
         data: {
           points: [section.startPoint, ...(section.bendPoints ?? []), section.endPoint],
         } satisfies RoutedEdgeData,

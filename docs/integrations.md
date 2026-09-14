@@ -41,6 +41,9 @@ such as `auth@file`, appears dashed and marked as defined elsewhere — Cetacean
 it. A router naming no service binds to the only service the labels declare, and is drawn unresolved when there is
 none or several. Middlewares and services nothing references stay visible, dimmed.
 
+The graph pans and zooms within its own bounds, so it cannot be pushed out of view, and carries controls for zoom,
+fit and full screen.
+
 For the configuration Traefik is actually running, across every service in the cluster, use Traefik's own dashboard.
 
 ## Editing

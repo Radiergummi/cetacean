@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `POST /-/resync` and `GET /swarm/plugins` appear in the API specification
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 - A service's Traefik labels can be read as a graph, from entrypoints through routers and the middleware chain to services, beside the existing structured and raw views
+- A stack's page opens with a topology graph: the networks its services attach to, and the configs, secrets and volumes they mount
 
 ### Changed
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy

@@ -1,4 +1,4 @@
-import type { RoutedEdgeData } from "@/lib/traefikLayout";
+import type { RoutedEdgeData } from "@/lib/graphLayout";
 import { BaseEdge, type EdgeProps } from "@xyflow/react";
 
 type Point = { x: number; y: number };

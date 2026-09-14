@@ -3,14 +3,17 @@ import type { StackDetail as StackDetailType, Task } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection, { composeQueryKey } from "../components/ComposeSection";
 import FetchError from "../components/FetchError";
+import { GraphFrame } from "../components/graph/GraphFrame";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import SimpleTable from "../components/SimpleTable";
 import { StackActions } from "../components/stack-detail/StackActions";
 import { useDetailResource } from "../hooks/useDetailResource";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+
+const StackGraph = lazy(() => import("../components/stack-detail/stack-graph/StackGraph"));
 
 export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
@@ -129,6 +132,17 @@ export default function StackDetail() {
           />
         }
       />
+
+      {stack.services?.length > 0 && (
+        <CollapsibleSection
+          title="Topology"
+          defaultOpen
+        >
+          <GraphFrame>
+            <StackGraph stack={stack} />
+          </GraphFrame>
+        </CollapsibleSection>
+      )}
 
       {stack.services?.length > 0 && (
         <CollapsibleSection title="Services">

@@ -1,5 +1,4 @@
 import { IntegrationSection } from "./IntegrationSection";
-import { TraefikGraphFrame } from "./traefik-graph/TraefikGraphFrame";
 import type {
   TraefikIntegration,
   TraefikMiddleware,
@@ -7,6 +6,7 @@ import type {
   TraefikService,
 } from "@/api/types";
 import KeyValuePills from "@/components/data/KeyValuePills";
+import { GraphFrame } from "@/components/graph/GraphFrame";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
@@ -20,7 +20,9 @@ import {
   type MiddlewareFormState,
 } from "@/lib/traefikLabels";
 import { ArrowRight, Lock } from "lucide-react";
-import { useState } from "react";
+import { lazy, useState } from "react";
+
+const TraefikGraph = lazy(() => import("./traefik-graph/TraefikGraph"));
 
 const docsUrl = "https://doc.traefik.io/traefik/providers/swarm/#routing-configuration-with-labels";
 
@@ -455,7 +457,13 @@ export function TraefikPanel({
       onSave={handleSave}
       serviceId={serviceId}
       onRawSave={onSaved}
-      visualContent={hasRouters ? <TraefikGraphFrame integration={integration} /> : undefined}
+      visualContent={
+        hasRouters ? (
+          <GraphFrame>
+            <TraefikGraph integration={integration} />
+          </GraphFrame>
+        ) : undefined
+      }
     >
       <div className="grid gap-4 lg:grid-cols-3">
         {hasRouters && (
