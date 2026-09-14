@@ -1367,15 +1367,10 @@ func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
 	}
 }
 
-// A task the orchestrator has already given up on is not a replica of the
-// desired state, however its last-observed status reads. Swarm marks a task
-// for shutdown the moment it decides to replace or reap it, so a rolling
-// update and a scale-down both leave records that are still
-// Status.State: running while on their way out — and a task Docker has since
-// garbage-collected keeps whatever status it was last inspected with forever,
-// because a 404 on inspect cannot update it. Counting either inflates every
-// replica figure in the product at once, since all three counters below feed
-// find, describe, the topology views and the convergence wait.
+// A task the orchestrator has given up on is not a replica of the desired state,
+// however its last-observed status reads: a rolling update and a scale-down both
+// leave records still Status.State: running on their way out, and a
+// garbage-collected task keeps its last-inspected status forever.
 func TestRunningCountsIgnoreTasksDestinedForShutdown(t *testing.T) {
 	c := New(nil)
 	c.SetService(swarm.Service{

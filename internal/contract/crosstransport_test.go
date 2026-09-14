@@ -103,15 +103,10 @@ func TestReadableOverRESTIsReadableOverMCP(t *testing.T) {
 	}
 }
 
-// readableOverREST reports whether the detail endpoint serves the resource.
-//
-// A name lookup answers 307 to the canonical ID URL (internal/api/canonical.go)
-// rather than serving the resource directly, but w.Server.Client() is an
-// ordinary *http.Client with no CheckRedirect override, so it follows the
-// redirect itself — same-origin, so the persona headers ride along — and
-// resp.StatusCode is already the final 200/403/404 by the time it gets here.
-// The 307 branch stays as a defensive fallback in case that following behavior
-// ever changes; it is not the path this test exercises today.
+// readableOverREST reports whether the detail endpoint serves the resource. A
+// name lookup answers 307 to the canonical ID URL, but the test client follows
+// redirects itself — same-origin, so the persona headers ride along — and the
+// status here is already the final one. The 307 branch is a defensive fallback.
 func readableOverREST(t *testing.T, w *World, persona, plural, identifier string) bool {
 	t.Helper()
 

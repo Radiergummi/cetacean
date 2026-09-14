@@ -37,13 +37,10 @@ func TestDeployBaselineConverges(t *testing.T) {
 	}
 }
 
-// TestDeployBaselineIsIdempotent removes the completion sentinel before the
-// second call, which is what makes the test mean anything: with the sentinel
-// in place both calls short-circuit in baselinePresent and the assertion
-// compares two ServiceList calls with no operation between them. Deleting it
-// forces the re-drive over resources that already exist, which is both the
-// recovery path a partially-failed run depends on and the only exercise the
-// create helpers' conflict tolerance gets.
+// Removes the completion sentinel before the second call: with it in place both
+// calls short-circuit and the assertion compares two ServiceList calls with no
+// operation between them. Deleting it forces the re-drive over existing
+// resources, which is the recovery path a partially-failed run depends on.
 func TestDeployBaselineIsIdempotent(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -72,10 +69,8 @@ func TestDeployBaselineIsIdempotent(t *testing.T) {
 }
 
 // TestBaselineShopWebUsesItsResources asserts the used-vs-orphan contrast the
-// baseline is designed around is real: shop_web must actually reference the
-// shop config, secret, network and volume, not merely coexist with them. A
-// test that only counted services would not catch four resources that are
-// created but never attached to anything.
+// baseline is designed around is real: shop_web must reference the shop config,
+// secret, network and volume, not merely coexist with them.
 func TestBaselineShopWebUsesItsResources(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)

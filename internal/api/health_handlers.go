@@ -56,17 +56,10 @@ func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v) // best-effort: status already sent
 }
 
-// HandleResync triggers a manual full re-fetch of cluster state. Useful when
-// the cache has drifted from reality (e.g. an event was missed during a rapid
-// stack deploy). Wraps the watcher's Resync method behind a small HTTP shim
-// so the api package doesn't import docker.
-//
-// Authenticated and behind a grant, and not exempt despite its /-/ prefix:
-// each call is a full seven-goroutine sweep of the Docker API, unbounded and
-// unthrottled, so leaving it open let anyone who could reach the port amplify
-// one cheap request into a cluster enumeration. Still not gated on the
-// operations level, which says what a deployment may do to the cluster: a
-// resync only re-reads it.
+// HandleResync triggers a manual full re-fetch of cluster state, behind a shim
+// so this package does not import docker. Authenticated and behind a grant
+// despite its /-/ prefix: each call sweeps the whole Docker API, unthrottled.
+// Not gated on the operations level, though — a resync only re-reads.
 func HandleResync(r Resyncer) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()

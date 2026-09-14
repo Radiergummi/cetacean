@@ -648,17 +648,10 @@ func TestRun_ReconnectsAfterEventStreamError(t *testing.T) {
 	}
 }
 
-// Swarm garbage-collects a task's record once it falls out of the history
-// window, and emits no removal event when it does — the only trace is that the
-// next inspect 404s. Holding the record on that failure left the cache serving
-// a task Docker had forgotten, still carrying whatever status it was last
-// inspected with: a service restarting in a loop accumulated thirty of them,
-// most reported "running", until the five-minutely full re-sync swept them.
-//
-// A not-found that survives every retry is the daemon's answer, not a race, so
-// it deletes. The retries themselves still have to run: during a stack deploy
-// a 404 means "not registered yet", which is why this is decided after they
-// are exhausted rather than on the first one.
+// Swarm garbage-collects a task's record once it leaves the history window and
+// emits no removal event, so the only trace is that the next inspect 404s. A
+// not-found surviving every retry is the daemon's answer rather than a race —
+// the retries still run, since during a deploy a 404 means "not registered yet".
 func TestHandleEventDeletesTaskThatNoLongerExists(t *testing.T) {
 	mc := newMockClient()
 	mc.inspectFn = func(context.Context, events.Type, string) (any, error) {
@@ -685,10 +678,9 @@ func TestHandleEventDeletesTaskThatNoLongerExists(t *testing.T) {
 }
 
 // A transient failure is not evidence of absence. Dropping the record on one
-// would turn a daemon hiccup into a resource vanishing from every listing,
-// which is the opposite failure and a worse one: the periodic re-sync repairs
-// a stale record, but nothing repairs a caller that already acted on an empty
-// result.
+// would make a daemon hiccup vanish a resource from every listing; the
+// periodic re-sync repairs a stale record, but nothing repairs a caller that
+// already acted on an empty result.
 func TestHandleEventKeepsTaskWhenInspectFailsTransiently(t *testing.T) {
 	mc := newMockClient()
 	mc.inspectFn = func(context.Context, events.Type, string) (any, error) {
@@ -710,16 +702,9 @@ func TestHandleEventKeepsTaskWhenInspectFailsTransiently(t *testing.T) {
 }
 
 // A container dying is the last event a failed task ever produces, and Swarm
-// reconciles the task record a moment after the container it wraps. Inspecting
-// on the event itself therefore reads the task as still running, desired
-// running — and because nothing further arrives, the cache keeps that reading
-// until the five-minutely full re-sync. Every replica figure derived from it
-// overcounts in the meantime: a service crash-looping every eight seconds
-// reported four running replicas against a desired one, and the convergence
-// wait behind every deploy could not settle.
-//
-// Re-inspecting once, shortly after, is what closes the gap: by then Swarm has
-// caught up and the terminal state is there to read.
+// reconciles the task record after the container it wraps -- so the inspect on
+// the event reads the task as still running, and nothing further arrives to
+// correct it. Re-inspecting shortly after is what closes the gap.
 func TestContainerDeathReinspectsUntilSwarmCatchesUp(t *testing.T) {
 	var calls atomic.Int32
 
@@ -771,10 +756,8 @@ func TestContainerDeathReinspectsUntilSwarmCatchesUp(t *testing.T) {
 }
 
 // A container event whose task record has already caught up must not pay for a
-// second inspect: a busy cluster produces these constantly, and doubling every
-// one would double the load the watcher puts on the daemon. The re-read is
-// bought only where it is needed, which is what keeps the direction added by
-// TestContainerStartReinspectsUntilSwarmCatchesUp free on the common path.
+// second inspect: a busy cluster produces these constantly. The re-read is
+// bought only where it is needed.
 func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
 	var calls atomic.Int32
 
@@ -808,18 +791,10 @@ func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
 	}
 }
 
-// The same race runs at the other end of a container's life, and cost more.
-// Swarm commits a task's running status *after* the container start event that
-// announced it, so the inspect on that event reads the task as still starting.
-// Nothing further arrives, so the cache held "starting" until the five-minutely
-// re-sync: the dashboard showed a task starting for minutes, and every figure
-// built on the running count undercounted — which left cluster.ServiceConverged
-// unable to settle, hanging `Prefer: wait`, the MCP `watch` tool and every
-// task-augmented mutation behind it.
-//
-// Waiting for a terminal state would be wrong here: this direction settles at
-// running, which is precisely the state the dying direction treats as not yet
-// settled. taskCaughtUp is what tells the two apart.
+// The same race at the other end of a container's life: Swarm commits a task's
+// running status after the start event that announced it, so the inspect reads
+// it as still starting and nothing further arrives. This direction settles at
+// running, the state the dying direction treats as not settled at all.
 func TestContainerStartReinspectsUntilSwarmCatchesUp(t *testing.T) {
 	var calls atomic.Int32
 
@@ -917,10 +892,8 @@ func TestContainerStartStopsReinspectingOnceRunning(t *testing.T) {
 }
 
 // One re-read is not enough when the daemon is slow to reconcile, and nothing
-// else re-arms it: the stale record — and the replica overcount built on it —
-// would then stand until the five-minutely full re-sync. A following container
-// event usually schedules another attempt in practice, but the fix must not
-// rest on "usually".
+// else re-arms it. A following container event usually schedules another
+// attempt in practice, but the fix must not rest on "usually".
 func TestContainerDeathKeepsReinspectingWhileSwarmLags(t *testing.T) {
 	var calls atomic.Int32
 
@@ -1092,11 +1065,10 @@ func TestLivenessDropsWhenTheStreamEnds(t *testing.T) {
 	}
 }
 
-// TestManualResyncFailureLeavesTheStreamVerdictAlone: POST /-/resync shares
-// the sync path with the watcher, but it runs beside a healthy event stream.
-// Letting its failure clear the connection verdict made /-/health and the
-// dashboard report "Cetacean cannot reach Docker" until the next periodic
-// sync, five minutes later, over a cluster nothing was wrong with.
+// POST /-/resync shares the sync path with the watcher, but runs beside a
+// healthy event stream. Letting its failure clear the connection verdict has
+// /-/health and the dashboard report "Cetacean cannot reach Docker" until the
+// next periodic sync, over a cluster nothing is wrong with.
 func TestManualResyncFailureLeavesTheStreamVerdictAlone(t *testing.T) {
 	mc := newMockClient()
 

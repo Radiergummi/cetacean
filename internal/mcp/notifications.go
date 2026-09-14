@@ -14,21 +14,13 @@ import (
 
 // NotificationManager tracks per-session resource subscriptions and matches
 // cache events against them. It owns no goroutines; dispatch is driven by the
-// cache's OnChange listener registered in StartNotifications.
-//
-// Sessions are keyed by the mcp-go ClientSession value rather than by session
-// ID, because protocol 2026-07-28 has no session IDs: mcp-go serves each modern
-// request from an ephemeral session whose SessionID() is empty and which never
-// enters the server's session registry. Keying on the ID would collapse every
-// modern client onto the same empty-string key and leave dispatch with nothing
-// to address. The session value is what mcp-go itself delivers against.
+// cache's OnChange listener. Sessions are keyed by ClientSession value, since
+// 2026-07-28 has no session IDs and every client would collapse onto "".
 type NotificationManager struct {
 	mu sync.RWMutex
-	// sessions holds per-session subscription state. Each session record stores
-	// the subscribed URIs, the *auth.Identity captured at subscribe time (used
-	// by dispatch to ACL-filter notifications per-session), and — for modern
-	// clients — the notification filter the subscriptions/listen stream
-	// established.
+	// sessions holds per-session subscription state: the subscribed URIs, the
+	// *auth.Identity captured at subscribe time so dispatch can ACL-filter, and
+	// the notification filter the subscriptions/listen stream established.
 	sessions map[mcpserver.ClientSession]*sessionState
 }
 
@@ -77,14 +69,9 @@ func (nm *NotificationManager) Subscribe(
 }
 
 // SetFilter records the notification opt-in a subscriptions/listen stream
-// established for session, so dispatch can honour it.
-//
-// The identity is recorded here as well as in Subscribe, because the filter's
-// four fields are independent: a stream may opt into resourcesListChanged
-// without naming a single resource subscription, and Subscribe would then
-// never run. Leaving the session record without an identity handed a nil one
-// to every ACL check at dispatch, so under a policy such a stream was
-// silently never notified.
+// established, so dispatch can honour it. The identity is recorded here as
+// well as in Subscribe: the filter's four fields are independent, so a stream
+// opting into resourcesListChanged alone never reaches Subscribe.
 func (nm *NotificationManager) SetFilter(
 	session mcpserver.ClientSession,
 	identity *auth.Identity,
@@ -188,11 +175,8 @@ func (nm *NotificationManager) IsListChange(event cache.Event) bool {
 
 // listChangedTargets returns the sessions that should receive a
 // resources/list_changed notification, paired with the identity to ACL-check
-// them against.
-//
-// A client receives it only when its subscriptions/listen filter opted in:
-// 2026-07-28 makes notification types opt-in and a server MUST NOT deliver one
-// that was not requested.
+// against. Only those whose filter opted in: 2026-07-28 makes notification
+// types opt-in, and a server MUST NOT deliver one that was not requested.
 func (nm *NotificationManager) listChangedTargets() []delivery {
 	nm.mu.RLock()
 	defer nm.mu.RUnlock()
@@ -210,10 +194,9 @@ func (nm *NotificationManager) listChangedTargets() []delivery {
 }
 
 // matchingDeliveries walks every session's subscriptions under a single RLock
-// and returns the (session, uri, identity) tuples that need notification for
-// this event. The identity is included so the dispatcher can ACL-check without
-// re-acquiring the lock. The lock is released before the caller dispatches so
-// a slow send cannot block subscribe/unsubscribe.
+// and returns the tuples needing notification for this event. The identity
+// rides along so the dispatcher can ACL-check without re-acquiring the lock,
+// which is released before dispatch so a slow send cannot block subscribe.
 func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery {
 	prefix := eventTypeToURIPrefix(event.Type)
 	if prefix == "" || event.ID == "" {
@@ -277,12 +260,9 @@ func eventTypeToURIPrefix(t cache.EventType) string {
 }
 
 // startNotifications attaches the manager to the cache's event stream and
-// returns a cancel function the caller invokes at shutdown. Called from New
-// after the mcp-go server is constructed.
-//
-// The cache listener fires synchronously on every cache mutation, so per-event
-// work must stay cheap: a lock-protected map lookup and a non-blocking write
-// onto each session's mcp-go notification channel.
+// returns a cancel function for shutdown. The listener fires synchronously on
+// every mutation, so per-event work stays a map lookup and a non-blocking
+// send.
 func (s *Server) startNotifications() func() {
 	if s.cache == nil || s.notifications == nil {
 		return func() {}
@@ -293,14 +273,9 @@ func (s *Server) startNotifications() func() {
 }
 
 // dispatchCacheEvent fans an event out to subscribed sessions. Detail
-// subscribers get notifications/resources/updated; list-relevant changes
-// (create/remove) additionally broadcast notifications/resources/list_changed.
-//
-// Notifications are ACL-checked per-delivery: a session whose stored identity
-// can't read the affected resource never receives the notification, even if it
-// subscribed before a policy tightening. The list_changed broadcast carries no
-// resource URI — it's a "go refetch" signal whose payload becomes empty after
-// the next per-resource list call's ACL filter, so it stays a broadcast.
+// subscribers get resources/updated; create and remove additionally broadcast
+// resources/list_changed, which carries no URI. Deliveries are ACL-checked, so
+// a policy tightened after a subscription still applies.
 func (s *Server) dispatchCacheEvent(event cache.Event) {
 	if event.Type == cache.EventSync {
 		// The full-resync event isn't useful as a single notification.
@@ -336,15 +311,10 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 	}
 }
 
-// notify delivers a notification to one session.
-//
-// 2026-07-28 sessions are ephemeral and unregistered — a client's
-// subscriptions/listen stream is the delivery channel — so the session is
-// written to directly rather than looked up by ID, mirroring what mcp-go does
-// internally: upgrade the response to SSE if the transport needs it, then send
-// without blocking. A full channel means the client is not draining its stream;
-// dropping is the same choice mcp-go makes, and the client re-reads when it
-// reconnects.
+// notify delivers a notification to one session. 2026-07-28 sessions are
+// ephemeral and unregistered, so the session is written to directly rather
+// than looked up by ID. A full channel is dropped, as mcp-go does; the client
+// re-reads when it reconnects.
 func (s *Server) notify(session mcpserver.ClientSession, method string, params map[string]any) {
 	if session == nil {
 		return
@@ -369,13 +339,9 @@ func (s *Server) notify(session mcpserver.ClientSession, method string, params m
 }
 
 // canReadAnyOfType returns true when the identity has at least one read grant
-// on a resource of the given type. Shares acl.TypeGrants with
-// toolVisibilityFor, so a write grant implies read and a stack grant reaches
-// its member types in both places.
-//
-// A caller matching no grant reads nothing and is told nothing: list_changed
-// carries no resource data, but its timing still says a resource of that type
-// changed.
+// on a resource of the type. Shares acl.TypeGrants with toolVisibilityFor, so
+// the two cannot disagree. list_changed carries no resource data, but its
+// timing still says one of that type changed.
 func (s *Server) canReadAnyOfType(identity *auth.Identity, resourceType string) bool {
 	if s.acl == nil {
 		return true
@@ -439,31 +405,18 @@ func eventTypeToACLPrefix(t cache.EventType) string {
 	}
 }
 
-// installSubscriptionHooks returns the mcp-go Hooks that wire client subscribe
-// / unsubscribe / session lifecycle into the NotificationManager, on both the
-// legacy resources/subscribe path and the 2026-07-28 subscriptions/listen path.
-// The hook callbacks read the session ID from the request context — mcp-go
-// stamps a ClientSession on the ctx before invoking handlers, for modern and
-// legacy clients alike.
+// installSubscriptionHooks wires subscribe / unsubscribe / session lifecycle
+// into the NotificationManager, on both the legacy resources/subscribe path
+// and the 2026-07-28 subscriptions/listen path.
 func (s *Server) installSubscriptionHooks() *mcpserver.Hooks {
 	h := &mcpserver.Hooks{}
 
 	s.installTaskTTLHook(h)
 
-	// subscriptions/listen is the only way to subscribe. mcp-go records the
-	// requested URIs by type-asserting the session to
+	// mcp-go tracks subscriptions by type-asserting the session to
 	// SessionWithResourceSubscriptions, which its streamable-HTTP session does
-	// not implement, so its own tracking never fires — we track them here or
-	// a client would subscribe successfully and never receive a notification.
-	//
-	// Sessions are tracked by value: 2026-07-28 removed session IDs, so
-	// SessionID() is always empty and cannot distinguish two clients. The
-	// filter is recorded alongside the URIs because notification types are
-	// opt-in from this revision on.
-	//
-	// The requested URIs are what mcp-go establishes verbatim: its
-	// allowedSubscriptions only drops them when resource subscription
-	// capability is off, and we advertise it unconditionally.
+	// not implement — so tracking happens here, or a client subscribes
+	// successfully and is never notified. The filter rides along: types opt in.
 	h.AddBeforeSubscriptionsListen(
 		func(ctx context.Context, _ any, msg *mcplib.SubscriptionsListenRequest) {
 			session := mcpserver.ClientSessionFromContext(ctx)

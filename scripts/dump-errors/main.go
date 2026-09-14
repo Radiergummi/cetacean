@@ -1,9 +1,7 @@
 // Command dump-errors writes the well-known error catalog to stdout as JSON.
-//
-// The website renders its error reference from this rather than from a copy an
-// author maintains, so the published page cannot drift from the registry the
-// server answers with. It is run by website/package.json's sync-assets step
-// before every dev server and every build.
+// The website renders its error reference from this rather than a hand-kept
+// copy, so the page cannot drift from the registry the server answers with.
+// website/package.json's sync-assets step runs it before every build.
 package main
 
 import (

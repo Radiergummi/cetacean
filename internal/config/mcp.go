@@ -21,11 +21,10 @@ type MCPConfig struct {
 	// OpsInherit (-1) means fall back to the global CETACEAN_OPERATIONS_LEVEL.
 	OperationsLevel OperationsLevel
 
-	// Issuer is the canonical external URL of this Cetacean instance, used as
-	// the OAuth 2.1 issuer identifier and as the base for the MCP resource
-	// audience. Empty means "derive from the listen address" — only correct
-	// when no reverse proxy sits in front. Behind a proxy, set this to the
-	// public URL (e.g. "https://cetacean.example.com").
+	// Issuer is the canonical external URL of this instance, used as the OAuth
+	// 2.1 issuer identifier and the base for the MCP resource audience. Empty
+	// derives it from the listen address, which is only correct when no reverse
+	// proxy sits in front.
 	Issuer string
 
 	// SigningKey is the root the token and CSRF keys derive from. Empty means
@@ -39,13 +38,9 @@ type MCPConfig struct {
 	RefreshTokenTTL time.Duration
 
 	// ConsentTTL is how long a remembered approval keeps letting a client skip
-	// the consent screen. It must outlive RefreshTokenTTL to be useful at all —
-	// the point of remembering is that an expired refresh token does not cost
-	// the operator a second prompt — but it cannot be unbounded: an approval is
-	// only revocable by presenting a token from its grant family, so once that
-	// family lapses an unbounded record would keep authorizing silently with no
-	// way left to withdraw it. Zero or negative disables remembering entirely,
-	// so every authorization is prompted.
+	// the consent screen. It must outlive RefreshTokenTTL to be useful, but not
+	// be unbounded: an approval is revocable only through its grant family.
+	// Zero or negative disables remembering, prompting every authorization.
 	ConsentTTL time.Duration
 
 	// RequireResourceIndicator requires RFC 8707 resource indicators in token requests.
@@ -57,14 +52,10 @@ type MCPConfig struct {
 	// mutations it never collects.
 	MaxConcurrentTasks int
 
-	// TaskTTL is the retention mcp-go is given for a task whose client did not
-	// ask for one. mcp-go schedules cleanup only for a task carrying a TTL, so
-	// without this a client that omits the field pins its result for the life
-	// of the process. Zero disables the fill-in.
-	//
-	// The clock starts when the task is created, not when it finishes, so this
-	// must comfortably exceed the convergence timeout or a result expires
-	// before the client that asked for it can collect it.
+	// TaskTTL is the retention mcp-go is given for a task whose client asked
+	// for none, which it would otherwise pin for the life of the process; zero
+	// disables the fill-in. The clock starts at creation, not completion, so
+	// this must exceed the convergence timeout or a result expires uncollected.
 	TaskTTL time.Duration
 
 	// MaxTaskTTL caps the retention a client may ask for. Without it the fill-
@@ -87,12 +78,10 @@ type MCPConfig struct {
 	// outbound requests on a client's behalf.
 	CIMDEnabled bool
 
-	// AuthBypass lists upstream Cetacean auth modes (e.g. "cert") whose
-	// authenticated identity is accepted at /mcp without an OAuth bearer
-	// token. When a request reaches /mcp and the active auth mode is in this
-	// list, the MCP server derives identity from the upstream provider
-	// (e.g. the mTLS client certificate) instead of validating a JWT.
-	// Modes that would issue redirects (e.g. "oidc") are unsafe to list.
+	// AuthBypass lists upstream auth modes whose authenticated identity is
+	// accepted at /mcp without an OAuth bearer. The MCP server then derives
+	// identity from that provider — the mTLS certificate, say — rather than
+	// validating a JWT. A mode that issues redirects is unsafe to list.
 	AuthBypass []string
 }
 
@@ -434,12 +423,8 @@ func resolveMCPOpsLevel(file *int) (OperationsLevel, error) {
 
 // MCPIssuer returns the canonical external base URL clients reach this
 // deployment at: mcp.issuer, then server.public_url, then a derivation from
-// server.listen_addr and whether TLS terminates here.
-//
-// The second return is false when that derivation reaches nothing: the
-// default ":9000" has an empty host, and a wildcard bind ("0.0.0.0", "::")
-// parses but resolves nowhere. The string is returned either way, since only
-// OAuth truly breaks on it — see MCPIssuerRequired.
+// server.listen_addr. The second return is false when that derivation reaches
+// nothing — an empty or wildcard host — though the string comes back either way.
 func (c *Config) MCPIssuer(tlsEnabled bool) (string, bool) {
 	if c.MCP.Issuer != "" {
 		return c.MCP.Issuer, true
@@ -469,11 +454,10 @@ func (c *Config) MCPIssuer(tlsEnabled bool) (string, bool) {
 	return issuer, true
 }
 
-// MCPIssuerRequired reports whether /mcp needs a reachable issuer, rather than
-// one that only feeds cosmetic tool-icon URLs. OAuth is in play unless the
-// auth mode is "none" or is listed in mcp.oauth.auth_bypass: a bypassed mode
-// authenticates each request from the upstream identity and never drives the
-// authorize/token flow.
+// MCPIssuerRequired reports whether /mcp needs a reachable issuer rather than
+// one that only feeds cosmetic tool-icon URLs. OAuth is in play unless the auth
+// mode is "none" or listed in mcp.oauth.auth_bypass, since a bypassed mode
+// never drives the authorize/token flow.
 func (c *Config) MCPIssuerRequired(authMode string) bool {
 	return authMode != "none" && !slices.Contains(c.MCP.AuthBypass, authMode)
 }

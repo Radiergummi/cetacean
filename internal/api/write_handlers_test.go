@@ -33,11 +33,10 @@ type mockServiceLifecycleWriter struct {
 }
 
 type mockServiceSpecWriter struct {
-	// simulatedEnv / simulatedLabels / simulatedSpec stand in for the "fresh
-	// inspect" that the real writer would do against Docker. The mutator
-	// passed into UpdateServiceEnv / UpdateServiceLabels / UpdateServiceSpec
-	// is applied to these, so what the Fn callback receives reflects M-42's
-	// contract: the merge ran against the live spec, not the cache.
+	// These stand in for the fresh inspect the real writer would do against
+	// Docker. The mutator passed into the update methods is applied to them, so
+	// what the callback receives reflects the contract: the merge ran against
+	// the live spec, not the cache.
 	simulatedEnv               map[string]string
 	simulatedLabels            map[string]string
 	simulatedSpec              *swarm.ServiceSpec

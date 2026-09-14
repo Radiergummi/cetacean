@@ -286,9 +286,8 @@ func TestOperationalChecker_AllHealthy(t *testing.T) {
 
 // The window a count covers is reported so a chronic fault reads differently
 // from a new one — and formatPromDuration, a PromQL range formatter, truncates
-// to whole hours. The tracker starts at process start, so for the whole first
-// hour after a restart, which is exactly when a crash loop clears the
-// threshold, every one of these read "over the past 0h".
+// to whole hours. The tracker starts with the process, so for the first hour
+// after a restart every one of these reads "over the past 0h".
 func TestOperationalChecker_FlakyServiceWindowIsNeverZero(t *testing.T) {
 	c := newOperationalCache([]swarm.Service{
 		{ID: "svc1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}}},

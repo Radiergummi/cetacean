@@ -69,11 +69,10 @@ func RemoveBrowserExtrasCLI(env *harness.Env) error {
 	return nil
 }
 
-// TouchForHistoryCLI relabels every baseline config, secret, service and node
-// so the watcher records a change for each. It must run against an already
-// running SUT: history is that process's ring buffer, and the initial full
-// sync records none. The label value differs per call so a re-run still
-// changes something.
+// TouchForHistoryCLI relabels every baseline config, secret, service and node so
+// the watcher records a change for each. It must run against an already running
+// SUT: history is that process's ring buffer, and the initial sync records
+// none. The label value differs per call, so a re-run still changes something.
 func TouchForHistoryCLI(env *harness.Env) error {
 	ctx := context.Background()
 	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)

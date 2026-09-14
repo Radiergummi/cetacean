@@ -12,28 +12,18 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// taskSupportOptional marks a service mutation as pollable. Convergence takes
-// far longer than the Docker call that starts it, so a client may ask for the
-// mutation as a task and poll it. Optional, not required: a plain call still
-// returns as soon as Swarm accepts the change.
-//
-// Every tool declaring this must call awaitServiceConvergence in its handler,
-// or it reports a task complete while the cluster is still catching up.
-// TestEveryTaskToolAwaitsConvergence enforces the pairing.
+// taskSupportOptional marks a service mutation as pollable: convergence takes
+// far longer than the Docker call that starts it. Optional, so a plain call
+// still returns as soon as Swarm accepts. Every tool declaring it must call
+// awaitServiceConvergence, or it reports complete while the cluster catches up.
 func taskSupportOptional() mcplib.ToolOption {
 	return mcplib.WithTaskSupport(mcplib.TaskSupportOptional)
 }
 
-// awaitServiceConvergence waits for a mutated service to actually reach the
-// state it was asked for, but only when the caller issued the mutation as a
-// task. A plain tools/call keeps returning the moment Docker accepts the
-// change, which is what every existing client expects — so the predicate is not
-// even built on that path.
-//
-// tasks/cancel cannot interrupt the wait: awaitServiceConvergenceFor detaches
-// the context, so a cancelled task is marked cancelled for the client while
-// this goroutine keeps polling until it converges or times out.
-// cluster.ConvergenceTimeout is the real bound.
+// awaitServiceConvergence waits for a mutated service to reach the state it was
+// asked for, but only when the mutation was issued as a task — a plain call
+// returns as soon as Docker accepts, and the predicate is not even built.
+// tasks/cancel cannot interrupt it: the context is detached.
 func (s *Server) awaitServiceConvergence(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -56,14 +46,9 @@ func (s *Server) awaitServiceConvergence(
 }
 
 // awaitServiceConvergenceFor waits up to timeout for svcID to settle, writing
-// the last progress line into observed. It is the core awaitServiceConvergence
-// wraps; watch needs the same wait with a caller-chosen bound and without the
-// task-augmentation early return, and one wait rather than two is what keeps
-// the two from drifting on the detachment above.
-//
-// The convergence wait itself lives in internal/cluster so the REST and MCP
-// transports cannot drift on what "settled" means — see cluster.AwaitService
-// for the minVersion gate this relies on.
+// the last progress line into observed. watch needs the same wait with its own
+// bound and no task early-return. The rule lives in cluster.AwaitService, so
+// REST and MCP cannot disagree on what "settled" means.
 func (s *Server) awaitServiceConvergenceFor(
 	ctx context.Context,
 	svcID string,
@@ -90,19 +75,9 @@ func (s *Server) awaitServiceConvergenceFor(
 }
 
 // boundTaskTTL fills in and caps how long mcp-go retains a task's result,
-// reporting whether it had to cut a client's request down.
-//
-// mcp-go deletes a task record only from scheduleTaskCleanup, which it starts
-// solely when the client supplied params.task.ttl — so an omitted TTL pins a
-// full CallToolResult for the life of the process, and a large one pins it for
-// as long as the client cared to name. Supplying the number mcp-go already
-// knows how to honour is the whole mechanism; nothing here reimplements
-// retention.
-//
-// A zero default leaves an absent TTL absent, and a zero ceiling clamps
-// nothing, so an operator can disable either half. The fill-in is clamped
-// along with everything else, so a default configured above the ceiling cannot
-// escape it.
+// reporting whether it cut the request down: mcp-go starts its cleanup only
+// when the client supplied a TTL. A zero default or ceiling disables that half,
+// and the fill-in is clamped too, so it cannot escape the ceiling.
 func boundTaskTTL(task *mcplib.TaskParams, def, ceiling time.Duration) bool {
 	// A call that carried no task augmentation must stay that way. Inventing
 	// params here would turn every ordinary synchronous tools/call into a
@@ -126,21 +101,10 @@ func boundTaskTTL(task *mcplib.TaskParams, def, ceiling time.Duration) bool {
 	return true
 }
 
-// installTaskTTLHook bounds the retention of every task-augmented tool call.
-//
-// mcp-go has no server-side default TTL and no exported way into its task map:
-// scheduleTaskCleanup is private and starts only when the client supplied
-// params.task.ttl, so a client that omits it pins a full CallToolResult for the
-// life of the process. What mcp-go does give us is this hook, called with a
-// pointer to the request it passes to handleToolCall on the very next line
-// (server/request_handler.go:520-521) — so filling the field in here is
-// indistinguishable, to everything downstream, from the client having sent it.
-//
-// That adjacency is the assumption the whole mechanism rests on, and it is not
-// a documented contract. TestTaskWithoutTTLIsStillReleased drives a real
-// tools/call and waits for the record to go, so a future bump that reorders or
-// copies between those two lines fails the build rather than quietly restoring
-// the leak.
+// installTaskTTLHook bounds the retention of every task-augmented tool call:
+// mcp-go has no server-side default TTL and starts its cleanup only for a TTL
+// the client sent. This hook gets a pointer to the request handleToolCall
+// receives on the next line — an adjacency nothing documents.
 func (s *Server) installTaskTTLHook(h *mcpserver.Hooks) {
 	h.AddBeforeCallTool(func(_ context.Context, _ any, msg *mcplib.CallToolRequest) {
 		if !boundTaskTTL(msg.Params.Task, s.config.TaskTTL, s.config.MaxTaskTTL) {

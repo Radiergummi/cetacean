@@ -693,12 +693,9 @@ func (c *Client) RemoveVolume(ctx context.Context, name string, force bool) erro
 	return c.docker.VolumeRemove(ctx, name, force)
 }
 
-// MapMutator transforms a string map. It is applied to a freshly-inspected
-// snapshot of the target spec's env or labels — the caller passes a closure
-// that already knows the requested patch (JSON Merge Patch or RFC 6902), and
-// the writer hands it the live state read straight from Docker. This closes
-// the lost-update window that existed when handlers pre-merged against an
-// in-memory cache snapshot.
+// MapMutator transforms a string map. The caller passes a closure knowing the
+// requested patch; the writer hands it the live state read from Docker, which
+// is what closes the lost-update window a cache-side merge leaves open.
 type MapMutator = func(current map[string]string) (map[string]string, error)
 
 func envSliceToMap(env []string) map[string]string {
@@ -863,13 +860,9 @@ func (c *Client) UpdateServiceEndpointMode(
 }
 
 // UpdateServiceSpec applies mutate to the service spec as the engine currently
-// holds it and writes the result back.
-//
-// It exists for the merge patches. A merge patch's base has to be the live
-// spec: merging into a cached copy the watcher has not yet refreshed silently
-// discards whatever was written in between, and the engine cannot refuse it,
-// because the version this update carries is read in the same breath as the
-// spec (M-42).
+// holds it and writes the result back. A merge patch's base has to be the live
+// spec: merging into a cached copy discards whatever was written in between,
+// and the engine cannot refuse it, since the version is read with the spec.
 func (c *Client) UpdateServiceSpec(
 	ctx context.Context,
 	id string,

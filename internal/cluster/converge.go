@@ -17,16 +17,9 @@ const (
 )
 
 // AwaitService blocks until serviceID has settled at or above minVersion, ctx
-// expires, or timeout elapses. It returns the last progress line either way.
-//
-// minVersion is the version the mutation produced, and the wait refuses to
-// judge anything older: the cache is filled asynchronously, so at the moment a
-// write returns it still holds the pre-write spec and tasks, and a scale in
-// either direction would settle instantly against them. Zero disables the gate,
-// for callers that follow no write of their own.
-//
-// The context is honoured as given and never detached; a caller that must
-// outlive its request detaches before calling.
+// expires, or timeout elapses, returning the last progress line either way.
+// minVersion is what the mutation produced, and anything older is refused,
+// since the cache still holds the pre-write spec. The context is never detached.
 func AwaitService(
 	ctx context.Context,
 	c *cache.Cache,

@@ -45,13 +45,10 @@ func etagMatch(header, etag string) bool {
 	return false
 }
 
-// negotiateCoding picks the content-coding this response body will be served
-// under and stamps the headers describing it. It returns the coding rather than
-// encoding anything, so a caller can suffix its ETag and answer a 304 without
-// spending a compression pass on a body it will not send.
-//
-// Vary is added whether or not anything was compressed, with Add rather than
-// Set so it extends a Vary another layer already wrote.
+// negotiateCoding picks the content-coding for this response and stamps the
+// headers, returning the coding rather than encoding anything -- so a caller
+// can suffix its ETag and answer a 304 without a compression pass. Vary is
+// added either way, with Add so it extends one another layer wrote.
 func negotiateCoding(w http.ResponseWriter, r *http.Request, body []byte) Encoding {
 	w.Header().Add("Vary", "Accept-Encoding")
 
@@ -77,12 +74,9 @@ func negotiateCoding(w http.ResponseWriter, r *http.Request, body []byte) Encodi
 }
 
 // codedETag marks a validator with the content-coding its representation was
-// served under, per RFC 9110 §8.8.3: two codings of one resource are two
-// representations and cannot share a strong validator.
-//
-// The suffix is appended to a hash of the identity bytes, never of the encoded
-// ones, so stripCodingSuffix can recover the underlying validator when a client
-// hands back an If-Match obtained under a different negotiation.
+// served under, per RFC 9110 §8.8.3: two codings are two representations and
+// cannot share a strong validator. The suffix is appended to a hash of the
+// identity bytes, so stripCodingSuffix can recover the underlying validator.
 func codedETag(etag string, coding Encoding) string {
 	if coding == EncodingIdentity {
 		return etag
@@ -100,9 +94,7 @@ func writeRawWithETag(w http.ResponseWriter, r *http.Request, data []byte) {
 }
 
 // writeRawWithPrecomputedETag is writeRawWithETag for bodies fixed at build
-// time, whose ETag the caller hashed once at startup rather than on every
-// request — including the 304s, which never touch the body at all.
-//
+// time, whose ETag the caller hashed once at startup rather than per request.
 // The precomputed tag is the identity validator: compression suffixes it and
 // hashes nothing.
 func writeRawWithPrecomputedETag(

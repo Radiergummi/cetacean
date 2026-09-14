@@ -15,23 +15,9 @@ import (
 )
 
 // A proxy that adds rather than replaces Client-Cert hands the real one and a
-// forged one to the provider. Reading only the first would authenticate the
-// attacker.
-//
-// /auth/whoami answers 401 for any identity failure at all — a missing
-// header, a renamed one, one dropped by the Rewrite hook — so a bare
-// "status != 200" cannot tell a rejected duplicate from a certificate that
-// never arrived. The positive half below drives the same SUT and the same
-// proxy machinery with a SINGLE Client-Cert header and asserts 200 with the
-// expected subject, which is what makes the negative half's 401 attributable
-// to the duplication check rather than to the header never reaching the
-// provider at all — the same two-sided convention
-// TestAllowHeaderReflectsOperationsLevel and the OIDC lane already use.
-//
-// The header value is the same real, CA-signed certificate
-// forgedClientCertHeader (cert_test.go) already builds for
-// TestUntrustedPeerClientCertIsIgnored — this test does not need a second
-// header encoding, only how many times it is sent.
+// forged one to the provider, and reading only the first authenticates the
+// attacker. /auth/whoami answers 401 for any identity failure, so the positive
+// half drives the same SUT with a single header to make the negative attributable.
 func TestDuplicateClientCertIsRejected(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -147,15 +133,10 @@ func TestForwardedWithoutAddressFallsBackToXFF(t *testing.T) {
 // response, and the poll returns as soon as it lands.
 const logWaitTimeout = 10 * time.Second
 
-// waitForLog polls the binary's output until it contains want, reporting
-// whether it arrived within logWaitTimeout.
-//
-// Reading Logs() once right after the response races the log line into
-// existence: requestLogger emits its record only after the handler returns,
-// http.Get returns as soon as the response headers arrive, and the record
-// still has to cross the child's stderr, the pipe and the copier goroutine
-// before it is visible here. A single read therefore fails a correct build,
-// which is why every other cross-process wait in this suite polls.
+// waitForLog polls the binary's output until it contains want, reporting whether
+// it arrived in time. Reading Logs() once right after the response races the
+// line into existence: requestLogger emits after the handler returns, and the
+// record still has to cross stderr, the pipe and the copier goroutine.
 func waitForLog(t *testing.T, proc *sut.Process, want string) bool {
 	t.Helper()
 

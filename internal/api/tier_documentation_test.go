@@ -14,23 +14,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// The operations level a write endpoint needs is stated four times: the chain
-// the route is registered with, resourceWriteMethods in allow.go, an
-// x-badges: operations-level:N marker in api/openapi.yaml, and a row in
-// docs/api.md's table. The first two are code and the last two are prose, and
-// nothing tied the prose to either — 53 badges and 51 table rows maintained by
-// hand, which is how PATCH /nodes/{id}/labels came to be documented at a tier
-// it was not gated at.
-//
-// These two tests chain the four together: the badge is checked against the
-// tier the router actually enforces, and the table is checked against the
-// badge. A tier that moves in code and not in the docs now fails, and so does
-// one moved in one document and not the other.
-//
-// The router side is asserted by driving it rather than by parsing it: the
-// chain composition (tierN, an ACL check, sometimes a precondition, sometimes
-// an Append on another chain) is exactly the thing a parser would have to
-// re-implement and get wrong.
+// The operations level a write endpoint needs is stated four times: the route's
+// chain, resourceWriteMethods, an x-badges marker in api/openapi.yaml, and a
+// row in docs/api.md. These two tests chain them together — the badge against
+// the tier the router enforces, the table against the badge.
 
 // operationsLevelBadge matches the marker as it appears in the OpenAPI
 // document: `- name: "operations-level:2"`.
@@ -55,11 +42,9 @@ type badgedOperation struct {
 func (o badgedOperation) String() string { return o.method + " " + o.path }
 
 // badgedOperations reads every operations-level badge out of the OpenAPI
-// document, keyed by "METHOD /path".
-//
-// It walks the parsed document rather than the YAML text so that the badge is
-// attributed to the operation the parser assigns it to, not to whichever path
-// heading most recently appeared above it.
+// document, keyed by "METHOD /path". It walks the parsed document rather than
+// the YAML text, so a badge is attributed to the operation the parser assigns
+// it to rather than the nearest path heading above it.
 func badgedOperations(t *testing.T) map[string]badgedOperation {
 	t.Helper()
 
@@ -100,15 +85,10 @@ func badgedOperations(t *testing.T) map[string]badgedOperation {
 	return found
 }
 
-// resolveTierPath is resolvePath plus the plugin name it has no fixture for,
-// which is every one of the five badged operations resolvePath declines.
-//
-// The entry is added here rather than to resolvePath because that helper is
-// shared with the two spec-conformance tests, which read the response and so
-// need a fixture the handler can actually resolve; this test reads only
-// whether requireLevel refused, which runs before the handler and does not
-// care whether the plugin exists. Teaching resolvePath about plugins would
-// hand those tests an endpoint whose fixture the cache cannot supply.
+// resolveTierPath is resolvePath plus the plugin name it has no fixture for.
+// The entry is added here because resolvePath is shared with the spec
+// conformance tests, which read the response and need a resolvable fixture;
+// this one reads only whether requireLevel refused, which runs first.
 func resolveTierPath(template string) (string, bool) {
 	const pluginPrefix = "/plugins/{name}"
 
@@ -151,16 +131,9 @@ func routersByLevel(t *testing.T) map[config.OperationsLevel]http.Handler {
 }
 
 // refusedForOperationsLevel drives the real router at the given level and
-// reports whether the request was refused by requireLevel specifically.
-//
-// The error code is what is checked, not the status: requireWriteACL answers
-// 403 as well, with ACL002, and these routers carry no policy so it never
-// should — asserting on the status alone would let an ACL refusal stand in for
-// a tier refusal. Above the gate the request goes on to fail for its own
-// reasons (a body that does not fit, a fixture the handler cannot use); any of
-// those are still "the tier admitted it", which is the whole claim, and a
-// route that does not exist at all is caught by the refusal assertion rather
-// than here — an unregistered path is admitted at every level.
+// reports whether requireLevel specifically refused. The error code is checked
+// rather than the status, since requireWriteACL also answers 403 and would
+// otherwise stand in for a tier refusal.
 func refusedForOperationsLevel(
 	t *testing.T,
 	routers map[config.OperationsLevel]http.Handler,
@@ -184,16 +157,10 @@ func refusedForOperationsLevel(
 	return strings.Contains(rec.Body.String(), "OPS001")
 }
 
-// TestBadgedOperationsLevelIsTheTierEnforced fails when an operations-level
-// badge names a tier the router does not gate the operation at, in either
-// direction: a badge left behind when the route moved, or a route moved
-// without its badge.
-//
-// Each operation is probed twice, because one probe cannot distinguish a tier
-// from every tier below it. Refused one level down and admitted at the badged
-// level is the only pair of answers that pins a single tier — and the refusal
-// half doubles as the check that the route exists at the path the document
-// gives it, since a path nothing is registered at is admitted at every level.
+// Fails when an operations-level badge names a tier the router does not gate the
+// operation at, in either direction. Each operation is probed twice, since one
+// probe cannot separate a tier from every tier below it — and the refusal half
+// doubles as the check that the route exists at the documented path.
 func TestBadgedOperationsLevelIsTheTierEnforced(t *testing.T) {
 	routers := routersByLevel(t)
 
@@ -226,14 +193,10 @@ func TestBadgedOperationsLevelIsTheTierEnforced(t *testing.T) {
 	}
 }
 
-// TestTierTableMatchesTheBadges fails when docs/api.md's write-endpoint table
-// disagrees with the OpenAPI badges, or lists an endpoint the document does
-// not gate, or omits one it does.
-//
-// The table is checked against the badges rather than against the router
-// because TestBadgedOperationsLevelIsTheTierEnforced already holds the badges
-// to the router: one link per test, and the chain reaches from the code to
-// both documents.
+// Fails when docs/api.md's write-endpoint table disagrees with the OpenAPI
+// badges, or lists an endpoint the document does not gate. The table is checked
+// against the badges rather than the router, since the test above already holds
+// the badges to the router: one link per test, and the chain reaches both documents.
 func TestTierTableMatchesTheBadges(t *testing.T) {
 	badges := badgedOperations(t)
 

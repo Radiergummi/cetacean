@@ -24,13 +24,9 @@ import (
 var errNoRepresentation = errors.New("api: no current representation")
 
 // representationFunc builds the value a GET at this URI would serialize, so a
-// precondition can be compared against the exact ETag that GET emits.
-//
-// It returns errNoRepresentation when the resource does not exist, and must
-// never write to the response: the precondition middleware answers that with
-// 412 and the GET handler with 404. That is why a paired handler looks its
-// resource up twice — once for its ACL check, which writes its own 403/404,
-// and once here.
+// precondition compares against the exact ETag that GET emits. It returns
+// errNoRepresentation when the resource is absent and must never write to the
+// response, which is why a paired handler looks its resource up twice.
 type representationFunc func(*http.Request) (any, error)
 
 // writeServiceRepresentation is the tail every service sub-resource GET shares:

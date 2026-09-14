@@ -10,11 +10,9 @@ import (
 )
 
 // AmbiguousNameError reports a name that identifies more than one resource.
-//
 // Swarm enforces unique names for services, configs, secrets and networks, but
-// not for node hostnames — two hosts built from one image routinely share one.
-// Answering with either would describe the wrong machine on a read a human
-// acts on, so the caller is asked to disambiguate instead.
+// not for node hostnames — two hosts from one image routinely share one, and
+// answering with either would describe the wrong machine.
 type AmbiguousNameError struct {
 	Name string
 	IDs  []string
@@ -33,17 +31,10 @@ func (e *AmbiguousNameError) Error() string {
 	)
 }
 
-// resolveIn finds a resource by ID or by name in one pass over items.
-//
-// The ID lookup comes first, which is both the fast path and the rule that
-// settles a collision: a resource whose name happens to be another's ID never
-// shadows the ID holder. The name fallback scans, because the alternative — a
-// name index the watcher keeps in step on every event — would cover the wrong
-// types anyway (services and tasks, the two callers actually address by name,
-// are not ResourceMaps) and buys nothing at the size these maps reach.
-//
-// The map key is the resource's ID, so the ambiguity report needs no separate
-// accessor for it. Callers hold the read lock.
+// resolveIn finds a resource by ID or by name in one pass over items. The ID
+// lookup comes first, which is both the fast path and the collision rule: a
+// name that happens to be another's ID never shadows it. The name fallback
+// scans, since an index would cover the wrong types. Callers hold the lock.
 func resolveIn[T any](
 	items map[string]T,
 	identifier string,

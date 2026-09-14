@@ -249,9 +249,8 @@ func TestNodeCanHostWithoutAPlacementSpec(t *testing.T) {
 
 // The platform list is not hand-written: Swarm copies it from the image's
 // manifest, so every service in a real cluster carries one. This is the exact
-// spec Docker 29 recorded for `nginx:alpine` against a node whose engine
-// reports "aarch64" — the pairing that showed the naive comparison strands an
-// ordinary multi-arch service on the very node it is already running on.
+// spec Docker 29 recorded for `nginx:alpine` against a node reporting
+// "aarch64" — the pairing that strands a multi-arch service on its own node.
 func TestNodeSupportsPlatformOnARealMultiArchService(t *testing.T) {
 	node := gpuNode()
 	node.Description.Platform = swarm.Platform{OS: "linux", Architecture: "aarch64"}
@@ -325,12 +324,10 @@ func TestNodeSupportsPlatformNamesAnUnreportedHalfAsUnknown(t *testing.T) {
 	}
 }
 
-// A node that publishes one half of its platform and not the other must not be
-// ruled out on the half it never stated. The guard originally required *both*
-// halves to be absent before it stopped blocking, so a node reporting
-// `OS: linux` with no architecture — a partial inspect, or an engine too old to
-// publish one — failed every non-wildcard entry and stranded every service on
-// it, which is the failure the check was hardened to avoid.
+// A node publishing one half of its platform and not the other must not be ruled
+// out on the half it never stated. Requiring *both* halves to be absent before
+// the guard stops blocking strands every service on a node reporting `OS: linux`
+// with no architecture — a partial inspect, or an engine too old to publish one.
 func TestNodeSupportsPlatformDoesNotBlockOnAHalfTheNodeNeverReported(t *testing.T) {
 	cases := []struct {
 		name string

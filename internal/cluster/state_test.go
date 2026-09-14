@@ -121,12 +121,10 @@ func TestDeriveServiceState(t *testing.T) {
 	}
 }
 
-// TestServiceConvergedWaitsOutRollback is the reason ServiceConverged and
-// DeriveServiceState share serviceUpdateInFlight. Swarm reports a rollback as
-// "rollback_started", and during one the replica count still matches, because
-// the old tasks are the ones being restored. A convergence check that only
-// looked for "updating" would call a rollback done the instant it began —
-// exactly the tool that most needs to wait.
+// The reason ServiceConverged and DeriveServiceState share
+// serviceUpdateInFlight. Swarm reports a rollback as "rollback_started", and
+// the replica count still matches during one, since the old tasks are what is
+// being restored — so a check looking only for "updating" calls it done at once.
 func TestServiceConvergedWaitsOutRollback(t *testing.T) {
 	replicas := uint64(2)
 
@@ -157,13 +155,9 @@ func TestServiceConvergedWaitsOutRollback(t *testing.T) {
 }
 
 // A scale-down is not done while the replicas it removed are still running.
-//
-// This pins the rule that briefly went the other way: accepting any count that
-// *reached* the desired one was meant to break a wait that could never end,
-// but it made every scale-down return on its first look, since the surplus is
-// by definition still up at that moment — a 5-to-2 scale answered "converged:
-// 5/2 replicas running" with five replicas running. The overshoot that
-// motivated it is a wrong cache, and is fixed in the watcher that fills it.
+// Accepting any count that *reached* the desired one returns on the first look
+// of every scale-down, since the surplus is by definition still up: a 5-to-2
+// scale answers "converged: 5/2 replicas running".
 func TestServiceConvergedRejectsSurplusRunningTasks(t *testing.T) {
 	svc := swarm.Service{
 		Spec: swarm.ServiceSpec{

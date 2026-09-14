@@ -19,24 +19,15 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// oidcHost is used for every request in this lane, browser-navigation and
-// API alike. It must be "localhost", not proc.BaseURL's "127.0.0.1": the
-// auth-flow cookies OIDCProvider sets while driving the redirect to Dex
-// (state, nonce, PKCE verifier, post-login redirect target) are host-only
-// per RFC 6265, and CETACEAN_AUTH_OIDC_REDIRECT_URL below names
-// "localhost:19002". A client that started the flow against 127.0.0.1 would
-// hold those cookies under a different cookie domain and never present them
-// back to the callback, which fails closed with "missing state cookie".
+// Used for every request in this lane. It must be "localhost", not
+// proc.BaseURL's "127.0.0.1": the auth-flow cookies are host-only per RFC 6265
+// and the redirect URL names "localhost:19002", so a flow started against
+// 127.0.0.1 never presents them back to the callback.
 const oidcBaseURL = "http://localhost:19002"
 
-// dexIssuer must resolve identically for the SUT and for this test's HTTP
-// client, or the ID token's iss claim won't validate against what the SUT's
-// OIDC discovery recorded. That is normally the hard part of testing OIDC
-// against a containerised issuer, but it is a non-issue here: sut.Start runs
-// the real cetacean binary as a host process (see test/e2e/sut), not inside
-// the compose network, so both the SUT and this test resolve
-// "localhost:19010" the same way — through Dex's published port — with no
-// extra_hosts or container DNS trick required.
+// Must resolve identically for the SUT and this test's HTTP client, or the ID
+// token's iss claim will not validate against what discovery recorded. sut.Start
+// runs the binary as a host process, so both resolve through Dex's published port.
 const dexIssuer = "http://localhost:19010/dex"
 
 // sessionCookieName mirrors the unexported cookieName in internal/auth's
@@ -44,32 +35,22 @@ const dexIssuer = "http://localhost:19010/dex"
 // it again rather than importing for one string).
 const sessionCookieName = "__Host-cetacean_session"
 
-// loginFormPattern extracts a login form's action attribute. Verified
-// against Dex v2.46.0's actual served login page (`docker run dexidp/dex`
-// against the same config added to compose.e2e.yaml): the page has exactly
-// one <form method="post" action="...">, and its two inputs are
-// id="login"/name="login" and id="password"/name="password" — not guessed.
+// loginFormPattern extracts a login form's action attribute. Dex's served login
+// page has exactly one <form method="post" action="...">, with inputs named
+// "login" and "password".
 var loginFormPattern = regexp.MustCompile(`<form[^>]*\baction="([^"]*)"`)
 
-// TestOIDCLoginEstablishesASession drives the full authorization-code flow
-// against a real Dex issuer: an unauthenticated request to a protected path
-// redirects to Dex, the static test user's credentials are posted to the
-// login form Dex actually serves, and Dex redirects back to the SUT's
-// callback. The static client is configured with oauth2.skipApprovalScreen
-// (see compose.e2e.yaml's dex-config), so there is no consent screen to
-// handle here — the login POST goes straight to the callback. That callback
-// sets the signed session cookie (__Host-cetacean_session); this test's
-// cookiejar carries it to the final /auth/whoami call, so a pass here
-// genuinely covers the cookie round-trip, not just the token exchange.
+// Drives the full authorization-code flow against a real Dex issuer. The static
+// client skips the approval screen, so the login POST goes straight to the
+// callback, which sets the signed session cookie this test's cookiejar carries
+// to /auth/whoami — covering the cookie round-trip, not just the exchange.
 func TestOIDCLoginEstablishesASession(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
 
 	// dex has no compose healthcheck, and main.go performs OIDC discovery
-	// synchronously at startup, exiting the SUT immediately on failure — so
-	// without this, a cold image pull or a loaded machine can start
-	// sut.Start below before Dex has bound its listener, and the SUT dies
-	// rather than the test failing with a clear message.
+	// synchronously at startup, exiting on failure — so without this a cold start
+	// kills the SUT instead of failing the test with a clear message.
 	waitDexReady(t)
 
 	proc := sut.Start(t, sut.Config{
@@ -131,13 +112,9 @@ func TestOIDCLoginEstablishesASession(t *testing.T) {
 }
 
 // waitDexReady blocks until Dex's own OIDC discovery document is served and
-// names the issuer this test configures. Dex has no built-in healthcheck in
-// compose.e2e.yaml; polling the discovery document rather than a bare TCP
-// dial also turns this into a correctness check rather than just a liveness
-// one — an issuer mismatch is caught here, by name, instead of surfacing
-// later as a confusing token-validation failure deep in the OIDC flow.
-// Mirrors cert_test.go's waitCaddyReady: an explicit poll against the same
-// path the test itself depends on, not a generic port probe.
+// names the issuer this test configures. Polling the document rather than
+// dialling the port catches an issuer mismatch here, by name, instead of
+// later as a token-validation failure deep in the flow.
 func waitDexReady(t *testing.T) {
 	t.Helper()
 
@@ -289,12 +266,9 @@ func whoamiRequest(t *testing.T, client *http.Client) *http.Response {
 	return resp
 }
 
-// assertUnauthenticatedIsRefused is the negative control this lane needs
-// precisely because it is about authentication: without it, a passing
-// TestOIDCLoginEstablishesASession would only show that logging in works,
-// not that it is required. handleWhoami's authenticateQuiet returns 401
-// (AUT001) with no session cookie and no Bearer token — there is no other
-// path to success it could be silently taking instead.
+// assertUnauthenticatedIsRefused is this lane's negative control: without it, a
+// passing login test would only show that logging in works, not that it is
+// required.
 func assertUnauthenticatedIsRefused(t *testing.T, client *http.Client, proc *sut.Process) {
 	t.Helper()
 

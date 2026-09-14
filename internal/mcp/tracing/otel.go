@@ -1,13 +1,7 @@
-// Package tracing adapts OpenTelemetry to the vendor-neutral tracing
-// interfaces mcp-go exposes. mcp-go deliberately depends on no tracing SDK, so
-// this package is the bridge, and the OTel dependency stays confined to it.
-//
-// mcp-go publishes an adapter of its own at github.com/mark3labs/mcp-go/otel.
-// It would compile against our pinned version — the tracing interfaces have not
-// changed since v0.53.0 — but it predates SEP-414 and has no MetaPropagator at
-// all, covering only the Tracer and the HTTP Propagator. Carrying trace context
-// through _meta is the whole point of the 2026-07-28 convention, so adopting it
-// would mean taking a second module and still writing the half that matters.
+// Package tracing adapts OpenTelemetry to the vendor-neutral tracing interfaces
+// mcp-go exposes, keeping the OTel dependency confined to one place. mcp-go's
+// own adapter predates SEP-414 and has no MetaPropagator, so adopting it would
+// mean taking a second module and still writing the half that matters.
 package tracing
 
 import (
@@ -36,13 +30,10 @@ func NewTracer(tracer oteltrace.Tracer) mcpgotracing.Tracer {
 	return otelTracer{tracer: tracer}
 }
 
-// Start opens a span and publishes it on the returned context twice over: once
-// through the OTel context, so nested OTel instrumentation nests correctly, and
-// once through mcpgotracing.ContextWithSpan. The second is not optional.
-// mcp-go's tool middleware looks up the enclosing span with
-// tracing.SpanFromContext to hang mcp.tool.name and the failure status on it,
-// and no code inside mcp-go ever publishes a span there — an adapter that skips
-// this leaves the middleware writing to a noop.
+// Start opens a span and publishes it on the returned context twice: through
+// the OTel context, so nested instrumentation nests, and through
+// mcpgotracing.ContextWithSpan. The second is not optional — mcp-go's tool
+// middleware hangs mcp.tool.name there, and nothing inside mcp-go publishes it.
 func (t otelTracer) Start(
 	ctx context.Context,
 	name string,

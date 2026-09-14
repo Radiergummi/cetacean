@@ -106,16 +106,10 @@ func TestDirectMutualTLSAuthenticates(t *testing.T) {
 	}
 }
 
-// The SUT listens plain; Caddy terminates TLS, verifies the client
-// certificate itself, and forwards it to the SUT in the RFC 9440 Client-Cert
-// header. The SUT trusts Caddy's address and builds the same identity from
-// the forwarded certificate that direct mTLS builds from a presented one:
-// same subject, same provider.
-//
-// This is the highest-stakes test in the lane, so every failure path below
-// includes the SUT's own log output — a bare "status = 401, want 200" from
-// this test alone gives no hint whether the SUT rejected the forwarded
-// certificate, never received it, or something else entirely went wrong.
+// The SUT listens plain; Caddy terminates TLS, verifies the client certificate
+// and forwards it in the RFC 9440 Client-Cert header. The SUT trusts Caddy's
+// address and builds the same identity direct mTLS builds from a presented
+// certificate. Every failure path below includes the SUT's own log.
 func TestProxyForwardedClientCertAuthenticates(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -174,37 +168,10 @@ func TestProxyForwardedClientCertAuthenticates(t *testing.T) {
 	}
 }
 
-// A forged Client-Cert header must be ignored when it did not arrive through
-// a trusted proxy — this is the one place in the feature where a bug is a
-// vulnerability rather than an outage: an ordinary client presenting no
-// certificate of its own, but naming someone else's real one in a header,
-// must not be believed.
-//
-// CETACEAN_TRUSTED_PROXIES is set to 10.0.0.0/8, a range that does not
-// contain the loopback peer this test connects from, rather than left
-// unset. Leaving it genuinely unset was tried first and does not reach this
-// code at all: config.ValidateCertMode refuses to start cert mode with
-// neither TLS nor any trusted proxy configured (a documented, intentionally
-// untested truth-table cell — it fails closed at startup, which is its own
-// coverage). 10.0.0.0/8 is the only way to get a *running* server whose
-// trust verdict for this peer is still false, which is what the request-time
-// rejection actually depends on.
-//
-// That verdict is also why one case here covers both a non-matching CIDR and
-// an empty list: internal/api/realip.go's isTrusted returns false in both
-// situations by the same loop finding no match, and
-// auth.FromTrustedProxy (internal/auth/peer.go) short-circuits on that
-// boolean before ever asking whether a verdict was recorded at all. Empty
-// and non-matching are one boolean, not two branches, so a second case would
-// add coverage of nothing this one doesn't already reach; see the fix-round
-// report for the trace.
-//
-// The forged header carries the real, CA-signed e2e-client certificate
-// (built by forgedClientCertHeader from client.pem) rather than nonsense
-// bytes: a forged header naming a certificate the SUT's own CA would
-// otherwise accept is the actual attack this test defends against, and a
-// malformed one would be rejected for the wrong reason (an unparsable
-// header, not an untrusted peer).
+// A forged Client-Cert header must be ignored when it did not arrive through a
+// trusted proxy. The allowlist is a non-matching CIDR rather than unset, since
+// cert mode refuses to start with neither TLS nor a proxy, and the header
+// carries the real certificate: nonsense bytes would fail for the wrong reason.
 func TestUntrustedPeerClientCertIsIgnored(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -313,15 +280,10 @@ func tlsClientFor(t *testing.T, env *harness.Env) *http.Client {
 	}
 }
 
-// waitCaddyReady blocks until Caddy answers a real request over the same
-// path the test itself uses: a TLS handshake presenting the e2e client
-// certificate, against the same "localhost" host name (Caddy's strict
-// SNI-Host enforcement cares which one is used). A bare TCP dial is not
-// enough here — Docker's published-port forwarder accepts the connection
-// before Caddy itself is listening behind it, so a dial-only probe can
-// return early and leave the test itself to fail on a connection reset
-// rather than a clean timeout. Retrying an actual request is the only way to
-// know the whole chain, not just the socket, is up.
+// waitCaddyReady blocks until Caddy answers a real request over the path the
+// test uses: a TLS handshake presenting the client certificate against the
+// "localhost" host name, which Caddy enforces strictly. A bare TCP dial is not
+// enough, since Docker's forwarder accepts before Caddy is listening.
 func waitCaddyReady(t *testing.T, env *harness.Env) {
 	t.Helper()
 

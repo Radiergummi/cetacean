@@ -25,10 +25,9 @@ type serviceMetrics struct {
 }
 
 // nanoCPUsFromPercent converts a serviceMetrics CPU reading — a percentage of
-// one core, the unit Prometheus returns — into the NanoCPUs every spec field,
-// Current and Suggested value in this package is denominated in. The mismatch
-// between the two units is what the recommendations got wrong; keeping the
-// conversion in one place is what keeps the next CPU hint from repeating it.
+// one core, the unit Prometheus returns — into the NanoCPUs every spec field
+// and reported value in this package is denominated in. One conversion, so a
+// new CPU hint cannot reintroduce the mismatch.
 func nanoCPUsFromPercent(percent float64) float64 {
 	return percent / 100 * 1e9
 }

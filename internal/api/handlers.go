@@ -61,15 +61,10 @@ type DockerSystemClient interface {
 	UnlockSwarm(ctx context.Context, key string) error
 }
 
-// Narrow write interfaces. Each handler depends only on the methods it
-// needs. The concrete docker.Client satisfies all of them via Go's
-// structural typing.
-//
-// Service operations are split into logical groups: lifecycle (scale,
-// image, rollback, restart, remove), spec updates (env, labels,
-// resources, mode, ports, placement, healthcheck, policies, log driver),
-// and attachment updates (configs, secrets, networks, mounts, container
-// config). Tests can mock just the group they exercise.
+// Narrow write interfaces: each handler depends only on the methods it needs,
+// and docker.Client satisfies all of them structurally. Service operations are
+// grouped into lifecycle, spec updates and attachment updates, so a test can
+// mock only the group it exercises.
 
 type ServiceLifecycleWriter interface {
 	ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error)

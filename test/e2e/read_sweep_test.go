@@ -18,30 +18,16 @@ import (
 	"github.com/radiergummi/cetacean/test/e2e/sut"
 )
 
-// This file drives Cetacean's read surface (every GET/HEAD route
-// contract.Routes() reports) against a real headers-auth SUT with a file ACL
-// policy, asserting the authorization boundary from a client's position: for
-// each route × persona, the outcome the policy implies is either served
-// (200, with content a granted persona can see), empty-filtered (200, with
-// nothing an ungranted persona has no grant for), or refused (403 ACL001). A
-// list endpoint that returns items a persona has no grant for is a defect
-// this file exists to catch — see write_sweep_test.go for the mutating
-// sibling this mirrors. Reserves port 19007 (see README.md's reserved-ports
-// table).
-//
-// drivenReadRoutes and excusedReadRoutes are the self-enforcing gate:
-// TestEveryReadRouteIsDrivenOrExcused requires every GET/HEAD route
-// contract.Routes() reports to appear in one or the other.
+// This file drives every GET/HEAD route contract.Routes() reports against a real
+// headers-auth SUT with a file ACL policy, asserting each route × persona is
+// served, empty-filtered or refused as the policy implies. drivenReadRoutes and
+// excusedReadRoutes must between them name every such route. Port 19007.
 
 const readSweepPort = 19007
 
 // readPersona is one identity this file drives requests as. The four named
-// personas mirror compose.dev-auth.yaml's own ACL demo (cetacean-acl, ports
-// 9005-9008) exactly — same groups, same policy text below — so a finding
-// here and a finding in that dev environment describe the same people.
-// anonymous is a fifth persona compose.dev-auth.yaml has no port for: a
-// subject in no group at all, the default-deny case every authorization
-// sweep needs.
+// personas mirror compose.dev-auth.yaml's ACL demo exactly; anonymous is a
+// fifth, a subject in no group at all, for the default-deny case.
 type readPersona struct {
 	name   string
 	user   string
@@ -56,14 +42,10 @@ var readPersonas = []readPersona{
 	{name: "anonymous", user: "nobody@example.com", groups: ""},
 }
 
-// Of the four named personas, none is read-scoped to a subset of the
-// fixture: ops and viewers read everything by construction, frontend's
-// blanket "*" read grant covers everything the frontend-* write grant does
-// not, and oncall's second grant covers read on every type its first grant
-// doesn't already give read+write on. The fixture stacks are named "shop"
-// and "platform" (fixtures.go), never "frontend-*", so frontend's write
-// grant never actually applies here either — see the report for what that
-// means for what this lane can and cannot show.
+// None of the four named personas is read-scoped to a subset of the fixture:
+// ops, viewers and frontend read everything, and oncall reads every type it
+// holds any grant on. The fixture stacks are never named "frontend-*", so
+// frontend's write grant never applies here.
 
 // readSweepPolicy is compose.dev-auth.yaml's acl-policy config block, copied
 // verbatim rather than declared a second time, so this lane's four personas
@@ -365,16 +347,10 @@ func readListFindTaskID(t *testing.T, proc *sut.Process, serviceName string) str
 
 type readDriveFunc func(t *testing.T, proc *sut.Process, ids baselineIDs)
 
-// driveList checks a standard list endpoint: every granted persona must see
-// at least one item (served), and anonymous must see exactly zero (the
-// filter denying everything, not the endpoint refusing outright) — the
-// two-sided check the task brief calls for, so a filter that happens to
-// admit nothing can't pass by only checking one side.
-// driveList checks a standard list endpoint. alsoEmpty names granted
-// personas that, despite holding other grants, hold none on this resource
-// type and so must see it filtered to zero items exactly like anonymous —
-// oncall on stacks is the one case in this policy: its grants cover
-// service/task/node/swarm/config/secret/network/volume, but never stack.
+// driveList checks a standard list endpoint: every granted persona must see at
+// least one item and anonymous exactly zero — the filter denying everything,
+// not the endpoint refusing. alsoEmpty names granted personas holding no grant
+// on this type, which must see zero too.
 func driveList(path string, alsoEmpty ...string) readDriveFunc {
 	empty := map[string]bool{"anonymous": true}
 	for _, name := range alsoEmpty {
@@ -413,10 +389,8 @@ func driveList(path string, alsoEmpty ...string) readDriveFunc {
 }
 
 // driveDetail checks a standard detail endpoint keyed by pathFn(ids):
-// anonymous must be refused with ACL001, every granted persona must be
-// served. alsoDenied names granted personas expected to be refused too, the
-// same way alsoEmpty does for driveList — oncall on a specific stack, which
-// this policy never grants it any permission on at all.
+// anonymous must be refused with ACL001 and every granted persona served.
+// alsoDenied names granted personas expected to be refused too.
 func driveDetail(pathFn func(baselineIDs) string, alsoDenied ...string) readDriveFunc {
 	denied := map[string]bool{"anonymous": true}
 	for _, name := range alsoDenied {
@@ -443,21 +417,15 @@ func driveDetail(pathFn func(baselineIDs) string, alsoDenied ...string) readDriv
 }
 
 // driveSubresource checks a sub-collection or section GET gated on its
-// parent resource's own read ACL (service/node/config/secret detail
-// sub-paths): same shape as driveDetail, kept as a separate name because the
-// routes it covers are gated through a different code path
-// (lookupACL/lookupServiceACL/handleGetLabels) than the parent detail GET
-// itself, even though the boundary it produces is identical.
+// parent resource's read ACL. Same boundary as driveDetail, kept separate
+// because the routes it covers reach it through a different code path.
 func driveSubresource(pathFn func(baselineIDs) string) readDriveFunc {
 	return driveDetail(pathFn)
 }
 
 // driveGrantGate checks a cluster-wide endpoint gated by requireAnyGrant:
-// anonymous (no grants at all) is refused with ACL001; every granted persona
-// must NOT be refused with ACL001 — whatever else the response is (200, or a
-// 503 from an unconfigured Prometheus in this environment), the authorization
-// decision must not be the thing standing between a grant holder and the
-// endpoint.
+// anonymous is refused with ACL001 and no granted persona is, whatever else
+// the response is (200, or 503 from an unconfigured Prometheus here).
 func driveGrantGate(path, accept string) readDriveFunc {
 	return func(t *testing.T, proc *sut.Process, _ baselineIDs) {
 		for _, p := range readPersonas {
@@ -484,13 +452,9 @@ func driveGrantGate(path, accept string) readDriveFunc {
 
 // ─── routes needing a specific, hand-derived assertion ─────────────────
 
-// driveSwarm checks GET /swarm: gated by requireAnyGrant like the rest of the
-// cluster-wide group, but its body additionally redacts join tokens unless
-// the caller holds write:swarm:cluster (internal/api/cluster_handlers.go).
-// Of the four granted personas only ops has that grant ("*" read+write);
-// viewers, frontend and oncall all read swarm but never write it under this
-// policy, so their join tokens must come back zeroed even though the request
-// itself succeeds.
+// driveSwarm checks GET /swarm: gated by requireAnyGrant, but its body also
+// redacts join tokens unless the caller holds write:swarm:cluster. Only ops
+// holds it, so every other persona's tokens come back zeroed on a 200.
 func driveSwarm(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	for _, p := range readPersonas {
 		t.Run(p.name, func(t *testing.T) {
@@ -542,17 +506,10 @@ func driveSwarm(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	}
 }
 
-// driveSwarmUnlockKey checks GET /swarm/unlock-key. Unlike every other read
-// route in this file, it is gated by requireWriteACL BEFORE the operations
-// tier check (internal/api/router.go's swarmTier3 := NewChain(swarmACL,
-// tier3), and Chain.Then applies its first constructor outermost) — so a
-// caller without write:swarm:cluster is refused with ACL002 regardless of
-// operations level, and ops (the only persona holding that grant) clears the
-// ACL gate but is then refused by the operations-tier gate itself: this lane
-// runs at level 2 (matching compose.dev-auth.yaml's ACL demo), and the route
-// requires level 3. No persona in this sweep ever reaches the handler, which
-// is itself the point — this is a GET route whose authorization boundary is
-// a write grant, and this test exists to pin that rather than assume it.
+// driveSwarmUnlockKey checks the one read route whose authorization boundary is
+// a write grant: requireWriteACL runs outside the tier check, so a caller
+// without write:swarm:cluster gets ACL002 at any level, and ops — the only
+// holder — is then refused by the tier gate, this lane running one below it.
 func driveSwarmUnlockKey(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	for _, p := range readPersonas {
 		t.Run(p.name, func(t *testing.T) {
@@ -617,12 +574,10 @@ func driveIdenticalDocument(path, accept string) readDriveFunc {
 	}
 }
 
-// driveProfile checks GET /profile: not a cluster-resource read at all, but
-// the identity-and-permissions echo every persona (including anonymous, who
-// is authenticated as a real subject carrying no groups — headers mode
-// always resolves an identity) gets served with. The boundary here is in the
-// body, not the status: anonymous's permissions map must be empty, and every
-// granted persona's must not be.
+// driveProfile checks GET /profile, the identity echo every persona —
+// including anonymous, since headers mode always resolves a subject — is
+// served. The boundary is in the body, not the status: anonymous's
+// permissions map must be empty and every granted persona's must not.
 func driveProfile(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	for _, p := range readPersonas {
 		t.Run(p.name, func(t *testing.T) {
@@ -635,11 +590,8 @@ func driveProfile(t *testing.T, proc *sut.Process, _ baselineIDs) {
 			}
 
 			// DetailResponse.MarshalJSON (internal/api/jsonld.go) inlines
-			// extra's fields directly alongside @context/@id/@type -- there
-			// is no nested "profile" wrapper key. An earlier version of
-			// this check decoded body.Profile.Permissions from exactly such
-			// a wrapper, which never existed, so it always saw an empty map
-			// regardless of persona; permissions lives at the top level.
+			// extra's fields alongside @context/@id/@type: permissions sits
+			// at the top level, with no nested "profile" wrapper key.
 			var body struct {
 				Subject     string              `json:"subject"`
 				Permissions map[string][]string `json:"permissions"`
@@ -666,14 +618,10 @@ func driveProfile(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	}
 }
 
-// drivePlugins checks GET /plugins (and, via the same handler, GET
-// /swarm/plugins — see the excuse below): filtered like every other list
-// endpoint (acl.Filter), never gated by requireAnyGrant, so even anonymous
-// gets 200 — the "empty-filtered" outcome distinct from "refused" the task
-// brief calls out by name. This environment's DinD engine has no plugins
-// installed, so every persona sees an empty, never-refused list; that is
-// itself the assertion (never 403), not a claim about plugin visibility this
-// fixture cannot exercise.
+// drivePlugins checks GET /plugins, and /swarm/plugins on the same handler:
+// filtered like every other list endpoint and never gated by requireAnyGrant,
+// so even anonymous gets 200. This engine has no plugins, so the assertion is
+// that no persona is refused rather than that anything is listed.
 func drivePlugins(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	for _, p := range readPersonas {
 		t.Run(p.name, func(t *testing.T) {
@@ -721,18 +669,11 @@ func driveSearch(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	}
 }
 
-// driveStacksSummary checks GET /stacks/summary: gated like the other
-// cluster-wide list endpoints (acl.Filter, no requireAnyGrant — see
-// plugin_handlers.go's sibling for the same shape), so anonymous gets 200
-// with an empty list rather than a refusal, and every granted persona sees
+// driveStacksSummary checks GET /stacks/summary. HandleStackSummary calls
+// requireAnyGrant before it lists anything, so anonymous is refused
+// outright rather than served an empty list; every granted persona sees
 // both fixture stacks.
 func driveStacksSummary(t *testing.T, proc *sut.Process, _ baselineIDs) {
-	// Unlike GET /plugins (acl.Filter only), HandleStackSummary calls
-	// requireAnyGrant before it ever lists anything -- so anonymous (no
-	// grants at all) is refused outright, the same as the requireAnyGrant
-	// cluster-wide group, rather than served an empty list. An earlier
-	// version of this check treated it like the pure-filter case and
-	// expected anonymous to get 200; the source says otherwise.
 	for _, p := range readPersonas {
 		t.Run(p.name, func(t *testing.T) {
 			resp := readAs(t, proc, p, "/stacks/summary", "")
@@ -750,11 +691,8 @@ func driveStacksSummary(t *testing.T, proc *sut.Process, _ baselineIDs) {
 
 			env := decodeCollection(t, resp, "/stacks/summary", p.name)
 
-			// oncall's grants (service/task/node/swarm/config/secret/
-			// network/volume) never include stack, so it clears the
-			// requireAnyGrant gate above (it does hold other grants) but
-			// the per-item acl.Filter that follows leaves it with none --
-			// same shape as GET /stacks and GET /stacks/{name}.
+			// oncall holds no stack grant, so it clears the requireAnyGrant gate
+			// above but the per-item acl.Filter that follows leaves it with none.
 			if p.name == "oncall" {
 				if env.Total != 0 {
 					t.Errorf("oncall sees %d stack summaries, want 0 (no stack grant)", env.Total)
@@ -776,10 +714,8 @@ func driveStacksSummary(t *testing.T, proc *sut.Process, _ baselineIDs) {
 // ─── the sweep itself ───────────────────────────────────────────────────
 
 // drivenReadRoutes is the single source of truth for what this file
-// exercises. TestReadSweepEnforcesTheACLBoundary runs every entry against a
-// real cluster; TestEveryReadRouteIsDrivenOrExcused requires every other
-// GET/HEAD route in the inventory to carry a reason in excusedReadRoutes
-// instead.
+// exercises; every other GET/HEAD route in the inventory must carry a
+// reason in excusedReadRoutes instead.
 var drivenReadRoutes = map[string]readDriveFunc{
 	// Core list + detail, the eight primary resource types.
 	"GET /services": driveList("/services"),
@@ -930,11 +866,8 @@ var drivenReadRoutes = map[string]readDriveFunc{
 //
 //nolint:gosec // G101: keys are route patterns, not credentials.
 var excusedReadRoutes = map[string]string{
-	// Auth-exempt by router design (internal/api/router.go's auth middleware
-	// exempts "/-/*", "/api*", "/assets/*" and "/auth/*"): these routes never
-	// reach the ACL evaluator at all, for any persona, so there is no
-	// authorization boundary here to assert — every persona, including
-	// anonymous, gets the same answer.
+	// Auth-exempt by router design ("/-/*", "/api*", "/assets/*", "/auth/*"):
+	// these never reach the ACL evaluator, so there is no boundary to assert.
 	"GET /-/docker-latest-version": "auth-exempt (/-/*): serves the same response to every persona, no ACL involved",
 	"GET /-/health":                "auth-exempt (/-/*): serves the same response to every persona, no ACL involved",
 	"GET /-/licenses":              "auth-exempt (/-/*): serves the same response to every persona, no ACL involved",
@@ -1003,12 +936,8 @@ func TestReadSweepEnforcesTheACLBoundary(t *testing.T) {
 
 // TestEveryReadRouteIsDrivenOrExcused requires every GET/HEAD route
 // contract.Routes() reports to appear in drivenReadRoutes or
-// excusedReadRoutes. Go's net/http.ServeMux answers a HEAD request against a
-// GET-registered pattern automatically when no HEAD handler is registered
-// separately (there are none here), which is why every entry in the
-// inventory below is a bare "GET ..." key: there is no separate "HEAD ..."
-// registration to enumerate, and "GET/HEAD" in this file's doc comment
-// means exactly that automatic pairing.
+// excusedReadRoutes. Keys are bare "GET ..." because ServeMux answers HEAD
+// off the GET registration; there is no separate HEAD route to enumerate.
 func TestEveryReadRouteIsDrivenOrExcused(t *testing.T) {
 	routes := contractRoutes(t)
 
