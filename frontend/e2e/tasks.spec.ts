@@ -1,10 +1,10 @@
-import { test, expect, navigateToFirst } from "./fixtures";
+import { test, expect, navigateToFirst, clickRow } from "./fixtures";
 
 test.describe("Task List (/tasks)", () => {
   test("renders table with expected columns", async ({ page }) => {
     await page.goto("/tasks");
 
-    const table = page.getByRole("table");
+    const table = page.getByRole("grid");
     await expect(table).toBeVisible({ timeout: 10_000 });
 
     const header = page.getByRole("row").first();
@@ -18,7 +18,7 @@ test.describe("Task List (/tasks)", () => {
 
     await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
 
-    await page.locator("table tbody tr").first().click();
+    await clickRow(page.locator("table tbody tr").first());
     await expect(page).toHaveURL(/\/tasks\/.+/);
   });
 });

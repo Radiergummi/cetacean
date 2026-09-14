@@ -1,0 +1,179 @@
+# End-to-end test environment. Brought up by test/e2e/harness, or by hand:
+#   docker compose -f test/e2e/compose.e2e.yaml up -d
+name: cetacean-e2e
+
+services:
+  dind:
+    image: docker:28-dind
+    privileged: true
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock", "--tls=false", "--label=cetacean-e2e=true"]
+    ports:
+      - "12375:2375"
+    networks:
+      - e2e
+
+  cert-init:
+    # The dind image above, reused because it already ships openssl. This was
+    # `alpine` plus `apk add openssl`, which reached the Alpine CDN on every
+    # bring-up under `set -e` -- so a transient TLS failure fetching APKINDEX
+    # failed the whole environment, `make test-stack` included.
+    image: docker:28-dind
+    entrypoint:
+      - sh
+      - -c
+    command:
+      - |
+        set -e
+        cd /certs
+        # `ready` is written last, after the chmod below, and is what the
+        # harness waits for. It is removed first so a run interrupted between
+        # generating the chain and fixing its modes cannot present a stale
+        # sentinel over a half-finished directory.
+        rm -f ready
+        # Idempotent: a restart of this one-shot (any `docker compose up -d`
+        # against an already-running project, e.g. a second `go test`
+        # invocation) must not regenerate the chain. Caddy loads its cert and
+        # trust pool once at its own startup and never restarts alongside
+        # this container, so a regenerated CA here would leave Caddy serving
+        # a certificate the newly written ca.pem can no longer verify.
+        if [ -f ca.pem ] && [ -f server.pem ] && [ -f server-key.pem ] && \
+           [ -f client.pem ] && [ -f client-key.pem ]; then
+          echo "certs already present, skipping generation"
+          chmod 644 *.pem
+          touch ready
+          exit 0
+        fi
+        openssl ecparam -genkey -name prime256v1 -out ca-key.pem
+        openssl req -x509 -new -key ca-key.pem -out ca.pem -days 365 \
+          -subj "/CN=Cetacean E2E CA"
+        openssl ecparam -genkey -name prime256v1 -out server-key.pem
+        openssl req -new -key server-key.pem -out server.csr \
+          -subj "/CN=host.docker.internal"
+        openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem \
+          -CAcreateserial -out server.pem -days 365 \
+          -extfile <(printf "subjectAltName=DNS:host.docker.internal,DNS:localhost,IP:127.0.0.1")
+        openssl ecparam -genkey -name prime256v1 -out client-key.pem
+        openssl req -new -key client-key.pem -out client.csr \
+          -subj "/CN=e2e-client/O=cetacean-e2e"
+        openssl x509 -req -in client.csr -CA ca.pem -CAkey ca-key.pem \
+          -CAcreateserial -out client.pem -days 365
+        rm -f *.csr *.srl
+        chmod 644 *.pem
+        touch ready
+        echo "certs ready"
+    volumes:
+      - ./certs:/certs
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "19104:19104"
+    configs:
+      - source: caddyfile-cert
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - ./certs:/certs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      cert-init:
+        condition: service_completed_successfully
+    networks:
+      - e2e
+
+  # --- OIDC provider (oidc lane) ---
+  dex:
+    image: dexidp/dex
+    command: ["dex", "serve", "/etc/dex/dex.yaml"]
+    ports:
+      - "19010:5556"
+    configs:
+      - source: dex-config
+        target: /etc/dex/dex.yaml
+    networks:
+      - e2e
+
+  # --- Prometheus (metrics lane) ---
+  #
+  # No scrape_configs: the lane writes TSDB blocks into this instance rather
+  # than waiting for real exporters to accumulate series, so a run gets hours
+  # of history immediately and gets the same history every time. `up` is part
+  # of what it writes, since with nothing scraped there is otherwise no `up`
+  # for the cAdvisor detection to find.
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    user: root
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    ports:
+      - "19090:9090"
+    configs:
+      - source: prometheus-config
+        target: /etc/prometheus/prometheus.yml
+    networks:
+      - e2e
+
+networks:
+  e2e:
+
+configs:
+  prometheus-config:
+    content: |
+      global:
+        scrape_interval: 15s
+
+  dex-config:
+    content: |
+      issuer: http://localhost:19010/dex
+
+      storage:
+        type: sqlite3
+        config:
+          file: ":memory:"
+
+      web:
+        http: 0.0.0.0:5556
+
+      # The oidc lane drives Dex with an http.Client + cookiejar rather than a
+      # browser: there is nothing to click a "Grant Access" consent screen,
+      # so skipping it here is what makes the lane exercise the login flow
+      # itself instead of a second scraped form.
+      oauth2:
+        skipApprovalScreen: true
+
+      staticClients:
+        - id: cetacean
+          secret: cetacean-e2e-secret
+          name: Cetacean E2E
+          redirectURIs:
+            - http://localhost:19002/auth/callback
+
+      enablePasswordDB: true
+
+      staticPasswords:
+        - email: dev@localhost
+          hash: "$$2a$$10$$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
+          username: Dev User
+          userID: "00000000-0000-0000-0000-000000000001"
+
+  caddyfile-cert:
+    content: |
+      :19104 {
+        tls /certs/server.pem /certs/server-key.pem {
+          client_auth {
+            mode require_and_verify
+            trust_pool file /certs/ca.pem
+          }
+        }
+
+        reverse_proxy http://host.docker.internal:19004 {
+          # RFC 9440 requires the certificate as an RFC 8941 Byte Sequence:
+          # base64 DER wrapped in colons. Caddy's placeholder yields bare
+          # base64, so the colons are added here.
+          header_up Client-Cert ":{http.request.tls.client.certificate_der_base64}:"
+          header_up -Client-Cert-Chain
+        }
+      }
