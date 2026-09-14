@@ -235,11 +235,12 @@ is `external: true` under its full name. Getting this backwards is the single mo
 reads correctly and fails to deploy, in both directions.
 
 Names are shortened by the stack's own prefix, because `docker stack deploy` adds it back: the service Swarm calls
-`myapp_api` is `api` in the file. A single-service export shortens nothing and declares everything external, because
-a service creates none of what it references.
+`myapp_api` is `api` in the file. A name another resource already spells in full is left long rather than collapsed
+onto it — an owned `myapp_data` and an adopted `data` stay two volumes. A single-service export shortens nothing and
+declares everything external, because a service creates none of what it references.
 
-Anything the projection could not carry — a custom seccomp profile, a second platform — is listed in the header
-comment rather than dropped silently.
+Anything the projection could not carry — a custom seccomp profile, a mount option Compose has no field for — is
+listed in the header comment rather than dropped silently.
 
 ## Pagination
 
