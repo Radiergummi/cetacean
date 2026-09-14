@@ -1200,9 +1200,14 @@ func BenchmarkHandleListNodes_Encoded(b *testing.B) {
 // policy so the per-item grant matching is visible.
 // =============================================================================
 
-func benchACL(grants ...acl.Grant) *acl.Evaluator {
+// benchACL builds an evaluator over c, wired the way main.go wires it. The
+// resolver is the point: without it a grant that does not match directly never
+// reaches Cache.StackOf, so the benchmark measures a configuration that does
+// not ship — see docs/specs/2026-09-14-acl-resolver-index-design.md.
+func benchACL(c *cache.Cache, grants ...acl.Grant) *acl.Evaluator {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: grants})
+	e.SetResolver(c)
 
 	return e
 }
@@ -1211,6 +1216,10 @@ func BenchmarkHandleListServices_ACL(b *testing.B) {
 	policies := map[string][]acl.Grant{
 		"wildcard": {{Resources: []string{"service:*"}, Permissions: []string{"read"}}},
 		"prefix":   {{Resources: []string{"service:svc-1*"}, Permissions: []string{"read"}}},
+		// The shape a real deployment writes, and the expensive one: a grant
+		// naming a stack matches no service directly, so every item falls
+		// through to the resolver.
+		"stack": {{Resources: []string{"stack:stack-0"}, Permissions: []string{"read"}}},
 		"many_grants": func() []acl.Grant {
 			g := make([]acl.Grant, 0, 20)
 			for i := range 20 {
@@ -1227,7 +1236,7 @@ func BenchmarkHandleListServices_ACL(b *testing.B) {
 		for _, n := range []int{100, 1000} {
 			c := cache.New(nil)
 			populateCache(c, n)
-			h := newTestHandlers(b, withCache(c), withACL(benchACL(grants...)))
+			h := newTestHandlers(b, withCache(c), withACL(benchACL(c, grants...)))
 			identity := &auth.Identity{Subject: "bench", Provider: "test"}
 
 			b.Run(fmt.Sprintf("%s/size=%d", name, n), func(b *testing.B) {
