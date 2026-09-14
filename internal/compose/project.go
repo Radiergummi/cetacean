@@ -478,6 +478,9 @@ func resources(r *swarm.ResourceRequirements) *Resources {
 	return out
 }
 
+// placement returns nil for a Placement holding nothing compose can carry.
+// Swarm fills Platforms on its own, so the struct is present on nearly every
+// service and a constraint-less one would render as "placement: {}".
 func placement(p *swarm.Placement) *Placement {
 	out := &Placement{Constraints: p.Constraints, MaxReplicas: p.MaxReplicas}
 	for _, pref := range p.Preferences {
@@ -488,6 +491,10 @@ func placement(p *swarm.Placement) *Placement {
 			)
 		}
 	}
+	if len(out.Constraints) == 0 && len(out.Preferences) == 0 && out.MaxReplicas == 0 {
+		return nil
+	}
+
 	return out
 }
 

@@ -289,6 +289,25 @@ func TestFromServiceDoesNotPinAPlatform(t *testing.T) {
 	}
 }
 
+// Swarm fills Platforms on nearly every service, so a Placement is nearly
+// always present; one holding nothing else is not a placement to render.
+func TestFromServiceOmitsAnEmptyPlacement(t *testing.T) {
+	svc := testService()
+	svc.Spec.TaskTemplate.Placement = &swarm.Placement{Platforms: []swarm.Platform{
+		{OS: "linux", Architecture: "amd64"},
+	}}
+
+	f, _ := FromService(svc, clusterNetworks())
+
+	out, err := Render(f, nil)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if strings.Contains(string(out), "placement:") {
+		t.Errorf("document carries an empty placement:\n%s", out)
+	}
+}
+
 // Runtime state a deploy would reject or ignore.
 func TestFromServiceDropsRuntimeState(t *testing.T) {
 	svc := testService()
