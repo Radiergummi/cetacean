@@ -405,7 +405,12 @@ func serviceSpec(svc swarm.Service, n names) (Service, []string) {
 		out.DNS, out.DNSSearch = d.Nameservers, d.Search
 	}
 
-	out.Volumes = mounts(container.Mounts, n)
+	vols, mountWarnings := mounts(container.Mounts, n)
+	out.Volumes = vols
+	out.Ulimits = ulimits(container.Ulimits)
+	for _, w := range mountWarnings {
+		warnings = append(warnings, spec.Name+": "+w)
+	}
 
 	credSpec, securityOpt, warn := privileges(container.Privileges)
 	out.CredSpec, out.SecurityOpt = credSpec, securityOpt
@@ -483,7 +488,6 @@ func placement(p *swarm.Placement) *Placement {
 			)
 		}
 	}
-
 	return out
 }
 

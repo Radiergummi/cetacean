@@ -105,9 +105,13 @@ func extraHosts(hosts []string) []string {
 
 // mounts renders compose's long syntax. A named volume loses the stack prefix;
 // a bind source is a host path and is passed through, since shortening it
-// would rewrite the filesystem.
-func mounts(ms []mount.Mount, n names) []ServiceVolume {
+// would rewrite the filesystem. Options compose has no field for are reported
+// rather than dropped: they change what the mount does.
+func mounts(ms []mount.Mount, n names) ([]ServiceVolume, []string) {
 	out := make([]ServiceVolume, 0, len(ms))
+
+	var warnings []string
+
 	for _, m := range ms {
 		v := ServiceVolume{
 			Type:     string(m.Type),
@@ -119,7 +123,61 @@ func mounts(ms []mount.Mount, n names) []ServiceVolume {
 			v.Source = n.short(kindVolume, m.Source)
 		}
 
+		if o := m.VolumeOptions; o != nil {
+			if o.NoCopy || o.Subpath != "" {
+				v.Volume = &VolumeOpts{NoCopy: o.NoCopy, Subpath: o.Subpath}
+			}
+			// Both belong to the volume rather than to this mount of it, and
+			// compose only accepts them where the volume is declared.
+			if o.DriverConfig != nil {
+				warnings = append(warnings, dropped(m.Target, "volume driver options"))
+			}
+			if len(o.Labels) > 0 {
+				warnings = append(warnings, dropped(m.Target, "volume labels"))
+			}
+		}
+
+		if o := m.BindOptions; o != nil {
+			if o.Propagation != "" {
+				v.Bind = &BindOpts{Propagation: string(o.Propagation)}
+			}
+			if o.NonRecursive || o.ReadOnlyNonRecursive || o.ReadOnlyForceRecursive {
+				warnings = append(warnings, dropped(m.Target, "bind recursion flags"))
+			}
+		}
+
+		if o := m.TmpfsOptions; o != nil {
+			if o.SizeBytes != 0 || o.Mode != 0 {
+				v.Tmpfs = &TmpfsOpts{Size: o.SizeBytes, Mode: uint32(o.Mode)}
+			}
+			if len(o.Options) > 0 {
+				warnings = append(warnings, dropped(m.Target, "tmpfs mount options"))
+			}
+		}
+
 		out = append(out, v)
+	}
+
+	return out, warnings
+}
+
+// dropped names what a mount carried and the document cannot.
+func dropped(target, what string) string {
+	return "mount " + target + ": " + what + " dropped: compose has no field for them"
+}
+
+// ulimits renders compose's long form, which is the only one that carries a
+// soft and a hard limit at once.
+func ulimits(us []*container.Ulimit) map[string]Ulimit {
+	if len(us) == 0 {
+		return nil
+	}
+
+	out := make(map[string]Ulimit, len(us))
+	for _, u := range us {
+		if u != nil {
+			out[u.Name] = Ulimit{Soft: u.Soft, Hard: u.Hard}
+		}
 	}
 
 	return out

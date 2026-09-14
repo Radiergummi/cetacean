@@ -45,6 +45,7 @@ type Service struct {
 	TTY         bool               `yaml:"tty,omitempty"`
 	StdinOpen   bool               `yaml:"stdin_open,omitempty"`
 	ReadOnly    bool               `yaml:"read_only,omitempty"`
+	Ulimits     map[string]Ulimit  `yaml:"ulimits,omitempty"`
 	Privileged  bool               `yaml:"privileged,omitempty"`
 	CapAdd      []string           `yaml:"cap_add,omitempty"`
 	CapDrop     []string           `yaml:"cap_drop,omitempty"`
@@ -121,10 +122,36 @@ type Logging struct {
 
 // ServiceVolume is compose's long mount syntax.
 type ServiceVolume struct {
-	Type     string `yaml:"type"`
-	Source   string `yaml:"source,omitempty"`
-	Target   string `yaml:"target"`
-	ReadOnly bool   `yaml:"read_only,omitempty"`
+	Type     string      `yaml:"type"`
+	Source   string      `yaml:"source,omitempty"`
+	Target   string      `yaml:"target"`
+	ReadOnly bool        `yaml:"read_only,omitempty"`
+	Volume   *VolumeOpts `yaml:"volume,omitempty"`
+	Bind     *BindOpts   `yaml:"bind,omitempty"`
+	Tmpfs    *TmpfsOpts  `yaml:"tmpfs,omitempty"`
+}
+
+// VolumeOpts, BindOpts and TmpfsOpts are the per-type halves of that syntax.
+// They carry mount semantics, not decoration: a bind left without its
+// propagation redeploys sharing nothing it used to share.
+type VolumeOpts struct {
+	NoCopy  bool   `yaml:"nocopy,omitempty"`
+	Subpath string `yaml:"subpath,omitempty"`
+}
+
+type BindOpts struct {
+	Propagation string `yaml:"propagation,omitempty"`
+}
+
+type TmpfsOpts struct {
+	Size int64  `yaml:"size,omitempty"`
+	Mode uint32 `yaml:"mode,omitempty"`
+}
+
+// Ulimit is compose's long form; the short one cannot carry both halves.
+type Ulimit struct {
+	Soft int64 `yaml:"soft"`
+	Hard int64 `yaml:"hard"`
 }
 
 // ServicePort is compose's long port syntax.

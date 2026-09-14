@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -107,7 +108,7 @@ func TestExtraHosts(t *testing.T) {
 }
 
 func TestMountsUseLongSyntaxAndShortenTheSource(t *testing.T) {
-	got := mounts([]mount.Mount{
+	got, _ := mounts([]mount.Mount{
 		{Type: mount.TypeVolume, Source: "web_data", Target: "/data"},
 		{Type: mount.TypeBind, Source: "/etc/hosts", Target: "/etc/hosts", ReadOnly: true},
 	}, forStack("web", nil))
@@ -122,6 +123,94 @@ func TestMountsUseLongSyntaxAndShortenTheSource(t *testing.T) {
 	// rewrite the filesystem path.
 	if got[1].Source != "/etc/hosts" || !got[1].ReadOnly {
 		t.Errorf("bind mount = %+v", got[1])
+	}
+}
+
+// Mount options are mount semantics: a bind that loses rshared redeploys
+// sharing nothing, and a tmpfs that loses its size is no longer capped.
+func TestMountsCarryTheOptionsComposeHas(t *testing.T) {
+	got, warnings := mounts([]mount.Mount{
+		{
+			Type:          mount.TypeVolume,
+			Source:        "web_data",
+			Target:        "/data",
+			VolumeOptions: &mount.VolumeOptions{NoCopy: true, Subpath: "inner"},
+		},
+		{
+			Type:        mount.TypeBind,
+			Source:      "/mnt/host",
+			Target:      "/mnt",
+			BindOptions: &mount.BindOptions{Propagation: mount.PropagationRShared},
+		},
+		{
+			Type:         mount.TypeTmpfs,
+			Target:       "/run",
+			TmpfsOptions: &mount.TmpfsOptions{SizeBytes: 1 << 20, Mode: 0o1777},
+		},
+	}, forStack("web", nil))
+
+	if got[0].Volume == nil || !got[0].Volume.NoCopy || got[0].Volume.Subpath != "inner" {
+		t.Errorf("volume options = %+v", got[0].Volume)
+	}
+	if got[1].Bind == nil || got[1].Bind.Propagation != "rshared" {
+		t.Errorf("bind options = %+v", got[1].Bind)
+	}
+	if got[2].Tmpfs == nil || got[2].Tmpfs.Size != 1<<20 || got[2].Tmpfs.Mode != 0o1777 {
+		t.Errorf("tmpfs options = %+v", got[2].Tmpfs)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("warned about options it carried: %v", warnings)
+	}
+}
+
+// What compose has no field for is named, which is the promise the header
+// comment makes for everything the projection cannot carry.
+func TestMountsReportWhatComposeCannotCarry(t *testing.T) {
+	_, warnings := mounts([]mount.Mount{
+		{
+			Type:   mount.TypeVolume,
+			Source: "web_data",
+			Target: "/data",
+			VolumeOptions: &mount.VolumeOptions{
+				Labels:       map[string]string{"a": "b"},
+				DriverConfig: &mount.Driver{Name: "rexray"},
+			},
+		},
+		{
+			Type:        mount.TypeBind,
+			Source:      "/mnt/host",
+			Target:      "/mnt",
+			BindOptions: &mount.BindOptions{NonRecursive: true},
+		},
+		{
+			Type:         mount.TypeTmpfs,
+			Target:       "/run",
+			TmpfsOptions: &mount.TmpfsOptions{Options: [][]string{{"noexec"}}},
+		},
+	}, forStack("web", nil))
+
+	for _, want := range []string{
+		"/data: volume driver options",
+		"/data: volume labels",
+		"/mnt: bind recursion flags",
+		"/run: tmpfs mount options",
+	} {
+		if !slices.ContainsFunc(warnings, func(w string) bool {
+			return strings.Contains(w, want)
+		}) {
+			t.Errorf("no warning for %q in %v", want, warnings)
+		}
+	}
+}
+
+func TestUlimitsUseTheLongForm(t *testing.T) {
+	got := ulimits([]*container.Ulimit{{Name: "nofile", Soft: 20000, Hard: 40000}})
+
+	if got["nofile"].Soft != 20000 || got["nofile"].Hard != 40000 {
+		t.Errorf("ulimits = %+v", got)
+	}
+	if ulimits(nil) != nil {
+		t.Error("no ulimits must render nothing, not an empty map")
 	}
 }
 
