@@ -174,6 +174,9 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	h.refresher = cfg.Refresher
 	h.liveness = cfg.Liveness
 	b := cfg.Broadcaster
+	if b != nil {
+		b.SetBasePath(cfg.BasePath)
+	}
 	metricsProxy := cfg.MetricsProxy
 	spa := cfg.SPA
 	authProvider := cfg.AuthProvider

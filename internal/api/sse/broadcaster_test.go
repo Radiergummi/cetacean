@@ -430,11 +430,41 @@ func TestSSE_WriteBatch_UsesHistoryID(t *testing.T) {
 	events := []cache.Event{
 		{Type: "service", Action: "update", ID: "s1", HistoryID: 42},
 	}
-	WriteBatch(&buf, f, events)
+	WriteBatch(&buf, f, events, "")
 
 	output := buf.String()
 	if !strings.Contains(output, "id: 42\n") {
 		t.Errorf("expected id: 42, got %q", output)
+	}
+}
+
+// Every identifier a response hands out has to work under server.base_path.
+// The stream is the one that has no request context to derive it from, so it
+// carries the prefix rather than looking it up.
+func TestSSE_WriteBatch_IdentifiersCarryTheBasePath(t *testing.T) {
+	var buf bytes.Buffer
+	f := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	WriteBatch(&buf, f, []cache.Event{
+		{Type: "service", Action: "update", ID: "s1", HistoryID: 1},
+	}, "/cetacean")
+
+	if !strings.Contains(buf.String(), `"@id":"/cetacean/services/s1"`) {
+		t.Errorf("event @id does not carry the base path: %q", buf.String())
+	}
+}
+
+// A sync event names no resource, so there is no path to prefix.
+func TestSSE_WriteBatch_SyncCarriesNoIdentifier(t *testing.T) {
+	var buf bytes.Buffer
+	f := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	WriteBatch(&buf, f, []cache.Event{
+		{Type: cache.EventSync, Action: "full_sync", HistoryID: 1},
+	}, "/cetacean")
+
+	if strings.Contains(buf.String(), "@id") {
+		t.Errorf("sync event grew an identifier: %q", buf.String())
 	}
 }
 
@@ -447,7 +477,7 @@ func TestSSE_WriteBatch_BatchUsesMaxHistoryID(t *testing.T) {
 		{Type: "service", Action: "update", ID: "s2", HistoryID: 12},
 		{Type: "node", Action: "update", ID: "n1", HistoryID: 11},
 	}
-	WriteBatch(&buf, f, events)
+	WriteBatch(&buf, f, events, "")
 
 	output := buf.String()
 	if !strings.Contains(output, "id: 12\n") {
@@ -462,7 +492,7 @@ func TestSSE_WriteBatch_SyncUsesHistoryID(t *testing.T) {
 	events := []cache.Event{
 		{Type: "sync", Action: "full_sync", HistoryID: 500},
 	}
-	WriteBatch(&buf, f, events)
+	WriteBatch(&buf, f, events, "")
 
 	output := buf.String()
 	if !strings.Contains(output, "id: 500\n") {
