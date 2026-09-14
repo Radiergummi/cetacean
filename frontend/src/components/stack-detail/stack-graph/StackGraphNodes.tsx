@@ -16,6 +16,29 @@ const nodeLink = cn(
 
 const chip = "max-w-44 gap-1.5 px-2 py-1 text-xs";
 
+function PerService({ title, rows }: { title: string; rows: { service: string; of: string }[] }) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <p className="mt-1.5 mb-0.5 text-muted-foreground">{title}</p>
+
+      <DetailList>
+        {rows.map(({ service, of }) => (
+          <Detail
+            key={service}
+            term={service}
+          >
+            {of}
+          </Detail>
+        ))}
+      </DetailList>
+    </>
+  );
+}
+
 export function NetworkNode({ data }: NodeProps & { data: NetworkNodeData }) {
   return (
     <Tooltip>
@@ -45,6 +68,11 @@ export function NetworkNode({ data }: NodeProps & { data: NetworkNodeData }) {
 
           {data.scope && <Detail term="Scope">{data.scope}</Detail>}
         </DetailList>
+
+        <PerService
+          title="Answers to"
+          rows={data.aliases.map(({ service, names }) => ({ service, of: names.join(", ") }))}
+        />
 
         {data.external && (
           <p className="mt-1 text-muted-foreground">Attached, but not part of this stack.</p>
@@ -129,6 +157,11 @@ export function mountNodeType(kind: string, icon: ReactNode) {
 
             {data.detail && <Detail term="Driver">{data.detail}</Detail>}
           </DetailList>
+
+          <PerService
+            title="Mounted at"
+            rows={data.mountedBy.map(({ service, path }) => ({ service, of: path }))}
+          />
 
           {!data.referenced && (
             <p className="mt-1 text-muted-foreground">No service mounts this.</p>

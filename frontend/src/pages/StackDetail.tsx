@@ -17,6 +17,19 @@ import { Link, useParams } from "react-router-dom";
 
 const StackGraph = lazy(() => import("../components/stack-detail/stack-graph/StackGraph"));
 
+/** The poll re-runs on every stack event; an unchanged answer should not redraw. */
+function sameCounts(before: Record<string, TaskCount>, after: Record<string, TaskCount>) {
+  const ids = Object.keys(after);
+
+  return (
+    ids.length === Object.keys(before).length &&
+    ids.every(
+      (id) =>
+        before[id]?.running === after[id]?.running && before[id]?.desired === after[id]?.desired,
+    )
+  );
+}
+
 export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
 
@@ -78,7 +91,7 @@ export default function StackDetail() {
             desired,
           };
         }
-        setTaskCounts(counts);
+        setTaskCounts((previous) => (sameCounts(previous, counts) ? previous : counts));
       });
     }, delay);
 

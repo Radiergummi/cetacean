@@ -9,6 +9,7 @@ export type NetworkNodeData = {
   scope?: string | undefined;
   external: boolean;
   referenced: boolean;
+  aliases: { service: string; names: string[] }[];
 };
 
 export type ServiceNodeData = {
@@ -28,6 +29,7 @@ export type MountNodeData = {
   href: string;
   detail?: string | undefined;
   referenced: boolean;
+  mountedBy: { service: string; path: string }[];
 };
 
 const origin = { x: 0, y: 0 };
@@ -74,6 +76,16 @@ export function stackToReactFlow(
     return { id, type, position: origin, data };
   }
 
+  // An edge says a service reaches a resource. Where it lands in the container,
+  // and what a service answers to on a network, are what the arrow cannot say.
+  function mountedAt(id: string, service: string, path: string) {
+    (mountNodes.get(id)?.data as MountNodeData | undefined)?.mountedBy.push({ service, path });
+  }
+
+  function answersTo(id: string, service: string, names: string[]) {
+    (networkNodes.get(id)?.data as NetworkNodeData | undefined)?.aliases.push({ service, names });
+  }
+
   /** Marks a node referenced, adding it first when the stack does not hold it. */
   function reference(nodes: Map<string, Node>, id: string, make: () => Node): string {
     const existing = nodes.get(id);
@@ -99,6 +111,7 @@ export function stackToReactFlow(
         scope: network.Scope,
         external: false,
         referenced: false,
+        aliases: [],
       } satisfies NetworkNodeData,
     });
   }
@@ -110,6 +123,7 @@ export function stackToReactFlow(
         name: bare(config.Spec.Name),
         href: `/configs/${config.ID}`,
         referenced: false,
+        mountedBy: [],
       }),
     );
   }
@@ -121,6 +135,7 @@ export function stackToReactFlow(
         name: bare(secret.Spec.Name),
         href: `/secrets/${secret.ID}`,
         referenced: false,
+        mountedBy: [],
       }),
     );
   }
@@ -133,18 +148,20 @@ export function stackToReactFlow(
         href: `/volumes/${volume.Name}`,
         detail: volume.Driver,
         referenced: false,
+        mountedBy: [],
       }),
     );
   }
 
   function referenceMount(id: string, type: string, name: string, href: string): string {
     return reference(mountNodes, id, () =>
-      mountNode(id, type, { name: bare(name), href, referenced: true }),
+      mountNode(id, type, { name: bare(name), href, referenced: true, mountedBy: [] }),
     );
   }
 
   for (const service of stack.services) {
     const serviceId = `service:${service.ID}`;
+    const name = bare(service.Spec.Name);
     const container = service.Spec.TaskTemplate?.ContainerSpec;
 
     serviceNodes.push({
@@ -152,7 +169,7 @@ export function stackToReactFlow(
       type: "stackService",
       position: origin,
       data: {
-        name: bare(service.Spec.Name),
+        name,
         href: `/services/${service.ID}`,
         image: shortImage(container?.Image),
         ...serviceMode(service),
@@ -160,7 +177,7 @@ export function stackToReactFlow(
       } satisfies ServiceNodeData,
     });
 
-    for (const { Target } of service.Spec.TaskTemplate?.Networks ?? []) {
+    for (const { Target, Aliases } of service.Spec.TaskTemplate?.Networks ?? []) {
       if (!Target) {
         continue;
       }
@@ -176,35 +193,53 @@ export function stackToReactFlow(
           href: `/networks/${Target}`,
           external: true,
           referenced: true,
+          aliases: [],
         } satisfies NetworkNodeData,
       }));
 
       connect(networkId, serviceId);
+
+      if (Aliases?.length) {
+        answersTo(networkId, name, Aliases);
+      }
     }
 
-    for (const { ConfigID, ConfigName } of container?.Configs ?? []) {
-      connect(
-        serviceId,
-        referenceMount(`config:${ConfigID}`, "stackConfig", ConfigName, `/configs/${ConfigID}`),
+    for (const { ConfigID, ConfigName, File } of container?.Configs ?? []) {
+      const id = referenceMount(
+        `config:${ConfigID}`,
+        "stackConfig",
+        ConfigName,
+        `/configs/${ConfigID}`,
       );
+
+      connect(serviceId, id);
+      mountedAt(id, name, File?.Name ?? `/${ConfigName}`);
     }
 
-    for (const { SecretID, SecretName } of container?.Secrets ?? []) {
-      connect(
-        serviceId,
-        referenceMount(`secret:${SecretID}`, "stackSecret", SecretName, `/secrets/${SecretID}`),
+    for (const { SecretID, SecretName, File } of container?.Secrets ?? []) {
+      const id = referenceMount(
+        `secret:${SecretID}`,
+        "stackSecret",
+        SecretName,
+        `/secrets/${SecretID}`,
       );
+
+      connect(serviceId, id);
+      mountedAt(id, name, File?.Name ?? `/run/secrets/${SecretName}`);
     }
 
-    for (const { Type, Source } of container?.Mounts ?? []) {
+    for (const { Type, Source, Target, ReadOnly } of container?.Mounts ?? []) {
       if (Type !== "volume" || !Source) {
         continue;
       }
 
-      connect(
-        serviceId,
-        referenceMount(`volume:${Source}`, "stackVolume", Source, `/volumes/${Source}`),
-      );
+      const id = referenceMount(`volume:${Source}`, "stackVolume", Source, `/volumes/${Source}`);
+
+      connect(serviceId, id);
+
+      if (Target) {
+        mountedAt(id, name, ReadOnly ? `${Target} (read-only)` : Target);
+      }
     }
   }
 

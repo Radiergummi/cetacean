@@ -60,6 +60,46 @@ function connections(edges: Edge[]): string[] {
 }
 
 describe("stackToReactFlow", () => {
+  it("records where a mount lands and what a service answers to", () => {
+    const { nodes } = stackToReactFlow(
+      makeStack({
+        services: [
+          makeService("web", {
+            ContainerSpec: {
+              Image: "web:1",
+              Secrets: [{ SecretID: "sec-token", SecretName: "token" }],
+              Configs: [
+                { ConfigID: "cfg-nginx", ConfigName: "nginx", File: { Name: "/etc/nginx.conf" } },
+              ],
+              Mounts: [{ Type: "volume", Source: "data", Target: "/var/lib/data", ReadOnly: true }],
+            },
+            Networks: [{ Target: "net-backend", Aliases: ["web", "web.internal"] }],
+          }),
+        ],
+        networks: [makeNetwork("backend")],
+        configs: [makeConfig("nginx")],
+        secrets: [makeSecret("token")],
+        volumes: [makeVolume("data")],
+      }),
+    );
+
+    const data = (id: string) => nodes.find((node) => node.id === id)?.data as never;
+
+    // A config names its own path; a secret takes Docker's default.
+    expect(data("config:cfg-nginx")["mountedBy"]).toEqual([
+      { service: "web", path: "/etc/nginx.conf" },
+    ]);
+    expect(data("secret:sec-token")["mountedBy"]).toEqual([
+      { service: "web", path: "/run/secrets/token" },
+    ]);
+    expect(data("volume:data")["mountedBy"]).toEqual([
+      { service: "web", path: "/var/lib/data (read-only)" },
+    ]);
+    expect(data("network:net-backend")["aliases"]).toEqual([
+      { service: "web", names: ["web", "web.internal"] },
+    ]);
+  });
+
   it("creates a node for every resource the stack holds", () => {
     const { nodes } = stackToReactFlow(
       makeStack({
