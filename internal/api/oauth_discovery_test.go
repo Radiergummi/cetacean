@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -98,6 +99,46 @@ func TestAdvertisedJWKSURIServesAKeySet(t *testing.T) {
 
 			if len(set.Keys) != 1 {
 				t.Errorf("published keys = %d, want 1", len(set.Keys))
+			}
+		})
+	}
+}
+
+// None of the authorization server's endpoints reads the cache, and refusing
+// them while the daemon is down leaves a client with no way to authenticate
+// against the deployment it is trying to diagnose.
+func TestTheAuthorizationServerAnswersWhileDockerIsUnreachable(t *testing.T) {
+	// Never closed: the daemon is unreachable for the whole test.
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withOAuthRoutes("")},
+		withCache(cache.New(nil)),
+		withReady(make(chan struct{})),
+	)
+
+	for _, tc := range []struct {
+		method string
+		path   string
+		accept string
+	}{
+		{http.MethodGet, "/oauth/jwks", "application/json"},
+		{http.MethodPost, "/oauth/token", "application/json"},
+		{http.MethodPost, "/oauth/revoke", "application/json"},
+		{http.MethodPost, "/oauth/register", "application/json"},
+		{http.MethodGet, "/oauth/authorize", "text/html"},
+	} {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.Header.Set("Accept", tc.accept)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code == http.StatusServiceUnavailable ||
+				strings.Contains(rec.Body.String(), "ENG001") {
+				t.Errorf(
+					"%s %s = %d %s, want the endpoint's own answer",
+					tc.method, tc.path, rec.Code, rec.Body.String(),
+				)
 			}
 		})
 	}
