@@ -376,7 +376,7 @@ func TestReferenceConfigMatchesTheSchema(t *testing.T) {
 // key or a section once uncommented.
 func uncommentReference(src string) string {
 	var live []string
-	for _, line := range strings.Split(src, "\n") {
+	for line := range strings.SplitSeq(src, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if after, ok := strings.CutPrefix(trimmed, "# "); ok {
 			if candidate := strings.TrimSpace(after); referenceKey.MatchString(candidate) ||
