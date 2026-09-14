@@ -97,6 +97,14 @@ var resourceAcceptPatch = map[string]string{
 	"plugin":  AcceptMergePatch,
 }
 
+// varyByIdentity marks a response as one whose body and Allow both depend on
+// who asked. Every ACL-filtered response travels one of the setAllow* seams, so
+// setting it here is what keeps the two from drifting apart. Add rather than
+// Set, to extend a Vary another layer already wrote.
+func varyByIdentity(w http.ResponseWriter) {
+	w.Header().Add("Vary", "Authorization, Cookie")
+}
+
 // setAllow sets the Allow response header for a detail endpoint based on the
 // configured operations level and ACL write permission.
 func (h *Handlers) setAllow(
@@ -120,6 +128,7 @@ func (h *Handlers) setAllow(
 	}
 
 	w.Header().Set("Allow", strings.Join(methods, ", "))
+	varyByIdentity(w)
 
 	if hasPatch {
 		if ap, ok := resourceAcceptPatch[resourceType]; ok {
@@ -145,6 +154,7 @@ func (h *Handlers) setAllowSubResource(
 		}
 	}
 	w.Header().Set("Allow", strings.Join(methods, ", "))
+	varyByIdentity(w)
 }
 
 // listCreateMethods maps resource types that support creation via POST to
@@ -167,4 +177,5 @@ func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resource
 	}
 
 	w.Header().Set("Allow", strings.Join(methods, ", "))
+	varyByIdentity(w)
 }

@@ -4,6 +4,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -300,5 +301,92 @@ func TestAllowHeaderOffersNodePatchAtTierTwo(t *testing.T) {
 
 	if allow := w.Header().Get("Allow"); !strings.Contains(allow, "PATCH") {
 		t.Errorf("Allow = %q at operations level 2, want PATCH offered", allow)
+	}
+}
+
+// Every response carrying a per-identity Allow is a per-identity response, so
+// the two are set together. Without Vary an intermediary has nothing telling it
+// these bodies differ per caller; Cache-Control: no-cache keeps it from serving
+// one wrongly, but revalidation is cheap now and actually happens.
+func TestAllowSeamVariesByIdentity(t *testing.T) {
+	h := newTestHandlers(t)
+	r := httptest.NewRequest("GET", "/nodes", nil)
+
+	seams := map[string]func(w *httptest.ResponseRecorder){
+		"setAllowList": func(w *httptest.ResponseRecorder) {
+			h.setAllowList(w, r, "node")
+		},
+		"setAllow": func(w *httptest.ResponseRecorder) {
+			h.setAllow(w, r, "node", "node-1")
+		},
+		"setAllowSubResource": func(w *httptest.ResponseRecorder) {
+			h.setAllowSubResource(w, r, "PUT", config.OpsOperational, "node:node-1")
+		},
+	}
+
+	for name, seam := range seams {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			seam(w)
+
+			values := w.Header().Values("Vary")
+			if len(values) != 1 {
+				t.Fatalf("%s set %d Vary headers, want 1: %q", name, len(values), values)
+			}
+			if got := values[0]; got != "Authorization, Cookie" {
+				t.Errorf("%s set Vary %q, want %q", name, got, "Authorization, Cookie")
+			}
+		})
+	}
+}
+
+// A 304 is as identity-dependent as the 200 it stands in for, and it travels
+// the same seam to say so.
+func TestNotModifiedVariesByIdentity(t *testing.T) {
+	h := newTestHandlers(t, withCache(validatorCache(5)))
+
+	full := listOnce(t, h, "/api/nodes", nil, "")
+	notModified := listOnce(t, h, "/api/nodes", nil, full.Header().Get("ETag"))
+	if notModified.Code != 304 {
+		t.Fatalf("revalidation returned %d, want 304", notModified.Code)
+	}
+
+	for _, rec := range []struct {
+		name string
+		vary string
+	}{
+		{"200", strings.Join(full.Header().Values("Vary"), ", ")},
+		{"304", strings.Join(notModified.Header().Values("Vary"), ", ")},
+	} {
+		for _, want := range []string{"Authorization, Cookie", "Accept-Encoding"} {
+			if !strings.Contains(rec.vary, want) {
+				t.Errorf("%s carried Vary %q, want it to include %q", rec.name, rec.vary, want)
+			}
+		}
+	}
+}
+
+// Feeds do not travel the allow seam — they have no Allow header to pair with —
+// so each renderer says it itself. Both formats are ACL-filtered and neither may
+// be the one that forgets.
+func TestFeedRenderersVaryByIdentity(t *testing.T) {
+	renderers := map[string]feedRenderer{
+		"atom": renderAtom,
+		"json": renderJSONFeed,
+	}
+
+	for name, render := range renderers {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("GET", "/api/recommendations", nil)
+
+			render(w, r, feedData{Title: "Recommendations", Updated: time.Now()})
+
+			vary := strings.Join(w.Header().Values("Vary"), ", ")
+			if !strings.Contains(vary, "Authorization, Cookie") {
+				t.Errorf("%s feed carried Vary %q, want it to include %q",
+					name, vary, "Authorization, Cookie")
+			}
+		})
 	}
 }

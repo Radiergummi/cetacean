@@ -15,28 +15,31 @@ comparisons, for one request.
 The same list endpoint at a thousand services, with and without the resolver that `main.go`
 wires in production:
 
-| policy                       | `resolver == nil`    | resolver wired       |
-| ---------------------------- | -------------------- | -------------------- |
-| `service:*`                  | 683µs / 626 allocs   | 705µs / 627 allocs   |
-| twenty single-service grants | 1.66ms / 285 allocs  | 200ms / 290 allocs   |
-| `stack:stack-0`              | 476µs / 56 allocs    | 11.2ms / 626 allocs  |
+`BenchmarkHandleListServices_ACL` at a thousand services, before and after `benchACL` was
+wired the way `main.go` wires it:
 
-The middle row is the clean comparison and the one to read: the twenty grants match the same
-twenty services either way, so both columns render the same response with the same
-allocations, and the resolver costs 120 times the latency to arrive at an identical answer.
-That is entirely CPU, and entirely `StackOf`.
+| policy                       | `resolver == nil`   | resolver wired      |
+| ---------------------------- | ------------------- | ------------------- |
+| `service:*`                  | 683µs / 626 allocs  | 693µs / 627 allocs  |
+| `service:svc-1*`             | 668µs / 623 allocs  | 10.0ms / 627 allocs |
+| twenty single-service grants | 1.66ms / 285 allocs | 208ms / 289 allocs  |
+| `stack:stack-0`              | 476µs / 56 allocs   | 11.0ms / 626 allocs |
 
-The bottom row is not like-for-like and is included because it is the realistic policy.
-Without a resolver a stack grant matches nothing, so that cell renders an empty list; with one
-it renders the two hundred services in the stack. Some of the 11.2ms is therefore real output.
-Not much of it: the top row renders five times as many services in 705µs.
+Read the middle two rows: both render the same response either way — the resolver admits no
+service a `service:` grant did not already match — so the columns differ in latency alone, by
+fifteen times and by a hundred and twenty. That is entirely CPU, and entirely `StackOf`.
+
+The prefix row was already in the suite. Nothing had to be added to expose this; the resolver
+had only to be present.
+
+The last row is not like-for-like, and is here because it is the shape a real deployment
+writes. Without a resolver a stack grant matches nothing, so that cell renders an empty list
+against two hundred services with one. Little of the 11ms is that output: the first row
+renders five times as many services in 693µs.
 
 A wildcard policy is unaffected because `grantCovers` matches before the resolver is
 consulted. The cost appears exactly when a grant does *not* match directly, which is what a
-stack-scoped or per-service policy is made of.
-
-These figures come from a throwaway benchmark at twenty iterations. They are magnitudes, not
-precise numbers; the committed benchmark described below is what pins those.
+stack-scoped or prefix policy is made of.
 
 ## Why this was invisible
 
@@ -124,7 +127,11 @@ These are the three functions that compute a per-identity `Allow`, so a response
 is per-identity by construction and the two cannot drift apart. `listNotModified` already
 calls one of them, so a 304 gets the header on the same path a 200 does.
 
-`writeCachedAtom` keeps setting its own: feeds do not route through the allow seam.
+Feeds do not route through that seam — they have no `Allow` to pair with — so each renderer
+says it itself. `writeCachedAtom` already did. `renderJSONFeed` did not, and is the other half
+of the gap the generation work recorded: the same ACL-filtered entries, served as
+`application/feed+json` instead, with nothing marking them per-user. Both now call the same
+helper, so there is one spelling of the rule rather than two to drift apart.
 
 `Cache-Control: no-cache` already forces revalidation, so nothing is served wrongly today.
 The header is what tells an intermediary these responses are per-user, and it matters more now
@@ -151,10 +158,24 @@ leaving the interface alone.
 
 ## Sequencing
 
-The benchmark wiring first, alone, so the cost is on the record before anything moves.
-
-Then the index. Then `Vary`, which is independent of both and is only here because the
+The benchmark wiring first, alone, so the cost is on the record before anything moves. Then
+`Vary`, which is independent of everything here and is only in this document because the
 generation work left it open.
+
+Both have landed. **The index has not, and is deliberately on hold.**
+
+It needs a thousand-ish services *and* a configured policy *and* grants that do not match
+directly. Drop any one and the cost is zero — with no policy the evaluator returns before the
+resolver is consulted at all, which is most deployments. At a hundred services the twenty-grant
+case costs 1.5ms, which nobody notices. Swarm clusters of the size where this bites are rare,
+and Cetacean is a small-cluster tool.
+
+So the index waits on evidence that someone is actually running that combination. What has
+landed means the wait is cheap: the benchmark now reports the real number, so the day a
+deployment does hit it, the cost is already visible and the fix is already designed here.
+
+If something is wanted sooner and cheaper, see the first rejected alternative below: it is a
+stopgap rather than a fix, but it is a small one.
 
 ## Files
 
@@ -162,14 +183,19 @@ generation work left it open.
 - `internal/cache/stacks.go` — the index, maintained beside stack membership and not from it.
 - `internal/cache/cache.go` — `SetService`, `DeleteService`, `ReplaceAll`.
 - `internal/api/handlers_bench_test.go` — `benchACL` wires the resolver.
-- `internal/api/allow.go` — the three `setAllow*` functions.
+- `internal/api/allow.go` — `varyByIdentity`, and the three `setAllow*` functions.
+- `internal/api/atom_handlers.go`, `internal/api/jsonfeed_handlers.go` — the two feeds.
 
 ## Rejected alternatives
 
-**Memoise `StackOf` per request.** Resolving each item once instead of once per grant would
-cut the twenty-grant case by twenty and leave the scan. It is a smaller change that trades a
-quadratic for a linear that is still a scan, and it needs a per-request cache threaded through
-the evaluator. The index costs one map and fixes the shape.
+**Resolve once per item instead of once per grant.** The resolver's answer depends on the
+item alone, so hoisting the call out of the grant loop needs no new state and no per-request
+cache — it is local to the filter. It takes the twenty-grant case from 208ms to roughly 11ms.
+
+Rejected as the fix, not as a stopgap. It trades a quadratic for a linear that is still a
+scan, and it does nothing at all for a single stack grant — one scan per item either way,
+which is the 11ms floor it arrives at from the other direction. That is also the likelier
+policy. Worth reaching for if the index is still on hold when someone hits this.
 
 **Give the evaluator its own copy of the stack labels.** It would remove the resolver
 interface and the re-entrancy rule with it. It also puts a second copy of cluster state
