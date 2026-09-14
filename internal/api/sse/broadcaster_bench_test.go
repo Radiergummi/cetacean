@@ -219,7 +219,14 @@ func serveOneClient(b *testing.B, target string) (*Broadcaster, *benchRecorder, 
 // Draining both queues first is what keeps the measurement honest: Broadcast
 // is non-blocking by design, so a loop that only waited for the next flush
 // would outrun the fan-out and measure a run that silently dropped events.
-func awaitFlush(br *Broadcaster, w *benchRecorder, since uint64) {
+//
+// That same non-blocking drop is why this gives up rather than spinning
+// forever: an iteration whose events were all dropped, or all filtered out,
+// drains to nothing without ever flushing.
+func awaitFlush(b *testing.B, br *Broadcaster, w *benchRecorder, since uint64) {
+	b.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
 	for {
 		pending := len(br.inbox)
 		br.mu.RLock()
@@ -230,6 +237,10 @@ func awaitFlush(br *Broadcaster, w *benchRecorder, since uint64) {
 
 		if pending == 0 && w.flushes.Load() != since {
 			return
+		}
+
+		if time.Now().After(deadline) {
+			b.Fatalf("no flush within 5s: %d events still queued", pending)
 		}
 
 		runtime.Gosched()
@@ -251,7 +262,7 @@ func BenchmarkServeSSE(b *testing.B) {
 						ID:     fmt.Sprintf("svc-%d", i),
 					})
 				}
-				awaitFlush(br, w, before)
+				awaitFlush(b, br, w, before)
 			}
 		})
 	}
@@ -274,6 +285,6 @@ func BenchmarkServeSSEFiltered(b *testing.B) {
 				)
 			}
 		}
-		awaitFlush(br, w, before)
+		awaitFlush(b, br, w, before)
 	}
 }

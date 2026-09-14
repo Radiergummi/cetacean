@@ -1250,10 +1250,10 @@ func BenchmarkHandleListServices_ACL(b *testing.B) {
 	}
 }
 
-// BenchmarkHandleTopology measures the memoised path, which is what a dashboard
-// polling between cluster events actually gets. This is the other half: a
-// mutation per iteration means every request rebuilds, so a regression in the
-// graph construction stays visible.
+// BenchmarkHandleTopology_ColdMemo is the other half of BenchmarkHandleTopology,
+// which measures the memoised path a dashboard polling between cluster events
+// gets. A mutation per iteration means every request here rebuilds, so a
+// regression in the graph construction stays visible.
 func BenchmarkHandleTopology_ColdMemo(b *testing.B) {
 	for _, n := range []int{100, 1000} {
 		c := cache.New(nil)
@@ -1274,10 +1274,10 @@ func BenchmarkHandleTopology_ColdMemo(b *testing.B) {
 	}
 }
 
-// BenchmarkHandleListNodes_WithETag sends a tag that cannot match, so it
-// measures a full response. This is the other half: the revalidation a
-// dashboard actually makes between cluster events, which answers 304 without
-// reading the cache, filtering, sorting or marshalling anything.
+// BenchmarkHandleListNodes_NotModified measures the revalidation a dashboard
+// makes between cluster events: the tag still matches, so the 304 is answered
+// without reading the cache, filtering, sorting or marshalling anything.
+// BenchmarkHandleListNodes is the full response it stands in for.
 func BenchmarkHandleListNodes_NotModified(b *testing.B) {
 	benchHandler(b, "ListNodes_NotModified", func(b *testing.B, h *Handlers) {
 		warm := httptest.NewRecorder()
