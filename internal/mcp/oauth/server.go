@@ -134,10 +134,18 @@ func NewServer(cfg ServerConfig) *Server {
 				carriedClients = state.Clients
 			}
 
+			// What the registry holds, not what the file offered: Restore
+			// keeps nothing with DCR disabled, and truncates to the cap when
+			// the file was written under a larger one.
+			restoredClients := 0
+			if clients != nil {
+				restoredClients = len(clients.Snapshot())
+			}
+
 			slog.Info("loaded MCP OAuth state",
 				"grants", len(state.Grants),
 				"approvals", len(state.Consent),
-				"clients", len(state.Clients),
+				"clients", restoredClients,
 			)
 		}
 
