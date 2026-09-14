@@ -44,7 +44,7 @@
     "@astrojs/check": "^0.9.10",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "vite": "^8.0.0"
