@@ -1,4 +1,5 @@
 import { IntegrationSection } from "./IntegrationSection";
+import { TraefikGraphFrame } from "./traefik-graph/TraefikGraphFrame";
 import type {
   TraefikIntegration,
   TraefikMiddleware,
@@ -454,6 +455,7 @@ export function TraefikPanel({
       onSave={handleSave}
       serviceId={serviceId}
       onRawSave={onSaved}
+      visualContent={hasRouters ? <TraefikGraphFrame integration={integration} /> : undefined}
     >
       <div className="grid gap-4 lg:grid-cols-3">
         {hasRouters && (

@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { KeyValueEditor } from "@/components/KeyValueEditor";
+import SegmentedControl from "@/components/SegmentedControl";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
@@ -8,6 +9,14 @@ import { showErrorToast } from "@/lib/showErrorToast";
 import { getErrorMessage } from "@/lib/utils";
 import { Code, ExternalLink, Layers, Pencil } from "lucide-react";
 import { type ReactNode, useState } from "react";
+
+type View = "graph" | "structured" | "raw";
+
+const viewSegments = [
+  { value: "graph", label: "Graph" },
+  { value: "structured", label: "Structured" },
+  { value: "raw", label: "Labels" },
+] as const satisfies { value: View; label: string }[];
 
 /**
  * Wrapper for integration panels that provides a toggle between
@@ -30,6 +39,7 @@ export function IntegrationSection({
   onSave,
   serviceId,
   onRawSave,
+  visualContent,
 }: {
   title: string;
   defaultOpen: boolean;
@@ -43,8 +53,10 @@ export function IntegrationSection({
   onSave?: (() => Promise<void>) | undefined;
   serviceId: string;
   onRawSave: (updated: Record<string, string>) => void;
+  /** Read-only visualisation. When given, the view toggle becomes three-way. */
+  visualContent?: ReactNode | undefined;
 }) {
-  const [showRaw, setShowRaw] = useState(false);
+  const [view, setView] = useState<View>(visualContent ? "graph" : "structured");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -54,7 +66,11 @@ export function IntegrationSection({
     setSaveError(null);
   }
 
-  useEscapeCancel(editing && !showRaw, cancel);
+  // The graph is read-only, so an edit shows the structured form without
+  // discarding the view to come back to when it ends.
+  const activeView: View = editing && view === "graph" ? "structured" : view;
+
+  useEscapeCancel(editing && activeView === "structured", cancel);
 
   async function save() {
     if (!onSave) {
@@ -81,6 +97,16 @@ export function IntegrationSection({
     setEditing(true);
   }
 
+  // Leaving the raw editor re-seeds the structured form from the labels the
+  // user may have just rewritten there.
+  function changeView(next: View) {
+    if (editing && view === "raw") {
+      onEditStart?.();
+    }
+
+    setView(next);
+  }
+
   return (
     <CollapsibleSection
       title={title}
@@ -98,27 +124,31 @@ export function IntegrationSection({
             <ExternalLink className="size-3" />
           </a>
 
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => {
-              setShowRaw((previous) => {
-                if (editing && previous) {
-                  onEditStart?.();
-                }
-
-                return !previous;
-              });
-            }}
-          >
-            {showRaw ? <Layers className="size-3" /> : <Code className="size-3" />}
-            {showRaw ? "Structured" : "Labels"}
-          </Button>
+          {visualContent ? (
+            <SegmentedControl
+              segments={viewSegments.map((segment) => ({
+                ...segment,
+                disabled: editing && segment.value === "graph",
+              }))}
+              value={activeView}
+              onChange={changeView}
+              size="sm"
+            />
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => changeView(view === "raw" ? "structured" : "raw")}
+            >
+              {view === "raw" ? <Layers className="size-3" /> : <Code className="size-3" />}
+              {view === "raw" ? "Structured" : "Labels"}
+            </Button>
+          )}
 
           {editable && !editing && (
             <Button
               variant="outline"
-              size="xs"
+              size="sm"
               onClick={startEditing}
             >
               <Pencil className="size-3" />
@@ -128,10 +158,10 @@ export function IntegrationSection({
         </>
       }
     >
-      {showRaw ? (
+      {activeView === "raw" ? (
         <KeyValueEditor
           key={editing ? "editing" : "display"}
-          title=""
+          title="labels"
           bare
           entries={Object.fromEntries(rawLabels)}
           defaultOpen
@@ -176,6 +206,8 @@ export function IntegrationSection({
         </div>
       ) : !enabled ? (
         <p className="text-sm text-muted-foreground">Disabled</p>
+      ) : activeView === "graph" ? (
+        visualContent
       ) : (
         children
       )}

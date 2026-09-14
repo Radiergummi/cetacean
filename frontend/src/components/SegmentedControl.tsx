@@ -2,12 +2,29 @@
 // when invoked as an event handler. The rule flags it because the callback is
 // handed to an `overflowContent` render prop, but the ref is never read during
 // render.
+import { cn } from "@/lib/utils";
 import { Menu } from "@base-ui/react/menu";
 import { Toggle } from "@base-ui/react/toggle";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { ChevronDown } from "lucide-react";
 import type { ReactNode } from "react";
 import { useRef } from "react";
+
+/** Matches the Button scale: `default` is h-8, `sm` is h-7. */
+export type SegmentedControlSize = "default" | "sm";
+
+const sizes = {
+  default: {
+    frame: "h-8",
+    segment: "gap-1.5 px-3 py-1 text-sm",
+    overflow: "gap-1 px-2 py-1 text-sm",
+  },
+  sm: {
+    frame: "h-7",
+    segment: "gap-1 px-2.5 py-0.5 text-[0.8rem]",
+    overflow: "gap-1 px-1.5 py-0.5 text-[0.8rem]",
+  },
+} as const;
 
 export interface Segment<T extends string> {
   value: T;
@@ -21,6 +38,7 @@ export default function SegmentedControl<T extends string>({
   value,
   onChange,
   max = 5,
+  size = "default",
   overflowIcon,
   overflowLabel,
   overflowActive,
@@ -30,6 +48,7 @@ export default function SegmentedControl<T extends string>({
   value: T;
   onChange: (value: T) => void;
   max?: number | undefined;
+  size?: SegmentedControlSize | undefined;
   /** Replace the default chevron icon on the overflow button. */
   overflowIcon?: ReactNode | undefined;
   /** Label shown next to the icon when the overflow is active. */
@@ -48,9 +67,15 @@ export default function SegmentedControl<T extends string>({
   const isActive = overflowActive ?? !!activeOverflow;
 
   const close = () => actionsRef.current?.close();
+  const scale = sizes[size];
 
   return (
-    <div className="inline-flex h-8 items-center gap-0.5 rounded-md bg-card px-0.5 ring-1 ring-input ring-inset">
+    <div
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-md bg-card px-0.5 ring-1 ring-input ring-inset",
+        scale.frame,
+      )}
+    >
       <ToggleGroup
         value={[value]}
         onValueChange={(values) => {
@@ -65,7 +90,10 @@ export default function SegmentedControl<T extends string>({
             key={segmentValue}
             value={segmentValue}
             disabled={disabled}
-            className="group/seg inline-flex cursor-pointer items-center gap-1.5 rounded-sm px-3 py-1 text-sm font-medium text-muted-foreground transition outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default disabled:text-muted-foreground/40 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm"
+            className={cn(
+              "group/seg inline-flex cursor-pointer items-center rounded-sm font-medium text-muted-foreground transition outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default disabled:text-muted-foreground/40 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm",
+              scale.segment,
+            )}
           >
             <span>{label}</span>
             {badge != null && (
@@ -84,7 +112,10 @@ export default function SegmentedControl<T extends string>({
         >
           <Menu.Trigger
             aria-current={isActive || undefined}
-            className="inline-flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1 text-sm text-muted-foreground transition outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm"
+            className={cn(
+              "inline-flex cursor-pointer items-center rounded-sm text-muted-foreground transition outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm",
+              scale.overflow,
+            )}
           >
             {overflowLabel ?? (activeOverflow ? <span>{activeOverflow.label}</span> : undefined)}
             {overflowIcon ?? <ChevronDown className="size-3" />}

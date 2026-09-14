@@ -14,7 +14,7 @@ import type { ELK as ElkInstance, ElkExtendedEdge, ElkNode } from "elkjs/lib/elk
  */
 let elkInstance: Promise<ElkInstance> | null = null;
 
-function loadElk(): Promise<ElkInstance> {
+export function loadElk(): Promise<ElkInstance> {
   elkInstance ??= import("elkjs/lib/elk.bundled.js").then(
     ({ default: ELK }) => new ELK() as ElkInstance,
   );
