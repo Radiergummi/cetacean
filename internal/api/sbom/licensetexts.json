@@ -358,7 +358,7 @@
   "go:github.com/jsimonetti/rtnetlink@v1.4.1": {
    "license": "1f61baf667aacf74c2d17abcfc0ba6e9"
   },
-  "go:github.com/klauspost/compress@v1.19.1": {
+  "go:github.com/klauspost/compress@v1.20.0": {
    "license": "0d9e582ee4bff57bf1189c9e514e6da7"
   },
   "go:github.com/mark3labs/mcp-go@v1.0.0": {
@@ -476,7 +476,7 @@
   "go:golang.org/x/net@v0.58.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
-  "go:golang.org/x/oauth2@v0.36.0": {
+  "go:golang.org/x/oauth2@v0.37.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
   "go:golang.org/x/sync@v0.22.0": {
@@ -514,7 +514,7 @@
   "go:gvisor.dev/gvisor@v0.0.0-20260224225140-573d5e7127a8": {
    "license": "0fbab5c58efbdf6d31e8085214f2dd82"
   },
-  "go:tailscale.com@v1.102.3": {
+  "go:tailscale.com@v1.102.4": {
    "license": "a7ca6186a7963a0a60740f6047760eec"
   },
   "npm:@ai-sdk/gateway@3.0.13": {
@@ -544,10 +544,10 @@
   "npm:@babel/types@7.29.8": {
    "license": "117da2af0d4ce0fe1c8e19b5cff9dcd8"
   },
-  "npm:@base-ui/react@1.7.0": {
+  "npm:@base-ui/react@1.8.0": {
    "license": "07fc1b39d69d14bc7d40482a628f4722"
   },
-  "npm:@base-ui/utils@0.3.2": {
+  "npm:@base-ui/utils@0.4.0": {
    "license": "07fc1b39d69d14bc7d40482a628f4722"
   },
   "npm:@codemirror/autocomplete@6.20.3": {
@@ -622,7 +622,7 @@
   "npm:@internationalized/number@3.6.8": {
    "license": "7dfe6526888bac51759c99f9a51262ba"
   },
-  "npm:@jridgewell/sourcemap-codec@1.5.5": {
+  "npm:@jridgewell/sourcemap-codec@1.6.0": {
    "license": "769d154fbde32a915af110b1123650bc"
   },
   "npm:@kurkle/color@0.3.4": {
@@ -658,7 +658,13 @@
   "npm:@marijn/find-cluster-break@1.0.4": {
    "license": "9360b00fdd091f05c783b568bdd46c67"
   },
-  "npm:@modelcontextprotocol/ext-apps@1.7.5": {
+  "npm:@modelcontextprotocol/client@2.0.0": {
+   "license": "0382b0057770ca05e9c350a50aa3b1c1"
+  },
+  "npm:@modelcontextprotocol/core@2.0.0": {
+   "license": "0382b0057770ca05e9c350a50aa3b1c1"
+  },
+  "npm:@modelcontextprotocol/ext-apps@2.0.0": {
    "license": "0382b0057770ca05e9c350a50aa3b1c1"
   },
   "npm:@modelcontextprotocol/sdk@1.30.0": {
@@ -763,10 +769,7 @@
   "npm:@tanstack/react-query@5.102.8": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
-  "npm:@tanstack/react-virtual@3.14.10": {
-   "license": "a405ee70c632bb938acb7ac5f210e814"
-  },
-  "npm:@tanstack/virtual-core@3.17.8": {
+  "npm:@tanstack/react-virtual@3.14.11": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
   "npm:@tanstack/virtual-core@3.17.9": {
@@ -814,10 +817,10 @@
   "npm:@types/node@24.13.4": {
    "license": "c2cfccb812fe482101a8f04597dfc5a9"
   },
-  "npm:@types/react-dom@19.2.7": {
+  "npm:@types/react-dom@19.3.0": {
    "license": "c2cfccb812fe482101a8f04597dfc5a9"
   },
-  "npm:@types/react@19.2.18": {
+  "npm:@types/react@19.3.0": {
    "license": "c2cfccb812fe482101a8f04597dfc5a9"
   },
   "npm:@types/unist@3.0.3": {
@@ -1283,7 +1286,7 @@
   "npm:lowlight@3.3.0": {
    "license": "dd1081884a92952802f4803110a6bb54"
   },
-  "npm:lucide-react@1.40.0": {
+  "npm:lucide-react@1.44.0": {
    "license": "b495047bd93a9b06913511076f504dab"
   },
   "npm:luxon@3.7.2": {
@@ -1520,7 +1523,7 @@
   "npm:react-chartjs-2@5.3.1": {
    "license": "8b9beea70bdbdd0e02b7a749c2f00b3f"
   },
-  "npm:react-dom@19.2.8": {
+  "npm:react-dom@19.3.0": {
    "license": "da6d3703ed11cbe42bd212c725957c98"
   },
   "npm:react-router-dom@7.18.3": {
@@ -1529,7 +1532,7 @@
   "npm:react-router@7.18.3": {
    "license": "77c9ee6a9c5d5782fb0c50b50d101189"
   },
-  "npm:react@19.2.8": {
+  "npm:react@19.3.0": {
    "license": "da6d3703ed11cbe42bd212c725957c98"
   },
   "npm:rehype-external-links@3.0.0": {
@@ -1577,7 +1580,7 @@
   "npm:safer-buffer@2.1.2": {
    "license": "4bc935e71be198c67ddf3c2b5fddb195"
   },
-  "npm:scheduler@0.27.0": {
+  "npm:scheduler@0.28.0": {
    "license": "da6d3703ed11cbe42bd212c725957c98"
   },
   "npm:send@1.2.1": {
@@ -1773,7 +1776,7 @@
   "npm:zod-to-json-schema@3.25.2": {
    "license": "80d3168ad2f70f6f5bb2ab22b2341470"
   },
-  "npm:zod@4.5.4": {
+  "npm:zod@4.6.2": {
    "license": "3f1189b28e3866e0d979968d466b78f8"
   },
   "npm:zustand@4.5.7": {
