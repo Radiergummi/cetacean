@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -232,12 +231,7 @@ func LoadFile(path string) (*fileConfig, error) {
 		}
 		slices.Sort(keys)
 
-		return nil, fmt.Errorf(
-			"unknown setting(s) in %s: %s — check the spelling against "+
-				"docs/configuration.mdx; settings do move between releases",
-			path,
-			strings.Join(keys, ", "),
-		)
+		return nil, unknownKeyError(path, keys)
 	}
 
 	return &fc, nil
