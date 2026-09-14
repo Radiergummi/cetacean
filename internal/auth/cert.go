@@ -88,8 +88,14 @@ func clientCertificate(r *http.Request) (*x509.Certificate, error) {
 	}
 
 	headers := r.Header.Values("Client-Cert")
-	if len(headers) == 0 || !FromTrustedProxy(r.Context()) {
+	if len(headers) == 0 {
 		return nil, certRejected("client certificate required")
+	}
+
+	if !FromTrustedProxy(r.Context()) {
+		return nil, certRejected(
+			"Client-Cert is honoured only from an address in server.trusted_proxies",
+		)
 	}
 
 	// A TTRP replaces the field rather than appending, so a second value means
