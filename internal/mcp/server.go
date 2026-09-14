@@ -92,6 +92,17 @@ func resolveGuard(opts Options) (guardMode, error) {
 	return guardUpstream, nil
 }
 
+// resolveBypass reports whether the upstream provider may establish identity
+// ahead of the bearer check. Only guardBearer consults it: the other modes
+// either run the provider for every request or authenticate nobody.
+func resolveBypass(opts Options) bool {
+	if opts.AuthProvider == nil || opts.AuthMode == "" {
+		return false
+	}
+
+	return slices.Contains(opts.Config.AuthBypass, opts.AuthMode)
+}
+
 // mcpInstructions and mcpDescription are the server-level usage contract sent
 // in the initialize response. mcpTitle is what a host listing several servers
 // shows, falling back to the programmatic name; mcpWebsiteURL is the "what is
@@ -138,11 +149,12 @@ type Server struct {
 	authMode       string        // upstream auth mode ("cert", "oidc", ...); used for bypass match
 	authProvider   auth.Provider // upstream auth provider; used when bypass is active
 
-	// guard is settled in New from the configuration, not re-derived per
-	// request. Which middleware protects /mcp is a property of the deployment,
-	// and asking a helper at request time is how an endpoint ends up
-	// unguarded because a provider happened to be nil.
+	// guard and bypass are settled in New from the configuration, not
+	// re-derived per request. Who authenticates /mcp is a property of the
+	// deployment, and asking a helper at request time is how an endpoint ends
+	// up unguarded because a provider happened to be nil.
 	guard      guardMode
+	bypass     bool
 	mcpServer  *mcpserver.MCPServer
 	httpServer *mcpserver.StreamableHTTPServer
 	recEngine  RecommendationEngine
@@ -244,6 +256,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 
 	srv := &Server{
 		guard:          guard,
+		bypass:         resolveBypass(opts),
 		cache:          c,
 		writeClient:    opts.WriteClient,
 		logs:           opts.Logs,
@@ -436,12 +449,8 @@ func (s *Server) originGuard(next http.Handler) http.Handler {
 // provider runs first and its identity skips JWT verification.
 func (s *Server) bearerAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.bypassActive() {
-			if id, err := s.authProvider.Authenticate(
-				newDiscardingResponseWriter(),
-				r,
-			); err == nil &&
-				id != nil {
+		if s.bypass {
+			if id := s.upstreamIdentity(r); id != nil {
 				ctx := auth.ContextWithIdentity(r.Context(), id)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
@@ -472,11 +481,8 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 // is one the transport below HTTP already carries.
 func (s *Server) upstreamAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// A nil identity with no error means the provider wrote its own
-		// response — a redirect, say — into the writer that discards it. It
-		// established nothing, so it is a refusal like any other.
-		id, err := s.authProvider.Authenticate(newDiscardingResponseWriter(), r)
-		if err != nil || id == nil {
+		id := s.upstreamIdentity(r)
+		if id == nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -485,13 +491,17 @@ func (s *Server) upstreamAuth(next http.Handler) http.Handler {
 	})
 }
 
-// bypassActive reports whether the upstream auth mode is in the configured
-// CETACEAN_MCP_AUTH_BYPASS list and a provider is available to consult.
-func (s *Server) bypassActive() bool {
-	if s.authProvider == nil || s.authMode == "" {
-		return false
+// upstreamIdentity runs the upstream provider for its identity alone. A nil
+// identity with no error means the provider wrote its own response — a
+// redirect, say — into the writer that discards it. It established nothing, so
+// it is a refusal like any other, and both callers treat it as one.
+func (s *Server) upstreamIdentity(r *http.Request) *auth.Identity {
+	id, err := s.authProvider.Authenticate(newDiscardingResponseWriter(), r)
+	if err != nil {
+		return nil
 	}
-	return slices.Contains(s.config.AuthBypass, s.authMode)
+
+	return id
 }
 
 // discardingResponseWriter swallows writes from a provider invoked only for

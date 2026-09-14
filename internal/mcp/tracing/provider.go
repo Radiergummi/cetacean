@@ -27,16 +27,15 @@ type Provider struct {
 // than left to the exporter, which logs a malformed URL to the OTel global
 // error handler and then quietly falls back to localhost:4318.
 func NewProvider(ctx context.Context, endpoint, serviceVersion string) (*Provider, error) {
-	if err := validateEndpoint(endpoint); err != nil {
-		return nil, err
-	}
-
-	tracesURL, err := resolveTracesEndpoint(endpoint)
+	parsed, err := validateEndpoint(endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(tracesURL))
+	exporter, err := otlptracehttp.New(
+		ctx,
+		otlptracehttp.WithEndpointURL(resolveTracesEndpoint(parsed)),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("tracing: build OTLP exporter: %w", err)
 	}
@@ -78,34 +77,33 @@ const tracesPath = "/v1/traces"
 
 // resolveTracesEndpoint appends the signal path to the configured base URL,
 // which WithEndpointURL does not do. An endpoint already naming it is left
-// alone.
-func resolveTracesEndpoint(endpoint string) (string, error) {
-	parsed, err := url.Parse(endpoint)
-	if err != nil {
-		return "", fmt.Errorf("tracing: endpoint %q is not a URL: %w", endpoint, err)
+// alone. The URL comes from validateEndpoint, which has already parsed it.
+func resolveTracesEndpoint(parsed *url.URL) string {
+	base := strings.TrimSuffix(parsed.Path, "/")
+	if strings.HasSuffix(base, tracesPath) {
+		return parsed.String()
 	}
 
-	if strings.HasSuffix(strings.TrimSuffix(parsed.Path, "/"), tracesPath) {
-		return endpoint, nil
-	}
+	withPath := *parsed
+	withPath.Path = base + tracesPath
 
-	parsed.Path = strings.TrimSuffix(parsed.Path, "/") + tracesPath
-
-	return parsed.String(), nil
+	return withPath.String()
 }
 
-func validateEndpoint(endpoint string) error {
+// validateEndpoint returns the parsed endpoint so a caller need not parse it a
+// second time.
+func validateEndpoint(endpoint string) (*url.URL, error) {
 	if endpoint == "" {
-		return fmt.Errorf("tracing: endpoint is empty")
+		return nil, fmt.Errorf("tracing: endpoint is empty")
 	}
 
 	parsed, err := url.Parse(endpoint)
 	if err != nil {
-		return fmt.Errorf("tracing: endpoint %q is not a URL: %w", endpoint, err)
+		return nil, fmt.Errorf("tracing: endpoint %q is not a URL: %w", endpoint, err)
 	}
 
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"tracing: endpoint %q must use http or https, got %q",
 			endpoint,
 			parsed.Scheme,
@@ -113,8 +111,8 @@ func validateEndpoint(endpoint string) error {
 	}
 
 	if parsed.Host == "" {
-		return fmt.Errorf("tracing: endpoint %q has no host", endpoint)
+		return nil, fmt.Errorf("tracing: endpoint %q has no host", endpoint)
 	}
 
-	return nil
+	return parsed, nil
 }

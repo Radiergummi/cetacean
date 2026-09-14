@@ -99,6 +99,11 @@ type cachedEntry struct {
 	fetchedAt time.Time
 }
 
+// lapsed reports whether the entry has aged out as of now.
+func (e cachedEntry) lapsed(now time.Time) bool {
+	return now.Sub(e.fetchedAt) >= cimdCacheTTL
+}
+
 // CIMDFetcher fetches and validates OAuth Client ID Metadata Documents.
 // The zero value is usable but will use a package-internal HTTP client.
 // For tests, set AllowLoopback to true and supply the test server's Client().
@@ -399,7 +404,7 @@ func (f *CIMDFetcher) cacheGet(clientID string) *ClientMetadata {
 		return nil
 	}
 	entry, ok := f.cache[clientID]
-	if !ok || time.Since(entry.fetchedAt) >= cimdCacheTTL {
+	if !ok || entry.lapsed(time.Now()) {
 		return nil
 	}
 	return entry.meta
@@ -431,19 +436,24 @@ func (f *CIMDFetcher) evictFor(now time.Time) {
 	}
 
 	for id, entry := range f.cache {
-		if now.Sub(entry.fetchedAt) >= cimdCacheTTL {
+		if entry.lapsed(now) {
 			delete(f.cache, id)
 		}
 	}
 
-	for len(f.cache) >= cimdCacheMaxEntries {
-		oldestID := ""
-		var oldest time.Time
-		for id, entry := range f.cache {
-			if oldestID == "" || entry.fetchedAt.Before(oldest) {
-				oldestID, oldest = id, entry.fetchedAt
-			}
-		}
-		delete(f.cache, oldestID)
+	// One eviction is enough: the cap is a constant and this runs before every
+	// insert, so the map is never more than one entry over it.
+	if len(f.cache) < cimdCacheMaxEntries {
+		return
 	}
+
+	oldestID := ""
+	var oldest time.Time
+	for id, entry := range f.cache {
+		if oldestID == "" || entry.fetchedAt.Before(oldest) {
+			oldestID, oldest = id, entry.fetchedAt
+		}
+	}
+
+	delete(f.cache, oldestID)
 }

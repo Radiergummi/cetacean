@@ -160,15 +160,13 @@ func main() {
 	}
 
 	if authCfg.Mode == "headers" {
-		proxies, err := config.ResolveTrustedProxies(cfg.TrustedProxies)
-		if err != nil {
+		if err := config.RequireTrustedProxies(cfg.TrustedProxies); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
 
 		// realIP reads the one, the provider the other; they must agree.
-		cfg.TrustedProxies = proxies
-		authCfg.Headers.TrustedProxies = proxies
+		authCfg.Headers.TrustedProxies = cfg.TrustedProxies
 	}
 
 	aclCfg := config.LoadACL(flags, fc)

@@ -105,12 +105,12 @@ func TestEndpointResolvesToTheTracesPath(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := resolveTracesEndpoint(testCase.endpoint)
+			parsed, err := validateEndpoint(testCase.endpoint)
 			if err != nil {
-				t.Fatalf("resolveTracesEndpoint(%q): %v", testCase.endpoint, err)
+				t.Fatalf("validateEndpoint(%q): %v", testCase.endpoint, err)
 			}
 
-			if got != testCase.want {
+			if got := resolveTracesEndpoint(parsed); got != testCase.want {
 				t.Errorf(
 					"resolveTracesEndpoint(%q) = %q, want %q",
 					testCase.endpoint,

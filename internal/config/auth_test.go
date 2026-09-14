@@ -4,7 +4,6 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -611,36 +610,27 @@ func TestValidateCertMode(t *testing.T) {
 	}
 }
 
-func TestResolveTrustedProxies(t *testing.T) {
-	current := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
-
+func TestRequireTrustedProxies(t *testing.T) {
 	tests := []struct {
 		name    string
-		current []netip.Prefix
-		want    []netip.Prefix
+		proxies []netip.Prefix
 		wantErr bool
 	}{
-		{"configured", current, current, false},
-		{"unset, so no request could authenticate", nil, nil, true},
+		{"configured", []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}, false},
+		{"unset, so no request could authenticate", nil, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ResolveTrustedProxies(tt.current)
-
-			if (err != nil) != tt.wantErr {
+			if err := RequireTrustedProxies(tt.proxies); (err != nil) != tt.wantErr {
 				t.Fatalf("error = %v, wantErr = %v", err, tt.wantErr)
-			}
-
-			if !slices.Equal(got, tt.want) {
-				t.Errorf("resolved = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestResolveTrustedProxiesErrorNamesTheSetting(t *testing.T) {
-	_, err := ResolveTrustedProxies(nil)
+func TestRequireTrustedProxiesErrorNamesTheSetting(t *testing.T) {
+	err := RequireTrustedProxies(nil)
 	if err == nil {
 		t.Fatal("want an error when neither setting is configured")
 	}
