@@ -494,8 +494,8 @@ func seededDescribeCache() *cache.Cache {
 						{Type: mount.TypeVolume, Source: "data", Target: "/data"},
 					},
 				},
+				Networks: []swarm.NetworkAttachmentConfig{{Target: "net1"}},
 			},
-			Networks: []swarm.NetworkAttachmentConfig{{Target: "net1"}},
 		},
 	})
 	c.SetNode(swarm.Node{

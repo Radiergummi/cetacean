@@ -430,8 +430,7 @@ func isPatchApplyError(err error) bool {
 	if err == nil {
 		return false
 	}
-	var tfe *testFailedError
-	if errors.As(err, &tfe) {
+	if _, ok := errors.AsType[*testFailedError](err); ok {
 		return true
 	}
 	return errors.Is(err, errPatchApply)
@@ -439,8 +438,7 @@ func isPatchApplyError(err error) bool {
 
 // writePatchError maps JSON Patch application errors to error codes.
 func writePatchError(w http.ResponseWriter, r *http.Request, err error) {
-	var tfe *testFailedError
-	if errors.As(err, &tfe) {
+	if _, ok := errors.AsType[*testFailedError](err); ok {
 		writeErrorCode(w, r, "API010", err.Error())
 		return
 	}
