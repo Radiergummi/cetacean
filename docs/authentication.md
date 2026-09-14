@@ -80,9 +80,14 @@ These paths skip authentication in every mode:
 | `/api`, `/api/*`                                  | API documentation and the JSON-LD context                |
 | `/assets/*`                                       | Dashboard static assets                                  |
 | `/auth`, `/auth/*`                                | Login, callback, logout and `whoami`                     |
-| `/mcp`                                            | The [MCP server][mcp] runs its own bearer-token check    |
+| `/mcp`                                            | The [MCP server][mcp] guards itself — see below          |
 | `/.well-known/*`                                  | OAuth discovery documents, unauthenticated by spec       |
 | `/oauth/token`, `/oauth/revoke`, `/oauth/register` | Carry their own credentials in the request body          |
+
+What guards `/mcp` depends on the configuration: with [`oauth.enabled`][oauth.enabled] the MCP server verifies
+a bearer token it issued; with the authorization server off, the active mode must be listed in
+[`mcp.auth_bypass`][mcp.auth_bypass] — there is no bearer check then, and the upstream provider authenticates
+every request instead. Cetacean refuses to start with neither.
 
 `/oauth/authorize` is not exempt: a user must authenticate before granting a client access. That is also why
 the authorization server cannot run under the `none` mode — there would be no one to ask.
@@ -562,6 +567,8 @@ response schemas.
 [configuration]: configuration
 [getting-started]: getting-started
 [mcp]: mcp
+[mcp.auth_bypass]: configuration#mcp.auth_bypass
+[oauth.enabled]: configuration#oauth.enabled
 [oidc]: configuration#oidc
 [rfc9440]: https://www.rfc-editor.org/rfc/rfc9440
 [server.listen_addr]: configuration#server.listen_addr
