@@ -20,6 +20,11 @@ the direct environment variable.
 The `acl.*`, `mcp.*`, `oauth.*` and `sizing.*` settings have no CLI flags. Set them through the environment or
 the config file.
 
+A setting this page does not list is not ignored: a config file carrying a key the schema does not
+know refuses startup and names it, as does an environment variable that has been renamed. Both say
+what replaced the setting, so a deployment is corrected in one pass rather than one restart per
+name.
+
 ## General settings
 
 <ConfigParam name="server.listen_addr" flag="-listen" env="CETACEAN_LISTEN_ADDR" default=":9000">

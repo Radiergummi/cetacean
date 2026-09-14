@@ -433,11 +433,10 @@ func (s *Server) Close() {
 	})
 }
 
-// Handler returns the http.Handler for the MCP endpoint. When OAuth is
-// configured, the handler validates the bearer token and emits
-// `WWW-Authenticate` with the protected-resource metadata URL on failure;
-// otherwise it serves the raw mcp-go handler unguarded (only safe with auth
-// mode "none").
+// Handler returns the http.Handler for the MCP endpoint. The guard decides who
+// authenticates the caller: the authorization server's own bearer tokens, the
+// upstream provider the deployment already runs, or nobody — the last only
+// where startup validation has established that auth mode is "none".
 func (s *Server) Handler() http.Handler {
 	// The protocol gate sits innermost so that origin and bearer checks answer
 	// first: an unauthenticated caller learns nothing about what we speak.
