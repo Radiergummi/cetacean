@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `auth.headers.trusted_proxies` is gone — use `server.trusted_proxies`, which headers mode already required
 - **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`, and accepts only `cert`, `headers` and `tailscale` — a listed mode authenticates `/mcp` on its own, so `oauth.enabled` can stay off
 - **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` is not read — delete it, and every client authorizes once more
+- **Breaking:** the `refresh_token` grant at `/oauth/token` requires `client_id`; a request without it is refused with `invalid_request`
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
 - Search, the resource lists and the topology view are faster on clusters with hundreds of services, and a stack's event stream costs less per connected browser
 - The dashboard's first load is about a third of its former size, and hashed assets are cached permanently
