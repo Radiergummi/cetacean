@@ -36,10 +36,9 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, code, detail
 }
 
 // AuthError is an authentication error that carries a WWW-Authenticate
-// header value per RFC 9110. Providers return this to advertise their
-// authentication scheme in the 401 response. Status and Code override that
-// 401 for a credential no challenge can ask for, and Msg becomes the detail:
-// a provider that chooses its own refusal owns what the client is told.
+// header value per RFC 9110. Code names a registry entry to answer with
+// instead of 401 AUT001 — for a credential no challenge can ask for — and
+// makes Msg the client-visible detail rather than only a log line.
 type AuthError struct {
 	Msg             string
 	WWWAuthenticate string
@@ -48,6 +47,29 @@ type AuthError struct {
 }
 
 func (e *AuthError) Error() string { return e.Msg }
+
+// writeAuthFailure answers a failed Authenticate, for both callers of it. A
+// provider that named a Code owns its refusal; one that did not gets the 401
+// AUT001 a challengeable credential deserves. Status is the fallback's only,
+// since a registered ErrorWriter takes the status from the registry instead.
+func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error) {
+	status, code, detail := http.StatusUnauthorized, "AUT001", "authentication required"
+
+	var authErr *AuthError
+	if errors.As(err, &authErr) {
+		if authErr.WWWAuthenticate != "" {
+			w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
+		}
+		if authErr.Code != "" {
+			code, detail = authErr.Code, authErr.Msg
+			if authErr.Status != 0 {
+				status = authErr.Status
+			}
+		}
+	}
+
+	writeError(w, r, status, code, detail)
+}
 
 // Middleware returns HTTP middleware that authenticates requests using the
 // given provider. Exempt paths (meta endpoints, API docs, static assets,
@@ -66,19 +88,7 @@ func Middleware(provider Provider) func(http.Handler) http.Handler {
 					"path", r.URL.Path,
 					"error", err,
 				)
-				status, code := http.StatusUnauthorized, "AUT001"
-				detail := "authentication required"
-
-				var authErr *AuthError
-				if errors.As(err, &authErr) {
-					if authErr.WWWAuthenticate != "" {
-						w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
-					}
-					if authErr.Status != 0 {
-						status, code, detail = authErr.Status, authErr.Code, authErr.Msg
-					}
-				}
-				writeError(w, r, status, code, detail)
+				writeAuthFailure(w, r, err)
 				return
 			}
 

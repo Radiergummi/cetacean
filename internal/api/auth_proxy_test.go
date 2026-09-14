@@ -149,6 +149,11 @@ func TestClientCertBehindTrustedProxy(t *testing.T) {
 			if w.Code != tt.status {
 				t.Fatalf("status=%d, want %d; body=%s", w.Code, tt.status, w.Body.String())
 			}
+			// Pins the registry's status for the code the provider names: the
+			// two are declared in packages that cannot see each other.
+			if tt.status != http.StatusOK {
+				assertACLErrorCode(t, w, "AUT005")
+			}
 		})
 	}
 }

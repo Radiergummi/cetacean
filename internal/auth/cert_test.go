@@ -457,6 +457,24 @@ func TestCertProvider_WhoamiCacheControl(t *testing.T) {
 	}
 }
 
+// /auth/whoami is exempt from the middleware and calls the provider itself, so
+// it is the one route that can disagree with the rest about what a rejected
+// certificate answers.
+func TestCertProvider_WhoamiRefusesAsTheMiddlewareDoes(t *testing.T) {
+	handler := WhoamiHandler(&CertProvider{}, WriteIdentityJSON)
+
+	r := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+	if got := w.Header().Get("WWW-Authenticate"); got != "" {
+		t.Errorf("WWW-Authenticate = %q, want none", got)
+	}
+}
+
 // Verify CertProvider implements Provider interface.
 var _ Provider = (*CertProvider)(nil)
 
