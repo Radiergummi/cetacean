@@ -532,6 +532,12 @@ func TestHTTPQuotedString(t *testing.T) {
 		{`back\slash`, `"back\\slash"`},
 		{"back`tick", "\"back`tick\""}, // backtick must NOT be Go-escaped
 		{`https://例えば.test/x`, `"https://例えば.test/x"`},
+		// qdtext admits HTAB and SP but no other control, and no DEL. None can
+		// be escaped into range either: quoted-pair takes only HTAB, SP, VCHAR
+		// and obs-text.
+		{"tab\tand space", "\"tab\tand space\""},
+		{"split\r\nheader", `"splitheader"`},
+		{"nul\x00and\x7fdel", `"nulanddel"`},
 	}
 	for _, c := range cases {
 		got := httpQuotedString(c.in)
