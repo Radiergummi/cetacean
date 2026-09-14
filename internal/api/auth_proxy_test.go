@@ -138,7 +138,7 @@ func TestClientCertBehindTrustedProxy(t *testing.T) {
 		status int
 	}{
 		"trusted proxy":  {peer: "10.0.0.5:1234", status: http.StatusOK},
-		"untrusted peer": {peer: "203.0.113.9:1234", status: http.StatusUnauthorized},
+		"untrusted peer": {peer: "203.0.113.9:1234", status: http.StatusForbidden},
 	}
 
 	for name, tt := range tests {

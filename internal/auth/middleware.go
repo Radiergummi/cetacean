@@ -37,10 +37,14 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, code, detail
 
 // AuthError is an authentication error that carries a WWW-Authenticate
 // header value per RFC 9110. Providers return this to advertise their
-// authentication scheme in the 401 response.
+// authentication scheme in the 401 response. Status and Code override that
+// 401 for a credential no challenge can ask for, and Msg becomes the detail:
+// a provider that chooses its own refusal owns what the client is told.
 type AuthError struct {
 	Msg             string
 	WWWAuthenticate string
+	Status          int
+	Code            string
 }
 
 func (e *AuthError) Error() string { return e.Msg }
@@ -62,11 +66,19 @@ func Middleware(provider Provider) func(http.Handler) http.Handler {
 					"path", r.URL.Path,
 					"error", err,
 				)
+				status, code := http.StatusUnauthorized, "AUT001"
+				detail := "authentication required"
+
 				var authErr *AuthError
-				if errors.As(err, &authErr) && authErr.WWWAuthenticate != "" {
-					w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
+				if errors.As(err, &authErr) {
+					if authErr.WWWAuthenticate != "" {
+						w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
+					}
+					if authErr.Status != 0 {
+						status, code, detail = authErr.Status, authErr.Code, authErr.Msg
+					}
 				}
-				writeError(w, r, http.StatusUnauthorized, "AUT001", "authentication required")
+				writeError(w, r, status, code, detail)
 				return
 			}
 

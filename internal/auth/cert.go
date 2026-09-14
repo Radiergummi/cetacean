@@ -39,10 +39,7 @@ func (p *CertProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Id
 	// Extract SPIFFE ID from URI SANs per X.509-SVID spec.
 	spiffeID, err := extractSPIFFEID(cert.URIs)
 	if err != nil {
-		return nil, &AuthError{
-			Msg:             err.Error(),
-			WWWAuthenticate: "mutual-tls",
-		}
+		return nil, certRejected(err.Error())
 	}
 	if spiffeID != "" {
 		id.Subject = spiffeID
@@ -61,16 +58,23 @@ func (p *CertProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Id
 	}
 
 	if id.Subject == "" {
-		return nil, &AuthError{
-			Msg:             "certificate has no identifiable subject (no CN, email, or SPIFFE URI SAN)",
-			WWWAuthenticate: "mutual-tls",
-		}
+		return nil, certRejected(
+			"certificate has no identifiable subject (no CN, email, or SPIFFE URI SAN)",
+		)
 	}
 
 	return id, nil
 }
 
 func (p *CertProvider) RegisterRoutes(_ *http.ServeMux) {}
+
+// certRejected refuses a client certificate with 403 rather than 401. The
+// credential lives in the TLS layer, where no HTTP challenge reaches it: TLS
+// 1.3 dropped renegotiation, and IANA registers no auth-scheme for a
+// certificate, so a challenge would name one no client implements.
+func certRejected(msg string) *AuthError {
+	return &AuthError{Msg: msg, Status: http.StatusForbidden, Code: "AUT005"}
+}
 
 // clientCertificate returns the certificate identifying the client: the one
 // presented on this connection, or — when a trusted proxy terminated TLS
@@ -85,32 +89,27 @@ func clientCertificate(r *http.Request) (*x509.Certificate, error) {
 
 	headers := r.Header.Values("Client-Cert")
 	if len(headers) == 0 || !FromTrustedProxy(r.Context()) {
-		return nil, &AuthError{
-			Msg:             "client certificate required",
-			WWWAuthenticate: "mutual-tls",
-		}
+		return nil, certRejected("client certificate required")
 	}
 
 	// A TTRP replaces the field rather than appending, so a second value means
 	// one of the two came from the client.
 	if len(headers) > 1 {
-		return nil, &AuthError{
-			Msg:             "Client-Cert appears more than once; the proxy must replace any header its client sent",
-			WWWAuthenticate: "mutual-tls",
-		}
+		return nil, certRejected(
+			"Client-Cert appears more than once; the proxy must replace any header its client sent",
+		)
 	}
 
 	der, err := decodeClientCert(headers[0])
 	if err != nil {
-		return nil, &AuthError{Msg: err.Error(), WWWAuthenticate: "mutual-tls"}
+		return nil, certRejected(err.Error())
 	}
 
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {
-		return nil, &AuthError{
-			Msg:             fmt.Sprintf("Client-Cert does not carry a certificate: %v", err),
-			WWWAuthenticate: "mutual-tls",
-		}
+		return nil, certRejected(
+			fmt.Sprintf("Client-Cert does not carry a certificate: %v", err),
+		)
 	}
 
 	return cert, nil

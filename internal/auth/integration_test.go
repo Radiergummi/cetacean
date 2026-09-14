@@ -352,8 +352,8 @@ func TestIntegration_CertMode_NoCert(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/services", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d for no TLS", rec.Code, http.StatusUnauthorized)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d for no TLS", rec.Code, http.StatusForbidden)
 	}
 
 	// TLS state but no peer certificates.
@@ -361,8 +361,8 @@ func TestIntegration_CertMode_NoCert(t *testing.T) {
 	req.TLS = &tls.ConnectionState{}
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d for empty peer certs", rec.Code, http.StatusUnauthorized)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d for empty peer certs", rec.Code, http.StatusForbidden)
 	}
 }
 

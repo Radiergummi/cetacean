@@ -144,6 +144,13 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "An internal error occurred during authentication.",
 		Suggestion:  "Retry the login flow. If the problem persists, check server logs.",
 	},
+	"AUT005": {
+		Code:        "AUT005",
+		Title:       "Client Certificate Rejected",
+		Status:      http.StatusForbidden,
+		Description: "The client certificate was absent, unreadable, or carried no usable identity.",
+		Suggestion:  "Present a certificate from a CA this deployment trusts, carrying a common name, email address or SPIFFE URI SAN.",
+	},
 
 	// ── ACL: access control ──────────────────────────────────────────
 	"ACL001": {Code: "ACL001", Title: "Access Denied", Status: http.StatusForbidden,

@@ -109,8 +109,12 @@ func TestCertProvider_NoTLS(t *testing.T) {
 	if !errors.As(err, &authErr) {
 		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
-	if authErr.WWWAuthenticate != "mutual-tls" {
-		t.Errorf("WWWAuthenticate = %q, want %q", authErr.WWWAuthenticate, "mutual-tls")
+	if authErr.Status != http.StatusForbidden || authErr.Code != "AUT005" {
+		t.Errorf("refusal = %d %s, want 403 AUT005", authErr.Status, authErr.Code)
+	}
+	if authErr.WWWAuthenticate != "" {
+		t.Errorf("WWWAuthenticate = %q, want none: no scheme can ask for a certificate",
+			authErr.WWWAuthenticate)
 	}
 }
 
@@ -416,11 +420,13 @@ func TestCertProvider_WWWAuthenticate_MiddlewareIntegration(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
-	if got := w.Header().Get("WWW-Authenticate"); got != "mutual-tls" {
-		t.Errorf("WWW-Authenticate = %q, want %q", got, "mutual-tls")
+	// RFC 9110 §15.5.2 wants a challenge on a 401 that is applicable to the
+	// resource. None is, so the refusal is a 403 and carries no challenge.
+	if got := w.Header().Get("WWW-Authenticate"); got != "" {
+		t.Errorf("WWW-Authenticate = %q, want none", got)
 	}
 }
 
