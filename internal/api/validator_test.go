@@ -206,3 +206,22 @@ func TestDerivedETagFollowsResync(t *testing.T) {
 			"keeps a listing of nodes that no longer exist")
 	}
 }
+
+// RFC 9110 §13.2.1: a precondition is ignored when the unconditional response
+// would not have been a 2xx. The derived validator answers before anything has
+// parsed the query, so a bare "*" must not reach it — the malformed filter owes
+// the client its error, not a 304.
+func TestWildcardDoesNotPreemptRequestValidation(t *testing.T) {
+	h := newTestHandlers(t, withCache(validatorCache(5)))
+
+	bad := listOnce(t, h, "/api/nodes?filter=%29%29bogus", nil, "*")
+	if bad.Code != http.StatusBadRequest {
+		t.Errorf("a malformed filter with If-None-Match: * returned %d, want 400", bad.Code)
+	}
+
+	// A valid request still gets its 304 — from the writer, once rendered.
+	good := listOnce(t, h, "/api/nodes", nil, "*")
+	if good.Code != http.StatusNotModified {
+		t.Errorf("If-None-Match: * on a valid list returned %d, want 304", good.Code)
+	}
+}

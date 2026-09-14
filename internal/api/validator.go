@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"hash/maphash"
 	"net/http"
+	"strings"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 )
@@ -81,6 +82,11 @@ func quoteETag(sum uint64) string {
 	return string(out)
 }
 
+// validatorCodings is every coding a rendered body could have been served
+// under, identity first. Built once: resolving a tag is the hot path this
+// whole file exists to make cheap.
+var validatorCodings = append([]Encoding{EncodingIdentity}, compressibleEncodings...)
+
 // matchedValidator returns the coded tag the request's If-None-Match matches,
 // or "" if none does.
 //
@@ -88,13 +94,19 @@ func quoteETag(sum uint64) string {
 // response would carry needs a body length that a caller answering before it
 // renders does not have. Trying each coding the server applies covers the tags
 // a rendered body would have produced.
+//
+// A bare "*" is deliberately not honoured here. RFC 9110 §13.2.1 says a
+// precondition is ignored unless the unconditional response would have been a
+// 2xx, and nothing has yet parsed the query — so a malformed filter would be
+// answered 304 rather than 400. It still gets its 304 from the writer, once the
+// request has been found valid and the body rendered.
 func matchedValidator(r *http.Request, validator string) string {
 	inm := r.Header.Get("If-None-Match")
-	if inm == "" {
+	if inm == "" || strings.TrimSpace(inm) == "*" {
 		return ""
 	}
 
-	for _, coding := range append([]Encoding{EncodingIdentity}, compressibleEncodings...) {
+	for _, coding := range validatorCodings {
 		if tagged := codedETag(validator, coding); etagMatch(inm, tagged) {
 			return tagged
 		}
