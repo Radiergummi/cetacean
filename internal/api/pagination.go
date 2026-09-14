@@ -20,10 +20,10 @@ type PageParams struct {
 	Dir      string
 	RangeReq bool
 
-	// Explicit records that the query named a page rather than being handed
-	// the default one, which only the CSV rendering reads. A Range request
-	// does not count: CSV answers 200 with no Content-Range, and a partial
-	// body under that status would be a lie.
+	// Explicit records that the query named a limit, which only the CSV
+	// rendering reads. An offset does not count: it says where to start, not
+	// how much to take, and the default fifty would then cut the file with
+	// nothing inside it to say so.
 	Explicit bool
 }
 
@@ -34,11 +34,12 @@ func parsePagination(r *http.Request) (PageParams, error) {
 		Dir:    "asc",
 	}
 
-	var hasQueryPagination bool
+	var hasLimit, hasQueryPagination bool
 
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			p.Limit = n
+			hasLimit = true
 			hasQueryPagination = true
 		}
 	}
@@ -61,7 +62,7 @@ func parsePagination(r *http.Request) (PageParams, error) {
 		}
 	}
 
-	p.Explicit = hasQueryPagination
+	p.Explicit = hasLimit
 
 	if p.Limit > 200 {
 		p.Limit = 200

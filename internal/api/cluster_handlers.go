@@ -463,6 +463,7 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 		NewCollectionResponse(
 			r.Context(),
 			wrapItems(
+				r.Context(),
 				summaries,
 				"DiskUsageSummary",
 				func(d DiskUsageSummary) string { return "/disk-usage/" + d.Type },

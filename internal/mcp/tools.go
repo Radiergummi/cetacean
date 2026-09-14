@@ -8,6 +8,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -239,6 +240,21 @@ func (s *Server) registerTools() {
 		s.mcpServer.AddTool(
 			td.tool,
 			func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+				// mcp-go runs a task-augmented tool on a goroutine holding the
+				// HTTP request context, which net/http cancels the moment the
+				// create-task response is written — so the handler starts with
+				// a dead context and its first Docker call fails before any
+				// request is issued. Detaching here rather than per handler
+				// covers every tool, including ones added later. A plain call
+				// keeps its live context, so a disconnecting client still
+				// cancels the work it started.
+				if req.Params.Task != nil {
+					var release context.CancelFunc
+
+					ctx, release = detachTaskContext(ctx, s.detachedTaskBudget())
+					defer release()
+				}
+
 				ctx, annotations := withResultAnnotations(ctx)
 
 				text, err := handler(ctx, req)
@@ -830,4 +846,25 @@ func parseNodeRole(s string) (swarm.NodeRole, error) {
 	default:
 		return "", fmt.Errorf("invalid role %q (expected worker/manager)", s)
 	}
+}
+
+// detachTaskContext frees a task-augmented call from the request context and
+// bounds what it frees: WithoutCancel drops the deadline along with the
+// cancellation, so a Docker call that hangs would hold its goroutine and its
+// connection for the life of the process, past shutdown's drain.
+func detachTaskContext(
+	ctx context.Context,
+	budget time.Duration,
+) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), budget)
+}
+
+// detachedTaskBudget is how long detached work may run. It is derived from
+// what the work needs — the longest legitimate step is a service convergence,
+// and the budget has to cover the mutation preceding it too — and deliberately
+// not from mcp.task_ttl, which is how long a *finished* result is kept. A
+// deployment that discards results quickly would otherwise have its writes
+// abandoned mid-flight.
+func (s *Server) detachedTaskBudget() time.Duration {
+	return 2 * cluster.ConvergenceTimeout
 }

@@ -265,8 +265,33 @@ func TestResourceType(t *testing.T) {
 	}
 }
 
+// recordedError captures what the broadcaster asked its ErrorWriter to write.
+// The real writer is internal/api's writeErrorCode, which this package cannot
+// import — internal/api imports it, which is the whole reason ErrorWriter is a
+// callback — so the concrete status for a code is asserted there
+// (TestWriteErrorCodeSSE001Is429) and what the broadcaster itself decides is
+// asserted here.
+type recordedError struct {
+	code   string
+	detail string
+}
+
+// recordingErrorWriter records the code and detail, and writes the status the
+// SSE001 registry entry documents, so the recorder observes a realistic
+// response rather than noopErrorWriter's blanket 500.
+func recordingErrorWriter(rec *recordedError) ErrorWriter {
+	return func(w http.ResponseWriter, _ *http.Request, code, detail string) {
+		rec.code = code
+		rec.detail = detail
+
+		http.Error(w, detail, http.StatusTooManyRequests)
+	}
+}
+
 func TestSSE_429OnConnectionLimit(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter, nil)
+	var recorded recordedError
+
+	b := NewBroadcaster(0, recordingErrorWriter(&recorded), nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -287,8 +312,21 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 	fw := &flushRecorder{ResponseRecorder: w}
 	b.ServeHTTP(fw, req)
 
-	// noopErrorWriter writes 500; the real error writer writes 429.
-	// We just verify the error writer was called (body contains the detail).
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want 429", w.Code)
+	}
+
+	// Retry-After is the broadcaster's own contribution — it sets the header
+	// before delegating to the writer — and is documented behaviour, so it is
+	// asserted rather than assumed.
+	if got := w.Header().Get("Retry-After"); got != "5" {
+		t.Errorf("Retry-After = %q, want %q", got, "5")
+	}
+
+	if recorded.code != "SSE001" {
+		t.Errorf("error code = %q, want SSE001", recorded.code)
+	}
+
 	if !strings.Contains(w.Body.String(), "too many SSE connections") {
 		t.Errorf("expected error about too many connections, got: %s", w.Body.String())
 	}
@@ -392,11 +430,41 @@ func TestSSE_WriteBatch_UsesHistoryID(t *testing.T) {
 	events := []cache.Event{
 		{Type: "service", Action: "update", ID: "s1", HistoryID: 42},
 	}
-	WriteBatch(&buf, f, events)
+	WriteBatch(&buf, f, events, "")
 
 	output := buf.String()
 	if !strings.Contains(output, "id: 42\n") {
 		t.Errorf("expected id: 42, got %q", output)
+	}
+}
+
+// Every identifier a response hands out has to work under server.base_path.
+// The stream is the one that has no request context to derive it from, so it
+// carries the prefix rather than looking it up.
+func TestSSE_WriteBatch_IdentifiersCarryTheBasePath(t *testing.T) {
+	var buf bytes.Buffer
+	f := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	WriteBatch(&buf, f, []cache.Event{
+		{Type: "service", Action: "update", ID: "s1", HistoryID: 1},
+	}, "/cetacean")
+
+	if !strings.Contains(buf.String(), `"@id":"/cetacean/services/s1"`) {
+		t.Errorf("event @id does not carry the base path: %q", buf.String())
+	}
+}
+
+// A sync event names no resource, so there is no path to prefix.
+func TestSSE_WriteBatch_SyncCarriesNoIdentifier(t *testing.T) {
+	var buf bytes.Buffer
+	f := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	WriteBatch(&buf, f, []cache.Event{
+		{Type: cache.EventSync, Action: "full_sync", HistoryID: 1},
+	}, "/cetacean")
+
+	if strings.Contains(buf.String(), "@id") {
+		t.Errorf("sync event grew an identifier: %q", buf.String())
 	}
 }
 
@@ -409,7 +477,7 @@ func TestSSE_WriteBatch_BatchUsesMaxHistoryID(t *testing.T) {
 		{Type: "service", Action: "update", ID: "s2", HistoryID: 12},
 		{Type: "node", Action: "update", ID: "n1", HistoryID: 11},
 	}
-	WriteBatch(&buf, f, events)
+	WriteBatch(&buf, f, events, "")
 
 	output := buf.String()
 	if !strings.Contains(output, "id: 12\n") {
@@ -424,7 +492,7 @@ func TestSSE_WriteBatch_SyncUsesHistoryID(t *testing.T) {
 	events := []cache.Event{
 		{Type: "sync", Action: "full_sync", HistoryID: 500},
 	}
-	WriteBatch(&buf, f, events)
+	WriteBatch(&buf, f, events, "")
 
 	output := buf.String()
 	if !strings.Contains(output, "id: 500\n") {

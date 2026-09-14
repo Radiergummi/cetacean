@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"log/slog"
 	"net/http"
 
 	json "github.com/goccy/go-json"
@@ -28,6 +29,14 @@ func WhoamiHandler(p Provider, writeIdentity WriteIdentityFunc) http.HandlerFunc
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := p.Authenticate(w, r)
 		if err != nil {
+			// Mirrors the middleware's own warning. /auth/* is exempt from
+			// the middleware, so this handler is the only place a failure
+			// here is observable, and the refusal deliberately says nothing
+			// about the cause.
+			slog.Warn("authentication failed",
+				"path", r.URL.Path,
+				"error", err,
+			)
 			writeAuthFailure(w, r, err)
 			return
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -32,7 +33,12 @@ func NewProvider(ctx context.Context, endpoint, serviceVersion string) (*Provide
 		return nil, err
 	}
 
-	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(endpoint))
+	tracesURL, err := resolveTracesEndpoint(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(tracesURL))
 	if err != nil {
 		return nil, fmt.Errorf("tracing: build OTLP exporter: %w", err)
 	}
@@ -67,6 +73,27 @@ func (p *Provider) Tracer() oteltrace.Tracer {
 // than once.
 func (p *Provider) Shutdown(ctx context.Context) error {
 	return p.provider.Shutdown(ctx)
+}
+
+// tracesPath is OTLP/HTTP's signal path, relative to a collector's base URL.
+const tracesPath = "/v1/traces"
+
+// resolveTracesEndpoint appends the signal path to the configured base URL,
+// which WithEndpointURL does not do. An endpoint already naming it is left
+// alone.
+func resolveTracesEndpoint(endpoint string) (string, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("tracing: endpoint %q is not a URL: %w", endpoint, err)
+	}
+
+	if strings.HasSuffix(strings.TrimSuffix(parsed.Path, "/"), tracesPath) {
+		return endpoint, nil
+	}
+
+	parsed.Path = strings.TrimSuffix(parsed.Path, "/") + tracesPath
+
+	return parsed.String(), nil
 }
 
 func validateEndpoint(endpoint string) error {

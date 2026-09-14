@@ -45,6 +45,12 @@ type Broadcaster struct {
 	keepaliveInterval time.Duration
 	writeError        ErrorWriter
 	replay            ReplaySource
+
+	// basePath prefixes the @id every event carries. It is configuration, not
+	// per-request state, and the stream has no request context to read once it
+	// is running — an identifier without it addresses nothing on a deployment
+	// served under a prefix.
+	basePath string
 }
 
 func NewBroadcaster(
@@ -203,7 +209,7 @@ func (b *Broadcaster) ServeSSE(
 		case e, ok := <-client.events:
 			if !ok {
 				if len(batch) > 0 {
-					WriteBatch(w, flusher, batch)
+					WriteBatch(w, flusher, batch, b.basePath)
 				}
 				return
 			}
@@ -218,7 +224,7 @@ func (b *Broadcaster) ServeSSE(
 			batch = append(batch, e)
 		case <-batchTicker.C:
 			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch)
+				WriteBatch(w, flusher, batch, b.basePath)
 				batch = batch[:0]
 				keepalive.Reset(b.keepaliveInterval)
 			}
@@ -227,12 +233,12 @@ func (b *Broadcaster) ServeSSE(
 			flusher.Flush()
 		case <-r.Context().Done():
 			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch)
+				WriteBatch(w, flusher, batch, b.basePath)
 			}
 			return
 		case <-client.done:
 			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch)
+				WriteBatch(w, flusher, batch, b.basePath)
 			}
 			return
 		}
@@ -250,7 +256,7 @@ func (b *Broadcaster) replayEvents(
 		count := b.replay.Count()
 		WriteBatch(w, flusher, []cache.Event{{
 			Type: cache.EventSync, Action: "full_sync", HistoryID: count,
-		}})
+		}}, b.basePath)
 		return count
 	}
 
@@ -294,7 +300,7 @@ func (b *Broadcaster) replayEvents(
 		return afterID
 	}
 
-	WriteBatch(w, flusher, replay)
+	WriteBatch(w, flusher, replay, b.basePath)
 	return replay[len(replay)-1].HistoryID
 }
 
@@ -388,9 +394,18 @@ type Event struct {
 	Resource any    `json:"resource,omitempty"`
 }
 
-func ToSSEEvent(e cache.Event) Event {
+// SetBasePath sets the prefix every event's @id carries. Called once while the
+// router is built, before any client connects.
+func (b *Broadcaster) SetBasePath(p string) { b.basePath = p }
+
+func ToSSEEvent(e cache.Event, basePath string) Event {
+	path := ResourcePath(e.Type, e.ID)
+	if path != "" {
+		path = basePath + path
+	}
+
 	return Event{
-		AtID:     ResourcePath(e.Type, e.ID),
+		AtID:     path,
 		AtType:   ResourceType(e.Type),
 		Type:     string(e.Type),
 		Action:   e.Action,
@@ -447,7 +462,7 @@ func ResourceType(typ cache.EventType) string {
 	}
 }
 
-func WriteBatch(w io.Writer, flusher http.Flusher, events []cache.Event) {
+func WriteBatch(w io.Writer, flusher http.Flusher, events []cache.Event, basePath string) {
 	var maxID uint64
 	for _, e := range events {
 		if e.HistoryID > maxID {
@@ -456,12 +471,12 @@ func WriteBatch(w io.Writer, flusher http.Flusher, events []cache.Event) {
 	}
 
 	if len(events) == 1 {
-		data, _ := json.Marshal(ToSSEEvent(events[0]))
+		data, _ := json.Marshal(ToSSEEvent(events[0], basePath))
 		fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", maxID, events[0].Type, data)
 	} else {
 		enriched := make([]Event, len(events))
 		for i, e := range events {
-			enriched[i] = ToSSEEvent(e)
+			enriched[i] = ToSSEEvent(e, basePath)
 		}
 		data, _ := json.Marshal(enriched)
 		fmt.Fprintf(w, "id: %d\nevent: batch\ndata: %s\n\n", maxID, data)
