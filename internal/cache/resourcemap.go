@@ -144,6 +144,9 @@ func (r *ResourceMap[T]) List() []T {
 // yield runs under the read lock and must not call back into the cache: Go's
 // RWMutex is not re-entrant for readers, so a writer arriving between the two
 // acquisitions deadlocks the second. Collect what matches and enrich after.
+//
+// The sort stays under the lock, where List's does not: the yield holds it
+// either way, and a scan that released it would no longer report one snapshot.
 func (r *ResourceMap[T]) Each(yield func(T) bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
