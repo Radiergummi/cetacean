@@ -301,6 +301,11 @@ func NewHandlers(
 // requireAnyGrant checks that the identity has at least one grant.
 // Used to gate cluster-wide endpoints when ACL is active.
 func (h *Handlers) requireAnyGrant(w http.ResponseWriter, r *http.Request) bool {
+	// Everything behind this gate is ACL-filtered — topology, search, history,
+	// recommendations, the stack summary — and none of them report an Allow to
+	// carry the marker for them.
+	varyByIdentity(w)
+
 	id := auth.IdentityFromContext(r.Context())
 	if h.acl.HasAnyGrant(id) {
 		return true

@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -97,12 +98,19 @@ var resourceAcceptPatch = map[string]string{
 	"plugin":  AcceptMergePatch,
 }
 
+const varyIdentity = "Authorization, Cookie"
+
 // varyByIdentity marks a response as per-caller. Every ACL-filtered response
 // owes it: the setAllow* seams cover the ones reporting a per-identity Allow,
-// and the feed renderers cover themselves. Add rather than Set, to extend a
-// Vary another layer already wrote.
+// requireAnyGrant covers the ones gated on having any, and the feed renderers
+// cover themselves. Add rather than Set, to extend a Vary another layer already
+// wrote — but only once, since those three overlap.
 func varyByIdentity(w http.ResponseWriter) {
-	w.Header().Add("Vary", "Authorization, Cookie")
+	if slices.Contains(w.Header().Values("Vary"), varyIdentity) {
+		return
+	}
+
+	w.Header().Add("Vary", varyIdentity)
 }
 
 // setAllow sets the Allow response header for a detail endpoint based on the

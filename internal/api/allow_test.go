@@ -376,3 +376,36 @@ func TestFeedRenderersVaryByIdentity(t *testing.T) {
 		})
 	}
 }
+
+// Topology, search, history, recommendations and the stack summary are all
+// ACL-filtered and none reports an Allow to carry the marker for them. The
+// grant gate they share does.
+func TestGrantGatedReadsVaryByIdentity(t *testing.T) {
+	h := newTestHandlers(t, withCache(validatorCache(5)))
+
+	reads := map[string]func(http.ResponseWriter, *http.Request){
+		"topology": h.HandleTopology,
+		"search":   h.HandleSearch,
+		"history":  h.HandleHistory,
+	}
+
+	for name, read := range reads {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			read(w, httptest.NewRequest("GET", "/api/"+name+"?q=x", nil))
+
+			assertVariesByIdentity(t, name, w.Header())
+		})
+	}
+}
+
+// Two seams writing the marker must not write it twice.
+func TestVaryByIdentityStatedOnce(t *testing.T) {
+	w := httptest.NewRecorder()
+	varyByIdentity(w)
+	varyByIdentity(w)
+
+	if got := w.Header().Values("Vary"); len(got) != 1 {
+		t.Errorf("Vary = %q, want a single value", got)
+	}
+}
