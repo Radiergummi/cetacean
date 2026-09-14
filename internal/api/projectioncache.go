@@ -1,6 +1,9 @@
 package api
 
-import "sync"
+import (
+	"slices"
+	"sync"
+)
 
 // projectionCacheSize bounds how many (generation, audience) pairs are kept.
 // One entry serves a deployment with no ACL policy; a handful serve one with a
@@ -56,7 +59,12 @@ func (p *projectionCache) get(key projectionKey) (renderedDoc, bool) {
 	return doc, ok
 }
 
-// put stores doc under key, evicting the oldest entry if the cache is full.
+// put stores doc under key, dropping anything the cluster has already moved
+// past and evicting the oldest entry if the cache is still full.
+//
+// Superseded generations go first because they can never be served again, and
+// a document here is hundreds of kilobytes — waiting for FIFO to push them out
+// keeps a whole cluster's worth of dead graphs resident.
 func (p *projectionCache) put(key projectionKey, doc renderedDoc) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -65,9 +73,18 @@ func (p *projectionCache) put(key projectionKey, doc renderedDoc) {
 		return
 	}
 
+	p.order = slices.DeleteFunc(p.order, func(k projectionKey) bool {
+		if k.generation >= key.generation {
+			return false
+		}
+		delete(p.entries, k)
+
+		return true
+	})
+
 	if len(p.order) >= projectionCacheSize {
 		delete(p.entries, p.order[0])
-		p.order = p.order[1:]
+		p.order = slices.Delete(p.order, 0, 1)
 	}
 
 	p.entries[key] = doc

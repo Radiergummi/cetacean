@@ -98,8 +98,10 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Capped, so no later writer can append into the array every caller of the
+	// memo is handed.
 	etag := computeETag(body)
-	h.topologyDocs.put(key, renderedDoc{body: body, etag: etag})
+	h.topologyDocs.put(key, renderedDoc{body: body[:len(body):len(body)], etag: etag})
 
 	w.Header().Set("Content-Type", "application/vnd.jgf+json")
 	writeRawWithPrecomputedETag(w, r, body, etag)
