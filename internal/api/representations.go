@@ -13,6 +13,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/integrations"
 )
@@ -438,6 +439,12 @@ func (h *Handlers) stackRepresentation(r *http.Request) (any, error) {
 	if !ok {
 		return nil, errNoRepresentation
 	}
+
+	// A stack grant no longer implies its members: a resource label narrows per
+	// resource, and the stack carries none. The memo this feeds is keyed on the
+	// identity's grant fingerprint, so a filtered document is not served to
+	// someone the filter would have answered differently.
+	detail = cluster.FilterStackDetail(h.acl, auth.IdentityFromContext(r.Context()), detail)
 
 	return NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", StackResponse{
 		Stack: detail,
