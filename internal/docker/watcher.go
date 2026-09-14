@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
@@ -672,6 +673,19 @@ func (w *Watcher) apply(resource any) {
 	}
 }
 
+// refreshHandoffTimeout bounds how long Refresh waits for the event loop to
+// take its request. Long enough that a loop busy with a burst of events still
+// gets there, short enough that a caller learns the engine is unreachable
+// rather than waiting out a reconnect.
+var refreshHandoffTimeout = 2 * time.Second
+
+// errRefreshUnavailable reports that no event loop took the refresh. It wraps
+// the containerd sentinel so the API answers ENG001, as it does for every
+// other way the engine turns out to be unreachable.
+var errRefreshUnavailable = fmt.Errorf(
+	"the Docker event loop is not accepting refreshes: %w", cerrdefs.ErrUnavailable,
+)
+
 // refreshRequest asks the event loop to re-read one resource on its behalf.
 type refreshRequest struct {
 	kind string
@@ -696,8 +710,18 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 
 	done := make(chan error, 1)
 
+	// The loop can stop between that check and this send, and during an outage
+	// it is gone for a whole reconnect interval. A request context carries no
+	// deadline of its own, so an unbounded send would hold the write this
+	// refresh precedes until the client gave up. Unavailable is what the
+	// engine being out of reach already answers with.
+	handoff := time.NewTimer(refreshHandoffTimeout)
+	defer handoff.Stop()
+
 	select {
 	case w.refreshes <- refreshRequest{kind: kind, id: id, done: done}:
+	case <-handoff.C:
+		return errRefreshUnavailable
 	case <-ctx.Done():
 		return ctx.Err()
 	}

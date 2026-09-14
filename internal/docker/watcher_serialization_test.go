@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/swarm"
 
@@ -159,4 +160,34 @@ func TestARefreshIsSerializedWithEventProcessing(t *testing.T) {
 
 	cancel()
 	<-streamed
+}
+
+// The loop can stop between Refresh's check and its send, and during an outage
+// it is gone for a whole reconnect interval. A request context has no deadline
+// of its own, so an unbounded send would hold the write this refresh precedes
+// until the client gave up.
+func TestRefreshDoesNotWaitOutAnAbsentLoop(t *testing.T) {
+	original := refreshHandoffTimeout
+	refreshHandoffTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { refreshHandoffTimeout = original })
+
+	w := &Watcher{refreshes: make(chan refreshRequest)}
+
+	// What the window between the check and the send looks like: the flag is
+	// set, and nothing is reading.
+	w.loopRunning.Store(true)
+
+	refreshed := make(chan error, 1)
+	go func() {
+		refreshed <- w.Refresh(context.Background(), string(events.ServiceEventType), "s1")
+	}()
+
+	select {
+	case err := <-refreshed:
+		if !cerrdefs.IsUnavailable(err) {
+			t.Errorf("error = %v, want one the API answers with ENG001", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Refresh never returned, so the write it precedes hangs with it")
+	}
 }
