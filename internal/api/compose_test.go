@@ -8,6 +8,7 @@ import (
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -173,5 +174,25 @@ func TestServiceNamedLikeAnExtensionResolvesAsARepresentation(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "web.yml") {
 		t.Errorf("the suffix was kept as part of the identifier:\n%s", rec.Body)
+	}
+}
+
+// A volume is addressed by its name, and prometheus.yml is how a Swarm
+// operator names one. The suffix table is read for every path, not just the
+// two that render compose, so stripping it here would negotiate the volume as
+// YAML — a type its endpoint cannot produce — and leave it unaddressable.
+func TestVolumeNamedLikeAComposeDocumentIsStillAddressable(t *testing.T) {
+	c := composeCache(t)
+	c.SetVolume(volume.Volume{Name: "prometheus.yml", Driver: "local"})
+
+	req := httptest.NewRequest(http.MethodGet, "/volumes/prometheus.yml", nil)
+	rec := httptest.NewRecorder()
+	newTestRouterWithCache(t, c).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200\n%s", rec.Code, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), "prometheus.yml") {
+		t.Errorf("the suffix was read as a representation request:\n%s", rec.Body)
 	}
 }

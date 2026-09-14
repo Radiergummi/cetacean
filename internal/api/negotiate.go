@@ -177,22 +177,47 @@ var supportedTypes = []struct {
 	{"text", "x-yaml", ContentTypeYAML},
 }
 
+// yamlPaths are the routes that have a YAML representation: the specification
+// documents, and a compose export of a stack or a service. Elsewhere the
+// suffix is part of the identifier — a volume is addressed by its name, and
+// prometheus.yml is a name rather than a request for YAML.
+var yamlPaths = []string{"/api", "/services", "/stacks"}
+
 // extensionTypes maps URL extension suffixes to content types.
 // Extension suffix takes priority over the Accept header.
 var extensionTypes = []struct {
 	ext string
 	ct  ContentType
+	// under, when set, limits the suffix to these routes and what lies
+	// below them. Elsewhere it is part of the identifier.
+	under []string
 }{
-	{".json", ContentTypeJSON},
-	{".html", ContentTypeHTML},
-	{".atom", ContentTypeAtom},
-	{".feed", ContentTypeJSONFeed},
-	{".jgf", ContentTypeJGF},
-	{".graphml", ContentTypeGraphML},
-	{".dot", ContentTypeDOT},
-	{".csv", ContentTypeCSV},
-	{".yaml", ContentTypeYAML},
-	{".yml", ContentTypeYAML},
+	{ext: ".json", ct: ContentTypeJSON},
+	{ext: ".html", ct: ContentTypeHTML},
+	{ext: ".atom", ct: ContentTypeAtom},
+	{ext: ".feed", ct: ContentTypeJSONFeed},
+	{ext: ".jgf", ct: ContentTypeJGF},
+	{ext: ".graphml", ct: ContentTypeGraphML},
+	{ext: ".dot", ct: ContentTypeDOT},
+	{ext: ".csv", ct: ContentTypeCSV},
+	{ext: ".yaml", ct: ContentTypeYAML, under: yamlPaths},
+	{ext: ".yml", ct: ContentTypeYAML, under: yamlPaths},
+}
+
+// scopedTo reports whether path is one of the routes a suffix is limited to,
+// or below it. An unscoped suffix reads everywhere.
+func scopedTo(under []string, path string) bool {
+	if under == nil {
+		return true
+	}
+
+	for _, route := range under {
+		if path == route || strings.HasPrefix(path, route+"/") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // literalDocuments are served under a filename rather than as a representation
@@ -209,7 +234,7 @@ var literalDocuments = map[string]bool{
 // reading as a representation.
 func hasMidPathExtension(path string) bool {
 	for _, ext := range extensionTypes {
-		if strings.Contains(path, ext.ext+"/") {
+		if strings.Contains(path, ext.ext+"/") && scopedTo(ext.under, path) {
 			return true
 		}
 	}
@@ -229,7 +254,11 @@ func resolveExtension(r *http.Request) (ContentType, string) {
 
 	for _, ext := range extensionTypes {
 		if trimmed, ok := strings.CutSuffix(path, ext.ext); ok {
+			if !scopedTo(ext.under, trimmed) {
+				continue
+			}
 			r.URL.Path = trimmed
+
 			return ext.ct, ext.ext
 		}
 	}
