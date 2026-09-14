@@ -35,22 +35,26 @@ func TestADetachedTaskContextIsBoundedButNotCancelled(t *testing.T) {
 	}
 }
 
-// The budget follows how long the result could still be collected.
-func TestDetachedTaskBudgetFollowsRetention(t *testing.T) {
+// Retention is how long a finished result is kept, not how long the work may
+// take. A one-minute ceiling must not abandon a service update that is still
+// converging.
+func TestDetachedTaskBudgetIgnoresRetention(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
 		config config.MCPConfig
-		want   time.Duration
 	}{
-		{"ceiling wins", config.MCPConfig{MaxTaskTTL: time.Minute, TaskTTL: time.Hour}, time.Minute},
-		{"default when uncapped", config.MCPConfig{TaskTTL: 30 * time.Minute}, 30 * time.Minute},
-		{"neither configured", config.MCPConfig{}, 2 * cluster.ConvergenceTimeout},
+		{"a short ceiling", config.MCPConfig{MaxTaskTTL: time.Minute, TaskTTL: time.Hour}},
+		{"a short default", config.MCPConfig{TaskTTL: time.Minute}},
+		{"neither configured", config.MCPConfig{}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Server{config: tt.config}
 
-			if got := s.detachedTaskBudget(); got != tt.want {
-				t.Errorf("detachedTaskBudget() = %v, want %v", got, tt.want)
+			if got := s.detachedTaskBudget(); got != 2*cluster.ConvergenceTimeout {
+				t.Errorf(
+					"detachedTaskBudget() = %v, want %v",
+					got, 2*cluster.ConvergenceTimeout,
+				)
 			}
 		})
 	}

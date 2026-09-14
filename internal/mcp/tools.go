@@ -859,18 +859,12 @@ func detachTaskContext(
 	return context.WithTimeout(context.WithoutCancel(ctx), budget)
 }
 
-// detachedTaskBudget is how long detached work may run. A task's result is
-// discarded once its retention elapses, so work outliving that serves nobody.
-// With no retention configured, the longest legitimate step is a service
-// convergence, and the budget has to cover the mutation preceding it too.
+// detachedTaskBudget is how long detached work may run. It is derived from
+// what the work needs — the longest legitimate step is a service convergence,
+// and the budget has to cover the mutation preceding it too — and deliberately
+// not from mcp.task_ttl, which is how long a *finished* result is kept. A
+// deployment that discards results quickly would otherwise have its writes
+// abandoned mid-flight.
 func (s *Server) detachedTaskBudget() time.Duration {
-	if s.config.MaxTaskTTL > 0 {
-		return s.config.MaxTaskTTL
-	}
-
-	if s.config.TaskTTL > 0 {
-		return s.config.TaskTTL
-	}
-
 	return 2 * cluster.ConvergenceTimeout
 }
