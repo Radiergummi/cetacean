@@ -9,6 +9,15 @@ const title = "Compose file";
 type Fetcher = (signal?: AbortSignal) => Promise<string>;
 
 /**
+ * The key the document is cached under. Whoever holds the stream for a stack
+ * or a service invalidates it, since the projection changes whenever the spec
+ * behind it does.
+ */
+export function composeQueryKey(key: string) {
+  return ["compose", key] as const;
+}
+
+/**
  * Renders a stack or service as a compose document. The file redeploys to the
  * same running state on the same cluster; it is not the file that created the
  * stack, and its secrets and configs are referenced rather than exported.
@@ -28,7 +37,7 @@ export default function ComposeSection({
 }) {
   const { open, toggle } = useSectionCollapse(title, false);
   const { data, error, isPending } = useQuery({
-    queryKey: ["compose", queryKey],
+    queryKey: composeQueryKey(queryKey),
     queryFn: ({ signal }) => fetcher(signal),
     enabled: open,
   });
