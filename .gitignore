@@ -70,6 +70,10 @@ cetacean.toml
 .playwright-mcp/
 frontend/test-results/
 
+# Generated locally for an end-to-end run. The certs are real private keys.
+/test/e2e/certs/
+/test/e2e/data/
+
 # Benchmark results (make bench / make bench-baseline)
 bench.txt
 bench-baseline.txt
