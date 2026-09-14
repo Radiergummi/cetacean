@@ -36,7 +36,11 @@ var removedEnv = map[string]string{ //nolint:gosec // G101: names, not values
 func checkRemovedEnv() error {
 	var removed []string
 	for old, replacement := range removedEnv {
-		if _, ok := os.LookupEnv(old); ok {
+		// Empty is unset, as every resolver in this package treats it: an
+		// orchestrator interpolating an undefined variable sets the name to
+		// the empty string rather than omitting it, and that configured
+		// nothing.
+		if os.Getenv(old) != "" {
 			removed = append(removed, old+" is now "+replacement)
 		}
 	}
