@@ -506,7 +506,6 @@ func main() {
 		cors:         corsConfig,
 		authMode:     authCfg.Mode,
 		authProvider: authProvider,
-		tlsEnabled:   tlsCfg.Enabled(),
 		issuer:       issuer,
 		dataDirReady: dataDirReady,
 		cache:        stateCache,
@@ -734,15 +733,14 @@ func serveDualListeners(
 }
 
 // mcpDeps bundles the runtime objects setupMCP needs. The split between
-// config sources (cfg/authMode/tlsEnabled — each loaded separately in main)
-// and runtime objects is preserved so callers don't have to wedge unrelated
-// runtime state onto config structs.
+// config sources (cfg/authMode — each loaded separately in main) and runtime
+// objects is preserved so callers don't have to wedge unrelated runtime state
+// onto config structs.
 type mcpDeps struct {
 	cfg          *config.Config
 	cors         *api.CORSConfig
 	authMode     string
 	authProvider auth.Provider
-	tlsEnabled   bool
 
 	// issuer is resolved once in main, so the authorization server advertises
 	// the same URL the MCP tool icons are built from rather than both sides
