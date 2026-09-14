@@ -994,6 +994,63 @@ func TestEvaluator_UnlabeledResourceWithConfigGrant(t *testing.T) {
 	}
 }
 
+// Every list endpoint filters through FilterInPlaceNamed, which arrived after
+// the label rules were written and did not know about them: a label neither
+// granted nor withheld anything in the list a resource appears in.
+func TestFilterInPlaceNamedAppliesLabels(t *testing.T) {
+	names := func(s string) string { return s }
+
+	// A label grants what no policy grant covers.
+	t.Run("grants", func(t *testing.T) {
+		e := NewEvaluator()
+		e.SetLabelsEnabled(true)
+		e.SetPolicy(&Policy{Grants: []Grant{
+			{
+				Resources:   []string{"service:public"},
+				Audience:    []string{"group:devs"},
+				Permissions: []string{"read"},
+			},
+		}})
+		e.SetResolver(&stubResolver{labels: map[string]map[string]string{
+			"service:labelled": {LabelRead: "group:devs"},
+		}})
+
+		id := &auth.Identity{Subject: "alice", Groups: []string{"devs"}}
+		got := FilterInPlaceNamed(
+			e, id, "read", []string{"public", "labelled", "other"}, "service", names,
+		)
+		if !slices.Equal(got, []string{"public", "labelled"}) {
+			t.Errorf("list gave %v, want public and labelled", got)
+		}
+		for _, name := range []string{"public", "labelled"} {
+			if !e.Can(id, "read", "service:"+name) {
+				t.Errorf("Can denies %q where the list keeps it", name)
+			}
+		}
+	})
+
+	// With no policy, a label withholds what allow-all would have handed over,
+	// and an unlabelled resource stays visible.
+	t.Run("withholds", func(t *testing.T) {
+		e := NewEvaluator()
+		e.SetLabelsEnabled(true)
+		e.SetResolver(&stubResolver{labels: map[string]map[string]string{
+			"service:private": {LabelRead: "group:platform"},
+		}})
+
+		id := &auth.Identity{Subject: "alice", Groups: []string{"devs"}}
+		got := FilterInPlaceNamed(
+			e, id, "read", []string{"unlabelled", "private"}, "service", names,
+		)
+		if !slices.Equal(got, []string{"unlabelled"}) {
+			t.Errorf("list gave %v, want only unlabelled", got)
+		}
+		if e.Can(id, "read", "service:private") {
+			t.Error("Can allows what the list withholds")
+		}
+	})
+}
+
 // HasAnyGrant gates /cluster, its metrics and the raw Prometheus proxy, none
 // of which filter per resource afterwards. Enabling labels must not answer it
 // yes for everyone — the question is whether a label names this identity.
