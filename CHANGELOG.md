@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A recommendation that measured zero no longer reads as one that measured nothing — a service using essentially no CPU reported an empty `current`
 - Header-based authentication works behind a reverse proxy again; it was answering 401 to every request
 - Asking an endpoint for a format it does not serve now says so, instead of answering with JSON
+- A malformed `filter` is reported as an error again on a request carrying `If-None-Match: *`
 - An address matching no route answers `404` with a problem document, rather than `200` and the dashboard, when the client said it cannot use a web page
 - A format an `Accept` header rules out with `;q=0` is refused with `406` instead of served anyway
 - `/favicon.ico` and the dashboard's other static files are no longer refused with `406` when a client asks for them as an image
