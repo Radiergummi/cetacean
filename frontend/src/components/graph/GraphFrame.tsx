@@ -40,6 +40,7 @@ export function GraphFrame({ children }: { children: ReactNode }) {
   return (
     <div
       ref={frame}
+      data-testid="graph-frame"
       className="h-96 overflow-hidden rounded-lg border"
     >
       {seen ? <Suspense fallback={<Loading />}>{children}</Suspense> : <Loading />}
