@@ -3,7 +3,7 @@ import type { AclIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { saveIntegrationLabels } from "@/lib/integrationLabels";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 const labelKeyRead = "cetacean.acl.read";
 const labelKeyWrite = "cetacean.acl.write";
@@ -50,6 +50,9 @@ export function AclPanel({
     return labels;
   }
 
+  const readId = useId();
+  const writeId = useId();
+
   async function handleSave() {
     await saveIntegrationLabels(rawLabels, serializeToLabels(), serviceId, onSaved);
   }
@@ -57,8 +60,14 @@ export function AclPanel({
   const editForm = (
     <div className="space-y-4">
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Read</label>
+        <label
+          htmlFor={readId}
+          className="text-xs font-medium text-foreground"
+        >
+          Read
+        </label>
         <MultiCombobox
+          id={readId}
           values={formRead}
           onChange={setFormRead}
           options={[]}
@@ -66,8 +75,14 @@ export function AclPanel({
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Write</label>
+        <label
+          htmlFor={writeId}
+          className="text-xs font-medium text-foreground"
+        >
+          Write
+        </label>
         <MultiCombobox
+          id={writeId}
           values={formWrite}
           onChange={setFormWrite}
           options={[]}
