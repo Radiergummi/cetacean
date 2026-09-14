@@ -174,11 +174,20 @@ func (h *Handlers) aclMatchWrap(
 // href carries only the parameters the feed it points at reads, through the
 // same feedQuery the feed's own links use.
 func addFeedLinks(w http.ResponseWriter, r *http.Request, feeds feedHandlers) {
-	if feeds.atom == nil && feeds.jsonFeed == nil && !feeds.csv {
+	if feeds.atom == nil && feeds.jsonFeed == nil && !feeds.csv && feeds.yaml == nil {
 		return
 	}
 
 	basePath := absPath(r.Context(), r.URL.Path)
+
+	// The compose document is a projection of the resource itself, not a feed
+	// over it, so it carries none of the query the others pass along.
+	if feeds.yaml != nil {
+		w.Header().Add("Link", fmt.Sprintf(
+			`<%s>; rel="alternate"; type="application/yaml"`,
+			feedHref(basePath+".yaml", nil),
+		))
+	}
 
 	if feeds.csv {
 		w.Header().Add("Link", fmt.Sprintf(
