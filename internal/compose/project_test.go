@@ -256,9 +256,36 @@ func TestFromServiceCarriesDeploy(t *testing.T) {
 	if d.EndpointMode != "vip" {
 		t.Errorf("endpoint_mode = %q, want vip", d.EndpointMode)
 	}
-	if d.Resources == nil || d.Resources.Limits.CPUs != "0.50" ||
+	if d.Resources == nil || d.Resources.Limits.CPUs != "0.5" ||
 		d.Resources.Limits.Memory != "512M" {
 		t.Errorf("resources = %+v", d.Resources)
+	}
+}
+
+// Swarm fills Placement.Platforms from the image manifest, so a multi-arch
+// image carries every architecture it was built for and the unknown/unknown
+// attestation entries beside them. None of it is an operator's pin.
+func TestFromServiceDoesNotPinAPlatform(t *testing.T) {
+	svc := testService()
+	svc.Spec.TaskTemplate.Placement = &swarm.Placement{Platforms: []swarm.Platform{
+		{OS: "linux", Architecture: "amd64"},
+		{OS: "linux", Architecture: "arm64"},
+		{OS: "unknown", Architecture: "unknown"},
+	}}
+
+	f, warnings := FromService(svc, clusterNetworks())
+
+	out, err := Render(f, nil)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if strings.Contains(string(out), "platform:") {
+		t.Errorf("document pins a platform:\n%s", out)
+	}
+	for _, w := range warnings {
+		if strings.Contains(w, "platform") {
+			t.Errorf("warned about platforms nobody asked for: %q", w)
+		}
 	}
 }
 
@@ -321,12 +348,65 @@ func TestFromServiceOmitsServicesWithoutAContainerSpec(t *testing.T) {
 func TestShortenStripsTheStackPrefix(t *testing.T) {
 	n := forStack("web", clusterNetworks())
 
-	if got := n.short("web_api"); got != "api" {
+	if got := n.short(kindService, "web_api"); got != "api" {
 		t.Errorf("short(web_api) = %q, want api", got)
 	}
 	// Adopted from outside the stack: the name is not the stack's to shorten.
-	if got := n.short("monitoring"); got != "monitoring" {
+	if got := n.short(kindNetwork, "monitoring"); got != "monitoring" {
 		t.Errorf("short(monitoring) = %q, want it unchanged", got)
+	}
+}
+
+// An owned web_data and an adopted data both shorten to data, which would put
+// two volumes on one key and mount whichever the map kept.
+func TestShortenKeepsContestedNamesApart(t *testing.T) {
+	n := forStack("web", clusterNetworks())
+	n.reserve(kindVolume, "web_data", "data")
+
+	if got := n.short(kindVolume, "web_data"); got != "web_data" {
+		t.Errorf("short(web_data) = %q, want it unchanged while data is taken", got)
+	}
+	if got := n.short(kindVolume, "data"); got != "data" {
+		t.Errorf("short(data) = %q, want data", got)
+	}
+
+	// A different compose namespace is not contested by it.
+	if got := n.short(kindNetwork, "web_data"); got != "data" {
+		t.Errorf("short(network web_data) = %q, want data", got)
+	}
+}
+
+// The stack owns web_data and adopts a shared data. Both shorten to data, and
+// the document that results would mount one volume for both.
+func TestFromStackKeepsAContestedVolumeApart(t *testing.T) {
+	d := testStack()
+	svc := d.Services[0]
+	svc.Spec.TaskTemplate.ContainerSpec.Mounts = []mount.Mount{
+		{Type: mount.TypeVolume, Source: "web_data", Target: "/data"},
+		{Type: mount.TypeVolume, Source: "data", Target: "/shared"},
+	}
+	d.Services[0] = svc
+
+	f, _ := FromStack(d, clusterNetworks())
+
+	owned, ok := f.Volumes["web_data"]
+	if !ok {
+		t.Fatalf("volumes = %v, want the owned one under its full name", keys(f.Volumes))
+	}
+	if owned.External {
+		t.Error("the stack's own volume was declared external")
+	}
+	adopted, ok := f.Volumes["data"]
+	if !ok || !adopted.External || adopted.Name != "data" {
+		t.Errorf("adopted volume = %+v (present=%v), want external data", adopted, ok)
+	}
+
+	sources := make(map[string]string, 2)
+	for _, v := range f.Services["api"].Volumes {
+		sources[v.Target] = v.Source
+	}
+	if sources["/data"] != "web_data" || sources["/shared"] != "data" {
+		t.Errorf("mount sources = %v, want /data->web_data and /shared->data", sources)
 	}
 }
 

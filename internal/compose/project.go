@@ -25,6 +25,28 @@ const notAContainerService = ": not a container service, omitted"
 type names struct {
 	byID   map[string]string
 	prefix string
+
+	// contested holds the shortened forms that more than one real name of the
+	// same kind produces. Stripping the prefix there would put two resources
+	// on one compose key, and the redeploy would mount whichever won.
+	contested map[contestedKey]bool
+}
+
+// kind separates the compose namespaces a name can live in. A network and a
+// volume may both be called data without contesting anything.
+type kind uint8
+
+const (
+	kindService kind = iota
+	kindNetwork
+	kindVolume
+	kindSecret
+	kindConfig
+)
+
+type contestedKey struct {
+	kind kind
+	name string
 }
 
 // forStack builds the rules for a stack export. A single-service export passes
@@ -35,7 +57,7 @@ func forStack(stack string, networks []network.Summary) names {
 		byID[net.ID] = net.Name
 	}
 
-	n := names{byID: byID}
+	n := names{byID: byID, contested: make(map[contestedKey]bool)}
 	if stack != "" {
 		n.prefix = stack + "_"
 	}
@@ -43,9 +65,38 @@ func forStack(stack string, networks []network.Summary) names {
 	return n
 }
 
+// reserve records the shortened forms that two different real names of one
+// kind would share. It must see every name the document will carry — the
+// stack's own resources and everything its services reference — before any of
+// them is rendered.
+func (n names) reserve(k kind, realNames ...string) {
+	if n.prefix == "" {
+		return
+	}
+
+	byShort := make(map[string]string, len(realNames))
+	for _, name := range realNames {
+		short := strings.TrimPrefix(name, n.prefix)
+		if first, ok := byShort[short]; ok && first != name {
+			n.contested[contestedKey{k, short}] = true
+
+			continue
+		}
+		byShort[short] = name
+	}
+}
+
 // short strips the stack's own prefix; docker stack deploy adds it back, so a
-// name left long redeploys as web_web_api.
-func (n names) short(s string) string { return strings.TrimPrefix(s, n.prefix) }
+// name left long redeploys as web_web_api. A name whose short form another
+// resource of the same kind already spells in full keeps its own.
+func (n names) short(k kind, s string) string {
+	trimmed := strings.TrimPrefix(s, n.prefix)
+	if trimmed == s || n.contested[contestedKey{k, trimmed}] {
+		return s
+	}
+
+	return trimmed
+}
 
 // network resolves an attachment target, which Swarm carries as an ID. An ID
 // no known network covers comes back unchanged, so the reference stays visible
@@ -79,20 +130,20 @@ func declareReferences(f *File, svc swarm.Service, n names) {
 
 	for _, a := range svc.Spec.TaskTemplate.Networks {
 		name, _ := n.network(a.Target)
-		declare(f.Networks, n.short(name), Network{External: true, Name: name})
+		declare(f.Networks, n.short(kindNetwork, name), Network{External: true, Name: name})
 	}
 	for _, m := range c.Mounts {
 		if m.Type == mount.TypeVolume && m.Source != "" {
-			declare(f.Volumes, n.short(m.Source), Volume{External: true, Name: m.Source})
+			declare(f.Volumes, n.short(kindVolume, m.Source), Volume{External: true, Name: m.Source})
 		}
 	}
 	for _, sec := range c.Secrets {
 		name := sec.SecretName
-		declare(f.Secrets, n.short(name), ExternalRef{External: true, Name: name})
+		declare(f.Secrets, n.short(kindSecret, name), ExternalRef{External: true, Name: name})
 	}
 	for _, cfg := range c.Configs {
 		name := cfg.ConfigName
-		declare(f.Configs, n.short(name), ExternalRef{External: true, Name: name})
+		declare(f.Configs, n.short(kindConfig, name), ExternalRef{External: true, Name: name})
 	}
 }
 
@@ -133,6 +184,7 @@ func owns(labels map[string]string, stack string) bool {
 // not try to create what it does not own.
 func FromStack(d cache.StackDetail, networks []network.Summary) (File, []string) {
 	n := forStack(d.Name, networks)
+	reserveStack(n, d)
 
 	f := File{
 		Services: make(map[string]Service, len(d.Services)),
@@ -150,12 +202,12 @@ func FromStack(d cache.StackDetail, networks []network.Summary) (File, []string)
 		}
 
 		spec, w := serviceSpec(svc, n)
-		f.Services[n.short(svc.Spec.Name)] = spec
+		f.Services[n.short(kindService, svc.Spec.Name)] = spec
 		warnings = append(warnings, w...)
 	}
 
 	for _, net := range d.Networks {
-		key := n.short(net.Name)
+		key := n.short(kindNetwork, net.Name)
 		if owns(net.Labels, d.Name) {
 			f.Networks[key] = Network{
 				Driver:     net.Driver,
@@ -172,7 +224,7 @@ func FromStack(d cache.StackDetail, networks []network.Summary) (File, []string)
 	}
 
 	for _, v := range d.Volumes {
-		key := n.short(v.Name)
+		key := n.short(kindVolume, v.Name)
 		if owns(v.Labels, d.Name) {
 			f.Volumes[key] = Volume{
 				Driver:     v.Driver,
@@ -189,10 +241,10 @@ func FromStack(d cache.StackDetail, networks []network.Summary) (File, []string)
 	// still not inlined: compose's content: field would have the redeploy
 	// create a new config rather than reuse the one the service is mounting.
 	for _, c := range d.Configs {
-		f.Configs[n.short(c.Spec.Name)] = ExternalRef{External: true, Name: c.Spec.Name}
+		f.Configs[n.short(kindConfig, c.Spec.Name)] = ExternalRef{External: true, Name: c.Spec.Name}
 	}
 	for _, s := range d.Secrets {
-		f.Secrets[n.short(s.Spec.Name)] = ExternalRef{External: true, Name: s.Spec.Name}
+		f.Secrets[n.short(kindSecret, s.Spec.Name)] = ExternalRef{External: true, Name: s.Spec.Name}
 	}
 
 	for _, svc := range d.Services {
@@ -200,6 +252,61 @@ func FromStack(d cache.StackDetail, networks []network.Summary) (File, []string)
 	}
 
 	return f, warnings
+}
+
+// reserveStack shows the naming rules every name the document will carry, the
+// stack's own resources and everything its services reference alike, so a
+// prefix is stripped only where doing so keeps two resources apart.
+func reserveStack(n names, d cache.StackDetail) {
+	services := make([]string, 0, len(d.Services))
+	nets := make([]string, 0, len(d.Networks))
+	volumes := make([]string, 0, len(d.Volumes))
+	secrets := make([]string, 0, len(d.Secrets))
+	configs := make([]string, 0, len(d.Configs))
+
+	for _, net := range d.Networks {
+		nets = append(nets, net.Name)
+	}
+	for _, v := range d.Volumes {
+		volumes = append(volumes, v.Name)
+	}
+	for _, sec := range d.Secrets {
+		secrets = append(secrets, sec.Spec.Name)
+	}
+	for _, c := range d.Configs {
+		configs = append(configs, c.Spec.Name)
+	}
+
+	for _, svc := range d.Services {
+		services = append(services, svc.Spec.Name)
+
+		for _, a := range svc.Spec.TaskTemplate.Networks {
+			name, _ := n.network(a.Target)
+			nets = append(nets, name)
+		}
+
+		c := svc.Spec.TaskTemplate.ContainerSpec
+		if c == nil {
+			continue
+		}
+		for _, m := range c.Mounts {
+			if m.Type == mount.TypeVolume && m.Source != "" {
+				volumes = append(volumes, m.Source)
+			}
+		}
+		for _, sec := range c.Secrets {
+			secrets = append(secrets, sec.SecretName)
+		}
+		for _, cfg := range c.Configs {
+			configs = append(configs, cfg.ConfigName)
+		}
+	}
+
+	n.reserve(kindService, services...)
+	n.reserve(kindNetwork, nets...)
+	n.reserve(kindVolume, volumes...)
+	n.reserve(kindSecret, secrets...)
+	n.reserve(kindConfig, configs...)
 }
 
 // stripNamespace removes the stack namespace label without mutating the
@@ -311,13 +418,13 @@ func serviceSpec(svc swarm.Service, n names) (Service, []string) {
 			))
 		}
 
-		out.Networks = append(out.Networks, n.short(name))
+		out.Networks = append(out.Networks, n.short(kindNetwork, name))
 	}
 	for _, s := range container.Secrets {
-		out.Secrets = append(out.Secrets, fileRef(n.short(s.SecretName), s.File))
+		out.Secrets = append(out.Secrets, fileRef(n.short(kindSecret, s.SecretName), s.File))
 	}
 	for _, c := range container.Configs {
-		out.Configs = append(out.Configs, configRef(n.short(c.ConfigName), c.File))
+		out.Configs = append(out.Configs, configRef(n.short(kindConfig, c.ConfigName), c.File))
 	}
 
 	if e := spec.EndpointSpec; e != nil {
@@ -327,15 +434,11 @@ func serviceSpec(svc swarm.Service, n names) (Service, []string) {
 		out.Logging = &Logging{Driver: l.Name, Options: l.Options}
 	}
 
-	if p := spec.TaskTemplate.Placement; p != nil && len(p.Platforms) > 0 {
-		out.Platform = p.Platforms[0].OS + "/" + p.Platforms[0].Architecture
-		if len(p.Platforms) > 1 {
-			warnings = append(warnings, fmt.Sprintf(
-				"%s: only the first of %d platforms kept; compose takes one",
-				spec.Name, len(p.Platforms),
-			))
-		}
-	}
+	// Placement.Platforms is not exported as platform:. Swarm fills it from
+	// the image manifest rather than from anything an operator asked for — a
+	// multi-arch image yields every architecture it was built for, plus the
+	// unknown/unknown attestation entries — so emitting it would pin a
+	// redeploy to an architecture the running service was never held to.
 
 	out.Deploy = deploy(svc)
 
