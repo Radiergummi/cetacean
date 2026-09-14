@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Hovering or focusing a node in either graph dims everything more than one edge away; a stack's topology can be linked to a particular node
 - Both graphs can be read with a keyboard: every node that hides detail is focusable, and the viewport animations follow the system's reduced-motion setting
 - A stack's topology says where each config, secret and volume is mounted inside the container, and what a service answers to on each network
+- The topology page carries the same zoom, reset and full-screen controls as the other graphs, and stops putting every node and edge in the tab order
 
 ### Changed
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy

@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type { JGFGraph } from "../api/types";
 import EmptyState from "../components/EmptyState";
+import { GraphControls, readOnlyKeyboard } from "../components/graph/viewport";
 import "@xyflow/react/dist/style.css";
 import { LoadingPage } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -183,6 +184,8 @@ function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) 
         }}
       >
         <ReactFlow
+          aria-label="Cluster network topology"
+          className="bg-background"
           nodes={nodes}
           edges={edges}
           nodeTypes={logicalNodeTypes}
@@ -190,9 +193,10 @@ function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) 
           fitView
           proOptions={{ hideAttribution: true }}
           nodesDraggable
-          nodesConnectable={false}
+          {...readOnlyKeyboard}
         >
           <Background />
+          <GraphControls />
         </ReactFlow>
         <StackLegend
           key={isMobile ? "mobile" : "desktop"}
@@ -223,6 +227,8 @@ function PhysicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean })
       }}
     >
       <ReactFlow
+        aria-label="Task placement across cluster nodes"
+        className="bg-background"
         nodes={nodes}
         edges={[]}
         nodeTypes={physicalNodeTypes}
@@ -230,9 +236,10 @@ function PhysicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean })
         fitViewOptions={{ padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
         nodesDraggable
-        nodesConnectable={false}
+        {...readOnlyKeyboard}
       >
         <Background />
+        <GraphControls />
       </ReactFlow>
     </div>
   );

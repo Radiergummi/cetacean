@@ -1,4 +1,5 @@
 import { RoutedEdge } from "./RoutedEdge";
+import { GraphControls, glide, readOnlyKeyboard } from "./viewport";
 import { layoutGraph, routedEdgeType, type LayerConstraints } from "@/lib/graphLayout";
 import { loadElk } from "@/lib/layoutElk";
 import { cn } from "@/lib/utils";
@@ -6,8 +7,6 @@ import {
   ReactFlow,
   ReactFlowProvider,
   Background,
-  ControlButton,
-  Controls,
   useEdgesState,
   useNodesInitialized,
   useNodesState,
@@ -18,22 +17,7 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Fullscreen, Minimize, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-const fitViewOptions = { padding: 0.15 };
-
-// No overshoot: the viewport is clamped, so a bounce would be cut short. Asked
-// for reduced motion, the viewport still lands where it should, at once.
-function glide(extra?: { zoom: number }) {
-  return {
-    ...fitViewOptions,
-    ...extra,
-    ease: (t: number) => 1 - (1 - t) ** 3,
-    interpolate: "smooth" as const,
-    duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 320,
-  };
-}
 
 const proOptions = { hideAttribution: true };
 const edgeTypes = { [routedEdgeType]: RoutedEdge };
@@ -45,14 +29,6 @@ const maxZoom = 2;
 
 // Until the first fit tells us what "everything visible" costs, allow anything.
 const looseZoom = 0.05;
-
-const controlButton =
-  "border-0 bg-card text-muted-foreground hover:bg-accent hover:text-foreground";
-
-// React Flow's own control CSS loads after Tailwind and fills its icons at
-// 12px, which turns a stroked Lucide glyph into a solid blob. Inline wins
-// without a specificity fight.
-const controlIcon = { fill: "none", width: 16, height: 16, maxWidth: "none", maxHeight: "none" };
 
 const dimmed = "opacity-15";
 
@@ -99,13 +75,11 @@ function Canvas({
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
   const [edges, setEdges] = useEdgesState(graph.edges);
   const [extent, setExtent] = useState<CoordinateExtent | null>(null);
-  const [fullscreen, setFullscreen] = useState(false);
   const [zoomFloor, setZoomFloor] = useState<number | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const own = useState<string | null>(null);
   const measured = useNodesInitialized();
-  const { fitView, getNode, getNodes, getZoom, setCenter, zoomIn, zoomOut } = useReactFlow();
-  const shell = useRef<HTMLDivElement>(null);
+  const { fitView, getNode, getNodes, getZoom, setCenter } = useReactFlow();
   const centred = useRef(false);
 
   const [selected, select] = selection ?? own;
@@ -168,7 +142,7 @@ function Canvas({
       return;
     }
 
-    void fitView(fitViewOptions).then(() => setZoomFloor(getZoom() * 0.8));
+    void fitView({ ...glide(), duration: 0 }).then(() => setZoomFloor(getZoom() * 0.8));
   }, [extent, fitView, getZoom]);
 
   // Waits on the fit, which is what decides the zoom the node is seen at.
@@ -191,25 +165,6 @@ function Canvas({
       glide({ zoom: getZoom() }),
     );
   }, [zoomFloor, selected, getNode, getZoom, setCenter]);
-
-  useEffect(() => {
-    const onChange = () => {
-      setFullscreen(document.fullscreenElement === shell.current);
-      void fitView(glide());
-    };
-
-    document.addEventListener("fullscreenchange", onChange);
-
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, [fitView]);
-
-  const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-    } else {
-      void shell.current?.requestFullscreen();
-    }
-  }, []);
 
   const near = useMemo(() => (active ? neighbours(edges, active) : null), [active, edges]);
 
@@ -236,9 +191,8 @@ function Canvas({
 
   return (
     <div
-      ref={shell}
       data-graph-ready={zoomFloor != null || undefined}
-      className="size-full bg-background"
+      className="size-full"
     >
       <ReactFlow
         aria-label={label}
@@ -258,12 +212,9 @@ function Canvas({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         proOptions={proOptions}
+        {...readOnlyKeyboard}
         nodesDraggable={false}
-        nodesConnectable={false}
-        nodesFocusable={false}
-        edgesFocusable={false}
         elementsSelectable={false}
-        disableKeyboardA11y
         // React Flow drops pointer events on a node that is selectable,
         // draggable and listened to by nothing: the hover below is what keeps
         // the links inside a node clickable.
@@ -274,57 +225,11 @@ function Canvas({
         minZoom={zoomFloor ?? looseZoom}
         maxZoom={maxZoom}
         {...(extent ? { translateExtent: extent } : {})}
-        className="transition-opacity duration-200"
+        className="bg-background transition-opacity duration-200"
         style={{ opacity: extent ? 1 : 0 }}
       >
         <Background />
-        <Controls
-          position="bottom-right"
-          orientation="horizontal"
-          showZoom={false}
-          showFitView={false}
-          showInteractive={false}
-          className="overflow-hidden rounded-md border bg-card"
-          style={{ boxShadow: "none" }}
-        >
-          <ControlButton
-            onClick={() => zoomIn(glide())}
-            title="Zoom in"
-            aria-label="Zoom in"
-            className={controlButton}
-          >
-            <ZoomIn style={controlIcon} />
-          </ControlButton>
-
-          <ControlButton
-            onClick={() => zoomOut(glide())}
-            title="Zoom out"
-            aria-label="Zoom out"
-            className={controlButton}
-          >
-            <ZoomOut style={controlIcon} />
-          </ControlButton>
-
-          <ControlButton
-            onClick={() => {
-              void fitView(glide());
-            }}
-            title="Reset view"
-            aria-label="Reset view"
-            className={controlButton}
-          >
-            <Undo2 style={controlIcon} />
-          </ControlButton>
-
-          <ControlButton
-            onClick={toggleFullscreen}
-            title={fullscreen ? "Exit full screen" : "Full screen"}
-            aria-label={fullscreen ? "Exit full screen" : "Full screen"}
-            className={controlButton}
-          >
-            {fullscreen ? <Minimize style={controlIcon} /> : <Fullscreen style={controlIcon} />}
-          </ControlButton>
-        </Controls>
+        <GraphControls />
       </ReactFlow>
     </div>
   );
