@@ -21,16 +21,14 @@ const layoutOptions = {
 };
 
 /**
- * Pins a node type to an end of the graph. ELK layers by longest path, which
- * scatters the kinds a reader expects to find together — keyed by node type so
- * each graph names its own ends.
+ * Pins a node type to an end of the graph: ELK layers by longest path, which
+ * scatters the kinds a reader expects to find together.
  */
 export type LayerConstraints = Record<string, "FIRST" | "LAST" | undefined>;
 
 /**
  * Lay the graph out from the sizes React Flow measured, so the boxes ELK packs
- * are the boxes on screen. Its bend points come back on each edge instead of
- * being discarded, which is what keeps a line off the nodes it passes.
+ * are the boxes on screen. Its bend points come back on each edge.
  */
 export async function layoutGraph(
   nodes: Node[],

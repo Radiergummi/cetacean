@@ -24,7 +24,6 @@ export default function TraefikGraph({ integration }: { integration: TraefikInte
 
   return (
     <MeasuredGraph
-      key={JSON.stringify(integration)}
       graph={graph}
       nodeTypes={nodeTypes}
       layerConstraints={layerConstraints}

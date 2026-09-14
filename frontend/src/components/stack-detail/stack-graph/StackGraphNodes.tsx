@@ -1,51 +1,17 @@
+import { Detail, DetailList, Ports } from "@/components/graph/NodeChrome";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MountNodeData, NetworkNodeData, ServiceNodeData } from "@/lib/stackGraph";
 import { cn } from "@/lib/utils";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { FileText, HardDrive, KeyRound, Network } from "lucide-react";
+import type { NodeProps } from "@xyflow/react";
+import { Network } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-/**
- * Every node is a link to the resource it stands for, so the graph is a way
- * into the stack rather than a picture of it.
- */
 const nodeLink =
   "flex cursor-pointer items-center rounded-md border bg-card shadow-sm transition-colors " +
   "hover:border-ring hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none";
 
-/** Both handles on every node, so an edge always finds an anchor on either side. */
-function Ports() {
-  return (
-    <>
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="opacity-0"
-        isConnectable={false}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="opacity-0"
-        isConnectable={false}
-      />
-    </>
-  );
-}
-
-function Detail({ term, children }: { term: string; children: ReactNode }) {
-  return (
-    <>
-      <dt className="text-muted-foreground">{term}</dt>
-      <dd className="font-mono break-all">{children}</dd>
-    </>
-  );
-}
-
-function DetailList({ children }: { children: ReactNode }) {
-  return <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">{children}</dl>;
-}
+const chip = "max-w-44 gap-1.5 px-2 py-1 text-xs";
 
 export function NetworkNode({ data }: NodeProps & { data: NetworkNodeData }) {
   return (
@@ -57,7 +23,7 @@ export function NetworkNode({ data }: NodeProps & { data: NetworkNodeData }) {
             aria-label={`Network ${data.name}`}
             className={cn(
               nodeLink,
-              "max-w-44 gap-1.5 px-2 py-1 text-xs",
+              chip,
               data.external && "border-dashed bg-transparent text-muted-foreground shadow-none",
               !data.referenced && "opacity-50",
             )}
@@ -128,65 +94,36 @@ export function ServiceNode({ data }: NodeProps & { data: ServiceNodeData }) {
   );
 }
 
-function MountNode({ data, kind, icon }: { data: MountNodeData; kind: string; icon: ReactNode }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Link
-            to={data.href}
-            aria-label={`${kind} ${data.name}`}
-            className={cn(
-              nodeLink,
-              "max-w-44 gap-1.5 px-2 py-1 text-xs",
-              !data.referenced && "opacity-50",
-            )}
-          >
-            <Ports />
-            {icon}
-            <span className="truncate font-medium">{data.name}</span>
-          </Link>
-        }
-      />
-      <TooltipContent>
-        <DetailList>
-          <Detail term={kind}>{data.name}</Detail>
+/** Configs, secrets and volumes differ only in what they are called and drawn with. */
+export function mountNodeType(kind: string, icon: ReactNode) {
+  return function MountNode({ data }: NodeProps & { data: MountNodeData }) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Link
+              to={data.href}
+              aria-label={`${kind} ${data.name}`}
+              className={cn(nodeLink, chip, !data.referenced && "opacity-50")}
+            >
+              <Ports />
+              {icon}
+              <span className="truncate font-medium">{data.name}</span>
+            </Link>
+          }
+        />
+        <TooltipContent>
+          <DetailList>
+            <Detail term={kind}>{data.name}</Detail>
 
-          {data.detail && <Detail term="Driver">{data.detail}</Detail>}
-        </DetailList>
+            {data.detail && <Detail term="Driver">{data.detail}</Detail>}
+          </DetailList>
 
-        {!data.referenced && <p className="mt-1 text-muted-foreground">No service mounts this.</p>}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-export function ConfigNode({ data }: NodeProps & { data: MountNodeData }) {
-  return (
-    <MountNode
-      data={data}
-      kind="Config"
-      icon={<FileText className="size-3 shrink-0 text-blue-600 dark:text-blue-400" />}
-    />
-  );
-}
-
-export function SecretNode({ data }: NodeProps & { data: MountNodeData }) {
-  return (
-    <MountNode
-      data={data}
-      kind="Secret"
-      icon={<KeyRound className="size-3 shrink-0 text-amber-600 dark:text-amber-400" />}
-    />
-  );
-}
-
-export function VolumeNode({ data }: NodeProps & { data: MountNodeData }) {
-  return (
-    <MountNode
-      data={data}
-      kind="Volume"
-      icon={<HardDrive className="size-3 shrink-0 text-purple-600 dark:text-purple-400" />}
-    />
-  );
+          {!data.referenced && (
+            <p className="mt-1 text-muted-foreground">No service mounts this.</p>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
 }

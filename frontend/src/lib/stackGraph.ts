@@ -41,10 +41,8 @@ function serviceMode(service: Service): { mode: string; replicas?: number | unde
 
 /**
  * Read a stack as the graph of what it holds: the networks its services attach
- * to, and the configs, secrets and volumes they mount. A resource a service
- * names but the stack does not hold — an overlay shared with another stack —
- * becomes a node marked external, so the attachment is visible even though the
- * resource is not this stack's to show.
+ * to, and the configs, secrets and volumes they mount. A resource the stack
+ * does not hold becomes a node marked external, so the attachment is visible.
  */
 export function stackToReactFlow(stack: StackDetail): { nodes: Node[]; edges: Edge[] } {
   // Every name here is prefixed with the stack whose page this is, which the
@@ -67,6 +65,19 @@ export function stackToReactFlow(stack: StackDetail): { nodes: Node[]; edges: Ed
 
   function mountNode(id: string, type: string, data: MountNodeData): Node {
     return { id, type, position: origin, data };
+  }
+
+  /** Marks a node referenced, adding it first when the stack does not hold it. */
+  function reference(nodes: Map<string, Node>, id: string, make: () => Node): string {
+    const existing = nodes.get(id);
+
+    if (existing) {
+      (existing.data as { referenced: boolean }).referenced = true;
+    } else {
+      nodes.set(id, make());
+    }
+
+    return id;
   }
 
   for (const network of stack.networks) {
@@ -107,8 +118,6 @@ export function stackToReactFlow(stack: StackDetail): { nodes: Node[]; edges: Ed
     );
   }
 
-  // Volumes are keyed by name everywhere in Cetacean, and a mount names one the
-  // same way, so this is the one reference here that is not an ID.
   for (const volume of stack.volumes) {
     mountNodes.set(
       `volume:${volume.Name}`,
@@ -122,15 +131,9 @@ export function stackToReactFlow(stack: StackDetail): { nodes: Node[]; edges: Ed
   }
 
   function referenceMount(id: string, type: string, name: string, href: string): string {
-    const existing = mountNodes.get(id);
-
-    if (existing) {
-      (existing.data as MountNodeData).referenced = true;
-    } else {
-      mountNodes.set(id, mountNode(id, type, { name: bare(name), href, referenced: true }));
-    }
-
-    return id;
+    return reference(mountNodes, id, () =>
+      mountNode(id, type, { name: bare(name), href, referenced: true }),
+    );
   }
 
   for (const service of stack.services) {
@@ -155,23 +158,18 @@ export function stackToReactFlow(stack: StackDetail): { nodes: Node[]; edges: Ed
       }
 
       const networkId = `network:${Target}`;
-      const existing = networkNodes.get(networkId);
 
-      if (existing) {
-        (existing.data as NetworkNodeData).referenced = true;
-      } else {
-        networkNodes.set(networkId, {
-          id: networkId,
-          type: "stackNetwork",
-          position: origin,
-          data: {
-            name: Target.slice(0, 12),
-            href: `/networks/${Target}`,
-            external: true,
-            referenced: true,
-          } satisfies NetworkNodeData,
-        });
-      }
+      reference(networkNodes, networkId, () => ({
+        id: networkId,
+        type: "stackNetwork",
+        position: origin,
+        data: {
+          name: Target.slice(0, 12),
+          href: `/networks/${Target}`,
+          external: true,
+          referenced: true,
+        } satisfies NetworkNodeData,
+      }));
 
       connect(networkId, serviceId);
     }

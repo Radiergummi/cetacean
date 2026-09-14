@@ -10,10 +10,9 @@ function Loading() {
 }
 
 /**
- * Holds a graph's box and mounts it only once it has been scrolled into view,
- * so React Flow and ELK are fetched when the graph is actually looked at
- * rather than alongside the page. Children stay unrendered until then, which
- * is what keeps a `lazy()` graph's chunk unrequested.
+ * Mounts its children only once scrolled into view. They stay unrendered until
+ * then, which is what keeps a `lazy()` graph's chunk — React Flow and ELK —
+ * unrequested until the graph is looked at.
  */
 export function GraphFrame({ children }: { children: ReactNode }) {
   const frame = useRef<HTMLDivElement>(null);
@@ -22,20 +21,21 @@ export function GraphFrame({ children }: { children: ReactNode }) {
   useEffect(() => {
     const element = frame.current;
 
-    if (!element || seen) {
+    if (!element) {
       return;
     }
 
     const observer = new IntersectionObserver((entries) => {
       if (entries.some(({ isIntersecting }) => isIntersecting)) {
         setSeen(true);
+        observer.disconnect();
       }
     });
 
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, [seen]);
+  }, []);
 
   return (
     <div

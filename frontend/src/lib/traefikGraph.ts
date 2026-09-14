@@ -42,11 +42,15 @@ export type ServiceNodeData = {
 
 const origin = { x: 0, y: 0 };
 
+function serviceNode(id: string, data: ServiceNodeData): Node {
+  return { id, type: "traefikService", position: origin, data };
+}
+
 /**
  * Read one service's Traefik labels as the graph they describe: entrypoints →
  * routers → the middleware chain → services. A reference the labels do not
  * define becomes a node marked external, because a missing arrow reads as "no
- * middleware" rather than "defined elsewhere". Positions come from ELK later.
+ * middleware" rather than "defined elsewhere".
  */
 export function traefikIntegrationToReactFlow(integration: TraefikIntegration): {
   nodes: Node[];
@@ -112,19 +116,17 @@ export function traefikIntegrationToReactFlow(integration: TraefikIntegration): 
       return id;
     }
 
-    serviceNodes.set(id, {
+    serviceNodes.set(
       id,
-      type: "traefikService",
-      position: origin,
-      data: {
+      serviceNode(id, {
         name: service.name,
         port: service.port,
         scheme: service.scheme,
         origin: "declared",
         implicit,
         referenced,
-      } satisfies ServiceNodeData,
-    });
+      }),
+    );
 
     return id;
   }
@@ -139,17 +141,15 @@ export function traefikIntegrationToReactFlow(integration: TraefikIntegration): 
 
       const id = `service:${router.service}`;
 
-      serviceNodes.set(id, {
+      serviceNodes.set(
         id,
-        type: "traefikService",
-        position: origin,
-        data: {
+        serviceNode(id, {
           name: router.service,
           origin: "external",
           implicit: false,
           referenced: true,
-        } satisfies ServiceNodeData,
-      });
+        }),
+      );
 
       return id;
     }
@@ -163,17 +163,15 @@ export function traefikIntegrationToReactFlow(integration: TraefikIntegration): 
 
     const id = `service:unresolved:${router.name}`;
 
-    serviceNodes.set(id, {
+    serviceNodes.set(
       id,
-      type: "traefikService",
-      position: origin,
-      data: {
+      serviceNode(id, {
         name: router.name,
         origin: "unresolved",
         implicit: false,
         referenced: true,
-      } satisfies ServiceNodeData,
-    });
+      }),
+    );
 
     return id;
   }

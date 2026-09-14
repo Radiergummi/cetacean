@@ -1,13 +1,5 @@
 import { expect } from "./fixtures";
-import type { Locator, Page } from "@playwright/test";
-
-/** Press a control repeatedly, each press landing before the next. */
-export async function press(control: Locator, times: number) {
-  for (let count = 0; count < times; count++) {
-    // oxlint-disable-next-line eslint/no-await-in-loop -- sequential by design
-    await control.click();
-  }
-}
+import type { Page } from "@playwright/test";
 
 /**
  * Open the first resource in a list by its link rather than its row: the row's
@@ -25,10 +17,9 @@ export async function openFirst(page: Page, list: string, detail: RegExp) {
 }
 
 /**
- * The routing a service's Traefik labels would describe, shaped to exercise
- * what the layout has to get right: a chain several steps long, an edge that
- * skips those steps, a reference the labels do not define, a middleware
- * nothing uses, and a router whose service cannot be resolved.
+ * Routing shaped to exercise what the layout must get right: a long chain, an
+ * edge that skips it, an undefined reference, an unused middleware, and a
+ * router whose service cannot be resolved.
  */
 const traefikIntegration = {
   name: "traefik",
@@ -64,12 +55,9 @@ const traefikIntegration = {
 };
 
 /**
- * Give whichever service the test opens a known set of Traefik labels.
- *
- * The cluster a run points at is not ours to arrange, and the graph is drawn
- * from the parsed integration alone — `internal/integrations` is what tests
- * the parse, so serving a fixed one here pins the layout without pinning the
- * suite to a particular deployment.
+ * Give whichever service the test opens a known set of Traefik labels: the
+ * cluster a run points at is not ours to arrange, and the parse is tested
+ * server-side, so a fixed integration pins the layout and nothing else.
  */
 export async function stubTraefikLabels(page: Page) {
   await page.route(/\/services\/[^/?#]+(\?.*)?$/, async (route) => {
@@ -91,37 +79,11 @@ export async function stubTraefikLabels(page: Page) {
   });
 }
 
-/** Scroll the graph into view and wait for ELK to have placed it. */
+/** Scroll the graph into view and wait for ELK to have placed and framed it. */
 export async function openGraph(page: Page) {
   await page.getByTestId("graph-frame").first().scrollIntoViewIfNeeded();
 
-  // React Flow renders a div.react-flow — no semantic selector available. It
-  // stays transparent until the layout lands, which is the signal to measure.
-  const canvas = page.locator(".react-flow").first();
-
-  await expect(canvas).toBeVisible({ timeout: 20_000 });
-  await expect(canvas).toHaveCSS("opacity", "1", { timeout: 20_000 });
-
-  // The fit runs in the effect after the layout commits, so the graph is
-  // visible a frame before it is framed. Settle for two identical samples.
-  let previous = "";
-
-  await expect
-    .poll(
-      async () => {
-        const current = await page
-          .locator(".react-flow__viewport")
-          .first()
-          .evaluate((element) => element.style.transform);
-        const settled = current !== "" && current === previous;
-
-        previous = current;
-
-        return settled;
-      },
-      { timeout: 20_000, intervals: [100] },
-    )
-    .toBe(true);
+  await expect(page.locator("[data-graph-ready]").first()).toBeAttached({ timeout: 20_000 });
 }
 
 export interface GraphGeometry {
@@ -139,10 +101,8 @@ export interface GraphGeometry {
 
 /**
  * Sample every edge and compare it against every node and every other edge.
- *
- * jsdom performs no layout, so nothing in the unit suite can see an edge drawn
- * through a label or a node pushed off the canvas. This is the only place
- * those hold.
+ * jsdom performs no layout, so this is the only place an edge drawn through a
+ * node, or a node pushed off the canvas, can be seen at all.
  */
 export async function measureGraph(page: Page): Promise<GraphGeometry> {
   return page.evaluate(() => {

@@ -1,3 +1,4 @@
+import { Detail, DetailList, Ports } from "@/components/graph/NodeChrome";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { badgePurple, badgeTeal } from "@/lib/integrationLabels";
 import {
@@ -7,45 +8,8 @@ import {
   type ServiceNodeData,
 } from "@/lib/traefikGraph";
 import { cn } from "@/lib/utils";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import type { NodeProps } from "@xyflow/react";
 import { Lock } from "lucide-react";
-import type { ReactNode } from "react";
-
-/**
- * Every node carries both handles so an edge always finds an anchor; the one
- * a given column does not use is invisible rather than absent.
- */
-function Ports() {
-  return (
-    <>
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="opacity-0"
-        isConnectable={false}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="opacity-0"
-        isConnectable={false}
-      />
-    </>
-  );
-}
-
-function DetailList({ children }: { children: ReactNode }) {
-  return <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">{children}</dl>;
-}
-
-function Detail({ term, children }: { term: string; children: ReactNode }) {
-  return (
-    <>
-      <dt className="text-muted-foreground">{term}</dt>
-      <dd className="font-mono break-all">{children}</dd>
-    </>
-  );
-}
 
 export function EntrypointNode({ data }: NodeProps & { data: EntrypointNodeData }) {
   return (

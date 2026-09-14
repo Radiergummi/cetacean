@@ -1,5 +1,6 @@
 import { RoutedEdge } from "./RoutedEdge";
 import { layoutGraph, routedEdgeType, type LayerConstraints } from "@/lib/graphLayout";
+import { loadElk } from "@/lib/layoutElk";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -17,12 +18,11 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Fullscreen, Minimize, Undo2, ZoomIn, ZoomOut } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const fitViewOptions = { padding: 0.15 };
 
-// Cubic ease-out: quick off the mark, settling rather than stopping. No
-// overshoot — the viewport is clamped, so a bounce would be cut short.
+// No overshoot: the viewport is clamped, so a bounce would be cut short.
 const glide = {
   ...fitViewOptions,
   duration: 320,
@@ -32,9 +32,8 @@ const glide = {
 const proOptions = { hideAttribution: true };
 const edgeTypes = { [routedEdgeType]: RoutedEdge };
 
-// How far past the graph the viewport may be pushed. Generous enough that a
-// trackpad fling usually runs out before the bound does, since the bound is a
-// hard stop rather than a spring.
+// Generous, because the bound is a hard stop rather than a spring: a fling
+// should run out before it lands.
 const panMargin = 240;
 const maxZoom = 2;
 
@@ -49,15 +48,14 @@ const controlButton =
 // without a specificity fight.
 const controlIcon = { fill: "none", width: 16, height: 16, maxWidth: "none", maxHeight: "none" };
 
-export interface Graph {
+interface Graph {
   nodes: Node[];
   edges: Edge[];
 }
 
 /**
  * Nodes are rendered unplaced so React Flow can measure them, and ELK is given
- * those measurements. Laying out from guessed sizes is what left edges hanging
- * in the empty half of an oversized box.
+ * those measurements.
  */
 function Canvas({
   graph,
@@ -72,10 +70,30 @@ function Canvas({
   const [edges, setEdges] = useEdgesState(graph.edges);
   const [extent, setExtent] = useState<CoordinateExtent | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
-  const [zoomFloor, setZoomFloor] = useState(looseZoom);
+  const [zoomFloor, setZoomFloor] = useState<number | null>(null);
   const measured = useNodesInitialized();
   const { fitView, getNodes, getZoom, zoomIn, zoomOut } = useReactFlow();
   const shell = useRef<HTMLDivElement>(null);
+
+  // Started here, the engine downloads while React Flow mounts and measures.
+  useEffect(() => {
+    void loadElk();
+  }, []);
+
+  // A data-only change — a rescaled service, an edited rule — lands on the
+  // nodes already placed. A change of shape remounts instead, via the key.
+  const applyData = useCallback(
+    (placed: Node[]) => {
+      const data = new Map(graph.nodes.map((node) => [node.id, node.data]));
+
+      return placed.map((node) => ({ ...node, data: data.get(node.id) ?? node.data }));
+    },
+    [graph],
+  );
+
+  useEffect(() => {
+    setNodes(applyData);
+  }, [applyData, setNodes]);
 
   useEffect(() => {
     if (!measured || extent) {
@@ -84,7 +102,9 @@ function Canvas({
 
     let live = true;
 
-    void layoutGraph(getNodes(), graph.edges, layerConstraints).then((result) => {
+    // React Flow's store still holds the data as of the last commit, so the
+    // layout is handed the current data rather than putting stale data back.
+    void layoutGraph(applyData(getNodes()), graph.edges, layerConstraints).then((result) => {
       if (!live) {
         return;
       }
@@ -100,14 +120,10 @@ function Canvas({
     return () => {
       live = false;
     };
-  }, [measured, extent, graph, layerConstraints, getNodes, setNodes, setEdges]);
+  }, [measured, extent, graph, applyData, layerConstraints, getNodes, setNodes, setEdges]);
 
-  // Fitting inside the promise above measured the positions React had not
-  // committed yet, which framed whichever node still sat at the origin.
-  //
-  // What that fit costs is also the floor worth allowing: zoomed out past the
-  // point where the whole graph is on screen, there is nothing left to see.
-  // Taken in the panel rather than full screen, so it never blocks a later fit.
+  // Zoomed out past the fit there is nothing left to see, so what the fit
+  // costs is the floor. Taken in the panel, so it never blocks a later one.
   useEffect(() => {
     if (!extent) {
       return;
@@ -138,6 +154,7 @@ function Canvas({
   return (
     <div
       ref={shell}
+      data-graph-ready={zoomFloor != null || undefined}
       className="size-full bg-background"
     >
       <ReactFlow
@@ -150,7 +167,7 @@ function Canvas({
         nodesDraggable={false}
         nodesConnectable={false}
         panOnScroll
-        minZoom={zoomFloor}
+        minZoom={zoomFloor ?? looseZoom}
         maxZoom={maxZoom}
         {...(extent ? { translateExtent: extent } : {})}
         className="transition-opacity duration-200"
@@ -209,18 +226,22 @@ function Canvas({
   );
 }
 
-/**
- * The measurement plumbing seeds itself once and has no way to take a second
- * graph, so a caller whose graph can change gives this a `key` that changes
- * with it.
- */
+/** Seeds the measurement plumbing afresh whenever the graph's shape changes. */
 export function MeasuredGraph(props: {
   graph: Graph;
   nodeTypes: NodeTypes;
   layerConstraints?: LayerConstraints | undefined;
 }) {
+  const shape = useMemo(
+    () =>
+      [...props.graph.nodes.map(({ id }) => id), ...props.graph.edges.map(({ id }) => id)].join(
+        "|",
+      ),
+    [props.graph],
+  );
+
   return (
-    <ReactFlowProvider>
+    <ReactFlowProvider key={shape}>
       <Canvas {...props} />
     </ReactFlowProvider>
   );

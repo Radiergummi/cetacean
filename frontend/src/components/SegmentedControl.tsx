@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
 import { useRef } from "react";
 
 /** Matches the Button scale: `default` is h-8, `sm` is h-7. */
-export type SegmentedControlSize = "default" | "sm";
+type SegmentedControlSize = "default" | "sm";
 
 const sizes = {
   default: {

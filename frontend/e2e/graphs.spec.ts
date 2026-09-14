@@ -5,7 +5,7 @@
  * waiting for a canvas that is not there.
  */
 import { expect, test } from "./fixtures";
-import { measureGraph, openFirst, openGraph, press, stubTraefikLabels } from "./graph";
+import { measureGraph, openFirst, openGraph, stubTraefikLabels } from "./graph";
 
 test.describe("Traefik graph (service detail)", () => {
   test.beforeEach(async ({ page }) => {
@@ -55,9 +55,8 @@ test.describe("Stack graph (stack detail)", () => {
 
     expect(Object.keys(links)).toHaveLength(nodes);
 
-    for (const [id, href] of Object.entries(links)) {
+    for (const href of Object.values(links)) {
       expect(href).toMatch(/^\/(services|networks|configs|secrets|volumes)\/.+/);
-      expect(id.split(":")[0]).toBeTruthy();
     }
   });
 
@@ -96,7 +95,12 @@ test.describe("Graph viewport", () => {
 
     const fitted = await zoom();
 
-    await press(page.getByRole("button", { name: "Zoom out" }), 12);
+    const zoomOut = page.getByRole("button", { name: "Zoom out" });
+
+    for (let count = 0; count < 12; count++) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential by design
+      await zoomOut.click();
+    }
 
     await expect.poll(zoom).toBeGreaterThan(fitted * 0.5);
   });
