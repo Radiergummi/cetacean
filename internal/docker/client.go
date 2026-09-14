@@ -43,7 +43,7 @@ type Client struct {
 // partially working against an older daemon without saying so.
 const (
 	RequiredAPIVersion   = "1.46"
-	MinimumEngineVersion = "27.0"
+	MinimumEngineVersion = "26.1"
 )
 
 // UnsupportedEngineError reports a daemon too old to serve RequiredAPIVersion.
