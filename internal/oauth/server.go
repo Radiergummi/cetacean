@@ -396,6 +396,15 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	resourceForm := r.FormValue("resource")         // #nosec G120 -- bounded in HandleToken
 	clientID := r.FormValue("client_id")            // #nosec G120 -- bounded in HandleToken
 
+	// RFC 6749 §6 makes client_id REQUIRED of a client that does not
+	// authenticate, which every client here is. Its value proves nothing — a
+	// public client's id is not a secret — but its absence is a malformed
+	// request, and answering one as a grant failure hides the client's bug.
+	if clientID == "" {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request", "client_id is required")
+		return
+	}
+
 	// RFC 8707 resource indicator validation against the server's resource.
 	// Run BEFORE consuming the refresh token: a malformed resource parameter
 	// (which is almost always a client typo) should not burn the grant family.
@@ -413,7 +422,7 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// Confirm the bound resource and client match BEFORE rotation, so a client
 	// typo doesn't revoke the family. A token that does not validate falls
 	// through to Rotate, whose theft branch is the only thing that burns a
-	// replayed family. client_id proves nothing here: every client is public.
+	// replayed family.
 	if bound, ok := s.refreshTokens.Validate(refreshTokenRaw); ok {
 		if resourceForm != "" && resourceForm != bound.Resource {
 			writeTokenError(
@@ -424,7 +433,7 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 			)
 			return
 		}
-		if clientID != "" && clientID != bound.ClientID {
+		if clientID != bound.ClientID {
 			writeTokenError(
 				w,
 				http.StatusBadRequest,

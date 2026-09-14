@@ -824,6 +824,7 @@ func postRefreshGrant(t *testing.T, s *Server, token string) *httptest.ResponseR
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {token},
 		"resource":      {s.cfg.Resource},
+		"client_id":     {testClientID},
 	}
 
 	req := httptest.NewRequest(

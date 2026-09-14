@@ -301,6 +301,7 @@ func TestTokenExchangeRefreshHappy(t *testing.T) {
 	form := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {refreshToken},
+		"client_id":     {"test-client"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -335,6 +336,42 @@ func TestTokenExchangeRefreshHappy(t *testing.T) {
 // TestTokenExchangeRefreshTheft
 // ---------------------------------------------------------------------------
 
+// RFC 6749 §6 requires client_id of a client that does not authenticate, and
+// every client here is one. An absent parameter is a malformed request, not a
+// grant that failed to match.
+func TestTokenExchangeRefreshWithoutClientID(t *testing.T) {
+	s := newTestServer(t)
+
+	refreshToken := s.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "user",
+		ClientID: "test-client",
+		Resource: s.cfg.Resource,
+	}, time.Hour)
+
+	form := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {refreshToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	w := httptest.NewRecorder()
+	s.HandleToken(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "invalid_request") {
+		t.Errorf("error = %s, want invalid_request", w.Body.String())
+	}
+
+	// The grant must survive: a malformed request is the client's bug, and
+	// burning the family would make it the user's.
+	if _, ok := s.refreshTokens.Validate(refreshToken); !ok {
+		t.Error("a request missing client_id consumed the refresh token")
+	}
+}
+
 func TestTokenExchangeRefreshTheft(t *testing.T) {
 	s := newTestServer(t)
 
@@ -354,6 +391,7 @@ func TestTokenExchangeRefreshTheft(t *testing.T) {
 	form := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {refreshToken},
+		"client_id":     {"test-client"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -471,6 +509,7 @@ func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {rt},
 		"resource":      {"https://other-cetacean.example.com/resource"}, // mismatch
+		"client_id":     {"https://example.com/client"},
 	}
 
 	rec := httptest.NewRecorder()
