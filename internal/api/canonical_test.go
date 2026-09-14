@@ -194,6 +194,40 @@ func TestCanonicalIdentifierAmbiguousNameIs409(t *testing.T) {
 	}
 }
 
+// The 409 hands over every candidate ID, so it is cut to the ones the caller
+// may read. A type-level grant answers "could this identity ever read a node",
+// which is not the same question.
+func TestCanonicalIdentifierAmbiguityNamesOnlyReadableCandidates(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"node:nodeaaaaaaaaaa"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	router := newTestRouterWithCache(t, canonicalTestCache(), withACL(evaluator))
+
+	req := httptest.NewRequest(http.MethodGet, "/nodes/twin", nil)
+	req.Header.Set("Accept", "application/json")
+	req = req.WithContext(
+		auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "alice"}),
+	)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// One readable candidate is no ambiguity this caller can act on, so the
+	// name falls through and is answered as an unresolved one.
+	if w.Code == http.StatusConflict {
+		t.Fatalf("status = 409 for a caller who may read one candidate; body: %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "nodebbbbbbbbbb") {
+		t.Errorf("body names a candidate the caller may not read: %s", w.Body.String())
+	}
+}
+
 // The redirect states that a named resource exists and hands over its ID, so
 // it must not answer a caller who could not read the resource anyway —
 // otherwise every detail path becomes a way to enumerate names behind the

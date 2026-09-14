@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
@@ -138,20 +139,26 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 
 		if ambiguous, ok := errors.AsType[*cache.AmbiguousNameError](err); ok {
 			// The report names every candidate ID, so it is a disclosure in
-			// its own right. A caller who could not read any resource of this
-			// type is told nothing and falls through to the handler, which
-			// answers the unresolved name with its ordinary 404. The question
-			// is type-level because an ambiguous name resolves to no single
-			// resource to check, and acl.TypeGrants answers it from one policy
-			// read.
-			access := h.acl.TypeGrants(auth.IdentityFromContext(r.Context()))
-			if !access.Can("read", singularType[collection]) {
+			// its own right and is cut to the candidates this caller may read.
+			// A type-level grant is not enough: it answers "could this identity
+			// ever read a node", where the report hands over the IDs of these
+			// ones. Fewer than two survivors is no ambiguity the caller can
+			// see, so the request falls through to the handler's ordinary 404.
+			identity := auth.IdentityFromContext(r.Context())
+			readable := acl.Filter(
+				h.acl, identity, "read", ambiguous.IDs,
+				func(id string) string { return singularType[collection] + ":" + id },
+			)
+			if len(readable) < 2 {
 				next.ServeHTTP(w, r)
 
 				return
 			}
 
-			writeErrorCode(w, r, "API015", ambiguous.Error())
+			writeErrorCode(w, r, "API015", (&cache.AmbiguousNameError{
+				Name: ambiguous.Name,
+				IDs:  readable,
+			}).Error())
 
 			return
 		}
