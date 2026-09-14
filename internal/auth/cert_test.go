@@ -410,7 +410,7 @@ func TestCertProvider_DNSSANsOnly_NoSubject(t *testing.T) {
 	}
 }
 
-func TestCertProvider_WWWAuthenticate_MiddlewareIntegration(t *testing.T) {
+func TestCertProvider_MiddlewareRefusesWithoutChallenge(t *testing.T) {
 	p := &CertProvider{}
 	handler := Middleware(p)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("inner handler should not be called")
