@@ -268,6 +268,53 @@ func TestAColdCallIsToldWhereATokenComesFrom(t *testing.T) {
 	}
 }
 
+// A provider with no challenge of its own refuses with 403, because a client
+// cannot act on it. Offering the resource's own challenge is what makes the
+// refusal actionable, so it becomes a 401 — the same rule, not an exception.
+func TestAChallengelessProviderStillPointsAtTheResource(t *testing.T) {
+	const resource = "https://cetacean.test"
+
+	w, _ := serve(
+		&failProvider{},
+		APITokens{Verifier: &stubVerifier{}, Resource: resource},
+		bearerRequest(""),
+	)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 once a challenge names where a token comes from", w.Code)
+	}
+
+	var named bool
+	for _, c := range w.Result().Header.Values("WWW-Authenticate") {
+		if strings.Contains(c, "resource_metadata=") && strings.Contains(c, resource) {
+			named = true
+		}
+	}
+	if !named {
+		t.Error("401 with no challenge naming the resource's metadata")
+	}
+}
+
+// The authorization endpoint is not a protected resource: it refuses a token
+// this server issued, so inviting a client to mint one sends it in a circle.
+func TestTheAuthorizationEndpointAdvertisesNoToken(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/oauth/authorize", nil)
+	w, _ := serve(
+		&failProvider{},
+		APITokens{Verifier: &stubVerifier{}, Resource: "https://cetacean.test"},
+		r,
+	)
+
+	for _, c := range w.Result().Header.Values("WWW-Authenticate") {
+		if strings.Contains(c, "resource_metadata=") {
+			t.Errorf("/oauth/authorize advertised a token endpoint: %q", c)
+		}
+	}
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 where no challenge is offered", w.Code)
+	}
+}
+
 // A deployment with no authorization server has no metadata to advertise, so the
 // provider's challenge stands alone exactly as it did before tokens existed.
 func TestAColdCallWithoutAVerifierIsUnchanged(t *testing.T) {
