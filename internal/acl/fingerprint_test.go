@@ -125,6 +125,29 @@ func TestFingerprintDistinguishesResourcesFromPermissions(t *testing.T) {
 	}
 }
 
+// The grant hashes are summed, so the mix inside a grant has to be what keeps
+// one grant's permissions from reading as another's.
+func TestFingerprintSeparatesGrantBoundaries(t *testing.T) {
+	id := &auth.Identity{Subject: "x"}
+
+	a := NewEvaluator()
+	a.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:a"}, Permissions: []string{"read"}},
+		{Resources: []string{"service:b"}, Permissions: []string{"write"}},
+	}})
+
+	b := NewEvaluator()
+	b.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:a"}, Permissions: []string{"write"}},
+		{Resources: []string{"service:b"}, Permissions: []string{"read"}},
+	}})
+
+	if a.Fingerprint(id) == b.Fingerprint(id) {
+		t.Error("swapping two grants' permissions left the fingerprint unchanged, " +
+			"so one identity may be served the other's rows")
+	}
+}
+
 func TestFingerprintNilAndUnconfigured(t *testing.T) {
 	var nilEval *Evaluator
 	if nilEval.Fingerprint(nil) != 0 {
@@ -183,3 +206,24 @@ func TestFilterInPlaceNamedUnconfigured(t *testing.T) {
 	}
 }
 
+// Fingerprint runs on every conditional request, so it is allowed no
+// allocations at all.
+func BenchmarkFingerprint(b *testing.B) {
+	grants := make([]Grant, 0, 20)
+	for i := range 20 {
+		grants = append(grants, Grant{
+			Resources:   []string{fmt.Sprintf("service:web-%d", i), fmt.Sprintf("stack:s%d", i)},
+			Permissions: []string{"read", "write"},
+			Audience:    []string{"group:devs"},
+		})
+	}
+
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: grants})
+	id := &auth.Identity{Subject: "dev", Groups: []string{"devs"}}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = e.Fingerprint(id)
+	}
+}
