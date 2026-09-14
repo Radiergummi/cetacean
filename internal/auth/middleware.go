@@ -55,8 +55,7 @@ func (e *AuthError) Error() string { return e.Msg }
 func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error) {
 	status, code, detail := http.StatusForbidden, "AUT006", "authentication refused"
 
-	var authErr *AuthError
-	if errors.As(err, &authErr) {
+	if authErr, ok := errors.AsType[*AuthError](err); ok {
 		if authErr.WWWAuthenticate != "" {
 			w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
 			status, code, detail = http.StatusUnauthorized, "AUT001", "authentication required"
@@ -107,6 +106,12 @@ func Middleware(provider Provider) func(http.Handler) http.Handler {
 // isExempt returns true for paths that should skip authentication.
 func isExempt(path string) bool {
 	switch {
+	case path == "/-/resync":
+		// The one /-/ route that does work rather than reporting state: it
+		// sweeps the whole Docker API, unbounded and unthrottled, so an
+		// uncredentialed caller who can reach the port could amplify one
+		// cheap request into a cluster enumeration at will.
+		return false
 	case strings.HasPrefix(path, "/-/"):
 		return true
 	case path == "/api" || strings.HasPrefix(path, "/api/"):

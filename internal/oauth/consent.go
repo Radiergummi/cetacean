@@ -137,11 +137,10 @@ func renderErrorPage(w http.ResponseWriter, status int, message string) {
 	_ = errorTemplate.Execute(w, map[string]string{"Message": message})
 }
 
-// setConsentHeaders sets security headers that prevent framing and caching.
-// The consent page carries the CSRF token, OAuth state, code_challenge,
-// redirect_uri and authenticated user identity in hidden form fields — any
-// shared cache or browser back-button cache would replay that to a different
-// user. Cache-Control: no-store matches the token-response handler.
+// setConsentHeaders sets the headers preventing framing and caching. The page
+// carries the CSRF token, OAuth state, code_challenge, redirect_uri and the
+// user's identity in hidden fields, which any shared or back-button cache
+// would replay to a different user.
 func setConsentHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
@@ -182,11 +181,10 @@ func csrfMAC(signingKey []byte, nonce string, b consentBinding) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// issueCSRFNonce generates a random nonce, sets a short-lived signed cookie,
-// and returns the CSRF token: an HMAC over the nonce and the authorization
-// request the page is being rendered for. The cookie is HttpOnly and
-// SameSite=Strict. When secure is true (issuer is HTTPS) the cookie is also
-// marked Secure.
+// issueCSRFNonce generates a random nonce, sets a short-lived signed cookie and
+// returns the CSRF token: an HMAC over the nonce and the authorization request
+// the page renders for. The cookie is HttpOnly and SameSite=Strict, and Secure
+// when the issuer is HTTPS.
 func issueCSRFNonce(
 	w http.ResponseWriter,
 	signingKey []byte,

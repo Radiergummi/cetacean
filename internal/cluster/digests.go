@@ -92,11 +92,9 @@ func NodeDigest(node swarm.Node, tasks []swarm.Task, services []swarm.Service) D
 	}
 }
 
-// TaskDigest builds the detail view of one task. service and node are
-// pointers because a caller may be able to read the task but not the
-// resource it references — a filtered-out service or an unreachable node —
-// and the digest must still be usable rather than erroring or leaving the
-// name blank.
+// TaskDigest builds the detail view of one task. service and node are pointers
+// because a caller may read the task but not what it references, and the digest
+// must stay usable rather than erroring or leaving the name blank.
 func TaskDigest(task swarm.Task, service *swarm.Service, node *swarm.Node) Digest {
 	name := TaskName(task, service)
 
@@ -172,17 +170,10 @@ func TaskDigest(task swarm.Task, service *swarm.Service, node *swarm.Node) Diges
 // back through them to explain it.
 var stackStateRank = map[string]int{"failed": 0, "updating": 1, "pending": 2, "running": 3}
 
-// StackDigest builds the detail view of one stack. A stack has no Swarm
-// status of its own, so its State and Reason are derived from its member
-// services using the exact rule RowsForServices already applies to each one
-// — otherwise a stack digest and its own services list could report
-// different health for the same cluster. stack.Services already holds the
-// full swarm.Service records (cache.StackDetail, not the bare-name
-// cache.Stack), so there is nothing to resolve a second time.
-//
-// Related spans all five member types a stack can hold, not just services:
-// a stack is the one resource whose membership crosses that many types, and
-// Related exists precisely so a caller can traverse without a second search.
+// StackDigest builds the detail view of one stack. A stack has no Swarm status,
+// so State and Reason derive from its members by the rule RowsForServices
+// applies, or a stack and its own services list could disagree. Related spans
+// all five member types, since a stack's membership crosses that many.
 func StackDigest(stack cache.StackDetail, tasks []swarm.Task) Digest {
 	// The same replica rule cache.RunningTaskCounts applies, so a stack's
 	// per-service counts and the service rows inside it cannot disagree: a
@@ -434,10 +425,9 @@ func stackScopedDetails(labels map[string]string) map[string]any {
 }
 
 // usersRelated builds the "which services reference this resource" half of a
-// Digest. Configs, secrets, networks and volumes all resolve this the same
-// way, from the cache's own reverse index (cache.ServiceRef), which already
-// carries a real ID and name — there is nothing here to fall back to an ID
-// for, unlike a Related built from a raw attachment.
+// Digest, from the cache's reverse index. A cache.ServiceRef already carries a
+// real ID and name, so unlike a Related built from a raw attachment there is
+// nothing here to fall back to an ID for.
 func usersRelated(users []cache.ServiceRef, relation string) []Related {
 	related := make([]Related, 0, len(users))
 

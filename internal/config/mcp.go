@@ -24,14 +24,10 @@ type MCPConfig struct {
 	// mutations it never collects.
 	MaxConcurrentTasks int
 
-	// TaskTTL is the retention mcp-go is given for a task whose client did not
-	// ask for one. mcp-go schedules cleanup only for a task carrying a TTL, so
-	// without this a client that omits the field pins its result for the life
-	// of the process. Zero disables the fill-in.
-	//
-	// The clock starts when the task is created, not when it finishes, so this
-	// must comfortably exceed the convergence timeout or a result expires
-	// before the client that asked for it can collect it.
+	// TaskTTL is the retention mcp-go is given for a task whose client asked
+	// for none, which it would otherwise pin for the life of the process; zero
+	// disables the fill-in. The clock starts at creation, not completion, so
+	// this must exceed the convergence timeout or a result expires uncollected.
 	TaskTTL time.Duration
 
 	// MaxTaskTTL caps the retention a client may ask for. Without it the fill-

@@ -14,18 +14,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// Row is one entry in a list of cluster resources.
-//
-// It exists because the raw Docker object is the wrong answer to a list
-// question: eight services of raw swarm.Service cost roughly fourteen thousand
-// tokens, most of it Platforms entries and a duplicated PreviousSpec, and the
-// field a caller actually asked for — whether the thing is healthy — is not in
-// there at all, because state is derived from tasks.
-//
-// The shape is TopologyNode's, which already proved sufficient to diagnose a
-// cluster in practice. Both ID and Name are always present so a caller never
-// has to resolve one into the other, following the TargetID/TargetName pair the
-// recommendations already use.
+// Row is one entry in a list of cluster resources. The raw Docker object is
+// the wrong answer to a list question: it is mostly Platforms and PreviousSpec,
+// and whether the thing is healthy is not in it at all, since state is derived
+// from tasks. ID and Name are both always present.
 type Row struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -50,14 +42,10 @@ type Row struct {
 	Running int `json:"running,omitempty"`
 }
 
-// RowsForServices builds the list view of services. The running counts are
-// needed because a service's state and running count are derived from its
-// tasks, not from its spec.
-//
-// It takes the counts rather than the tasks themselves so the caller can
-// aggregate them wherever they already live — cache.RunningTaskCounts does it
-// under one read lock — instead of cloning the whole task table to reduce it
-// to one integer per service here.
+// RowsForServices builds the list view of services. State and running count
+// are derived from tasks, not from the spec, so the counts come in — already
+// aggregated by cache.RunningTaskCounts under one read lock, rather than
+// cloning the whole task table here to reduce it to one integer per service.
 func RowsForServices(services []swarm.Service, running map[string]int) []Row {
 	rows := make([]Row, 0, len(services))
 
@@ -117,22 +105,10 @@ func RowsForNodes(nodes []swarm.Node) []Row {
 	return rows
 }
 
-// RowsForTasks builds the list view of tasks. Services are needed to name each
-// task's parent: a task's own record holds only its ID, and a caller reading a
-// task list is asking which service is broken and where.
-//
-// The node half of that answer comes off the enriched task rather than a second
-// slice, because EnrichTasksWithin has already resolved it — against the same
-// ACL-filtered node listing this would have taken — and re-deriving it made
-// every find and every completion keystroke clone, sort and filter the whole
-// node table a second time to recover a string it was handed.
-//
-// The services slice must already be filtered to what the caller may read, the
-// way TaskDigest's is, and the tasks must have been enriched from an equally
-// filtered node listing: a parent absent from either falls back to the ID the
-// task record carries anyway, so a row never names a resource from behind the
-// caller's grants. Passing the unfiltered cache listings made find disclose a
-// service name that describe withheld for the very same task.
+// RowsForTasks builds the list view of tasks. Services name each task's
+// parent, which its own record holds only as an ID; the node half comes off
+// the enriched task, which resolved it already. The services slice and the
+// enrichment must both be ACL-filtered, or a row names what describe withholds.
 func RowsForTasks(tasks []EnrichedTask, services []swarm.Service) []Row {
 	serviceByID := make(map[string]*swarm.Service, len(services))
 	for i := range services {
@@ -262,12 +238,8 @@ func RowsForStacks(stacks []cache.Stack) []Row {
 }
 
 // Digest is the detail view of one resource: everything a caller needs to
-// decide what to do, and nothing they would have to ask a second question for.
-//
-// Reason is the field that earns the type. A state alone — "failed" — is not an
-// answer to "why is this broken", so every read that reports a non-healthy
-// state also reports the cause Swarm gave for it, and a follow-up call is not
-// required to learn it.
+// decide what to do, without a second question. Reason is what earns the type:
+// every read reporting a non-healthy state also reports the cause Swarm gave.
 type Digest struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -280,11 +252,9 @@ type Digest struct {
 	Reason string `json:"reason,omitempty"`
 
 	// Since is when the current State began: the oldest failing task's
-	// timestamp, captured before RecentFailures is capped to the newest few,
-	// or the resource's own last-updated time when there is no failure to
-	// date it from — or when the State is healthy, which a failure cannot
-	// explain however recent it is. Answers "how long has this been going on"
-	// without a second call into history.
+	// timestamp, captured before RecentFailures is capped, or the resource's
+	// own last-updated time when no failure dates it — including a healthy
+	// State, which a failure cannot explain however recent.
 	Since string `json:"since,omitempty"`
 
 	// Details is type-specific. It is deliberately open in the advertised
@@ -308,31 +278,18 @@ type Digest struct {
 	Restarts *ServiceRestarts `json:"restarts,omitempty"`
 }
 
-// ServiceRestarts counts a service's involuntary task terminations over a
-// short window and a long one.
-//
-// One number cannot answer the question an operator is actually asking. A
-// service failing twenty times in the last hour is either a fault that started
-// during this deploy or one that has run for a week, and only the ratio of the
-// two windows tells them apart — so the digest carries both rather than a rate
-// the reader would have to trust blindly.
-//
-// It is also the only channel through which the *rate* of a restart loop
-// reaches a digest. DeriveServiceState reports "running" whenever a replica is
-// up, and RecentFailures is capped at the newest few with no window attached,
-// so a service crash-looping every four seconds and one that failed twice this
-// morning otherwise describe alike.
+// ServiceRestarts counts involuntary task terminations over a short window and
+// a long one. Only the ratio separates a fault that started with this deploy
+// from one that has run for a week. It is also the only channel carrying the
+// *rate* of a restart loop: a crash-looping service is still "running".
 type ServiceRestarts struct {
 	LastHour uint64 `json:"lastHour"`
 	LastWeek uint64 `json:"lastWeek"`
 
-	// TrackingSince is the earliest moment the counts above can account for.
-	// The tracker is built at startup, so on a Cetacean that has not been up
-	// for a week — or one whose snapshot does not persist — both figures are
-	// bounded by it rather than by their labels, and the ratio the two windows
-	// exist to expose collapses: identical counts read as a fault that began
-	// within the hour when it may have run for days. Compare it against the
-	// window before concluding "new".
+	// TrackingSince is the earliest moment the counts can account for. The
+	// tracker starts with the process, so on a young one both figures are
+	// bounded by this rather than by their labels and the ratio collapses.
+	// Compare it against the window before concluding "new".
 	TrackingSince string `json:"trackingSince,omitempty"`
 }
 
@@ -358,14 +315,10 @@ type TaskFailure struct {
 // loop can hold dozens of failed records and they all say the same thing.
 const maxRecentFailures = 5
 
-// ServiceDigest builds the detail view of one service. networks resolves the
-// names of its network attachments, which carry only an ID; the caller may
-// have already filtered the slice by ACL, so a Target with no match falls
-// back to the ID rather than leaving Related.Name empty.
-//
-// restarts is the caller's reading of the restart tracker, or nil when it has
-// none to give; it is passed in rather than looked up so this stays a pure
-// function of the records handed to it, as every other builder here is.
+// ServiceDigest builds the detail view of one service. networks names its
+// attachments, which carry only an ID; an unmatched Target falls back to the
+// ID, since the slice may be ACL-filtered. restarts is passed in, nil included,
+// so this stays a pure function of the records handed to it.
 func ServiceDigest(
 	svc swarm.Service,
 	tasks []swarm.Task,
@@ -385,42 +338,27 @@ func ServiceDigest(
 			continue
 		}
 
-		// cache.CountsAsRunningReplica, not Status.State alone: a task Swarm
-		// has marked for shutdown keeps Status.State: running while it
-		// drains, and cache.RunningTaskCounts — what find and every list row
-		// count with — already excludes those. Counting them here made a
-		// service mid-rolling-update describe as "running" while find called
-		// the same service "failed".
+		// Not Status.State alone: a task marked for shutdown keeps
+		// Status.State: running while it drains, and RunningTaskCounts —
+		// what every list row counts with — excludes those.
 		if cache.CountsAsRunningReplica(task) {
 			running++
 
 			continue
 		}
 
-		// Ordinary mid-startup or mid-rollout states — preparing, starting,
-		// assigned, new — are not failures; DeriveServiceState already
-		// reports "pending" for those without help. A task only earns a
-		// place here when Swarm itself calls it an involuntary failure or
-		// gives an explicit cause for not running. This is also what keeps a
-		// rolling update quiet: it leaves a cleanly shut-down task behind for
-		// every replica it moved, and none of them are failures.
+		// A task earns a place here only when Swarm calls it an involuntary
+		// failure or gives an explicit cause for not running. Mid-startup
+		// states are not failures, and neither are the cleanly shut-down
+		// tasks a rolling update leaves behind for every replica it moved.
 		if !cache.IsFailureState(task.Status.State) && task.Status.Err == "" {
 			continue
 		}
 
-		// Whether the orchestrator has since replaced the task decides nothing
-		// here, and excluding replaced ones emptied the list precisely when it
-		// mattered: a crash loop is made entirely of replaced tasks, because
-		// Swarm marks one for shutdown the instant it fails and starts
-		// another. The guard only ever looked correct because the cache held
-		// those tasks with a stale DesiredState that let them through; once
-		// the watcher learned to observe the terminal transition it did what
-		// it said, and "why is this restarting in a loop" came back empty.
-		//
-		// It still has to hold for a task that is merely *unplaced* rather
-		// than failed — one carrying an explicit cause but no failure state,
-		// which is how an unschedulable replica reports. A replaced one of
-		// those is genuinely history.
+		// Replacement decides nothing for a failed task: a crash loop is made
+		// entirely of replaced ones, since Swarm shuts a task down the instant
+		// it fails. It still decides for a merely *unplaced* task — an
+		// explicit cause with no failure state — where a replaced one is history.
 		if !cache.IsFailureState(task.Status.State) && !TaskIsLive(task) {
 			continue
 		}
@@ -467,10 +405,8 @@ func ServiceDigest(
 
 	// Since dates the state above, so only a state a failure explains may be
 	// dated from one. Swarm keeps a terminal record for every replica it has
-	// replaced, up to the task history limit, and those now reach `failures`
-	// on purpose — but a service that crashed once last week and has run
-	// clean since is "running", and answering "how long has this been going
-	// on" with a fault that is over is worse than not answering at all.
+	// replaced, and dating a "running" service from a fault that is over is
+	// worse than not answering at all.
 	if haveOldest && state != "running" {
 		digest.Since = oldestFail.UTC().Format(time.RFC3339)
 	} else {
@@ -572,12 +508,9 @@ func sortRelated(related []Related) {
 	})
 }
 
-// ServiceDetails is the type-specific body of a service's Digest.
-//
-// Every numeric field names its unit. Docker's own types express CPU in
-// NanoCPUs and durations in nanoseconds, which read as unlabelled large
-// integers and have already caused one shipped bug; a caller should not have to
-// know that 10000000000 is ten seconds.
+// ServiceDetails is the type-specific body of a service's Digest. Every
+// numeric field names its unit: Docker expresses CPU in NanoCPUs and durations
+// in nanoseconds, which read as unlabelled large integers.
 func ServiceDetails(svc swarm.Service) map[string]any {
 	details := map[string]any{
 		"mode":     serviceMode(svc),
@@ -589,10 +522,8 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 		details["image"] = StripImageDigest(spec.Image)
 
 		// Docker's split, kept: Command is the entrypoint, Args is what
-		// follows it. This used to report Args under the name "command" and
-		// never reported Command at all, which hid an entrypoint override —
-		// and once a caller can write this section, writing Command and
-		// reading Args back under the same name is a trap.
+		// follows it. Reporting Args as "command" hides an entrypoint
+		// override, and is a trap once a caller can write this section.
 		if len(spec.Command) > 0 {
 			details["command"] = spec.Command
 		}
@@ -610,11 +541,9 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 		slices.Sort(names)
 		details["envNames"] = names
 
-		// Durations as strings, never the nanosecond integers Docker's own
-		// type carries: "10s" is a value a caller can read and write back,
-		// 10000000000 is one they have to decode. Each key is omitted when
-		// unset, so "not configured" reads as absence rather than as a zero
-		// a caller might mistake for a configured value.
+		// Durations as strings, never Docker's nanosecond integers: "10s" is
+		// a value a caller can write back. Each key is omitted when unset, so
+		// "not configured" reads as absence rather than as a configured zero.
 		if hc := spec.Healthcheck; hc != nil {
 			details["healthcheck"] = true
 
@@ -665,11 +594,9 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 			details["configNames"] = names
 		}
 
-		// Targets first, over every mount: bindMounts below reports the
-		// security-relevant ones in full but skips volumes, so it cannot on
-		// its own answer whether a data volume survived a wholesale
-		// replacement. A target is a mount's identity — two things cannot be
-		// mounted at one path.
+		// Targets first, over every mount: bindMounts below skips volumes, so
+		// it cannot say whether a data volume survived a wholesale
+		// replacement. A target is a mount's identity.
 		if len(spec.Mounts) > 0 {
 			targets := make([]string, 0, len(spec.Mounts))
 			for _, m := range spec.Mounts {
@@ -730,11 +657,9 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 		details["labels"] = svc.Spec.Labels
 	}
 
-	// Option *names* only, the same rule envNames follows: a log driver's
-	// options routinely carry a credential (`splunk-token`, an authenticated
-	// syslog address), and a digest that named the driver honestly while
-	// handing over its token would be a worse leak than the one envNames
-	// exists to prevent.
+	// Option *names* only, the rule envNames follows: a log driver's options
+	// routinely carry a credential, such as a splunk-token or an
+	// authenticated syslog address.
 	if driver := svc.Spec.TaskTemplate.LogDriver; driver != nil && driver.Name != "" {
 		logDriver := map[string]any{"name": driver.Name}
 

@@ -24,6 +24,11 @@ type feedHandlers struct {
 	// sub-collection that takes none.
 	csvParams []string
 
+	// yaml marks an endpoint that also renders a compose document. A handler
+	// rather than a flag, because it is a different projection of the
+	// resource, not the same body in another encoding.
+	yaml http.HandlerFunc
+
 	queryParams []string
 }
 
@@ -48,6 +53,10 @@ func (f feedHandlers) servedTypes(sse bool) string {
 		types = append(types, "text/csv")
 	}
 
+	if f.yaml != nil {
+		types = append(types, "application/yaml")
+	}
+
 	return strings.Join(types, ", ")
 }
 
@@ -61,11 +70,9 @@ func contentNegotiated(
 	return contentNegotiatedWithSSE(jsonHandler, nil, feeds, spa)
 }
 
-// contentNegotiatedWithSSE is contentNegotiated with a stream. A nil
-// sseHandler is the endpoint that has none.
-//
-// Anything the endpoint does not serve — a graph format, or a type nothing
-// serves — gets 406, since negotiate resolves without refusing.
+// contentNegotiatedWithSSE is contentNegotiated with a stream; a nil sseHandler
+// is the endpoint that has none. Anything this endpoint does not serve gets
+// 406, since negotiate resolves without refusing.
 func contentNegotiatedWithSSE(
 	jsonHandler, sseHandler http.HandlerFunc,
 	feeds feedHandlers,
@@ -98,6 +105,8 @@ func contentNegotiatedWithSSE(
 			}
 
 			jsonHandler(w, r)
+		case ContentTypeYAML:
+			dispatchFeed(w, r, feeds.yaml, served)
 		case ContentTypeJSON:
 			addFeedLinks(w, r, feeds)
 			jsonHandler(w, r)
@@ -163,11 +172,20 @@ func (h *Handlers) aclMatchWrap(
 // href carries only the parameters the feed it points at reads, through the
 // same feedQuery the feed's own links use.
 func addFeedLinks(w http.ResponseWriter, r *http.Request, feeds feedHandlers) {
-	if feeds.atom == nil && feeds.jsonFeed == nil && !feeds.csv {
+	if feeds.atom == nil && feeds.jsonFeed == nil && !feeds.csv && feeds.yaml == nil {
 		return
 	}
 
 	basePath := absPath(r.Context(), r.URL.Path)
+
+	// The compose document is a projection of the resource itself, not a feed
+	// over it, so it carries none of the query the others pass along.
+	if feeds.yaml != nil {
+		w.Header().Add("Link", fmt.Sprintf(
+			`<%s>; rel="alternate"; type="application/yaml"`,
+			feedHref(basePath+".yaml", nil),
+		))
+	}
 
 	if feeds.csv {
 		w.Header().Add("Link", fmt.Sprintf(

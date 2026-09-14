@@ -12,7 +12,7 @@ import McpTool from "@/components/McpTool.astro";
 
 # MCP tools and resources
 
-This page is the catalog an agent sees over Cetacean's MCP server: 12 resources, 27 tools, 6 prompts, and 5
+This page is the catalog an agent sees over Cetacean's MCP server: 14 resources, 27 tools, 6 prompts, and 5
 widgets. For enabling the server, authorization, and configuration, see [MCP Server][mcp].
 
 Everything here is filtered per identity. A tool above the configured [operations level][operations-level] is not
@@ -350,16 +350,18 @@ Every numeric field in `cetacean://cluster` names its unit: `totalCPUCores`, `re
 `maxNodeCPUCores`, `totalMemoryBytes`, `reservedMemoryBytes`, `maxNodeMemoryBytes`. Both CPU figures are in
 cores.
 
-Templated resources return the same compact digest the `describe` tool builds. `services/{id}/logs` is the
-exception: it is a raw log stream.
+Templated resources return the same compact digest the `describe` tool builds. The exceptions are
+`services/{id}/logs`, a raw log stream, and the two `compose` documents, which are YAML rather than JSON.
 
 | URI template                    | Contents                                                                        |
 |---------------------------------|---------------------------------------------------------------------------------|
 | `cetacean://nodes/{id}`         | Node digest, by ID or hostname                                                  |
 | `cetacean://services/{id}`      | Service digest, by ID or name, with cross-references                            |
 | `cetacean://services/{id}/logs` | Service logs merged across replicas, subscribable; not a digest                 |
+| `cetacean://services/{id}/compose` | The service as a one-service compose file; everything it references is external |
 | `cetacean://tasks/{id}`         | Task digest; the parent service and node are in `related`, not top-level fields |
 | `cetacean://stacks/{name}`      | Stack digest, rolling up its member resources                                   |
+| `cetacean://stacks/{name}/compose` | The stack as a compose file; secrets and configs are referenced, never exported |
 | `cetacean://configs/{id}`       | Config digest; the payload's size in bytes, never the payload                   |
 | `cetacean://secrets/{id}`       | Secret digest; the payload is never read, not even its length                   |
 | `cetacean://networks/{id}`      | Network digest, with the attached services                                      |

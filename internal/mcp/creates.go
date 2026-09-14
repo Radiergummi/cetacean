@@ -12,11 +12,9 @@ import (
 )
 
 // createResult is what a create answers with: enough to reference the new
-// resource on the next call, and nothing more.
-//
-// A secret's payload is deliberately absent. The caller supplied it, so
-// repeating it adds nothing and puts a credential in a transcript that may be
-// logged, replayed to a model, or shown to someone reviewing the session.
+// resource on the next call, and nothing more. A secret's payload is absent —
+// the caller supplied it, and repeating it puts a credential in a transcript
+// that may be logged or replayed to a model.
 type createResult struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -24,13 +22,9 @@ type createResult struct {
 }
 
 // decodePayload reads the `data` argument, honouring an explicit `encoding`.
-//
-// Base64 exists because a config is very often a file — a TLS certificate, an
-// nginx block, a key — and JSON string escaping mangles one. The encoding is
-// declared rather than guessed from the shape of the string: plenty of ordinary
-// passwords are valid base64, and silently decoding one writes a secret whose
-// value is not the value. Nothing detects that until an authentication fails at
-// runtime, far from the call that caused it.
+// Base64 exists because a config is often a file that JSON escaping mangles.
+// The encoding is declared rather than guessed: plenty of ordinary passwords
+// are valid base64, and decoding one writes a secret whose value is not the value.
 func decodePayload(req mcplib.CallToolRequest) ([]byte, error) {
 	raw := req.GetString("data", "")
 	if raw == "" {
@@ -72,10 +66,8 @@ func createLabels(req mcplib.CallToolRequest) (map[string]string, error) {
 }
 
 // dataResourceSpec is the half of a create that differs between a secret and a
-// config: what to call the thing, how to write it, and how to seed it. The
-// other half — require a name, check the write grant before anything else,
-// require a write client, decode the payload, read the labels — is identical,
-// and that half includes the ordering the refusal path depends on.
+// config: what to call it, how to write it, and how to seed it. The other half
+// is identical, and includes the ordering the refusal path depends on.
 type dataResourceSpec struct {
 	// kind is both the ACL resource type and the result's Type.
 	kind string
@@ -88,29 +80,17 @@ type dataResourceSpec struct {
 		data []byte,
 	) (string, error)
 
-	// seed writes the created record into the cache. Both tools tell a caller
-	// to create the replacement and then repoint the service, and resolution
-	// reads the cache — which the watcher fills asynchronously, a few hundred
-	// milliseconds later. Against a live cluster that made the documented
-	// sequence fail on its second step with "no such secret", for a resource
-	// whose ID had just been returned.
-	//
-	// Neither seed carries the payload. For a secret that is the point: the
-	// cache backs every listing and a credential has no business in it, and
-	// the watcher's own record carries none either. For a config it is merely
-	// unnecessary — the watcher brings the content moments later and nothing
-	// in between reads it.
+	// seed writes the created record into the cache, which resolution reads and
+	// the watcher fills only a few hundred milliseconds later — otherwise the
+	// documented rotation sequence fails its second step with "no such secret".
+	// Neither seed carries the payload: the cache backs every listing.
 	seed func(c *cache.Cache, id, name string, labels map[string]string)
 }
 
 // Swarm secrets and configs are immutable, so "rotate this password" is three
-// calls in order: create the replacement, repoint every service that uses it,
-// remove the old one. Cetacean could previously only do the third, which made
-// the whole sequence impossible rather than merely awkward.
-//
-// The ACL key is the resource's name, matching every other write of its type
-// and the REST route: there is no ID yet to key on, which is the one respect in
-// which a create differs from the edits around it.
+// calls in order: create the replacement, repoint every service using it,
+// remove the old one. The ACL key is the resource's name, matching the REST
+// route — there is no ID yet, which is the one way a create differs.
 var (
 	secretResource = dataResourceSpec{
 		kind: "secret",

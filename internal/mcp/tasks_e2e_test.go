@@ -134,15 +134,10 @@ func taskTestServer(t *testing.T, c *cache.Cache) *Server {
 	return newToolTestServer(t, c, writeClient, config.OpsOperational)
 }
 
-// TestScaleServiceAsTaskCompletesOnConvergence is the headline behaviour: the
-// call returns a handle at once, the task stays "working" while the cluster is
-// still catching up, and completes only once the cache shows the replicas
-// actually running.
-//
-// It runs through the real transport because that is the only place the
-// behaviour exists: mcp-go creates the task, runs the handler on a goroutine
-// whose context the HTTP server has already cancelled, and answers tasks/get
-// from its own registry. None of that is reachable by calling the handler.
+// The headline behaviour: the call returns a handle at once, the task stays
+// "working" while the cluster catches up, and completes only once the replicas
+// are running. It runs through the real transport because that is the only
+// place the behaviour exists — none of it is reachable by calling the handler.
 func TestScaleServiceAsTaskCompletesOnConvergence(t *testing.T) {
 	c := cache.New(nil)
 	seedService(t, c, "web", 3 /* desired */, 1 /* running */)
@@ -246,14 +241,10 @@ var taskToolArguments = map[string]map[string]any{
 	"restart_service":      {"id": "web"},
 }
 
-// TestEveryTaskToolAwaitsConvergence holds the declaration and the behaviour
-// together, tool by tool. A tool that advertises taskSupport but never calls
-// awaitIfTask completes its task the instant Docker accepts the change — it
-// tells an agent the cluster converged when it did not, which is precisely the
-// failure this phase exists to prevent, and a test that only checks the task
-// eventually completes would pass anyway.
-//
-// The check is that the task is still working while the cluster is not.
+// Holds the declaration and the behaviour together, tool by tool: one that
+// advertises taskSupport but never awaits completes the instant Docker accepts,
+// telling an agent the cluster converged when it did not. The check is that the
+// task is still working while the cluster is not.
 func TestEveryTaskToolAwaitsConvergence(t *testing.T) {
 	srv := taskTestServer(t, cache.New(nil))
 
@@ -301,13 +292,10 @@ func TestEveryTaskToolAwaitsConvergence(t *testing.T) {
 	}
 }
 
-// TestTaskAugmentedCallStillEnforcesACL — a task must never become a way
-// around the ACL check. The task path runs the very same handler as a plain
-// call, so the check has to fire there too.
-//
-// This drives the handler directly rather than the transport: the ACL only
-// engages when an identity is on the context, and the test transport
-// authenticates nobody.
+// A task must never become a way around the ACL check: the task path runs the
+// same handler as a plain call, so the check has to fire there too. This drives
+// the handler directly, since the ACL engages only with an identity on the
+// context and the test transport authenticates nobody.
 func TestTaskAugmentedCallStillEnforcesACL(t *testing.T) {
 	c := cache.New(nil)
 	seedService(t, c, "web", 1, 1)
@@ -347,11 +335,10 @@ func TestTaskAugmentedCallStillEnforcesACL(t *testing.T) {
 	}
 }
 
-// TestFailedTaskReportsFailedNotCompleted pins the distinction an agent acts
-// on. mcp-go marks a task completed whenever the handler returns no error, and
-// our tool errors normally travel *inside* a successful result — so a refused
-// mutation would show up as a completed task, and an agent polling tasks/get
-// would carry on as though the cluster had changed.
+// Pins the distinction an agent acts on. mcp-go marks a task completed whenever
+// the handler returns no error, and a tool error normally travels *inside* a
+// successful result — so a refused mutation would show as completed and an
+// agent polling tasks/get would carry on as though the cluster had changed.
 func TestFailedTaskReportsFailedNotCompleted(t *testing.T) {
 	c := cache.New(nil)
 	seedService(t, c, "web", 2, 2)
@@ -376,13 +363,10 @@ func TestFailedTaskReportsFailedNotCompleted(t *testing.T) {
 	}
 }
 
-// TestServiceMutationResultIsCompact pins the shape a task retains. mcp-go
-// keeps a completed task's result until its TTL elapses, and a client that
-// omits task.ttl keeps it for the life of the process, so returning the whole
-// swarm.Service here is what turns a busy agent into steady memory growth.
-//
-// Driven over the real transport so it covers the structured content a client
-// actually receives, not just the handler's return value.
+// Pins the shape a task retains. mcp-go keeps a completed task's result until
+// its TTL elapses, so returning the whole swarm.Service turns a busy agent into
+// steady memory growth. Driven over the real transport, so it covers the
+// structured content a client receives rather than the handler's return value.
 func TestServiceMutationResultIsCompact(t *testing.T) {
 	c := cache.New(nil)
 	seedService(t, c, "web", 2, 2)
@@ -499,17 +483,10 @@ func awaitTaskRelease(
 	t.Fatalf("task %s was still retained after %v; its result has leaked", taskID, within)
 }
 
-// TestTaskWithoutTTLIsStillReleased is the retention guard, and it has to run
-// through the real transport because the whole mechanism lives in mcp-go:
-// scheduleTaskCleanup is private, starts only for a task carrying a TTL, and
-// nothing in our code can delete a record. We supply the TTL mcp-go already
-// knows how to honour, on the request it is about to read.
-//
-// That last part is the fragile assumption worth pinning: mcp-go calls the
-// BeforeCallTool hook with a *pointer* to the request and passes that same
-// value to handleToolCall on the next line (request_handler.go:520-521). If a
-// future bump reorders those two, or copies the request between them, the
-// clamp silently stops applying and the leak returns — this test fails instead.
+// The retention guard, which runs through the real transport because the whole
+// mechanism lives in mcp-go. The fragile assumption: the BeforeCallTool hook
+// receives a *pointer* to the request handleToolCall reads on the next line, so
+// a bump that reorders or copies between them silently returns the leak.
 func TestTaskWithoutTTLIsStillReleased(t *testing.T) {
 	c := cache.New(nil)
 	seedService(t, c, "web", 1, 1)
@@ -606,21 +583,9 @@ func taskTestServerWithTTL(
 }
 
 // A panic inside a task-augmented mutation must fail that one task, not the
-// process.
-//
-// mcp-go recovers panics in executeTaskTool — the AddTaskTool path — but not
-// in executeRegularToolAsTask, which is the branch Cetacean's four converging
-// tools take: they are ordinary AddTool registrations, because AddTaskTool
-// would make mcp-go refuse every synchronous call (see
-// TestScaleServiceStillWorksSynchronously). That goroutine runs after the HTTP
-// response is written, so api's recovery middleware is long out of the picture
-// and an unrecovered panic there takes the dashboard, the SSE streams and the
-// watcher down with it.
-//
-// What stands in the way is mcpserver.WithRecovery: executeRegularToolAsTask
-// applies the tool middleware chain, and that option is a middleware. Without
-// it this test does not fail — it kills the test binary, which is the same
-// thing this guards against in production.
+// process. mcp-go recovers panics in executeTaskTool but not in
+// executeRegularToolAsTask, the branch the four converging tools take. What
+// stands in the way is WithRecovery: without it this kills the test binary.
 func TestPanickingMutationFailsTheTaskNotTheProcess(t *testing.T) {
 	c := cache.New(nil)
 	seedService(t, c, "web", 1, 1)

@@ -1,0 +1,56 @@
+package filter
+
+import (
+	"testing"
+	"time"
+)
+
+// Exercises Compile and Evaluate, the expr-lang parser behind the ?filter=
+// parameter every list endpoint accepts — reachable by anyone who can issue a
+// read, so a pathological expression is a denial-of-service vector. Compiling
+// and evaluating one must never panic and never exceed a fixed time budget.
+func FuzzFilterCompile(f *testing.F) {
+	seeds := []string{
+		`name == "web"`,
+		`contains(image, "nginx") && mode == "replicated"`,
+		`labels["env"] == "prod"`,
+		`name ==`, // syntax error: never reaches Evaluate
+		`((((((((((true))))))))))`,
+		`repeat("a", 100000000) != ""`, // deliberately expensive
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+
+	// Env shaped like ServiceEnv's output, plus a labels map — filter
+	// expressions commonly index into labels (e.g. labels["env"]).
+	env := map[string]any{
+		"id":       "svc1",
+		"name":     "web",
+		"image":    "nginx:latest",
+		"mode":     "replicated",
+		"stack":    "mystack",
+		"replicas": 3,
+		"labels": map[string]any{
+			"env":  "prod",
+			"team": "platform",
+		},
+	}
+
+	const budget = 2 * time.Second
+
+	f.Fuzz(func(t *testing.T, expression string) {
+		start := time.Now()
+
+		prog, err := Compile(expression)
+		if err != nil {
+			return
+		}
+
+		_, _ = Evaluate(prog, env)
+
+		if elapsed := time.Since(start); elapsed > budget {
+			t.Fatalf("expression took %s (budget %s): %q", elapsed, budget, expression)
+		}
+	})
+}

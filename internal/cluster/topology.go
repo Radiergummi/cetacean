@@ -19,12 +19,10 @@ const (
 	TopologyViewDrainImpact = "drain-impact"
 )
 
-// TopologyGraph is a transport-neutral view of the cluster as a graph.
-//
-// Nodes and Edges are always non-nil: this is marshalled against an advertised
-// MCP output schema declaring arrays, and a nil slice would marshal to null and
-// fail validation. Both are sorted, so the same cluster state always produces
-// the same bytes.
+// TopologyGraph is a transport-neutral view of the cluster as a graph. Nodes
+// and Edges are always non-nil, since a nil slice marshals to null and fails
+// the advertised output schema, and both are sorted, so the same cluster state
+// always produces the same bytes.
 type TopologyGraph struct {
 	View string `json:"view"`
 
@@ -34,22 +32,19 @@ type TopologyGraph struct {
 	// one side, candidate nodes on the other — has nowhere to say which.
 	Subject string `json:"subject,omitempty"`
 
-	// Note is a caveat about the answer rather than about any one vertex.
-	// A drain-impact assessment reaches conclusions from the nodes it was
-	// given, and those are the nodes the caller may read — so when ACL
-	// filtering hid any, "stranded" is a statement about the caller's view of
-	// the cluster and has to say so.
+	// Note is a caveat about the answer rather than any one vertex: a
+	// drain-impact assessment concludes from the nodes it was given, so when
+	// ACL filtering hid any, "stranded" is a statement about the caller's view
+	// of the cluster and has to say so.
 	Note string `json:"note,omitempty"`
 
 	Nodes []TopologyNode `json:"nodes"`
 	Edges []TopologyEdge `json:"edges"`
 }
 
-// TopologyNode is one vertex: a service, an overlay network, or a cluster node.
-//
-// The fields are deliberately generic. A renderer groups and colours by Type
-// and Group without knowing what a Swarm service is, and a model reading the
-// JSON gets a label, a one-line detail and a state without a second lookup.
+// TopologyNode is one vertex: a service, an overlay network, or a cluster
+// node. The fields are generic so a renderer can group and colour by Type and
+// Group without knowing what a Swarm service is.
 type TopologyNode struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
@@ -80,17 +75,9 @@ type TopologyEdge struct {
 }
 
 // NetworkGraph projects services and the overlay networks they attach to as a
-// bipartite graph: one vertex per service, one per attached network, one edge
-// per attachment.
-//
-// Deliberately not the pairwise "these two services can reach each other" graph
-// the REST /topology projection emits. That form is quadratic
-// in the services sharing a network — an ingress network with forty services on
-// it is 780 edges — and a reader cannot tell from it which network a given pair
-// share without reading the edge metadata. The bipartite form carries the same
-// information in one edge per attachment.
-//
-// Both slices must already be filtered to what the caller may read.
+// bipartite graph, not the pairwise reachability graph REST /topology emits:
+// that form is quadratic in the services sharing a network. Both slices must
+// already be filtered to what the caller may read.
 func NetworkGraph(services []swarm.Service, networks []network.Summary) TopologyGraph {
 	overlays := OverlayNetworks(networks)
 
@@ -129,11 +116,9 @@ func NetworkGraph(services []swarm.Service, networks []network.Summary) Topology
 	return newGraph(TopologyViewNetwork, nodes, edges)
 }
 
-// OverlayNetworks indexes the overlay networks among networks by ID.
-//
-// Only overlays carry service-to-service connectivity, so every topology
-// projection filters to them first; they share the filter for the same reason
-// they share ServiceAttachments.
+// OverlayNetworks indexes the overlay networks among networks by ID. Only
+// overlays carry service-to-service connectivity, so every topology projection
+// filters to them first.
 func OverlayNetworks(networks []network.Summary) map[string]network.Summary {
 	overlays := make(map[string]network.Summary, len(networks))
 
@@ -147,20 +132,9 @@ func OverlayNetworks(networks []network.Summary) map[string]network.Summary {
 }
 
 // ServiceAttachments returns the overlay networks a service is on, mapped to
-// its aliases there.
-//
-// Exported because it is the join every topology projection makes, and they
-// used to make it three different ways: the REST projections derived
-// membership from Endpoint.VirtualIPs alone and so dropped every dnsrr service
-// from the graph, while this one had always taken the union. A service is on a
-// network or it is not, whichever transport is asking.
-//
-// Two sources, because neither alone is complete. Endpoint.VirtualIPs is the
-// realised attachment, but a service published with endpoint mode dnsrr has no
-// virtual IP at all and would vanish from the graph. The task template's
-// networks are the desired attachment, present from the moment the spec is
-// accepted but silent about aliases the scheduler resolved. Their union is the
-// set of networks the service is meant to be reachable on.
+// its aliases there — the join every topology projection makes. Neither source
+// alone is complete: a dnsrr service has no Endpoint.VirtualIPs, and the task
+// template's networks say nothing about the aliases the scheduler resolved.
 func ServiceAttachments(
 	svc swarm.Service,
 	overlays map[string]network.Summary,
@@ -183,16 +157,9 @@ func ServiceAttachments(
 }
 
 // PlacementGraph projects which cluster node runs which service as a bipartite
-// graph: one vertex per cluster node, one per service, one edge per pair with
-// tasks, labelled with how many of them are running.
-//
-// Tasks are the join, not vertices of their own — a cluster of any size has
-// far more tasks than a graph can usefully show, and "how many replicas of this
-// service does that host carry" is the question the view answers.
-//
-// clusterNodes and services must already be filtered to what the caller may
-// read; a task referencing anything outside them is dropped, so the graph
-// cannot disclose a resource the filters excluded.
+// graph, one edge per pair with tasks, labelled with how many are running.
+// Tasks are the join rather than vertices of their own. Both slices must
+// already be ACL-filtered; a task referencing anything outside them is dropped.
 func PlacementGraph(
 	clusterNodes []swarm.Node,
 	tasks []swarm.Task,
@@ -279,11 +246,8 @@ func PlacementGraph(
 }
 
 // TaskIsLive reports whether the orchestrator still intends this task to run.
-//
-// The rule itself lives in internal/cache, because the cache's replica
-// counters need it and cannot import this package. This is the name the
-// topology and digest builders already call it by, kept so the projections
-// read the way they always did while there is only one definition to drift.
+// The rule lives in internal/cache, whose replica counters need it and cannot
+// import this package; this is the name the projections here call it by.
 func TaskIsLive(task swarm.Task) bool {
 	return cache.TaskIsLive(task)
 }

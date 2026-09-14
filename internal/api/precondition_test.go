@@ -148,12 +148,10 @@ type preconditionEndpoint struct {
 	wantStatus int
 }
 
-// pairedEndpoints is every path in the router carrying both a GET and a write
-// method, and so every path that declares an If-Match precondition. The three
-// collection creates (POST /configs, /secrets, /plugins) are absent: their
-// paired GET is a collection whose ETag turns over on any member change, so no
-// caller could satisfy the precondition. /services/{id}/healthcheck appears
-// twice, for the PUT and the PATCH, against the one representation.
+// pairedEndpoints is every path carrying both a GET and a write method, and so
+// every path declaring an If-Match precondition. The three collection creates
+// are absent: their paired GET is a collection whose ETag turns over on any
+// member change. /services/{id}/healthcheck appears twice, for PUT and PATCH.
 var pairedEndpoints = []preconditionEndpoint{
 	{
 		"service env", "/services/svc1/env", "PATCH", "/services/svc1/env",
@@ -225,10 +223,6 @@ var pairedEndpoints = []preconditionEndpoint{
 		`{"user":"nobody"}`, "application/merge-patch+json", http.StatusOK,
 	},
 	{
-		"service mode", "/services/svc1/mode", "PUT", "/services/svc1/mode",
-		`{"mode":"replicated","replicas":3}`, "application/json", http.StatusOK,
-	},
-	{
 		"service endpoint mode", "/services/svc1/endpoint-mode",
 		"PUT", "/services/svc1/endpoint-mode",
 		`{"mode":"dnsrr"}`, "application/json", http.StatusOK,
@@ -287,15 +281,10 @@ var pairedEndpoints = []preconditionEndpoint{
 	},
 }
 
-// TestPreconditionRoundTripsForEveryPairedEndpoint reads each endpoint that
-// declares a precondition, then drives its write twice: once with the ETag the
-// read just returned, and once with a strong tag that cannot match.
-//
-// The mismatched row catches a route that never got its precond wrapper, since
-// an unconditioned write admits every If-Match; the matching row proves the
-// route is conditioned on this URI's representation. Neither can prove a
-// builder still renders what its GET rendered — a corrupted builder corrupts
-// both validators identically — so do not read a green run as covering that.
+// Reads each endpoint declaring a precondition, then drives its write twice:
+// with the ETag the read returned, and with a strong tag that cannot match. The
+// mismatched row catches a route that never got its precond wrapper; the
+// matching row proves it is conditioned on this URI's representation.
 func TestPreconditionRoundTripsForEveryPairedEndpoint(t *testing.T) {
 	write := func(t *testing.T, router http.Handler, tc preconditionEndpoint, ifMatch string) int {
 		t.Helper()
@@ -449,21 +438,18 @@ func seededWriteClient() *mockWriteClient {
 	return &mockWriteClient{
 		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
 			removeServiceFn: func(context.Context, string) error { return nil },
-			updateServiceModeFn: func(_ context.Context, id string, _ swarm.ServiceMode) (swarm.Service, error) {
-				return updated(id)
-			},
 			updateServiceEndpointModeFn: func(_ context.Context, id string, _ swarm.ResolutionMode) (swarm.Service, error) {
 				return updated(id)
 			},
 		},
 		mockServiceSpecWriter: mockServiceSpecWriter{
+			updateServiceSpecFn: func(_ context.Context, id string, _ swarm.ServiceSpec) (swarm.Service, error) {
+				return updated(id)
+			},
 			updateServiceEnvFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
 				return updated(id)
 			},
 			updateServiceLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceResourcesFn: func(_ context.Context, id string, _ *swarm.ResourceRequirements) (swarm.Service, error) {
 				return updated(id)
 			},
 			updateServiceHealthcheckFn: func(_ context.Context, id string, _ *container.HealthConfig) (swarm.Service, error) {
@@ -473,15 +459,6 @@ func seededWriteClient() *mockWriteClient {
 				return updated(id)
 			},
 			updateServicePortsFn: func(_ context.Context, id string, _ []swarm.PortConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceUpdatePolicyFn: func(_ context.Context, id string, _ *swarm.UpdateConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceRollbackPolicyFn: func(_ context.Context, id string, _ *swarm.UpdateConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceLogDriverFn: func(_ context.Context, id string, _ *swarm.Driver) (swarm.Service, error) {
 				return updated(id)
 			},
 		},
@@ -496,9 +473,6 @@ func seededWriteClient() *mockWriteClient {
 				return updated(id)
 			},
 			updateServiceMountsFn: func(_ context.Context, id string, _ []mount.Mount) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceContainerConfigFn: func(_ context.Context, id string, _ func(*swarm.ContainerSpec)) (swarm.Service, error) {
 				return updated(id)
 			},
 		},
@@ -531,15 +505,9 @@ func seededWriteClient() *mockWriteClient {
 	}
 }
 
-// newSeededTestRouter builds a router over a cache holding one of every
-// resource type the paired endpoints address, plus write and plugin clients
-// that accept every write in pairedEndpoints. Each subtest gets its own, so a
-// row that removes a resource cannot affect the next.
-// TestPreconditionDistinguishesAnUnreachableBackend covers the one builder that
-// reads the daemon rather than the cache. A plugin that is genuinely gone has
-// no current representation and is a 412; a daemon that could not be reached
-// leaves the condition unevaluable, and answering 412 there would tell the
-// caller its validator is stale when nothing about the resource has changed.
+// Covers the one builder that reads the daemon rather than the cache: a plugin
+// genuinely gone is a 412, but a daemon that could not be reached leaves the
+// condition unevaluable.
 func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 	cases := []struct {
 		name       string

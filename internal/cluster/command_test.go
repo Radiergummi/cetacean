@@ -8,14 +8,10 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 )
 
-// TestServiceDetailsSeparatesCommandFromArgs fixes a mislabel that only starts
-// to bite now that a caller can *write* this section.
-//
-// ServiceDetails reported spec.Args under the key "command" and never reported
-// spec.Command at all. Docker draws the line the other way: Command is the
-// entrypoint, Args is what follows it. A service with an entrypoint override
-// therefore had it hidden, and — once update_service gains a "command" section
-// — a caller would write Command and read back Args under the same name.
+// Fixes a mislabel that bites now a caller can *write* this section. Reporting
+// spec.Args under the key "command" and spec.Command not at all inverts Docker's
+// line — Command is the entrypoint, Args what follows it — so an entrypoint
+// override is hidden and a caller writes Command but reads Args back.
 func TestServiceDetailsSeparatesCommandFromArgs(t *testing.T) {
 	svc := swarm.Service{
 		ID: "svc1",

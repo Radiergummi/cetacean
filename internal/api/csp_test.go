@@ -8,11 +8,10 @@ import (
 	"testing/fstest"
 )
 
-// The theme script has to run inline to beat the first paint, and the policy
-// has no `script-src` to spare it, so the served document is hashed at startup
-// rather than a digest being pasted into the header. This is the whole point:
-// an edit to index.html must change the token the header carries, with nothing
-// to remember to update.
+// The theme script has to run inline to beat the first paint, and the policy has
+// no `script-src` to spare it, so the served document is hashed at startup
+// rather than a digest pasted into the header — an edit to index.html must
+// change the token the header carries, with nothing to remember to update.
 func TestInlineScriptHashesCoverTheServedDocument(t *testing.T) {
 	index := `<!doctype html><html><head>` +
 		`<script>document.documentElement.classList.add("dark")</script>` +

@@ -53,11 +53,10 @@ func promptNames(listing promptListing) []string {
 	return names
 }
 
-// TestPromptsAreRegisteredAndReachable guards registration and end-to-end
-// reachability. A unit test on promptCatalog() passes happily whether or not
-// registerPrompts() ever ran on a real server; this drives the real transport
-// so a missing registerPrompts() call, an empty catalog, or a broken handler
-// fails here instead of silently serving no prompts.
+// Guards registration and end-to-end reachability: a unit test on
+// promptCatalog() passes whether or not registerPrompts() ever ran, so this
+// drives the real transport and fails on a missing call, an empty catalog or a
+// broken handler.
 func TestPromptsAreRegisteredAndReachable(t *testing.T) {
 	handler := newPromptTestServer(t, config.OpsReadOnly).Handler()
 
@@ -176,11 +175,10 @@ func visiblePrompts(t *testing.T, policy *acl.Policy) map[string]bool {
 	return found
 }
 
-// TestPromptsForANodeOperator pins both halves of the filter against one
-// policy. diagnose_service walks get_logs, which needs service:read, and
-// explain_unschedulable reads services even though every tool it drives is
-// ungated — so neither is offered. review_capacity walks nodes end to end and
-// must be, and drain_node needs node:write rather than read.
+// Pins both halves of the filter against one policy. diagnose_service walks
+// get_logs, which needs service:read, and explain_unschedulable reads services
+// though every tool it drives is ungated — so neither is offered.
+// review_capacity walks nodes end to end and must be.
 func TestPromptsForANodeOperator(t *testing.T) {
 	got := visiblePrompts(t, readOnlyPolicy("node:*"))
 
@@ -216,11 +214,10 @@ func TestPromptsVisibleWhenEveryDrivenToolIs(t *testing.T) {
 	}
 }
 
-// TestPromptsHiddenWhenTheReadTypesAreDenied covers what the driven-tool check
-// cannot see. explain_unschedulable and review_capacity walk only ungated
-// cross-type tools, so every driven name passes allow for any grant holder —
-// but a caller granted volume:read alone would get an empty list from every
-// step. The declared read types are what keep them hidden.
+// Covers what the driven-tool check cannot see: explain_unschedulable and
+// review_capacity walk only ungated cross-type tools, so every driven name
+// passes for any grant holder while a caller granted volume:read alone gets an
+// empty list from every step. The declared read types keep them hidden.
 func TestPromptsHiddenWhenTheReadTypesAreDenied(t *testing.T) {
 	got := visiblePrompts(t, readOnlyPolicy("volume:*"))
 
@@ -230,11 +227,10 @@ func TestPromptsHiddenWhenTheReadTypesAreDenied(t *testing.T) {
 	}
 }
 
-// TestPromptsVisibleToAStackOperator is the end-to-end payoff of expanding
-// grants by type. A stack grant covers the stack's services, so every step of
-// diagnose_service and roll_back_service succeeds for its holder — and both
-// were hidden before, with prompts/get reporting "not found" for a sequence the
-// caller could run.
+// The end-to-end payoff of expanding grants by type: a stack grant covers the
+// stack's services, so every step of diagnose_service and roll_back_service
+// succeeds for its holder. Without the expansion, prompts/get reports "not
+// found" for a sequence the caller could run.
 func TestPromptsVisibleToAStackOperator(t *testing.T) {
 	got := visiblePrompts(t, &acl.Policy{Grants: []acl.Grant{{
 		Resources:   []string{"stack:web"},

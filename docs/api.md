@@ -40,6 +40,7 @@ the client asks for. There is no `/api/v1/` prefix; versioning lives in the medi
 | `application/vnd.jgf+json`         | `.jgf`      | JSON Graph Format, `/topology` only          |
 | `application/graphml+xml`          | `.graphml`  | GraphML, `/topology` only                    |
 | `text/vnd.graphviz`                | `.dot`      | Graphviz DOT, `/topology` only               |
+| `application/yaml`                 | `.yaml`, `.yml` | [Compose file](#compose-export), on a stack or a service |
 
 All negotiated responses include `Vary: Accept`. Requesting a type an endpoint cannot produce returns
 `406 Not Acceptable` with code [`API003`](api/errors#API003); asking for SSE on an endpoint without a stream
@@ -208,6 +209,39 @@ curl 'http://localhost:9000/tasks.csv?limit=100&offset=200'
 A [`Range` header](#range-header-pagination) is not honoured for CSV: that exchange answers `206` with a
 `Content-Range`, and a download is always a plain `200`. Ask for a page with `limit` and `offset` instead.
 
+## Compose export
+
+A stack or a single service also serves a Compose file, for the consumer no other format serves: someone who wants
+the running state as something they can read, keep in version control, or redeploy.
+
+```bash
+curl -o myapp.yaml http://localhost:9000/stacks/myapp.yaml
+curl -H 'Accept: application/yaml' http://localhost:9000/services/r8m2x5nk3p7q
+```
+
+The promise is narrow and the file says so in a header comment: it redeploys to **the same running state on the same
+cluster**. It is not the file that originally created the stack, and it is not portable on its own.
+
+### What is external, and why
+
+Secrets are never exported — that rule holds here as everywhere else. Configs are not exported either, even though
+their content is available: inlining it through Compose's `content:` field would have a redeploy create a new config
+rather than reuse the one the running service is already mounting, which would break the promise above. Both are
+referenced as `external: true`, so another cluster needs them created first.
+
+Networks and volumes split. One carrying the stack's `com.docker.stack.namespace` label is the stack's own, and is
+declared with its driver and options. Everything else — a shared `monitoring` overlay the services merely attach to —
+is `external: true` under its full name. Getting this backwards is the single most likely way to produce a file that
+reads correctly and fails to deploy, in both directions.
+
+Names are shortened by the stack's own prefix, because `docker stack deploy` adds it back: the service Swarm calls
+`myapp_api` is `api` in the file. A name another resource already spells in full is left long rather than collapsed
+onto it — an owned `myapp_data` and an adopted `data` stay two volumes. A single-service export shortens nothing and
+declares everything external, because a service creates none of what it references.
+
+Anything the projection could not carry — a custom seccomp profile, a mount option Compose has no field for — is
+listed in the header comment rather than dropped silently.
+
 ## Pagination
 
 List endpoints page by query parameter or by HTTP `Range` header.
@@ -297,6 +331,26 @@ wrap items as `{ items, total, limit, offset }` with [RFC 8288](https://www.rfc-
 for pagination. Detail responses wrap the resource with its cross-references, such as the services using a config, or
 the service and node for a task.
 
+## Resource identifiers
+
+Detail paths accept a resource's ID or its name. A name is answered with `307 Temporary Redirect` to the
+canonical, ID-addressed URL:
+
+```bash
+curl -i -H 'Accept: application/json' http://localhost:9000/services/shop_web
+# < HTTP/1.1 307 Temporary Redirect
+# < Location: /services/x3k9m2p8q1w7
+```
+
+`307` preserves the method and the body, so writes may be addressed by name too: `PUT /services/shop_web/scale`
+reaches the scale endpoint with its payload intact. Most clients follow the redirect on request (`curl -L`).
+
+Volumes and stacks are keyed by name already, so their paths never redirect. Tasks are addressable by ID only: a
+task's `<service>.<slot>` name is derived from its parent rather than stored on it.
+
+A name matching more than one resource is answered `409 Conflict` with [`API015`](api/errors#API015), whose
+detail lists every ID the request could have meant.
+
 ## Errors
 
 Errors follow [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details, with Content-Type
@@ -347,6 +401,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 | Cross-origin write from an origin that is not allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
+| Name in the path identifies more than one resource | 409 | [`API015`](api/errors#API015) | Address the resource by ID; the detail lists the candidates |
 
 ## Caching
 
@@ -585,7 +640,14 @@ There is no general rate limiting. Concurrent streams are capped, and a request 
 | Meta | `/-/health`, `/-/ready`, `/-/metrics`, `/-/licenses`, `/-/licenses/texts/{id}`, `/-/notices`, `/-/sbom.cdx`, `/-/docker-latest-version` |
 
 `GET /search` takes `q` (required, max 200 characters) and `limit` (per type, default 3; `0` or a value above 1000
-returns up to 1000). `POST /-/resync` forces a full re-fetch from the Docker socket.
+returns up to 1000). `POST /-/resync` forces a full re-fetch from the Docker socket; unlike the other
+`/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API,
+but it is not gated on the operations level — it re-reads the cluster and never changes it.
+
+`GET /-/health` carries a `watcher` object reporting whether Cetacean is still tracking the cluster:
+`connected` for the Docker event stream, and `lastSyncAt` / `lastSyncAgeSeconds` for the last
+successful read. `/-/metrics` carries the same as `cetacean_watcher_connected`,
+`cetacean_cache_last_sync_timestamp_seconds` and `cetacean_cache_sync_failures_total`.
 
 ### Writes
 
@@ -612,7 +674,6 @@ passes the per-resource [ACL][authorization] write check.
 | `PATCH /services/{id}/networks` | 2 |
 | `PATCH /services/{id}/mounts` | 2 |
 | `PATCH /services/{id}/container-config` | 2 |
-| `PUT /services/{id}/mode` | 3 |
 | `PUT /services/{id}/endpoint-mode` | 3 |
 | `DELETE /services/{id}` | 3 |
 | `PATCH /nodes/{id}/labels` | 2 |
@@ -659,14 +720,14 @@ A `412` always means the resource moved. Where the current representation cannot
 `DELETE /plugins/{name}` inspects the daemon rather than the cache — the write answers `503`
 (`ENG001`) or `500` (`ENG004`) instead, so an unreachable daemon is not reported as a stale `ETag`.
 
-30 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
+29 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
 `PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
 `PUT /services/{id}/placement`, `PATCH /services/{id}/ports`,
 `PATCH /services/{id}/update-policy`, `PATCH /services/{id}/rollback-policy`,
 `PATCH /services/{id}/log-driver`, `PATCH /services/{id}/configs`,
 `PATCH /services/{id}/secrets`, `PATCH /services/{id}/networks`,
 `PATCH /services/{id}/mounts`, `PATCH /services/{id}/container-config`,
-`PUT /services/{id}/mode`, `PUT /services/{id}/endpoint-mode`, `DELETE /services/{id}`,
+`PUT /services/{id}/endpoint-mode`, `DELETE /services/{id}`,
 `PATCH /nodes/{id}/labels`, `PUT /nodes/{id}/role`, `DELETE /nodes/{id}`,
 `PATCH /configs/{id}/labels`, `DELETE /configs/{id}`, `PATCH /secrets/{id}/labels`,
 `DELETE /secrets/{id}`, `DELETE /networks/{id}`, `DELETE /volumes/{name}`,

@@ -86,12 +86,10 @@ func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result
 	return results, nil
 }
 
-// RangeQuery runs a range query and decodes the matrix it returns.
-//
-// The raw variant exists for the proxy and the SSE stream, which forward
-// Prometheus' own JSON verbatim; this one is for callers that need the samples
-// themselves, and it drops a sample it cannot parse rather than failing the
-// whole series — one malformed value should not blank a chart.
+// RangeQuery runs a range query and decodes the matrix it returns. The raw
+// variant is for the proxy and the SSE stream, which forward Prometheus' own
+// JSON verbatim; this one drops a sample it cannot parse rather than failing
+// the series, since one malformed value should not blank a chart.
 func (pc *Client) RangeQuery(
 	ctx context.Context,
 	query, start, end, step string,
