@@ -88,6 +88,35 @@ func TestDCRRejectsSymmetricAuth(t *testing.T) {
 	}
 }
 
+// Only "none" is supported, so anything else is refused rather than stored and
+// silently treated as public — including a method nobody has heard of, which is
+// what let an unbounded string reach the state file.
+func TestDCRRejectsUnrecognisedAuthMethod(t *testing.T) {
+	for _, method := range []string{
+		"private_key_jwt",
+		"tls_client_auth",
+		strings.Repeat("a", 60000),
+	} {
+		t.Run(method[:min(len(method), 20)], func(t *testing.T) {
+			s := newTestServer(t)
+
+			body := `{
+				"redirect_uris": ["http://localhost/cb"],
+				"token_endpoint_auth_method": "` + method + `"
+			}`
+			rec := httptest.NewRecorder()
+			s.HandleRegister(rec, newDCRRequest(t, body))
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+			}
+			if s.clients.Get("") != nil || len(s.clients.Snapshot()) != 0 {
+				t.Error("a refused registration was stored anyway")
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // TestDCRRejectsUnsupportedGrantType
 // ---------------------------------------------------------------------------
