@@ -36,9 +36,9 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, code, detail
 }
 
 // AuthError is an authentication error that carries a WWW-Authenticate
-// header value per RFC 9110. Code names a registry entry to answer with
-// instead of 401 AUT001 — for a credential no challenge can ask for — and
-// makes Msg the client-visible detail rather than only a log line.
+// header value per RFC 9110. The challenge is what earns a 401; Code names a
+// registry entry to answer with instead of the default refusal, and makes Msg
+// the client-visible detail rather than only a log line.
 type AuthError struct {
 	Msg             string
 	WWWAuthenticate string
@@ -48,17 +48,18 @@ type AuthError struct {
 
 func (e *AuthError) Error() string { return e.Msg }
 
-// writeAuthFailure answers a failed Authenticate, for both callers of it. A
-// provider that named a Code owns its refusal; one that did not gets the 401
-// AUT001 a challengeable credential deserves. Status is the fallback's only,
-// since a registered ErrorWriter takes the status from the registry instead.
+// writeAuthFailure answers a failed Authenticate, for both callers that answer
+// one — MCP's bypass falls through to its own bearer challenge. RFC 9110
+// §15.5.2 admits no 401 without a challenge, so a refusal that produced none
+// is 403; a Code names a refusal of its own. Status is the fallback's only.
 func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error) {
-	status, code, detail := http.StatusUnauthorized, "AUT001", "authentication required"
+	status, code, detail := http.StatusForbidden, "AUT006", "authentication refused"
 
 	var authErr *AuthError
 	if errors.As(err, &authErr) {
 		if authErr.WWWAuthenticate != "" {
 			w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
+			status, code, detail = http.StatusUnauthorized, "AUT001", "authentication required"
 		}
 		if authErr.Code != "" {
 			code, detail = authErr.Code, authErr.Msg

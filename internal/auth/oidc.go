@@ -132,7 +132,10 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 
 		var claims map[string]any
 		if err := idToken.Claims(&claims); err != nil {
-			return nil, fmt.Errorf("failed to parse token claims: %w", err)
+			return nil, &AuthError{
+				Msg:             "unreadable bearer token claims",
+				WWWAuthenticate: `Bearer error="invalid_token"`,
+			}
 		}
 
 		if err := p.validateAzp(idToken, claims); err != nil {

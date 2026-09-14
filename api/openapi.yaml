@@ -6209,7 +6209,7 @@ components:
             instance: /plugins/vieux/sshfs:latest
             requestId: req_a1b2c3d4e5f6
     Forbidden:
-      description: Access denied by operations level, ACL, cross-origin protection, or a rejected client certificate
+      description: Access denied by operations level, ACL, cross-origin protection, or a rejected credential no HTTP challenge can ask for
       content:
         application/problem+json:
           schema:
