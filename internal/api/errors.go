@@ -122,6 +122,13 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "The If-Match header did not match the current state of the resource.",
 		Suggestion:  "Re-read the resource, take the ETag from that response, and retry with it.",
 	},
+	"API014": {
+		Code:        "API014",
+		Title:       "Not Representable as Compose",
+		Status:      http.StatusUnprocessableEntity,
+		Description: "The resource has nothing a compose file can describe. A service running a plugin or a network attachment has no container specification, which is all a compose service is.",
+		Suggestion:  "Read the resource as JSON instead; only container services have a compose projection.",
+	},
 
 	// ── AUT: authentication ───────────────────────────────────────────
 	"AUT001": {Code: "AUT001", Title: "Not Authenticated", Status: http.StatusUnauthorized,

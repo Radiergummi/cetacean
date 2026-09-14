@@ -10,6 +10,7 @@ import type {
   SpecChange,
   Task,
 } from "../api/types";
+import { composeQueryKey } from "../components/ComposeSection";
 import type { ServiceResourceShape } from "../components/service-detail";
 import {
   isCadvisorReady,
@@ -24,9 +25,11 @@ import { deriveServiceSubResources } from "../lib/deriveServiceState";
 import { integrationLabelPrefix } from "../lib/integrationLabels";
 import { cpuThresholds, memoryThresholds } from "../lib/resourceThresholds";
 import { escapePromQL } from "../lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export function useServiceDetail(id: string | undefined) {
+  const queryClient = useQueryClient();
   const [service, setService] = useState<Service | null>(null);
   const [changes, setChanges] = useState<SpecChange[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -187,6 +190,13 @@ export function useServiceDetail(id: string | undefined) {
       // Service deletions and full syncs come without a payload — refetch to
       // pick up the new state (or surface 404 on delete).
       fetchService(controller.signal);
+    }
+
+    // The compose document is a projection of the spec, so a task event does
+    // not change it; an expanded section would otherwise keep showing the
+    // file the service was exported as before the update.
+    if (event.type === "service" || event.type === "sync") {
+      void queryClient.invalidateQueries({ queryKey: [...composeQueryKey(`service:${id}`)] });
     }
   });
 

@@ -379,6 +379,13 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			spa,
 		),
 	)
+	serviceFeeds := h.detailFeeds(cache.EventService, "id", func(id string) string {
+		if s, ok := h.cache.GetService(id); ok {
+			return s.Spec.Name
+		}
+		return id
+	})
+	serviceFeeds.yaml = h.HandleServiceCompose
 	mux.HandleFunc(
 		"GET /services/{id}",
 		contentNegotiatedWithSSE(
@@ -386,12 +393,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventService, r.PathValue("id"))
 			},
-			h.detailFeeds(cache.EventService, "id", func(id string) string {
-				if s, ok := h.cache.GetService(id); ok {
-					return s.Spec.Name
-				}
-				return id
-			}),
+			serviceFeeds,
 			spa,
 		),
 	)
@@ -619,14 +621,16 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		"GET /stacks/summary",
 		contentNegotiated(h.HandleStackSummary, feedHandlers{}, spa),
 	)
+	stackFeeds := h.detailFeeds(cache.EventStack, "name", func(name string) string {
+		return name
+	})
+	stackFeeds.yaml = h.HandleStackCompose
 	mux.HandleFunc(
 		"GET /stacks/{name}",
 		contentNegotiatedWithSSE(h.HandleGetStack, func(w http.ResponseWriter, r *http.Request) {
 			stackMatch := sse.StackMatcher(h.cache, r.PathValue("name"))
 			h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, stackMatch), "")
-		}, h.detailFeeds(cache.EventStack, "name", func(name string) string {
-			return name
-		}), spa),
+		}, stackFeeds, spa),
 	)
 	mux.Handle("DELETE /stacks/{name}",
 		stackTier3.Append(h.precond(h.stackRepresentation)).

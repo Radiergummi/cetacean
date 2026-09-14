@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
+import ComposeSection from "../components/ComposeSection";
 import { ContainerImage, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
@@ -321,6 +322,12 @@ export default function ServiceDetail() {
         onRefetch={detail.refetchService}
         cpuActual={detail.cpuActual}
         memActual={detail.memActual}
+      />
+
+      <ComposeSection
+        name={service.Spec.Name}
+        queryKey={`service:${id!}`}
+        fetcher={(signal) => api.serviceCompose(id!, signal)}
       />
 
       <ErrorBoundary inline>

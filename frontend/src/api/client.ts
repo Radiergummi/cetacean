@@ -267,8 +267,8 @@ async function fetchJGF<T>(
   return data;
 }
 
-async function fetchText(path: string, signal?: AbortSignal): Promise<string> {
-  const response = await request(path, undefined, signal);
+async function fetchText(path: string, signal?: AbortSignal, accept?: string): Promise<string> {
+  const response = await request(path, accept ? { Accept: accept } : undefined, signal);
 
   return response.text();
 }
@@ -630,6 +630,8 @@ export const api = {
     ).then(({ data }) => data),
   service: (id: string, signal?: AbortSignal) =>
     fetchJSON<ServiceDetail>(`/services/${id}`, signal, schema.serviceDetailSchema),
+  serviceCompose: (id: string, signal?: AbortSignal) =>
+    fetchText(`/services/${encodeURIComponent(id)}`, signal, "application/yaml"),
   tasks: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Task>("/tasks", params, signal, schema.taskSchema),
   stacks: (params?: ListParams, signal?: AbortSignal) =>
@@ -649,6 +651,8 @@ export const api = {
       data: data.stack,
       allowedMethods,
     })),
+  stackCompose: (name: string, signal?: AbortSignal) =>
+    fetchText(`/stacks/${encodeURIComponent(name)}`, signal, "application/yaml"),
   configs: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Config>("/configs", params, signal, schema.configSchema),
   config: (id: string, signal?: AbortSignal) =>

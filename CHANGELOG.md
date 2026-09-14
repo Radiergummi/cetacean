@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- A stack or a service can be exported as a Compose file, from its detail page or by adding `.yaml` to its URL. Secrets and configs are referenced, never exported
 - `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document — the channels, the messages each carries, and which cursor dialect its `id:` uses. Sixteen streams were previously described nowhere
 - Both API descriptions are served as YAML as well as JSON, at `/api/openapi.yaml` and `/api/asyncapi.yaml` or by negotiating on `Accept`
 - Any list can be downloaded as CSV — add `.csv` to the URL or ask for `text/csv`. Search, filters and sorting apply; a download that asks for no page gets every row
