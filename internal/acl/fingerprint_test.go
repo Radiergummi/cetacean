@@ -135,9 +135,9 @@ func TestFingerprintNilAndUnconfigured(t *testing.T) {
 	}
 }
 
-// FilterInPlace must keep exactly what Filter keeps, in the same order — it is
-// only allowed to differ in what it does to the caller's backing array.
-func TestFilterInPlaceMatchesFilter(t *testing.T) {
+// FilterInPlaceNamed must keep exactly what Filter keeps, in the same order —
+// it is only allowed to differ in what it does to the caller's backing array.
+func TestFilterInPlaceNamedMatchesFilter(t *testing.T) {
 	policies := map[string][]Grant{
 		"wildcard":   {readGrant("service:*")},
 		"prefix":     {readGrant("service:web*")},
@@ -150,6 +150,7 @@ func TestFilterInPlaceMatchesFilter(t *testing.T) {
 		names = append(names, fmt.Sprintf("web-%d", i))
 	}
 	resource := func(s string) string { return "service:" + s }
+	identity := func(s string) string { return s }
 
 	for name, grants := range policies {
 		t.Run(name, func(t *testing.T) {
@@ -160,10 +161,10 @@ func TestFilterInPlaceMatchesFilter(t *testing.T) {
 			inPlace := slices.Clone(names)
 
 			want := Filter(e, nil, "read", copied, resource)
-			got := FilterInPlace(e, nil, "read", inPlace, resource)
+			got := FilterInPlaceNamed(e, nil, "read", inPlace, "service", identity)
 
 			if !slices.Equal(want, got) {
-				t.Errorf("FilterInPlace gave %v, Filter gave %v", got, want)
+				t.Errorf("FilterInPlaceNamed gave %v, Filter gave %v", got, want)
 			}
 			if !slices.Equal(copied, names) {
 				t.Error("Filter modified the slice it was given")
@@ -172,17 +173,13 @@ func TestFilterInPlaceMatchesFilter(t *testing.T) {
 	}
 }
 
-func TestFilterInPlaceUnconfigured(t *testing.T) {
+func TestFilterInPlaceNamedUnconfigured(t *testing.T) {
 	items := []string{"a", "b"}
-	if got := FilterInPlace(
-		nil,
-		nil,
-		"read",
-		items,
-		func(s string) string { return s },
-	); len(
-		got,
-	) != 2 {
+	got := FilterInPlaceNamed(nil, nil, "read", items, "service", func(s string) string {
+		return s
+	})
+	if len(got) != 2 {
 		t.Errorf("a nil evaluator filtered %d of 2 items", len(got))
 	}
 }
+
