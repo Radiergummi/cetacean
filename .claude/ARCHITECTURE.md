@@ -75,7 +75,10 @@ Each of these looks like a simplification and is not.
 - **`ResourceMap.Each` yields under the read lock.** Nothing in the loop may call
   back into the cache: Go's `RWMutex` is not re-entrant for readers, so a writer
   arriving between two `RLock`s wedges the second. Search collects what matches
-  and enriches afterwards for exactly this reason.
+  and enriches afterwards for exactly this reason. `List` sorts after releasing
+  the lock and `Each` deliberately does not: a scan reading values straight from
+  the map holds it for the whole yield regardless, so hoisting the sort out would
+  buy a sliver of the hold and cost the snapshot the scan reports on.
 - **A path ending `.json` never reaches the mux.** `negotiate` strips a known extension and
   rewrites the path before routing, so the SPA fallback answers it. That is why the JWK Set
   is served at `/oauth/jwks` rather than the conventional `/.well-known/jwks.json`.

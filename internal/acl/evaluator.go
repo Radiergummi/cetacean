@@ -90,9 +90,9 @@ func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) b
 
 // Filter returns only items the identity can access with the given permission.
 //
-// items is left untouched. A caller that owns the slice — one holding a copy
-// the cache just handed it, and nothing else — should use FilterInPlace, which
-// is the same walk without a second slice.
+// items is left untouched. A caller that owns the slice outright — one holding
+// a copy the cache just handed it — and whose items are all one resource type
+// should use FilterInPlaceNamed, which is the same walk without a second slice.
 func Filter[T any](
 	e *Evaluator,
 	id *auth.Identity,
@@ -100,29 +100,37 @@ func Filter[T any](
 	items []T,
 	resourceFunc func(T) string,
 ) []T {
+	if e == nil {
+		return items
+	}
+	p := e.policy.Load()
+	if p == nil {
+		return items
+	}
+
+	grants := e.collectGrants(id, p)
+
 	// Grown rather than sized for the whole input: a permissive policy pays
 	// for the growth, but sizing for every item costs a restrictive one far
 	// more — and a restrictive policy is the reason to run one at all.
-	return filterInto(e, id, permission, items, nil, resourceFunc)
+	var result []T
+	for _, item := range items {
+		resource := resourceFunc(item)
+		for _, g := range grants {
+			if hasPermission(g, permission) && e.grantMatchesResource(g, resource) {
+				result = append(result, item)
+				break
+			}
+		}
+	}
+
+	return result
 }
 
-// FilterInPlace is Filter, writing the survivors over items rather than into a
-// slice of its own. The order is the same and nothing is dropped that Filter
-// would keep, but items is reordered and must not be shared: the caller has to
-// own it outright, as prepareList does with the copy the cache gave it.
-func FilterInPlace[T any](
-	e *Evaluator,
-	id *auth.Identity,
-	permission string,
-	items []T,
-	resourceFunc func(T) string,
-) []T {
-	return filterInto(e, id, permission, items, items[:0], resourceFunc)
-}
-
-// FilterInPlaceNamed is FilterInPlace for the common case where every item's
-// resource is the same type, so the caller can name each one rather than build
-// a "type:name" string per item that the matcher immediately splits again.
+// FilterInPlaceNamed is Filter for a caller that owns items outright and whose
+// items are all one resource type, so each can be named rather than spelled as
+// a "type:name" string the matcher immediately splits again. The survivors are
+// written over items, which is reordered and must not be shared.
 func FilterInPlaceNamed[T any](
 	e *Evaluator,
 	id *auth.Identity,
@@ -152,38 +160,6 @@ func FilterInPlaceNamed[T any](
 		}
 	}
 
-	return result
-}
-
-// filterInto is the walk both share. dst nil means grow a new slice.
-func filterInto[T any](
-	e *Evaluator,
-	id *auth.Identity,
-	permission string,
-	items []T,
-	dst []T,
-	resourceFunc func(T) string,
-) []T {
-	if e == nil {
-		return items
-	}
-	p := e.policy.Load()
-	if p == nil {
-		return items
-	}
-
-	grants := e.collectGrants(id, p)
-
-	result := dst
-	for _, item := range items {
-		resource := resourceFunc(item)
-		for _, g := range grants {
-			if hasPermission(g, permission) && e.grantMatchesResource(g, resource) {
-				result = append(result, item)
-				break
-			}
-		}
-	}
 	return result
 }
 

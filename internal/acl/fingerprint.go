@@ -1,9 +1,8 @@
 package acl
 
 import (
+	"encoding/binary"
 	"hash/maphash"
-	"slices"
-	"strings"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 )
@@ -24,6 +23,10 @@ var fingerprintSeed = maphash.MakeSeed()
 //
 // A nil Evaluator or absent policy filters nothing, which is one shared answer
 // rather than a per-identity one, and fingerprints accordingly.
+//
+// The grants are walked here rather than through collectGrants: this runs on
+// every conditional request, and summing as it goes costs nothing, where
+// gathering a slice first costs an allocation per call.
 func (e *Evaluator) Fingerprint(id *auth.Identity) uint64 {
 	if e == nil {
 		return 0
@@ -33,40 +36,46 @@ func (e *Evaluator) Fingerprint(id *auth.Identity) uint64 {
 		return 0
 	}
 
-	grants := e.collectGrants(id, p)
-
 	// Grant order depends on policy file order and on what the provider
-	// returned, neither of which changes what the identity may see. Normalise
-	// so an identical set of grants fingerprints identically.
-	lines := make([]string, 0, len(grants))
-	for _, g := range grants {
-		resources := slices.Clone(g.Resources)
-		permissions := slices.Clone(g.Permissions)
-		slices.Sort(resources)
-		slices.Sort(permissions)
-		lines = append(lines,
-			strings.Join(resources, ",")+"\x00"+strings.Join(permissions, ","))
+	// returned, neither of which changes what the identity may see. Summing is
+	// commutative, so an identical set of grants fingerprints identically.
+	var sum uint64
+	for _, g := range p.Grants {
+		if audienceMatches(g, id) {
+			sum += grantHash(g)
+		}
 	}
-	slices.Sort(lines)
-
-	var h maphash.Hash
-	h.SetSeed(fingerprintSeed)
-
-	// The generation goes in as bytes rather than as text so it cannot collide
-	// with a grant line that happens to spell the same digits.
-	var gen [8]byte
-	v := e.PolicyGeneration()
-	for i := range gen {
-		gen[i] = byte(v >> (8 * i))
-	}
-	_, _ = h.Write(gen[:])
-
-	for _, l := range lines {
-		_, _ = h.WriteString(l)
-		// Without a separator two different splits of the same characters
-		// hash alike.
-		_, _ = h.Write([]byte{0x1e})
+	if e.source != nil && id != nil {
+		for _, g := range e.source.GrantsFor(id) {
+			sum += grantHash(g)
+		}
 	}
 
-	return h.Sum64()
+	return mixHash(sum, e.PolicyGeneration())
+}
+
+// grantHash reduces one grant to a value independent of the order of its
+// resources and permissions. The two are summed apart and only then mixed, so
+// a string cannot move between them unnoticed.
+func grantHash(g Grant) uint64 {
+	var resources, permissions uint64
+	for _, r := range g.Resources {
+		resources += maphash.String(fingerprintSeed, r)
+	}
+	for _, p := range g.Permissions {
+		permissions += maphash.String(fingerprintSeed, p)
+	}
+
+	return mixHash(resources, permissions)
+}
+
+// mixHash combines two hashes non-linearly, which is what keeps the sum over
+// grants from blurring their boundaries: were this an add or an xor, two
+// policies that swapped one grant's permissions for another's would agree.
+func mixHash(a, b uint64) uint64 {
+	var buf [16]byte
+	binary.LittleEndian.PutUint64(buf[0:], a)
+	binary.LittleEndian.PutUint64(buf[8:], b)
+
+	return maphash.Bytes(fingerprintSeed, buf[:])
 }

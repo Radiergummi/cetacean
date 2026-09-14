@@ -125,6 +125,29 @@ func TestFingerprintDistinguishesResourcesFromPermissions(t *testing.T) {
 	}
 }
 
+// The grant hashes are summed, so the mix inside a grant has to be what keeps
+// one grant's permissions from reading as another's.
+func TestFingerprintSeparatesGrantBoundaries(t *testing.T) {
+	id := &auth.Identity{Subject: "x"}
+
+	a := NewEvaluator()
+	a.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:a"}, Permissions: []string{"read"}},
+		{Resources: []string{"service:b"}, Permissions: []string{"write"}},
+	}})
+
+	b := NewEvaluator()
+	b.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:a"}, Permissions: []string{"write"}},
+		{Resources: []string{"service:b"}, Permissions: []string{"read"}},
+	}})
+
+	if a.Fingerprint(id) == b.Fingerprint(id) {
+		t.Error("swapping two grants' permissions left the fingerprint unchanged, " +
+			"so one identity may be served the other's rows")
+	}
+}
+
 func TestFingerprintNilAndUnconfigured(t *testing.T) {
 	var nilEval *Evaluator
 	if nilEval.Fingerprint(nil) != 0 {
@@ -135,9 +158,9 @@ func TestFingerprintNilAndUnconfigured(t *testing.T) {
 	}
 }
 
-// FilterInPlace must keep exactly what Filter keeps, in the same order — it is
-// only allowed to differ in what it does to the caller's backing array.
-func TestFilterInPlaceMatchesFilter(t *testing.T) {
+// FilterInPlaceNamed must keep exactly what Filter keeps, in the same order —
+// it is only allowed to differ in what it does to the caller's backing array.
+func TestFilterInPlaceNamedMatchesFilter(t *testing.T) {
 	policies := map[string][]Grant{
 		"wildcard":   {readGrant("service:*")},
 		"prefix":     {readGrant("service:web*")},
@@ -150,6 +173,7 @@ func TestFilterInPlaceMatchesFilter(t *testing.T) {
 		names = append(names, fmt.Sprintf("web-%d", i))
 	}
 	resource := func(s string) string { return "service:" + s }
+	identity := func(s string) string { return s }
 
 	for name, grants := range policies {
 		t.Run(name, func(t *testing.T) {
@@ -160,10 +184,10 @@ func TestFilterInPlaceMatchesFilter(t *testing.T) {
 			inPlace := slices.Clone(names)
 
 			want := Filter(e, nil, "read", copied, resource)
-			got := FilterInPlace(e, nil, "read", inPlace, resource)
+			got := FilterInPlaceNamed(e, nil, "read", inPlace, "service", identity)
 
 			if !slices.Equal(want, got) {
-				t.Errorf("FilterInPlace gave %v, Filter gave %v", got, want)
+				t.Errorf("FilterInPlaceNamed gave %v, Filter gave %v", got, want)
 			}
 			if !slices.Equal(copied, names) {
 				t.Error("Filter modified the slice it was given")
@@ -172,17 +196,34 @@ func TestFilterInPlaceMatchesFilter(t *testing.T) {
 	}
 }
 
-func TestFilterInPlaceUnconfigured(t *testing.T) {
+func TestFilterInPlaceNamedUnconfigured(t *testing.T) {
 	items := []string{"a", "b"}
-	if got := FilterInPlace(
-		nil,
-		nil,
-		"read",
-		items,
-		func(s string) string { return s },
-	); len(
-		got,
-	) != 2 {
+	got := FilterInPlaceNamed(nil, nil, "read", items, "service", func(s string) string {
+		return s
+	})
+	if len(got) != 2 {
 		t.Errorf("a nil evaluator filtered %d of 2 items", len(got))
+	}
+}
+
+// Fingerprint runs on every conditional request, so it is allowed no
+// allocations at all.
+func BenchmarkFingerprint(b *testing.B) {
+	grants := make([]Grant, 0, 20)
+	for i := range 20 {
+		grants = append(grants, Grant{
+			Resources:   []string{fmt.Sprintf("service:web-%d", i), fmt.Sprintf("stack:s%d", i)},
+			Permissions: []string{"read", "write"},
+			Audience:    []string{"group:devs"},
+		})
+	}
+
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: grants})
+	id := &auth.Identity{Subject: "dev", Groups: []string{"devs"}}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = e.Fingerprint(id)
 	}
 }
