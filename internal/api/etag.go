@@ -174,9 +174,6 @@ func writeCachedJSONStatusValidated(
 	v any,
 	validator string,
 ) {
-	rc := http.NewResponseController(w)
-	_ = rc.SetWriteDeadline(time.Now().Add(30 * time.Second))
-
 	body, err := json.Marshal(v)
 	if err != nil {
 		w.Header().Set("Cache-Control", "no-store")
@@ -196,13 +193,18 @@ func writeCachedJSONStatusValidated(
 //
 // This is the tail of writeCachedJSONStatusValidated, split out for a memoised
 // document: a hit there has the bytes and the hash of them already, and the
-// only thing left is to negotiate and write.
+// only thing left is to negotiate and write. The write deadline lives here
+// rather than with the marshal, because it is the only place bytes reach a
+// socket — and the server sets no WriteTimeout of its own.
 func writeRenderedJSON(
 	w http.ResponseWriter,
 	r *http.Request,
 	status int,
 	doc renderedDoc,
 ) {
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Now().Add(30 * time.Second))
+
 	coding := negotiateCoding(w, r, doc.body)
 	etag := codedETag(doc.etag, coding)
 
