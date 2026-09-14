@@ -26,6 +26,7 @@ export default function TraefikGraph({ integration }: { integration: TraefikInte
     <MeasuredGraph
       graph={graph}
       nodeTypes={nodeTypes}
+      label="Traefik routing"
       layerConstraints={layerConstraints}
     />
   );

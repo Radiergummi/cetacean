@@ -17,7 +17,11 @@ export type ServiceNodeData = {
   image?: string | undefined;
   mode: string;
   replicas?: number | undefined;
+  tasks?: TaskCount | undefined;
 };
+
+/** What the page's own task poll found, absent until the first answer lands. */
+export type TaskCount = { running: number; desired: number };
 
 export type MountNodeData = {
   name: string;
@@ -44,7 +48,10 @@ function serviceMode(service: Service): { mode: string; replicas?: number | unde
  * to, and the configs, secrets and volumes they mount. A resource the stack
  * does not hold becomes a node marked external, so the attachment is visible.
  */
-export function stackToReactFlow(stack: StackDetail): { nodes: Node[]; edges: Edge[] } {
+export function stackToReactFlow(
+  stack: StackDetail,
+  tasks: Record<string, TaskCount> = {},
+): { nodes: Node[]; edges: Edge[] } {
   // Every name here is prefixed with the stack whose page this is, which the
   // page title already says.
   const bare = (name: string) => stripStackPrefix(name, stack.name);
@@ -149,6 +156,7 @@ export function stackToReactFlow(stack: StackDetail): { nodes: Node[]; edges: Ed
         href: `/services/${service.ID}`,
         image: shortImage(container?.Image),
         ...serviceMode(service),
+        tasks: tasks[service.ID],
       } satisfies ServiceNodeData,
     });
 

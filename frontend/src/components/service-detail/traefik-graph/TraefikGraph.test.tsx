@@ -47,6 +47,29 @@ describe("TraefikGraph", () => {
     expect(container.querySelectorAll(".react-flow__node")).toHaveLength(labels.length);
   });
 
+  it("puts every node that hides detail in the tab order, and nothing else", () => {
+    const { container } = render(<TraefikGraph integration={integration} />);
+
+    const focusable = [...container.querySelectorAll(".react-flow__node button")].map((element) =>
+      element.getAttribute("aria-label"),
+    );
+
+    expect(focusable.sort()).toEqual([
+      "Middleware auth@file",
+      "Middleware compress",
+      "Router admin",
+      "Router web",
+      "Service metrics",
+      "Service shop",
+      "Unresolved service",
+    ]);
+
+    // The entrypoint reveals nothing a tooltip would add, and React Flow's own
+    // wrappers would otherwise be a stop each, edges included.
+    expect(container.querySelectorAll(".react-flow__node[tabindex]")).toHaveLength(0);
+    expect(container.querySelectorAll(".react-flow__edge[tabindex]")).toHaveLength(0);
+  });
+
   it("draws a referenced but undeclared middleware as external", () => {
     const { container } = render(<TraefikGraph integration={integration} />);
     const external = container.querySelector('.react-flow__node[data-id="middleware:auth@file"]');

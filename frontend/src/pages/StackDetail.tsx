@@ -139,7 +139,10 @@ export default function StackDetail() {
           defaultOpen
         >
           <GraphFrame>
-            <StackGraph stack={stack} />
+            <StackGraph
+              stack={stack}
+              taskCounts={taskCounts}
+            />
           </GraphFrame>
         </CollapsibleSection>
       )}

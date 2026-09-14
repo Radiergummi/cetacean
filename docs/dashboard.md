@@ -97,7 +97,9 @@ secret to the services mounting it to the nodes their tasks run on.
 
 A stack's page opens with **Topology**: the networks its services attach to and the configs, secrets and volumes
 they mount, drawn as a graph above the tables listing the same resources. Every node links to the resource it
-stands for. A network the stack does not own is drawn dashed; a resource nothing references is dimmed.
+stands for, and a service shows its running tasks against the number wanted. A network the stack does not own is
+drawn dashed; a resource nothing references is dimmed. Hovering or focusing a node dims everything more than one
+edge away and names it in the URL.
 
 Where the operations level and your grants allow it, detail pages carry actions: scale, update image, rollback and
 restart on a service, plus inline editors for environment variables, resource reservations and limits, placement,

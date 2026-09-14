@@ -2,9 +2,10 @@ import { mountNodeType, NetworkNode, ServiceNode } from "./StackGraphNodes";
 import type { StackDetail } from "@/api/types";
 import { MeasuredGraph } from "@/components/graph/MeasuredGraph";
 import type { LayerConstraints } from "@/lib/graphLayout";
-import { stackToReactFlow } from "@/lib/stackGraph";
+import { stackToReactFlow, type TaskCount } from "@/lib/stackGraph";
 import { FileText, HardDrive, KeyRound } from "lucide-react";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 
 const nodeTypes = {
   stackNetwork: NetworkNode,
@@ -23,6 +24,8 @@ const nodeTypes = {
   ),
 };
 
+const nodeParam = "node";
+
 // Services attach to networks and mount everything else, so the reading runs
 // network → service → what it carries.
 const layerConstraints: LayerConstraints = {
@@ -32,14 +35,46 @@ const layerConstraints: LayerConstraints = {
   stackVolume: "LAST",
 };
 
-export default function StackGraph({ stack }: { stack: StackDetail }) {
-  const graph = useMemo(() => stackToReactFlow(stack), [stack]);
+export default function StackGraph({
+  stack,
+  taskCounts,
+}: {
+  stack: StackDetail;
+  taskCounts: Record<string, TaskCount>;
+}) {
+  const graph = useMemo(() => stackToReactFlow(stack, taskCounts), [stack, taskCounts]);
+  const [params, setParams] = useSearchParams();
+
+  // Replaces rather than pushes: tabbing across the graph is not a trail of
+  // pages to walk back through.
+  const select = useCallback(
+    (id: string | null) => {
+      setParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+
+          if (id) {
+            next.set(nodeParam, id);
+          } else {
+            next.delete(nodeParam);
+          }
+
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
+  );
 
   return (
     <MeasuredGraph
       graph={graph}
       nodeTypes={nodeTypes}
+      label={`Topology of stack ${stack.name}`}
       layerConstraints={layerConstraints}
+      selection={params.get(nodeParam)}
+      onSelect={select}
     />
   );
 }

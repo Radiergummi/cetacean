@@ -1,6 +1,6 @@
-import { Detail, DetailList, Ports } from "@/components/graph/NodeChrome";
+import { Detail, DetailList, Ports, useNodeFocus } from "@/components/graph/NodeChrome";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { MountNodeData, NetworkNodeData, ServiceNodeData } from "@/lib/stackGraph";
+import type { MountNodeData, NetworkNodeData, ServiceNodeData, TaskCount } from "@/lib/stackGraph";
 import { cn } from "@/lib/utils";
 import type { NodeProps } from "@xyflow/react";
 import { Network } from "lucide-react";
@@ -13,7 +13,24 @@ const nodeLink =
 
 const chip = "max-w-44 gap-1.5 px-2 py-1 text-xs";
 
-export function NetworkNode({ data }: NodeProps & { data: NetworkNodeData }) {
+/** Short enough to keep the node three lines tall, which the layout depends on. */
+function Running({ running, desired }: TaskCount) {
+  return (
+    <>
+      <span
+        data-healthy={running >= desired || undefined}
+        className="text-status-warning data-healthy:text-status-ok"
+      >
+        {running}
+      </span>
+      /{desired} running
+    </>
+  );
+}
+
+export function NetworkNode({ id, data }: NodeProps & { data: NetworkNodeData }) {
+  const focus = useNodeFocus(id);
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -21,6 +38,7 @@ export function NetworkNode({ data }: NodeProps & { data: NetworkNodeData }) {
           <Link
             to={data.href}
             aria-label={`Network ${data.name}`}
+            {...focus}
             className={cn(
               nodeLink,
               chip,
@@ -53,10 +71,11 @@ export function NetworkNode({ data }: NodeProps & { data: NetworkNodeData }) {
   );
 }
 
-export function ServiceNode({ data }: NodeProps & { data: ServiceNodeData }) {
+export function ServiceNode({ id, data }: NodeProps & { data: ServiceNodeData }) {
   const count = data.replicas ?? 0;
   const replicas =
     data.mode === "global" ? "global" : `${count} ${count === 1 ? "replica" : "replicas"}`;
+  const focus = useNodeFocus(id);
 
   return (
     <Tooltip>
@@ -65,6 +84,7 @@ export function ServiceNode({ data }: NodeProps & { data: ServiceNodeData }) {
           <Link
             to={data.href}
             aria-label={`Service ${data.name}`}
+            {...focus}
             className={cn(
               nodeLink,
               "w-56 flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-sm",
@@ -75,7 +95,9 @@ export function ServiceNode({ data }: NodeProps & { data: ServiceNodeData }) {
             <span className="w-full truncate font-mono text-xs text-muted-foreground">
               {data.image ?? "—"}
             </span>
-            <span className="text-xs text-muted-foreground">{replicas}</span>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {data.tasks ? <Running {...data.tasks} /> : replicas}
+            </span>
           </Link>
         }
       />
@@ -88,6 +110,12 @@ export function ServiceNode({ data }: NodeProps & { data: ServiceNodeData }) {
           <Detail term="Mode">{data.mode}</Detail>
 
           {data.mode !== "global" && <Detail term="Replicas">{data.replicas ?? 0}</Detail>}
+
+          {data.tasks && (
+            <Detail term="Tasks">
+              {data.tasks.running} of {data.tasks.desired} running
+            </Detail>
+          )}
         </DetailList>
       </TooltipContent>
     </Tooltip>
@@ -96,7 +124,9 @@ export function ServiceNode({ data }: NodeProps & { data: ServiceNodeData }) {
 
 /** Configs, secrets and volumes differ only in what they are called and drawn with. */
 export function mountNodeType(kind: string, icon: ReactNode) {
-  return function MountNode({ data }: NodeProps & { data: MountNodeData }) {
+  return function MountNode({ id, data }: NodeProps & { data: MountNodeData }) {
+    const focus = useNodeFocus(id);
+
     return (
       <Tooltip>
         <TooltipTrigger
@@ -104,6 +134,7 @@ export function mountNodeType(kind: string, icon: ReactNode) {
             <Link
               to={data.href}
               aria-label={`${kind} ${data.name}`}
+              {...focus}
               className={cn(nodeLink, chip, !data.referenced && "opacity-50")}
             >
               <Ports />
