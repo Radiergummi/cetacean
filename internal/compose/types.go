@@ -54,7 +54,6 @@ type Service struct {
 	DNS         []string           `yaml:"dns,omitempty"`
 	DNSSearch   []string           `yaml:"dns_search,omitempty"`
 	Isolation   string             `yaml:"isolation,omitempty"`
-	Platform    string             `yaml:"platform,omitempty"`
 	OomScoreAdj int64              `yaml:"oom_score_adj,omitempty"`
 	Deploy      *Deploy            `yaml:"deploy,omitempty"`
 }

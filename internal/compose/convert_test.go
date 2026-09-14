@@ -26,14 +26,18 @@ func TestDuration(t *testing.T) {
 	}
 }
 
+// Exactly, never rounded: 0.125 is a reservation a service can hold, and 0.13
+// is not the one it holds.
 func TestCPUs(t *testing.T) {
 	for _, tc := range []struct {
 		in   int64
 		want string
 	}{
-		{500000000, "0.50"},
-		{1000000000, "1.00"},
-		{2500000000, "2.50"},
+		{500000000, "0.5"},
+		{1000000000, "1"},
+		{2500000000, "2.5"},
+		{125000000, "0.125"},
+		{1, "0.000000001"},
 		{0, ""},
 	} {
 		if got := cpus(tc.in); got != tc.want {

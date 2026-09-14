@@ -48,7 +48,7 @@ services:
       endpoint_mode: vip
       resources:
         limits:
-          cpus: "0.50"
+          cpus: "0.5"
           memory: 512M
 networks:
   internal:

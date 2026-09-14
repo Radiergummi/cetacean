@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -20,14 +21,23 @@ func duration(d time.Duration) string {
 	return d.String()
 }
 
-// cpus renders NanoCPUs as compose's fractional core count.
+// cpus renders NanoCPUs as compose's fractional core count, exactly: rounding
+// to two places turns a 0.125 reservation into a 0.13 the service never had,
+// which is the claim memory refuses to make just below.
 func cpus(nano int64) string {
 	if nano == 0 {
 		return ""
 	}
 
-	return strconv.FormatFloat(float64(nano)/1e9, 'f', 2, 64)
+	whole, frac := nano/nanosPerCPU, nano%nanosPerCPU
+	if frac == 0 {
+		return strconv.FormatInt(whole, 10)
+	}
+
+	return strings.TrimRight(fmt.Sprintf("%d.%09d", whole, frac), "0")
 }
+
+const nanosPerCPU = 1e9
 
 // memory renders a byte count with a binary suffix, but only when the suffix
 // divides evenly: a rounded figure would claim a limit the service does not
@@ -106,7 +116,7 @@ func mounts(ms []mount.Mount, n names) []ServiceVolume {
 			ReadOnly: m.ReadOnly,
 		}
 		if m.Type == mount.TypeVolume {
-			v.Source = n.short(m.Source)
+			v.Source = n.short(kindVolume, m.Source)
 		}
 
 		out = append(out, v)
