@@ -99,6 +99,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 
 			return true
 		})
+		if ctx.Err() != nil {
+			// An abandoned scan counted part of the cluster; publishing that
+			// would report a truncated total as the whole one.
+			return
+		}
 
 		// RunningTaskCount takes the read lock, so it runs out here rather than
 		// inside the scan that already holds it.
@@ -179,6 +184,9 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 
 			return true
 		})
+		if ctx.Err() != nil {
+			return
+		}
 		allResults[stNodes] = typeResults{"nodes", matches, count}
 	}()
 
@@ -218,6 +226,9 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 
 			return true
 		})
+		if ctx.Err() != nil {
+			return
+		}
 
 		// TaskName needs the whole service, and GetService takes the read lock
 		// the scan above was holding — so naming happens out here, and only for
@@ -272,6 +283,9 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 
 			return true
 		})
+		if ctx.Err() != nil {
+			return
+		}
 		allResults[stConfigs] = typeResults{"configs", matches, count}
 	}()
 
@@ -305,6 +319,9 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 
 			return true
 		})
+		if ctx.Err() != nil {
+			return
+		}
 		allResults[stSecrets] = typeResults{"secrets", matches, count}
 	}()
 
@@ -337,6 +354,9 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 
 			return true
 		})
+		if ctx.Err() != nil {
+			return
+		}
 		allResults[stNetworks] = typeResults{"networks", matches, count}
 	}()
 
@@ -369,6 +389,9 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 
 			return true
 		})
+		if ctx.Err() != nil {
+			return
+		}
 		allResults[stVolumes] = typeResults{"volumes", matches, count}
 	}()
 
