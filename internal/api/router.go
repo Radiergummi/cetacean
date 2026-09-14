@@ -907,7 +907,8 @@ func requireReady(h *Handlers, mux *routeRecorder) func(http.Handler) http.Handl
 // the cache. Path shape cannot say: what matches no route falls through to the
 // SPA catch-all, which serves the frontend — manifest and icons included — off
 // the embedded filesystem, so the mux is asked. The rest answer from the
-// request alone.
+// request alone, the authorization server included: a token is how a client
+// reaches the deployment it is trying to diagnose.
 func readsClusterState(mux *routeRecorder, r *http.Request) bool {
 	path := r.URL.Path
 
@@ -917,6 +918,7 @@ func readsClusterState(mux *routeRecorder, r *http.Request) bool {
 	case strings.HasPrefix(path, "/-/"),
 		strings.HasPrefix(path, "/api"),
 		strings.HasPrefix(path, "/auth/"),
+		strings.HasPrefix(path, "/oauth/"),
 		strings.HasPrefix(path, "/.well-known/"),
 		path == "/",
 		path == "/index",
