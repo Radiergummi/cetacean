@@ -132,7 +132,10 @@ func Filter[T any](
 	p := e.policy.Load()
 	policyAbsent := p == nil
 	if policyAbsent {
-		if !e.labelsEnabled {
+		// The same condition the label lookups below are gated on. Testing
+		// only the flag dropped every item where Can allows every item, on a
+		// deployment with labels on and no resolver set.
+		if !e.labelsEnabled || e.resolver == nil {
 			return items
 		}
 		p = &Policy{}
@@ -257,7 +260,38 @@ func (e *Evaluator) HasAnyGrant(id *auth.Identity) bool {
 		p = &Policy{}
 	}
 	grants := e.collectGrants(id, p)
-	return len(grants) > 0 || e.labelsEnabled
+
+	// A label-only identity holds no policy grant and still has access, so
+	// labels have to be asked. Asking whether they are *enabled* answered yes
+	// for everyone, which handed cluster-wide metrics to identities no label
+	// names — these endpoints have no per-resource filter behind them.
+	return len(grants) > 0 || e.hasAnyLabelGrant(id)
+}
+
+// labelledTypes are the resource types a cetacean.acl.* label can appear on.
+// Tasks are absent because a task inherits its service's labels rather than
+// carrying its own.
+var labelledTypes = []string{"service", "config", "secret", "network", "volume", "node"}
+
+// hasAnyLabelGrant reports whether any labelled resource names this identity.
+// It stops at the first match, so the common case — an identity that does hold
+// a grant — never reaches it, and one that does not usually stops early.
+func (e *Evaluator) hasAnyLabelGrant(id *auth.Identity) bool {
+	if !e.labelsEnabled || e.resolver == nil || id == nil {
+		return false
+	}
+
+	for _, resType := range labelledTypes {
+		for name, labels := range e.resolver.LabelsByType(resType) {
+			if allowed, handled, _ := decideFromLabels(
+				labels, id, "read", resType+":"+name,
+			); handled && allowed {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // PermissionsFor returns a map of resource patterns to permission lists
@@ -531,11 +565,19 @@ func (e *Evaluator) TypeGrants(id *auth.Identity) TypeAccess {
 	}
 
 	grants := e.collectGrants(id, p)
-	if len(grants) == 0 {
+
+	// A label-only identity projects to no types from the policy alone, and
+	// MCP hides every tool it could in fact call. The labels decide which
+	// types it reaches, so they are projected alongside the grants.
+	labelled := e.labelTypeGrants(id)
+	if len(grants) == 0 && len(labelled) == 0 {
 		return TypeAccess{}
 	}
 
 	access := TypeAccess{granted: make(map[typeKey]bool), anyGrant: true}
+	for key := range labelled {
+		access.granted[key] = true
+	}
 	for _, g := range grants {
 		for _, expr := range g.Resources {
 			resType, ok := grantResourceType(expr)
@@ -559,6 +601,37 @@ func (e *Evaluator) TypeGrants(id *auth.Identity) TypeAccess {
 	}
 
 	return access
+}
+
+// labelTypeGrants projects the labels naming this identity onto the types they
+// grant. One walk per type, stopping at the first resource that matches: the
+// answer is type-level, so a second match adds nothing.
+func (e *Evaluator) labelTypeGrants(id *auth.Identity) map[typeKey]bool {
+	if !e.labelsEnabled || e.resolver == nil || id == nil {
+		return nil
+	}
+
+	granted := map[typeKey]bool{}
+	for _, resType := range labelledTypes {
+		for name, labels := range e.resolver.LabelsByType(resType) {
+			resource := resType + ":" + name
+			for permission := range validPermissions {
+				if granted[typeKey{permission, resType}] {
+					continue
+				}
+				if allowed, handled, _ := decideFromLabels(
+					labels, id, permission, resource,
+				); handled && allowed {
+					granted[typeKey{permission, resType}] = true
+					for _, implied := range impliedTypes[resType] {
+						granted[typeKey{permission, implied}] = true
+					}
+				}
+			}
+		}
+	}
+
+	return granted
 }
 
 // grantResourceType pulls the type prefix from a grant resource expression

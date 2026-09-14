@@ -994,16 +994,53 @@ func TestEvaluator_UnlabeledResourceWithConfigGrant(t *testing.T) {
 	}
 }
 
-func TestHasAnyGrant_LabelsEnabled_AlwaysTrue(t *testing.T) {
+// HasAnyGrant gates /cluster, its metrics and the raw Prometheus proxy, none
+// of which filter per resource afterwards. Enabling labels must not answer it
+// yes for everyone — the question is whether a label names this identity.
+func TestHasAnyGrant_LabelsEnabled_AsksTheLabels(t *testing.T) {
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
 	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{labels: map[string]map[string]string{
+		"service:web": {LabelRead: "group:devs"},
+	}})
 
-	// Even an identity with zero config/provider grants should return true
-	// when labels are enabled — they may have label-based grants on specific resources.
+	named := &auth.Identity{Subject: "alice", Groups: []string{"devs"}}
+	if !e.HasAnyGrant(named) {
+		t.Error("an identity a label names holds no grant and still has access")
+	}
+
 	nobody := &auth.Identity{Subject: "nobody"}
-	if !e.HasAnyGrant(nobody) {
-		t.Fatal("HasAnyGrant should return true for all identities when labels enabled")
+	if e.HasAnyGrant(nobody) {
+		t.Error("an identity no grant and no label names reached the cluster endpoints")
+	}
+}
+
+// A label-only identity projects to no types from the policy alone, and MCP
+// hides every tool it could in fact call.
+func TestTypeGrants_ProjectsLabelGrants(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{labels: map[string]map[string]string{
+		"service:web": {LabelWrite: "group:devs"},
+	}})
+
+	access := e.TypeGrants(&auth.Identity{Subject: "alice", Groups: []string{"devs"}})
+
+	if !access.Can("read", "service") {
+		t.Error("a label granting write does not project read, though write implies it")
+	}
+	if !access.Can("write", "service") {
+		t.Error("a label granting write does not project write")
+	}
+	if access.Can("read", "node") {
+		t.Error("a service label projected onto a type no label names")
+	}
+
+	none := e.TypeGrants(&auth.Identity{Subject: "nobody"})
+	if none.Can("read", "service") {
+		t.Error("an identity no label names projected a type grant")
 	}
 }
 
