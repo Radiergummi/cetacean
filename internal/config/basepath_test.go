@@ -48,6 +48,8 @@ func TestValidateBasePath(t *testing.T) {
 		{"/cetacean?foo=bar", "query string"},
 		{"/cetacean#anchor", "fragment"},
 		{"/cetacean//sub", "double slash"},
+		{"/ceta\x01cean", "C0 control"},
+		{"/cetacean\x7f", "DEL"},
 	}
 	for _, tt := range invalid {
 		if err := ValidateBasePath(tt.input); err == nil {
