@@ -132,9 +132,9 @@ func Filter[T any](
 	p := e.policy.Load()
 	policyAbsent := p == nil
 	if policyAbsent {
-		// The same condition the label lookups below are gated on. Testing
-		// only the flag dropped every item where Can allows every item, on a
-		// deployment with labels on and no resolver set.
+		// The same condition the label path is gated on. Testing only the flag
+		// dropped every item where Can allows every item, on a deployment with
+		// labels on and no resolver set.
 		if !e.labelsEnabled || e.resolver == nil {
 			return items
 		}
@@ -142,31 +142,7 @@ func Filter[T any](
 	}
 
 	grants := e.collectGrants(id, p)
-
-	// One bulk label read per type touched, memoised for the call. Resolving
-	// per item costs the resolver a scan each time, which is quadratic over a
-	// page — see acl.ResourceResolver.LabelsByType.
-	byType := map[string]map[string]map[string]string{}
-	labelsFor := func(resource string) map[string]string {
-		resType, resName, ok := splitResource(resource)
-		if !ok {
-			return nil
-		}
-		if resType == "task" {
-			resName = e.resolver.ServiceOfTask(resName)
-			if resName == "" {
-				return nil
-			}
-			resType = "service"
-		}
-
-		known, cached := byType[resType]
-		if !cached {
-			known = e.resolver.LabelsByType(resType)
-			byType[resType] = known
-		}
-		return known[resName]
-	}
+	labelsFor := e.labelLookup()
 
 	// Grown rather than sized for the whole input: a permissive policy pays
 	// for the growth, but sizing for every item costs a restrictive one far
@@ -174,27 +150,15 @@ func Filter[T any](
 	var result []T
 	for _, item := range items {
 		resource := resourceFunc(item)
-
-		// Check labels first when enabled.
-		if e.labelsEnabled && e.resolver != nil {
-			allowed, handled, labelled := decideFromLabels(
-				labelsFor(resource),
-				id,
-				permission,
-				resource,
-			)
-			if handled {
-				if allowed {
+		resType, resName, ok := splitResource(resource)
+		if ok {
+			if keep, decided := e.labelDecision(
+				id, permission, resType, resName, labelsFor, policyAbsent,
+			); decided {
+				if keep {
 					result = append(result, item)
 				}
-				continue
-			}
 
-			// Carries no labels and there is no policy to fall through to, so
-			// it sits outside the label mechanism entirely and keeps the
-			// allow-all an absent policy has always meant. Mirrors Can.
-			if policyAbsent && !labelled {
-				result = append(result, item)
 				continue
 			}
 		}
@@ -226,15 +190,31 @@ func FilterInPlaceNamed[T any](
 		return items
 	}
 	p := e.policy.Load()
-	if p == nil {
-		return items
+	policyAbsent := p == nil
+	if policyAbsent {
+		if !e.labelsEnabled || e.resolver == nil {
+			return items
+		}
+		p = &Policy{}
 	}
 
 	grants := e.collectGrants(id, p)
+	labelsFor := e.labelLookup()
 
 	result := items[:0]
 	for _, item := range items {
 		name := nameFunc(item)
+
+		if keep, decided := e.labelDecision(
+			id, permission, resourceType, name, labelsFor, policyAbsent,
+		); decided {
+			if keep {
+				result = append(result, item)
+			}
+
+			continue
+		}
+
 		for _, g := range grants {
 			if hasPermission(g, permission) && e.grantMatchesParts(g, resourceType, name) {
 				result = append(result, item)
@@ -244,6 +224,61 @@ func FilterInPlaceNamed[T any](
 	}
 
 	return result
+}
+
+// labelLookup reads a whole type at once and memoises it for the call.
+// Resolving per item costs the resolver a scan each time, which is quadratic
+// over a page — see acl.ResourceResolver.LabelsByType.
+func (e *Evaluator) labelLookup() func(resType, resName string) map[string]string {
+	byType := map[string]map[string]map[string]string{}
+
+	return func(resType, resName string) map[string]string {
+		if resType == "task" {
+			resName = e.resolver.ServiceOfTask(resName)
+			if resName == "" {
+				return nil
+			}
+			resType = "service"
+		}
+
+		known, cached := byType[resType]
+		if !cached {
+			known = e.resolver.LabelsByType(resType)
+			byType[resType] = known
+		}
+
+		return known[resName]
+	}
+}
+
+// labelDecision is the per-item half of the label rules, shared by both
+// filters so a list cannot apply a different rule from a detail read. decided
+// reports that the labels settled the question; keep is their answer.
+func (e *Evaluator) labelDecision(
+	id *auth.Identity,
+	permission, resType, resName string,
+	labelsFor func(resType, resName string) map[string]string,
+	policyAbsent bool,
+) (keep, decided bool) {
+	if !e.labelsEnabled || e.resolver == nil {
+		return false, false
+	}
+
+	allowed, handled, labelled := decideFromLabels(
+		labelsFor(resType, resName), id, permission, resType+":"+resName,
+	)
+	if handled {
+		return allowed, true
+	}
+
+	// Carries no labels and there is no policy to fall through to, so it sits
+	// outside the label mechanism entirely and keeps the allow-all an absent
+	// policy has always meant. Mirrors Can.
+	if policyAbsent && !labelled {
+		return true, true
+	}
+
+	return false, false
 }
 
 // HasAnyGrant returns true if the identity has at least one grant in the policy.
