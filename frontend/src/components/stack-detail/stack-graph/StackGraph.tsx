@@ -73,8 +73,7 @@ export default function StackGraph({
       nodeTypes={nodeTypes}
       label={`Topology of stack ${stack.name}`}
       layerConstraints={layerConstraints}
-      selection={params.get(nodeParam)}
-      onSelect={select}
+      selection={[params.get(nodeParam), select]}
     />
   );
 }

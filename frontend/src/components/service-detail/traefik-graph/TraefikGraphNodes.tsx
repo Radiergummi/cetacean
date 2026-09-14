@@ -1,4 +1,4 @@
-import { Detail, DetailList, Ports, useNodeFocus } from "@/components/graph/NodeChrome";
+import { Detail, DetailList, focusRing, Ports } from "@/components/graph/NodeChrome";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { badgePurple, badgeTeal } from "@/lib/integrationLabels";
 import {
@@ -14,7 +14,6 @@ import { Lock } from "lucide-react";
 // A node reveals the rest of itself in a tooltip, which a pointer opens by
 // hovering and a keyboard by focusing — hence a button around a node that does
 // nothing when pressed. Entrypoints hide nothing, so they stay out of the way.
-const focusRing = "focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none";
 
 export function EntrypointNode({ data }: NodeProps & { data: EntrypointNodeData }) {
   return (
@@ -25,10 +24,9 @@ export function EntrypointNode({ data }: NodeProps & { data: EntrypointNodeData 
   );
 }
 
-export function RouterNode({ id, data }: NodeProps & { data: RouterNodeData }) {
+export function RouterNode({ data }: NodeProps & { data: RouterNodeData }) {
   const { certResolver, domains, options } = data.tls ?? {};
   const priority = (data.priority ?? 0) > 0 ? data.priority : undefined;
-  const focus = useNodeFocus(id);
 
   return (
     <Tooltip>
@@ -37,7 +35,6 @@ export function RouterNode({ id, data }: NodeProps & { data: RouterNodeData }) {
           <button
             type="button"
             aria-label={`Router ${data.name}`}
-            {...focus}
             className={cn(
               "flex w-64 flex-col gap-1 rounded-lg border bg-card px-3 py-2 text-start text-sm shadow-sm",
               focusRing,
@@ -88,9 +85,8 @@ export function RouterNode({ id, data }: NodeProps & { data: RouterNodeData }) {
   );
 }
 
-export function MiddlewareNode({ id, data }: NodeProps & { data: MiddlewareNodeData }) {
+export function MiddlewareNode({ data }: NodeProps & { data: MiddlewareNodeData }) {
   const config = Object.entries(data.config ?? {});
-  const focus = useNodeFocus(id);
 
   return (
     <Tooltip>
@@ -99,7 +95,6 @@ export function MiddlewareNode({ id, data }: NodeProps & { data: MiddlewareNodeD
           <button
             type="button"
             aria-label={`Middleware ${data.name}`}
-            {...focus}
             className={cn("flex max-w-32 flex-col items-center gap-0.5 rounded-md", focusRing)}
           >
             <Ports />
@@ -146,9 +141,8 @@ export function MiddlewareNode({ id, data }: NodeProps & { data: MiddlewareNodeD
   );
 }
 
-export function ServiceNode({ id, data }: NodeProps & { data: ServiceNodeData }) {
+export function ServiceNode({ data }: NodeProps & { data: ServiceNodeData }) {
   const unresolved = data.origin === "unresolved";
-  const focus = useNodeFocus(id);
 
   return (
     <Tooltip>
@@ -157,7 +151,6 @@ export function ServiceNode({ id, data }: NodeProps & { data: ServiceNodeData })
           <button
             type="button"
             aria-label={unresolved ? "Unresolved service" : `Service ${data.name}`}
-            {...focus}
             className={cn(
               "flex w-50 flex-col gap-0.5 rounded-lg border bg-card px-3 py-2 text-start text-sm shadow-sm",
               focusRing,

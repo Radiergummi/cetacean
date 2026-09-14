@@ -2,34 +2,28 @@ import StackGraph from "./StackGraph";
 import type { StackDetail } from "@/api/types";
 import type { TaskCount } from "@/lib/stackGraph";
 import { fireEvent, render } from "@testing-library/react";
-import { useEffect } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
-function draw(detail: StackDetail, taskCounts: Record<string, TaskCount> = {}, entry = "/") {
-  const seen = { search: "" };
+function Url() {
+  return <output>{useLocation().search}</output>;
+}
 
-  function Probe() {
-    const { search } = useLocation();
-
-    useEffect(() => {
-      seen.search = search;
-    }, [search]);
-
-    return null;
-  }
-
+function draw(
+  detail: StackDetail,
+  { taskCounts = {}, entry = "/" }: { taskCounts?: Record<string, TaskCount>; entry?: string } = {},
+) {
   const { container } = render(
     <MemoryRouter initialEntries={[entry]}>
       <StackGraph
         stack={detail}
         taskCounts={taskCounts}
       />
-      <Probe />
+      <Url />
     </MemoryRouter>,
   );
 
-  return { container, url: () => seen.search };
+  return { container, url: () => container.querySelector("output")?.textContent };
 }
 
 const stack = {
@@ -87,7 +81,7 @@ describe("StackGraph", () => {
   });
 
   it("counts running tasks against desired once the page has polled them", () => {
-    const { container } = draw(stack, { "svc-web": { running: 1, desired: 2 } });
+    const { container } = draw(stack, { taskCounts: { "svc-web": { running: 1, desired: 2 } } });
     const service = container.querySelector('.react-flow__node[data-id="service:svc-web"]');
 
     expect(service?.textContent).toContain("1/2 running");
@@ -107,7 +101,7 @@ describe("StackGraph", () => {
   });
 
   it("highlights the node a link named, before anything is touched", () => {
-    const { container } = draw(stack, {}, "/?node=volume:shop_data");
+    const { container } = draw(stack, { entry: "/?node=volume:shop_data" });
     const node = (id: string) => container.querySelector(`.react-flow__node[data-id="${id}"]`)!;
 
     // Nothing mounts the volume, so everything else is a step too far.
@@ -116,12 +110,19 @@ describe("StackGraph", () => {
     expect(node("network:net-backend").className).toContain("opacity-15");
   });
 
-  it("leaves React Flow's own node and edge tab stops out of a read-only graph", () => {
+  // Edges are not here to check: jsdom lays nothing out, so React Flow never
+  // gets the node sizes an edge needs and renders none.
+  it("gives each node one tab stop, and React Flow's own wrapper none", () => {
     const { container } = draw(stack);
+    const wrappers = [...container.querySelectorAll(".react-flow__node")];
 
-    expect(container.querySelectorAll(".react-flow__node[tabindex]")).toHaveLength(0);
-    expect(container.querySelectorAll(".react-flow__edge[tabindex]")).toHaveLength(0);
-    expect(container.querySelectorAll(".react-flow__node a")).toHaveLength(3);
+    expect(wrappers.map((node) => node.querySelector("a")?.ariaLabel).sort()).toEqual([
+      "Network backend",
+      "Service web",
+      "Volume data",
+    ]);
+
+    expect(wrappers.filter((node) => node.hasAttribute("tabindex"))).toEqual([]);
   });
 
   it("shows a service's image without its digest, and counts one replica singular", () => {

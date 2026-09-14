@@ -1,4 +1,3 @@
-import { SelectNodeProvider } from "./NodeChrome";
 import { RoutedEdge } from "./RoutedEdge";
 import { layoutGraph, routedEdgeType, type LayerConstraints } from "@/lib/graphLayout";
 import { loadElk } from "@/lib/layoutElk";
@@ -24,19 +23,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const fitViewOptions = { padding: 0.15 };
 
-// No overshoot: the viewport is clamped, so a bounce would be cut short.
-const glide = {
-  ...fitViewOptions,
-  duration: 320,
-  ease: (t: number) => 1 - (1 - t) ** 3,
-  interpolate: "smooth",
-} as const;
-
-/** Drops the animation, not the move, so the viewport still lands where it should. */
-function eased<T extends { duration: number }>(options: T): T {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ? { ...options, duration: 0 }
-    : options;
+// No overshoot: the viewport is clamped, so a bounce would be cut short. Asked
+// for reduced motion, the viewport still lands where it should, at once.
+function glide(extra?: { zoom: number }) {
+  return {
+    ...fitViewOptions,
+    ...extra,
+    ease: (t: number) => 1 - (1 - t) ** 3,
+    interpolate: "smooth" as const,
+    duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 320,
+  };
 }
 
 const proOptions = { hideAttribution: true };
@@ -58,27 +54,29 @@ const controlButton =
 // without a specificity fight.
 const controlIcon = { fill: "none", width: 16, height: 16, maxWidth: "none", maxHeight: "none" };
 
-const dimmed = 0.15;
+const dimmed = "opacity-15";
 
 interface Graph {
   nodes: Node[];
   edges: Edge[];
 }
 
-/** The active node, everything one edge away, and the edges between them. */
-function neighbourhood(edges: Edge[], active: string) {
-  const nodes = new Set([active]);
-  const touching = new Set<string>();
+/** A `useState` pair, so a caller that keeps the selection elsewhere can say so. */
+export type Selection = readonly [string | null, (id: string | null) => void];
+
+/** The active node and everything one edge from it. */
+function neighbours(edges: Edge[], active: string) {
+  const near = new Set([active]);
 
   for (const edge of edges) {
-    if (edge.source === active || edge.target === active) {
-      touching.add(edge.id);
-      nodes.add(edge.source);
-      nodes.add(edge.target);
+    if (edge.source === active) {
+      near.add(edge.target);
+    } else if (edge.target === active) {
+      near.add(edge.source);
     }
   }
 
-  return { nodes, touching };
+  return near;
 }
 
 /**
@@ -91,14 +89,12 @@ function Canvas({
   label,
   layerConstraints,
   selection,
-  onSelect,
 }: {
   graph: Graph;
   nodeTypes: NodeTypes;
   label: string;
   layerConstraints?: LayerConstraints | undefined;
-  selection?: string | null | undefined;
-  onSelect?: ((id: string | null) => void) | undefined;
+  selection?: Selection | undefined;
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
   const [edges, setEdges] = useEdgesState(graph.edges);
@@ -106,25 +102,17 @@ function Canvas({
   const [fullscreen, setFullscreen] = useState(false);
   const [zoomFloor, setZoomFloor] = useState<number | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
-  const [ownSelection, setOwnSelection] = useState<string | null>(null);
+  const own = useState<string | null>(null);
   const measured = useNodesInitialized();
   const { fitView, getNode, getNodes, getZoom, setCenter, zoomIn, zoomOut } = useReactFlow();
   const shell = useRef<HTMLDivElement>(null);
   const centred = useRef(false);
 
-  const selected = selection ?? ownSelection;
+  const [selected, select] = selection ?? own;
 
-  // Hover is transient and selection is addressable, so a pointer never writes
-  // to the URL and the two cannot disagree while both are set.
+  // A selection is worth addressing and a hover is not, so only the keyboard's
+  // half of the gesture reaches whoever owns the selection.
   const active = hovered ?? selected;
-
-  const select = useCallback(
-    (id: string | null) => {
-      setOwnSelection(id);
-      onSelect?.(id);
-    },
-    [onSelect],
-  );
 
   // Started here, the engine downloads while React Flow mounts and measures.
   useEffect(() => {
@@ -183,10 +171,13 @@ function Canvas({
     void fitView(fitViewOptions).then(() => setZoomFloor(getZoom() * 0.8));
   }, [extent, fitView, getZoom]);
 
-  // A link arriving with a node named puts it in the middle, once the fit has
-  // decided the zoom it should be seen at.
+  // Waits on the fit, which is what decides the zoom the node is seen at.
   useEffect(() => {
-    const node = zoomFloor == null || centred.current ? undefined : getNode(selected ?? "");
+    if (zoomFloor == null || centred.current || !selected) {
+      return;
+    }
+
+    const node = getNode(selected);
 
     if (!node?.measured?.width || !node.measured.height) {
       return;
@@ -197,14 +188,14 @@ function Canvas({
     void setCenter(
       node.position.x + node.measured.width / 2,
       node.position.y + node.measured.height / 2,
-      eased({ ...glide, zoom: getZoom() }),
+      glide({ zoom: getZoom() }),
     );
   }, [zoomFloor, selected, getNode, getZoom, setCenter]);
 
   useEffect(() => {
     const onChange = () => {
       setFullscreen(document.fullscreenElement === shell.current);
-      void fitView(eased(glide));
+      void fitView(glide());
     };
 
     document.addEventListener("fullscreenchange", onChange);
@@ -220,13 +211,13 @@ function Canvas({
     }
   }, []);
 
-  const near = useMemo(() => (active ? neighbourhood(edges, active) : null), [active, edges]);
+  const near = useMemo(() => (active ? neighbours(edges, active) : null), [active, edges]);
 
   const shownNodes = useMemo(
     () =>
       nodes.map((node) => ({
         ...node,
-        className: cn("transition-opacity", near && !near.nodes.has(node.id) && "opacity-15"),
+        className: cn("transition-opacity", near && !near.has(node.id) && dimmed),
       })),
     [nodes, near],
   );
@@ -235,13 +226,12 @@ function Canvas({
     () =>
       edges.map((edge) => ({
         ...edge,
-        style: {
-          ...edge.style,
-          transition: "opacity 200ms",
-          ...(near && !near.touching.has(edge.id) && { opacity: dimmed }),
-        },
+        className: cn(
+          "transition-opacity",
+          active && edge.source !== active && edge.target !== active && dimmed,
+        ),
       })),
-    [edges, near],
+    [edges, active],
   );
 
   return (
@@ -250,85 +240,92 @@ function Canvas({
       data-graph-ready={zoomFloor != null || undefined}
       className="size-full bg-background"
     >
-      <SelectNodeProvider value={select}>
-        <ReactFlow
-          aria-label={label}
-          onKeyDown={({ key }) => key === "Escape" && select(null)}
-          nodes={shownNodes}
-          edges={shownEdges}
-          onNodesChange={onNodesChange}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          proOptions={proOptions}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          nodesFocusable={false}
-          edgesFocusable={false}
-          elementsSelectable={false}
-          disableKeyboardA11y
-          // React Flow drops pointer events on a node that is selectable,
-          // draggable and listened to by nothing: the hover below is what keeps
-          // the links inside a node clickable.
-          onNodeMouseEnter={(_, { id }) => setHovered(id)}
-          onNodeMouseLeave={() => setHovered(null)}
-          onPaneClick={() => select(null)}
-          panOnScroll
-          minZoom={zoomFloor ?? looseZoom}
-          maxZoom={maxZoom}
-          {...(extent ? { translateExtent: extent } : {})}
-          className="transition-opacity duration-200"
-          style={{ opacity: extent ? 1 : 0 }}
+      <ReactFlow
+        aria-label={label}
+        onKeyDown={({ key }) => key === "Escape" && select(null)}
+        onFocus={({ target }) => {
+          // Focus lands on the link or button inside a node, so the node it
+          // belongs to is read off the wrapper React Flow put around it.
+          const id = (target as HTMLElement).closest<HTMLElement>(".react-flow__node")?.dataset.id;
+
+          if (id) {
+            select(id);
+          }
+        }}
+        nodes={shownNodes}
+        edges={shownEdges}
+        onNodesChange={onNodesChange}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        proOptions={proOptions}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        nodesFocusable={false}
+        edgesFocusable={false}
+        elementsSelectable={false}
+        disableKeyboardA11y
+        // React Flow drops pointer events on a node that is selectable,
+        // draggable and listened to by nothing: the hover below is what keeps
+        // the links inside a node clickable.
+        onNodeMouseEnter={(_, { id }) => setHovered(id)}
+        onNodeMouseLeave={() => setHovered(null)}
+        onPaneClick={() => select(null)}
+        panOnScroll
+        minZoom={zoomFloor ?? looseZoom}
+        maxZoom={maxZoom}
+        {...(extent ? { translateExtent: extent } : {})}
+        className="transition-opacity duration-200"
+        style={{ opacity: extent ? 1 : 0 }}
+      >
+        <Background />
+        <Controls
+          position="bottom-right"
+          orientation="horizontal"
+          showZoom={false}
+          showFitView={false}
+          showInteractive={false}
+          className="overflow-hidden rounded-md border bg-card"
+          style={{ boxShadow: "none" }}
         >
-          <Background />
-          <Controls
-            position="bottom-right"
-            orientation="horizontal"
-            showZoom={false}
-            showFitView={false}
-            showInteractive={false}
-            className="overflow-hidden rounded-md border bg-card"
-            style={{ boxShadow: "none" }}
+          <ControlButton
+            onClick={() => zoomIn(glide())}
+            title="Zoom in"
+            aria-label="Zoom in"
+            className={controlButton}
           >
-            <ControlButton
-              onClick={() => zoomIn(eased(glide))}
-              title="Zoom in"
-              aria-label="Zoom in"
-              className={controlButton}
-            >
-              <ZoomIn style={controlIcon} />
-            </ControlButton>
+            <ZoomIn style={controlIcon} />
+          </ControlButton>
 
-            <ControlButton
-              onClick={() => zoomOut(eased(glide))}
-              title="Zoom out"
-              aria-label="Zoom out"
-              className={controlButton}
-            >
-              <ZoomOut style={controlIcon} />
-            </ControlButton>
+          <ControlButton
+            onClick={() => zoomOut(glide())}
+            title="Zoom out"
+            aria-label="Zoom out"
+            className={controlButton}
+          >
+            <ZoomOut style={controlIcon} />
+          </ControlButton>
 
-            <ControlButton
-              onClick={() => {
-                void fitView(eased(glide));
-              }}
-              title="Reset view"
-              aria-label="Reset view"
-              className={controlButton}
-            >
-              <Undo2 style={controlIcon} />
-            </ControlButton>
+          <ControlButton
+            onClick={() => {
+              void fitView(glide());
+            }}
+            title="Reset view"
+            aria-label="Reset view"
+            className={controlButton}
+          >
+            <Undo2 style={controlIcon} />
+          </ControlButton>
 
-            <ControlButton
-              onClick={toggleFullscreen}
-              title={fullscreen ? "Exit full screen" : "Full screen"}
-              aria-label={fullscreen ? "Exit full screen" : "Full screen"}
-              className={controlButton}
-            >
-              {fullscreen ? <Minimize style={controlIcon} /> : <Fullscreen style={controlIcon} />}
-            </ControlButton>
-          </Controls>
-        </ReactFlow>
-      </SelectNodeProvider>
+          <ControlButton
+            onClick={toggleFullscreen}
+            title={fullscreen ? "Exit full screen" : "Full screen"}
+            aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+            className={controlButton}
+          >
+            {fullscreen ? <Minimize style={controlIcon} /> : <Fullscreen style={controlIcon} />}
+          </ControlButton>
+        </Controls>
+      </ReactFlow>
     </div>
   );
 }
@@ -339,8 +336,7 @@ export function MeasuredGraph(props: {
   nodeTypes: NodeTypes;
   label: string;
   layerConstraints?: LayerConstraints | undefined;
-  selection?: string | null | undefined;
-  onSelect?: ((id: string | null) => void) | undefined;
+  selection?: Selection | undefined;
 }) {
   const shape = useMemo(
     () =>

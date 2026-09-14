@@ -4,12 +4,14 @@ import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection, { composeQueryKey } from "../components/ComposeSection";
 import FetchError from "../components/FetchError";
 import { GraphFrame } from "../components/graph/GraphFrame";
+import { TaskHealth } from "../components/HealthIndicator";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import SimpleTable from "../components/SimpleTable";
 import { StackActions } from "../components/stack-detail/StackActions";
 import { useDetailResource } from "../hooks/useDetailResource";
+import type { TaskCount } from "../lib/stackGraph";
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -30,9 +32,7 @@ export default function StackDetail() {
     extraQueryKeys,
   });
 
-  const [taskCounts, setTaskCounts] = useState<
-    Record<string, { running: number; desired: number }>
-  >({});
+  const [taskCounts, setTaskCounts] = useState<Record<string, TaskCount>>({});
 
   const taskDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasInitialTaskFetchRef = useRef(false);
@@ -64,7 +64,7 @@ export default function StackDetail() {
           return;
         }
 
-        const counts: Record<string, { running: number; desired: number }> = {};
+        const counts: Record<string, TaskCount> = {};
 
         for (const [service, tasks] of results) {
           const desired =
@@ -170,13 +170,7 @@ export default function StackDetail() {
                 <td className="p-3 text-sm tabular-nums">
                   {taskCounts[ID] ? (
                     <span>
-                      <span
-                        data-healthy={taskCounts[ID].running >= taskCounts[ID].desired || undefined}
-                        className="text-status-warning data-healthy:text-status-ok"
-                      >
-                        {taskCounts[ID].running}
-                      </span>
-                      /{taskCounts[ID].desired}
+                      <TaskHealth {...taskCounts[ID]} />/{taskCounts[ID].desired}
                     </span>
                   ) : (
                     "—"

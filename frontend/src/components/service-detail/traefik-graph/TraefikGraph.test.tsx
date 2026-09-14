@@ -64,10 +64,10 @@ describe("TraefikGraph", () => {
       "Unresolved service",
     ]);
 
-    // The entrypoint reveals nothing a tooltip would add, and React Flow's own
-    // wrappers would otherwise be a stop each, edges included.
-    expect(container.querySelectorAll(".react-flow__node[tabindex]")).toHaveLength(0);
-    expect(container.querySelectorAll(".react-flow__edge[tabindex]")).toHaveLength(0);
+    // The entrypoint reveals nothing a tooltip would add.
+    const wrappers = [...container.querySelectorAll(".react-flow__node")];
+
+    expect(wrappers.filter((node) => node.hasAttribute("tabindex"))).toEqual([]);
   });
 
   it("draws a referenced but undeclared middleware as external", () => {

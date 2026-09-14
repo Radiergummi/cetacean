@@ -1,16 +1,8 @@
 import { Handle, Position } from "@xyflow/react";
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
-const SelectNode = createContext<(id: string | null) => void>(() => {});
-
-export const SelectNodeProvider = SelectNode.Provider;
-
-/** A keyboard has focus where a pointer has hover, so both drive the highlight. */
-export function useNodeFocus(id: string) {
-  const select = useContext(SelectNode);
-
-  return useMemo(() => ({ onFocus: () => select(id) }), [select, id]);
-}
+export const focusRing =
+  "focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none";
 
 /**
  * Every node carries both handles so an edge always finds an anchor; the one

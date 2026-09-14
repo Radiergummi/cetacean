@@ -47,13 +47,12 @@ function smoothPath(points: Point[]): string {
 }
 
 /** Draws ELK's route as one smooth curve rather than a run of straight segments. */
-export function RoutedEdge({ markerEnd, style, data }: EdgeProps) {
+export function RoutedEdge({ markerEnd, data }: EdgeProps) {
   const { points } = data as RoutedEdgeData;
 
   return (
     <BaseEdge
       path={smoothPath(points)}
-      style={style}
       {...(markerEnd == null ? {} : { markerEnd })}
     />
   );
