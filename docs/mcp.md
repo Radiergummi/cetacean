@@ -185,6 +185,12 @@ Refresh tokens, approvals and dynamically registered clients are stored in `mcp-
 else survives a restart, which is why a single replica is required: the file is node-local, and an unset signing key
 would leave each replica signing differently.
 
+Registrations now outlive the restart that used to clear them, and `/oauth/register` is open to anyone who can reach
+it. A flood from rotating addresses evicts legitimate clients up to [`mcp.oauth.dcr_max_clients`][mcp.oauth.dcr_max_clients] and
+is restored on every start, so raising the cap afterwards does not recover them: delete `mcp-tokens.json` and let
+clients register once more, or set [`mcp.oauth.dcr_enabled`][mcp.oauth.dcr_enabled] to `false` if nothing needs dynamic
+registration. Registrations carry no expiry — RFC 7591 gives them none.
+
 [api]: api
 [authorization]: authorization
 [dashboard]: dashboard
@@ -193,6 +199,8 @@ would leave each replica signing differently.
 [mcp.consent_ttl]: configuration#mcp.consent_ttl
 [mcp.enabled]: configuration#mcp.enabled
 [mcp.max_concurrent_tasks]: configuration#mcp.max_concurrent_tasks
+[mcp.oauth.dcr_enabled]: configuration#mcp.oauth.dcr_enabled
+[mcp.oauth.dcr_max_clients]: configuration#mcp.oauth.dcr_max_clients
 [mcp.oauth.auth_bypass]: configuration#mcp.oauth.auth_bypass
 [mcp.operations_level]: configuration#mcp.operations_level
 [mcp.signing_key]: configuration#mcp.signing_key
