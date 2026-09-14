@@ -44,7 +44,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks, p, ok := prepareList(h, w, r, listSpec[swarm.Task]{
 		resourceType: "task",
 		list:         h.cache.ListTasks,
-		aclResource:  func(t swarm.Task) string { return "task:" + t.ID },
+		aclName:      func(t swarm.Task) string { return t.ID },
 		filterEnv:    filter.TaskEnv,
 		sortKeys: map[string]func(swarm.Task) string{
 			"state":   func(t swarm.Task) string { return taskStateSortKey(t.Status.State) },
@@ -75,6 +75,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 			paged.Offset,
 		),
 		p,
+		"",
 	)
 }
 

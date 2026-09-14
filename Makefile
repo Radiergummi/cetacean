@@ -1,4 +1,4 @@
-.PHONY: lint typecheck fmt fmt-check build test test-e2e check sbom sbom-check sbom-verify hooks
+.PHONY: lint typecheck fmt fmt-check build test test-e2e check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks
 
 ## Lint all code
 lint:
@@ -55,6 +55,42 @@ test-e2e:
 
 ## Run all checks (lint + type check + format check + test)
 check: lint typecheck fmt-check test
+
+## Run the Go benchmark suite, writing results to bench.txt
+#
+# The default is a fixed iteration count rather than a duration: allocs/op and
+# B/op are what these are read for, those are counted rather than timed, and a
+# fixed count keeps a run to a predictable couple of minutes. Override for
+# timing work, where a duration and more samples are worth the wait:
+#
+#   make bench BENCHTIME=1s BENCHCOUNT=10
+#   make bench BENCH='BenchmarkHandleSearch|BenchmarkStackMatcher'
+#
+# -race is deliberately absent: it perturbs allocation accounting.
+BENCH      ?= .
+BENCHTIME  ?= 200x
+BENCHCOUNT ?= 6
+BENCHPKGS  ?= ./internal/...
+BENCHOUT   ?= bench.txt
+
+bench:
+	go test -run '^$$' -bench '$(BENCH)' -benchmem \
+	  -benchtime=$(BENCHTIME) -count=$(BENCHCOUNT) $(BENCHPKGS) \
+	  | tee $(BENCHOUT)
+
+## Record the current results as the baseline to compare against
+bench-baseline: bench
+	@cp $(BENCHOUT) bench-baseline.txt
+	@echo "baseline recorded in bench-baseline.txt"
+
+## Compare bench.txt against the recorded baseline
+#
+# Run `make bench-baseline` before changing anything, then `make bench` after,
+# then this. benchstat reports allocs/op with no noise, so any movement there is
+# real; sec/op needs a quiet machine before it means much.
+bench-diff:
+	@test -f bench-baseline.txt || { echo "no baseline: run 'make bench-baseline' first" >&2; exit 1; }
+	go run golang.org/x/perf/cmd/benchstat@latest bench-baseline.txt $(BENCHOUT)
 
 ## Generate the CycloneDX SBOM (Go + frontend npm) embedded into the binary
 # The artifacts build-sbom.sh produces. Listed explicitly because

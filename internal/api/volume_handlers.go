@@ -36,7 +36,7 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 		resourceType: "volume",
 		linkTemplate: "/volumes/{name}",
 		list:         h.cache.ListVolumes,
-		aclResource:  func(v volume.Volume) string { return "volume:" + v.Name },
+		aclName:      func(v volume.Volume) string { return v.Name },
 		searchName:   func(v volume.Volume) string { return v.Name },
 		filterEnv:    filter.VolumeEnv,
 		sortKeys: map[string]func(volume.Volume) string{

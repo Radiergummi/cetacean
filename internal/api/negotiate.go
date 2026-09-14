@@ -287,8 +287,10 @@ func parseAcceptRanges(accept string) []mediaRange {
 		return nil
 	}
 
-	var ranges []mediaRange
-	for i, part := range strings.Split(accept, ",") {
+	ranges := make([]mediaRange, 0, strings.Count(accept, ",")+1)
+	i := -1
+	for part := range strings.SplitSeq(accept, ",") {
+		i++
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
@@ -345,7 +347,11 @@ func bestMatch(ranges []mediaRange) ContentType {
 		order       int // header position of the matching range
 	}
 
-	var best *candidate
+	// A value rather than a pointer: taking the address of a candidate declared
+	// in the loop escapes it to the heap on every match, and a wildcard range
+	// matches every supported type.
+	var best candidate
+	var found bool
 
 	for _, sup := range supportedTypes {
 		for _, mr := range ranges {
@@ -362,29 +368,29 @@ func bestMatch(ranges []mediaRange) ContentType {
 				order:       mr.order,
 			}
 
-			if best == nil {
-				best = &c
+			if !found {
+				best, found = c, true
 				continue
 			}
 
 			// Higher quality wins.
 			if c.q > best.q {
-				best = &c
+				best = c
 			} else if c.q == best.q {
 				// Same quality: higher specificity wins.
 				if c.specificity > best.specificity {
-					best = &c
+					best = c
 				} else if c.specificity == best.specificity {
 					// Same specificity: earlier in header wins.
 					if c.order < best.order {
-						best = &c
+						best = c
 					}
 				}
 			}
 		}
 	}
 
-	if best == nil {
+	if !found {
 		return ContentTypeUnsupported
 	}
 	return best.ct

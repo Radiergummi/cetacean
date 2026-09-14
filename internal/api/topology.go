@@ -37,6 +37,21 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 	}
 
 	identity := auth.IdentityFromContext(r.Context())
+
+	// The document is a pure function of the cache contents and what this
+	// identity may see, so a repeat request rebuilds nothing. absPath is part
+	// of the key by proxy: the base path is fixed for the process.
+	key := projectionKey{
+		generation:  h.cache.Generation(),
+		fingerprint: h.acl.Fingerprint(identity),
+	}
+	if doc, ok := h.topologyDocs.get(key); ok {
+		w.Header().Set("Content-Type", "application/vnd.jgf+json")
+		writeRawWithPrecomputedETag(w, r, doc.body, doc.etag)
+
+		return
+	}
+
 	services := acl.Filter(
 		h.acl, identity, "read",
 		h.cache.ListServices(),
@@ -83,8 +98,13 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Capped, so no later writer can append into the array every caller of the
+	// memo is handed.
+	etag := computeETag(body)
+	h.topologyDocs.put(key, renderedDoc{body: body[:len(body):len(body)], etag: etag})
+
 	w.Header().Set("Content-Type", "application/vnd.jgf+json")
-	writeRawWithETag(w, r, body)
+	writeRawWithPrecomputedETag(w, r, body, etag)
 }
 
 // buildACLFilteredNetworkGraph builds the network JGF graph for the requesting

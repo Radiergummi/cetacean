@@ -254,6 +254,11 @@ type Handlers struct {
 	metricsStreamCount atomic.Int32
 	tickerInterval     time.Duration // override for tick interval in tests; zero means use step duration
 	dockerVersionCache *dockerVersionCache
+
+	// topologyDocs and stackDocs memoise rendered documents that are pure
+	// functions of the cache generation and what the caller may see.
+	topologyDocs *projectionCache
+	stackDocs    *projectionCache
 }
 
 func NewHandlers(
@@ -288,12 +293,19 @@ func NewHandlers(
 		recEngine:          recEngine,
 		acl:                aclEval,
 		dockerVersionCache: newDockerVersionCache(),
+		topologyDocs:       newProjectionCache(),
+		stackDocs:          newProjectionCache(),
 	}
 }
 
 // requireAnyGrant checks that the identity has at least one grant.
 // Used to gate cluster-wide endpoints when ACL is active.
 func (h *Handlers) requireAnyGrant(w http.ResponseWriter, r *http.Request) bool {
+	// Everything behind this gate is ACL-filtered — topology, search, history,
+	// recommendations, the stack summary — and none of them report an Allow to
+	// carry the marker for them.
+	varyByIdentity(w)
+
 	id := auth.IdentityFromContext(r.Context())
 	if h.acl.HasAnyGrant(id) {
 		return true
@@ -317,7 +329,8 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 		return items
 	}
 	q := strings.ToLower(query)
-	var filtered []T
+	// In place, for the reason exprFilter gives.
+	filtered := items[:0]
 	for _, item := range items {
 		if cluster.ContainsFold(name(item), q) {
 			filtered = append(filtered, item)
@@ -347,7 +360,10 @@ func exprFilter[T any](
 		writeErrorCode(w, r, "FLT002", fmt.Sprintf("invalid filter expression: %s", err))
 		return nil, false
 	}
-	var filtered []T
+	// Filtered in place. prepareList is the only caller and items is the copy
+	// the cache handed it, so nothing else can observe the reordering; growing
+	// a second slice would copy every surviving item again.
+	filtered := items[:0]
 	var m map[string]any
 	for _, item := range items {
 		m = env(item, m)

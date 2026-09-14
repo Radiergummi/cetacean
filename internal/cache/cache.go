@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/docker/docker/api/types/network"
@@ -127,7 +128,21 @@ type Cache struct {
 	history        *History
 	serviceRef     serviceRefIndex
 	restarts       *RestartTracker
+
+	// generation counts every change to the cache's contents, including a full
+	// resync. It is deliberately not the history sequence: history answers
+	// "which changes have I missed", which a resync cannot, and so does not
+	// advance for one — see notify. A validator derived from that number would
+	// report a wholly replaced cache as unchanged.
+	generation atomic.Uint64
 }
+
+// Generation returns a counter that advances on every change to the cache's
+// contents. Equal values mean nothing has changed; it says nothing about what
+// did. Read without the lock, so a value taken alongside a concurrent write may
+// already be stale by the time a caller uses it — the same window a response
+// has between being rendered and being written.
+func (c *Cache) Generation() uint64 { return c.generation.Load() }
 
 func New(onChange OnChangeFunc) *Cache {
 	c := &Cache{
@@ -261,6 +276,9 @@ func (c *Cache) notify(e Event) {
 
 	// Sync events are internal bookkeeping; broadcast them to SSE clients
 	// but don't record them in history where they drown out real changes.
+	// Every event means the contents changed, a resync included.
+	c.generation.Add(1)
+
 	if e.Type != EventSync {
 		e.HistoryID = c.history.Append(HistoryEntry{
 			Type:       e.Type,
@@ -375,6 +393,66 @@ func (c *Cache) DeleteNode(id string) {
 }
 
 func (c *Cache) ListNodes() []swarm.Node { return c.nodes.List() }
+
+// EachNode calls yield for every node in ListNodes order. See ResourceMap.Each
+// for the rule about calling back into the cache from yield.
+func (c *Cache) EachNode(yield func(swarm.Node) bool) { c.nodes.Each(yield) }
+
+// EachConfig, EachSecret, EachNetwork and EachVolume are EachNode for the other
+// ResourceMap-backed types.
+func (c *Cache) EachConfig(yield func(swarm.Config) bool)     { c.configs.Each(yield) }
+func (c *Cache) EachSecret(yield func(swarm.Secret) bool)     { c.secrets.Each(yield) }
+func (c *Cache) EachNetwork(yield func(network.Summary) bool) { c.networks.Each(yield) }
+func (c *Cache) EachVolume(yield func(volume.Volume) bool)    { c.volumes.Each(yield) }
+
+// EachService calls yield for every service in ListServices order.
+func (c *Cache) EachService(yield func(swarm.Service) bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	ids := make([]string, 0, len(c.services))
+	for id := range c.services {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+
+	for _, id := range ids {
+		if !yield(c.services[id]) {
+			return
+		}
+	}
+}
+
+// EachTask calls yield for every task in ListTasks order, which is by slot and
+// then ID rather than by key — so the sort key is gathered rather than the map
+// keys, and the tasks themselves are still never copied into a slice.
+func (c *Cache) EachTask(yield func(swarm.Task) bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	type key struct {
+		slot int
+		id   string
+	}
+
+	keys := make([]key, 0, len(c.tasks))
+	for id, t := range c.tasks {
+		keys = append(keys, key{t.Slot, id})
+	}
+	slices.SortFunc(keys, func(a, b key) int {
+		if bySlot := cmp.Compare(a.slot, b.slot); bySlot != 0 {
+			return bySlot
+		}
+
+		return cmp.Compare(a.id, b.id)
+	})
+
+	for _, k := range keys {
+		if !yield(c.tasks[k.id]) {
+			return
+		}
+	}
+}
 
 // --- Services ---
 

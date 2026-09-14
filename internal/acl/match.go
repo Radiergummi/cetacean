@@ -12,15 +12,29 @@ import (
 // string. resource is "type:name" (e.g. "service:webapp-api").
 // expression is "type:pattern" with glob wildcards, or bare "*" for all.
 func matchResource(expression, resource string) bool {
+	// Before the split, not after: a bare wildcard covers everything, including
+	// a resource with no type separator to take apart.
+	if expression == "*" {
+		return true
+	}
+
+	resType, resName, ok := splitResource(resource)
+	if !ok {
+		return false
+	}
+
+	return matchResourceParts(expression, resType, resName)
+}
+
+// matchResourceParts is matchResource for a caller that already has the two
+// halves, and so need not build the "type:name" string only for this to cut it
+// apart again. Filtering a list does that for every item.
+func matchResourceParts(expression, resType, resName string) bool {
 	if expression == "*" {
 		return true
 	}
 
 	exprType, exprPattern, ok := strings.Cut(expression, ":")
-	if !ok {
-		return false
-	}
-	resType, resName, ok := strings.Cut(resource, ":")
 	if !ok {
 		return false
 	}

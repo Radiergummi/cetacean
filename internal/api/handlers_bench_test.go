@@ -17,7 +17,9 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/sse"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -1160,4 +1162,139 @@ func BenchmarkMixedWorkloadParallel(b *testing.B) {
 			})
 		})
 	}
+}
+
+// =============================================================================
+// Content coding
+//
+// Every benchmark above negotiates identity, but compressionThreshold is 1KiB
+// and a browser asks for a coding, so the pass these measure is one production
+// pays on nearly every list response.
+// =============================================================================
+
+func BenchmarkHandleListNodes_Encoded(b *testing.B) {
+	for _, n := range handlerSizes {
+		c := cache.New(nil)
+		populateCache(c, n)
+		h := newTestHandlers(b, withCache(c))
+
+		for _, coding := range []string{"identity", "gzip", "zstd"} {
+			b.Run(fmt.Sprintf("size=%d/%s", n, coding), func(b *testing.B) {
+				for b.Loop() {
+					req := httptest.NewRequest("GET", "/api/nodes?per_page=1000", nil)
+					if coding != "identity" {
+						req.Header.Set("Accept-Encoding", coding)
+					}
+					h.HandleListNodes(httptest.NewRecorder(), req)
+				}
+			})
+		}
+	}
+}
+
+// =============================================================================
+// ACL filtering
+//
+// newTestHandlers leaves the evaluator nil, which acl.Filter short-circuits, so
+// every other handler benchmark measures the unguarded path. These carry a
+// policy so the per-item grant matching is visible.
+// =============================================================================
+
+// benchACL builds an evaluator over c, wired the way main.go wires it. The
+// resolver is the point: without it a grant that does not match directly never
+// reaches Cache.StackOf, so the benchmark measures a configuration that does
+// not ship — see docs/specs/2026-09-14-acl-resolver-index-design.md.
+func benchACL(c *cache.Cache, grants ...acl.Grant) *acl.Evaluator {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: grants})
+	e.SetResolver(c)
+
+	return e
+}
+
+func BenchmarkHandleListServices_ACL(b *testing.B) {
+	policies := map[string][]acl.Grant{
+		"wildcard": {{Resources: []string{"service:*"}, Permissions: []string{"read"}}},
+		"prefix":   {{Resources: []string{"service:svc-1*"}, Permissions: []string{"read"}}},
+		// The shape a real deployment writes, and the expensive one: a grant
+		// naming a stack matches no service directly, so every item falls
+		// through to the resolver.
+		"stack": {{Resources: []string{"stack:stack-0"}, Permissions: []string{"read"}}},
+		"many_grants": func() []acl.Grant {
+			g := make([]acl.Grant, 0, 20)
+			for i := range 20 {
+				g = append(g, acl.Grant{
+					Resources:   []string{fmt.Sprintf("service:svc-%d", i)},
+					Permissions: []string{"read"},
+				})
+			}
+			return g
+		}(),
+	}
+
+	for name, grants := range policies {
+		for _, n := range []int{100, 1000} {
+			c := cache.New(nil)
+			populateCache(c, n)
+			h := newTestHandlers(b, withCache(c), withACL(benchACL(c, grants...)))
+			identity := &auth.Identity{Subject: "bench", Provider: "test"}
+
+			b.Run(fmt.Sprintf("%s/size=%d", name, n), func(b *testing.B) {
+				for b.Loop() {
+					req := httptest.NewRequest("GET", "/api/services?per_page=1000", nil)
+					req = req.WithContext(auth.ContextWithIdentity(req.Context(), identity))
+					h.HandleListServices(httptest.NewRecorder(), req)
+				}
+			})
+		}
+	}
+}
+
+// BenchmarkHandleTopology_ColdMemo is the other half of BenchmarkHandleTopology,
+// which measures the memoised path a dashboard polling between cluster events
+// gets. A mutation per iteration means every request here rebuilds, so a
+// regression in the graph construction stays visible.
+func BenchmarkHandleTopology_ColdMemo(b *testing.B) {
+	for _, n := range []int{100, 1000} {
+		c := cache.New(nil)
+		populateCache(c, n)
+		h := newTestHandlers(b, withCache(c))
+
+		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
+			i := 0
+			for b.Loop() {
+				// Advances the generation, so the next request misses.
+				c.SetNode(swarm.Node{ID: fmt.Sprintf("churn-%d", i%2)})
+				i++
+
+				req := httptest.NewRequest("GET", "/api/topology", nil)
+				h.HandleTopology(httptest.NewRecorder(), req)
+			}
+		})
+	}
+}
+
+// BenchmarkHandleListNodes_NotModified measures the revalidation a dashboard
+// makes between cluster events: the tag still matches, so the 304 is answered
+// without reading the cache, filtering, sorting or marshalling anything.
+// BenchmarkHandleListNodes is the full response it stands in for.
+func BenchmarkHandleListNodes_NotModified(b *testing.B) {
+	benchHandler(b, "ListNodes_NotModified", func(b *testing.B, h *Handlers) {
+		warm := httptest.NewRecorder()
+		h.HandleListNodes(warm, httptest.NewRequestWithContext(b.Context(), "GET", "/nodes", nil))
+		etag := warm.Header().Get("ETag")
+		if etag == "" {
+			b.Fatal("no ETag to revalidate with")
+		}
+
+		for b.Loop() {
+			req := httptest.NewRequestWithContext(b.Context(), "GET", "/nodes", nil)
+			req.Header.Set("If-None-Match", etag)
+			rec := httptest.NewRecorder()
+			h.HandleListNodes(rec, req)
+			if rec.Code != http.StatusNotModified {
+				b.Fatalf("expected 304, got %d", rec.Code)
+			}
+		}
+	})
 }

@@ -39,5 +39,6 @@ func renderJSONFeed(w http.ResponseWriter, r *http.Request, data feedData) {
 	}
 
 	w.Header().Set("Content-Type", "application/feed+json;charset=utf-8")
+	varyByIdentity(w)
 	writeCachedJSON(w, r, feed)
 }

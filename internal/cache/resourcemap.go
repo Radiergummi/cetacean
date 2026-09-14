@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"cmp"
 	"maps"
 	"slices"
 	"sync"
@@ -105,12 +106,59 @@ func (r *ResourceMap[T]) Delete(key string, eventType EventType) Event {
 // sort is the expensive half of the call on a large cluster, and it does not
 // belong under the lock the watcher's writers are contending for. ListServices
 // and ListTasks split the work the same way.
+//
+// Keys and values are gathered into parallel slices rather than cloning the
+// map: Go stores map values larger than 128 bytes indirectly, so cloning one
+// allocates every value separately. Sorting an index permutation then keeps
+// the sort itself off the values, which are wide enough that swapping them
+// costs more than the extra slice.
 func (r *ResourceMap[T]) List() []T {
 	r.mu.RLock()
-	items := maps.Clone(r.items)
+	keys := make([]string, 0, len(r.items))
+	vals := make([]T, 0, len(r.items))
+	for k, v := range r.items {
+		keys = append(keys, k)
+		vals = append(vals, v)
+	}
 	r.mu.RUnlock()
 
-	return listSorted(items)
+	order := make([]int, len(keys))
+	for i := range order {
+		order[i] = i
+	}
+	slices.SortFunc(order, func(a, b int) int { return cmp.Compare(keys[a], keys[b]) })
+
+	out := make([]T, len(vals))
+	for i, j := range order {
+		out[i] = vals[j]
+	}
+
+	return out
+}
+
+// Each calls yield for every value in the same order List returns them,
+// stopping early if yield returns false. Only the keys are copied, so a scan
+// that keeps few of the values — search — allocates a fraction of what listing
+// them costs.
+//
+// yield runs under the read lock and must not call back into the cache: Go's
+// RWMutex is not re-entrant for readers, so a writer arriving between the two
+// acquisitions deadlocks the second. Collect what matches and enrich after.
+func (r *ResourceMap[T]) Each(yield func(T) bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	keys := make([]string, 0, len(r.items))
+	for k := range r.items {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+
+	for _, k := range keys {
+		if !yield(r.items[k]) {
+			return
+		}
+	}
 }
 
 // Len returns the number of items.

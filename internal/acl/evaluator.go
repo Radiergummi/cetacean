@@ -14,6 +14,21 @@ type Evaluator struct {
 	policy   atomic.Pointer[Policy]
 	source   GrantSource
 	resolver ResourceResolver
+
+	// policyGeneration advances on every SetPolicy. The policy is hot-reloaded
+	// from disk, so what an identity may see changes with no cache mutation
+	// behind it, and anything keyed on the grants has to notice.
+	policyGeneration atomic.Uint64
+}
+
+// PolicyGeneration returns a counter that advances whenever the policy is
+// replaced.
+func (e *Evaluator) PolicyGeneration() uint64 {
+	if e == nil {
+		return 0
+	}
+
+	return e.policyGeneration.Load()
 }
 
 // NewEvaluator creates a new Evaluator. All parameters are optional.
@@ -27,6 +42,7 @@ func (e *Evaluator) SetPolicy(p *Policy) {
 		return
 	}
 	e.policy.Store(p)
+	e.policyGeneration.Add(1)
 }
 
 // SetResolver sets the resource resolver for stack/task resolution.
@@ -73,11 +89,79 @@ func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) b
 }
 
 // Filter returns only items the identity can access with the given permission.
+//
+// items is left untouched. A caller that owns the slice — one holding a copy
+// the cache just handed it, and nothing else — should use FilterInPlace, which
+// is the same walk without a second slice.
 func Filter[T any](
 	e *Evaluator,
 	id *auth.Identity,
 	permission string,
 	items []T,
+	resourceFunc func(T) string,
+) []T {
+	// Grown rather than sized for the whole input: a permissive policy pays
+	// for the growth, but sizing for every item costs a restrictive one far
+	// more — and a restrictive policy is the reason to run one at all.
+	return filterInto(e, id, permission, items, nil, resourceFunc)
+}
+
+// FilterInPlace is Filter, writing the survivors over items rather than into a
+// slice of its own. The order is the same and nothing is dropped that Filter
+// would keep, but items is reordered and must not be shared: the caller has to
+// own it outright, as prepareList does with the copy the cache gave it.
+func FilterInPlace[T any](
+	e *Evaluator,
+	id *auth.Identity,
+	permission string,
+	items []T,
+	resourceFunc func(T) string,
+) []T {
+	return filterInto(e, id, permission, items, items[:0], resourceFunc)
+}
+
+// FilterInPlaceNamed is FilterInPlace for the common case where every item's
+// resource is the same type, so the caller can name each one rather than build
+// a "type:name" string per item that the matcher immediately splits again.
+func FilterInPlaceNamed[T any](
+	e *Evaluator,
+	id *auth.Identity,
+	permission string,
+	items []T,
+	resourceType string,
+	nameFunc func(T) string,
+) []T {
+	if e == nil {
+		return items
+	}
+	p := e.policy.Load()
+	if p == nil {
+		return items
+	}
+
+	grants := e.collectGrants(id, p)
+
+	result := items[:0]
+	for _, item := range items {
+		name := nameFunc(item)
+		for _, g := range grants {
+			if hasPermission(g, permission) && e.grantMatchesParts(g, resourceType, name) {
+				result = append(result, item)
+				break
+			}
+		}
+	}
+
+	return result
+}
+
+// filterInto is the walk both share. dst nil means grow a new slice.
+func filterInto[T any](
+	e *Evaluator,
+	id *auth.Identity,
+	permission string,
+	items []T,
+	dst []T,
 	resourceFunc func(T) string,
 ) []T {
 	if e == nil {
@@ -89,7 +173,8 @@ func Filter[T any](
 	}
 
 	grants := e.collectGrants(id, p)
-	var result []T
+
+	result := dst
 	for _, item := range items {
 		resource := resourceFunc(item)
 		for _, g := range grants {
@@ -171,47 +256,58 @@ func (e *Evaluator) collectGrants(id *auth.Identity, p *Policy) []Grant {
 // grantMatchesResource checks if a grant covers the given resource,
 // including stack resolution and task inheritance.
 func (e *Evaluator) grantMatchesResource(g Grant, resource string) bool {
-	for _, expr := range g.Resources {
-		if matchResource(expr, resource) {
-			return true
-		}
+	resType, resID, ok := splitResource(resource)
+	if !ok {
+		// Nothing to match a pattern against, but a bare wildcard still covers
+		// it — see matchResource.
+		return slices.Contains(g.Resources, "*")
+	}
+
+	return e.grantMatchesParts(g, resType, resID)
+}
+
+// grantMatchesParts is grantMatchesResource for a caller holding the two halves
+// already, so that filtering a list need not build a "type:name" string per
+// item for the direct comparison to split straight back apart.
+func (e *Evaluator) grantMatchesParts(g Grant, resType, resID string) bool {
+	if grantCovers(g, resType, resID) {
+		return true
 	}
 
 	// Stack resolution: if no direct match, check if the resource belongs
 	// to a stack that a grant covers.
-	if e.resolver != nil {
-		resType, resID, ok := splitResource(resource)
-		if ok {
-			// Task inheritance: tasks inherit from their parent service.
-			if resType == "task" {
-				if svcName := e.resolver.ServiceOfTask(resID); svcName != "" {
-					svcResource := "service:" + svcName
-					for _, expr := range g.Resources {
-						if matchResource(expr, svcResource) {
-							return true
-						}
-					}
-					// Also check the parent service's stack (task→service→stack).
-					if stackName := e.resolver.StackOf("service", svcName); stackName != "" {
-						stackResource := "stack:" + stackName
-						for _, expr := range g.Resources {
-							if matchResource(expr, stackResource) {
-								return true
-							}
-						}
-					}
-				}
-			}
+	if e.resolver == nil {
+		return false
+	}
 
-			// Stack membership: check if the resource belongs to a matching stack.
-			if stackName := e.resolver.StackOf(resType, resID); stackName != "" {
-				stackResource := "stack:" + stackName
-				for _, expr := range g.Resources {
-					if matchResource(expr, stackResource) {
-						return true
-					}
+	// Task inheritance: tasks inherit from their parent service.
+	if resType == "task" {
+		if svcName := e.resolver.ServiceOfTask(resID); svcName != "" {
+			if grantCovers(g, "service", svcName) {
+				return true
+			}
+			// Also check the parent service's stack (task→service→stack).
+			if stackName := e.resolver.StackOf("service", svcName); stackName != "" {
+				if grantCovers(g, "stack", stackName) {
+					return true
 				}
 			}
+		}
+	}
+
+	// Stack membership: check if the resource belongs to a matching stack.
+	if stackName := e.resolver.StackOf(resType, resID); stackName != "" {
+		return grantCovers(g, "stack", stackName)
+	}
+
+	return false
+}
+
+// grantCovers reports whether any of the grant's resource patterns matches.
+func grantCovers(g Grant, resType, resName string) bool {
+	for _, expr := range g.Resources {
+		if matchResourceParts(expr, resType, resName) {
+			return true
 		}
 	}
 

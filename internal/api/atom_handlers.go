@@ -75,7 +75,7 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/atom+xml;charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Add("Vary", "Authorization, Cookie")
+	varyByIdentity(w)
 
 	if etagMatch(r.Header.Get("If-None-Match"), etag) {
 		w.WriteHeader(http.StatusNotModified)

@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 )
@@ -68,19 +70,17 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	}
 	var allResults [stCount]typeResults
 
-	services := c.ListServices()
-
 	var wg sync.WaitGroup
 	wg.Add(stCount)
 
 	// Services
 	go func() {
 		defer wg.Done()
-		var matches []SearchResult
+		var hits []swarm.Service
 		count := 0
-		for _, s := range services {
+		c.EachService(func(s swarm.Service) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			hit := ContainsFold(s.Spec.Name, ql)
 			if !hit && s.Spec.TaskTemplate.ContainerSpec != nil {
@@ -90,23 +90,35 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(s.Spec.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
-			if len(matches) >= limit {
-				continue
+			if len(hits) < limit {
+				hits = append(hits, s)
 			}
+
+			return true
+		})
+		if ctx.Err() != nil {
+			// An abandoned scan counted part of the cluster; publishing that
+			// would report a truncated total as the whole one.
+			return
+		}
+
+		// RunningTaskCount takes the read lock, so it runs out here rather than
+		// inside the scan that already holds it.
+		matches := make([]SearchResult, 0, len(hits))
+		for _, s := range hits {
 			detail := ""
 			if s.Spec.TaskTemplate.ContainerSpec != nil {
 				detail = StripImageDigest(s.Spec.TaskTemplate.ContainerSpec.Image)
 			}
-			running := c.RunningTaskCount(s.ID)
 			matches = append(matches, SearchResult{
 				Type:   "services",
 				ID:     s.ID,
 				Name:   s.Spec.Name,
 				Detail: detail,
-				State:  DeriveServiceState(s, running),
+				State:  DeriveServiceState(s, c.RunningTaskCount(s.ID)),
 			})
 		}
 		allResults[stServices] = typeResults{"services", matches, count}
@@ -142,12 +154,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	// Nodes
 	go func() {
 		defer wg.Done()
-		nodes := c.ListNodes()
 		var matches []SearchResult
 		count := 0
-		for _, n := range nodes {
+		c.EachNode(func(n swarm.Node) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			hit := ContainsFold(n.Description.Hostname, ql)
 			if !hit {
@@ -157,11 +168,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(n.Spec.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
 			if len(matches) >= limit {
-				continue
+				return true
 			}
 			matches = append(matches, SearchResult{
 				Type:   "nodes",
@@ -170,6 +181,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				State:  deriveNodeState(n),
 				Detail: string(n.Spec.Role),
 			})
+
+			return true
+		})
+		if ctx.Err() != nil {
+			return
 		}
 		allResults[stNodes] = typeResults{"nodes", matches, count}
 	}()
@@ -177,28 +193,23 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	// Tasks
 	go func() {
 		defer wg.Done()
-		tasks := c.ListTasks()
-		// Task names embed the service name (svcName.slot); build the lookup
-		// once here rather than at the top level so cluster-wide searches that
-		// never hit the tasks branch don't pay the allocation.
-		svcByID := make(map[string]*swarm.Service, len(services))
-		for i := range services {
-			svcByID[services[i].ID] = &services[i]
-		}
-		var matches []SearchResult
-		count := 0
-		for _, t := range tasks {
-			if ctx.Err() != nil {
-				return
-			}
-			svc := svcByID[t.ServiceID]
-			svcName := ""
-			if svc != nil {
-				svcName = svc.Spec.Name
-			}
-			taskName := TaskName(t, svc)
+		// A task matches on its service's name, so every task needs one — but
+		// only the name. Keeping the services themselves would put a copy of
+		// every service on the heap to read one field off each.
+		svcNames := make(map[string]string)
+		c.EachService(func(s swarm.Service) bool {
+			svcNames[s.ID] = s.Spec.Name
 
-			hit := ContainsFold(svcName, ql)
+			return true
+		})
+
+		var hits []swarm.Task
+		count := 0
+		c.EachTask(func(t swarm.Task) bool {
+			if ctx.Err() != nil {
+				return false
+			}
+			hit := ContainsFold(svcNames[t.ServiceID], ql)
 			if !hit && t.Spec.ContainerSpec != nil {
 				hit = ContainsFold(t.Spec.ContainerSpec.Image, ql)
 			}
@@ -206,11 +217,27 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(t.Spec.ContainerSpec.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
-			if len(matches) >= limit {
-				continue
+			if len(hits) < limit {
+				hits = append(hits, t)
+			}
+
+			return true
+		})
+		if ctx.Err() != nil {
+			return
+		}
+
+		// TaskName needs the whole service, and GetService takes the read lock
+		// the scan above was holding — so naming happens out here, and only for
+		// the tasks that survived.
+		matches := make([]SearchResult, 0, len(hits))
+		for _, t := range hits {
+			var svc *swarm.Service
+			if s, ok := c.GetService(t.ServiceID); ok {
+				svc = &s
 			}
 			detail := ""
 			if t.Spec.ContainerSpec != nil {
@@ -219,7 +246,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 			matches = append(matches, SearchResult{
 				Type:   "tasks",
 				ID:     t.ID,
-				Name:   taskName,
+				Name:   TaskName(t, svc),
 				Detail: detail,
 				State:  string(t.Status.State),
 			})
@@ -230,23 +257,22 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	// Configs
 	go func() {
 		defer wg.Done()
-		configs := c.ListConfigs()
 		var matches []SearchResult
 		count := 0
-		for _, cfg := range configs {
+		c.EachConfig(func(cfg swarm.Config) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			hit := ContainsFold(cfg.Spec.Name, ql)
 			if !hit {
 				hit = labelsMatch(cfg.Spec.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
 			if len(matches) >= limit {
-				continue
+				return true
 			}
 			matches = append(matches, SearchResult{
 				Type:   "configs",
@@ -254,6 +280,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Name:   cfg.Spec.Name,
 				Detail: cfg.CreatedAt.Format(time.RFC3339),
 			})
+
+			return true
+		})
+		if ctx.Err() != nil {
+			return
 		}
 		allResults[stConfigs] = typeResults{"configs", matches, count}
 	}()
@@ -261,12 +292,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	// Secrets
 	go func() {
 		defer wg.Done()
-		secrets := c.ListSecrets()
 		var matches []SearchResult
 		count := 0
-		for _, s := range secrets {
+		c.EachSecret(func(s swarm.Secret) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			s = RedactSecret(s)
 			hit := ContainsFold(s.Spec.Name, ql)
@@ -274,11 +304,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(s.Spec.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
 			if len(matches) >= limit {
-				continue
+				return true
 			}
 			matches = append(matches, SearchResult{
 				Type:   "secrets",
@@ -286,6 +316,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Name:   s.Spec.Name,
 				Detail: s.CreatedAt.Format(time.RFC3339),
 			})
+
+			return true
+		})
+		if ctx.Err() != nil {
+			return
 		}
 		allResults[stSecrets] = typeResults{"secrets", matches, count}
 	}()
@@ -293,23 +328,22 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	// Networks
 	go func() {
 		defer wg.Done()
-		networks := c.ListNetworks()
 		var matches []SearchResult
 		count := 0
-		for _, n := range networks {
+		c.EachNetwork(func(n network.Summary) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			hit := ContainsFold(n.Name, ql)
 			if !hit {
 				hit = labelsMatch(n.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
 			if len(matches) >= limit {
-				continue
+				return true
 			}
 			matches = append(matches, SearchResult{
 				Type:   "networks",
@@ -317,6 +351,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Name:   n.Name,
 				Detail: n.Driver,
 			})
+
+			return true
+		})
+		if ctx.Err() != nil {
+			return
 		}
 		allResults[stNetworks] = typeResults{"networks", matches, count}
 	}()
@@ -324,23 +363,22 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	// Volumes
 	go func() {
 		defer wg.Done()
-		volumes := c.ListVolumes()
 		var matches []SearchResult
 		count := 0
-		for _, v := range volumes {
+		c.EachVolume(func(v volume.Volume) bool {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			hit := ContainsFold(v.Name, ql)
 			if !hit {
 				hit = labelsMatch(v.Labels, ql)
 			}
 			if !hit {
-				continue
+				return true
 			}
 			count++
 			if len(matches) >= limit {
-				continue
+				return true
 			}
 			matches = append(matches, SearchResult{
 				Type:   "volumes",
@@ -348,6 +386,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Name:   v.Name,
 				Detail: v.Driver,
 			})
+
+			return true
+		})
+		if ctx.Err() != nil {
+			return
 		}
 		allResults[stVolumes] = typeResults{"volumes", matches, count}
 	}()
@@ -426,8 +469,6 @@ func ContainsFoldNoAlloc(s, substrLower string) bool {
 	return false
 }
 
-var separatorReplacer = strings.NewReplacer("_", "", "-", "")
-
 func isSeparator(r rune) bool { return r == '_' || r == '-' }
 
 // SegmentPrefixMatch checks if query matches target using segment-prefix
@@ -441,63 +482,116 @@ func SegmentPrefixMatch(targetLower, queryLower string) bool {
 		return true
 	}
 
-	// Strip separators from query (user may type "go_gc" meaning "go" + "gc")
-	query := separatorReplacer.Replace(queryLower)
+	// Both the stripped query and the segment offsets go in caller arrays, and
+	// the walk below is a function rather than a closure so they stay there.
+	// This runs against every label key and value of every resource: the query
+	// copy and the []string strings.FieldsFunc returned were together 96% of
+	// the allocations a search made.
+	var qbuf [maxStackQuery]byte
+	var sbuf [32]int32
+
+	query := stripSeparators(qbuf[:0], queryLower)
 	if len(query) == 0 {
 		return true
 	}
 
-	segments := strings.FieldsFunc(targetLower, isSeparator)
+	bounds := appendSegmentBounds(sbuf[:0], targetLower)
 
 	// Single-segment targets are already covered by substring match in ContainsFold
-	if len(segments) <= 1 {
+	if len(bounds) <= 2 {
 		return false
 	}
 
-	// TODO(perf): this allocates a fresh memo map per call on a hot path —
-	// SegmentPrefixMatch runs against every label key/value of every resource
-	// across parallel search goroutines. Benchmark and, if the GC pressure is
-	// material, replace recursive memoised backtracking with an iterative DP
-	// using a preallocated [len(query)+1][len(segments)+1]bool array.
-	type key struct{ qi, si int }
-	memo := map[key]bool{}
+	return segmentWalk(query, targetLower, bounds, map[memoKey]bool{}, 0, 0)
+}
 
-	var match func(qi, si int) bool
-	match = func(qi, si int) bool {
-		if qi >= len(query) {
-			return true
+// memoKey settles one (query offset, segment index) pair for segmentWalk.
+type memoKey struct{ qi, si int }
+
+// maxStackQuery is the longest query stripSeparators keeps in the caller's
+// array. The search endpoint refuses anything longer than 200 bytes; a caller
+// that does not enforce that just pays an allocation.
+const maxStackQuery = 256
+
+// stripSeparators appends queryLower to dst without its separators, so a user
+// typing "go_gc" means "go" + "gc". dst is normally backed by a caller's array.
+func stripSeparators(dst []byte, queryLower string) []byte {
+	for i := range len(queryLower) {
+		if c := queryLower[i]; !isSeparator(rune(c)) {
+			dst = append(dst, c)
 		}
-
-		if si >= len(segments) {
-			return false
-		}
-
-		k := key{qi, si}
-		if v, ok := memo[k]; ok {
-			return v
-		}
-
-		result := false
-		for s := si; s < len(segments) && !result; s++ {
-			seg := segments[s]
-			maxMatch := 0
-
-			for maxMatch < len(seg) && qi+maxMatch < len(query) && query[qi+maxMatch] == seg[maxMatch] {
-				maxMatch++
-			}
-
-			for take := maxMatch; take >= 1 && !result; take-- {
-				if match(qi+take, s+1) {
-					result = true
-				}
-			}
-		}
-
-		memo[k] = result
-		return result
 	}
 
-	return match(0, 0)
+	return dst
+}
+
+// segmentWalk reports whether query[qi:] can be consumed by the segments of
+// target from si onwards, taking a prefix of each and skipping any. memo keys
+// the (qi, si) pairs already settled.
+func segmentWalk(
+	query []byte,
+	target string,
+	bounds []int32,
+	memo map[memoKey]bool,
+	qi, si int,
+) bool {
+	if qi >= len(query) {
+		return true
+	}
+
+	segments := len(bounds) / 2
+	if si >= segments {
+		return false
+	}
+
+	k := memoKey{qi, si}
+	if v, ok := memo[k]; ok {
+		return v
+	}
+
+	result := false
+	for s := si; s < segments && !result; s++ {
+		seg := target[bounds[2*s]:bounds[2*s+1]]
+		maxMatch := 0
+
+		for maxMatch < len(seg) && qi+maxMatch < len(query) && query[qi+maxMatch] == seg[maxMatch] {
+			maxMatch++
+		}
+
+		for take := maxMatch; take >= 1 && !result; take-- {
+			if segmentWalk(query, target, bounds, memo, qi+take, s+1) {
+				result = true
+			}
+		}
+	}
+
+	memo[k] = result
+
+	return result
+}
+
+// appendSegmentBounds appends the [start, end) offset pair of every separator-
+// delimited segment of s to dst, skipping empty ones the way strings.FieldsFunc
+// does. dst is normally backed by a caller's array, so nothing is allocated.
+func appendSegmentBounds(dst []int32, s string) []int32 {
+	start := -1
+	for i := range len(s) {
+		if isSeparator(rune(s[i])) {
+			if start >= 0 {
+				dst = append(dst, int32(start), int32(i))
+				start = -1
+			}
+			continue
+		}
+		if start < 0 {
+			start = i
+		}
+	}
+	if start >= 0 {
+		dst = append(dst, int32(start), int32(len(s)))
+	}
+
+	return dst
 }
 
 // labelsMatch returns true if any label key or value contains the query string

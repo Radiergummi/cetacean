@@ -65,6 +65,42 @@ func (c *Cache) removeFromStack(resource EventType, id string, labels map[string
 	}
 }
 
+// StackContains reports whether the named stack lists id as a member of the
+// given resource kind. It answers under the read lock without copying
+// membership out, because the SSE stack streams ask once per event per
+// subscribed client.
+//
+// Membership is sorted — see appendUnique — so the lookup is a binary search.
+func (c *Cache) StackContains(name string, resource EventType, id string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	s, ok := c.stacks[name]
+	if !ok {
+		return false
+	}
+
+	var members []string
+	switch resource {
+	case EventService:
+		members = s.Services
+	case EventConfig:
+		members = s.Configs
+	case EventSecret:
+		members = s.Secrets
+	case EventNetwork:
+		members = s.Networks
+	case EventVolume:
+		members = s.Volumes
+	default:
+		return false
+	}
+
+	_, found := slices.BinarySearch(members, id)
+
+	return found
+}
+
 // rebuildStacks rebuilds all stacks from the current resource maps. Must be called with c.mu held for writing.
 func (c *Cache) rebuildStacks() {
 	stacks := make(map[string]*Stack)

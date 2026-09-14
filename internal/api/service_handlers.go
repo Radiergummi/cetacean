@@ -41,7 +41,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	services, p, ok := prepareList(h, w, r, listSpec[swarm.Service]{
 		resourceType: "service",
 		list:         h.cache.ListServices,
-		aclResource:  func(s swarm.Service) string { return "service:" + s.Spec.Name },
+		aclName:      func(s swarm.Service) string { return s.Spec.Name },
 		searchName:   func(s swarm.Service) string { return s.Spec.Name },
 		filterEnv:    filter.ServiceEnv,
 		sortKeys: map[string]func(swarm.Service) string{
@@ -95,6 +95,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 			paged.Offset,
 		),
 		p,
+		"",
 	)
 }
 

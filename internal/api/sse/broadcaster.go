@@ -5,7 +5,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -363,24 +362,14 @@ func StackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
 		if e.Type == cache.EventSync {
 			return true
 		}
-		stack, ok := c.GetStack(name)
-		if !ok {
-			return false
-		}
 		switch e.Type {
-		case cache.EventService:
-			return slices.Contains(stack.Services, e.ID)
-		case cache.EventConfig:
-			return slices.Contains(stack.Configs, e.ID)
-		case cache.EventSecret:
-			return slices.Contains(stack.Secrets, e.ID)
-		case cache.EventNetwork:
-			return slices.Contains(stack.Networks, e.ID)
-		case cache.EventVolume:
-			return slices.Contains(stack.Volumes, e.ID)
+		case cache.EventService, cache.EventConfig, cache.EventSecret,
+			cache.EventNetwork, cache.EventVolume:
+			return c.StackContains(name, e.Type, e.ID)
 		case cache.EventTask:
+			// A task belongs to the stack its service does.
 			if t, ok := e.Resource.(swarm.Task); ok {
-				return slices.Contains(stack.Services, t.ServiceID)
+				return c.StackContains(name, cache.EventService, t.ServiceID)
 			}
 			return false
 		default:

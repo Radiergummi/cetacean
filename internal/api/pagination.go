@@ -146,17 +146,20 @@ func pageOf[T any](items []T, p PageParams) []T {
 //
 // For query-param requests: 200 OK with Link pagination headers.
 // Always sets Accept-Ranges: items.
+// writeCollectionResponse writes a paginated collection. validator is the tag
+// the caller already offered on the conditional path, or empty to hash the body.
 func writeCollectionResponse[T any](
 	w http.ResponseWriter,
 	r *http.Request,
 	resp CollectionResponse[T],
 	p PageParams,
+	validator string,
 ) {
 	w.Header().Set("Accept-Ranges", "items")
 
 	if p.RangeReq {
 		if resp.Total == 0 {
-			writeCachedJSONStatus(w, r, http.StatusOK, resp)
+			writeCachedJSONStatusValidated(w, r, http.StatusOK, resp, validator)
 			return
 		}
 
@@ -169,7 +172,7 @@ func writeCollectionResponse[T any](
 
 		last := resp.Offset + len(resp.Items) - 1
 		if resp.Offset == 0 && last >= resp.Total-1 {
-			writeCachedJSONStatus(w, r, http.StatusOK, resp)
+			writeCachedJSONStatusValidated(w, r, http.StatusOK, resp, validator)
 			return
 		}
 
@@ -177,12 +180,12 @@ func writeCollectionResponse[T any](
 			"Content-Range",
 			fmt.Sprintf("items %d-%d/%d", resp.Offset, last, resp.Total),
 		)
-		writeCachedJSONStatus(w, r, http.StatusPartialContent, resp)
+		writeCachedJSONStatusValidated(w, r, http.StatusPartialContent, resp, validator)
 		return
 	}
 
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
-	writeCachedJSON(w, r, resp)
+	writeCachedJSONStatusValidated(w, r, http.StatusOK, resp, validator)
 }
 
 // writeLinkTemplate sets a Link-Template header (RFC 9652) on the response,

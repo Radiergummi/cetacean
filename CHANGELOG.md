@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
+- Search, the resource lists and the topology view are faster on clusters with hundreds of services, and a stack's event stream costs less per connected browser
 - The dashboard's first load is about a third of its former size, and hashed assets are cached permanently
 - The API reference at `/api` is six months newer, and now follows Scalar releases automatically
 - MCP access tokens follow the RFC 9068 `at+jwt` profile. Clients holding an older token refresh automatically
@@ -42,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A recommendation that measured zero no longer reads as one that measured nothing — a service using essentially no CPU reported an empty `current`
 - Header-based authentication works behind a reverse proxy again; it was answering 401 to every request
 - Asking an endpoint for a format it does not serve now says so, instead of answering with JSON
+- A malformed `filter` is reported as an error again on a request carrying `If-None-Match: *`
 - An address matching no route answers `404` with a problem document, rather than `200` and the dashboard, when the client said it cannot use a web page
 - A format an `Accept` header rules out with `;q=0` is refused with `406` instead of served anyway
 - `/favicon.ico` and the dashboard's other static files are no longer refused with `406` when a client asks for them as an image

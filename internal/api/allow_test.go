@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -300,5 +301,111 @@ func TestAllowHeaderOffersNodePatchAtTierTwo(t *testing.T) {
 
 	if allow := w.Header().Get("Allow"); !strings.Contains(allow, "PATCH") {
 		t.Errorf("Allow = %q at operations level 2, want PATCH offered", allow)
+	}
+}
+
+// assertVariesByIdentity fails unless the response is marked as per-caller.
+// Nothing else tells an intermediary that these bodies differ between callers.
+func assertVariesByIdentity(t *testing.T, what string, h http.Header) {
+	t.Helper()
+
+	vary := strings.Join(h.Values("Vary"), ", ")
+	if !strings.Contains(vary, "Authorization, Cookie") {
+		t.Errorf("%s carried Vary %q, want it to include %q",
+			what, vary, "Authorization, Cookie")
+	}
+}
+
+// A response reporting a per-identity Allow is per-identity, so whatever
+// computes one says so too.
+func TestAllowSeamVariesByIdentity(t *testing.T) {
+	h := newTestHandlers(t)
+	r := httptest.NewRequest("GET", "/nodes", nil)
+
+	seams := map[string]func(http.ResponseWriter){
+		"setAllowList": func(w http.ResponseWriter) { h.setAllowList(w, r, "node") },
+		"setAllow":     func(w http.ResponseWriter) { h.setAllow(w, r, "node", "node-1") },
+		"setAllowSubResource": func(w http.ResponseWriter) {
+			h.setAllowSubResource(w, r, "PUT", config.OpsOperational, "node:node-1")
+		},
+	}
+
+	for name, seam := range seams {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			seam(w)
+
+			if values := w.Header().Values("Vary"); len(values) != 1 {
+				t.Fatalf("%s set %d Vary headers, want 1: %q", name, len(values), values)
+			}
+			assertVariesByIdentity(t, name, w.Header())
+		})
+	}
+}
+
+// A 304 is as identity-dependent as the 200 it stands in for, and reaches the
+// seam by the same route.
+func TestNotModifiedVariesByIdentity(t *testing.T) {
+	h := newTestHandlers(t, withCache(validatorCache(5)))
+
+	full := listOnce(t, h, "/api/nodes", nil, "")
+	notModified := listOnce(t, h, "/api/nodes", nil, full.Header().Get("ETag"))
+	if notModified.Code != http.StatusNotModified {
+		t.Fatalf("revalidation returned %d, want 304", notModified.Code)
+	}
+
+	for name, rec := range map[string]*httptest.ResponseRecorder{
+		"200": full,
+		"304": notModified,
+	} {
+		assertVariesByIdentity(t, name, rec.Header())
+	}
+}
+
+// Feeds have no Allow to pair with, so each renderer says it itself — and
+// neither format may be the one that forgets.
+func TestFeedRenderersVaryByIdentity(t *testing.T) {
+	renderers := map[string]feedRenderer{"atom": renderAtom, "json": renderJSONFeed}
+
+	for name, render := range renderers {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			render(w, httptest.NewRequest("GET", "/api/recommendations", nil), feedData{})
+
+			assertVariesByIdentity(t, name+" feed", w.Header())
+		})
+	}
+}
+
+// Topology, search, history, recommendations and the stack summary are all
+// ACL-filtered and none reports an Allow to carry the marker for them. The
+// grant gate they share does.
+func TestGrantGatedReadsVaryByIdentity(t *testing.T) {
+	h := newTestHandlers(t, withCache(validatorCache(5)))
+
+	reads := map[string]func(http.ResponseWriter, *http.Request){
+		"topology": h.HandleTopology,
+		"search":   h.HandleSearch,
+		"history":  h.HandleHistory,
+	}
+
+	for name, read := range reads {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			read(w, httptest.NewRequest("GET", "/api/"+name+"?q=x", nil))
+
+			assertVariesByIdentity(t, name, w.Header())
+		})
+	}
+}
+
+// Two seams writing the marker must not write it twice.
+func TestVaryByIdentityStatedOnce(t *testing.T) {
+	w := httptest.NewRecorder()
+	varyByIdentity(w)
+	varyByIdentity(w)
+
+	if got := w.Header().Values("Vary"); len(got) != 1 {
+		t.Errorf("Vary = %q, want a single value", got)
 	}
 }

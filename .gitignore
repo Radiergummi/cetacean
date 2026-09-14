@@ -62,3 +62,10 @@ node_modules/
 cetacean.toml
 .playwright-mcp/
 frontend/test-results/
+
+# Benchmark results (make bench / make bench-baseline)
+bench.txt
+bench-baseline.txt
+coverdata
+cetacean.cover
+cetacean.race
