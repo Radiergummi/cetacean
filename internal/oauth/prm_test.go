@@ -37,3 +37,19 @@ func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 		t.Errorf("bearer_methods_supported = %v, want [header]", doc.BearerMethodsSupported)
 	}
 }
+
+// The server may run with nothing serving the resource it names — an operator
+// can enable it before the resource exists. Advertising the identifier anyway
+// sends a client following RFC 9728 discovery to a path that 404s.
+func TestProtectedResourceMetadataAbsentWhileNothingServesTheResource(t *testing.T) {
+	s := newTestServer(t)
+	s.cfg.ResourceMounted = false
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
+	rec := httptest.NewRecorder()
+	s.HandleProtectedResourceMetadata(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}

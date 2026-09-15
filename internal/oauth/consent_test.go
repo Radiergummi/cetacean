@@ -307,11 +307,14 @@ func TestConsentTokenIsBoundToTheWholeRequest(t *testing.T) {
 
 	const nonce = "test-nonce"
 	issued := consentBinding{
-		State:         "test-state",
-		Fingerprint:   "test-fingerprint",
-		ClientID:      "https://client.example/id",
-		RedirectURI:   "https://client.example/callback",
-		CodeChallenge: computeS256Challenge(authorizeVerifier),
+		State:               "test-state",
+		Fingerprint:         "test-fingerprint",
+		ClientID:            "https://client.example/id",
+		RedirectURI:         "https://client.example/callback",
+		CodeChallenge:       computeS256Challenge(authorizeVerifier),
+		CodeChallengeMethod: "S256",
+		ResponseType:        "code",
+		Resource:            "https://swarm.example.com/first",
 	}
 	token := csrfMAC(km.csrf, nonce, issued)
 
@@ -323,6 +326,9 @@ func TestConsentTokenIsBoundToTheWholeRequest(t *testing.T) {
 				"client_id":             {b.ClientID},
 				"redirect_uri":          {b.RedirectURI},
 				"code_challenge":        {b.CodeChallenge},
+				"code_challenge_method": {b.CodeChallengeMethod},
+				"response_type":         {b.ResponseType},
+				"resource":              {b.Resource},
 				"csrf_token":            {token},
 			}.Encode(),
 		))
@@ -344,6 +350,9 @@ func TestConsentTokenIsBoundToTheWholeRequest(t *testing.T) {
 		"code_challenge": func(b *consentBinding) {
 			b.CodeChallenge = computeS256Challenge("a" + authorizeVerifier)
 		},
+		"code_challenge_method": func(b *consentBinding) { b.CodeChallengeMethod = "plain" },
+		"response_type":         func(b *consentBinding) { b.ResponseType = "token" },
+		"resource":              func(b *consentBinding) { b.Resource = "https://swarm.example.com/second" },
 	}
 
 	for field, swap := range swapped {

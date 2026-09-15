@@ -476,14 +476,13 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 
 // upstreamAuth authenticates every request through the upstream provider, for a
 // deployment that bypasses the bearer check and runs no authorization server.
-// There is no WWW-Authenticate to offer: without an authorization server there
-// is no metadata document to send a client to, and the credential this accepts
-// is one the transport below HTTP already carries.
+// The refusal is 403: the credential this accepts rides the transport below
+// HTTP, so no challenge could ask for it, and 401 owes one.
 func (s *Server) upstreamAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := s.upstreamIdentity(r)
 		if id == nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 

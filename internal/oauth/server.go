@@ -35,6 +35,11 @@ type ServerConfig struct {
 	// tokens for — both the PRM resource identifier and the JWT audience.
 	Resource string
 
+	// ResourceMounted says whether anything actually serves Resource. The server
+	// may run ahead of it, and metadata naming a path that 404s sends a client
+	// following discovery nowhere.
+	ResourceMounted bool
+
 	// OAuth holds the server's own settings: TTLs, DCR knobs, CIMD and the
 	// require_resource_indicator flag.
 	OAuth config.OAuthConfig
@@ -654,11 +659,14 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 		w,
 		s.csrfKey(),
 		consentBinding{
-			State:         data.State,
-			Fingerprint:   data.Fingerprint,
-			ClientID:      data.ClientID,
-			RedirectURI:   data.RedirectURI,
-			CodeChallenge: data.CodeChallenge,
+			State:               data.State,
+			Fingerprint:         data.Fingerprint,
+			ClientID:            data.ClientID,
+			RedirectURI:         data.RedirectURI,
+			CodeChallenge:       data.CodeChallenge,
+			CodeChallengeMethod: data.CodeChallengeMethod,
+			ResponseType:        data.ResponseType,
+			Resource:            data.Resource,
 		},
 		strings.HasPrefix(s.cfg.Issuer, "https://"),
 	)

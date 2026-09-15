@@ -19,9 +19,10 @@ import (
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	cfg := ServerConfig{
-		Issuer:   "https://cetacean.test",
-		BasePath: "",
-		Resource: "https://cetacean.test/resource",
+		Issuer:          "https://cetacean.test",
+		BasePath:        "",
+		Resource:        "https://cetacean.test/resource",
+		ResourceMounted: true,
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,

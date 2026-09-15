@@ -158,11 +158,14 @@ const consentFingerprintField = "consent_fingerprint"
 // the client metadata forward, since a CIMD document can change in between; the
 // rest stops any hidden field being swapped before the POST acts on it.
 type consentBinding struct {
-	State         string
-	Fingerprint   string
-	ClientID      string
-	RedirectURI   string
-	CodeChallenge string
+	State               string
+	Fingerprint         string
+	ClientID            string
+	RedirectURI         string
+	CodeChallenge       string
+	CodeChallengeMethod string
+	ResponseType        string
+	Resource            string
 }
 
 // csrfMAC derives the CSRF token from the nonce and the request it stays bound
@@ -177,6 +180,9 @@ func csrfMAC(signingKey []byte, nonce string, b consentBinding) string {
 	hashField(mac, b.ClientID)
 	hashField(mac, b.RedirectURI)
 	hashField(mac, b.CodeChallenge)
+	hashField(mac, b.CodeChallengeMethod)
+	hashField(mac, b.ResponseType)
+	hashField(mac, b.Resource)
 
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
@@ -239,11 +245,14 @@ func verifyCSRFToken(r *http.Request, signingKey []byte) bool {
 	}
 
 	expected := csrfMAC(signingKey, cookie.Value, consentBinding{
-		State:         r.FormValue("state"),
-		Fingerprint:   r.FormValue(consentFingerprintField),
-		ClientID:      r.FormValue("client_id"),
-		RedirectURI:   r.FormValue("redirect_uri"),
-		CodeChallenge: r.FormValue("code_challenge"),
+		State:               r.FormValue("state"),
+		Fingerprint:         r.FormValue(consentFingerprintField),
+		ClientID:            r.FormValue("client_id"),
+		RedirectURI:         r.FormValue("redirect_uri"),
+		CodeChallenge:       r.FormValue("code_challenge"),
+		CodeChallengeMethod: r.FormValue("code_challenge_method"),
+		ResponseType:        r.FormValue("response_type"),
+		Resource:            r.FormValue("resource"),
 	})
 
 	return hmac.Equal([]byte(r.FormValue("csrf_token")), []byte(expected))

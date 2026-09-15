@@ -15,6 +15,11 @@ type protectedResourceMetadata struct {
 // HandleProtectedResourceMetadata serves the RFC 9728 protected resource
 // metadata document at GET {base}/.well-known/oauth-protected-resource.
 func (s *Server) HandleProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
+	if !s.cfg.ResourceMounted {
+		http.NotFound(w, r)
+		return
+	}
+
 	iss := s.cfg.issuerID()
 	doc := protectedResourceMetadata{
 		Resource:               s.cfg.Resource,
