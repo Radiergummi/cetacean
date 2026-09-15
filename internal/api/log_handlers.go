@@ -174,7 +174,10 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		resp.Oldest = lines[0].Timestamp
 		resp.Newest = lines[len(lines)-1].Timestamp
 	}
-	writeJSON(w, NewDetailResponse(r.Context(), r.URL.Path, "LogResponse", resp))
+	// Cached like every other JSON read: a paginated log read is a snapshot,
+	// and it carries oldest/newest cursors precisely so a client can poll it —
+	// which it cannot do without a validator to revalidate against.
+	writeCachedJSON(w, r, NewDetailResponse(r.Context(), r.URL.Path, "LogResponse", resp))
 }
 
 func (h *Handlers) serveLogsSSE(

@@ -99,6 +99,11 @@ type cachedEntry struct {
 	fetchedAt time.Time
 }
 
+// lapsed reports whether the entry has aged out as of now.
+func (e cachedEntry) lapsed(now time.Time) bool {
+	return now.Sub(e.fetchedAt) >= cimdCacheTTL
+}
+
 // CIMDFetcher fetches and validates OAuth Client ID Metadata Documents.
 // The zero value is usable but will use a package-internal HTTP client.
 // For tests, set AllowLoopback to true and supply the test server's Client().
@@ -122,23 +127,10 @@ type CIMDFetcher struct {
 	cache map[string]cachedEntry
 }
 
-// httpClient returns an HTTP client suitable for fetching CIMD documents.
-//
-// When f.Client is nil (the production path) the returned client uses a
-// Transport whose DialContext resolves the host, validates the resulting IP
-// against the SSRF block-list, and connects to that exact IP — collapsing the
-// previous "pre-flight LookupIP + transport LookupIP" pair into a single
-// resolution so a DNS-rebinding attacker cannot return a public IP for the
-// validation lookup and a private IP for the actual connect.
-//
-// When f.Client is non-nil (tests inject httptest.Server.Client()) the caller's
-// client is shallow-copied. Tests that need to reach loopback set
-// AllowLoopback=true to skip the IP check; in production that flag should
-// remain false.
-//
-// CheckRedirect re-runs URL-structure validation (https, no userinfo, no
-// fragment, non-trivial path). DNS validation for the redirect target happens
-// in the same DialContext on the follow-up request.
+// httpClient returns an HTTP client suitable for fetching CIMD documents. Its
+// DialContext resolves the host, screens the IP and connects to that exact
+// address in one step, so a DNS-rebinding attacker cannot answer the
+// validation lookup and the connect differently. CheckRedirect re-validates.
 func (f *CIMDFetcher) httpClient() *http.Client {
 	f.clientOnce.Do(func() {
 		var c http.Client
@@ -166,15 +158,10 @@ func (f *CIMDFetcher) httpClient() *http.Client {
 	return f.cachedHTTP
 }
 
-// ssrfTransport returns an http.RoundTripper that performs SSRF-aware dialing.
-// If base is an *http.Transport, it is shallow-cloned so we don't mutate the
-// caller's transport. If base is nil, a fresh Transport is built with the
-// same defaults net/http uses.
-//
-// The custom DialContext resolves the host, screens every returned IP through
-// checkIP, and dials the first survivor — pinning the connection to the
-// validated address so net/http cannot perform a second, unvalidated DNS
-// lookup.
+// ssrfTransport returns an http.RoundTripper performing SSRF-aware dialing. A
+// base *http.Transport is shallow-cloned rather than mutated. The DialContext
+// resolves the host, screens every IP through checkIP and dials the first
+// survivor, pinning the connection so net/http cannot resolve again unchecked.
 func (f *CIMDFetcher) ssrfTransport(base http.RoundTripper) http.RoundTripper {
 	var t *http.Transport
 	if base == nil {
@@ -239,14 +226,10 @@ func (f *CIMDFetcher) ssrfTransport(base http.RoundTripper) http.RoundTripper {
 	return t
 }
 
-// Fetch retrieves the Client ID Metadata Document for the given client_id URL.
-// It validates the URL, applies SSRF guards in the dialer, enforces a size cap,
-// and checks structural invariants in the returned document. Successful results
-// are cached for cimdCacheTTL; failed fetches are never cached.
-//
-// SSRF protection runs in the HTTP client's DialContext (see httpClient /
-// ssrfTransport) so DNS resolution and IP validation happen as a single atomic
-// step — no pre-flight LookupIP + transport LookupIP TOCTOU window.
+// Fetch retrieves the Client ID Metadata Document for a client_id URL: it
+// validates the URL, guards against SSRF in the dialer, caps the size and
+// checks the document's structural invariants. Successful results are cached
+// for cimdCacheTTL; failed fetches never are.
 func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetadata, error) {
 	// Step 1–2: validate URL structure (scheme, path, fragment, userinfo).
 	if err := f.validateURL(clientID); err != nil {
@@ -421,7 +404,7 @@ func (f *CIMDFetcher) cacheGet(clientID string) *ClientMetadata {
 		return nil
 	}
 	entry, ok := f.cache[clientID]
-	if !ok || time.Since(entry.fetchedAt) >= cimdCacheTTL {
+	if !ok || entry.lapsed(time.Now()) {
 		return nil
 	}
 	return entry.meta
@@ -453,19 +436,24 @@ func (f *CIMDFetcher) evictFor(now time.Time) {
 	}
 
 	for id, entry := range f.cache {
-		if now.Sub(entry.fetchedAt) >= cimdCacheTTL {
+		if entry.lapsed(now) {
 			delete(f.cache, id)
 		}
 	}
 
-	for len(f.cache) >= cimdCacheMaxEntries {
-		oldestID := ""
-		var oldest time.Time
-		for id, entry := range f.cache {
-			if oldestID == "" || entry.fetchedAt.Before(oldest) {
-				oldestID, oldest = id, entry.fetchedAt
-			}
-		}
-		delete(f.cache, oldestID)
+	// One eviction is enough: the cap is a constant and this runs before every
+	// insert, so the map is never more than one entry over it.
+	if len(f.cache) < cimdCacheMaxEntries {
+		return
 	}
+
+	oldestID := ""
+	var oldest time.Time
+	for id, entry := range f.cache {
+		if oldestID == "" || entry.fetchedAt.Before(oldest) {
+			oldestID, oldest = id, entry.fetchedAt
+		}
+	}
+
+	delete(f.cache, oldestID)
 }

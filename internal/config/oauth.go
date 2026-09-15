@@ -131,40 +131,16 @@ func (c *Config) ValidateOAuth(authMode string) error {
 func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 	def := DefaultOAuthConfig()
 
-	// Extract file-level pointers (safely handle nil sub-struct).
-	var (
-		fEnabled       *bool
-		fIssuer        *string
-		fSigningKey    *string
-		fAccessTTL     *string
-		fRefreshTTL    *string
-		fConsentTTL    *string
-		fAPITokens     *bool
-		fRequireRI     *bool
-		fDCREnabled    *bool
-		fDCRRateLimit  *int
-		fDCRMaxClients *int
-		fCIMDEnabled   *bool
-	)
-	if fo != nil {
-		fEnabled = fo.Enabled
-		fIssuer = fo.Issuer
-		fSigningKey = fo.SigningKey
-		fAccessTTL = fo.AccessTokenTTL
-		fRefreshTTL = fo.RefreshTokenTTL
-		fConsentTTL = fo.ConsentTTL
-		fAPITokens = fo.APITokens
-		fRequireRI = fo.RequireResourceIndicator
-		fDCREnabled = fo.DCREnabled
-		fDCRRateLimit = fo.DCRRateLimit
-		fDCRMaxClients = fo.DCRMaxClients
-		fCIMDEnabled = fo.CIMDEnabled
+	// Every field is a pointer, so the zero struct reads as "nothing set in the
+	// file" — the same thing an absent section means.
+	if fo == nil {
+		fo = &fileOAuth{}
 	}
 
 	accessTTL, err := resolveDuration(
 		nil,
 		"CETACEAN_OAUTH_ACCESS_TOKEN_TTL",
-		fAccessTTL,
+		fo.AccessTokenTTL,
 		def.AccessTokenTTL,
 	)
 	if err != nil {
@@ -174,7 +150,7 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 	refreshTTL, err := resolveDuration(
 		nil,
 		"CETACEAN_OAUTH_REFRESH_TOKEN_TTL",
-		fRefreshTTL,
+		fo.RefreshTokenTTL,
 		def.RefreshTokenTTL,
 	)
 	if err != nil {
@@ -186,7 +162,7 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 	consentTTL, err := resolveNonNegativeDuration(
 		nil,
 		"CETACEAN_OAUTH_CONSENT_TTL",
-		fConsentTTL,
+		fo.ConsentTTL,
 		def.ConsentTTL,
 	)
 	if err != nil {
@@ -196,7 +172,7 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 	dcrRateLimit, err := resolveInt(
 		nil,
 		"CETACEAN_OAUTH_DCR_RATE_LIMIT",
-		fDCRRateLimit,
+		fo.DCRRateLimit,
 		def.DCRRateLimit,
 		1,
 		1<<20,
@@ -208,7 +184,7 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 	dcrMaxClients, err := resolveInt(
 		nil,
 		"CETACEAN_OAUTH_DCR_MAX_CLIENTS",
-		fDCRMaxClients,
+		fo.DCRMaxClients,
 		def.DCRMaxClients,
 		1,
 		1<<20,
@@ -217,7 +193,7 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 		return OAuthConfig{}, err
 	}
 
-	issuer, err := resolveOAuthIssuer(fIssuer)
+	issuer, err := resolveOAuthIssuer(fo.Issuer)
 	if err != nil {
 		return OAuthConfig{}, err
 	}
@@ -225,7 +201,7 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 	signingKey, err := resolveSecret(
 		nil,
 		"CETACEAN_OAUTH_SIGNING_KEY",
-		fSigningKey,
+		fo.SigningKey,
 		def.SigningKey,
 	)
 	if err != nil {
@@ -236,28 +212,23 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 	}
 
 	return OAuthConfig{
-		Enabled:         resolveBool(nil, "CETACEAN_OAUTH_ENABLED", fEnabled, def.Enabled),
+		Enabled:         resolveBool(nil, "CETACEAN_OAUTH_ENABLED", fo.Enabled, def.Enabled),
 		Issuer:          issuer,
 		SigningKey:      signingKey,
 		AccessTokenTTL:  accessTTL,
 		RefreshTokenTTL: refreshTTL,
 		ConsentTTL:      consentTTL,
-		APITokens: resolveBool(
-			nil,
-			"CETACEAN_OAUTH_API_TOKENS",
-			fAPITokens,
-			def.APITokens,
-		),
+		APITokens:       resolveBool(nil, "CETACEAN_OAUTH_API_TOKENS", fo.APITokens, def.APITokens),
 		RequireResourceIndicator: resolveBool(
 			nil,
 			"CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR",
-			fRequireRI,
+			fo.RequireResourceIndicator,
 			def.RequireResourceIndicator,
 		),
 		DCREnabled: resolveBool(
 			nil,
 			"CETACEAN_OAUTH_DCR_ENABLED",
-			fDCREnabled,
+			fo.DCREnabled,
 			def.DCREnabled,
 		),
 		DCRRateLimit:  dcrRateLimit,
@@ -265,7 +236,7 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 		CIMDEnabled: resolveBool(
 			nil,
 			"CETACEAN_OAUTH_CIMD_ENABLED",
-			fCIMDEnabled,
+			fo.CIMDEnabled,
 			def.CIMDEnabled,
 		),
 	}, nil

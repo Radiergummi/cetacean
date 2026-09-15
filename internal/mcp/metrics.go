@@ -75,22 +75,10 @@ type metricSpec struct {
 	queries []metricQuery
 }
 
-// exporterProbe answers "is anything collecting for this target at all?".
-//
-// It is asked only when every series came back empty, which is ambiguous on
-// its own: a service that is genuinely idle and a cluster with no cAdvisor
-// both produce no points. The tool promises to report unavailability rather
-// than return empty series, and right_size_service tells the model to stop on
-// exactly that signal — an empty series would otherwise read as measured zero
-// usage and invite shrinking a service to nothing.
-//
-// Presence of the exporter's own metric family is the test, never a `job`
-// label: the job name belongs to whoever wrote the Prometheus config, which
-// HandleMonitoringStatus makes the same argument about for node-exporter. The
-// service probe requires the Swarm service label too, because a cAdvisor that
-// reports only its own root cgroup — cgroup v2 without a host cgroup
-// namespace does exactly that — emits container metrics that can never be
-// attributed to a service.
+// exporterProbe answers "is anything collecting for this target at all?",
+// asked only when every series came back empty: an idle service and a cluster
+// with no cAdvisor look alike. The test is the exporter's own metric family,
+// never a `job` label, plus the Swarm service label for a service probe.
 type exporterProbe struct {
 	query   string
 	missing string
@@ -107,14 +95,10 @@ var exporterProbes = map[string]exporterProbe{
 	},
 }
 
-// metricCatalog holds every query get_metrics can run.
-//
-// These mirror the queries the dashboard composes in
-// frontend/src/hooks/useServiceMetrics.ts, useNodeMetrics.ts and NodeDetail —
-// deliberately a second copy rather than a shared one, since the dashboard
-// builds its PromQL in the browser and there is no server-side query layer to
-// share. Keep the two in step: a metric that reads differently here than on the
-// dashboard is worse than one that is missing.
+// metricCatalog holds every query get_metrics can run. These mirror the ones
+// the dashboard composes in the browser — a second copy, since there is no
+// server-side query layer to share. Keep the two in step: a metric that reads
+// differently here than on the dashboard is worse than one that is missing.
 var metricCatalog = map[string]map[string]metricSpec{
 	metricTargetService: {
 		metricCPU: {
@@ -179,10 +163,8 @@ var metricCatalog = map[string]map[string]metricSpec{
 }
 
 // metricsResult is the envelope the metrics widget renders and an agent reads.
-//
-// Timestamps are RFC 3339 rather than epoch seconds: this is a tool result a
-// model reads as text as often as a chart plots it, and "2026-09-01T09:00:00Z"
-// needs no explaining where 1788254400 does.
+// Timestamps are RFC 3339 rather than epoch seconds: a model reads this as text
+// as often as a chart plots it.
 type metricsResult struct {
 	Target string         `json:"target"`
 	ID     string         `json:"id"`
@@ -203,13 +185,10 @@ type metricPoint struct {
 	Value float64 `json:"value"`
 }
 
-// toolGetMetrics charts one metric for one service or node.
-//
-// The target is resolved against the cache *before* anything is queried, and
-// the query is built from what the cache holds — never from the caller's
-// string. That is what makes the ACL check meaningful: an agent cannot name a
-// service it may not read, and cannot smuggle a label selector of its own
-// through the id either.
+// toolGetMetrics charts one metric for one service or node. The target is
+// resolved against the cache before anything is queried, and the query is
+// built from what the cache holds, never from the caller's string — otherwise
+// an agent could smuggle a label selector of its own through the id.
 func (s *Server) toolGetMetrics(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -307,10 +286,8 @@ func (s *Server) toolGetMetrics(
 }
 
 // requireExporter reports metrics as unavailable when nothing came back and
-// the exporter behind this target is not reporting at all.
-//
-// A probe failure is not an error: the point is to explain an empty result,
-// and failing the whole call because the explanation could not be fetched
+// the exporter behind this target is not reporting at all. A probe failure is
+// not an error: failing the call because the explanation could not be fetched
 // would turn a degraded answer into no answer.
 func (s *Server) requireExporter(
 	ctx context.Context,
@@ -342,12 +319,10 @@ func (s *Server) requireExporter(
 	return fmt.Errorf("metrics are unavailable: %s", probe.missing)
 }
 
-// queryMetricSeries runs one query and flattens what comes back.
-//
-// Every query in the catalogue aggregates to a single series, so a well-formed
-// answer has one element; if Prometheus returns several anyway (a recording
-// rule that did not aggregate, say) their points are merged in time order
-// rather than silently dropping all but the first.
+// queryMetricSeries runs one query and flattens what comes back. Every
+// catalogue query aggregates to a single series; if Prometheus returns several
+// anyway, their points are merged in time order rather than dropping all but
+// the first.
 func (s *Server) queryMetricSeries(
 	ctx context.Context,
 	query string,
@@ -432,10 +407,9 @@ func (s *Server) nodeMetricSelector(ctx context.Context, id string) (string, str
 }
 
 // instanceSelector matches a node against node-exporter's `instance` label,
-// which is host:port and known to neither Docker nor Cetacean. Mirrors
-// buildInstanceFilter in frontend/src/lib/prometheusParser.ts: the node's
-// address is the reliable half of the pair, and its hostname — which the
-// exporter may report fully qualified — is the fallback.
+// which is host:port and known to neither Docker nor Cetacean. The node's
+// address is the reliable half; its hostname, which the exporter may report
+// fully qualified, is the fallback.
 func instanceSelector(node swarm.Node) string {
 	if address := node.Status.Addr; address != "" {
 		return fmt.Sprintf(`instance=~"%s:.*"`, promQLRegexValue(address))
@@ -456,13 +430,10 @@ func escapePromQLValue(value string) string {
 	return strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`).Replace(value)
 }
 
-// promQLRegexValue quotes a value for use inside a PromQL regex matcher.
-//
-// Escaping for the string literal is not enough there, because `=~` compiles
-// what it is given: a service legitimately named "api.v2" would also match
-// "apixv2", and an alternation built from the names a caller may read would
-// silently reach past their grants. Regex-quote first and escape after — the
-// backslashes QuoteMeta adds are themselves string escapes.
+// promQLRegexValue quotes a value for a PromQL regex matcher. String escaping
+// alone is not enough, since `=~` compiles what it is given: "api.v2" would
+// also match "apixv2", reaching past the caller's grants. Regex-quote first
+// and escape after, since QuoteMeta's backslashes are themselves escapes.
 func promQLRegexValue(value string) string {
 	return escapePromQLValue(regexp.QuoteMeta(value))
 }
@@ -488,11 +459,8 @@ func rangeNames() []string {
 }
 
 // promTime renders a Prometheus timestamp — a float of Unix seconds — as the
-// RFC 3339 string a metric point carries.
-//
-// Shared by the single-resource read and the ranking so the two cannot format
-// the same instant differently; a caller correlating a chart against
-// get_events reads both as text.
+// RFC 3339 string a metric point carries. Shared by the single-resource read
+// and the ranking, so the two cannot format one instant differently.
 func promTime(timestamp float64) string {
 	seconds := int64(timestamp)
 	fraction := timestamp - float64(seconds)

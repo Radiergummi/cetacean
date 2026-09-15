@@ -459,7 +459,9 @@ func TestHandlerWithoutOAuthAuthenticatesABypassedMode(t *testing.T) {
 
 // With no authorization server there is no second chance: whatever the upstream
 // provider refuses is refused, including the identity it declines to establish
-// while writing a redirect nobody reads.
+// while writing a redirect nobody reads. The refusal is 403, not 401: no
+// challenge can ask for the credential these modes read, which is the same
+// ruling the API endpoints answer under.
 func TestHandlerWithoutOAuthRefusesWhatUpstreamRefuses(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
@@ -485,8 +487,12 @@ func TestHandlerWithoutOAuthRefusesWhatUpstreamRefuses(t *testing.T) {
 
 			srv.Handler().ServeHTTP(rec, req)
 
-			if rec.Code != http.StatusUnauthorized {
-				t.Fatalf("status = %d, want 401", rec.Code)
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want 403", rec.Code)
+			}
+
+			if challenge := rec.Header().Get("WWW-Authenticate"); challenge != "" {
+				t.Fatalf("WWW-Authenticate = %q, want none on a 403", challenge)
 			}
 		})
 	}

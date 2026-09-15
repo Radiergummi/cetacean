@@ -156,10 +156,8 @@ function composeSignals(caller: AbortSignal | undefined, timeout: AbortSignal): 
 }
 
 /**
- * Issues a read request and hands back the response once it is known good.
- * The 401-Bearer redirect and the timeout live here so every reader gets them
- * on the same terms; callers differ only in the Accept they ask for and how
- * they decode the body.
+ * Issues a read request and hands back the response once it is known good. The
+ * 401-Bearer redirect and the timeout live here so every reader gets them.
  */
 async function request(
   path: string,
@@ -195,11 +193,8 @@ function endpointOf(path: string): string {
 
 /**
  * Reports a response that is not the shape the dashboard was written against.
- *
- * Deliberately does not throw. The dashboard renders a server it disagrees with
- * exactly as it did before — a missing field was already going to show as a
- * blank cell — and this makes the reason visible instead of leaving it to be
- * guessed at from the symptom.
+ * Deliberately does not throw: it makes the reason visible without changing how
+ * the dashboard renders a server it disagrees with.
  */
 function reportSchemaDrift(path: string, error: z.ZodError): void {
   const endpoint = endpointOf(path);
@@ -267,8 +262,8 @@ async function fetchJGF<T>(
   return data;
 }
 
-async function fetchText(path: string, signal?: AbortSignal): Promise<string> {
-  const response = await request(path, undefined, signal);
+async function fetchText(path: string, signal?: AbortSignal, accept?: string): Promise<string> {
+  const response = await request(path, accept ? { Accept: accept } : undefined, signal);
 
   return response.text();
 }
@@ -311,10 +306,8 @@ async function mutationFetch<T>(
 }
 
 /**
- * The one deliberately unshaped read: `ServiceSubResource` renders whichever of
- * the fourteen service sub-resources the URL names, so the shape is chosen at
- * runtime and there is no single schema to hold it to. Everything else names
- * one.
+ * The one deliberately unshaped read: `ServiceSubResource` renders whichever
+ * sub-resource the URL names, so there is no single schema to hold it to.
  */
 export function get<T>(path: string, signal?: AbortSignal): Promise<FetchResult<T>> {
   return fetchJSON(path, signal, z.unknown());
@@ -630,6 +623,8 @@ export const api = {
     ).then(({ data }) => data),
   service: (id: string, signal?: AbortSignal) =>
     fetchJSON<ServiceDetail>(`/services/${id}`, signal, schema.serviceDetailSchema),
+  serviceCompose: (id: string, signal?: AbortSignal) =>
+    fetchText(`/services/${encodeURIComponent(id)}`, signal, "application/yaml"),
   tasks: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Task>("/tasks", params, signal, schema.taskSchema),
   stacks: (params?: ListParams, signal?: AbortSignal) =>
@@ -649,6 +644,8 @@ export const api = {
       data: data.stack,
       allowedMethods,
     })),
+  stackCompose: (name: string, signal?: AbortSignal) =>
+    fetchText(`/stacks/${encodeURIComponent(name)}`, signal, "application/yaml"),
   configs: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Config>("/configs", params, signal, schema.configSchema),
   config: (id: string, signal?: AbortSignal) =>
@@ -806,8 +803,6 @@ export const api = {
     ).then(({ data }) => data),
   scaleService: (id: string, replicas: number) =>
     put<ServiceDetail>(`/services/${id}/scale`, { replicas }),
-  updateServiceMode: (id: string, mode: "replicated" | "global", replicas?: number) =>
-    put<ServiceDetail>(`/services/${id}/mode`, { mode, replicas }),
   updateServiceEndpointMode: (id: string, mode: "vip" | "dnsrr") =>
     put<ServiceDetail>(`/services/${id}/endpoint-mode`, { mode }),
   updateServiceImage: (id: string, image: string) =>

@@ -14,11 +14,9 @@ import (
 )
 
 // A cetacean:// read addresses a resource by the identifier a caller has in
-// hand, and after find and describe that identifier is a name far more often
-// than an ID — every prompt tells an agent to resolve the name first, and
-// completions offer names because a dropdown of hex IDs is unusable. Six of
-// the eight types are keyed by ID in the cache, so a name reached none of
-// them until lookupResource learned to fall back.
+// hand, which after find and describe is a name far more often than an ID —
+// every prompt says to resolve the name first, and completions offer names. Six
+// of the eight types are keyed by ID, so a name reaches none without a fallback.
 func TestLookupResolvesNamesAsWellAsIDs(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{

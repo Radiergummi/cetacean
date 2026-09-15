@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- A stack or a service can be exported as a Compose file, from its detail page or by adding `.yaml` to its URL. Secrets and configs are referenced, never exported
 - `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document — the channels, the messages each carries, and which cursor dialect its `id:` uses. Sixteen streams were previously described nowhere
 - Both API descriptions are served as YAML as well as JSON, at `/api/openapi.yaml` and `/api/asyncapi.yaml` or by negotiating on `Accept`
 - Any list can be downloaded as CSV — add `.csv` to the URL or ask for `text/csv`. Search, filters and sorting apply; a download that asks for no page gets every row
@@ -15,25 +16,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The cluster can be searched from the browser's address bar, via the OpenSearch description at `/opensearch.xml`
 - `/.well-known/api-catalog` (RFC 9727) lists the APIs this process serves; every response links to it
 - `GET /` answers a JSON client with an entry point naming every collection, so a deployment's address is enough to find the rest of the API; browsers still get the dashboard
+- Resources can be addressed by name as well as by ID: `GET /services/shop_web` redirects to its ID-addressed URL. The redirect keeps the method and body, so writes work by name with `curl -L`
 - Write operations accept an optional `If-Match` header and refuse with 412 if the resource changed since you read it
 - `Prefer: wait=30` holds a service write open until the cluster settles, answering `202 Accepted` with the rollout's progress if it runs out. `Prefer: respond-async` acknowledges immediately
 - JSON, Atom feeds and topology exports above a kilobyte are served as zstd or gzip when the client accepts one
 - Cross-site request forgery protection covers every write. An origin must be in `server.cors.origins`; `server.public_url` is trusted automatically. A wildcard cannot grant writes, so a read-everything deployment must now name its writers
 - Client certificate authentication works behind a TLS-terminating proxy that forwards the certificate in `Client-Cert` (RFC 9440)
-- `Forwarded` (RFC 7239) is read alongside `X-Forwarded-For` when resolving the client address behind a trusted proxy
+- `server.forwarded_headers` names which forwarding headers a trusted proxy writes — `x-forwarded` by default, or `forwarded` for RFC 7239. The family it does not name is discarded, so a client cannot name its own address
 - The MCP authorization server publishes the public key that verifies its access tokens, as a JWK Set at `/oauth/jwks`. Anything checking a token Cetacean issued no longer needs a key that could issue one
+- `GET /-/health` reports whether Cetacean is still tracking the cluster, and `/-/metrics` says the same for alerting. The dashboard marks itself stale instead of showing a frozen cluster as a live one
+- `POST /-/resync` and `GET /swarm/plugins` appear in the API specification
 - The REST API accepts bearer tokens the authorization server issues, so a script or app can authenticate without a browser session — `oauth.api_tokens` turns it off
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
+- A stack's page and a service's Traefik labels are each drawn as a graph
 
 ### Changed
 - **Breaking:** the OAuth authorization server is opt-in — set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server at all
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
-- **Breaking:** a setting the schema does not know refuses startup and is named, rather than being ignored — a config file still carrying `[mcp.oauth]` will not start
+- **Breaking:** a setting the schema does not know refuses startup and is named, rather than being ignored — a config file still carrying `[mcp.oauth]` will not start, and the refusal says where each moved setting went
 - **Breaking:** startup refuses while a renamed `CETACEAN_MCP_*` or `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` variable is still set, naming every one at once
 - **Breaking:** `auth.headers.trusted_proxies` is gone — use `server.trusted_proxies`, which headers mode already required
 - **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`, and accepts only `cert`, `headers` and `tailscale` — a listed mode authenticates `/mcp` on its own, so `oauth.enabled` can stay off
 - **Breaking:** `/mcp`'s protected resource metadata moved to `/.well-known/oauth-protected-resource/mcp`; the root document describes the API, whose tokens do not open `/mcp`. A client following `resource_metadata` from the 401 is unaffected
+- **Breaking:** a token request sending no `resource` parameter binds to the web API, not `/mcp`. An MCP client that cannot send one needs `oauth.api_tokens` off to keep working
 - **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` is not read — delete it, and every client authorizes once more
+- **Breaking:** the `refresh_token` grant at `/oauth/token` requires `client_id`; a request without it is refused with `invalid_request`
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
 - Search, the resource lists and the topology view are faster on clusters with hundreds of services, and a stack's event stream costs less per connected browser
 - The dashboard's first load is about a third of its former size, and hashed assets are cached permanently
@@ -44,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Access tokens are signed with ES256 rather than HMAC, and the key is derived differently, so the published `kid` changes. Clients refresh once on upgrade; stop every replica before starting the new version
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
 - **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale` and `headers` — no challenge can ask for the credential those modes read
+
+### Removed
+- `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
 
 ### Fixed
 - Authorization server metadata is served at the address RFC 8414 has a client derive, as well as under `server.base_path`
@@ -61,20 +71,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - An ACL grant written against an email address matches a token as well as a browser session. MCP clients were silently denied everything such a grant allowed
 - A replayed refresh token revokes the whole grant family and the remembered approval again; sending the `resource` parameter — which every conformant client does — had the request refused before theft detection could run
 - Everything that does not describe the cluster keeps working while the Docker daemon is unreachable — the dashboard's own icons and manifest, the API catalogue, the OpenSearch description, `/profile` and the OAuth endpoints that issue a token
+- A Docker Engine too old for Cetacean says so at startup instead of coming up and serving empty pages. Cetacean speaks Docker API 1.46, which means Engine 26.1 or newer
 - The CSV alternate a filtered listing advertises downloads the rows you are looking at; it dropped the query, so following the link returned everything
 - A browser-based MCP client can complete its OAuth flow again — cross-origin protection covered the endpoints that authenticate from the request body, where there is no ambient credential to defend
 - The dashboard can be installed as an app under OIDC authentication; the browser's manifest request was made without credentials and rejected
 - A recommendation that measured zero no longer reads as one that measured nothing — a service using essentially no CPU reported an empty `current`
 - Header-based authentication works behind a reverse proxy again; it was answering 401 to every request
+- A failed `GET /auth/whoami` records why in the log, so a misconfigured proxy leaves something to debug
 - Asking an endpoint for a format it does not serve now says so, instead of answering with JSON
 - A malformed `filter` is reported as an error again on a request carrying `If-None-Match: *`
 - An address matching no route answers `404` with a problem document, rather than `200` and the dashboard, when the client said it cannot use a web page
 - A format an `Accept` header rules out with `;q=0` is refused with `406` instead of served anyway
 - `/favicon.ico` and the dashboard's other static files are no longer refused with `406` when a client asks for them as an image
 - Deep links into a service whose name contains a dot, such as `/services/web.api/logs`, open instead of answering 404
+- A write to a path that does not exist answers `404`, instead of `200` and the dashboard's HTML
+- A CSV download of a filtered list is no longer cut to fifty rows by an `offset=0` the caller added for good measure. Only a limit truncates; an offset still says where to start
+- `/index.html` opens behind a hardened reverse proxy. It redirected to `/.html`, a dot-segment path nginx and Apache refuse by default, and the redirect was permanent; both spellings now serve the entry point directly
+- A transient hiccup in the five-minutely re-sync no longer reports the cluster as unreachable for the next five minutes. The stream ending is what marks a disconnection; a stalled cache still shows as stale
+- A resource deleted while a write held `If-Match` on it stays deleted, instead of reappearing in every listing until the next re-sync
+- A cluster operation run as an MCP task can no longer outlive the process. Detaching it from the request dropped its deadline too, so a wedged Docker call held its goroutine and its connection open forever
+- A write that loses a race answers `409` naming the conflict, instead of a bare `500 Docker Engine Error`
+- A `PATCH` to a service's resources, healthcheck, update policy, rollback policy, log driver or container config no longer discards an edit made just before it
+- `If-Match` can refuse the lost update it exists for: the condition is now evaluated against the engine rather than the cache
+- Every identifier a response hands out works under `server.base_path`. Listings, and a task's links to its service and node, left the deployment and answered 404
 - Relabelling a node needs operations level 2 over the API, matching MCP. It was gated with draining and demoting
+- `POST /-/resync` requires authentication. It is still not gated on the operations level, so a read-only deployment keeps its refresh button
+- A task no longer sits at `starting` for minutes after it is running, which also left the running count short and anything waiting for a service to settle waiting
+- Recommendations are complete right after a restart, instead of missing every sizing finding for the first five minutes
+- A rolling update no longer truncates whatever was in flight: shutdown waits up to five seconds for in-flight requests
+- Distributed tracing exports spans. `tracing.endpoint` takes the collector's base URL, and every export went to `/` rather than `/v1/traces`, where a collector discards it
+- The two log reads carry an `ETag` and `Cache-Control`, so a client polling their cursors can revalidate
+- JSON Feed responses are labelled `application/feed+json` rather than plain JSON, so a reader can tell they are subscribable
 - An Atom feed identifies itself by the same host its links use. Set `server.public_url` to keep that identity stable across proxies, since nothing derived from a request can be
 - Feed alternate links carry only the parameters the feed they point at reads
+- A client that subscribes over MCP only to "the list changed" is notified again; with an authorization policy configured it was silently never told anything
+- A service change asked for through the MCP tasks extension reaches the engine. It never did, and reported back as `cancelled`
+- Refresh-token theft detection works in the configuration everyone runs. Replaying a rotated token was refused as unknown before the detection could revoke the grant family
+- Authorization policy changes are picked up when the file is replaced by a rename, as a deployment, several editors and a ConfigMap update all do
+- The error reference page at `/api/errors` renders instead of showing "Something went wrong"
 - The API documentation, the playground script, the JSON-LD context and the attribution documents are cacheable, and compressed once rather than on every request
 - Documentation pages no longer advertise a `.html` canonical URL that nothing links to
 

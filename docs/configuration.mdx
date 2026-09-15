@@ -86,7 +86,13 @@ name.
 </ConfigParam>
 
 <ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">
-  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose forwarding headers are trusted, e.g. `10.0.0.0/8,172.16.0.0/12`. Both [`Forwarded`][rfc7239] and `X-Forwarded-For` are read for the real client IP, the standard header first. Required for [header-based authentication][trusted-proxy-headers], and for `cert` mode behind a [TLS-terminating proxy][cert-behind-proxy]. When unset, every request counts as a direct connection.
+  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose forwarding headers are trusted, e.g. `10.0.0.0/8,172.16.0.0/12`. The real client IP is read from the header family [`server.forwarded_headers`][server.forwarded_headers] names. Required for [header-based authentication][trusted-proxy-headers], and for `cert` mode behind a [TLS-terminating proxy][cert-behind-proxy]. When unset, every request counts as a direct connection.
+</ConfigParam>
+
+<ConfigParam name="server.forwarded_headers" flag="-forwarded-headers" env="CETACEAN_FORWARDED_HEADERS" default="x-forwarded">
+  Which forwarding headers a proxy in [`server.trusted_proxies`][server.trusted_proxies] writes: `x-forwarded` for `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host`, or `forwarded` for [`Forwarded`][rfc7239]. The other family is discarded before anything reads it.
+
+  Set this to match your proxy. Every common proxy writes the `x-forwarded` family by default and passes an inbound `Forwarded` through untouched, so a deployment reading both would let a client name its own address and origin.
 </ConfigParam>
 
 <ConfigParam name="storage.snapshot" flag="-snapshot" env="CETACEAN_SNAPSHOT" default="true">
@@ -446,6 +452,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [recommendations]: recommendations
 [rfc7239]: https://www.rfc-editor.org/rfc/rfc7239
 [server.base_path]: #server.base_path
+[server.forwarded_headers]: #server.forwarded_headers
 [server.operations_level]: #server.operations_level
 [server.pprof]: #server.pprof
 [server.public_url]: #server.public_url

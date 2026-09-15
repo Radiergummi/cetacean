@@ -32,10 +32,9 @@ func TestNoticesArePresentForApacheComponents(t *testing.T) {
 
 func TestProjectedJSONHasPopulatedTextIDs(t *testing.T) {
 	// ProjectedJSON() is the cached document served at GET /-/licenses, and the
-	// only one that carries text ids. Guards against a half-regenerated pair of
-	// artifacts — a projection referencing an id the pool no longer holds would
-	// render an empty license dialog in production and nowhere else — and
-	// against a refactor that drops ids from most components but not all.
+	// only one carrying text ids. Guards against a half-regenerated pair of
+	// artifacts, where a projection references an id the pool no longer holds
+	// and the license dialog renders empty in production and nowhere else.
 	doc := projectedDocument(t)
 
 	var missing []string

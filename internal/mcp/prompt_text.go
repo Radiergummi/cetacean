@@ -1,35 +1,9 @@
 package mcp
 
-// Prompt message text. This is the closest thing Cetacean has to telling a
-// model how to reason about a Swarm cluster, so it lives here — reviewable in
-// one place, beside mcpInstructions in review terms — rather than inline in the
-// catalog.
-//
-// Five rules shape this text, not all enforced the same way. 1 and 4 are
-// tested across all six prompts (TestDiagnoseServiceExpandsItsArgument's
-// driven-tool loop, generalized to the whole catalog, and
-// TestPromptTextMakesNoClusterClaims). 2 and 3 apply only to the three
-// remediation prompts and are both checked by
-// TestRemediationPromptsConfirmBeforeActing. 5 is not tested at all — it
-// holds structurally, because promptResult always builds exactly one user
-// message and nothing in this package can construct a GetPromptResult any
-// other way:
-//
-//  1. Name the driven tools explicitly, in order. The sequence is the content;
-//     a prompt that gestures at "investigate the service" adds nothing to the
-//     tool list the model already has.
-//  2. State the stopping condition — what to report instead of continuing.
-//  3. A remediation prompt must not presume its own diagnosis. Each opens by
-//     confirming the problem is real, and says to stop and report if it is not.
-//  4. Make no claims about *this* cluster. The text is static and cannot know
-//     the cluster's shape. Describe method; never assert that the cluster runs
-//     three managers or uses overlay networks.
-//  5. One user message. The prompt seeds a conversation; it never fabricates
-//     an assistant turn.
-//
-// No backticks: these are raw string literals, which are backtick-delimited.
-// Tool names appear bare. No literal % either — the single %s is the
-// interpolated argument.
+// Prompt message text, kept here rather than inline in the catalog so it is
+// reviewable in one place. The five rules it is written under are in
+// docs/specs/2026-09-04-mcp-prompts-design.md; four of them are test-enforced.
+// No backticks — these are raw string literals — and no literal %.
 const (
 	promptTextDiagnoseService = `A service in this Swarm cluster is reported unhealthy: %s.
 

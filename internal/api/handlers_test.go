@@ -1898,16 +1898,10 @@ func TestHandleGetSecret_DataIsRedacted(t *testing.T) {
 	}
 }
 
-// TestHandleGetStack_MemberSecretDataIsRedacted covers the way around the two
-// tests either side of it: a stack rolls up whole member records out of the
-// cache, so reading it by name must not hand back the payload GET
-// /secrets/{id} withholds.
-//
-// The handler does no redacting itself, deliberately — the cache nils
-// Spec.Data on every write path, and GetStackDetail documents that re-walking
-// downstream would duplicate the contract and invite it to drift. This is the
-// response-side guard on that invariant, which stack detail was the one detail
-// endpoint to lack.
+// Covers the way around the two tests either side of it: a stack rolls up whole
+// member records out of the cache, so reading it by name must not hand back the
+// payload GET /secrets/{id} withholds. The handler does no redacting itself, so
+// this is the response-side guard on the cache's own invariant.
 func TestHandleGetStack_MemberSecretDataIsRedacted(t *testing.T) {
 	labels := map[string]string{"com.docker.stack.namespace": "mystack"}
 

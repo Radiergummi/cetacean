@@ -5,20 +5,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// nameHistoryTasks replaces the name on task history entries with the one
-// Swarm shows — "<service>.<slot>" — leaving every other type untouched.
-//
-// cache.ExtractName records a task's own ID as its name, and it must keep
-// doing so: the ACL resolver looks a task's parent service up by task ID
-// (acl.ResourceSource.ServiceOfTask), so the ID is the key every read-side
-// permission check is built on, including filterHistory's. The correction is
-// therefore made after filtering and for presentation only — resourceId still
-// carries the ID, which is what addresses the task.
-//
-// Without this, a history read of a restarting service is a wall of opaque
-// IDs: the resource that exists to answer "what changed?" cannot say what
-// changed. Naming is best-effort, since a task can outlive its service record
-// or arrive before it; cluster.TaskName falls back to the ID.
+// nameHistoryTasks replaces the name on task history entries with the one Swarm
+// shows. cache.ExtractName must keep recording a task's ID as its name, since
+// every read-side permission check is keyed on it — so this runs after
+// filtering, for presentation only. Naming is best-effort and falls back.
 func nameHistoryTasks(c *cache.Cache, entries []cache.HistoryEntry) []cache.HistoryEntry {
 	named := make([]cache.HistoryEntry, len(entries))
 	copy(named, entries)

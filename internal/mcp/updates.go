@@ -13,16 +13,9 @@ import (
 )
 
 // The section names the spec-editing tools report, and the keys of the
-// cluster.ServiceDetails / NodeDigest projection each one covers.
-//
-// A section is answered from the same projection describe builds rather than
-// from a second one written beside it, so a caller who edits a service's ports
-// and then describes it is told the same thing twice. That is also what keeps
-// the answer free of what these tools must never hand back: the projection
-// reports environment variable and log-driver option *names*, never their
-// values, and every one of these tools used to return the whole swarm.Service
-// — so a call that only raised a CPU limit came back carrying the service's
-// database password.
+// cluster.ServiceDetails / NodeDigest projection each covers. Answering from
+// the same projection describe builds keeps an edit and a description in step,
+// and keeps values out: it reports environment and log-driver option *names*.
 const (
 	sectionEnv            = "env"
 	sectionLabels         = "labels"
@@ -88,23 +81,10 @@ type sectionWriter func(
 	section string,
 ) (swarm.Service, error)
 
-// serviceSectionWriters is what update_service can actually perform, and is
-// deliberately narrower than serviceSectionKeys.
-//
-// The two are not the same question. serviceSectionKeys answers "how is this
-// section reported", and the attachment editors need an entry there because
-// they reply through serviceUpdate like everything else. Whether update_service
-// can *perform* the edit is a separate matter: an attachment editor takes a
-// list of resource references, resolves each one and checks a read grant on
-// it, which is a different argument shape and a different authorization step
-// — so it is a tool of its own.
-//
-// Validating against the projection table conflated the two. update_service
-// accepted section "secrets", reached no case in a switch, and answered with a
-// zero-valued result that reads as a write that landed. The accepted list, the
-// advertised enum and the dispatch are now one table rather than three things
-// that agreed by inspection: a section here is dispatched by construction, and
-// one that is not here is refused before any write client is resolved.
+// serviceSectionWriters is what update_service can perform, deliberately
+// narrower than serviceSectionKeys, which only answers how a section is
+// reported. The accepted list, the advertised enum and the dispatch are one
+// table, so a section absent here is refused before any write is attempted.
 var serviceSectionWriters = map[string]sectionWriter{
 	sectionEnv: func(
 		wc DockerWriteClient, ctx context.Context, id string,
@@ -248,13 +228,9 @@ var nodeSectionKeys = map[string][]string{
 }
 
 // serviceUpdateResult is what the spec-editing service tools return: enough to
-// confirm the edit landed and to address the service again, and nothing else.
-//
-// Version is here because a follow-up write needs it — Docker rejects an
-// update carrying a stale version, and reading it back off a cache the watcher
-// fills asynchronously is a race these tools would otherwise force on every
-// caller. It comes off the service the write returned, which docker.Client
-// ends with a fresh inspect.
+// confirm the edit landed and address the service again. Version is here
+// because a follow-up write needs it and reading it back off the
+// asynchronously filled cache is a race; it comes off the write's own inspect.
 type serviceUpdateResult struct {
 	ID      string         `json:"id"`
 	Name    string         `json:"name"`
@@ -264,10 +240,8 @@ type serviceUpdateResult struct {
 }
 
 // nodeUpdateResult is the node counterpart. Role and availability ride along
-// whichever section was edited, because they are the two facts that decide
-// what a node will accept next: draining a node to move its work is a
-// different act on a manager than on a worker, and the answer to "did the
-// drain take" is meaningless without the role it took effect on.
+// whichever section was edited: they decide what the node accepts next, and
+// draining a manager to move its work is a different act from draining a worker.
 type nodeUpdateResult struct {
 	ID           string         `json:"id"`
 	Hostname     string         `json:"hostname"`
@@ -329,19 +303,9 @@ func stringDetail(details map[string]any, key string) string {
 }
 
 // toolUpdateService dispatches one section of a service's specification to the
-// writer that owns it.
-//
-// The eight sections were eight tools until they were folded into this one.
-// They shared a tier, an ACL check and a result shape, and differed only in
-// which field of the spec they replaced — while each one spent about a
-// kilobyte of every tools/list, over two thousand tokens of an agent's context
-// before it had read a single service.
-//
-// The cost of folding is the input schema: `value` is whatever the section
-// takes, so JSON Schema cannot describe it and the section's own decoder is
-// what validates it. That is why decodeSection reports the section it was
-// decoding and the shape it wanted — a model that guessed the payload wrong
-// has to be told which of eight shapes it was being held to.
+// writer that owns it. The cost of folding eight tools into one is the input
+// schema: `value` is whatever the section takes, so JSON Schema cannot describe
+// it and decodeSection has to name both the section and the shape it wanted.
 func (s *Server) toolUpdateService(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -474,14 +438,10 @@ func decodeSection[T any](req mcplib.CallToolRequest, section string) (T, error)
 	return out, nil
 }
 
-// validatePorts rejects a port that publishes nothing.
-//
-// Docker accepts a PortConfig with TargetPort 0 and assigns an ephemeral
-// published port pointing at container port 0, so the service ends up holding
-// a port that cannot serve and the caller is told the write succeeded. The
-// target is the one field with no sensible default — a caller who omits it
-// meant to name it — so this is the cheapest place to turn a silent
-// misconfiguration into an error naming the entry.
+// validatePorts rejects a port that publishes nothing. Docker accepts a
+// PortConfig with TargetPort 0, assigns an ephemeral published port pointing
+// at container port 0, and reports success — so the service holds a port that
+// cannot serve. The target is the one field with no sensible default.
 func validatePorts(ports []swarm.PortConfig) error {
 	for i, p := range ports {
 		if p.TargetPort == 0 {

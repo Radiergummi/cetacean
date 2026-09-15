@@ -122,13 +122,10 @@ func fetchCatalog(
 	return doc
 }
 
-// TestAPICatalogTargetsAnswerAsAdvertised keeps the catalog honest: every
-// target is driven against the router that published it and must answer with
-// the media type the catalog claimed.
-//
-// The assertion is the media type, not "not 404" — the SPA fallback answers
-// every unrouted path with 200 and HTML, so a 404 check passes even after a
-// route is renamed out from under the catalog.
+// Keeps the catalog honest: every target is driven against the router that
+// published it and must answer with the media type claimed. The assertion is the
+// media type rather than "not 404", since the SPA fallback answers every
+// unrouted path with 200 and HTML.
 func TestAPICatalogTargetsAnswerAsAdvertised(t *testing.T) {
 	router := newSeededTestRouter(t)
 

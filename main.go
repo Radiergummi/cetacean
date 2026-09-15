@@ -38,12 +38,8 @@ import (
 var frontendDist embed.FS
 
 // widgetDist holds the MCP Apps widget bundles, one self-contained HTML
-// document per widget. Built by `npm run build:widgets` into
-// frontend/dist-widgets/; internal/mcp serves each as a ui://cetacean/<name>
-// resource.
-//
-// Like frontend/dist above, this must exist before `go build` — `make build`,
-// the Dockerfile and CI all run the widget build first.
+// document per widget, built by `npm run build:widgets`. Like frontend/dist
+// above, it must exist before `go build`.
 //
 //go:embed frontend/dist-widgets/*
 var widgetDist embed.FS
@@ -55,16 +51,8 @@ var openapiSpec []byte
 var asyncapiSpec []byte
 
 // scalarJS is the Scalar API reference bundle served at /api/scalar.js, copied
-// out of node_modules into frontend/dist by the frontend build's postbuild
-// step. It comes from npm rather than a copy committed here so that one
-// dependency declaration governs it: Dependabot watches the version, the SBOM
-// and THIRD_PARTY_LICENSES pick it up with the rest of the frontend's
-// production dependencies, and there is no 3.5MB blob in the tree to go stale
-// unnoticed — the committed one had reached six months and 613 releases behind
-// before anything noticed, because nothing was watching it.
-//
-// Embedded by its own directive rather than read out of frontendDist so a
-// missing file fails `go build`, the way the two directives above do.
+// out of node_modules by the frontend build's postbuild step, so Dependabot,
+// the SBOM and THIRD_PARTY_LICENSES govern it. A missing file fails the build.
 //
 //go:embed frontend/dist/scalar.js
 var scalarJS []byte
@@ -172,15 +160,13 @@ func main() {
 	}
 
 	if authCfg.Mode == "headers" {
-		proxies, err := config.ResolveTrustedProxies(cfg.TrustedProxies)
-		if err != nil {
+		if err := config.RequireTrustedProxies(cfg.TrustedProxies); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
 
 		// realIP reads the one, the provider the other; they must agree.
-		cfg.TrustedProxies = proxies
-		authCfg.Headers.TrustedProxies = proxies
+		authCfg.Headers.TrustedProxies = cfg.TrustedProxies
 	}
 
 	aclCfg := config.LoadACL(flags, fc)
@@ -263,11 +249,22 @@ func main() {
 	}
 	defer dockerClient.Close() //nolint:errcheck // best-effort shutdown close
 
+	// A too-old daemon refuses every request, which otherwise surfaces as
+	// empty listings and a failing readiness probe.
+	versionCtx, versionCancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+	err = dockerClient.CheckAPIVersion(versionCtx)
+
+	versionCancel()
+
+	if err != nil {
+		slog.Error("unsupported Docker Engine", "error", err, "host", cfg.DockerHost)
+		os.Exit(1)
+	}
+
 	// Created once, for whichever feature needs it: the cache snapshot, the
-	// authorization server's token store, or both. Token durability is
-	// deliberately not tied to storage.snapshot, so either reason alone is
-	// enough — and one call means one place that can fail and one warning when
-	// it does.
+	// authorization server's token store, or both. Token durability is not tied
+	// to storage.snapshot, so either reason alone is enough, and one call means
+	// one place that can fail.
 	dataDirReady := false
 	if cfg.Snapshot || cfg.OAuth.Enabled {
 		//nolint:gosec // DataDir is operator-configured, not user input
@@ -342,7 +339,7 @@ func main() {
 		}
 		recEngine = recommendations.NewEngine(checkers...)
 		if recEngine != nil {
-			go recEngine.Run(ctx)
+			go recEngine.RunAfter(ctx, watcher.Ready())
 			slog.Info("recommendation engine started", "checkers", len(checkers))
 		}
 	} else {
@@ -352,6 +349,17 @@ func main() {
 	// ACL
 	var aclEval *acl.Evaluator
 	var stopPolicyWatch func()
+
+	// Auth mode "none" resolves every caller to the same anonymous identity,
+	// so a configured policy is not applied at all.
+	if authCfg.Mode == "none" && (aclCfg.Policy != "" || aclCfg.PolicyFile != "") {
+		slog.Warn(
+			"an ACL policy is configured but auth.mode is none, so no grant will be enforced; "+
+				"set auth.mode to identify callers, or remove the policy",
+			"policy_file", aclCfg.PolicyFile,
+		)
+	}
+
 	if authCfg.Mode != "none" {
 		aclEval = acl.NewEvaluator()
 		aclEval.SetResolver(stateCache)
@@ -466,12 +474,10 @@ func main() {
 		}
 	}
 
-	// Distributed tracing is opt-in: with no collector configured the MCP
-	// server keeps mcp-go's noop tracer and nothing is allocated.
-	//
-	// The MCP server is the only thing that emits spans today, so building the
-	// pipeline without it would leave a batch processor and its goroutine alive
-	// for the life of the process with nothing able to feed them.
+	// Opt-in: with no collector configured the MCP server keeps mcp-go's noop
+	// tracer. The MCP server is the only thing emitting spans, so building the
+	// pipeline without it would leave a batch processor and its goroutine
+	// alive for the life of the process with nothing able to feed them.
 	var mcpTracer oteltrace.Tracer
 
 	if cfg.OTelEndpoint != "" && !cfg.MCP.Enabled {
@@ -506,7 +512,6 @@ func main() {
 		cors:         corsConfig,
 		authMode:     authCfg.Mode,
 		authProvider: authProvider,
-		tlsEnabled:   tlsCfg.Enabled(),
 		issuer:       issuer,
 		dataDirReady: dataDirReady,
 		cache:        stateCache,
@@ -564,7 +569,10 @@ func main() {
 		CORS:               corsConfig,
 		TLSEnabled:         tlsCfg.Enabled(),
 		TrustedProxies:     cfg.TrustedProxies,
+		ForwardedHeaders:   cfg.ForwardedHeaders,
 		Resyncer:           watcher,
+		Liveness:           watcher,
+		Refresher:          watcher,
 		MCPHandler:         mcpHandler,
 		OAuthRoutes:        oauthRoutes,
 		APITokens:          apiTokens,
@@ -606,11 +614,17 @@ func main() {
 		TLSConfig:    serverTLSConfig,
 	}
 
-	// Graceful shutdown
+	// Graceful shutdown. ListenAndServe returns ErrServerClosed as soon as
+	// Shutdown closes the listeners, so main waits on drained rather than
+	// returning mid-drain.
+	drained := make(chan struct{})
+
 	go func() {
+		defer close(drained)
+
 		<-ctx.Done()
 		slog.Info("shutting down", "cause", context.Cause(ctx))
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			slog.Error("shutdown error", "error", err)
@@ -642,7 +656,18 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	<-drained
+	slog.Info("shutdown complete")
 }
+
+// dockerProbeTimeout bounds the startup version probe, so a socket that
+// accepts and then says nothing cannot hold startup open.
+const dockerProbeTimeout = 10 * time.Second
+
+// shutdownGrace bounds how long a signalled process waits for in-flight
+// requests, inside the ten seconds an orchestrator allows before SIGKILL.
+const shutdownGrace = 5 * time.Second
 
 func runHealthcheck() int {
 	addr := os.Getenv("CETACEAN_LISTEN_ADDR")
@@ -708,11 +733,15 @@ func serveDualListeners(
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// Graceful shutdown of both servers
+	// Graceful shutdown of both servers; see drained above.
+	drained := make(chan struct{})
+
 	go func() { //nolint:gosec // G118: context.Background is correct here — ctx is done, we need a fresh timeout
+		defer close(drained)
+
 		<-ctx.Done()
 		slog.Info("shutting down", "cause", context.Cause(ctx))
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer shutdownCancel()
 		if err := appServer.Shutdown(shutdownCtx); err != nil {
 			slog.Error("tsnet server shutdown error", "error", err)
@@ -745,18 +774,20 @@ func serveDualListeners(
 		slog.Error("tsnet server error", "error", err)
 		os.Exit(1)
 	}
+
+	<-drained
+	slog.Info("shutdown complete")
 }
 
 // mcpDeps bundles the runtime objects setupMCP needs. The split between
-// config sources (cfg/authMode/tlsEnabled — each loaded separately in main)
-// and runtime objects is preserved so callers don't have to wedge unrelated
-// runtime state onto config structs.
+// config sources (cfg/authMode — each loaded separately in main) and runtime
+// objects is preserved so callers don't have to wedge unrelated runtime state
+// onto config structs.
 type mcpDeps struct {
 	cfg          *config.Config
 	cors         *api.CORSConfig
 	authMode     string
 	authProvider auth.Provider
-	tlsEnabled   bool
 
 	// issuer is resolved once in main, so the authorization server advertises
 	// the same URL the MCP tool icons are built from rather than both sides
@@ -819,7 +850,9 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	if d.cfg.OAuth.APITokens {
 		resources = append(resources, oauth.Resource{Path: "", Realm: "cetacean"})
 	}
-	resources = append(resources, oauth.Resource{Path: mcp.MountPath, Realm: "cetacean-mcp"})
+	if d.cfg.MCP.Enabled {
+		resources = append(resources, oauth.Resource{Path: mcp.MountPath, Realm: "cetacean-mcp"})
+	}
 
 	srv := oauth.NewServer(oauth.ServerConfig{
 		Issuer:     d.issuer,
@@ -854,11 +887,10 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		return nil, func() {}
 	}
 
-	// Hand the MCP server the built widget bundles. fs.Sub strips the embed
-	// prefix so internal/mcp sees one directory per widget at the root, which is
-	// how it derives widget names. A build that skipped `npm run build:widgets`
-	// yields an empty FS, and the server then advertises no UI extension rather
-	// than promising widgets it cannot serve.
+	// fs.Sub strips the embed prefix, so internal/mcp sees one directory per
+	// widget at the root, which is how it derives widget names. A build that
+	// skipped `npm run build:widgets` yields an empty FS, and the server then
+	// advertises no UI extension rather than promising what it cannot serve.
 	if widgets, err := fs.Sub(widgetDist, "frontend/dist-widgets"); err != nil {
 		slog.Warn("widget bundles unavailable; MCP Apps widgets disabled", "error", err)
 	} else {

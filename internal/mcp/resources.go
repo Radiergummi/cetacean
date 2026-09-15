@@ -10,21 +10,42 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/compose"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
-const mcpMIMEType = "application/json"
+const (
+	mcpMIMEType = "application/json"
 
-// namedResource describes a cetacean:// resource — either a fixed singleton
-// (cluster, recommendations, history) or an RFC 6570 URI template that mcp-go
-// dispatches via its template router. `name` is the programmatic MCP resource
-// name (stable, used by clients as a key); `title` is the human-readable label
-// MCP clients prefer for display.
+	// composeMIMEType marks the one resource that is not JSON.
+	composeMIMEType = "application/yaml"
+)
+
+// composeDocument is rendered YAML, already text. The type is what tells
+// readResource to hand it back as-is instead of JSON-encoding it into a quoted
+// string the way every other resource is served.
+type composeDocument string
+
+// namedResource describes a cetacean:// resource: a fixed singleton, or an RFC
+// 6570 URI template mcp-go dispatches through its template router. `name` is
+// the stable programmatic name clients key on; `title` is the display label.
 type namedResource struct {
 	uri         string
 	name        string
 	title       string
 	description string
+
+	// mimeType is what the resource is served as; empty means mcpMIMEType.
+	mimeType string
+}
+
+// mime is the resource's media type, defaulting to JSON.
+func (r namedResource) mime() string {
+	if r.mimeType == "" {
+		return mcpMIMEType
+	}
+
+	return r.mimeType
 }
 
 var (
@@ -75,6 +96,20 @@ var (
 			description: "Compact digest of one task by ID: current state with the failure message behind it, desired state, slot, image, container ID and exit code once it has stopped, and cross-references naming the parent service and the node it runs on. Same shape the describe tool returns; subscribe for updates.",
 		},
 		{
+			uri:         "cetacean://stacks/{name}/compose",
+			name:        "stack_compose",
+			title:       "Stack as a compose file",
+			mimeType:    composeMIMEType,
+			description: "The stack rendered as a compose YAML document that redeploys to the same running state on the same cluster. Secrets and configs are referenced as external, never exported, so another cluster needs them created first. Not the file that originally created the stack.",
+		},
+		{
+			uri:         "cetacean://services/{id}/compose",
+			name:        "service_compose",
+			title:       "Service as a compose file",
+			mimeType:    composeMIMEType,
+			description: "One service rendered as a one-service compose YAML document. Everything it references — networks, volumes, configs, secrets — is declared external, because a single service creates none of them.",
+		},
+		{
 			uri:         "cetacean://stacks/{name}",
 			name:        "stack",
 			title:       "Stack detail",
@@ -117,7 +152,7 @@ func (s *Server) registerResources() {
 			mcplib.NewResource(r.uri, r.name,
 				mcplib.WithResourceTitle(r.title),
 				mcplib.WithResourceDescription(r.description),
-				mcplib.WithMIMEType(mcpMIMEType),
+				mcplib.WithMIMEType(r.mime()),
 				mcplib.WithResourceIcons(s.icon("resources", r.name)...),
 			),
 			s.handleReadResource,
@@ -129,7 +164,7 @@ func (s *Server) registerResources() {
 			mcplib.NewResourceTemplate(t.uri, t.name,
 				mcplib.WithTemplateTitle(t.title),
 				mcplib.WithTemplateDescription(t.description),
-				mcplib.WithTemplateMIMEType(mcpMIMEType),
+				mcplib.WithTemplateMIMEType(t.mime()),
 				mcplib.WithTemplateIcons(s.icon("resources", t.name)...),
 			),
 			s.handleReadResource,
@@ -146,14 +181,14 @@ func (s *Server) handleReadResource(
 	req mcplib.ReadResourceRequest,
 ) ([]mcplib.ResourceContents, error) {
 	uri := req.Params.URI
-	body, err := s.readResource(ctx, uri)
+	body, mime, err := s.readResourceContents(ctx, uri)
 	if err != nil {
 		return nil, err
 	}
 	return []mcplib.ResourceContents{
 		mcplib.TextResourceContents{
 			URI:      uri,
-			MIMEType: mcpMIMEType,
+			MIMEType: mime,
 			Text:     body,
 		},
 	}, nil
@@ -162,21 +197,33 @@ func (s *Server) handleReadResource(
 // readResource is the URI-dispatch core, separated from handleReadResource so
 // tests can drive it without constructing an mcp-go request.
 func (s *Server) readResource(ctx context.Context, uri string) (string, error) {
+	body, _, err := s.readResourceContents(ctx, uri)
+
+	return body, err
+}
+
+// readResourceContents is readResource plus the media type the body is in.
+func (s *Server) readResourceContents(
+	ctx context.Context,
+	uri string,
+) (string, string, error) {
 	data, err := s.lookupResource(ctx, uri)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	// A read of one resource serves the same digest the describe tool builds,
-	// through the same function — a subscription payload and a tool result
-	// must not describe the same resource differently. The resources keep
-	// their URIs because they carry the subscriptions (NotificationManager
-	// delivers notifications/resources/updated per URI) and a tool cannot;
-	// only the payload changes.
+	if doc, ok := data.(composeDocument); ok {
+		return string(doc), composeMIMEType, nil
+	}
+
+	// A read of one resource serves the same digest describe builds, through
+	// the same function: a subscription payload and a tool result must not
+	// differ. The URIs stay because they carry the subscriptions, which a tool
+	// cannot; only the payload changes.
 	if resourceType, ok := digestibleResourceType(uri); ok {
 		digest, err := s.digestOf(ctx, resourceType, data)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 
 		data = digest
@@ -184,9 +231,20 @@ func (s *Server) readResource(ctx context.Context, uri string) (string, error) {
 
 	b, err := json.Marshal(data)
 	if err != nil {
-		return "", fmt.Errorf("marshal resource: %w", err)
+		return "", "", fmt.Errorf("marshal resource: %w", err)
 	}
-	return string(b), nil
+
+	return string(b), mcpMIMEType, nil
+}
+
+// composeDoc renders the document both compose resources return.
+func composeDoc(file compose.File, warnings []string) (composeDocument, error) {
+	body, err := compose.Render(file, warnings)
+	if err != nil {
+		return "", fmt.Errorf("render compose document: %w", err)
+	}
+
+	return composeDocument(body), nil
 }
 
 // lookupResource parses the cetacean:// URI and resolves the cache slice it
@@ -260,6 +318,11 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if subResource == "logs" {
 			return s.readServiceLogs(ctx, svc.ID)
 		}
+		if subResource == "compose" {
+			return composeDoc(
+				compose.FromService(svc, s.filterNetworks(ctx, s.cache.ListNetworks())),
+			)
+		}
 		return svc, nil
 
 	case "tasks":
@@ -288,6 +351,11 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		}
 		if err := s.checkRead(ctx, "stack", resourceID); err != nil {
 			return nil, err
+		}
+		if subResource == "compose" {
+			return composeDoc(
+				compose.FromStack(stack, s.filterNetworks(ctx, s.cache.ListNetworks())),
+			)
 		}
 		return stack, nil
 

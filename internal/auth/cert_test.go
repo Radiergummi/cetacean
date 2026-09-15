@@ -105,8 +105,8 @@ func TestCertProvider_NoTLS(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 
-	var authErr *AuthError
-	if !errors.As(err, &authErr) {
+	authErr, ok := errors.AsType[*AuthError](err)
+	if !ok {
 		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
 	if authErr.Status != http.StatusForbidden || authErr.Code != "AUT005" {
@@ -129,8 +129,7 @@ func TestCertProvider_EmptyPeerCertificates(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 
-	var authErr *AuthError
-	if !errors.As(err, &authErr) {
+	if _, ok := errors.AsType[*AuthError](err); !ok {
 		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
 }
@@ -178,8 +177,7 @@ func TestCertProvider_EmptySubjectIsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for cert with no identifiable subject")
 	}
-	var authErr *AuthError
-	if !errors.As(err, &authErr) {
+	if _, ok := errors.AsType[*AuthError](err); !ok {
 		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
 }
@@ -308,8 +306,7 @@ func TestCertProvider_MultipleSPIFFEURIs_Rejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for multiple SPIFFE URIs")
 	}
-	var authErr *AuthError
-	if !errors.As(err, &authErr) {
+	if _, ok := errors.AsType[*AuthError](err); !ok {
 		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
 }

@@ -77,11 +77,9 @@ func certRejected(msg string) *AuthError {
 }
 
 // clientCertificate returns the certificate identifying the client: the one
-// presented on this connection, or — when a trusted proxy terminated TLS
-// instead — the one it forwarded in the RFC 9440 Client-Cert header. One
-// verified here always wins; a forwarded one is gated on the edge's trust
-// verdict, which RFC 9440 §3 requires. Client-Cert-Chain is not read: it
-// carries the issuer chain for a party doing its own validation.
+// presented on this connection, or the one a trusted proxy forwarded in the RFC
+// 9440 Client-Cert header. One verified here always wins, and a forwarded one
+// is gated on the edge's trust verdict. Client-Cert-Chain is not read.
 func clientCertificate(r *http.Request) (*x509.Certificate, error) {
 	if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
 		return r.TLS.PeerCertificates[0], nil
@@ -127,8 +125,8 @@ func decodeClientCert(value string) ([]byte, error) {
 	value = strings.TrimSpace(value)
 	if len(value) < 2 || value[0] != ':' || value[len(value)-1] != ':' {
 		return nil, fmt.Errorf(
-			"Client-Cert is not a byte sequence; expected :base64:, got %q",
-			truncate(value),
+			"Client-Cert is not an RFC 8941 byte sequence; expected :base64: (%d bytes)",
+			len(value),
 		)
 	}
 
@@ -138,15 +136,6 @@ func decodeClientCert(value string) ([]byte, error) {
 	}
 
 	return der, nil
-}
-
-// truncate shortens a header value for an error message.
-func truncate(s string) string {
-	const limit = 32
-	if len(s) <= limit {
-		return s
-	}
-	return s[:limit] + "…"
 }
 
 // extractSPIFFEID returns the SPIFFE ID from the URI SANs, or "" if none

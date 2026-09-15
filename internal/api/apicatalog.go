@@ -21,9 +21,9 @@ const oauthProtectedResourcePath = "/.well-known/oauth-protected-resource"
 const mcpPath = "/mcp"
 
 // catalogMounts is what the router mounted, which is what the catalog may
-// claim. MCP is off by default, and its OAuth server is wired only when
-// auth.mode is not "none" — so MCP can be reachable while the metadata
-// document describing it does not exist.
+// claim. MCP is off by default, and the authorization server is wired only
+// when oauth.enabled — so MCP can be reachable while the metadata document
+// describing it does not exist.
 type catalogMounts struct {
 	mcp           bool
 	oauthMetadata bool
@@ -46,11 +46,9 @@ func protectedResourceMeta(href string) []linkset.Target {
 }
 
 // HandleAPICatalog serves the RFC 9727 API catalog as an RFC 9264 linkset.
-// Cetacean publishes two APIs from one process: the web API at "/", and the
-// MCP server at /mcp when enabled.
-//
-// The document is unauthenticated — /.well-known/ is exempt — so it may name
-// only public resources.
+// Cetacean publishes two APIs from one process: the web API at "/" and the
+// MCP server at /mcp when enabled. The document is unauthenticated, since
+// /.well-known/ is exempt, so it may name only public resources.
 func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()

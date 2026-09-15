@@ -61,15 +61,10 @@ type DockerSystemClient interface {
 	UnlockSwarm(ctx context.Context, key string) error
 }
 
-// Narrow write interfaces. Each handler depends only on the methods it
-// needs. The concrete docker.Client satisfies all of them via Go's
-// structural typing.
-//
-// Service operations are split into logical groups: lifecycle (scale,
-// image, rollback, restart, remove), spec updates (env, labels,
-// resources, mode, ports, placement, healthcheck, policies, log driver),
-// and attachment updates (configs, secrets, networks, mounts, container
-// config). Tests can mock just the group they exercise.
+// Narrow write interfaces: each handler depends only on the methods it needs,
+// and docker.Client satisfies all of them structurally. Service operations are
+// grouped into lifecycle, spec updates and attachment updates, so a test can
+// mock only the group it exercises.
 
 type ServiceLifecycleWriter interface {
 	ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
@@ -77,7 +72,6 @@ type ServiceLifecycleWriter interface {
 	RollbackService(ctx context.Context, id string) (swarm.Service, error)
 	RestartService(ctx context.Context, id string) (swarm.Service, error)
 	RemoveService(ctx context.Context, id string) error
-	UpdateServiceMode(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
 	UpdateServiceEndpointMode(
 		ctx context.Context,
 		id string,
@@ -86,6 +80,14 @@ type ServiceLifecycleWriter interface {
 }
 
 type ServiceSpecWriter interface {
+	// UpdateServiceSpec is how every merge patch writes: the base it merges
+	// into must be the live spec, so the merge runs inside the writer rather
+	// than against the asynchronously filled cache (M-42).
+	UpdateServiceSpec(
+		ctx context.Context,
+		id string,
+		mutate func(spec *swarm.ServiceSpec) error,
+	) (swarm.Service, error)
 	UpdateServiceEnv(
 		ctx context.Context,
 		id string,
@@ -95,11 +97,6 @@ type ServiceSpecWriter interface {
 		ctx context.Context,
 		id string,
 		mutate func(current map[string]string) (map[string]string, error),
-	) (swarm.Service, error)
-	UpdateServiceResources(
-		ctx context.Context,
-		id string,
-		resources *swarm.ResourceRequirements,
 	) (swarm.Service, error)
 	UpdateServiceHealthcheck(
 		ctx context.Context,
@@ -115,21 +112,6 @@ type ServiceSpecWriter interface {
 		ctx context.Context,
 		id string,
 		ports []swarm.PortConfig,
-	) (swarm.Service, error)
-	UpdateServiceUpdatePolicy(
-		ctx context.Context,
-		id string,
-		policy *swarm.UpdateConfig,
-	) (swarm.Service, error)
-	UpdateServiceRollbackPolicy(
-		ctx context.Context,
-		id string,
-		policy *swarm.UpdateConfig,
-	) (swarm.Service, error)
-	UpdateServiceLogDriver(
-		ctx context.Context,
-		id string,
-		driver *swarm.Driver,
 	) (swarm.Service, error)
 }
 
@@ -150,11 +132,6 @@ type ServiceAttachmentWriter interface {
 		networks []swarm.NetworkAttachmentConfig,
 	) (swarm.Service, error)
 	UpdateServiceMounts(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
-	UpdateServiceContainerConfig(
-		ctx context.Context,
-		id string,
-		apply func(spec *swarm.ContainerSpec),
-	) (swarm.Service, error)
 }
 
 // ServiceWriter composes all service write interfaces.
@@ -241,10 +218,12 @@ type Handlers struct {
 	resourceRemover     ResourceRemover
 	pluginClient        DockerPluginClient
 	ready               <-chan struct{}
+	liveness            LivenessReporter
 	promClient          *prometheus.Client
 	operationsLevel     config.OperationsLevel
 	recEngine           *recommendations.Engine
 	acl                 *acl.Evaluator
+	refresher           ResourceRefresher
 	localNodeMu         sync.Mutex
 	localNodeID         string
 	localNodeDone       bool

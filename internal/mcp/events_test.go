@@ -106,10 +106,9 @@ func TestGetEventsRejectsAnUnparseableSince(t *testing.T) {
 }
 
 // The filters are applied after the ring returns, so the read has to see the
-// whole ring. Reading a page of it means task churn — which is most of what a
-// busy cluster records — fills the window, and "what changed about the
-// services?" comes back empty with truncated: false, saying "that is all there
-// was" about a window the caller never asked for.
+// whole ring. Reading a page of it lets task churn fill the window, so "what
+// changed about the services?" comes back empty with truncated: false, about a
+// window the caller never asked for.
 func TestGetEventsFindsAnEventBuriedUnderTaskChurn(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{

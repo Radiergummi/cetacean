@@ -159,3 +159,31 @@ func TestErrorDefsAreCompleteAndSorted(t *testing.T) {
 		}
 	}
 }
+
+// Pins the other half of the SSE connection-limit contract. internal/api/sse
+// sets Retry-After and asks for the SSE001 code, but cannot see the status that
+// code maps to: the writer lives here, and sse cannot import this package. Both
+// endpoints document a 429, so the mapping is asserted rather than assumed.
+func TestWriteErrorCodeSSE001Is429(t *testing.T) {
+	for _, code := range []string{"SSE001", "LOG001"} {
+		t.Run(code, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/events", nil)
+			w := httptest.NewRecorder()
+
+			writeErrorCode(w, req, code, "too many connections")
+
+			if w.Code != http.StatusTooManyRequests {
+				t.Errorf("status=%d, want 429", w.Code)
+			}
+
+			var body map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			if body["type"] != "/api/errors/"+code {
+				t.Errorf("type=%v, want /api/errors/%s", body["type"], code)
+			}
+		})
+	}
+}

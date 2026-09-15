@@ -90,11 +90,10 @@ func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
 func (oc *OperationalChecker) flakyServiceRecs() []Recommendation {
 	var recs []Recommendation
 
-	// The tracker is built at startup, so on a young process the lookback in
-	// the message below is longer than the period actually counted. Saying
-	// "over the past 7d" for half an hour of observation understates a chronic
-	// fault by orders of magnitude and makes it read as new, so the window is
-	// reported as the shorter of the two.
+	// The tracker starts with the process, so on a young one the lookback below
+	// is longer than the period actually counted. "Over the past 7d" for half
+	// an hour of observation makes a chronic fault read as new, so the window
+	// reported is the shorter of the two.
 	counted := oc.lookback
 	if since := time.Since(oc.cache.RestartTrackingSince()); since < counted {
 		counted = since
@@ -124,12 +123,9 @@ func (oc *OperationalChecker) flakyServiceRecs() []Recommendation {
 }
 
 // formatCountedWindow renders the window a failure count actually covers.
-//
-// formatPromDuration is a PromQL range formatter and truncates to whole hours,
-// which is right for the query strings it was written for and wrong in prose:
-// the tracker starts at process start, so the whole first hour after a restart
-// — precisely when a crash-looping service earns this recommendation, since it
-// takes minutes to clear the threshold — renders as "over the past 0h".
+// formatPromDuration truncates to whole hours, which is right for a PromQL
+// range and wrong in prose: the tracker starts with the process, so the first
+// hour after a restart renders as "over the past 0h".
 func formatCountedWindow(d time.Duration) string {
 	if d < time.Hour {
 		// A restored snapshot dates the tracker from the oldest bucket it

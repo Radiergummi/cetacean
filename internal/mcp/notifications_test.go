@@ -203,11 +203,9 @@ func TestEventACLResource(t *testing.T) {
 	}
 }
 
-// TestDispatchCacheEvent_ACLBlocksUpdatedNotification asserts that a subscriber
-// whose stored identity can't read the affected resource does NOT show up in
-// the matching deliveries — the dispatch loop short-circuits before calling
-// SendNotificationToSpecificClient. The check is done on the canRead helper
-// directly (mcp-go's send machinery is exercised in integration tests).
+// Asserts that a subscriber whose stored identity cannot read the affected
+// resource does not show up in the matching deliveries: the dispatch loop
+// short-circuits before sending. The check is on the canRead helper directly.
 func TestDispatchCacheEvent_ACLBlocksUpdatedNotification(t *testing.T) {
 	c := cache.New(nil)
 	e := acl.NewEvaluator()

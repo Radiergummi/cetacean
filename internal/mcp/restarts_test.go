@@ -11,14 +11,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// TestDescribeServiceReportsRestartsFromTheTracker drives the whole read path
-// a caller uses — describe over the real cache — to prove the restart counts
-// reach the digest. The cluster-level test pins the rule; this one pins the
-// wiring, which is the half that silently goes missing.
-//
-// The scenario is the one the live evaluation hit: a service crash-looping
-// every few seconds, whose digest said "running" with one failure because
-// every earlier replica had already been replaced.
+// Drives the whole read path a caller uses — describe over the real cache — to
+// prove the restart counts reach the digest. The cluster-level test pins the
+// rule; this pins the wiring, the half that silently goes missing. The scenario
+// is a service crash-looping every few seconds whose digest says "running".
 func TestDescribeServiceReportsRestartsFromTheTracker(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{

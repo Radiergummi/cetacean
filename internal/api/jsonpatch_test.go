@@ -83,8 +83,7 @@ func TestApplyJSONPatch_Test_Fail(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on test failure")
 	}
-	var tfe *testFailedError
-	if !errors.As(err, &tfe) {
+	if _, ok := errors.AsType[*testFailedError](err); !ok {
 		t.Errorf("expected testFailedError, got %T: %v", err, err)
 	}
 }
@@ -95,8 +94,7 @@ func TestApplyJSONPatch_Test_Missing(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on missing key test")
 	}
-	var tfe *testFailedError
-	if !errors.As(err, &tfe) {
+	if _, ok := errors.AsType[*testFailedError](err); !ok {
 		t.Errorf("expected testFailedError, got %T: %v", err, err)
 	}
 }
@@ -206,8 +204,7 @@ func TestTestFailedError(t *testing.T) {
 		map[string]string{"k": "a"},
 		[]PatchOp{{Op: "test", Path: "k", Value: "b"}},
 	)
-	var tfe *testFailedError
-	if !errors.As(err, &tfe) {
+	if _, ok := errors.AsType[*testFailedError](err); !ok {
 		t.Fatal("expected testFailedError")
 	}
 }

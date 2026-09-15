@@ -39,21 +39,22 @@ type Config struct {
 	DockerHost       string
 	PrometheusURL    string
 	ListenAddr       string
-	BasePath         string          // CETACEAN_BASE_PATH, default ""
-	PublicURL        string          // CETACEAN_PUBLIC_URL, external origin, default ""
-	LogLevel         string          // "debug", "info", "warn", "error"
-	LogFormat        string          // "json", "text"
-	DataDir          string          // CETACEAN_DATA_DIR, default "./data"
-	Snapshot         bool            // CETACEAN_SNAPSHOT, default true
-	SSEBatchInterval time.Duration   // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
-	Pprof            bool            // CETACEAN_PPROF, default false
-	SelfMetrics      bool            // CETACEAN_SELF_METRICS, default true
-	Recommendations  bool            // CETACEAN_RECOMMENDATIONS, default true
-	OperationsLevel  OperationsLevel // CETACEAN_OPERATIONS_LEVEL
-	CORSOrigins      []string        // CETACEAN_CORS_ORIGINS, default empty (disabled)
-	TrustedProxies   []netip.Prefix  // CETACEAN_TRUSTED_PROXIES
-	MCP              MCPConfig       // [mcp] section / CETACEAN_MCP_* env vars
-	OAuth            OAuthConfig     // [oauth] section / CETACEAN_OAUTH_* env vars
+	BasePath         string           // CETACEAN_BASE_PATH, default ""
+	PublicURL        string           // CETACEAN_PUBLIC_URL, external origin, default ""
+	LogLevel         string           // "debug", "info", "warn", "error"
+	LogFormat        string           // "json", "text"
+	DataDir          string           // CETACEAN_DATA_DIR, default "./data"
+	Snapshot         bool             // CETACEAN_SNAPSHOT, default true
+	SSEBatchInterval time.Duration    // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
+	Pprof            bool             // CETACEAN_PPROF, default false
+	SelfMetrics      bool             // CETACEAN_SELF_METRICS, default true
+	Recommendations  bool             // CETACEAN_RECOMMENDATIONS, default true
+	OperationsLevel  OperationsLevel  // CETACEAN_OPERATIONS_LEVEL
+	CORSOrigins      []string         // CETACEAN_CORS_ORIGINS, default empty (disabled)
+	TrustedProxies   []netip.Prefix   // CETACEAN_TRUSTED_PROXIES
+	ForwardedHeaders ForwardedHeaders // CETACEAN_FORWARDED_HEADERS
+	MCP              MCPConfig        // [mcp] section / CETACEAN_MCP_* env vars
+	OAuth            OAuthConfig      // [oauth] section / CETACEAN_OAUTH_* env vars
 
 	// OTelEndpoint is the OTLP/HTTP collector to export traces to.
 	// CETACEAN_OTEL_ENDPOINT / [tracing].endpoint; empty disables tracing.
@@ -74,23 +75,24 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 
 	// Extract file-level pointers (safely handle nil sub-structs).
 	var (
-		fListen          *string
-		fPprof           *bool
-		fSelfMetrics     *bool
-		fRecommendations *bool
-		fSSEBatch        *string
-		fDockerHost      *string
-		fPromURL         *string
-		fLogLevel        *string
-		fLogFormat       *string
-		fDataDir         *string
-		fSnapshot        *bool
-		fOpsLevel        *int
-		fBasePath        *string
-		fPublicURL       *string
-		fCORSOrigins     []string
-		fTrustedProxies  *string
-		fOTelEndpoint    *string
+		fListen           *string
+		fPprof            *bool
+		fSelfMetrics      *bool
+		fRecommendations  *bool
+		fSSEBatch         *string
+		fDockerHost       *string
+		fPromURL          *string
+		fLogLevel         *string
+		fLogFormat        *string
+		fDataDir          *string
+		fSnapshot         *bool
+		fOpsLevel         *int
+		fBasePath         *string
+		fPublicURL        *string
+		fCORSOrigins      []string
+		fTrustedProxies   *string
+		fForwardedHeaders *string
+		fOTelEndpoint     *string
 	)
 	if fc != nil {
 		if fc.Server != nil {
@@ -102,6 +104,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			fBasePath = fc.Server.BasePath
 			fPublicURL = fc.Server.PublicURL
 			fTrustedProxies = fc.Server.TrustedProxies
+			fForwardedHeaders = fc.Server.ForwardedHeaders
 			if fc.Server.SSE != nil {
 				fSSEBatch = fc.Server.SSE.BatchInterval
 			}
@@ -233,6 +236,16 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			return nil, fmt.Errorf("server.trusted_proxies: %w", err)
 		}
 		cfg.TrustedProxies = tp
+	}
+
+	cfg.ForwardedHeaders, err = parseForwardedHeaders(resolve(
+		flags.ForwardedHeaders,
+		"CETACEAN_FORWARDED_HEADERS",
+		fForwardedHeaders,
+		string(XForwardedHeaders),
+	))
+	if err != nil {
+		return nil, err
 	}
 
 	return cfg, nil

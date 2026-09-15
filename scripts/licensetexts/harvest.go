@@ -29,11 +29,10 @@ var (
 	noticeStems  = []string{"notice"}
 )
 
-// rejectedExtensions marks file extensions that mark a stem match as source
-// code or build metadata rather than a license text — e.g. "license_test.go"
-// sitting beside the real "LICENSE" file. Matched case-insensitively against
-// the name's extension after the final dot; a name with no dot (like
-// "LICENSE" or "LICENSE-MIT") is never rejected.
+// rejectedExtensions marks the extensions that make a stem match source code or
+// build metadata rather than a license text, such as a "license_test.go" beside
+// the real LICENSE. Matched case-insensitively after the final dot; a name with
+// no dot is never rejected.
 var rejectedExtensions = map[string]bool{
 	"go": true, "js": true, "mjs": true, "cjs": true, "ts": true, "tsx": true,
 	"jsx": true, "json": true, "yaml": true, "yml": true, "toml": true,
@@ -56,16 +55,10 @@ type Roots struct {
 	NodeModules string
 }
 
-// licenseSurrogates names, for a package that publishes no license file of its
-// own, a package that does and is covered by the same one. Every entry must be
-// a sibling from the same repository under the same license: the text is then
-// the one upstream actually ships for the version installed, which is why this
-// maps to a sibling rather than vendoring a copy here — a copy is a second
-// thing to keep in step, and going stale unnoticed is the failure this whole
-// mechanism exists to catch.
-//
-// A surrogate that is not itself installed fails the harvest like any other
-// missing text, rather than quietly attributing nothing.
+// licenseSurrogates names, for a package publishing no license file of its own,
+// a sibling that does and is covered by the same one. It maps to a sibling
+// rather than vendoring a copy, since a copy is a second thing to keep in step.
+// A surrogate that is not installed fails the harvest like any missing text.
 var licenseSurrogates = map[string]string{
 	// The scalar/scalar monorepo publishes one MIT license, and 19 of its
 	// packages ship it byte-identically. These four omit it from their
@@ -80,21 +73,10 @@ var licenseSurrogates = map[string]string{
 	"@headlessui/vue": "@headlessui/tailwindcss",
 }
 
-// licenseTextless supplies the attribution for packages that publish no
-// license text anywhere — not in the tarball, and not in the upstream
-// repository either — so there is nothing to read and nothing a surrogate
-// could stand in for. The value is what the attribution document prints where
-// the text would go.
-//
-// A substitute rather than a skip, because every component the binary ships
-// must appear in the notices and resolve to a text: TestNoticesCoversEvery-
-// Component and TestProjectedJSONHasPopulatedTextIDs hold exactly that, and a
-// package whose license nobody wrote down is the one a reader most needs told
-// about. Omitting it would hide the gap rather than disclose it.
-//
-// What the substitute must not be is an MIT text: that names a copyright
-// holder and a year, and inventing those asserts something the authors never
-// wrote. It states the declaration and what was checked, and stops there.
+// licenseTextless supplies the attribution for a package that publishes no
+// license text anywhere. A substitute rather than a skip: every component must
+// resolve to a text, and omitting one hides the gap. It must not be an MIT
+// text — that names a copyright holder and a year nobody wrote.
 var licenseTextless = map[string]string{
 	"@replit/codemirror-css-color-picker": "No license text is published for this package.\n" +
 		"\n" +
@@ -180,13 +162,9 @@ func Harvest(doc sbom.Document, roots Roots) (sbom.Artifact, error) {
 }
 
 // surrogateTexts reads the license text of the sibling standing in for a
-// component that ships none, or returns nothing when the component has no
-// surrogate declared.
-//
-// The surrogate is resolved at the version the same SBOM lists, not whatever
-// happens to be hoisted in node_modules: the two are the same package store
-// this run is already describing, and taking the version from the document
-// keeps the text attributable to a component the inventory actually names.
+// component that ships none, or nothing when none is declared. The surrogate is
+// resolved at the version the same SBOM lists, not whatever is hoisted in
+// node_modules, so the text stays attributable to a component the inventory names.
 func surrogateTexts(component sbom.Component, doc sbom.Document, roots Roots) ([]namedText, error) {
 	name, ok := licenseSurrogates[component.Name]
 	if !ok {
@@ -251,14 +229,10 @@ func componentDir(component sbom.Component, roots Roots) (string, bool, error) {
 	}
 }
 
-// npmDir locates the directory holding one specific version of an npm
-// package. npm hoists a single version of any package to the top of
-// node_modules and nests the rest under the dependents that need them, so the
-// hoisted path names only the package, not the version — reading its
-// package.json is what tells two installed versions apart. Attributing the
-// hoisted version's license text to a different version listed in the SBOM
-// would be silently wrong, and looking nowhere but the top level would fail
-// outright on a package that only ever appears nested.
+// npmDir locates the directory holding one specific version of an npm package.
+// npm hoists one version to the top of node_modules and nests the rest, so the
+// hoisted path names the package and not the version — reading package.json is
+// what tells two installed versions apart.
 func npmDir(root, name, version string) (string, error) {
 	relative := filepath.FromSlash(name)
 
@@ -332,17 +306,10 @@ type namedText struct {
 	text string
 }
 
-// readTexts returns every regular file in dir whose name starts with the first
-// stem that matches anything (case-insensitively), with line endings
-// normalized. os.ReadDir returns entries ordered by filename, so the selection
-// does not depend on directory order.
-//
-// Every match for the winning stem is collected rather than only the first,
-// because a dual-licensed package ships LICENSE-APACHE and LICENSE-MIT with no
-// plain LICENSE and owes both texts; taking the alphabetically first would
-// drop half the attribution with nothing to show for it. A missing dir is
-// reported as no match, not an error — the caller turns that into the "no
-// license file" error itself.
+// readTexts returns every regular file in dir starting with the first stem that
+// matches anything, line endings normalized and ordered by filename. Every
+// match for the winning stem is collected, since a dual-licensed package owes
+// both its texts. A missing dir is no match rather than an error.
 func readTexts(dir string, stems []string) ([]namedText, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -430,10 +397,9 @@ func readText(path string) (string, error) {
 }
 
 // joinTexts renders one component's collected texts into the single string the
-// pool holds. A lone text is returned untouched — the overwhelmingly common
-// case, and the one whose pooled bytes must stay identical to what the
-// committed artifact already carries. Several are labelled with the file they
-// came from, because a reader owed two licenses needs to know which is which.
+// pool holds. A lone text is returned untouched, so its pooled bytes stay
+// identical to what the committed artifact carries. Several are labelled with
+// the file they came from, since a reader owed two licenses needs to know which.
 func joinTexts(texts []namedText) string {
 	if len(texts) == 1 {
 		return texts[0].text

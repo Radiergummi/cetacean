@@ -40,3 +40,20 @@ func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 		t.Errorf("bearer_methods_supported = %v, want [header]", doc.BearerMethodsSupported)
 	}
 }
+
+// Which documents exist is decided by the configured set, so an identifier the
+// deployment does not serve is never advertised. The gate that keeps an unserved
+// resource out of the set is what this leaves nothing to advertise.
+func TestNoDocumentForAResourceOutsideTheSet(t *testing.T) {
+	s := newTestServer(t)
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux, "")
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource/absent", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}

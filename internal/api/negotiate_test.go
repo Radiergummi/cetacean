@@ -431,12 +431,10 @@ func refuse(t *testing.T, router http.Handler, path, accept string) ProblemDetai
 	return problem
 }
 
-// TestUnservedTypeIsRefusedByTheEndpoint: an endpoint refuses every type it
-// does not serve, including one another endpoint does — a graph format
-// resolves successfully here and is no more servable for it.
-//
-// /services and /cluster differ in whether they carry a stream, and /api,
-// /events and /topology dispatch without the helpers.
+// An endpoint refuses every type it does not serve, including one another
+// endpoint does: a graph format resolves here and is no more servable for it.
+// The rows differ in how they dispatch — /services and /cluster in whether
+// they carry a stream, and /api, /events and /topology without the helpers.
 func TestUnservedTypeIsRefusedByTheEndpoint(t *testing.T) {
 	router := newTestRouterWithCache(t, cache.New(nil))
 
@@ -475,12 +473,10 @@ func TestRefusalNamesOnlyWhatTheEndpointServes(t *testing.T) {
 	}
 }
 
-// TestSingleRepresentationDocumentsNeedNoTableRow holds both halves of the
-// claim together: neither media type resolves against supportedTypes, and each
-// document still answers a client asking for it. Asserting only the second
-// half is satisfied by putting the row back, which is the thing being removed.
-//
-// The fetch helpers assert the status and the content type.
+// Holds both halves of the claim together: neither media type resolves against
+// supportedTypes, and each document still answers a client asking for it.
+// Asserting only the second half is satisfied by putting the row back, which is
+// the thing being removed.
 func TestSingleRepresentationDocumentsNeedNoTableRow(t *testing.T) {
 	router := newTestRouterWithCache(t, cache.New(nil))
 
@@ -495,4 +491,43 @@ func TestSingleRepresentationDocumentsNeedNoTableRow(t *testing.T) {
 
 	fetchOpenSearch(t, router, openSearchPath)
 	fetchCatalog(t, router, apiCatalogPath, linkset.MediaType)
+}
+
+// The YAML suffixes read only where a YAML representation exists. Everywhere
+// else they belong to the identifier: prometheus.yml is what an operator calls
+// a volume, and a name read as a suffix leaves the volume unaddressable.
+func TestNegotiate_YAMLSuffixOnlyWhereYAMLIsServed(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		want ContentType
+		left string
+	}{
+		{"/stacks/web.yaml", ContentTypeYAML, "/stacks/web"},
+		{"/services/api.yml", ContentTypeYAML, "/services/api"},
+		{"/api.yaml", ContentTypeYAML, "/api"},
+		{"/api/asyncapi.yml", ContentTypeYAML, "/api/asyncapi"},
+		// The list endpoint has no compose document, but the refusal is its
+		// own to make: the suffix still resolves.
+		{"/services.yaml", ContentTypeYAML, "/services"},
+		{"/volumes/prometheus.yml", ContentTypeJSON, "/volumes/prometheus.yml"},
+		{"/configs/app.yaml", ContentTypeJSON, "/configs/app.yaml"},
+		{"/networks/mesh.yml", ContentTypeJSON, "/networks/mesh.yml"},
+	} {
+		var captured ContentType
+		var capturedPath string
+		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			captured, capturedPath = ContentTypeFromContext(r.Context()), r.URL.Path
+		})
+
+		req := httptest.NewRequest("GET", tc.path, nil)
+		req.Header.Set("Accept", "application/json")
+		negotiate(inner).ServeHTTP(httptest.NewRecorder(), req)
+
+		if captured != tc.want {
+			t.Errorf("%s negotiated as %v, want %v", tc.path, captured, tc.want)
+		}
+		if capturedPath != tc.left {
+			t.Errorf("%s left path %q, want %q", tc.path, capturedPath, tc.left)
+		}
+	}
 }

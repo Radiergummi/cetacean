@@ -146,11 +146,10 @@ func TestExistingViewsIgnoreTheNodeArgument(t *testing.T) {
 	}
 }
 
-// The candidates are the nodes the caller may read, so a service the
-// assessment calls stranded may in fact be placeable on one they cannot see.
-// "no other node is ready and active" is a confident wrong answer on the one
-// question this view exists to get right, so the graph says what it was
-// assessed against.
+// The candidates are the nodes the caller may read, so a service the assessment
+// calls stranded may be placeable on one they cannot see. "No other node is
+// ready and active" is a confident wrong answer on the question this view exists
+// to get right, so the graph says what it was assessed against.
 func TestDrainImpactSaysWhenGrantsNarrowedTheCandidates(t *testing.T) {
 	evaluator := acl.NewEvaluator()
 	evaluator.SetPolicy(readOnlyPolicy("node:worker-1", "service:*", "task:*"))

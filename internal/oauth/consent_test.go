@@ -220,13 +220,10 @@ func hiddenFields(page string) url.Values {
 	return fields
 }
 
-// consentForm rebuilds the form a browser would resubmit from a rendered
-// consent page: every hidden input the template emitted, plus the decision.
-//
-// Reading the fields back off the page rather than restating them is what keeps
-// these tests in step with the template. A field added to the form is carried
-// automatically — which is exactly what the consent fingerprint was not, having
-// cost an edit in all three places that submit this form.
+// consentForm rebuilds the form a browser would resubmit from a rendered consent
+// page: every hidden input the template emitted, plus the decision. Reading the
+// fields back off the page rather than restating them keeps these tests in step
+// with the template, and carries a newly added field automatically.
 func consentForm(page, decision string, overrides url.Values) url.Values {
 	form := hiddenFields(page)
 	form.Set("decision", decision)
@@ -310,11 +307,14 @@ func TestConsentTokenIsBoundToTheWholeRequest(t *testing.T) {
 
 	const nonce = "test-nonce"
 	issued := consentBinding{
-		State:         "test-state",
-		Fingerprint:   "test-fingerprint",
-		ClientID:      "https://client.example/id",
-		RedirectURI:   "https://client.example/callback",
-		CodeChallenge: computeS256Challenge(authorizeVerifier),
+		State:               "test-state",
+		Fingerprint:         "test-fingerprint",
+		ClientID:            "https://client.example/id",
+		RedirectURI:         "https://client.example/callback",
+		CodeChallenge:       computeS256Challenge(authorizeVerifier),
+		CodeChallengeMethod: "S256",
+		ResponseType:        "code",
+		Resource:            "https://swarm.example.com/first",
 	}
 	token := csrfMAC(km.csrf, nonce, issued)
 
@@ -326,6 +326,9 @@ func TestConsentTokenIsBoundToTheWholeRequest(t *testing.T) {
 				"client_id":             {b.ClientID},
 				"redirect_uri":          {b.RedirectURI},
 				"code_challenge":        {b.CodeChallenge},
+				"code_challenge_method": {b.CodeChallengeMethod},
+				"response_type":         {b.ResponseType},
+				"resource":              {b.Resource},
 				"csrf_token":            {token},
 			}.Encode(),
 		))
@@ -347,6 +350,9 @@ func TestConsentTokenIsBoundToTheWholeRequest(t *testing.T) {
 		"code_challenge": func(b *consentBinding) {
 			b.CodeChallenge = computeS256Challenge("a" + authorizeVerifier)
 		},
+		"code_challenge_method": func(b *consentBinding) { b.CodeChallengeMethod = "plain" },
+		"response_type":         func(b *consentBinding) { b.ResponseType = "token" },
+		"resource":              func(b *consentBinding) { b.Resource = "https://swarm.example.com/second" },
 	}
 
 	for field, swap := range swapped {

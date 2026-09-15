@@ -337,12 +337,10 @@ func TestReplicaCount(t *testing.T) {
 	}
 }
 
-// TestPlacementGraphIgnoresReplacedTasks — Swarm keeps a task record for every
-// replaced replica, so a service that has merely been updated or has restarted
-// accumulates terminal records on the node it runs on. Counting those as slots
-// that ought to be running renders a converged service as degraded: a
-// single-replica service updated twice read "1/3 running". Only tasks the
-// orchestrator still wants running belong in the denominator.
+// Swarm keeps a task record for every replaced replica, so an updated or
+// restarted service accumulates terminal records on its node. Counting those as
+// slots that ought to be running renders a converged service degraded — a
+// single-replica service updated twice reads "1/3 running".
 func TestPlacementGraphIgnoresReplacedTasks(t *testing.T) {
 	clusterNode := swarm.Node{
 		ID:          "node-1",

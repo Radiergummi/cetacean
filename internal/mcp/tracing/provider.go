@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -22,17 +23,19 @@ type Provider struct {
 }
 
 // NewProvider builds a trace pipeline exporting to an OTLP/HTTP collector at
-// endpoint. The caller owns Shutdown.
-//
-// The endpoint is validated here rather than left to the exporter, which logs
-// a malformed URL to the OTel global error handler and then quietly falls back
-// to localhost:4318 — configuration that looks accepted and exports nowhere.
+// endpoint; the caller owns Shutdown. The endpoint is validated here rather
+// than left to the exporter, which logs a malformed URL to the OTel global
+// error handler and then quietly falls back to localhost:4318.
 func NewProvider(ctx context.Context, endpoint, serviceVersion string) (*Provider, error) {
-	if err := validateEndpoint(endpoint); err != nil {
+	parsed, err := validateEndpoint(endpoint)
+	if err != nil {
 		return nil, err
 	}
 
-	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(endpoint))
+	exporter, err := otlptracehttp.New(
+		ctx,
+		otlptracehttp.WithEndpointURL(resolveTracesEndpoint(parsed)),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("tracing: build OTLP exporter: %w", err)
 	}
@@ -69,18 +72,38 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	return p.provider.Shutdown(ctx)
 }
 
-func validateEndpoint(endpoint string) error {
+// tracesPath is OTLP/HTTP's signal path, relative to a collector's base URL.
+const tracesPath = "/v1/traces"
+
+// resolveTracesEndpoint appends the signal path to the configured base URL,
+// which WithEndpointURL does not do. An endpoint already naming it is left
+// alone. The URL comes from validateEndpoint, which has already parsed it.
+func resolveTracesEndpoint(parsed *url.URL) string {
+	base := strings.TrimSuffix(parsed.Path, "/")
+	if strings.HasSuffix(base, tracesPath) {
+		return parsed.String()
+	}
+
+	withPath := *parsed
+	withPath.Path = base + tracesPath
+
+	return withPath.String()
+}
+
+// validateEndpoint returns the parsed endpoint so a caller need not parse it a
+// second time.
+func validateEndpoint(endpoint string) (*url.URL, error) {
 	if endpoint == "" {
-		return fmt.Errorf("tracing: endpoint is empty")
+		return nil, fmt.Errorf("tracing: endpoint is empty")
 	}
 
 	parsed, err := url.Parse(endpoint)
 	if err != nil {
-		return fmt.Errorf("tracing: endpoint %q is not a URL: %w", endpoint, err)
+		return nil, fmt.Errorf("tracing: endpoint %q is not a URL: %w", endpoint, err)
 	}
 
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"tracing: endpoint %q must use http or https, got %q",
 			endpoint,
 			parsed.Scheme,
@@ -88,8 +111,8 @@ func validateEndpoint(endpoint string) error {
 	}
 
 	if parsed.Host == "" {
-		return fmt.Errorf("tracing: endpoint %q has no host", endpoint)
+		return nil, fmt.Errorf("tracing: endpoint %q has no host", endpoint)
 	}
 
-	return nil
+	return parsed, nil
 }

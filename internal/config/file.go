@@ -5,21 +5,16 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 )
 
 const configFileName = "cetacean.toml"
 
-// DiscoverConfigFile searches standard locations for a config file and
-// returns the path to the first one found. Returns "" if none exists.
-//
-// Search order:
-//  1. ./cetacean.toml (working directory)
-//  2. $XDG_CONFIG_HOME/cetacean/cetacean.toml (or ~/.config/cetacean/cetacean.toml)
-//  3. $HOME/.cetacean.toml
-//  4. /etc/cetacean/cetacean.toml
+// DiscoverConfigFile returns the first config file it finds, or "" if none
+// exists: ./cetacean.toml, then $XDG_CONFIG_HOME/cetacean/cetacean.toml (or
+// ~/.config/cetacean/cetacean.toml), then $HOME/.cetacean.toml, then
+// /etc/cetacean/cetacean.toml.
 func DiscoverConfigFile() string {
 	candidates := []string{
 		configFileName,
@@ -118,16 +113,17 @@ type fileSizingThresholds struct {
 }
 
 type fileServer struct {
-	ListenAddr      *string   `toml:"listen_addr"`
-	Pprof           *bool     `toml:"pprof"`
-	SelfMetrics     *bool     `toml:"self_metrics"`
-	Recommendations *bool     `toml:"recommendations"`
-	SSE             *fileSSE  `toml:"sse"`
-	CORS            *fileCORS `toml:"cors"`
-	OperationsLevel *int      `toml:"operations_level"`
-	BasePath        *string   `toml:"base_path"`
-	PublicURL       *string   `toml:"public_url"`
-	TrustedProxies  *string   `toml:"trusted_proxies"`
+	ListenAddr       *string   `toml:"listen_addr"`
+	Pprof            *bool     `toml:"pprof"`
+	SelfMetrics      *bool     `toml:"self_metrics"`
+	Recommendations  *bool     `toml:"recommendations"`
+	SSE              *fileSSE  `toml:"sse"`
+	CORS             *fileCORS `toml:"cors"`
+	OperationsLevel  *int      `toml:"operations_level"`
+	BasePath         *string   `toml:"base_path"`
+	PublicURL        *string   `toml:"public_url"`
+	TrustedProxies   *string   `toml:"trusted_proxies"`
+	ForwardedHeaders *string   `toml:"forwarded_headers"`
 }
 
 type fileCORS struct {
@@ -237,12 +233,7 @@ func LoadFile(path string) (*fileConfig, error) {
 		}
 		slices.Sort(keys)
 
-		return nil, fmt.Errorf(
-			"unknown setting(s) in %s: %s — check the spelling against "+
-				"docs/configuration.mdx; settings do move between releases",
-			path,
-			strings.Join(keys, ", "),
-		)
+		return nil, unknownKeyError(path, keys)
 	}
 
 	return &fc, nil

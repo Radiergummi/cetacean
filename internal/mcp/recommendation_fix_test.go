@@ -7,15 +7,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
-// TestRecommendationFixNamesATool pins the fix for what the live evaluation
-// found: get_recommendations handed back `"fixAction": "PUT /nodes/{id}/availability"`.
-//
-// That is the REST transport's vocabulary. An MCP caller has tools, not
-// routes, and cannot issue an HTTP request at all — so the one field on the
-// finding that is supposed to say what to do next says something the reader
-// is structurally unable to do. The REST field stays exactly as it is, because
-// the dashboard string-matches on it (frontend/src/lib/applyRecommendation.ts);
-// the translation belongs at the MCP boundary.
+// get_recommendations handing back a REST route as its fixAction speaks the
+// wrong transport's vocabulary: an MCP caller has tools, not routes, and cannot
+// issue an HTTP request at all. The REST field stays as it is, since the
+// dashboard string-matches on it; the translation belongs at the MCP boundary.
 func TestRecommendationFixNamesATool(t *testing.T) {
 	cases := []struct {
 		name        string

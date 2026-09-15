@@ -7,33 +7,17 @@ import (
 )
 
 // isNotFound reports whether the daemon refused a read because the record is
-// gone.
-//
-// The classification is the SDK's own: every non-2xx response the Docker
-// client returns is wrapped by httpErrorFromStatusCode, so a 404 from the log
-// endpoints carries cerrdefs.ErrNotFound exactly as one from any other call
-// does — the same predicate internal/api's writeDockerError already uses.
-// Matching the daemon's message text instead would also claim any unrelated
-// failure whose wording happens to contain the phrase, and the caller would be
-// told, confidently, that Swarm had retired a record it never lost.
+// gone. The classification is the SDK's own, so a 404 from the log endpoints
+// carries cerrdefs.ErrNotFound like any other call. Matching the message text
+// instead would claim any unrelated failure whose wording contains the phrase.
 func isNotFound(err error) bool {
 	return cerrdefs.IsNotFound(err)
 }
 
 // explainMissingTaskLogs turns the daemon's "task not found" into something a
-// caller can act on.
-//
-// get_logs offers a task read as the only way to reach a replica that has
-// already exited, and the moment that is most worth doing — just after a
-// replica died — is precisely when Swarm has retired the record: it keeps
-// task-history-limit entries per slot, five by default, which on a service
-// restarting every few seconds is a window seconds deep. The daemon's own
-// message says only "not found", which reads identically to a mistyped ID and
-// invites a retry that cannot succeed.
-//
-// The cache is the tiebreaker. It outlives the daemon's task record, so a task
-// it still knows is a real one whose output has simply been discarded — and it
-// also knows the parent service, which is where the caller should look next.
+// caller can act on: a task read is the only way to reach an exited replica,
+// and "not found" reads identically to a mistyped ID. The cache is the
+// tiebreaker — it outlives the record, and knows the parent service.
 func (s *Server) explainMissingTaskLogs(taskID string, err error) error {
 	task, known := s.cache.GetTask(taskID)
 	if !known {

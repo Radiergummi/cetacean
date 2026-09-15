@@ -80,9 +80,14 @@ These paths skip authentication in every mode:
 | `/api`, `/api/*`                                  | API documentation and the JSON-LD context                |
 | `/assets/*`                                       | Dashboard static assets                                  |
 | `/auth`, `/auth/*`                                | Login, callback, logout and `whoami`                     |
-| `/mcp`                                            | The [MCP server][mcp] runs its own bearer-token check    |
+| `/mcp`                                            | The [MCP server][mcp] guards itself — see below          |
 | `/.well-known/*`                                  | OAuth discovery documents, unauthenticated by spec       |
 | `/oauth/token`, `/oauth/revoke`, `/oauth/register` | Carry their own credentials in the request body          |
+
+What guards `/mcp` depends on the configuration: with [`oauth.enabled`][oauth.enabled] the MCP server verifies
+a bearer token it issued; with the authorization server off, the active mode must be listed in
+[`mcp.auth_bypass`][mcp.auth_bypass] — there is no bearer check then, and the upstream provider authenticates
+every request instead. Cetacean refuses to start with neither.
 
 `/oauth/authorize` is not exempt: a user must authenticate before granting a client access. That is also why
 the authorization server cannot run under the `none` mode — there would be no one to ask.
@@ -487,6 +492,28 @@ http:
           - url: "http://cetacean:9000"
 ```
 
+## Forwarding headers
+
+Behind a proxy listed in [`server.trusted_proxies`][server.trusted_proxies], Cetacean reads the client address
+and the external origin from forwarding headers. [`server.forwarded_headers`][server.forwarded_headers] names
+which family it reads: `x-forwarded` (the default) for `X-Forwarded-For`, `X-Forwarded-Proto` and
+`X-Forwarded-Host`, or `forwarded` for [`Forwarded`][rfc7239]. The other family is discarded on arrival.
+
+> [!WARNING]
+> Set this to match your proxy. nginx, HAProxy, Traefik and Caddy all write the `x-forwarded` family, and none
+> of them strip an inbound `Forwarded` — it is an unknown request header they pass through untouched. A
+> deployment believing both families would let a client choose the address in its own audit log, and the host
+> in every URL Cetacean publishes.
+
+Stripping the family your proxy does not write costs nothing and is worth doing anyway:
+
+```nginx
+proxy_set_header Forwarded "";
+```
+
+[`server.public_url`][server.public_url] settles the origin half outright: with it set, published URLs come
+from configuration and no header can steer them.
+
 ## TLS
 
 TLS termination works in any auth mode and is required for `cert` mode. Set [`tls.cert`][tls.cert] and
@@ -620,10 +647,13 @@ response schemas.
 [getting-started]: getting-started
 [mcp]: mcp
 [oauth.api_tokens]: configuration#oauth.api_tokens
+[mcp.auth_bypass]: configuration#mcp.auth_bypass
 [oauth.enabled]: configuration#oauth.enabled
 [oidc]: configuration#oidc
+[rfc7239]: https://www.rfc-editor.org/rfc/rfc7239
 [rfc9440]: https://www.rfc-editor.org/rfc/rfc9440
 [server.base_path]: configuration#server.base_path
+[server.forwarded_headers]: configuration#server.forwarded_headers
 [server.listen_addr]: configuration#server.listen_addr
 [storage.data_dir]: configuration#storage.data_dir
 [server.public_url]: configuration#server.public_url

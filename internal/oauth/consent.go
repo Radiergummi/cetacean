@@ -137,11 +137,10 @@ func renderErrorPage(w http.ResponseWriter, status int, message string) {
 	_ = errorTemplate.Execute(w, map[string]string{"Message": message})
 }
 
-// setConsentHeaders sets security headers that prevent framing and caching.
-// The consent page carries the CSRF token, OAuth state, code_challenge,
-// redirect_uri and authenticated user identity in hidden form fields — any
-// shared cache or browser back-button cache would replay that to a different
-// user. Cache-Control: no-store matches the token-response handler.
+// setConsentHeaders sets the headers preventing framing and caching. The page
+// carries the CSRF token, OAuth state, code_challenge, redirect_uri and the
+// user's identity in hidden fields, which any shared or back-button cache
+// would replay to a different user.
 func setConsentHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
@@ -159,11 +158,14 @@ const consentFingerprintField = "consent_fingerprint"
 // the client metadata forward, since a CIMD document can change in between; the
 // rest stops any hidden field being swapped before the POST acts on it.
 type consentBinding struct {
-	State         string
-	Fingerprint   string
-	ClientID      string
-	RedirectURI   string
-	CodeChallenge string
+	State               string
+	Fingerprint         string
+	ClientID            string
+	RedirectURI         string
+	CodeChallenge       string
+	CodeChallengeMethod string
+	ResponseType        string
+	Resource            string
 }
 
 // csrfMAC derives the CSRF token from the nonce and the request it stays bound
@@ -178,15 +180,17 @@ func csrfMAC(signingKey []byte, nonce string, b consentBinding) string {
 	hashField(mac, b.ClientID)
 	hashField(mac, b.RedirectURI)
 	hashField(mac, b.CodeChallenge)
+	hashField(mac, b.CodeChallengeMethod)
+	hashField(mac, b.ResponseType)
+	hashField(mac, b.Resource)
 
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// issueCSRFNonce generates a random nonce, sets a short-lived signed cookie,
-// and returns the CSRF token: an HMAC over the nonce and the authorization
-// request the page is being rendered for. The cookie is HttpOnly and
-// SameSite=Strict. When secure is true (issuer is HTTPS) the cookie is also
-// marked Secure.
+// issueCSRFNonce generates a random nonce, sets a short-lived signed cookie and
+// returns the CSRF token: an HMAC over the nonce and the authorization request
+// the page renders for. The cookie is HttpOnly and SameSite=Strict, and Secure
+// when the issuer is HTTPS.
 func issueCSRFNonce(
 	w http.ResponseWriter,
 	signingKey []byte,
@@ -241,11 +245,14 @@ func verifyCSRFToken(r *http.Request, signingKey []byte) bool {
 	}
 
 	expected := csrfMAC(signingKey, cookie.Value, consentBinding{
-		State:         r.FormValue("state"),
-		Fingerprint:   r.FormValue(consentFingerprintField),
-		ClientID:      r.FormValue("client_id"),
-		RedirectURI:   r.FormValue("redirect_uri"),
-		CodeChallenge: r.FormValue("code_challenge"),
+		State:               r.FormValue("state"),
+		Fingerprint:         r.FormValue(consentFingerprintField),
+		ClientID:            r.FormValue("client_id"),
+		RedirectURI:         r.FormValue("redirect_uri"),
+		CodeChallenge:       r.FormValue("code_challenge"),
+		CodeChallengeMethod: r.FormValue("code_challenge_method"),
+		ResponseType:        r.FormValue("response_type"),
+		Resource:            r.FormValue("resource"),
 	})
 
 	return hmac.Equal([]byte(r.FormValue("csrf_token")), []byte(expected))
