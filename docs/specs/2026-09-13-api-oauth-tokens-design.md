@@ -385,9 +385,9 @@ One new setting beyond the aliases, plus the tier cap from decision 5:
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `oauth.enabled` | `true` when `auth.mode != none` | Whether the AS runs at all, independent of `mcp.enabled` |
+| `oauth.enabled` | **shipped as `false`** | Whether the AS runs at all, independent of `mcp.enabled` |
 | `oauth.api_tokens` | `true` | Whether the API is offered as a resource |
-| `api.token.operations_level` | inherit | Tier cap for token-authenticated callers |
+| `api.token.operations_level` | inherit | Tier cap for token-authenticated callers. **Deferred:** `requireLevel` decides at construction, so this needs a request-scoped level first |
 
 `oauth.api_tokens = false` is the escape hatch for an operator who wants MCP tokens and nothing
 else. It must make the API resource undiscoverable as well as unusable: no root-path PRM, no entry
