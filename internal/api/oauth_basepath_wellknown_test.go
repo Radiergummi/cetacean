@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -67,6 +68,37 @@ func TestOtherWellKnownPathsStayUnderTheBasePath(t *testing.T) {
 
 			if rec.Code != http.StatusNotFound {
 				t.Errorf("status = %d, want 404", rec.Code)
+			}
+		})
+	}
+}
+
+// The passthrough carries the documents this deployment registered at the
+// authority root, not everything sharing their prefix: an unregistered spelling
+// is a path the host root does not serve, and the SPA fallback answers whatever
+// reaches it with the dashboard.
+func TestUnregisteredOAuthWellKnownPathsStayUnderTheBasePath(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withBasePath("/cetacean"), withOAuthRoutes("/cetacean")},
+		withCache(cache.New(nil)),
+	)
+
+	for _, path := range []string{
+		"/.well-known/oauth-nonsense",
+		"/.well-known/oauth-protected-resource/elsewhere",
+		"/.well-known/oauth-protected-resource/cetacean/nope",
+		"/.well-known/oauth-authorization-server/elsewhere",
+	} {
+		t.Run(path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("status = %d, want 404", rec.Code)
+			}
+			if ct := rec.Header().Get("Content-Type"); strings.HasPrefix(ct, "text/html") {
+				t.Errorf("Content-Type = %q, want no dashboard", ct)
 			}
 		})
 	}

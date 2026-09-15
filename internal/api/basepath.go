@@ -156,7 +156,7 @@ const derivedWellKnownPrefix = "/.well-known/oauth-"
 // basePathMiddleware strips the base path prefix from incoming requests,
 // stores the base path in context, and redirects trailing slashes.
 // If basePath is "", it is a no-op.
-func basePathMiddleware(basePath string, next http.Handler) http.Handler {
+func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handler) http.Handler {
 	if basePath == "" {
 		return next
 	}
@@ -165,9 +165,9 @@ func basePathMiddleware(basePath string, next http.Handler) http.Handler {
 
 		// RFC 9728 §3.1 and RFC 8414 §3 build their URL by inserting the well-known
 		// segment after the host, so a client derives a path the prefix check would
-		// refuse. Nothing wider than those: the SPA fallback answers whatever is left
-		// unrouted, which would put the dashboard under the host root too.
-		if strings.HasPrefix(path, derivedWellKnownPrefix) {
+		// refuse. Only the documents registered there: the SPA fallback answers
+		// whatever is left unrouted, which would put the dashboard at the host root.
+		if strings.HasPrefix(path, derivedWellKnownPrefix) && routes.serves(r) {
 			ctx := context.WithValue(r.Context(), basePathKey, basePath)
 			next.ServeHTTP(w, r.WithContext(ctx))
 

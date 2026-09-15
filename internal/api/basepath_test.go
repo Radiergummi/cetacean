@@ -53,6 +53,12 @@ func TestAbsPath(t *testing.T) {
 	}
 }
 
+// noRoutes is the route table for a middleware under test on its own: nothing
+// here asks for the well-known passthrough, which is the only thing that reads it.
+func noRoutes() *routeRecorder {
+	return &routeRecorder{mux: http.NewServeMux()}
+}
+
 func TestBasePathMiddleware_Strips(t *testing.T) {
 	var capturedPath string
 	var capturedBasePath string
@@ -63,7 +69,7 @@ func TestBasePathMiddleware_Strips(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := basePathMiddleware("/cetacean", inner)
+	handler := basePathMiddleware("/cetacean", noRoutes(), inner)
 
 	req := httptest.NewRequest(http.MethodGet, "/cetacean/nodes", nil)
 	rec := httptest.NewRecorder()
@@ -96,7 +102,7 @@ func TestBasePathMiddleware_Root(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		handler := basePathMiddleware("/cetacean", inner)
+		handler := basePathMiddleware("/cetacean", noRoutes(), inner)
 
 		req := httptest.NewRequest(http.MethodGet, tc.url, nil)
 		rec := httptest.NewRecorder()
@@ -116,7 +122,7 @@ func TestBasePathMiddleware_Mismatch(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := basePathMiddleware("/cetacean", inner)
+	handler := basePathMiddleware("/cetacean", noRoutes(), inner)
 
 	for _, path := range []string{"/other/path", "/cetaceannodes"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -134,7 +140,7 @@ func TestBasePathMiddleware_TrailingSlashRedirect(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := basePathMiddleware("/cetacean", inner)
+	handler := basePathMiddleware("/cetacean", noRoutes(), inner)
 
 	req := httptest.NewRequest(http.MethodGet, "/cetacean/nodes/?sort=name", nil)
 	rec := httptest.NewRecorder()
@@ -159,7 +165,7 @@ func TestBasePathMiddleware_Empty(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := basePathMiddleware("", inner)
+	handler := basePathMiddleware("", noRoutes(), inner)
 
 	req := httptest.NewRequest(http.MethodGet, "/nodes", nil)
 	rec := httptest.NewRecorder()
@@ -203,6 +209,7 @@ func TestAbsURLPrefersPublicURLWithBasePath(t *testing.T) {
 		"https://cetacean.example.com",
 		basePathMiddleware(
 			"/cetacean",
+			noRoutes(),
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				called = true
 				want := "https://cetacean.example.com/cetacean/services"

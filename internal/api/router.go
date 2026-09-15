@@ -167,6 +167,14 @@ func (r *routeRecorder) route(req *http.Request) string {
 	return pattern
 }
 
+// serves reports whether a route of its own answers req, rather than the
+// catch-all standing behind every path no route claims.
+func (r *routeRecorder) serves(req *http.Request) bool {
+	pattern := r.route(req)
+
+	return pattern != "" && pattern != "/"
+}
+
 func NewRouter(cfg RouterConfig) http.Handler {
 	handler, _ := newRouter(cfg)
 
@@ -937,7 +945,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 
 	return publicURLMiddleware(
 		cfg.PublicURL,
-		basePathMiddleware(cfg.BasePath, stack.Then(mux)),
+		basePathMiddleware(cfg.BasePath, mux, stack.Then(mux)),
 	), mux.patterns
 }
 
