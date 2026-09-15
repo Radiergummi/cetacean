@@ -118,6 +118,12 @@ func forEachSourceFile(t *testing.T, fn func(*ast.File)) {
 			continue
 		}
 
+		// removed.go names variables because they are refused, not read, so
+		// every scan built on "this package consults it" must skip the file.
+		if path == "removed.go" {
+			continue
+		}
+
 		found = true
 
 		file, err := parser.ParseFile(fset, path, nil, 0)
@@ -363,30 +369,6 @@ func TestFileSuffixConventionMatches(t *testing.T) {
 
 	for _, entry := range drift.staleExcuses {
 		t.Errorf("stale excuse in docs_test.go (no longer needed): %s", entry)
-	}
-}
-
-// TestDeprecatedHeadersTrustedProxiesStillReads drives LoadAuth directly to
-// prove CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES still parses into
-// AuthConfig.Headers.TrustedProxies. The surface check above only proves the
-// name still appears on both sides, and main.go's fallback depends on the value.
-func TestDeprecatedHeadersTrustedProxiesStillReads(t *testing.T) {
-	t.Setenv("CETACEAN_AUTH_MODE", "headers")
-	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-Remote-User")
-	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8")
-
-	cfg, err := LoadAuth(nil, nil, "", "")
-	if err != nil {
-		t.Fatalf("LoadAuth: %v", err)
-	}
-
-	if len(cfg.Headers.TrustedProxies) != 1 {
-		t.Fatalf(
-			"CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES no longer resolves into "+
-				"AuthConfig.Headers.TrustedProxies (got %v) — the deprecated alias has "+
-				"silently stopped working",
-			cfg.Headers.TrustedProxies,
-		)
 	}
 }
 

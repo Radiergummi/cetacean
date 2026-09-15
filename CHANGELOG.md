@@ -30,14 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A stack's page and a service's Traefik labels are each drawn as a graph
 
 ### Changed
+- **Breaking:** the OAuth authorization server is opt-in — set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server at all
+- **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
+- **Breaking:** a setting the schema does not know refuses startup and is named, rather than being ignored — a config file still carrying `[mcp.oauth]` will not start
+- **Breaking:** `auth.headers.trusted_proxies` is gone — use `server.trusted_proxies`, which headers mode already required
+- **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`, and accepts only `cert`, `headers` and `tailscale` — a listed mode authenticates `/mcp` on its own, so `oauth.enabled` can stay off
+- **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` is not read — delete it, and every client authorizes once more
+- **Breaking:** the `refresh_token` grant at `/oauth/token` requires `client_id`; a request without it is refused with `invalid_request`
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
 - Search, the resource lists and the topology view are faster on clusters with hundreds of services, and a stack's event stream costs less per connected browser
 - The dashboard's first load is about a third of its former size, and hashed assets are cached permanently
 - The API reference at `/api` is six months newer, and now follows Scalar releases automatically
 - MCP access tokens follow the RFC 9068 `at+jwt` profile. Clients holding an older token refresh automatically
 - The Cetacean API description moved to `/api/openapi.yaml`; `/openapi.json` now describes the documentation site itself
-- **Breaking:** `CETACEAN_MCP_SIGNING_KEY` is now a root secret both keys derive from, and must be 32 bytes of hex or base64 — generate one with `openssl rand -hex 32`. Leaving it unset still generates a key at startup
-- MCP access tokens are signed with ES256 rather than HMAC. Clients refresh once on upgrade; stop every replica before starting the new version
+- **Breaking:** `CETACEAN_OAUTH_SIGNING_KEY` is now a root secret both keys derive from, and must be 32 bytes of hex or base64 — generate one with `openssl rand -hex 32`. Leaving it unset still generates a key at startup
+- Access tokens are signed with ES256 rather than HMAC, and the key is derived differently, so the published `kid` changes. Clients refresh once on upgrade; stop every replica before starting the new version
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
 - **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale` and `headers` — no challenge can ask for the credential those modes read
 
@@ -45,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
 
 ### Fixed
+- A replayed refresh token revokes the whole grant family and the remembered approval again; sending the `resource` parameter — which every conformant client does — had the request refused before theft detection could run
 - Everything that does not describe the cluster keeps working while the Docker daemon is unreachable — the dashboard's own icons and manifest, the API catalogue, the OpenSearch description, `/profile` and the OAuth endpoints that issue a token
 - A Docker Engine too old for Cetacean says so at startup instead of coming up and serving empty pages. Cetacean speaks Docker API 1.46, which means Engine 26.1 or newer
 - The CSV alternate a filtered listing advertises downloads the rows you are looking at; it dropped the query, so following the link returned everything

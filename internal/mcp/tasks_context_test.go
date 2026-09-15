@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // net/http cancels the request context the moment the create-task response is
@@ -39,23 +38,10 @@ func TestADetachedTaskContextIsBoundedButNotCancelled(t *testing.T) {
 // take. A one-minute ceiling must not abandon a service update that is still
 // converging.
 func TestDetachedTaskBudgetIgnoresRetention(t *testing.T) {
-	for _, tt := range []struct {
-		name   string
-		config config.MCPConfig
-	}{
-		{"a short ceiling", config.MCPConfig{MaxTaskTTL: time.Minute, TaskTTL: time.Hour}},
-		{"a short default", config.MCPConfig{TaskTTL: time.Minute}},
-		{"neither configured", config.MCPConfig{}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &Server{config: tt.config}
-
-			if got := s.detachedTaskBudget(); got != 2*cluster.ConvergenceTimeout {
-				t.Errorf(
-					"detachedTaskBudget() = %v, want %v",
-					got, 2*cluster.ConvergenceTimeout,
-				)
-			}
-		})
+	if detachedTaskBudget != 2*cluster.ConvergenceTimeout {
+		t.Errorf(
+			"detachedTaskBudget = %v, want %v",
+			detachedTaskBudget, 2*cluster.ConvergenceTimeout,
+		)
 	}
 }

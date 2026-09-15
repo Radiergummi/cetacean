@@ -127,7 +127,7 @@ func TestConsentFingerprintSeparatesFields(t *testing.T) {
 const (
 	testSubject     = "user@example.com"
 	testClientID    = "https://example.com/client.json"
-	testResource    = "https://cetacean.example.com/mcp"
+	testResource    = "https://cetacean.example.com/resource"
 	testFingerprint = "fingerprint-a"
 )
 
@@ -159,10 +159,10 @@ func TestConsentStoreRequiresAnExactMatch(t *testing.T) {
 			resource: testResource, fingerprint: testFingerprint,
 		},
 		{
-			// RFC 8707: an approval for one MCP endpoint must not cover another.
+			// RFC 8707: an approval for one resource must not cover another.
 			name:    "another resource",
 			subject: testSubject, clientID: testClientID,
-			resource: "https://other.example.com/mcp", fingerprint: testFingerprint,
+			resource: "https://other.example.com/resource", fingerprint: testFingerprint,
 		},
 		{
 			// The client changed its metadata after the approval.
@@ -298,7 +298,7 @@ func TestConsentKeySeparatesFields(t *testing.T) {
 }
 
 func TestConsentSurvivesRestart(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	before := newPersistingServer(t, path, testResource)
 	before.consent.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
@@ -312,7 +312,7 @@ func TestConsentSurvivesRestart(t *testing.T) {
 }
 
 func TestConsentIsWrittenThrough(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	consent := persisting(NewRefreshTokenStore(), path)
 
@@ -339,12 +339,12 @@ func consentServer(t *testing.T) (*Server, string) {
 	t.Helper()
 
 	s := newTestServer(t)
-	s.consent.Remember(keyFor(testSubject, testClientID, s.cfg.MCPResource), testFingerprint)
+	s.consent.Remember(keyFor(testSubject, testClientID, s.cfg.Resource), testFingerprint)
 
 	token := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  testSubject,
 		ClientID: testClientID,
-		Resource: s.cfg.MCPResource,
+		Resource: s.cfg.Resource,
 	}, time.Hour)
 
 	return s, token
@@ -362,7 +362,7 @@ func TestRevocationClearsConsent(t *testing.T) {
 	// A record outliving revocation degrades revoke into "grant one more
 	// silent re-authorization", which is worse than not revoking, because it
 	// appears to have worked.
-	if s.consent.Allows(keyFor(testSubject, testClientID, s.cfg.MCPResource), testFingerprint) {
+	if s.consent.Allows(keyFor(testSubject, testClientID, s.cfg.Resource), testFingerprint) {
 		t.Error("revocation should have cleared the approval")
 	}
 }
@@ -382,7 +382,7 @@ func TestTheftResultNamesTheBurnedFamily(t *testing.T) {
 
 	// Naming the burned family is what lets the caller clear its approval; the
 	// handler that does so is covered by TestTheftAtTheTokenEndpointClearsConsent.
-	want := keyFor(testSubject, testClientID, s.cfg.MCPResource)
+	want := keyFor(testSubject, testClientID, s.cfg.Resource)
 	if got := replay.Data.ConsentKey(); got != want {
 		t.Errorf("theft result should name the burned family, got %+v", got)
 	}
@@ -390,12 +390,12 @@ func TestTheftResultNamesTheBurnedFamily(t *testing.T) {
 
 func TestExpiryDoesNotClearConsent(t *testing.T) {
 	s := newTestServer(t)
-	s.consent.Remember(keyFor(testSubject, testClientID, s.cfg.MCPResource), testFingerprint)
+	s.consent.Remember(keyFor(testSubject, testClientID, s.cfg.Resource), testFingerprint)
 
 	expired := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  testSubject,
 		ClientID: testClientID,
-		Resource: s.cfg.MCPResource,
+		Resource: s.cfg.Resource,
 	}, -time.Second)
 
 	if s.refreshTokens.Rotate(expired, time.Hour).OK {
@@ -403,7 +403,7 @@ func TestExpiryDoesNotClearConsent(t *testing.T) {
 	}
 
 	// Consent outliving the refresh token is the entire point of the feature.
-	if !s.consent.Allows(keyFor(testSubject, testClientID, s.cfg.MCPResource), testFingerprint) {
+	if !s.consent.Allows(keyFor(testSubject, testClientID, s.cfg.Resource), testFingerprint) {
 		t.Error("expiry must not clear consent")
 	}
 }
@@ -529,7 +529,7 @@ func TestDisabledConsentAlwaysPromptsThroughTheServer(t *testing.T) {
 	// Even a record that matches on every field must not skip the page once an
 	// operator has turned remembering off.
 	s.consent.Restore([]ConsentRecord{{
-		ConsentKey:  keyFor(testSubject, clientID, s.cfg.MCPResource),
+		ConsentKey:  keyFor(testSubject, clientID, s.cfg.Resource),
 		Fingerprint: consentFingerprint(meta),
 		GrantedAt:   time.Now(),
 	}})
@@ -565,57 +565,51 @@ func TestConsentPageOmitsTheLeaseWhenDisabled(t *testing.T) {
 	}
 }
 
-func TestVersion1FileLoadsWithoutConsent(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+// The wire format keeps tokens, consumed and grants at the top level, where
+// RefreshTokenSnapshot is embedded rather than named. An embedding that nested
+// them under a key would drop every operator's refresh tokens, and the
+// round-trip helpers cannot see it: they are symmetric, and would round-trip a
+// nested shape just as happily. So the fixture is spelled by hand.
+func TestStateFileKeepsTheSnapshotFlat(t *testing.T) {
+	path := t.TempDir() + "/oauth-tokens.json"
 
-	// A file written before consent records existed, holding a live refresh
-	// token — which is what makes the fixture worth having: v2 moved the token
-	// maps into an embedded snapshot, and nesting rather than flattening them
-	// would drop every operator's tokens on upgrade.
-	const raw = "v1-fixture-refresh-token"
+	const raw = "flat-fixture-refresh-token"
 
 	now := time.Now().UTC()
 	expiry := now.Add(time.Hour).Format(time.RFC3339Nano)
 
-	v1 := fmt.Sprintf(`{
-  "version": 1,
+	fixture := fmt.Sprintf(`{
+  "version": %d,
   "timestamp": %q,
   "tokens": {
     %q: {
       "subject": %q,
       "clientId": %q,
       "resource": %q,
-      "grantId": "v1-grant",
+      "grantId": "flat-grant",
       "expiresAt": %q,
       "grantExpiresAt": %q
     }
   },
   "consumed": {},
-  "grants": {"v1-grant": [%q]}
+  "grants": {"flat-grant": [%q]}
 }`,
+		oauthStateVersion,
 		now.Format(time.RFC3339Nano),
 		hashToken(raw), testSubject, testClientID, testResource, expiry, expiry,
 		hashToken(raw),
 	)
 
-	if err := os.WriteFile(path, []byte(v1), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(fixture), 0600); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
 
-	state, err := readState(path)
-	if err != nil {
-		t.Fatalf("a v1 file should still load: %v", err)
-	}
-	if len(state.Consent) != 0 {
-		t.Errorf("consent records = %d, want none", len(state.Consent))
-	}
-
-	// Drive the load path an upgrading operator's restart actually takes.
+	// Drive the load path a restart actually takes.
 	s := newPersistingServer(t, path, testResource)
 
 	data, ok := s.refreshTokens.Validate(raw)
 	if !ok {
-		t.Fatal("a v1 refresh token must still validate after the upgrade")
+		t.Fatal("a refresh token at the top level did not survive the load")
 	}
 	if data.Subject != testSubject {
 		t.Errorf("subject = %q, want %q", data.Subject, testSubject)
@@ -643,7 +637,7 @@ func authorizeGET(
 		redirectURI,
 		computeS256Challenge(authorizeVerifier),
 		"xyz",
-		s.cfg.MCPResource,
+		s.cfg.Resource,
 	)
 
 	req := withIdentity(httptest.NewRequest(http.MethodGet, target, nil), testSubject, "")
@@ -685,7 +679,7 @@ func cimdServer(t *testing.T) (srv *Server, clientID, redirectURI string, meta *
 
 func TestApprovedClientSkipsTheConsentPage(t *testing.T) {
 	s, clientID, redirectURI, meta := cimdServer(t)
-	s.consent.Remember(keyFor(testSubject, clientID, s.cfg.MCPResource), consentFingerprint(meta))
+	s.consent.Remember(keyFor(testSubject, clientID, s.cfg.Resource), consentFingerprint(meta))
 
 	w := authorizeGET(t, s, clientID, redirectURI)
 
@@ -710,7 +704,7 @@ func TestChangedMetadataRePrompts(t *testing.T) {
 
 	// An approval granted against different metadata than the client now
 	// publishes must not carry over.
-	s.consent.Remember(keyFor(testSubject, clientID, s.cfg.MCPResource), "fingerprint-from-before")
+	s.consent.Remember(keyFor(testSubject, clientID, s.cfg.Resource), "fingerprint-from-before")
 
 	w := authorizeGET(t, s, clientID, redirectURI)
 
@@ -741,7 +735,7 @@ func TestDynamicallyRegisteredClientNeverSkipsTheConsentPage(t *testing.T) {
 		ClientName:   "Self-Registered CLI",
 		RedirectURIs: []string{redirectURI},
 	})
-	s.consent.Remember(keyFor(testSubject, clientID, s.cfg.MCPResource), fingerprint)
+	s.consent.Remember(keyFor(testSubject, clientID, s.cfg.Resource), fingerprint)
 
 	w := authorizeGET(t, s, clientID, redirectURI)
 
@@ -800,7 +794,7 @@ func TestApprovingThroughTheConsentPageIsRemembered(t *testing.T) {
 	// The wiring under test: the approve handler must write the record, not
 	// merely issue a code. Seeding the store directly would prove nothing
 	// about whether the endpoint ever calls Remember.
-	approval := keyFor(testSubject, clientID, s.cfg.MCPResource)
+	approval := keyFor(testSubject, clientID, s.cfg.Resource)
 	if !s.consent.Allows(approval, consentFingerprint(meta)) {
 		t.Fatal("approving through the consent page recorded no approval")
 	}
@@ -815,16 +809,18 @@ func TestApprovingThroughTheConsentPageIsRemembered(t *testing.T) {
 	}
 }
 
-// postRefreshGrant drives a refresh_token grant through the real token endpoint,
-// with no resource parameter: supplying one has the handler validate it against
-// the live token first, so a replay is rejected as unknown and never reaches the
-// theft branch. RequireResourceIndicator is off, so omitting it is legitimate.
+// postRefreshGrant drives a refresh_token grant through the real token
+// endpoint. The resource parameter is sent because require_resource_indicator
+// defaults to on, so every conformant client sends one — and it is the path on
+// which a pre-rotation check once swallowed the replay before Rotate saw it.
 func postRefreshGrant(t *testing.T, s *Server, token string) *httptest.ResponseRecorder {
 	t.Helper()
 
 	form := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {token},
+		"resource":      {s.cfg.Resource},
+		"client_id":     {testClientID},
 	}
 
 	req := httptest.NewRequest(
@@ -857,7 +853,7 @@ func TestTheftAtTheTokenEndpointClearsConsent(t *testing.T) {
 
 	// A replayed token burned the family. Silently re-granting on the next
 	// authorize is exactly wrong.
-	if s.consent.Allows(keyFor(testSubject, testClientID, s.cfg.MCPResource), testFingerprint) {
+	if s.consent.Allows(keyFor(testSubject, testClientID, s.cfg.Resource), testFingerprint) {
 		t.Error("a replayed refresh token should have cleared the approval")
 	}
 }
@@ -931,7 +927,7 @@ func TestMetadataChangedMidFlowRePrompts(t *testing.T) {
 	current := published
 	mu.Unlock()
 
-	approval := keyFor(testSubject, documentURL, s.cfg.MCPResource)
+	approval := keyFor(testSubject, documentURL, s.cfg.Resource)
 	if !s.consent.Allows(approval, consentFingerprint(&current)) {
 		t.Error("approving the second prompt should record the metadata it displayed")
 	}

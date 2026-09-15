@@ -13,8 +13,9 @@ import (
 )
 
 // oauthStateVersion is the on-disk format version. Bump it whenever the shape
-// below changes incompatibly; readState refuses anything newer. A v1 file
-// loads and yields no consent records, so every client is prompted once more.
+// below changes incompatibly; readState accepts this version and no other.
+// Refusing an older file costs every client one re-authorization, and costs this
+// package no compatibility branch that outlives the release it bridged.
 const oauthStateVersion = 2
 
 // RefreshTokenSnapshot is the serializable state of a RefreshTokenStore, kept
@@ -226,9 +227,9 @@ func readState(path string) (oauthState, error) {
 		return oauthState{}, fmt.Errorf("unmarshal oauth state: %w", err)
 	}
 
-	if state.Version < 1 || state.Version > oauthStateVersion {
+	if state.Version != oauthStateVersion {
 		return oauthState{}, fmt.Errorf(
-			"unsupported oauth state version: got %d, supported 1..%d",
+			"unsupported oauth state version: got %d, want %d",
 			state.Version,
 			oauthStateVersion,
 		)
@@ -280,7 +281,7 @@ func sweepTempFiles(path string) {
 
 	for _, orphan := range orphans {
 		if err := os.Remove(orphan); err != nil {
-			slog.Warn("could not remove orphaned MCP OAuth state temp file",
+			slog.Warn("could not remove orphaned OAuth state temp file",
 				"error", err,
 				"path", orphan,
 			)
@@ -320,7 +321,7 @@ func (f *stateFile) write() {
 
 	if err := writeState(f.path, state); err != nil {
 		slog.Warn(
-			"MCP OAuth state write failed; tokens and approvals will not survive a restart",
+			"OAuth state write failed; tokens and approvals will not survive a restart",
 			"error", err,
 			"path", f.path,
 		)

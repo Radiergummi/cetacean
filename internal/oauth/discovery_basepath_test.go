@@ -22,10 +22,11 @@ const wantBasePathIssuer = "https://cetacean.test/cetacean"
 // a base-path-less 404.
 func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 	cfg := ServerConfig{
-		Issuer:      "https://cetacean.test",
-		BasePath:    "/cetacean",
-		MCPResource: "https://cetacean.test/cetacean/mcp",
-		MCP: config.MCPConfig{
+		Issuer:          "https://cetacean.test",
+		BasePath:        "/cetacean",
+		Resource:        "https://cetacean.test/cetacean/resource",
+		ResourceMounted: true,
+		OAuth: config.OAuthConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,
 			RequireResourceIndicator: false,

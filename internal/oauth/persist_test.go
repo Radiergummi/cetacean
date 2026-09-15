@@ -3,6 +3,7 @@ package oauth
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -67,14 +68,14 @@ func persisting(s *RefreshTokenStore, path string) *ConsentStore {
 }
 
 func TestRefreshTokenSurvivesRestart(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	token := s.Issue(RefreshTokenData{
 		Subject:  "user@example.com",
 		Groups:   []string{"ops"},
 		ClientID: "https://example.com/client",
-		Resource: "https://cetacean.example.com/mcp",
+		Resource: "https://cetacean.example.com/resource",
 	}, time.Hour)
 
 	restored := restart(t, s, path)
@@ -89,7 +90,7 @@ func TestRefreshTokenSurvivesRestart(t *testing.T) {
 	if data.ClientID != "https://example.com/client" {
 		t.Errorf("client id = %q", data.ClientID)
 	}
-	if data.Resource != "https://cetacean.example.com/mcp" {
+	if data.Resource != "https://cetacean.example.com/resource" {
 		t.Errorf("resource = %q", data.Resource)
 	}
 	if len(data.Groups) != 1 || data.Groups[0] != "ops" {
@@ -98,7 +99,7 @@ func TestRefreshTokenSurvivesRestart(t *testing.T) {
 }
 
 func TestTheftDetectionSurvivesRestart(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	first := s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
@@ -125,7 +126,7 @@ func TestTheftDetectionSurvivesRestart(t *testing.T) {
 }
 
 func TestExpiredGrantFamilyIsDroppedOnLoad(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	live := s.Issue(RefreshTokenData{Subject: "live@example.com"}, time.Hour)
@@ -180,7 +181,7 @@ func TestExpiredGrantFamilyIsDroppedOnLoad(t *testing.T) {
 
 func TestRefreshTokenFileIsPrivateAndAtomic(t *testing.T) {
 	dir := t.TempDir()
-	path := dir + "/mcp-tokens.json"
+	path := dir + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	s.Issue(RefreshTokenData{Subject: "user@example.com"}, time.Hour)
@@ -239,7 +240,7 @@ func TestReadRefreshTokensRejectsUnreadableFiles(t *testing.T) {
 }
 
 func TestIssueIsWrittenThrough(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	persisting(s, path)
@@ -255,7 +256,7 @@ func TestIssueIsWrittenThrough(t *testing.T) {
 }
 
 func TestRotateIsWrittenThrough(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	persisting(s, path)
@@ -275,7 +276,7 @@ func TestRotateIsWrittenThrough(t *testing.T) {
 }
 
 func TestRevokeIsWrittenThrough(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	persisting(s, path)
@@ -291,17 +292,17 @@ func TestRevokeIsWrittenThrough(t *testing.T) {
 }
 
 func TestServerCarriesRefreshTokensAcrossRestart(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
-	before := newPersistingServer(t, path, "https://cetacean.test/mcp")
+	before := newPersistingServer(t, path, "https://cetacean.test/resource")
 	token := before.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user@example.com",
 		ClientID: "https://example.com/client",
-		Resource: "https://cetacean.test/mcp",
+		Resource: "https://cetacean.test/resource",
 	}, 720*time.Hour)
 
 	// A second Server over the same path stands in for the process restarting.
-	after := newPersistingServer(t, path, "https://cetacean.test/mcp")
+	after := newPersistingServer(t, path, "https://cetacean.test/resource")
 
 	if _, ok := after.refreshTokens.Validate(token); !ok {
 		t.Fatal("a refresh token issued before the restart should still validate")
@@ -325,7 +326,7 @@ func TestServerWithoutStatePathKeepsTokensInMemory(t *testing.T) {
 }
 
 func TestUnknownTokenRotationDoesNotWrite(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	persisting(s, path)
@@ -346,7 +347,7 @@ func TestUnknownTokenRotationDoesNotWrite(t *testing.T) {
 }
 
 func TestUnknownTokenRevocationDoesNotWrite(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	s := NewRefreshTokenStore()
 	persisting(s, path)
@@ -364,7 +365,7 @@ func TestUnknownTokenRevocationDoesNotWrite(t *testing.T) {
 }
 
 func TestStateFileSerializesConcurrentWriters(t *testing.T) {
-	path := t.TempDir() + "/mcp-tokens.json"
+	path := t.TempDir() + "/oauth-tokens.json"
 
 	tokens := NewRefreshTokenStore()
 	consent := persisting(tokens, path)
@@ -414,5 +415,73 @@ func TestStateFileSerializesConcurrentWriters(t *testing.T) {
 	}
 	if got := len(state.Consent); got != rounds {
 		t.Errorf("consent records on disk = %d, want %d", got, rounds)
+	}
+}
+
+// The configured file is the only one consulted. Deleting it is how an operator
+// drops every grant at once, so a sibling in the same directory holding an older
+// copy — whatever it is named — must not bring them back.
+func TestOnlyTheConfiguredStateFileIsRead(t *testing.T) {
+	dir := t.TempDir()
+	current := filepath.Join(dir, "oauth-tokens.json")
+	sibling := filepath.Join(dir, "other-tokens.json")
+
+	seed := newPersistingServer(t, sibling, testResource)
+	orphaned := seed.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "alice",
+		ClientID: "client-1",
+		Resource: testResource,
+	}, time.Hour)
+
+	if _, err := os.Stat(sibling); err != nil {
+		t.Fatalf("the seed never reached disk: %v", err)
+	}
+
+	srv := newPersistingServer(t, current, testResource)
+
+	if _, ok := srv.refreshTokens.Validate(orphaned); ok {
+		t.Error("a grant was restored from a file the server was not pointed at")
+	}
+}
+
+// A corrupt file is still the file this server owns: it comes up empty rather
+// than reaching for a copy of the state that happens to be intact.
+func TestCorruptStateComesUpEmpty(t *testing.T) {
+	dir := t.TempDir()
+	current := filepath.Join(dir, "oauth-tokens.json")
+	sibling := filepath.Join(dir, "other-tokens.json")
+
+	seed := newPersistingServer(t, sibling, testResource)
+	orphaned := seed.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "alice",
+		ClientID: "client-1",
+		Resource: testResource,
+	}, time.Hour)
+
+	if err := os.WriteFile(current, []byte("{not json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := newPersistingServer(t, current, testResource)
+
+	if _, ok := srv.refreshTokens.Validate(orphaned); ok {
+		t.Error("a corrupt file fell through to another copy of the state")
+	}
+}
+
+// A file this build does not write is refused outright rather than read for
+// whichever fields still line up.
+func TestStateFromAnotherFormatVersionIsRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "oauth-tokens.json")
+
+	for _, version := range []int{oauthStateVersion - 1, oauthStateVersion + 1} {
+		body := fmt.Sprintf(`{"version":%d,"tokens":{},"consumed":{},"grants":{}}`, version)
+		if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := readState(path); err == nil {
+			t.Errorf("version %d was accepted", version)
+		}
 	}
 }

@@ -79,9 +79,9 @@ func TestDuplicateClientCertIsRejected(t *testing.T) {
 	}
 	defer resp2.Body.Close()
 
-	if resp2.StatusCode != http.StatusUnauthorized {
+	if resp2.StatusCode != http.StatusForbidden {
 		t.Errorf(
-			"status = %d, want 401; a duplicated Client-Cert must not authenticate",
+			"status = %d, want 403; a duplicated Client-Cert must not authenticate",
 			resp2.StatusCode,
 		)
 	}

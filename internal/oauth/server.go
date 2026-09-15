@@ -31,12 +31,18 @@ type ServerConfig struct {
 	// BasePath is an optional URL prefix, e.g. "" or "/cetacean".
 	BasePath string
 
-	// MCPResource is the canonical MCP endpoint URL — both the PRM resource
-	// identifier and the JWT audience.
-	MCPResource string
+	// Resource is the canonical URL of the protected resource this server issues
+	// tokens for — both the PRM resource identifier and the JWT audience.
+	Resource string
 
-	// MCP holds DCR knobs and the require_resource_indicator flag.
-	MCP config.MCPConfig
+	// ResourceMounted says whether anything actually serves Resource. The server
+	// may run ahead of it, and metadata naming a path that 404s sends a client
+	// following discovery nowhere.
+	ResourceMounted bool
+
+	// OAuth holds the server's own settings: TTLs, DCR knobs, CIMD and the
+	// require_resource_indicator flag.
+	OAuth config.OAuthConfig
 
 	// SigningKey is the root the token and CSRF keys derive from. An empty one
 	// leaves the server unable to issue tokens.
@@ -80,14 +86,14 @@ func NewServer(cfg ServerConfig) *Server {
 	// Without a root, issuing and verifying answer ErrMissingKey.
 	km, err := deriveKeys(cfg.SigningKey)
 	if err != nil {
-		slog.Warn("MCP OAuth has no signing key; tokens cannot be issued", "error", err)
+		slog.Warn("OAuth has no signing key; tokens cannot be issued", "error", err)
 	}
 
 	var issuer *TokenIssuer
 	if km != nil {
-		issuer = newTokenIssuer(km, cfg.issuerID(), cfg.MCPResource)
+		issuer = newTokenIssuer(km, cfg.issuerID(), cfg.Resource)
 	} else {
-		issuer = &TokenIssuer{Issuer: cfg.issuerID(), Audience: cfg.MCPResource}
+		issuer = &TokenIssuer{Issuer: cfg.issuerID(), Audience: cfg.Resource}
 	}
 
 	cimd := &CIMDFetcher{
@@ -95,27 +101,28 @@ func NewServer(cfg ServerConfig) *Server {
 	}
 
 	var clients *ClientRegistry
-	if cfg.MCP.DCREnabled {
-		clients = newClientRegistry(cfg.MCP.DCRMaxClients, cfg.MCP.DCRRateLimit)
+	if cfg.OAuth.DCREnabled {
+		clients = newClientRegistry(cfg.OAuth.DCRMaxClients, cfg.OAuth.DCRRateLimit)
 	}
 
 	refreshTokens := NewRefreshTokenStore()
-	consent := NewConsentStore(cfg.MCP.ConsentTTL)
+	consent := NewConsentStore(cfg.OAuth.ConsentTTL)
 
 	if cfg.StatePath != "" {
 		sweepTempFiles(cfg.StatePath)
 
 		// A missing file is the normal first start. Anything else — corrupt
-		// JSON, bad permissions, a version from a newer build — costs every
+		// JSON, bad permissions, a version this build does not write — costs every
 		// client a re-authorization, so it is worth an operator's attention.
 		// Neither is fatal: the server comes up empty and clients re-authorize,
 		// exactly as they did before the store existed.
-		if state, err := readState(cfg.StatePath); err != nil {
+		state, err := readState(cfg.StatePath)
+		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				slog.Info("no MCP OAuth state yet", "path", cfg.StatePath)
+				slog.Info("no OAuth state yet", "path", cfg.StatePath)
 			} else {
 				slog.Warn(
-					"could not read MCP OAuth state; clients must re-authorize",
+					"could not read OAuth state; clients must re-authorize",
 					"error", err,
 					"path", cfg.StatePath,
 				)
@@ -123,7 +130,7 @@ func NewServer(cfg ServerConfig) *Server {
 		} else {
 			refreshTokens.Restore(state.RefreshTokenSnapshot)
 			consent.Restore(state.Consent)
-			slog.Info("loaded MCP OAuth state",
+			slog.Info("loaded OAuth state",
 				"grants", len(state.Grants),
 				"approvals", len(state.Consent),
 			)
@@ -159,7 +166,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("POST "+basePath+"/oauth/authorize", s.HandleAuthorize)
 	mux.HandleFunc("POST "+basePath+"/oauth/token", s.HandleToken)
 	mux.HandleFunc("POST "+basePath+"/oauth/revoke", s.HandleRevoke)
-	if s.cfg.MCP.DCREnabled {
+	if s.cfg.OAuth.DCREnabled {
 		mux.HandleFunc("POST "+basePath+"/oauth/register", s.HandleRegister)
 	}
 }
@@ -222,14 +229,14 @@ func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 		TokenEndpointAuthMethodsSupported:      []string{"none"},
 		RevocationEndpointAuthMethodsSupported: []string{"none"},
 	}
-	if s.cfg.MCP.DCREnabled {
+	if s.cfg.OAuth.DCREnabled {
 		doc.RegistrationEndpoint = base + "/oauth/register"
 	}
 	if s.keys != nil {
 		doc.JWKSURI = base + jwksPath
 	}
 
-	doc.ClientIDMetadataDocumentSupported = s.cfg.MCP.CIMDEnabled
+	doc.ClientIDMetadataDocumentSupported = s.cfg.OAuth.CIMDEnabled
 
 	writeDiscoveryDoc(w, doc, "application/json")
 }
@@ -294,8 +301,8 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 	// RFC 8707 resource indicator validation.
 	if _, err := ValidateResourceIndicator(
 		resourceForm,
-		s.cfg.MCPResource,
-		s.cfg.MCP.RequireResourceIndicator,
+		s.cfg.Resource,
+		s.cfg.OAuth.RequireResourceIndicator,
 	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
 		return
@@ -360,7 +367,7 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		Subject:  codeData.Subject,
 		Groups:   codeData.Groups,
 		ClientID: codeData.ClientID,
-	}, s.cfg.MCP.AccessTokenTTL)
+	}, s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
 		writeTokenError(
 			w,
@@ -377,12 +384,12 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		Groups:   codeData.Groups,
 		ClientID: codeData.ClientID,
 		Resource: codeData.Resource,
-	}, s.cfg.MCP.RefreshTokenTTL)
+	}, s.cfg.OAuth.RefreshTokenTTL)
 
 	writeTokenResponse(w, tokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(s.cfg.MCP.AccessTokenTTL.Seconds()),
+		ExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),
 		RefreshToken: refreshToken,
 	})
 }
@@ -392,6 +399,16 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// per-function analysis.
 	refreshTokenRaw := r.FormValue("refresh_token") // #nosec G120 -- bounded in HandleToken
 	resourceForm := r.FormValue("resource")         // #nosec G120 -- bounded in HandleToken
+	clientID := r.FormValue("client_id")            // #nosec G120 -- bounded in HandleToken
+
+	// RFC 6749 §6 makes client_id REQUIRED of a client that does not
+	// authenticate, which every client here is. Its value proves nothing — a
+	// public client's id is not a secret — but its absence is a malformed
+	// request, and answering one as a grant failure hides the client's bug.
+	if clientID == "" {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request", "client_id is required")
+		return
+	}
 
 	// RFC 8707 resource indicator validation against the server's resource.
 	// Run BEFORE consuming the refresh token: a malformed resource parameter
@@ -400,25 +417,19 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// triggers Rotate's Theft branch on its second presentation.
 	if _, err := ValidateResourceIndicator(
 		resourceForm,
-		s.cfg.MCPResource,
-		s.cfg.MCP.RequireResourceIndicator,
+		s.cfg.Resource,
+		s.cfg.OAuth.RequireResourceIndicator,
 	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
 		return
 	}
 
-	// Confirm the bound resource matches BEFORE rotation, again so a client
-	// typo doesn't revoke the entire family.
-	//
-	// A token that does not validate is deliberately *not* refused here. It
-	// may be a replay of one already rotated, and only Rotate can tell that
-	// from a token nobody ever issued — refusing early made theft detection
-	// unreachable on every conforming refresh, since the default
-	// configuration makes `resource` mandatory. Rotate answers an unknown
-	// token with the same invalid_grant below.
-	if resourceForm != "" {
-		if bound, live := s.refreshTokens.Validate(refreshTokenRaw); live &&
-			resourceForm != bound.Resource {
+	// Confirm the bound resource and client match BEFORE rotation, so a client
+	// typo doesn't revoke the family. A token that does not validate falls
+	// through to Rotate, whose theft branch is the only thing that burns a
+	// replayed family.
+	if bound, ok := s.refreshTokens.Validate(refreshTokenRaw); ok {
+		if resourceForm != "" && resourceForm != bound.Resource {
 			writeTokenError(
 				w,
 				http.StatusBadRequest,
@@ -427,10 +438,19 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 			)
 			return
 		}
+		if clientID != bound.ClientID {
+			writeTokenError(
+				w,
+				http.StatusBadRequest,
+				"invalid_grant",
+				"client_id does not match this grant",
+			)
+			return
+		}
 	}
 
 	// Now consume (rotate) the token. Theft detection runs inside Rotate.
-	result := s.refreshTokens.Rotate(refreshTokenRaw, s.cfg.MCP.RefreshTokenTTL)
+	result := s.refreshTokens.Rotate(refreshTokenRaw, s.cfg.OAuth.RefreshTokenTTL)
 	if result.Theft {
 		// A replayed token means someone else holds a copy. Re-prompting is
 		// the point: the next authorization must reach a human.
@@ -455,7 +475,7 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		Subject:  result.Data.Subject,
 		Groups:   result.Data.Groups,
 		ClientID: result.Data.ClientID,
-	}, s.cfg.MCP.AccessTokenTTL)
+	}, s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
 		writeTokenError(
 			w,
@@ -469,7 +489,7 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	writeTokenResponse(w, tokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(s.cfg.MCP.AccessTokenTTL.Seconds()),
+		ExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),
 		RefreshToken: result.NewToken,
 	})
 }
@@ -530,7 +550,7 @@ func writeTokenResponse(w http.ResponseWriter, resp tokenResponse) {
 //
 // Limitation: revocation only applies to refresh tokens. Access tokens are
 // stateless HMAC JWTs and continue to validate until their `exp` claim
-// (default 1h via CETACEAN_MCP_ACCESS_TOKEN_TTL). Per RFC 7009 §2.2 the
+// (default 1h via CETACEAN_OAUTH_ACCESS_TOKEN_TTL). Per RFC 7009 §2.2 the
 // server still returns 200 OK regardless of token type so the client cannot
 // distinguish "unknown token" from "no-op". Adding real access-token
 // revocation would require a JTI denylist sized to AccessTokenTTL — not
@@ -638,8 +658,16 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 	data.CSRFToken, _ = issueCSRFNonce(
 		w,
 		s.csrfKey(),
-		data.State,
-		data.Fingerprint,
+		consentBinding{
+			State:               data.State,
+			Fingerprint:         data.Fingerprint,
+			ClientID:            data.ClientID,
+			RedirectURI:         data.RedirectURI,
+			CodeChallenge:       data.CodeChallenge,
+			CodeChallengeMethod: data.CodeChallengeMethod,
+			ResponseType:        data.ResponseType,
+			Resource:            data.Resource,
+		},
 		strings.HasPrefix(s.cfg.Issuer, "https://"),
 	)
 
@@ -700,8 +728,8 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 
 	effectiveResource, err := ValidateResourceIndicator(
 		resourceParam,
-		s.cfg.MCPResource,
-		s.cfg.MCP.RequireResourceIndicator,
+		s.cfg.Resource,
+		s.cfg.OAuth.RequireResourceIndicator,
 	)
 	if err != nil {
 		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_target", err.Error())
@@ -833,6 +861,23 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if responseType != "code" {
+		clearCSRFCookie(w, secure)
+		s.redirectWithError(w, r, redirectURIRaw, state, "unsupported_response_type",
+			"response_type must be code")
+		return
+	}
+
+	// PKCE is not optional, and an empty challenge must not reach a code: the
+	// token endpoint would refuse every verifier against it, but a code that
+	// can never be redeemed is a worse answer than a refusal here.
+	if codeChallenge == "" {
+		clearCSRFCookie(w, secure)
+		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
+			"code_challenge is required")
+		return
+	}
+
 	if codeChallengeMethod != "S256" {
 		clearCSRFCookie(w, secure)
 		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
@@ -842,8 +887,8 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 
 	effectiveResource, err := ValidateResourceIndicator(
 		resourceParam,
-		s.cfg.MCPResource,
-		s.cfg.MCP.RequireResourceIndicator,
+		s.cfg.Resource,
+		s.cfg.OAuth.RequireResourceIndicator,
 	)
 	if err != nil {
 		clearCSRFCookie(w, secure)
@@ -921,7 +966,7 @@ func (s *Server) resolveClientMeta(
 		// CIMD makes the server fetch a URL the client chose, so an operator
 		// who disabled it is deliberately removing outbound request surface.
 		// Refuse before fetching rather than after.
-		if !s.cfg.MCP.CIMDEnabled {
+		if !s.cfg.OAuth.CIMDEnabled {
 			return nil, false, cimdDisabledMessage
 		}
 
@@ -930,7 +975,7 @@ func (s *Server) resolveClientMeta(
 		// etc. Log the specifics for operators and show a generic message.
 		m, err := s.cimd.Fetch(r.Context(), clientID)
 		if err != nil {
-			slog.Warn("MCP CIMD fetch failed",
+			slog.Warn("CIMD fetch failed",
 				"client_id", clientID,
 				"error", err,
 			)
@@ -986,21 +1031,13 @@ func (s *Server) redirectWithError(
 // WWW-Authenticate helper
 // ---------------------------------------------------------------------------
 
-// VerifyAccessToken verifies a JWT signature, issuer, audience and expiry.
-// Returns the application claims on success. Exposed so the MCP HTTP handler
-// can validate bearer tokens without reaching into the oauth package's
-// internals.
-func (s *Server) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
-	return s.tokenIssuer.VerifyAccessToken(token)
-}
-
 // WriteUnauthorized writes a 401 response with a WWW-Authenticate header
 // that includes the protected resource metadata URL and the error code.
-// Used by the MCP HTTP handler when a bearer token is missing or invalid.
+// Used by a resource server's handler when a bearer token is missing or invalid.
 func (s *Server) WriteUnauthorized(w http.ResponseWriter, errorCode string) {
 	prmURL := s.cfg.issuerID() + "/.well-known/oauth-protected-resource"
 	w.Header().Set("WWW-Authenticate", fmt.Sprintf(
-		`Bearer realm="mcp", resource_metadata=%s, error=%s`,
+		`Bearer realm="cetacean", resource_metadata=%s, error=%s`,
 		httpQuotedString(prmURL), httpQuotedString(errorCode),
 	))
 	w.WriteHeader(http.StatusUnauthorized)

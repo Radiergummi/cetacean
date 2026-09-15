@@ -13,7 +13,7 @@ import (
 func generateOpaqueToken() string {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		panic("mcp/oauth: crypto/rand failure: " + err.Error())
+		panic("oauth: crypto/rand failure: " + err.Error())
 	}
 
 	return base64.RawURLEncoding.EncodeToString(b)
@@ -34,7 +34,7 @@ type AuthCodeData struct {
 	ClientID      string
 	RedirectURI   string
 	CodeChallenge string
-	Resource      string // RFC 8707 — the MCP endpoint URL the code is bound to
+	Resource      string // RFC 8707 — the resource URL the code is bound to
 	Subject       string
 	Groups        []string
 }
@@ -114,7 +114,7 @@ type RefreshTokenData struct {
 	Subject  string
 	Groups   []string
 	ClientID string
-	Resource string // RFC 8707 — the MCP endpoint URL this grant is bound to
+	Resource string // RFC 8707 — the resource URL this grant is bound to
 	grantID  string // assigned and tracked by the store; unexported
 }
 

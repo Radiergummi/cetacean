@@ -27,13 +27,29 @@ func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 		t.Fatalf("decode PRM: %v", err)
 	}
 
-	if doc.Resource != s.cfg.MCPResource {
-		t.Errorf("resource = %q, want %q", doc.Resource, s.cfg.MCPResource)
+	if doc.Resource != s.cfg.Resource {
+		t.Errorf("resource = %q, want %q", doc.Resource, s.cfg.Resource)
 	}
 	if len(doc.AuthorizationServers) != 1 || doc.AuthorizationServers[0] != s.cfg.Issuer {
 		t.Errorf("authorization_servers = %v, want [%q]", doc.AuthorizationServers, s.cfg.Issuer)
 	}
 	if len(doc.BearerMethodsSupported) == 0 || doc.BearerMethodsSupported[0] != "header" {
 		t.Errorf("bearer_methods_supported = %v, want [header]", doc.BearerMethodsSupported)
+	}
+}
+
+// The server may run with nothing serving the resource it names — an operator
+// can enable it before the resource exists. Advertising the identifier anyway
+// sends a client following RFC 9728 discovery to a path that 404s.
+func TestProtectedResourceMetadataAbsentWhileNothingServesTheResource(t *testing.T) {
+	s := newTestServer(t)
+	s.cfg.ResourceMounted = false
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
+	rec := httptest.NewRecorder()
+	s.HandleProtectedResourceMetadata(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
 	}
 }

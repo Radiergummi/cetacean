@@ -134,13 +134,15 @@ func TestTailscaleRefusesEveryPeerOutsideTheTailnet(t *testing.T) {
 
 		outcome := getWithHeaders(t, proc, "/services", nil)
 
-		if outcome.status != http.StatusUnauthorized {
-			t.Fatalf("GET /services: status = %d, want 401; body: %s",
+		// A tailnet identity comes from the peer's address, which no challenge
+		// can ask a client to supply, so the refusal is 403 AUT006.
+		if outcome.status != http.StatusForbidden {
+			t.Fatalf("GET /services: status = %d, want 403; body: %s",
 				outcome.status, outcome.body)
 		}
 
-		if !strings.Contains(outcome.body, "AUT001") {
-			t.Errorf("401 body does not name AUT001: %s", outcome.body)
+		if !strings.Contains(outcome.body, "AUT006") {
+			t.Errorf("403 body does not name AUT006: %s", outcome.body)
 		}
 
 		written := awaitLog(t, proc, mark, "not in tailnet range")
@@ -168,8 +170,8 @@ func TestTailscaleRefusesEveryPeerOutsideTheTailnet(t *testing.T) {
 		// identity would be the one route that hands it out unchecked.
 		outcome := getWithHeaders(t, proc, "/auth/whoami", nil)
 
-		if outcome.status != http.StatusUnauthorized {
-			t.Fatalf("GET /auth/whoami: status = %d, want 401; body: %s",
+		if outcome.status != http.StatusForbidden {
+			t.Fatalf("GET /auth/whoami: status = %d, want 403; body: %s",
 				outcome.status, outcome.body)
 		}
 
@@ -189,8 +191,8 @@ func TestTailscaleRefusesEveryPeerOutsideTheTailnet(t *testing.T) {
 			"X-Forwarded-For": "100.64.0.5",
 		})
 
-		if outcome.status != http.StatusUnauthorized {
-			t.Fatalf("status = %d, want 401; body: %s", outcome.status, outcome.body)
+		if outcome.status != http.StatusForbidden {
+			t.Fatalf("status = %d, want 403; body: %s", outcome.status, outcome.body)
 		}
 
 		written := awaitLog(t, proc, mark, "not in tailnet range")
@@ -214,8 +216,8 @@ func TestTailscaleRefusesEveryPeerOutsideTheTailnet(t *testing.T) {
 			"Forwarded": `for="[` + tailnetULABase + `]"`,
 		})
 
-		if outcome.status != http.StatusUnauthorized {
-			t.Fatalf("status = %d, want 401; body: %s", outcome.status, outcome.body)
+		if outcome.status != http.StatusForbidden {
+			t.Fatalf("status = %d, want 403; body: %s", outcome.status, outcome.body)
 		}
 
 		written := awaitLog(t, proc, mark, "not in tailnet range")
@@ -260,8 +262,8 @@ func TestTailscaleBehindATrustedProxyDefersToTheDaemon(t *testing.T) {
 		)
 	}
 
-	if outcome.status != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401; body: %s", outcome.status, outcome.body)
+	if outcome.status != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403; body: %s", outcome.status, outcome.body)
 	}
 
 	// Past the range check and refused by the daemon instead — which is the

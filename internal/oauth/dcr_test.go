@@ -163,9 +163,9 @@ func TestDCRMissingRedirectURIs(t *testing.T) {
 func TestDCRRateLimit(t *testing.T) {
 	// Configure a small rate limit (3/hour) for testing.
 	cfg := ServerConfig{
-		Issuer:      "https://cetacean.test",
-		MCPResource: "https://cetacean.test/mcp",
-		MCP: config.MCPConfig{
+		Issuer:   "https://cetacean.test",
+		Resource: "https://cetacean.test/resource",
+		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  10 * 60 * 1e9, // 10m in nanoseconds
 			RefreshTokenTTL: 720 * 3600 * 1e9,
 			DCREnabled:      true,
@@ -207,9 +207,9 @@ func TestDCRRateLimit(t *testing.T) {
 func TestDCRLRUEviction(t *testing.T) {
 	// Max 2 clients.
 	cfg := ServerConfig{
-		Issuer:      "https://cetacean.test",
-		MCPResource: "https://cetacean.test/mcp",
-		MCP: config.MCPConfig{
+		Issuer:   "https://cetacean.test",
+		Resource: "https://cetacean.test/resource",
+		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  3600 * 1e9,
 			RefreshTokenTTL: 720 * 3600 * 1e9,
 			DCREnabled:      true,
@@ -272,7 +272,7 @@ func registerClient(t *testing.T, s *Server, body string) (int, ClientRegistrati
 
 // TestDCRDefaultsApplicationTypeToNative — SEP-837. OpenID Connect defaults
 // application_type to "web", which forbids the loopback redirect URIs native
-// MCP clients use. Defaulting to "native" avoids rejecting a correct client
+// these clients use. Defaulting to "native" avoids rejecting a correct client
 // that simply did not send the field.
 func TestDCRDefaultsApplicationTypeToNative(t *testing.T) {
 	s := newTestServer(t)

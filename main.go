@@ -25,8 +25,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/mcp"
-	"github.com/radiergummi/cetacean/internal/mcp/oauth"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
+	"github.com/radiergummi/cetacean/internal/oauth"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
@@ -115,6 +115,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := cfg.ValidateOAuth(authCfg.Mode); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
 	tlsCfg := config.LoadTLS(flags, fc)
 	if err := config.ValidateTLS(tlsCfg); err != nil {
 		fmt.Fprintf(os.Stderr, "TLS configuration error: %v\n", err)
@@ -128,23 +133,40 @@ func main() {
 		}
 	}
 
-	if authCfg.Mode == "headers" {
-		proxies, warnings, err := config.ResolveTrustedProxies(
-			cfg.TrustedProxies,
-			authCfg.Headers.TrustedProxies,
+	// Resolved before either setup so both read the same value, and adjudicated
+	// here because the answer depends only on configuration: the authorization
+	// server cannot work without a reachable issuer, while MCP alone only wants
+	// one for its tool icon URLs.
+	issuer, reachable := cfg.OAuthIssuer(tlsCfg.Enabled())
+	switch {
+	case reachable:
+	case cfg.OAuth.Enabled:
+		slog.Error(
+			"the OAuth server needs an issuer clients can reach, and none could be derived from server.listen_addr. Set server.public_url to the URL clients reach from outside, or oauth.issuer to override it.",
+			"derived_issuer",
+			issuer,
+			"listen_addr",
+			cfg.ListenAddr,
 		)
-		if err != nil {
+		os.Exit(1)
+	case cfg.MCP.Enabled:
+		slog.Warn(
+			"no reachable issuer could be derived from server.listen_addr; MCP tool icons will point at an unreachable URL. Set server.public_url to the URL clients reach from outside.",
+			"derived_issuer",
+			issuer,
+			"listen_addr",
+			cfg.ListenAddr,
+		)
+	}
+
+	if authCfg.Mode == "headers" {
+		if err := config.RequireTrustedProxies(cfg.TrustedProxies); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
 
-		for _, warning := range warnings {
-			slog.Warn(warning)
-		}
-
 		// realIP reads the one, the provider the other; they must agree.
-		cfg.TrustedProxies = proxies
-		authCfg.Headers.TrustedProxies = proxies
+		authCfg.Headers.TrustedProxies = cfg.TrustedProxies
 	}
 
 	aclCfg := config.LoadACL(flags, fc)
@@ -239,13 +261,27 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Created once, for whichever feature needs it: the cache snapshot, the
+	// authorization server's token store, or both. Token durability is not tied
+	// to storage.snapshot, so either reason alone is enough, and one call means
+	// one place that can fail.
+	dataDirReady := false
+	if cfg.Snapshot || cfg.OAuth.Enabled {
+		//nolint:gosec // DataDir is operator-configured, not user input
+		if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
+			slog.Warn(
+				"could not create data dir; snapshots and OAuth state will not persist",
+				"error", err,
+				"path", cfg.DataDir,
+			)
+		} else {
+			dataDirReady = true
+		}
+	}
+
 	snapshotPath := ""
 	if cfg.Snapshot {
 		snapshotPath = filepath.Join(cfg.DataDir, "snapshot.json")
-		//nolint:gosec // DataDir is operator-configured, not user input
-		if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
-			slog.Warn("could not create data dir", "error", err)
-		}
 		if err := stateCache.LoadFromDisk(snapshotPath); err != nil {
 			slog.Info("no snapshot loaded", "error", err)
 		} else {
@@ -471,12 +507,13 @@ func main() {
 		slog.Info("distributed tracing enabled", "endpoint", cfg.OTelEndpoint)
 	}
 
-	mcpHandler, oauthRoutes, closeMCP := setupMCP(mcpDeps{
+	deps := mcpDeps{
 		cfg:          cfg,
 		cors:         corsConfig,
 		authMode:     authCfg.Mode,
 		authProvider: authProvider,
-		tlsEnabled:   tlsCfg.Enabled(),
+		issuer:       issuer,
+		dataDirReady: dataDirReady,
 		cache:        stateCache,
 		writeClient:  dockerClient,
 		logs:         dockerClient,
@@ -484,7 +521,22 @@ func main() {
 		rec:          recEngine,
 		prometheus:   promClient,
 		tracer:       mcpTracer,
-	})
+	}
+
+	oauthSrv := setupOAuth(deps)
+
+	// One nil check for both consumers. A nil *oauth.Server is not a nil
+	// interface and not a nil func value, so assigning it unguarded would arm
+	// bearerAuth on a nil receiver and mount routes that call through nothing.
+	var (
+		tokenVerifier mcp.TokenVerifier
+		oauthRoutes   func(mux *http.ServeMux, basePath string)
+	)
+	if oauthSrv != nil {
+		tokenVerifier, oauthRoutes = oauthSrv, oauthSrv.RegisterRoutes
+	}
+
+	mcpHandler, closeMCP := setupMCP(deps, tokenVerifier)
 	defer closeMCP()
 
 	router := api.NewRouter(api.RouterConfig{
@@ -714,30 +766,99 @@ func serveDualListeners(
 }
 
 // mcpDeps bundles the runtime objects setupMCP needs. The split between
-// config sources (cfg/authMode/tlsEnabled — each loaded separately in main)
-// and runtime objects is preserved so callers don't have to wedge unrelated
-// runtime state onto config structs.
+// config sources (cfg/authMode — each loaded separately in main) and runtime
+// objects is preserved so callers don't have to wedge unrelated runtime state
+// onto config structs.
 type mcpDeps struct {
 	cfg          *config.Config
 	cors         *api.CORSConfig
 	authMode     string
 	authProvider auth.Provider
-	tlsEnabled   bool
-	cache        *cache.Cache
-	writeClient  mcp.DockerWriteClient
-	logs         mcp.LogStreamer
-	acl          *acl.Evaluator
-	rec          mcp.RecommendationEngine
-	prometheus   *promapi.Client
-	tracer       oteltrace.Tracer
+
+	// issuer is resolved once in main, so the authorization server advertises
+	// the same URL the MCP tool icons are built from rather than both sides
+	// deriving it and hoping they agree.
+	issuer string
+
+	// dataDirReady reports whether main managed to create storage.data_dir, so
+	// the authorization server is told whether its store can persist rather
+	// than finding out by trying again.
+	dataDirReady bool
+
+	cache       *cache.Cache
+	writeClient mcp.DockerWriteClient
+	logs        mcp.LogStreamer
+	acl         *acl.Evaluator
+	rec         mcp.RecommendationEngine
+	prometheus  *promapi.Client
+	tracer      oteltrace.Tracer
 }
 
-// setupMCP builds the MCP HTTP handler and the OAuth route registrar. Both are
-// nil when MCP is disabled, and the registrar is also nil under auth mode
-// "none". The third return detaches the cache listener at shutdown.
-func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string), func()) {
+// setupOAuth builds the OAuth 2.1 authorization server, or returns nil when the
+// deployment did not ask for one. It is opt-in because a token issuer should
+// never appear as a side effect of enabling something else.
+func setupOAuth(d mcpDeps) *oauth.Server {
+	if !d.cfg.OAuth.Enabled {
+		return nil
+	}
+
+	// A configured key has already been rejected unless it decodes, so it
+	// arrives here as key material or not at all.
+	signingKey, _ := config.SigningKeyBytes(d.cfg.OAuth.SigningKey)
+	if len(signingKey) == 0 {
+		signingKey = make([]byte, 32)
+		if _, err := rand.Read(signingKey); err != nil {
+			slog.Error("OAuth signing key generation failed", "error", err)
+			os.Exit(1)
+		}
+		slog.Warn(
+			"OAuth signing key auto-generated; tokens won't survive restarts. Set CETACEAN_OAUTH_SIGNING_KEY, or CETACEAN_OAUTH_SIGNING_KEY_FILE to read it from a file, for stable tokens.",
+		)
+	}
+
+	// Refresh tokens outlive the process only if the data directory is writable.
+	// An empty path keeps both stores in memory, which is what an unwritable one
+	// means; main has already warned about it.
+	statePath := ""
+	if d.dataDirReady {
+		statePath = filepath.Join(d.cfg.DataDir, "oauth-tokens.json")
+	}
+
+	resource := d.issuer + d.cfg.BasePath + "/mcp"
+	srv := oauth.NewServer(oauth.ServerConfig{
+		Issuer:          d.issuer,
+		BasePath:        d.cfg.BasePath,
+		Resource:        resource,
+		ResourceMounted: d.cfg.MCP.Enabled,
+		OAuth:           d.cfg.OAuth,
+		SigningKey:      signingKey,
+		StatePath:       statePath,
+	})
+
+	slog.Info("OAuth 2.1 authorization server enabled",
+		"issuer", d.issuer, "resource", resource)
+
+	// Nothing consumes it yet, which is allowed: the operator asked for it, and
+	// the REST API becomes a second resource later.
 	if !d.cfg.MCP.Enabled {
-		return nil, nil, func() {}
+		slog.Warn(
+			"the OAuth server is enabled but nothing consumes it: /mcp is the only protected resource today, and mcp.enabled is false.",
+		)
+	}
+
+	return srv
+}
+
+// setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, returning nil
+// when MCP is disabled. The second return is a cleanup function the caller must
+// invoke at shutdown so the MCP server's cache change listener detaches before
+// the cache itself is torn down.
+//
+// The authorization server is built separately and arrives as the narrow
+// interface MCP consumes, so MCP is one of its consumers rather than its owner.
+func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier) (http.Handler, func()) {
+	if !d.cfg.MCP.Enabled {
+		return nil, func() {}
 	}
 
 	// fs.Sub strips the embed prefix, so internal/mcp sees one directory per
@@ -748,69 +869,6 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		slog.Warn("widget bundles unavailable; MCP Apps widgets disabled", "error", err)
 	} else {
 		mcp.SetWidgetFS(widgets)
-	}
-
-	issuer, reachable := d.cfg.MCPIssuer(d.tlsEnabled)
-	if !reachable {
-		if d.cfg.MCPIssuerRequired(d.authMode) {
-			slog.Error(
-				"MCP OAuth needs an issuer clients can reach, and none could be derived from server.listen_addr. Set server.public_url to the URL clients reach from outside, or mcp.issuer to override it for MCP alone.",
-				"derived_issuer",
-				issuer,
-				"listen_addr",
-				d.cfg.ListenAddr,
-			)
-			os.Exit(1)
-		}
-		slog.Warn(
-			"no reachable MCP issuer could be derived from server.listen_addr; MCP tool icons will point at an unreachable URL. Set server.public_url to the URL clients reach from outside.",
-			"derived_issuer",
-			issuer,
-			"listen_addr",
-			d.cfg.ListenAddr,
-		)
-	}
-	mcpResource := issuer + d.cfg.BasePath + "/mcp"
-
-	var oauthSrv *oauth.Server
-	if d.authMode != "none" {
-		// A configured key has already been rejected unless it decodes, so it
-		// arrives here as key material or not at all.
-		signingKey, _ := config.SigningKeyBytes(d.cfg.MCP.SigningKey)
-		if len(signingKey) == 0 {
-			signingKey = make([]byte, 32)
-			if _, err := rand.Read(signingKey); err != nil {
-				slog.Error("MCP signing key generation failed", "error", err)
-				os.Exit(1)
-			}
-			slog.Warn(
-				"MCP signing key auto-generated; tokens won't survive restarts. Set CETACEAN_MCP_SIGNING_KEY, or CETACEAN_MCP_SIGNING_KEY_FILE to read it from a file, for stable tokens.",
-			)
-		}
-		// Created here rather than relying on the snapshot path: token
-		// durability is not tied to storage.snapshot, so an operator who turns
-		// cache snapshots off still gets clients authorized across a restart.
-		statePath := filepath.Join(d.cfg.DataDir, "mcp-tokens.json")
-		//nolint:gosec // DataDir is operator-configured, not user input
-		if err := os.MkdirAll(d.cfg.DataDir, 0700); err != nil {
-			slog.Warn(
-				"could not create data dir; MCP tokens and approvals will not survive a restart",
-				"error", err,
-				"path", d.cfg.DataDir,
-			)
-			statePath = ""
-		}
-
-		oauthSrv = oauth.NewServer(oauth.ServerConfig{
-			Issuer:      issuer,
-			BasePath:    d.cfg.BasePath,
-			MCPResource: mcpResource,
-			MCP:         d.cfg.MCP,
-			SigningKey:  signingKey,
-			StatePath:   statePath,
-		})
-		slog.Info("MCP OAuth 2.1 authorization server enabled",
-			"issuer", issuer, "resource", mcpResource)
 	}
 
 	// A nil *promapi.Client stored in the interface would be a non-nil
@@ -827,14 +885,14 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		ACL:             d.acl,
 		Config:          d.cfg.MCP,
 		GlobalOpsLevel:  d.cfg.OperationsLevel,
-		OAuth:           oauthSrv,
+		OAuth:           tokenVerifier,
 		AuthMode:        d.authMode,
 		AuthProvider:    d.authProvider,
 		Recommendations: d.rec,
 		Prometheus:      metricsQuerier,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		AllowAnyOrigin:  d.cors.Wildcard(),
-		IconBaseURL:     issuer + d.cfg.BasePath,
+		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 	})
 	if err != nil {
@@ -859,8 +917,5 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		)
 	}
 
-	if oauthSrv == nil {
-		return mcpSrv.Handler(), nil, mcpSrv.Close
-	}
-	return mcpSrv.Handler(), oauthSrv.RegisterRoutes, mcpSrv.Close
+	return mcpSrv.Handler(), mcpSrv.Close
 }
