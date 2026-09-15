@@ -253,6 +253,8 @@ Tempting to add `scope` and let a device hold less than its user. Resisted, for 
 - What a device actually needs narrowing on is *how destructive* it may be, and there is already a
   precedent for that axis: `mcp.operations_level` caps a transport below the global tier.
 
+> **Landed**, with one correction: the setting *caps* the global tier rather than replacing it, and `mcp.operations_level` was changed to match. Replacing let a transport reach past the tier the deployment runs at, which is wrong for a credential meant to hold less than its user.
+
 **Recommendation:** mirror it as an operations-level cap for token-authenticated callers
 (`api.token.operations_level` or similar, inheriting the global by default). It composes with
 everything — `requireLevel` already enforces it, `Allow` already reports it, so the native app's
@@ -387,7 +389,7 @@ One new setting beyond the aliases, plus the tier cap from decision 5:
 |---|---|---|
 | `oauth.enabled` | **shipped as `false`** | Whether the AS runs at all, independent of `mcp.enabled` |
 | `oauth.api_tokens` | `true` | Whether the API is offered as a resource |
-| `api.token.operations_level` | inherit | Tier cap for token-authenticated callers. **Deferred:** `requireLevel` decides at construction, so this needs a request-scoped level first |
+| `oauth.token_operations_level` | inherit | Tier cap for token-authenticated callers. **Landed** as `oauth.*` rather than a new `[api]` section; `requireLevel` now resolves per request |
 
 `oauth.api_tokens = false` is the escape hatch for an operator who wants MCP tokens and nothing
 else. It must make the API resource undiscoverable as well as unusable: no root-path PRM, no entry
