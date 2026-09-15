@@ -62,3 +62,22 @@ func TestNoConfiguredResourcesMeansTheDeploymentRoot(t *testing.T) {
 		t.Errorf("identifiers = %v, want [https://cetacean.test]", got)
 	}
 }
+
+// NewServer normalizes the paths it was configured with. It takes the config by
+// value, but a struct copy shares the slice's backing array, so normalizing in
+// place rewrites the []Resource the caller still holds — and a caller reusing
+// one across two servers would never see it happen.
+func TestNewServerLeavesTheCallersResourcesAlone(t *testing.T) {
+	resources := []Resource{{Path: "sub/", Realm: "cetacean-sub"}}
+
+	NewServer(ServerConfig{
+		Issuer:     "https://cetacean.test",
+		Resources:  resources,
+		OAuth:      config.OAuthConfig{AccessTokenTTL: time.Hour},
+		SigningKey: []byte("test-signing-key-32bytes-padded!!"),
+	})
+
+	if resources[0].Path != "sub/" {
+		t.Errorf("Path = %q, want it as the caller wrote it", resources[0].Path)
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -91,6 +92,9 @@ func NewServer(cfg ServerConfig) *Server {
 	if len(cfg.Resources) == 0 {
 		cfg.Resources = []Resource{{Realm: "cetacean"}}
 	}
+	// cfg is a copy, but its slice header still points at the caller's array:
+	// normalizing in place would rewrite the resources they handed in.
+	cfg.Resources = slices.Clone(cfg.Resources)
 	for i := range cfg.Resources {
 		cfg.Resources[i].Path = config.NormalizeBasePath(cfg.Resources[i].Path)
 	}
