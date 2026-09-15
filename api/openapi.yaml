@@ -7743,11 +7743,13 @@ components:
           shepherd: "#/components/schemas/ShepherdIntegration"
           swarm-cronjob: "#/components/schemas/CronjobIntegration"
           diun: "#/components/schemas/DiunIntegration"
+          cetacean-acl: "#/components/schemas/ACLIntegration"
       oneOf:
         - $ref: "#/components/schemas/TraefikIntegration"
         - $ref: "#/components/schemas/ShepherdIntegration"
         - $ref: "#/components/schemas/CronjobIntegration"
         - $ref: "#/components/schemas/DiunIntegration"
+        - $ref: "#/components/schemas/ACLIntegration"
 
     TraefikIntegration:
       type: object
@@ -7973,3 +7975,30 @@ components:
         maxTags: 5
         includeTags: '^\d+\.\d+\.\d+$'
         platform: linux/amd64
+
+    ACLIntegration:
+      type: object
+      description: >-
+        Access control read by Cetacean from the resource's own
+        cetacean.acl.read and cetacean.acl.write labels. Present only when
+        acl.labels is enabled and the resource carries one.
+      required: [name]
+      properties:
+        name:
+          type: string
+          enum: [cetacean-acl]
+          description: Discriminator field identifying the integration type
+        read:
+          type: array
+          description: Audiences the label grants read to
+          items:
+            type: string
+        write:
+          type: array
+          description: Audiences the label grants write to; write implies read
+          items:
+            type: string
+      example:
+        name: cetacean-acl
+        read: ["group:support"]
+        write: ["group:platform", "user:alice@example.com"]
