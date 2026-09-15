@@ -282,9 +282,11 @@ func TestLoadFileRefusesUnknownKeys(t *testing.T) {
 		want string
 	}{
 		{
+			// Named exhaustively: the table carrying them is not listed too,
+			// having said nothing the keys inside it have not.
 			name: "a section that moved",
 			body: "[mcp.oauth]\ndcr_enabled = false\ncimd_enabled = false\n",
-			want: "mcp.oauth.dcr_enabled",
+			want: "read: mcp.oauth.cimd_enabled, mcp.oauth.dcr_enabled.",
 		},
 		{
 			name: "a key that moved out of its section",

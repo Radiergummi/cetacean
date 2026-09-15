@@ -32,8 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - **Breaking:** the OAuth authorization server is opt-in — set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server at all
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
-- **Breaking:** a setting the schema does not know refuses startup and is named, rather than being ignored — a config file still carrying `[mcp.oauth]` will not start, and the refusal says where each moved setting went
-- **Breaking:** startup refuses while a renamed `CETACEAN_MCP_*` or `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` variable is still set, naming every one at once
+- **Breaking:** a setting the schema does not know refuses startup and is named, rather than being ignored — a config file still carrying `[mcp.oauth]` will not start
 - **Breaking:** `auth.headers.trusted_proxies` is gone — use `server.trusted_proxies`, which headers mode already required
 - **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`, and accepts only `cert`, `headers` and `tailscale` — a listed mode authenticates `/mcp` on its own, so `oauth.enabled` can stay off
 - **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` is not read — delete it, and every client authorizes once more
