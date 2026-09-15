@@ -55,30 +55,32 @@ func (e *AuthError) Error() string { return e.Msg }
 func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error, extra ...string) {
 	status, code, detail := http.StatusForbidden, "AUT006", "authentication refused"
 
+	var named bool
+
 	if authErr, ok := errors.AsType[*AuthError](err); ok {
 		if authErr.WWWAuthenticate != "" {
 			w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
 			status, code, detail = http.StatusUnauthorized, "AUT001", "authentication required"
 		}
 		if authErr.Code != "" {
-			code, detail = authErr.Code, authErr.Msg
+			code, detail, named = authErr.Code, authErr.Msg, true
 			if authErr.Status != 0 {
 				status = authErr.Status
 			}
 		}
 	}
 
-	// A challenge the caller can act on is what separates 401 from 403, so a
-	// resource challenge added here turns a bare refusal into one. Added as its
-	// own field line rather than appended: a challenge list whose first scheme
-	// takes no parameters cannot be parsed unambiguously.
+	// A challenge the caller can act on separates 401 from 403, so one added here
+	// promotes a bare refusal — never one that named its own code, which the
+	// challenge informs but cannot answer. Added as its own field line rather
+	// than appended: a first scheme taking no parameters parses ambiguously.
 	for _, challenge := range extra {
 		if challenge == "" {
 			continue
 		}
 
 		w.Header().Add("WWW-Authenticate", challenge)
-		if status == http.StatusForbidden {
+		if !named && status == http.StatusForbidden {
 			status, code, detail = http.StatusUnauthorized, "AUT001", "authentication required"
 		}
 	}
