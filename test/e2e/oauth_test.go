@@ -729,7 +729,7 @@ type refreshReplayOutcome struct {
 
 // driveRefreshReplay runs a whole grant through rotation and then replays the
 // consumed token, reporting what happened to the family. resource is sent when
-// non-empty and omitted otherwise, which is the axis finding D-5 turns on.
+// non-empty and omitted otherwise.
 func driveRefreshReplay(
 	t *testing.T,
 	proc *sut.Process,
@@ -1731,10 +1731,9 @@ func TestMCPOAuthFlow(t *testing.T) {
 	})
 }
 
-// Drives the same replay down the one path that still reaches
-// RefreshTokenStore.Rotate: a refresh carrying no `resource` parameter, which
-// only a server with mcp.require_resource_indicator off accepts. The store's
-// detection is live, so D-5 is an ordering bug in the handler in front of it.
+// Drives the same replay from the deployment that turned the resource
+// indicator off, whose refreshes carry no `resource` at all. Detection must not
+// depend on the parameter that decides which resource a token is for.
 func TestMCPOAuthTheftDetectionWithoutTheResourceIndicator(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -1821,15 +1820,7 @@ func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 
 	dataDir := t.TempDir()
 
-	// Both processes run with mcp.require_resource_indicator off and every
-	// refresh below omits it: under D-5 a refresh carrying `resource` is
-	// answered before Rotate is consulted, so the persisted rotation history
-	// would be unobservable. Revert to the default once D-5 is fixed.
-	withoutIndicator := map[string]string{
-		"CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR": "false",
-	}
-
-	first := startOAuth(t, env, dataDir, withoutIndicator)
+	first := startOAuth(t, env, dataDir, nil)
 	discovery := discoverOAuth(t, first)
 
 	survivor, survivorID := completeFlow(t, first, discovery, oauthGranted, "e2e-restart-survivor")
@@ -1838,7 +1829,7 @@ func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 	// Consume the victim's token before the restart, so its replay afterwards
 	// is a replay of a token this process never saw issued.
 	rotatedVictim := requireTokens(
-		t, refreshGrant(t, first, discovery, victim.RefreshToken, victimID, ""),
+		t, refreshGrant(t, first, discovery, victim.RefreshToken, victimID, discovery.resource),
 	)
 
 	first.Stop()
@@ -1848,7 +1839,7 @@ func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 		t.Fatalf("no OAuth state was written to %s: %v", statePath, err)
 	}
 
-	second := startOAuth(t, env, dataDir, withoutIndicator)
+	second := startOAuth(t, env, dataDir, nil)
 
 	t.Run("the_access_token_still_verifies", func(t *testing.T) {
 		// Stable signing key, so a token minted by the previous process is
@@ -1864,7 +1855,9 @@ func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 
 	t.Run("the_refresh_token_still_rotates", func(t *testing.T) {
 		rotated := requireTokens(
-			t, refreshGrant(t, second, discovery, survivor.RefreshToken, survivorID, ""),
+			t, refreshGrant(
+				t, second, discovery, survivor.RefreshToken, survivorID, discovery.resource,
+			),
 		)
 
 		if rotated.RefreshToken == survivor.RefreshToken {
@@ -1879,14 +1872,18 @@ func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 	})
 
 	t.Run("theft_detection_survives", func(t *testing.T) {
-		replay := refreshGrant(t, second, discovery, victim.RefreshToken, victimID, "")
+		replay := refreshGrant(
+			t, second, discovery, victim.RefreshToken, victimID, discovery.resource,
+		)
 		requireOAuthError(t, replay, http.StatusBadRequest, "invalid_grant")
 
 		// The distinguishing assertion. A server that merely forgot the
 		// consumed token would reject the replay above and leave the live one
 		// working; only a server that still knows the token was *consumed*
 		// burns the family.
-		after := refreshGrant(t, second, discovery, rotatedVictim.RefreshToken, victimID, "")
+		after := refreshGrant(
+			t, second, discovery, rotatedVictim.RefreshToken, victimID, discovery.resource,
+		)
 
 		if after.status == http.StatusOK {
 			t.Error(

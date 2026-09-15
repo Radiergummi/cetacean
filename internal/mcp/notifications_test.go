@@ -244,7 +244,7 @@ func TestStartNotificationsCancelDetachesListener(t *testing.T) {
 	c := cache.New(nil)
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
-	srv, err := New(c, Options{Config: cfg})
+	srv, err := New(c, Options{Config: cfg, AuthMode: "none"})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

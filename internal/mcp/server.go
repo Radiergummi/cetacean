@@ -55,8 +55,8 @@ const (
 
 // resolveGuard settles what protects /mcp, refusing a configuration that would
 // leave it open. It lives here rather than only in main's config validation
-// because this package owns the endpoint. An empty AuthMode is the zero
-// Options: no upstream auth, which is the posture "none" describes.
+// because this package owns the endpoint. Serving unguarded takes an explicit
+// "none"; an unset AuthMode is a caller that never settled the question.
 func resolveGuard(opts Options) (guardMode, error) {
 	if opts.OAuth != nil {
 		// Both halves of the bearer guard are keyed by it: the audience a token
@@ -72,8 +72,14 @@ func resolveGuard(opts Options) (guardMode, error) {
 		return guardBearer, nil
 	}
 
-	if opts.AuthMode == "" || opts.AuthMode == "none" {
+	if opts.AuthMode == "none" {
 		return guardNone, nil
+	}
+
+	if opts.AuthMode == "" {
+		return guardNone, errors.New(
+			"mcp: no auth mode was given, so nothing settles what guards /mcp",
+		)
 	}
 
 	// No token to verify, so the upstream provider is the only thing that can

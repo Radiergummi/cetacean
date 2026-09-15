@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -238,4 +239,29 @@ func LoadFile(path string) (*fileConfig, error) {
 	}
 
 	return &fc, nil
+}
+
+// unknownKeyError reports the keys a file carries that nothing decodes. Keys
+// arrive sorted.
+func unknownKeyError(path string, keys []string) error {
+	named := make([]string, 0, len(keys))
+
+	for _, key := range keys {
+		// Undecoded() reports a table as well as the keys inside it, and the
+		// table says nothing the key it contains has not already said.
+		if slices.ContainsFunc(keys, func(other string) bool {
+			return strings.HasPrefix(other, key+".")
+		}) {
+			continue
+		}
+
+		named = append(named, key)
+	}
+
+	return fmt.Errorf(
+		"%s carries settings this release does not read: %s. Check them against "+
+			"docs/configuration.mdx",
+		path,
+		strings.Join(named, ", "),
+	)
 }

@@ -104,6 +104,7 @@ func TestMCPEndToEnd(t *testing.T) {
 	srv, err := New(c, Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
+		AuthMode:       "none",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)

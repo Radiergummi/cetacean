@@ -65,10 +65,6 @@ type Config struct {
 // config file, and hardcoded defaults (in that precedence order).
 // Pass nil for fc and/or flags to skip those layers.
 func Load(fc *fileConfig, flags *Flags) (*Config, error) {
-	if err := checkRemovedEnv(); err != nil {
-		return nil, err
-	}
-
 	if flags == nil {
 		flags = &Flags{}
 	}

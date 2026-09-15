@@ -23,6 +23,7 @@ func newResourceTestServer(t *testing.T, c *cache.Cache, opts ...func(*Options))
 	o := Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
+		AuthMode:       "none",
 	}
 	for _, fn := range opts {
 		fn(&o)
