@@ -17,6 +17,12 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
+// handlersAt stands in for a deployment at one tier, with no separate ceiling
+// for tokens: these cases are about the tier itself.
+func handlersAt(level config.OperationsLevel) *Handlers {
+	return &Handlers{operationsLevel: level, tokenOperationsLevel: level}
+}
+
 func TestRequireLevel_Allowed(t *testing.T) {
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +30,7 @@ func TestRequireLevel_Allowed(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := requireLevel(config.OpsOperational, config.OpsImpactful)(inner)
+	handler := handlersAt(config.OpsImpactful).requireLevel(config.OpsOperational)(inner)
 	req := httptest.NewRequest("PUT", "/services/abc/scale", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -43,7 +49,7 @@ func TestRequireLevel_Denied(t *testing.T) {
 		called = true
 	})
 
-	handler := requireLevel(config.OpsImpactful, config.OpsOperational)(inner)
+	handler := handlersAt(config.OpsOperational).requireLevel(config.OpsImpactful)(inner)
 	req := httptest.NewRequest("PUT", "/nodes/abc/availability", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -70,7 +76,7 @@ func TestRequireLevel_ReadOnly(t *testing.T) {
 		called = true
 	})
 
-	handler := requireLevel(config.OpsOperational, config.OpsReadOnly)(inner)
+	handler := handlersAt(config.OpsReadOnly).requireLevel(config.OpsOperational)(inner)
 	req := httptest.NewRequest("PUT", "/services/abc/scale", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -90,7 +96,7 @@ func TestRequireLevel_ExactMatch(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := requireLevel(config.OpsImpactful, config.OpsImpactful)(inner)
+	handler := handlersAt(config.OpsImpactful).requireLevel(config.OpsImpactful)(inner)
 	req := httptest.NewRequest("PUT", "/nodes/abc/availability", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -118,10 +124,7 @@ func TestRequireLevel_Integration_ScaleBlockedAtLevel0(t *testing.T) {
 		withWriteClient(&mockWriteClient{}),
 		withOpsLevel(config.OpsReadOnly),
 	)
-	handler := requireLevel(
-		config.OpsOperational,
-		config.OpsReadOnly,
-	)(
+	handler := handlersAt(config.OpsReadOnly).requireLevel(config.OpsOperational)(
 		http.HandlerFunc(h.HandleScaleService),
 	)
 
@@ -162,10 +165,7 @@ func TestRequireLevel_Integration_ScaleAllowedAtLevel1(t *testing.T) {
 		withWriteClient(mock),
 		withOpsLevel(config.OpsOperational),
 	)
-	handler := requireLevel(
-		config.OpsOperational,
-		config.OpsOperational,
-	)(
+	handler := handlersAt(config.OpsOperational).requireLevel(config.OpsOperational)(
 		http.HandlerFunc(h.HandleScaleService),
 	)
 

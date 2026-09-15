@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /-/health` reports whether Cetacean is still tracking the cluster, and `/-/metrics` says the same for alerting. The dashboard marks itself stale instead of showing a frozen cluster as a live one
 - `POST /-/resync` and `GET /swarm/plugins` appear in the API specification
 - The REST API accepts bearer tokens the authorization server issues, so a script or app can authenticate without a browser session — `oauth.api_tokens` turns it off
+- `oauth.token_operations_level` holds a token-authenticated caller below the tier the deployment runs at, so a token left on a device can read the cluster without changing it
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 - A stack's page and a service's Traefik labels are each drawn as a graph
 
@@ -39,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`, and accepts only `cert`, `headers` and `tailscale` — a listed mode authenticates `/mcp` on its own, so `oauth.enabled` can stay off
 - **Breaking:** `/mcp`'s protected resource metadata moved to `/.well-known/oauth-protected-resource/mcp`; the root document describes the API, whose tokens do not open `/mcp`. A client following `resource_metadata` from the 401 is unaffected
 - **Breaking:** a token request sending no `resource` parameter binds to the web API, not `/mcp`. An MCP client that cannot send one needs `oauth.api_tokens` off to keep working
+- **Breaking:** `mcp.operations_level` narrows `server.operations_level` instead of replacing it. Set above the global tier it now grants nothing; set below, it caps as before
 - **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` is not read — delete it, and every client authorizes once more
 - **Breaking:** the `refresh_token` grant at `/oauth/token` requires `client_id`; a request without it is refused with `invalid_request`
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy

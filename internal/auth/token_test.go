@@ -339,3 +339,22 @@ func (p *schemeProvider) Authenticate(
 }
 
 func (p *schemeProvider) RegisterRoutes(_ *http.ServeMux) {}
+
+// The middleware puts one of two kinds of identity in the context, and what a
+// caller may do depends on which: a token is a credential left on a device.
+func TestAnIdentityKnowsWhetherATokenCarriedIt(t *testing.T) {
+	token := &Identity{Subject: "alice", Provider: ProviderToken}
+	if !token.FromToken() {
+		t.Error("an identity from a token did not say so")
+	}
+
+	session := &Identity{Subject: "alice", Provider: "oidc"}
+	if session.FromToken() {
+		t.Error("an identity from the provider claimed a token carried it")
+	}
+
+	var absent *Identity
+	if absent.FromToken() {
+		t.Error("no identity at all claimed a token carried it")
+	}
+}

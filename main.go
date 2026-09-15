@@ -437,6 +437,10 @@ func main() {
 		aclEval,
 	)
 
+	handlers.SetTokenOperationsLevel(
+		cfg.OAuth.EffectiveTokenOperationsLevel(cfg.OperationsLevel),
+	)
+
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
 	if err != nil {

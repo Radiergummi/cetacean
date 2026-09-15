@@ -205,29 +205,30 @@ type DockerPluginClient interface {
 }
 
 type Handlers struct {
-	cache               *cache.Cache
-	broadcaster         *sse.Broadcaster
-	dockerClient        DockerLogStreamer
-	systemClient        DockerSystemClient
-	serviceLifecycle    ServiceLifecycleWriter
-	serviceSpec         ServiceSpecWriter
-	serviceAttachment   ServiceAttachmentWriter
-	nodeWriter          NodeWriter
-	configWriter        ConfigWriter
-	secretWriter        SecretWriter
-	resourceRemover     ResourceRemover
-	pluginClient        DockerPluginClient
-	ready               <-chan struct{}
-	liveness            LivenessReporter
-	promClient          *prometheus.Client
-	operationsLevel     config.OperationsLevel
-	recEngine           *recommendations.Engine
-	acl                 *acl.Evaluator
-	refresher           ResourceRefresher
-	localNodeMu         sync.Mutex
-	localNodeID         string
-	localNodeDone       bool
-	localNodeRetryAfter *time.Time
+	cache                *cache.Cache
+	broadcaster          *sse.Broadcaster
+	dockerClient         DockerLogStreamer
+	systemClient         DockerSystemClient
+	serviceLifecycle     ServiceLifecycleWriter
+	serviceSpec          ServiceSpecWriter
+	serviceAttachment    ServiceAttachmentWriter
+	nodeWriter           NodeWriter
+	configWriter         ConfigWriter
+	secretWriter         SecretWriter
+	resourceRemover      ResourceRemover
+	pluginClient         DockerPluginClient
+	ready                <-chan struct{}
+	liveness             LivenessReporter
+	promClient           *prometheus.Client
+	operationsLevel      config.OperationsLevel
+	tokenOperationsLevel config.OperationsLevel
+	recEngine            *recommendations.Engine
+	acl                  *acl.Evaluator
+	refresher            ResourceRefresher
+	localNodeMu          sync.Mutex
+	localNodeID          string
+	localNodeDone        bool
+	localNodeRetryAfter  *time.Time
 
 	activeLogSSEConns  atomic.Int64
 	metricsStreamCount atomic.Int32
@@ -254,27 +255,37 @@ func NewHandlers(
 	aclEval *acl.Evaluator,
 ) *Handlers {
 	return &Handlers{
-		cache:              c,
-		broadcaster:        b,
-		dockerClient:       dc,
-		systemClient:       sc,
-		serviceLifecycle:   wc,
-		serviceSpec:        wc,
-		serviceAttachment:  wc,
-		nodeWriter:         wc,
-		configWriter:       wc,
-		secretWriter:       wc,
-		resourceRemover:    wc,
-		pluginClient:       pc,
-		ready:              ready,
-		promClient:         promClient,
-		operationsLevel:    operationsLevel,
-		recEngine:          recEngine,
-		acl:                aclEval,
-		dockerVersionCache: newDockerVersionCache(),
-		topologyDocs:       newProjectionCache(),
-		stackDocs:          newProjectionCache(),
+		cache:             c,
+		broadcaster:       b,
+		dockerClient:      dc,
+		systemClient:      sc,
+		serviceLifecycle:  wc,
+		serviceSpec:       wc,
+		serviceAttachment: wc,
+		nodeWriter:        wc,
+		configWriter:      wc,
+		secretWriter:      wc,
+		resourceRemover:   wc,
+		pluginClient:      pc,
+		ready:             ready,
+		promClient:        promClient,
+		operationsLevel:   operationsLevel,
+
+		// Unset, a token is the person it speaks for. Only a deployment that
+		// says otherwise holds it lower.
+		tokenOperationsLevel: operationsLevel,
+		recEngine:            recEngine,
+		acl:                  aclEval,
+		dockerVersionCache:   newDockerVersionCache(),
+		topologyDocs:         newProjectionCache(),
+		stackDocs:            newProjectionCache(),
 	}
+}
+
+// SetTokenOperationsLevel holds a token-authenticated caller below the tier the
+// deployment runs at. Already narrowed by the global level when it arrives.
+func (h *Handlers) SetTokenOperationsLevel(level config.OperationsLevel) {
+	h.tokenOperationsLevel = level
 }
 
 // requireAnyGrant checks that the identity has at least one grant.

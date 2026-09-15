@@ -93,6 +93,7 @@ type fileOAuth struct {
 	RefreshTokenTTL          *string `toml:"refresh_token_ttl"`
 	ConsentTTL               *string `toml:"consent_ttl"`
 	APITokens                *bool   `toml:"api_tokens"`
+	TokenOperationsLevel     *int    `toml:"token_operations_level"`
 	RequireResourceIndicator *bool   `toml:"require_resource_indicator"`
 	DCREnabled               *bool   `toml:"dcr_enabled"`
 	DCRRateLimit             *int    `toml:"dcr_rate_limit"`

@@ -275,6 +275,10 @@ consent screen, so one would only sit unused.
   Offer the web API as a protected resource, so a client can obtain a token for it and authenticate with `Authorization: Bearer` instead of a browser session. The API and `/mcp` are separate resources: a token for one is refused by the other, whichever path it sits under. Turning this off makes the API resource undiscoverable as well as unusable — there is no metadata document for it, and the authorize endpoint refuses to mint one.
 </ConfigParam>
 
+<ConfigParam name="oauth.token_operations_level" env="CETACEAN_OAUTH_TOKEN_OPERATIONS_LEVEL">
+  What a caller holding a token may do: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset, and narrows it rather than replacing it — a token never reaches past the tier the deployment itself runs at. Set it lower to leave a token on a device that can read the cluster but not change it.
+</ConfigParam>
+
 <ConfigParam name="oauth.require_resource_indicator" env="CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR" default="true">
   Require the RFC 8707 `resource` parameter on authorize and token requests, which stops a token issued for Cetacean being replayed against another server and is how a client says which resource it wants. Turn it off only for a client that cannot send the parameter; a request without one is then bound to the web API, or to `/mcp` where [`oauth.api_tokens`][oauth.api_tokens] is off.
 </ConfigParam>
@@ -308,7 +312,7 @@ default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token
 </ConfigParam>
 
 <ConfigParam name="mcp.operations_level" env="CETACEAN_MCP_OPERATIONS_LEVEL">
-  Which tools MCP clients may call: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset. Set it lower to allow writes from the dashboard that agents cannot make.
+  Which tools MCP clients may call: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset, and narrows it rather than replacing it — a value above the global one grants nothing. Set it lower to allow writes from the dashboard that agents cannot make.
 </ConfigParam>
 
 <ConfigParam name="mcp.max_concurrent_tasks" env="CETACEAN_MCP_MAX_CONCURRENT_TASKS" default="32">
@@ -444,6 +448,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [mcp.operations_level]: #mcp.operations_level
 [monitoring]: monitoring
 [oauth.api_tokens]: #oauth.api_tokens
+[oauth.token_operations_level]: #oauth.token_operations_level
 [oauth.enabled]: #oauth.enabled
 [oauth.issuer]: #oauth.issuer
 [oauth.refresh_token_ttl]: #oauth.refresh_token_ttl

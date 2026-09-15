@@ -200,9 +200,9 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 
 	mux := &routeRecorder{mux: http.NewServeMux()}
 
-	tier1 := requireLevel(config.OpsOperational, h.operationsLevel)
-	tier2 := requireLevel(config.OpsConfiguration, h.operationsLevel)
-	tier3 := requireLevel(config.OpsImpactful, h.operationsLevel)
+	tier1 := h.requireLevel(config.OpsOperational)
+	tier2 := h.requireLevel(config.OpsConfiguration)
+	tier3 := h.requireLevel(config.OpsImpactful)
 
 	// ACL wrappers for write endpoints.
 	svcACL := h.requireWriteACL(
