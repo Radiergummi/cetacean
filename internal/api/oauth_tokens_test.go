@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -252,6 +253,55 @@ func TestATokenCeilingNarrowsTheAllowItReports(t *testing.T) {
 
 	if !strings.Contains(viaToken, "GET") {
 		t.Errorf("Allow over a read-only token = %q, want GET", viaToken)
+	}
+}
+
+// What /profile says a token caller is. The value is wire-visible to exactly
+// the clients this credential exists for, and it changed while nothing but the
+// issuing package looked at it.
+func TestProfileNamesTheCredentialATokenCallerUsed(t *testing.T) {
+	identity := &auth.Identity{
+		Subject:     "a3f1c8e2-7b04-4d19-9e55-2c6f0b8a41d7",
+		Email:       "alice@example.com",
+		DisplayName: "Alice",
+	}
+
+	rec := getWithToken(
+		t,
+		tokenRouter(t),
+		"/profile.json",
+		tokenFor(t, "", identity),
+	)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	var body struct {
+		Provider    string `json:"provider"`
+		Subject     string `json:"subject"`
+		Email       string `json:"email"`
+		DisplayName string `json:"displayName"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode profile: %v", err)
+	}
+
+	// Spelled out rather than compared against the constant: the constant is
+	// what produces the value, so the two would move together and pin nothing.
+	if body.Provider != "oauth" {
+		t.Errorf("provider = %q, want %q", body.Provider, "oauth")
+	}
+
+	// The same fields a session reports: the claims carry them so a grant
+	// written against an address reaches a token too.
+	if body.Subject != identity.Subject {
+		t.Errorf("subject = %q, want %q", body.Subject, identity.Subject)
+	}
+	if body.Email != identity.Email {
+		t.Errorf("email = %q, want %q", body.Email, identity.Email)
+	}
+	if body.DisplayName != identity.DisplayName {
+		t.Errorf("displayName = %q, want %q", body.DisplayName, identity.DisplayName)
 	}
 }
 

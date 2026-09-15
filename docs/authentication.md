@@ -76,13 +76,13 @@ These paths skip authentication in every mode:
 
 | Path                                              | Reason                                                   |
 | ------------------------------------------------- | -------------------------------------------------------- |
-| `/-/*`                                            | Health, readiness, metrics, SBOM and license endpoints   |
+| `/-/*`, except `/-/resync`                        | Health, readiness, metrics, SBOM and licenses. Resync sweeps the Docker API, so it authenticates |
 | `/api`, `/api/*`                                  | API documentation and the JSON-LD context                |
 | `/assets/*`                                       | Dashboard static assets                                  |
 | `/auth`, `/auth/*`                                | Login, callback, logout and `whoami`                     |
 | `/mcp`                                            | The [MCP server][mcp] guards itself — see below          |
 | `/.well-known/*`                                  | OAuth discovery documents, unauthenticated by spec       |
-| `/oauth/token`, `/oauth/revoke`, `/oauth/register` | Carry their own credentials in the request body          |
+| `/oauth/token`, `/oauth/revoke`, `/oauth/register`, `/oauth/jwks` | The grants carry their own proof in the body, and the key set is public |
 
 What guards `/mcp` depends on the configuration: with [`oauth.enabled`][oauth.enabled] the MCP server verifies
 a bearer token it issued; with the authorization server off, the active mode must be listed in
