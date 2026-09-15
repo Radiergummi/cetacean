@@ -1170,28 +1170,6 @@ func (s *Server) UnauthorizedHeader(resource, errorCode string) string {
 	return challenge + `, error=` + httpQuotedString(errorCode)
 }
 
-// WriteUnauthorized writes a bare 401 carrying that header, for a resource
-// server whose protocol has no body to put an error in.
-func (s *Server) WriteUnauthorized(w http.ResponseWriter, resource, errorCode string) {
-	w.Header().Set("WWW-Authenticate", s.UnauthorizedHeader(resource, errorCode))
-	w.WriteHeader(http.StatusUnauthorized)
-}
-
-// Foreign reports whether err means the presented token was not issued by this
-// server, so a caller with an upstream auth provider behind it should fall
-// through rather than refuse.
-//
-// The discriminator is the issuer, not the outcome of verification. A token
-// under another `iss`, and one that is not a JWT at all — which is what an
-// opaque provider token looks like — belong to someone else. Every other error
-// is a token claiming to be ours that failed to prove it: a bad signature, an
-// expiry, an audience for a different resource. Those are final, because falling
-// through on them would let a forged token reach the provider and be judged by
-// weaker evidence.
-func (s *Server) Foreign(err error) bool {
-	return errors.Is(err, ErrIssuerMismatch) || errors.Is(err, ErrMalformedToken)
-}
-
 // httpQuotedString wraps s in an RFC 9110 §5.6.4 quoted-string: " and \ become
 // quoted-pair, and a byte qdtext excludes — the controls and DEL — is dropped,
 // because quoted-pair cannot carry one either. Go's %q is close but wrong by
