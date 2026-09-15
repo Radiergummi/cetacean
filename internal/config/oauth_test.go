@@ -631,3 +631,35 @@ func TestSigningKeyBytes(t *testing.T) {
 		})
 	}
 }
+
+// A token is a credential its holder can leave on a device, so a deployment
+// may want it to reach less than the person it speaks for.
+func TestOAuthTokenOperationsLevel(t *testing.T) {
+	unset := OAuthConfig{TokenOperationsLevel: OpsInherit}
+	if got := unset.EffectiveTokenOperationsLevel(OpsConfiguration); got != OpsConfiguration {
+		t.Errorf("unset should fall back to global, got %v", got)
+	}
+
+	lower := OAuthConfig{TokenOperationsLevel: OpsReadOnly}
+	if got := lower.EffectiveTokenOperationsLevel(OpsImpactful); got != OpsReadOnly {
+		t.Errorf("a lower level should narrow the global, got %v", got)
+	}
+
+	higher := OAuthConfig{TokenOperationsLevel: OpsImpactful}
+	if got := higher.EffectiveTokenOperationsLevel(OpsOperational); got != OpsOperational {
+		t.Errorf("a higher level should not raise the global, got %v", got)
+	}
+}
+
+func TestOAuthTokenOperationsLevelFromEnv(t *testing.T) {
+	t.Setenv("CETACEAN_OAUTH_TOKEN_OPERATIONS_LEVEL", "0")
+
+	cfg, err := loadOAuth(nil)
+	if err != nil {
+		t.Fatalf("loadOAuth: %v", err)
+	}
+
+	if cfg.TokenOperationsLevel != OpsReadOnly {
+		t.Errorf("TokenOperationsLevel = %v, want 0", cfg.TokenOperationsLevel)
+	}
+}

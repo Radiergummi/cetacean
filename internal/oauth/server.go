@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -31,14 +32,10 @@ type ServerConfig struct {
 	// BasePath is an optional URL prefix, e.g. "" or "/cetacean".
 	BasePath string
 
-	// Resource is the canonical URL of the protected resource this server issues
-	// tokens for — both the PRM resource identifier and the JWT audience.
-	Resource string
-
-	// ResourceMounted says whether anything actually serves Resource. The server
-	// may run ahead of it, and metadata naming a path that 404s sends a client
-	// following discovery nowhere.
-	ResourceMounted bool
+	// Resources are the protected resources this server issues tokens for.
+	// The first is the default a token request carrying no RFC 8707 resource
+	// indicator resolves to. Empty means one resource at the deployment root.
+	Resources []Resource
 
 	// OAuth holds the server's own settings: TTLs, DCR knobs, CIMD and the
 	// require_resource_indicator flag.
@@ -68,6 +65,7 @@ type Server struct {
 	consent       *ConsentStore
 	clients       *ClientRegistry // nil when DCREnabled is false
 	keys          *keyMaterial    // nil when no root was configured
+	resources     resourceSet
 }
 
 // issuerID is the external base URL clients discover this authorization server
@@ -83,6 +81,19 @@ func (c ServerConfig) issuerID() string {
 // NewServer constructs a fully wired Server from cfg. No separate init step
 // is required; call RegisterRoutes to attach handlers to a mux.
 func NewServer(cfg ServerConfig) *Server {
+	// A server configured with no resource protects the deployment root, which is
+	// what a single unnamed protected resource is. Defaulted here so every reader
+	// downstream can take the set as given.
+	if len(cfg.Resources) == 0 {
+		cfg.Resources = []Resource{{Realm: "cetacean"}}
+	}
+	// cfg is a copy, but its slice header still points at the caller's array:
+	// normalizing in place would rewrite the resources they handed in.
+	cfg.Resources = slices.Clone(cfg.Resources)
+	for i := range cfg.Resources {
+		cfg.Resources[i].Path = config.NormalizeBasePath(cfg.Resources[i].Path)
+	}
+
 	// Without a root, issuing and verifying answer ErrMissingKey.
 	km, err := deriveKeys(cfg.SigningKey)
 	if err != nil {
@@ -91,9 +102,9 @@ func NewServer(cfg ServerConfig) *Server {
 
 	var issuer *TokenIssuer
 	if km != nil {
-		issuer = newTokenIssuer(km, cfg.issuerID(), cfg.Resource)
+		issuer = newTokenIssuer(km, cfg.issuerID())
 	} else {
-		issuer = &TokenIssuer{Issuer: cfg.issuerID(), Audience: cfg.Resource}
+		issuer = &TokenIssuer{Issuer: cfg.issuerID()}
 	}
 
 	cimd := &CIMDFetcher{
@@ -150,17 +161,38 @@ func NewServer(cfg ServerConfig) *Server {
 		consent:       consent,
 		clients:       clients,
 		keys:          km,
+		resources:     newResourceSet(cfg),
 	}
 }
 
 // RegisterRoutes attaches all OAuth endpoints to mux under basePath.
 func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
-	mux.HandleFunc("GET "+basePath+"/.well-known/oauth-authorization-server", s.HandleMetadata)
+	// RFC 8414 §3 inserts the well-known segment after the authority, like RFC 9728
+	// §3.1, so the AS document gets both spellings for the same reason the resource
+	// documents do. OIDC Discovery is a different rule — it appends its suffix to
+	// the issuer — so openid-configuration keeps the mounted form only.
+	const asMetadataPath = "/.well-known/oauth-authorization-server"
+
+	mux.HandleFunc("GET "+asMetadataPath+s.cfg.BasePath, s.HandleMetadata)
+	if mounted := basePath + asMetadataPath; mounted != asMetadataPath+s.cfg.BasePath {
+		mux.HandleFunc("GET "+mounted, s.HandleMetadata)
+	}
+
 	mux.HandleFunc("GET "+basePath+"/.well-known/openid-configuration", s.HandleMetadata)
-	mux.HandleFunc(
-		"GET "+basePath+"/.well-known/oauth-protected-resource",
-		s.HandleProtectedResourceMetadata,
-	)
+	for _, resource := range s.cfg.Resources {
+		handler := s.protectedResourceMetadataHandler(resource)
+
+		// Two locations, one document. The first is what RFC 9728 §3.1 derives
+		// from the identifier; the second is beneath this deployment's prefix,
+		// where a proxy that forwards only that prefix can reach it. They are the
+		// same path when there is no base path, so only register once.
+		conformant := resource.metadataPath(s.cfg.BasePath)
+		mux.HandleFunc("GET "+conformant, handler)
+
+		if mounted := resource.mountedMetadataPath(basePath); mounted != conformant {
+			mux.HandleFunc("GET "+mounted, handler)
+		}
+	}
 	mux.HandleFunc("GET "+basePath+jwksPath, s.HandleJWKS)
 	mux.HandleFunc("GET "+basePath+"/oauth/authorize", s.HandleAuthorize)
 	mux.HandleFunc("POST "+basePath+"/oauth/authorize", s.HandleAuthorize)
@@ -193,6 +225,17 @@ type asMetadata struct {
 	// the document never points at a path the server will refuse.
 	ClientIDMetadataDocumentSupported bool `json:"client_id_metadata_document_supported,omitempty"`
 
+	// RFC 9207 §2.4 makes a client's iss check conditional on the server saying it
+	// sends one. Without this the mix-up defence every authorization response
+	// already carries is invisible, so a conformant client never enforces it.
+	AuthorizationResponseIssParameterSupported bool `json:"authorization_response_iss_parameter_supported"`
+
+	// Empty, and present rather than omitted: RFC 8414 §2 recommends the field,
+	// and an absent one reads as "unspecified" where an empty array says there are
+	// none to ask for. A client that consults it then sends no scope at all rather
+	// than guessing at one this server would ignore.
+	ScopesSupported []string `json:"scopes_supported"`
+
 	CodeChallengeMethodsSupported          []string `json:"code_challenge_methods_supported"`
 	GrantTypesSupported                    []string `json:"grant_types_supported"`
 	ResponseTypesSupported                 []string `json:"response_types_supported"`
@@ -219,10 +262,14 @@ func writeDiscoveryDoc(w http.ResponseWriter, doc any, contentType string) {
 func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 	base := s.cfg.issuerID()
 	doc := asMetadata{
-		Issuer:                                 base,
-		AuthorizationEndpoint:                  base + "/oauth/authorize",
-		TokenEndpoint:                          base + "/oauth/token",
-		RevocationEndpoint:                     base + "/oauth/revoke",
+		Issuer:                base,
+		AuthorizationEndpoint: base + "/oauth/authorize",
+		TokenEndpoint:         base + "/oauth/token",
+		RevocationEndpoint:    base + "/oauth/revoke",
+		AuthorizationResponseIssParameterSupported: true,
+
+		ScopesSupported: []string{},
+
 		CodeChallengeMethodsSupported:          []string{"S256"},
 		GrantTypesSupported:                    []string{"authorization_code", "refresh_token"},
 		ResponseTypesSupported:                 []string{"code"},
@@ -282,6 +329,11 @@ func (s *Server) HandleToken(w http.ResponseWriter, r *http.Request) {
 		s.handleAuthorizationCodeGrant(w, r)
 	case "refresh_token":
 		s.handleRefreshTokenGrant(w, r)
+	case "":
+		// A missing parameter, not an unknown value: only a grant type that is
+		// present and unsupported gets unsupported_grant_type.
+		writeTokenError(w, http.StatusBadRequest, "invalid_request",
+			"grant_type is required")
 	default:
 		writeTokenError(w, http.StatusBadRequest, "unsupported_grant_type",
 			"grant_type must be authorization_code or refresh_token")
@@ -296,15 +348,20 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 	redirectURI := r.FormValue("redirect_uri")   // #nosec G120 -- bounded in HandleToken
 	clientID := r.FormValue("client_id")         // #nosec G120 -- bounded in HandleToken
 	codeVerifier := r.FormValue("code_verifier") // #nosec G120 -- bounded in HandleToken
-	resourceForm := r.FormValue("resource")      // #nosec G120 -- bounded in HandleToken
+	resourceForm := r.PostFormValue("resource")  // #nosec G120 -- bounded in HandleToken
+	resourceAll := r.PostForm["resource"]        // RFC 8707 §2 allows a repeat
 
 	// RFC 8707 resource indicator validation.
-	if _, err := ValidateResourceIndicator(
-		resourceForm,
-		s.cfg.Resource,
+	if _, err := s.resources.effectiveResource(
+		resourceAll,
 		s.cfg.OAuth.RequireResourceIndicator,
 	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
+		return
+	}
+
+	if code == "" {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request", "code is required")
 		return
 	}
 
@@ -332,8 +389,11 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Match resource.
-	if resourceForm != "" && resourceForm != codeData.Resource {
+	// Match resource, on the spelling a grant binds to rather than whichever
+	// equivalent one the client sent.
+	if resourceForm != "" &&
+		s.resources.canonicalSpelling(resourceForm) !=
+			s.resources.canonicalSpelling(codeData.Resource) {
 		writeTokenError(
 			w,
 			http.StatusBadRequest,
@@ -364,10 +424,12 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 
 	// Issue access token.
 	accessToken, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
-		Subject:  codeData.Subject,
-		Groups:   codeData.Groups,
-		ClientID: codeData.ClientID,
-	}, s.cfg.OAuth.AccessTokenTTL)
+		Subject:     codeData.Subject,
+		Email:       codeData.Email,
+		DisplayName: codeData.DisplayName,
+		Groups:      codeData.Groups,
+		ClientID:    codeData.ClientID,
+	}, codeData.Resource, s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
 		writeTokenError(
 			w,
@@ -380,12 +442,18 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 
 	// Issue refresh token.
 	refreshToken := s.refreshTokens.Issue(RefreshTokenData{
-		Subject:  codeData.Subject,
-		Groups:   codeData.Groups,
-		ClientID: codeData.ClientID,
-		Resource: codeData.Resource,
+		Subject:     codeData.Subject,
+		Email:       codeData.Email,
+		DisplayName: codeData.DisplayName,
+		Groups:      codeData.Groups,
+		ClientID:    codeData.ClientID,
+		Resource:    codeData.Resource,
 	}, s.cfg.OAuth.RefreshTokenTTL)
 
+	// No scope in the response, and none read from the request. RFC 6749 §5.1
+	// requires the parameter only when the granted scope differs from the
+	// requested one; this server defines none, so both reduce to the empty set.
+	// Adding a scope means revisiting that, and scopes_supported with it.
 	writeTokenResponse(w, tokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
@@ -398,7 +466,8 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// Body bounded by HandleToken; comments suppress gosec G120's
 	// per-function analysis.
 	refreshTokenRaw := r.FormValue("refresh_token") // #nosec G120 -- bounded in HandleToken
-	resourceForm := r.FormValue("resource")         // #nosec G120 -- bounded in HandleToken
+	resourceForm := r.PostFormValue("resource")     // #nosec G120 -- bounded in HandleToken
+	resourceAll := r.PostForm["resource"]           // RFC 8707 §2 allows a repeat
 	clientID := r.FormValue("client_id")            // #nosec G120 -- bounded in HandleToken
 
 	// RFC 6749 §6 makes client_id REQUIRED of a client that does not
@@ -415,21 +484,30 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// (which is almost always a client typo) should not burn the grant family.
 	// Theft detection still works because a replay of an already-rotated token
 	// triggers Rotate's Theft branch on its second presentation.
-	if _, err := ValidateResourceIndicator(
-		resourceForm,
-		s.cfg.Resource,
+	if _, err := s.resources.effectiveResource(
+		resourceAll,
 		s.cfg.OAuth.RequireResourceIndicator,
 	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
 		return
 	}
 
+	// REQUIRED by RFC 6749 §6, and absent is a malformed request rather than a
+	// grant that failed — the same reading client_id gets above.
+	if refreshTokenRaw == "" {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request", "refresh_token is required")
+
+		return
+	}
+
 	// Confirm the bound resource and client match BEFORE rotation, so a client
 	// typo doesn't revoke the family. A token that does not validate falls
 	// through to Rotate, whose theft branch is the only thing that burns a
-	// replayed family.
+	// replayed family — refusing here instead would leave a replay undetected.
 	if bound, ok := s.refreshTokens.Validate(refreshTokenRaw); ok {
-		if resourceForm != "" && resourceForm != bound.Resource {
+		if resourceForm != "" &&
+			s.resources.canonicalSpelling(resourceForm) !=
+				s.resources.canonicalSpelling(bound.Resource) {
 			writeTokenError(
 				w,
 				http.StatusBadRequest,
@@ -472,10 +550,12 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 
 	// Issue new access token.
 	accessToken, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
-		Subject:  result.Data.Subject,
-		Groups:   result.Data.Groups,
-		ClientID: result.Data.ClientID,
-	}, s.cfg.OAuth.AccessTokenTTL)
+		Subject:     result.Data.Subject,
+		Email:       result.Data.Email,
+		DisplayName: result.Data.DisplayName,
+		Groups:      result.Data.Groups,
+		ClientID:    result.Data.ClientID,
+	}, result.Data.Resource, s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
 		writeTokenError(
 			w,
@@ -578,6 +658,24 @@ func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 // Authorize endpoint
 // ---------------------------------------------------------------------------
 
+// consentRefusal returns the status and message for an identity that may not
+// found a new authorization grant, or 0 when it may.
+//
+// The two refusals are different answers. No identity is 401 and carries a
+// challenge, per RFC 9110 §15.5.2. A token this server issued is 403: the request
+// was authenticated, and repeating it with the same credential will not help,
+// which is the one thing a 401 promises.
+func consentRefusal(identity *auth.Identity) (int, string) {
+	switch {
+	case identity == nil:
+		return http.StatusUnauthorized, "authentication required"
+	case identity.Provider == ProviderName:
+		return http.StatusForbidden, "an access token cannot authorize a client; sign in first"
+	default:
+		return 0, ""
+	}
+}
+
 // HandleAuthorize handles GET and POST {base}/oauth/authorize.
 func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -655,6 +753,8 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 		data.RememberedFor = humanizeDuration(s.consent.TTL())
 	}
 
+	data.ResourcePath = s.resources.resourceFor(data.ResourceID).Path
+
 	data.CSRFToken, _ = issueCSRFNonce(
 		w,
 		s.csrfKey(),
@@ -693,6 +793,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	codeChallengeMethod := q.Get("code_challenge_method")
 	state := q.Get("state")
 	resourceParam := q.Get("resource")
+	resourceAll := q["resource"]
 
 	// Resolve client metadata and validate redirect_uri BEFORE any redirect.
 	meta, verified, errMsg := s.resolveClientMeta(r, clientID)
@@ -726,9 +827,8 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	effectiveResource, err := ValidateResourceIndicator(
-		resourceParam,
-		s.cfg.Resource,
+	effectiveResource, err := s.resources.effectiveResource(
+		resourceAll,
 		s.cfg.OAuth.RequireResourceIndicator,
 	)
 	if err != nil {
@@ -736,10 +836,10 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Require identity from auth middleware.
+	// Require an identity the upstream provider established.
 	identity := auth.IdentityFromContext(r.Context())
-	if identity == nil {
-		renderErrorPage(w, http.StatusUnauthorized, "authentication required")
+	if status, refusal := consentRefusal(identity); status != 0 {
+		s.renderConsentRefusal(w, status, refusal)
 		return
 	}
 
@@ -779,6 +879,8 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 			CodeChallenge: codeChallenge,
 			Resource:      effectiveResource,
 			Subject:       identity.Subject,
+			Email:         identity.Email,
+			DisplayName:   identity.DisplayName,
 			Groups:        identity.Groups,
 		}, state)
 
@@ -801,6 +903,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		// the form must resubmit what the client sent, not the resolved
 		// default.
 		Resource:    resourceParam,
+		ResourceID:  effectiveResource,
 		Fingerprint: fingerprint,
 	})
 }
@@ -817,7 +920,8 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	state := r.FormValue("state")
 	codeChallenge := r.FormValue("code_challenge")
 	codeChallengeMethod := r.FormValue("code_challenge_method")
-	resourceParam := r.FormValue("resource")
+	resourceParam := r.PostFormValue("resource")
+	resourceAll := r.PostForm["resource"]
 	decision := r.FormValue("decision")
 	responseType := r.FormValue("response_type")
 
@@ -853,11 +957,11 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Require identity.
+	// Require an identity the upstream provider established.
 	identity := auth.IdentityFromContext(r.Context())
-	if identity == nil {
+	if status, refusal := consentRefusal(identity); status != 0 {
 		clearCSRFCookie(w, secure)
-		renderErrorPage(w, http.StatusUnauthorized, "authentication required")
+		s.renderConsentRefusal(w, status, refusal)
 		return
 	}
 
@@ -885,9 +989,8 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	effectiveResource, err := ValidateResourceIndicator(
-		resourceParam,
-		s.cfg.Resource,
+	effectiveResource, err := s.resources.effectiveResource(
+		resourceAll,
 		s.cfg.OAuth.RequireResourceIndicator,
 	)
 	if err != nil {
@@ -918,6 +1021,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 			CodeChallengeMethod: codeChallengeMethod,
 			State:               state,
 			Resource:            resourceParam,
+			ResourceID:          effectiveResource,
 			Fingerprint:         fingerprint,
 		})
 
@@ -948,6 +1052,8 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		CodeChallenge: codeChallenge,
 		Resource:      effectiveResource,
 		Subject:       identity.Subject,
+		Email:         identity.Email,
+		DisplayName:   identity.DisplayName,
 		Groups:        identity.Groups,
 	}, state)
 }
@@ -1031,16 +1137,36 @@ func (s *Server) redirectWithError(
 // WWW-Authenticate helper
 // ---------------------------------------------------------------------------
 
-// WriteUnauthorized writes a 401 response with a WWW-Authenticate header
-// that includes the protected resource metadata URL and the error code.
-// Used by a resource server's handler when a bearer token is missing or invalid.
-func (s *Server) WriteUnauthorized(w http.ResponseWriter, errorCode string) {
-	prmURL := s.cfg.issuerID() + "/.well-known/oauth-protected-resource"
-	w.Header().Set("WWW-Authenticate", fmt.Sprintf(
-		`Bearer realm="cetacean", resource_metadata=%s, error=%s`,
-		httpQuotedString(prmURL), httpQuotedString(errorCode),
-	))
-	w.WriteHeader(http.StatusUnauthorized)
+// renderConsentRefusal answers a consent request that carried the wrong kind of
+// credential. RFC 9110 §15.5.2 requires a challenge on every 401, so a 401 here
+// names where a usable credential comes from; a 403 is already authenticated and
+// takes none.
+func (s *Server) renderConsentRefusal(w http.ResponseWriter, status int, message string) {
+	if status == http.StatusUnauthorized {
+		w.Header().Set("WWW-Authenticate", s.UnauthorizedHeader(s.resources.fallback, ""))
+	}
+
+	renderErrorPage(w, status, message)
+}
+
+// UnauthorizedHeader is the WWW-Authenticate value for a 401 from resource,
+// naming that resource's own metadata document rather than a neighbouring one
+// whose token this resource would also reject. An empty errorCode omits the
+// error parameter per RFC 6750 §3.1; an unknown resource falls back to the
+// default.
+func (s *Server) UnauthorizedHeader(resource, errorCode string) string {
+	target := s.resources.resourceFor(resource)
+
+	challenge := fmt.Sprintf(
+		`Bearer realm=%s, resource_metadata=%s`,
+		httpQuotedString(target.Realm),
+		httpQuotedString(s.cfg.metadataURL(target)),
+	)
+	if errorCode == "" {
+		return challenge
+	}
+
+	return challenge + `, error=` + httpQuotedString(errorCode)
 }
 
 // httpQuotedString wraps s in an RFC 9110 §5.6.4 quoted-string: " and \ become

@@ -437,6 +437,10 @@ func main() {
 		aclEval,
 	)
 
+	handlers.SetTokenOperationsLevel(
+		cfg.OAuth.EffectiveTokenOperationsLevel(cfg.OperationsLevel),
+	)
+
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
 	if err != nil {
@@ -531,12 +535,25 @@ func main() {
 	var (
 		tokenVerifier mcp.TokenVerifier
 		oauthRoutes   func(mux *http.ServeMux, basePath string)
+		apiTokens     auth.APITokens
+		mcpResource   string
 	)
 	if oauthSrv != nil {
 		tokenVerifier, oauthRoutes = oauthSrv, oauthSrv.RegisterRoutes
+		mcpResource = oauthSrv.ResourceIdentifier(mcp.MountPath)
+
+		// Only when the API is actually offered as a resource: without it there
+		// is no audience a token could carry, so a verifier here would refuse
+		// every bearer it was handed instead of leaving it to the provider.
+		if cfg.OAuth.APITokens {
+			apiTokens = auth.APITokens{
+				Verifier: oauthSrv,
+				Resource: oauthSrv.ResourceIdentifier(""),
+			}
+		}
 	}
 
-	mcpHandler, closeMCP := setupMCP(deps, tokenVerifier)
+	mcpHandler, closeMCP := setupMCP(deps, tokenVerifier, mcpResource)
 	defer closeMCP()
 
 	router := api.NewRouter(api.RouterConfig{
@@ -562,6 +579,7 @@ func main() {
 		Refresher:          watcher,
 		MCPHandler:         mcpHandler,
 		OAuthRoutes:        oauthRoutes,
+		APITokens:          apiTokens,
 	})
 
 	var serverTLSConfig *tls.Config
@@ -824,25 +842,37 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 		statePath = filepath.Join(d.cfg.DataDir, "oauth-tokens.json")
 	}
 
-	resource := d.issuer + d.cfg.BasePath + "/mcp"
+	// The API comes first, so a client that sends no RFC 8707 resource
+	// indicator gets a token for the deployment it pointed at rather than for
+	// a transport it never asked about. With oauth.api_tokens off, MCP is both
+	// the only resource and the default, which is what shipped before the API
+	// became one.
+	//
+	// The two are separate audiences despite one path lying under the other:
+	// granting an agent MCP access is not granting it DELETE /services/{id}.
+	var resources []oauth.Resource
+	if d.cfg.OAuth.APITokens {
+		resources = append(resources, oauth.Resource{Path: "", Realm: "cetacean"})
+	}
+	if d.cfg.MCP.Enabled {
+		resources = append(resources, oauth.Resource{Path: mcp.MountPath, Realm: "cetacean-mcp"})
+	}
+
 	srv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:          d.issuer,
-		BasePath:        d.cfg.BasePath,
-		Resource:        resource,
-		ResourceMounted: d.cfg.MCP.Enabled,
-		OAuth:           d.cfg.OAuth,
-		SigningKey:      signingKey,
-		StatePath:       statePath,
+		Issuer:     d.issuer,
+		BasePath:   d.cfg.BasePath,
+		Resources:  resources,
+		OAuth:      d.cfg.OAuth,
+		SigningKey: signingKey,
+		StatePath:  statePath,
 	})
 
 	slog.Info("OAuth 2.1 authorization server enabled",
-		"issuer", d.issuer, "resource", resource)
+		"issuer", d.issuer, "resources", srv.ResourceIdentifiers())
 
-	// Nothing consumes it yet, which is allowed: the operator asked for it, and
-	// the REST API becomes a second resource later.
-	if !d.cfg.MCP.Enabled {
+	if !d.cfg.MCP.Enabled && !d.cfg.OAuth.APITokens {
 		slog.Warn(
-			"the OAuth server is enabled but nothing consumes it: /mcp is the only protected resource today, and mcp.enabled is false.",
+			"the OAuth server is enabled but nothing consumes it: mcp.enabled is false and oauth.api_tokens is off, so it issues tokens for no reachable resource.",
 		)
 	}
 
@@ -856,7 +886,7 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 //
 // The authorization server is built separately and arrives as the narrow
 // interface MCP consumes, so MCP is one of its consumers rather than its owner.
-func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier) (http.Handler, func()) {
+func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http.Handler, func()) {
 	if !d.cfg.MCP.Enabled {
 		return nil, func() {}
 	}
@@ -886,6 +916,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier) (http.Handler, func())
 		Config:          d.cfg.MCP,
 		GlobalOpsLevel:  d.cfg.OperationsLevel,
 		OAuth:           tokenVerifier,
+		Resource:        resource,
 		AuthMode:        d.authMode,
 		AuthProvider:    d.authProvider,
 		Recommendations: d.rec,

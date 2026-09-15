@@ -44,6 +44,16 @@ type OAuthConfig struct {
 	// so every authorization is prompted.
 	ConsentTTL time.Duration
 
+	// APITokens offers the REST API as a protected resource, so a client can
+	// mint a token for it. Disabling it makes the API resource undiscoverable as
+	// well as unusable: no metadata document, no catalog entry, and a refusal at
+	// the authorize endpoint rather than a token that mints and then fails.
+	APITokens bool
+
+	// TokenOperationsLevel is the ceiling on what a token-authenticated caller
+	// may do, narrowing the global tier. OpsInherit leaves it at the global.
+	TokenOperationsLevel OperationsLevel
+
 	// RequireResourceIndicator requires RFC 8707 resource indicators in token requests.
 	RequireResourceIndicator bool
 
@@ -72,6 +82,8 @@ func DefaultOAuthConfig() OAuthConfig {
 		RefreshTokenTTL: 720 * time.Hour,
 		ConsentTTL:      2160 * time.Hour, // 90d, well past the refresh token's 30d
 
+		APITokens:                true,
+		TokenOperationsLevel:     OpsInherit,
 		RequireResourceIndicator: true,
 		DCREnabled:               true,
 		DCRRateLimit:             10,
@@ -118,6 +130,14 @@ func (c *Config) ValidateOAuth(authMode string) error {
 	return nil
 }
 
+// EffectiveTokenOperationsLevel returns what a token-authenticated caller may
+// do: the global level, narrowed by this deployment's ceiling for tokens. It is
+// a ceiling and never a second dial, so a token never reaches past the tier the
+// deployment itself runs at.
+func (o OAuthConfig) EffectiveTokenOperationsLevel(global OperationsLevel) OperationsLevel {
+	return capLevel(o.TokenOperationsLevel, global)
+}
+
 // loadOAuth builds an OAuthConfig from a file section and env vars, applying the
 // standard resolve helpers. It is called from Load() and is also directly
 // testable.
@@ -128,6 +148,14 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 	// file" — the same thing an absent section means.
 	if fo == nil {
 		fo = &fileOAuth{}
+	}
+
+	tokenOpsLevel, err := resolveOpsCeiling(
+		"CETACEAN_OAUTH_TOKEN_OPERATIONS_LEVEL",
+		fo.TokenOperationsLevel,
+	)
+	if err != nil {
+		return OAuthConfig{}, err
 	}
 
 	accessTTL, err := resolveDuration(
@@ -211,6 +239,13 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 		AccessTokenTTL:  accessTTL,
 		RefreshTokenTTL: refreshTTL,
 		ConsentTTL:      consentTTL,
+		APITokens: resolveBool(
+			nil,
+			"CETACEAN_OAUTH_API_TOKENS",
+			fo.APITokens,
+			def.APITokens,
+		),
+		TokenOperationsLevel: tokenOpsLevel,
 		RequireResourceIndicator: resolveBool(
 			nil,
 			"CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR",

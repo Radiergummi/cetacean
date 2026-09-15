@@ -52,8 +52,10 @@ func (e *AuthError) Error() string { return e.Msg }
 // one — MCP's bypass falls through to its own bearer challenge. RFC 9110
 // §15.5.2 admits no 401 without a challenge, so a refusal that produced none
 // is 403; a Code names a refusal of its own. Status is the fallback's only.
-func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error) {
+func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error, extra ...string) {
 	status, code, detail := http.StatusForbidden, "AUT006", "authentication refused"
+
+	var named bool
 
 	if authErr, ok := errors.AsType[*AuthError](err); ok {
 		if authErr.WWWAuthenticate != "" {
@@ -61,10 +63,25 @@ func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error) {
 			status, code, detail = http.StatusUnauthorized, "AUT001", "authentication required"
 		}
 		if authErr.Code != "" {
-			code, detail = authErr.Code, authErr.Msg
+			code, detail, named = authErr.Code, authErr.Msg, true
 			if authErr.Status != 0 {
 				status = authErr.Status
 			}
+		}
+	}
+
+	// A challenge the caller can act on separates 401 from 403, so one added here
+	// promotes a bare refusal — never one that named its own code, which the
+	// challenge informs but cannot answer. Added as its own field line rather
+	// than appended: a first scheme taking no parameters parses ambiguously.
+	for _, challenge := range extra {
+		if challenge == "" {
+			continue
+		}
+
+		w.Header().Add("WWW-Authenticate", challenge)
+		if !named && status == http.StatusForbidden {
+			status, code, detail = http.StatusUnauthorized, "AUT001", "authentication required"
 		}
 	}
 
@@ -74,7 +91,12 @@ func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error) {
 // Middleware returns HTTP middleware that authenticates requests using the
 // given provider. Exempt paths (meta endpoints, API docs, static assets,
 // auth callbacks) bypass authentication entirely.
-func Middleware(provider Provider) func(http.Handler) http.Handler {
+//
+// A token this deployment issued is consulted before the provider, so an
+// explicit credential outranks the ambient session cookie a browser may also be
+// carrying. tokens may be its zero value, which is every deployment without an
+// authorization server.
+func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isExempt(r.URL.Path) {
@@ -82,13 +104,29 @@ func Middleware(provider Provider) func(http.Handler) http.Handler {
 				return
 			}
 
-			id, err := provider.Authenticate(w, r)
+			// A token of ours settles the request on its own; anything else —
+			// including a token somebody else issued — goes to the provider.
+			id, err, fromToken := tokens.authenticate(r)
+			if !fromToken {
+				id, err = provider.Authenticate(w, r)
+			}
+
 			if err != nil {
 				slog.Warn("authentication failed",
 					"path", r.URL.Path,
 					"error", err,
 				)
-				writeAuthFailure(w, r, err)
+				// A request that presented no credential gets the resource's
+				// own challenge too, or a client cannot do what RFC 9728 exists
+				// for: call the resource cold, read the 401, follow
+				// resource_metadata to the token endpoint. Not on /oauth/*,
+				// which refuses a token this server issued.
+				resourceChallenge := ""
+				if ExtractBearerToken(r) == "" && isProtectedResource(r.URL.Path) {
+					resourceChallenge = tokens.Challenge("")
+				}
+
+				writeAuthFailure(w, r, err, resourceChallenge)
 				return
 			}
 
@@ -101,6 +139,14 @@ func Middleware(provider Provider) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// isProtectedResource excludes the authorization server's own endpoints from the
+// bearer challenge. /oauth/authorize is the only one the middleware reaches, and
+// it refuses a token this server issued: offering one there sends a client for a
+// credential that answers 403.
+func isProtectedResource(path string) bool {
+	return !strings.HasPrefix(path, "/oauth/")
 }
 
 // isExempt returns true for paths that should skip authentication.

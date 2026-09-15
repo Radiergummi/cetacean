@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 )
@@ -41,19 +42,63 @@ type jwtHeaderClaims struct {
 
 // AccessTokenClaims holds the application-level claims carried by the JWT.
 // Standard claims (iss, aud, exp, iat, jti) are managed internally.
+//
+// Email and DisplayName are here because the ACL resolves a user audience
+// against subject or email: without them a grant matches one person's session
+// and not their token. Raw claims stay out, as they do from the session cookie.
 type AccessTokenClaims struct {
-	Subject  string   `json:"sub"`
-	Groups   []string `json:"groups,omitempty"`
-	ClientID string   `json:"client_id,omitempty"`
+	Subject     string   `json:"sub"`
+	Email       string   `json:"email,omitempty"`
+	DisplayName string   `json:"name,omitempty"`
+	Groups      []string `json:"groups,omitempty"`
+	ClientID    string   `json:"client_id,omitempty"`
+}
+
+// audience accepts both shapes RFC 7519 §4.1.3 allows — an array, or a bare
+// string for a single audience — and emits the bare string, which is what this
+// server mints. A validator that took only one shape would refuse a conformant
+// token, and ours would then misread it as another issuer's.
+type audience []string
+
+func (a *audience) UnmarshalJSON(raw []byte) error {
+	var one string
+	if err := json.Unmarshal(raw, &one); err == nil {
+		*a = audience{one}
+
+		return nil
+	}
+
+	var many []string
+	if err := json.Unmarshal(raw, &many); err != nil {
+		return err
+	}
+
+	*a = many
+
+	return nil
+}
+
+func (a audience) MarshalJSON() ([]byte, error) {
+	if len(a) == 1 {
+		return json.Marshal(a[0])
+	}
+
+	return json.Marshal([]string(a))
 }
 
 type jwtPayload struct {
 	Issuer    string   `json:"iss"`
-	Audience  string   `json:"aud"`
+	Audience  audience `json:"aud"`
 	ExpiresAt int64    `json:"exp"`
 	IssuedAt  int64    `json:"iat"`
 	JTIID     string   `json:"jti"`
+
+	// RFC 7519 §4.1.5: a token must not be accepted before nbf. Never minted
+	// here, so omitempty keeps it off the wire, but it is honoured on the way in.
+	NotBefore int64    `json:"nbf,omitempty"`
 	Subject   string   `json:"sub"`
+	Email     string   `json:"email,omitempty"`
+	Name      string   `json:"name,omitempty"`
 	Groups    []string `json:"groups,omitempty"`
 
 	// No omitempty: RFC 9068 §2.2 requires the claim, and an empty one is
@@ -61,32 +106,32 @@ type jwtPayload struct {
 	ClientID string `json:"client_id"`
 }
 
+// The audience is per token, not per issuer: one server issues for several
+// protected resources and a token must name the one it was bound to.
 type TokenIssuer struct {
-	signer   *ecdsa.PrivateKey
-	header   string
-	Issuer   string
-	Audience string
+	signer *ecdsa.PrivateKey
+	header string
+	Issuer string
 }
 
-func NewTokenIssuer(root []byte, issuer, audience string) (*TokenIssuer, error) {
+func NewTokenIssuer(root []byte, issuer string) (*TokenIssuer, error) {
 	km, err := deriveKeys(root)
 	if err != nil {
 		return nil, err
 	}
 
-	return newTokenIssuer(km, issuer, audience), nil
+	return newTokenIssuer(km, issuer), nil
 }
 
 // For a caller that has already derived, so it does not derive twice.
-func newTokenIssuer(km *keyMaterial, issuer, audience string) *TokenIssuer {
+func newTokenIssuer(km *keyMaterial, issuer string) *TokenIssuer {
 	return &TokenIssuer{
 		signer: km.signer,
 		// kid is base64url of a hash, so it needs no JSON escaping.
 		header: base64.RawURLEncoding.EncodeToString([]byte(
 			`{"alg":"ES256","kid":"` + km.kid + `","typ":"` + accessTokenType + `"}`,
 		)),
-		Issuer:   issuer,
-		Audience: audience,
+		Issuer: issuer,
 	}
 }
 
@@ -127,8 +172,11 @@ func verifyES256(pub *ecdsa.PublicKey, input, sig string) bool {
 	)
 }
 
+// audience is the identifier of the resource the grant was bound to, stamped
+// as aud so a resource server can refuse a token minted for another one.
 func (t *TokenIssuer) IssueAccessToken(
 	claims AccessTokenClaims,
+	aud string,
 	ttl time.Duration,
 ) (string, error) {
 	if t.signer == nil {
@@ -145,6 +193,12 @@ func (t *TokenIssuer) IssueAccessToken(
 		return "", fmt.Errorf("%w: client_id is required (RFC 9068 §2.2)", ErrIncompleteClaims)
 	}
 
+	// An unaudienced token would verify against every resource this server
+	// serves, which is the confusion the audience exists to stop.
+	if aud == "" {
+		return "", fmt.Errorf("%w: aud is required (RFC 9068 §2.2)", ErrIncompleteClaims)
+	}
+
 	jtiBytes := make([]byte, 16)
 	if _, err := rand.Read(jtiBytes); err != nil {
 		panic(fmt.Sprintf("jwt: crypto/rand.Read failed (host RNG broken): %v", err))
@@ -153,11 +207,13 @@ func (t *TokenIssuer) IssueAccessToken(
 	now := time.Now()
 	payload := jwtPayload{
 		Issuer:    t.Issuer,
-		Audience:  t.Audience,
+		Audience:  audience{aud},
 		IssuedAt:  now.Unix(),
 		ExpiresAt: now.Add(ttl).Unix(),
 		JTIID:     base64.RawURLEncoding.EncodeToString(jtiBytes),
 		Subject:   claims.Subject,
+		Email:     claims.Email,
+		Name:      claims.DisplayName,
 		Groups:    claims.Groups,
 		ClientID:  claims.ClientID,
 	}
@@ -178,7 +234,12 @@ func (t *TokenIssuer) IssueAccessToken(
 	return signingInput + "." + sig, nil
 }
 
-func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
+// audience is the identifier of the resource doing the verifying. Comparison is
+// exact: a token for a neighbouring resource, or for one whose path contains
+// this one, is refused with ErrAudienceMismatch.
+func (t *TokenIssuer) VerifyAccessToken(
+	token, aud string,
+) (*AccessTokenClaims, error) {
 	if t.signer == nil {
 		return nil, ErrMissingKey
 	}
@@ -199,13 +260,12 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 	if hdr.Alg != "ES256" {
 		return nil, fmt.Errorf("%w: unexpected alg %q", ErrMalformedToken, hdr.Alg)
 	}
-	// RFC 9068 §4: any other typ, an absent one included, is refused.
-	if hdr.Typ != accessTokenType && hdr.Typ != accessTokenTypeFull {
+	// RFC 9068 §4: any other typ, an absent one included, is refused. Compared
+	// without regard to case, because RFC 2045 makes a media type's type and
+	// subtype case-insensitive and RFC 7515 §4.1.9 carries that into typ.
+	if !strings.EqualFold(hdr.Typ, accessTokenType) &&
+		!strings.EqualFold(hdr.Typ, accessTokenTypeFull) {
 		return nil, fmt.Errorf("%w: unexpected typ %q", ErrMalformedToken, hdr.Typ)
-	}
-
-	if !verifyES256(&t.signer.PublicKey, parts[0]+"."+parts[1], parts[2]) {
-		return nil, fmt.Errorf("%w: ES256 verification failed", ErrInvalidSig)
 	}
 
 	payloadJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
@@ -218,17 +278,45 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 		return nil, fmt.Errorf("%w: JSON decode payload: %w", ErrMalformedToken, err)
 	}
 
+	// Before the signature, deliberately. iss says which issuer a token claims,
+	// and a caller sharing the Authorization header with another one needs that
+	// answer to route the token at all — checked after the signature, every
+	// foreign token would report a bad signature instead, and be refused where it
+	// should have been passed on. Reading an unverified claim to route on is safe
+	// because it decides nothing else: a token that names us still has to survive
+	// every check below.
 	if payload.Issuer != t.Issuer {
 		return nil, fmt.Errorf("%w: got %q, want %q", ErrIssuerMismatch, payload.Issuer, t.Issuer)
 	}
 
-	if payload.Audience != t.Audience {
+	if !verifyES256(&t.signer.PublicKey, parts[0]+"."+parts[1], parts[2]) {
+		return nil, fmt.Errorf("%w: ES256 verification failed", ErrInvalidSig)
+	}
+
+	// Membership, still exact per element: a token may name several audiences and
+	// reach any of them, but no identifier is ever treated as containing another.
+	if !slices.Contains(payload.Audience, aud) {
 		return nil, fmt.Errorf(
 			"%w: got %q, want %q",
 			ErrAudienceMismatch,
-			payload.Audience,
-			t.Audience,
+			[]string(payload.Audience),
+			aud,
 		)
+	}
+
+	if payload.NotBefore != 0 && time.Now().Before(time.Unix(payload.NotBefore, 0)) {
+		return nil, fmt.Errorf(
+			"%w: not valid before %v",
+			ErrTokenExpired,
+			time.Unix(payload.NotBefore, 0),
+		)
+	}
+
+	// Enforced on the way in as well as at mint: an absent sub would reach the ACL
+	// as the empty subject, which is nobody and matches nothing readable.
+	if payload.Subject == "" || payload.ClientID == "" {
+		return nil, fmt.Errorf("%w: sub and client_id are required (RFC 9068 §2.2)",
+			ErrIncompleteClaims)
 	}
 
 	if time.Unix(payload.ExpiresAt, 0).Before(time.Now()) {
@@ -240,8 +328,10 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 	}
 
 	return &AccessTokenClaims{
-		Subject:  payload.Subject,
-		Groups:   payload.Groups,
-		ClientID: payload.ClientID,
+		Subject:     payload.Subject,
+		Email:       payload.Email,
+		DisplayName: payload.Name,
+		Groups:      payload.Groups,
+		ClientID:    payload.ClientID,
 	}, nil
 }

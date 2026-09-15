@@ -1,7 +1,8 @@
 # API Access Tokens from the OAuth Server
 
 **Date:** 2026-09-13
-**Status:** Investigation. Phase 0 of `2026-09-13-native-apple-client-design.md`, written up
+**Status:** Implemented, except decision 5 (the operations-tier cap), which is deferred — see
+the note under it. Phase 0 of `2026-09-13-native-apple-client-design.md`, written up
 separately because it stands on its own: any CLI, script or third-party client wants it whether or
 not a native app is ever built.
 
@@ -45,6 +46,13 @@ Five facts about it shape everything below.
 ## Decisions
 
 ### 1. Resource identifiers, and where the PRM documents live
+
+> **Landed as recommended, with one deviation made explicit.** RFC 9728 §3.1 inserts the
+> well-known segment after the *authority*, which under a base path would put both documents
+> outside the prefix Cetacean is mounted under — often outside what the operator controls. The
+> base path therefore precedes the well-known segment, matching where the AS metadata has
+> always been served. Resources reach the package as paths with realms attached, never as named
+> consumers, so `independence_test.go` holds with no exemption.
 
 This is the part that actually needs thought, because RFC 9728 derives the metadata URL from the
 resource identifier's path, and today's single document sits at the root-path location while
@@ -90,6 +98,12 @@ the token is scoped to that path.
 
 ### 2. `aud` comes from the bound resource
 
+> **Landed.** `TokenIssuer.Audience` is gone rather than defaulted: a field would have been one
+> more thing that could disagree with the resource the grant was actually bound to.
+> `ValidateResourceIndicator` takes the known set and the fallback separately, and the fallback
+> is the first configured resource — which lets `oauth.api_tokens = false` preserve today's
+> behaviour exactly, MCP being then both the only resource and the default.
+
 `IssueAccessToken` takes the audience per call, from `codeData.Resource` / `RefreshTokenData.Resource`
 — the value already validated and stored. `VerifyAccessToken` takes the expected audience from its
 caller. `TokenIssuer.Audience` stops being a field, or becomes a default for the no-indicator case.
@@ -104,6 +118,24 @@ the REST API produces `ErrAudienceMismatch`, which the middleware must answer as
 `invalid_token` naming the *API's* PRM, not as a fall-through.
 
 ### 3. Verification runs in `internal/auth`, behind an interface
+
+> **Landed, and the trap was real but in a different place.** The discriminator is the issuer as
+> designed — but `ErrIssuerMismatch` was *unreachable*: `VerifyAccessToken` verified the
+> signature before decoding the payload, so a token from another issuer (signed with another
+> key, as any genuinely foreign token is) reported `ErrInvalidSig` and would have been refused
+> finally instead of passed to the provider. The issuer check now runs before signature
+> verification. Reading an unverified claim to *route* on is safe because it decides nothing
+> else; a token naming us still faces every check below it.
+>
+> Two smaller notes. The OIDC provider never reaches its redirect branch with a bearer present
+> (`oidc.go` checks the header before the `text/html` branch), so that half of the trap was
+> already closed. And the ordering question the design did not raise — a request carrying both a
+> cookie and a token — is settled as *token wins*: an explicit credential outranks an ambient
+> one, and the alternative silently ignores a token the client deliberately sent.
+>
+> The interface carries `UnauthorizedHeader` rather than `WriteUnauthorized`, so the API can set
+> the challenge and still answer with an RFC 9457 problem document; `/mcp`, whose protocol has
+> no body for one, keeps writing the bare 401.
 
 `internal/api` cannot import `internal/mcp`, and putting the verifier in `internal/auth` while the
 OAuth package imports `internal/auth` for `IdentityFromContext` would be a cycle.
@@ -142,6 +174,14 @@ one — the interface decouples either way.
 
 ### 4. The identity in a token must be the identity from the provider
 
+> **Landed as a fix, and it ran deeper than the claims.** `AuthCodeData` and `RefreshTokenData`
+> did not carry the fields either, so the propagation runs the full length of the flow — consent,
+> the code, the access token, the refresh token, and the persisted snapshot. The test drives
+> consent and the code grant rather than handing `IssueAccessToken` a fixture: the defect was in
+> the propagation, and a fixture would have proved the claim round-trips while the flow still
+> dropped it. A state file an older build wrote has no email, so such a grant refreshes into the
+> identity it always did until its client re-authorizes — thinner than the ACL wants, never wider.
+
 `bearerAuth` builds `&auth.Identity{Subject, Groups, Provider}` today. `DisplayName` and `Email` are
 dropped, because the claims never carried them.
 
@@ -166,12 +206,54 @@ the fix lands as a fix rather than as an assumption.
 
 ### 5. No scopes in this change, but reserve the tier cap
 
+> **Not implemented, and the premise below is wrong.** "`requireLevel` already enforces it,
+> `Allow` already reports it" does not hold: `requireLevel(required, configured)` decides at
+> *construction* time — `if configured >= required { return next }` — and `h.operationsLevel` is
+> a struct field. A per-caller cap needs a request-scoped effective level, which means the three
+> constructors in `router.go` and the three reads in `allow.go` (all of which already have `r` in
+> hand). Tractable, but a cross-cutting change to the write-gating path rather than a free ride
+> on existing machinery — which is why it was deferred out of this change rather than bundled.
+>
+> No `scope` field was reserved in the claims. JWT claim sets are open by construction, so adding
+> one later is not a token-format migration either way, and an unused field would only be dead
+> code in the meantime.
+>
+> Revisited afterwards: `offline_access` and a per-transport scope were both weighed and declined —
+> nothing is gated on either, so a scope that is asked for and granted unconditionally documents an
+> authorization boundary that does not exist. What landed instead is the conformant handling of
+> having none: both discovery documents carry an empty `scopes_supported` (RFC 8414 §2 recommends
+> the field, and absent reads as *unspecified* where `[]` says *none*), a requested scope is ignored
+> rather than met with `invalid_scope`, and the token response omits `scope` — RFC 6749 §5.1 asks
+> for it only when the granted scope differs from the requested one, and with none defined both
+> reduce to the empty set. Echoing `scope: ""` would violate the parameter's own ABNF. Defining a
+> real scope means revisiting all three together.
+>
+> **The one candidate that survives that reasoning** is a scope naming the operations tier the
+> client wants, which is this decision's own cap wearing a scope as its front end. It escapes the
+> objection above because it only ever subtracts: `min(deployment tier, transport cap, requested)`.
+> Forget to enforce it and the caller gets the deployment's tier — too much access, a bug, but not
+> an escalation, where a forgotten `mcp:use` would open a transport. It also rides an axis that
+> already exists rather than layering a second model over the ACL, makes the consent screen a real
+> decision ("read-only" vs "may delete services"), and makes RFC 6749 §5.1 live: a client asking
+> for tier 3 on a tier-1 deployment is granted a subset, so the response must echo `scope`.
+> RFC 9068 §2.2.3 already defines the claim, so no custom one is needed.
+>
+> It is still gated on the request-scoped effective level, and must follow it rather than lead:
+> a scope stored and advertised but enforced nowhere is the thing rejected above. The refresh grant
+> has to clamp too (RFC 6749 §6 forbids widening), which is the one place a miss *is* an escalation.
+> Note also that there is no per-user tier to sit in that `min` — the ACL narrows resources and
+> permissions, not tiers — so the feature is "a client may hold less than the deployment allows",
+> not "less than its user is allowed". Letting the consent screen lower the tier further is what
+> would turn it from an honest client's self-restraint into a control its user imposes.
+
 Tempting to add `scope` and let a device hold less than its user. Resisted, for now:
 
 - The ACL is the project's authorization model, and a second one layered over it — scope ∩ grant —
   is a new way for access to be surprising. `Allow` already has to be the single answer.
 - What a device actually needs narrowing on is *how destructive* it may be, and there is already a
   precedent for that axis: `mcp.operations_level` caps a transport below the global tier.
+
+> **Landed**, with one correction: the setting *caps* the global tier rather than replacing it, and `mcp.operations_level` was changed to match. Replacing let a transport reach past the tier the deployment runs at, which is wrong for a credential meant to hold less than its user.
 
 **Recommendation:** mirror it as an operations-level cap for token-authenticated callers
 (`api.token.operations_level` or similar, inheriting the global by default). It composes with
@@ -270,6 +352,15 @@ Mostly: it doesn't, which is the point of landing it in the middleware.
   A *browser* client holding a token is still subject to the check, which is correct —
   `carriesItsOwnProof` must not grow an entry for the API, or every REST path would lose the
   protection that Tailscale, mTLS and header modes depend on.
+> **One assumption here was wrong, and it cost a vulnerability.** "Non-exempt" was read as "the
+> provider authenticates it" — but once a token of ours satisfies the middleware first, a leaked
+> access token reaches the consent endpoint and can found a *new* grant: a 30-day refresh token,
+> under a client the user never saw, on a resource they never approved, with no provider and no
+> human involved. It crosses the API → `/mcp` audience boundary this design exists to enforce, in
+> the direction that is on by default. In `cert`, `headers` and `tailscale` modes the provider's
+> credential is bound to the transport and could not be replayed there at all before this change.
+> Consent now refuses an identity whose provider is the authorization server itself.
+
 - **`isExempt`.** No new entry. `/mcp` is exempt because it authenticates itself; the API's tokens
   are checked *by* the middleware, so the API stays non-exempt. `/oauth/authorize` stays
   non-exempt too — consent must run under a real session, which is precisely how the upstream
@@ -296,9 +387,9 @@ One new setting beyond the aliases, plus the tier cap from decision 5:
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `oauth.enabled` | `true` when `auth.mode != none` | Whether the AS runs at all, independent of `mcp.enabled` |
+| `oauth.enabled` | **shipped as `false`** | Whether the AS runs at all, independent of `mcp.enabled` |
 | `oauth.api_tokens` | `true` | Whether the API is offered as a resource |
-| `api.token.operations_level` | inherit | Tier cap for token-authenticated callers |
+| `oauth.token_operations_level` | inherit | Tier cap for token-authenticated callers. **Landed** as `oauth.*` rather than a new `[api]` section; `requireLevel` now resolves per request |
 
 `oauth.api_tokens = false` is the escape hatch for an operator who wants MCP tokens and nothing
 else. It must make the API resource undiscoverable as well as unusable: no root-path PRM, no entry

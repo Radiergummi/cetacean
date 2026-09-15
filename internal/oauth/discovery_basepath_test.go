@@ -16,16 +16,19 @@ import (
 // Cetacean is mounted under a base path: Issuer + BasePath.
 const wantBasePathIssuer = "https://cetacean.test/cetacean"
 
-// Reproduces E-5: with a non-empty base path, every advertised issuer identifier
-// must be the URL the well-known documents are actually served from, so a client
-// deriving the metadata location from the issuer resolves it rather than hitting
-// a base-path-less 404.
+// TestDiscoveryIssuerIncludesBasePath reproduces E-5: when CETACEAN_BASE_PATH
+// is non-empty, every advertised/claimed issuer identifier must be the URL the
+// well-known documents are actually served from (Issuer + BasePath), so a
+// client that derives the metadata location from the issuer resolves it
+// instead of hitting a base-path-less 404.
 func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 	cfg := ServerConfig{
-		Issuer:          "https://cetacean.test",
-		BasePath:        "/cetacean",
-		Resource:        "https://cetacean.test/cetacean/resource",
-		ResourceMounted: true,
+		Issuer:   "https://cetacean.test",
+		BasePath: "/cetacean",
+		Resources: []Resource{
+			{Path: "", Realm: "cetacean"},
+			{Path: "/resource", Realm: "cetacean-resource"},
+		},
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,
@@ -60,19 +63,46 @@ func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 		}
 	}
 
-	prmDoc := readJSONDoc(t, mux, "/cetacean/.well-known/oauth-protected-resource")
-	servers, _ := prmDoc["authorization_servers"].([]any)
-	if len(servers) != 1 || servers[0] != wantBasePathIssuer {
-		t.Errorf(
-			"PRM authorization_servers = %v, want [%q]",
-			prmDoc["authorization_servers"], wantBasePathIssuer,
-		)
+	// One document per resource, each at the location RFC 9728 §3.1 derives from
+	// its identifier's path — with the base path ahead of the well-known segment,
+	// where this deployment is actually mounted. Both are asserted because the
+	// root document describing the wrong resource is the confusion that makes a
+	// token for one reach the other.
+	// Each resource is reachable at both spellings: the location RFC 9728 §3.1
+	// derives from the identifier — well-known after the authority, base path
+	// inside it — and the one beneath this deployment's own prefix, which is what
+	// a proxy forwarding only that prefix can deliver.
+	for _, want := range []struct{ path, resource string }{
+		{"/.well-known/oauth-protected-resource/cetacean", wantBasePathIssuer},
+		{
+			"/.well-known/oauth-protected-resource/cetacean/resource",
+			wantBasePathIssuer + "/resource",
+		},
+		{"/cetacean/.well-known/oauth-protected-resource", wantBasePathIssuer},
+		{
+			"/cetacean/.well-known/oauth-protected-resource/resource",
+			wantBasePathIssuer + "/resource",
+		},
+	} {
+		prmDoc := readJSONDoc(t, mux, want.path)
+
+		if prmDoc["resource"] != want.resource {
+			t.Errorf("%s: resource = %v, want %q",
+				want.path, prmDoc["resource"], want.resource)
+		}
+
+		servers, _ := prmDoc["authorization_servers"].([]any)
+		if len(servers) != 1 || servers[0] != wantBasePathIssuer {
+			t.Errorf("%s: authorization_servers = %v, want [%q]",
+				want.path, prmDoc["authorization_servers"], wantBasePathIssuer)
+		}
 	}
 
 	// The token's iss claim must match the advertised issuer, or a client that
 	// validates iss against the discovered AS rejects the token.
 	tok, err := s.tokenIssuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u", ClientID: "c1"},
+		s.resources.fallback,
 		time.Hour,
 	)
 	if err != nil {

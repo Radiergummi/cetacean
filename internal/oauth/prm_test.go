@@ -11,9 +11,12 @@ import (
 func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 	s := newTestServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource"+
+		testResourcePath, nil)
 	rec := httptest.NewRecorder()
-	s.HandleProtectedResourceMetadata(rec, req)
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux, "")
+	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -27,8 +30,8 @@ func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 		t.Fatalf("decode PRM: %v", err)
 	}
 
-	if doc.Resource != s.cfg.Resource {
-		t.Errorf("resource = %q, want %q", doc.Resource, s.cfg.Resource)
+	if doc.Resource != s.resources.fallback {
+		t.Errorf("resource = %q, want %q", doc.Resource, s.resources.fallback)
 	}
 	if len(doc.AuthorizationServers) != 1 || doc.AuthorizationServers[0] != s.cfg.Issuer {
 		t.Errorf("authorization_servers = %v, want [%q]", doc.AuthorizationServers, s.cfg.Issuer)
@@ -38,16 +41,17 @@ func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 	}
 }
 
-// The server may run with nothing serving the resource it names — an operator
-// can enable it before the resource exists. Advertising the identifier anyway
-// sends a client following RFC 9728 discovery to a path that 404s.
-func TestProtectedResourceMetadataAbsentWhileNothingServesTheResource(t *testing.T) {
+// Which documents exist is decided by the configured set, so an identifier the
+// deployment does not serve is never advertised. The gate that keeps an unserved
+// resource out of the set is what this leaves nothing to advertise.
+func TestNoDocumentForAResourceOutsideTheSet(t *testing.T) {
 	s := newTestServer(t)
-	s.cfg.ResourceMounted = false
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux, "")
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource/absent", nil)
 	rec := httptest.NewRecorder()
-	s.HandleProtectedResourceMetadata(rec, req)
+	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
