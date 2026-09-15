@@ -29,7 +29,7 @@ function PerService({ title, rows }: { title: string; rows: { service: string; o
       <DetailList>
         {rows.map(({ service, of }) => (
           <Detail
-            key={service}
+            key={`${service}:${of}`}
             term={service}
           >
             {of}

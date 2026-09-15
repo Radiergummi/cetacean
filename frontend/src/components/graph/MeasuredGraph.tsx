@@ -1,6 +1,12 @@
 import { RoutedEdge } from "./RoutedEdge";
 import { graphShape, useMeasuredLayout, type Graph } from "./useMeasuredLayout";
-import { GraphControls, glide, readOnlyKeyboard } from "./viewport";
+import {
+  GraphControls,
+  glide,
+  readOnlyKeyboard,
+  useKeptViewport,
+  type KeptViewport,
+} from "./viewport";
 import { layoutGraph, routedEdgeType, type LayerConstraints } from "@/lib/graphLayout";
 import { cn } from "@/lib/utils";
 import {
@@ -13,7 +19,6 @@ import {
   type Edge,
   type Node,
   type NodeTypes,
-  type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -37,23 +42,6 @@ const looseZoom = 0.05;
 
 const fade = "transition-opacity motion-reduce:transition-none";
 const dimmed = "opacity-15";
-
-/** A viewport held outside the canvas, so it outlives a remount. */
-function useKeptViewport() {
-  const kept = useRef<Viewport | null>(null);
-
-  return useMemo(
-    () => ({
-      keep: (moved: Viewport) => {
-        kept.current = moved;
-      },
-      take: () => kept.current,
-    }),
-    [],
-  );
-}
-
-type KeptViewport = ReturnType<typeof useKeptViewport>;
 
 /** A `useState` pair, so a caller that keeps the selection elsewhere can say so. */
 export type Selection = readonly [string | null, (id: string | null) => void];
@@ -128,7 +116,7 @@ function Canvas({
     }
 
     void fitView({ ...glide(), duration: 0 }).then(() => {
-      setZoomFloor(getViewport().zoom * 0.8);
+      setZoomFloor(Math.min(getViewport().zoom, 1) * 0.8);
 
       // A changed shape remounts the canvas. What the reader had panned and
       // zoomed to outlives that, rather than being thrown away by the refit.
@@ -259,7 +247,7 @@ function Canvas({
         maxZoom={maxZoom}
         {...(extent ? { translateExtent: extent } : {})}
         className="bg-background transition-opacity duration-200 motion-reduce:transition-none"
-        style={{ opacity: extent ? 1 : 0 }}
+        style={{ opacity: zoomFloor == null ? 0 : 1 }}
       >
         <Background />
         <GraphControls />

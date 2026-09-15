@@ -1,6 +1,6 @@
-import { Controls, ControlButton, useReactFlow, useStore } from "@xyflow/react";
+import { Controls, ControlButton, useReactFlow, useStore, type Viewport } from "@xyflow/react";
 import { Fullscreen, Minimize, Undo2, ZoomIn, ZoomOut } from "lucide-react";
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 const fitViewOptions = { padding: 0.15 };
 
@@ -15,6 +15,23 @@ export function glide(extra?: { zoom: number }) {
     duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 320,
   };
 }
+
+/** A viewport held outside the canvas, so it outlives a remount. */
+export function useKeptViewport() {
+  const kept = useRef<Viewport | null>(null);
+
+  return useMemo(
+    () => ({
+      keep: (moved: Viewport) => {
+        kept.current = moved;
+      },
+      take: () => kept.current,
+    }),
+    [],
+  );
+}
+
+export type KeptViewport = ReturnType<typeof useKeptViewport>;
 
 /**
  * React Flow is an editor by default: every node and edge is a tab stop, told

@@ -1,7 +1,14 @@
 import { api } from "../api/client";
 import type { JGFGraph } from "../api/types";
 import EmptyState from "../components/EmptyState";
-import { FitOnResize, glide, GraphControls, readOnlyKeyboard } from "../components/graph/viewport";
+import {
+  FitOnResize,
+  glide,
+  GraphControls,
+  readOnlyKeyboard,
+  useKeptViewport,
+  type KeptViewport,
+} from "../components/graph/viewport";
 import "@xyflow/react/dist/style.css";
 import { LoadingPage } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -87,15 +94,26 @@ function StackLegend({ colors, isMobile }: { colors: Map<string, string>; isMobi
   );
 }
 
-function LogicalCanvas({ graph }: { graph: Graph }) {
+function LogicalCanvas({ graph, viewport }: { graph: Graph; viewport: KeptViewport }) {
   const { nodes, edges, onNodesChange, bounds } = useMeasuredLayout(graph, computeLayout);
-  const { fitView } = useReactFlow();
+  const { fitView, setViewport } = useReactFlow();
 
+  // Live updates change the shape often, and a changed shape remounts the
+  // canvas. What the reader had panned and zoomed to outlives that, so only a
+  // graph they have not moved yet is fitted.
   useEffect(() => {
-    if (bounds) {
+    if (!bounds) {
+      return;
+    }
+
+    const kept = viewport.take();
+
+    if (kept) {
+      void setViewport(kept);
+    } else {
       void fitView(glide());
     }
-  }, [bounds, fitView]);
+  }, [bounds, fitView, setViewport, viewport]);
 
   return (
     <ReactFlow
@@ -105,6 +123,12 @@ function LogicalCanvas({ graph }: { graph: Graph }) {
       nodes={nodes}
       edges={edges}
       onNodesChange={onNodesChange}
+      onMoveEnd={(event, moved) => {
+        // Only what the reader did: a fit reports itself with no event.
+        if (event) {
+          viewport.keep(moved);
+        }
+      }}
       nodeTypes={logicalNodeTypes}
       edgeTypes={logicalEdgeTypes}
       proOptions={{ hideAttribution: true }}
@@ -126,6 +150,9 @@ function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) 
   // before, which only agreed with the cards because both hashed the name.
   const legendColors = useMemo(() => stackColors(data), [data]);
 
+  // Outside the key, so it survives the remount a changed shape forces.
+  const viewport = useKeptViewport();
+
   if (Object.keys(data.nodes).length === 0) {
     return (
       <EmptyState
@@ -144,7 +171,10 @@ function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) 
         }}
       >
         <ReactFlowProvider key={shape}>
-          <LogicalCanvas graph={graph} />
+          <LogicalCanvas
+            graph={graph}
+            viewport={viewport}
+          />
         </ReactFlowProvider>
         <StackLegend
           key={isMobile ? "mobile" : "desktop"}

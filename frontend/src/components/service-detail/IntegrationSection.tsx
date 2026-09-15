@@ -66,9 +66,7 @@ export function IntegrationSection({
     setSaveError(null);
   }
 
-  // The graph is read-only, so an edit shows the structured form without
-  // discarding the view to come back to when it ends.
-  const activeView: View = editing && view === "graph" ? "structured" : view;
+  const activeView: View = (editing || !visualContent) && view === "graph" ? "structured" : view;
 
   useEscapeCancel(editing && activeView === "structured", cancel);
 

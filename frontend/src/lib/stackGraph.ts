@@ -61,15 +61,19 @@ export function stackToReactFlow(
   const networkNodes = new Map<string, Node>();
   const serviceNodes: Node[] = [];
   const mountNodes = new Map<string, Node>();
-  const edges: Edge[] = [];
+  const edges = new Map<string, Edge>();
 
   function connect(source: string, target: string) {
-    edges.push({
-      id: `${source}->${target}`,
-      source,
-      target,
-      markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-    });
+    const id = `${source}->${target}`;
+
+    if (!edges.has(id)) {
+      edges.set(id, {
+        id,
+        source,
+        target,
+        markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+      });
+    }
   }
 
   function mountNode(id: string, type: string, data: MountNodeData): Node {
@@ -245,6 +249,6 @@ export function stackToReactFlow(
 
   return {
     nodes: [...networkNodes.values(), ...serviceNodes, ...mountNodes.values()],
-    edges,
+    edges: [...edges.values()],
   };
 }

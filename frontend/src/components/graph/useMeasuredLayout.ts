@@ -46,7 +46,7 @@ export function useMeasuredLayout(graph: Graph, layout: Layout) {
 
   // Started here, the engine downloads while React Flow mounts and measures.
   useEffect(() => {
-    void loadElk();
+    loadElk().catch(() => {});
   }, []);
 
   // A data-only change — a rescaled service, an edited rule — lands on the
@@ -77,15 +77,20 @@ export function useMeasuredLayout(graph: Graph, layout: Layout) {
 
     // React Flow's store still holds the data as of the last commit, so the
     // layout is handed the current data rather than putting stale data back.
-    void layout(applyData(getNodes()), graph.edges).then((result) => {
-      if (!live) {
-        return;
-      }
+    void layout(applyData(getNodes()), graph.edges).then(
+      (result) => {
+        if (!live) {
+          return;
+        }
 
-      setNodes(result.nodes);
-      setEdges(result.edges);
-      setBounds(result.bounds);
-    });
+        setNodes(result.nodes);
+        setEdges(result.edges);
+        setBounds(result.bounds);
+      },
+      (error: unknown) => {
+        console.warn("graph layout failed:", error);
+      },
+    );
 
     return () => {
       live = false;
