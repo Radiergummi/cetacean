@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // registeredClient registers a DCR client in the server's registry and
@@ -380,5 +381,99 @@ func TestConsentTokenFieldsCannotSpellEachOther(t *testing.T) {
 
 	if left == right {
 		t.Error("fields ran together; the MAC does not length-prefix them")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestConsentPageNamesTheResourceBeingAuthorized
+// ---------------------------------------------------------------------------
+
+// A server offering the deployment root and one resource mounted beneath it.
+// The two are separate audiences: a token for one does not reach the other.
+func newTwoResourceServer(t *testing.T) *Server {
+	t.Helper()
+
+	s := NewServer(ServerConfig{
+		Issuer: "https://cetacean.test",
+		Resources: []Resource{
+			{Realm: "cetacean"},
+			{Path: "/other", Realm: "cetacean-other"},
+		},
+		OAuth: config.OAuthConfig{
+			AccessTokenTTL: time.Hour,
+			ConsentTTL:     testConsentTTL,
+			DCREnabled:     true,
+			DCRRateLimit:   10,
+			DCRMaxClients:  100,
+			CIMDEnabled:    true,
+		},
+		SigningKey: []byte("test-signing-key-32bytes-padded!!"),
+	})
+	s.cimd.AllowLoopback = true
+
+	return s
+}
+
+// grantPattern matches the first warning block on the consent page: the one
+// that says what approving actually hands over.
+var grantPattern = regexp.MustCompile(`(?s)<div class="warning">(.*?)</div>`)
+
+// grantDisclosure reads that block back as flat text.
+func grantDisclosure(t *testing.T, page string) string {
+	t.Helper()
+
+	match := grantPattern.FindStringSubmatch(page)
+	if match == nil {
+		t.Fatal("consent page has no grant disclosure")
+	}
+
+	return html.UnescapeString(strings.Join(strings.Fields(match[1]), " "))
+}
+
+// consentPageFor renders the consent page for one resource identifier.
+func consentPageFor(t *testing.T, s *Server, resource string) string {
+	t.Helper()
+
+	const redirectURI = "http://localhost:8711/cb"
+	target := authorizeURL(
+		registeredClient(t, s, []string{redirectURI}),
+		redirectURI,
+		computeS256Challenge("verifier-padded-to-the-RFC-7636-minimum-length"),
+		"state",
+		resource,
+	)
+
+	rec := httptest.NewRecorder()
+	s.HandleAuthorize(rec, withIdentity(
+		httptest.NewRequest(http.MethodGet, target, nil),
+		"alice",
+		"",
+	))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET consent for %s: %d: %s", resource, rec.Code, rec.Body.String())
+	}
+
+	return rec.Body.String()
+}
+
+// Splitting the audiences buys nothing if the page asking for one reads exactly
+// like the page asking for the other: the person clicking Approve is the only
+// check on which resource a client walks away with.
+func TestConsentPageNamesTheResourceBeingAuthorized(t *testing.T) {
+	s := newTwoResourceServer(t)
+	root, sub := s.resources.identifiers[0], s.resources.identifiers[1]
+
+	rootGrant := grantDisclosure(t, consentPageFor(t, s, root))
+	subGrant := grantDisclosure(t, consentPageFor(t, s, sub))
+
+	if !strings.Contains(subGrant, sub) {
+		t.Errorf("the disclosure does not name the resource: %s", subGrant)
+	}
+	if strings.Contains(rootGrant, "/other") {
+		t.Errorf("the root's disclosure names another resource: %s", rootGrant)
+	}
+	if rootGrant == subGrant {
+		t.Errorf("both resources ask for the same thing: %s", rootGrant)
 	}
 }

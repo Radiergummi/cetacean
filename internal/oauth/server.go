@@ -754,6 +754,8 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 		data.RememberedFor = humanizeDuration(s.consent.TTL())
 	}
 
+	data.ResourcePath = s.resources.resourceFor(data.ResourceID).Path
+
 	data.CSRFToken, _ = issueCSRFNonce(
 		w,
 		s.csrfKey(),
@@ -902,6 +904,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		// the form must resubmit what the client sent, not the resolved
 		// default.
 		Resource:    resourceParam,
+		ResourceID:  effectiveResource,
 		Fingerprint: fingerprint,
 	})
 }
@@ -1019,6 +1022,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 			CodeChallengeMethod: codeChallengeMethod,
 			State:               state,
 			Resource:            resourceParam,
+			ResourceID:          effectiveResource,
 			Fingerprint:         fingerprint,
 		})
 
