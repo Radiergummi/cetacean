@@ -37,11 +37,6 @@ type ServerConfig struct {
 	// indicator resolves to. Empty means one resource at the deployment root.
 	Resources []Resource
 
-	// ResourceMounted says whether anything actually serves Resource. The server
-	// may run ahead of it, and metadata naming a path that 404s sends a client
-	// following discovery nowhere.
-	ResourceMounted bool
-
 	// OAuth holds the server's own settings: TTLs, DCR knobs, CIMD and the
 	// require_resource_indicator flag.
 	OAuth config.OAuthConfig
@@ -353,8 +348,8 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 	redirectURI := r.FormValue("redirect_uri")   // #nosec G120 -- bounded in HandleToken
 	clientID := r.FormValue("client_id")         // #nosec G120 -- bounded in HandleToken
 	codeVerifier := r.FormValue("code_verifier") // #nosec G120 -- bounded in HandleToken
-	resourceForm := r.FormValue("resource")      // #nosec G120 -- bounded in HandleToken
-	resourceAll := r.Form["resource"]            // RFC 8707 §2 allows a repeat
+	resourceForm := r.PostFormValue("resource")  // #nosec G120 -- bounded in HandleToken
+	resourceAll := r.PostForm["resource"]        // RFC 8707 §2 allows a repeat
 
 	// RFC 8707 resource indicator validation.
 	if _, err := s.resources.effectiveResource(
@@ -471,8 +466,8 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// Body bounded by HandleToken; comments suppress gosec G120's
 	// per-function analysis.
 	refreshTokenRaw := r.FormValue("refresh_token") // #nosec G120 -- bounded in HandleToken
-	resourceForm := r.FormValue("resource")         // #nosec G120 -- bounded in HandleToken
-	resourceAll := r.Form["resource"]               // RFC 8707 §2 allows a repeat
+	resourceForm := r.PostFormValue("resource")     // #nosec G120 -- bounded in HandleToken
+	resourceAll := r.PostForm["resource"]           // RFC 8707 §2 allows a repeat
 	clientID := r.FormValue("client_id")            // #nosec G120 -- bounded in HandleToken
 
 	// RFC 6749 §6 makes client_id REQUIRED of a client that does not
@@ -663,7 +658,6 @@ func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 // Authorize endpoint
 // ---------------------------------------------------------------------------
 
-// HandleAuthorize handles GET and POST {base}/oauth/authorize.
 // consentRefusal returns the status and message for an identity that may not
 // found a new authorization grant, or 0 when it may.
 //
@@ -682,6 +676,7 @@ func consentRefusal(identity *auth.Identity) (int, string) {
 	}
 }
 
+// HandleAuthorize handles GET and POST {base}/oauth/authorize.
 func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -925,8 +920,8 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	state := r.FormValue("state")
 	codeChallenge := r.FormValue("code_challenge")
 	codeChallengeMethod := r.FormValue("code_challenge_method")
-	resourceParam := r.FormValue("resource")
-	resourceAll := r.Form["resource"]
+	resourceParam := r.PostFormValue("resource")
+	resourceAll := r.PostForm["resource"]
 	decision := r.FormValue("decision")
 	responseType := r.FormValue("response_type")
 

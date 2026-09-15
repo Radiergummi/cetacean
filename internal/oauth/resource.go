@@ -128,6 +128,10 @@ func (s resourceSet) resourceFor(identifier string) Resource {
 // resources. This server binds a token to exactly one, so it refuses rather than
 // honouring the first and dropping the rest: a token whose audience is not the
 // one the client asked for is the confusion the indicator exists to prevent.
+//
+// A caller on a POST endpoint passes the body-borne values alone. r.Form merges
+// the query in, and a client echoing one value in each place is not the repeat
+// this refuses; RFC 6749 §3.2 puts these parameters in the body.
 func (s resourceSet) effectiveResource(raw []string, required bool) (string, error) {
 	if len(raw) > 1 {
 		return "", errors.New(

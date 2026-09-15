@@ -652,7 +652,6 @@ response schemas.
 [oidc]: configuration#oidc
 [rfc7239]: https://www.rfc-editor.org/rfc/rfc7239
 [rfc9440]: https://www.rfc-editor.org/rfc/rfc9440
-[server.base_path]: configuration#server.base_path
 [server.forwarded_headers]: configuration#server.forwarded_headers
 [server.listen_addr]: configuration#server.listen_addr
 [storage.data_dir]: configuration#storage.data_dir

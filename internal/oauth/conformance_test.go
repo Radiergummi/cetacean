@@ -87,6 +87,57 @@ func TestRepeatedResourceIndicatorIsRefused(t *testing.T) {
 	})
 }
 
+// The token endpoint carries its parameters in the body (RFC 6749 §3.2), and
+// r.Form merges the query in. A client that also echoed `resource` on the URL was
+// read as the repeat above and refused a grant it had asked for unambiguously.
+func TestAResourceEchoedInTheQueryIsNotARepeat(t *testing.T) {
+	s := newTestServer(t)
+	s.cfg.OAuth.RequireResourceIndicator = false
+
+	resource := s.resources.fallback
+	target := "/oauth/token?resource=" + url.QueryEscape(resource)
+
+	for name, form := range map[string]url.Values{
+		"authorization_code": {
+			"grant_type":   {"authorization_code"},
+			"code":         {"no-such-code"},
+			"redirect_uri": {"http://localhost:9/cb"},
+			"client_id":    {"c"},
+			"resource":     {resource},
+		},
+		"refresh_token": {
+			"grant_type":    {"refresh_token"},
+			"refresh_token": {"no-such-token"},
+			"client_id":     {"c"},
+			"resource":      {resource},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest(
+				http.MethodPost,
+				target,
+				strings.NewReader(form.Encode()),
+			)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rec := httptest.NewRecorder()
+			s.HandleToken(rec, req)
+
+			var resp oauthErrorResponse
+			if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			// The grant itself is bogus, so the request fails either way. What
+			// must not happen is failing on the target.
+			if resp.Error == "invalid_target" {
+				t.Fatalf("refused as a repeat: %s", resp.ErrorDescription)
+			}
+			if resp.Error != "invalid_grant" {
+				t.Errorf("error = %q, want invalid_grant", resp.Error)
+			}
+		})
+	}
+}
+
 // RFC 6750 §3.1: on a request that carried no credential at all, the challenge
 // carries no error code — there is nothing wrong with a token never sent. An
 // invalid one does carry it.

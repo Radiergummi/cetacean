@@ -116,7 +116,7 @@
 # refresh_token_ttl = "720h"                # Refresh token lifetime (30 days)
 # consent_ttl = "2160h"                     # How long a remembered approval lasts (90 days); "0s" always prompts
 # api_tokens = true                         # Offer the web API as a protected resource clients can get tokens for
-# token_operations_level = 0                # Ceiling on a token-authenticated caller of the web API; /mcp uses mcp.operations_level
+# token_operations_level = 0                # Ceiling on a token-authenticated caller of the web API (0=read, 1=ops, 2=config, 3=impactful); unset inherits CETACEAN_OPERATIONS_LEVEL
 # require_resource_indicator = true         # Require RFC 8707 resource parameter on authorize/token
 # dcr_enabled = true                        # Enable Dynamic Client Registration (RFC 7591)
 # dcr_rate_limit = 10                       # Max DCR registrations per IP per hour
