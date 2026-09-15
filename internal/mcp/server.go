@@ -59,6 +59,16 @@ const (
 // Options: no upstream auth, which is the posture "none" describes.
 func resolveGuard(opts Options) (guardMode, error) {
 	if opts.OAuth != nil {
+		// Both halves of the bearer guard are keyed by it: the audience a token
+		// is verified against, and the metadata document the challenge names.
+		if opts.Resource == "" {
+			return guardNone, errors.New(
+				"mcp: an authorization server needs the resource identifier it verifies " +
+					"tokens against: without one /mcp would refuse every token and send " +
+					"clients to another resource's metadata for a replacement",
+			)
+		}
+
 		return guardBearer, nil
 	}
 

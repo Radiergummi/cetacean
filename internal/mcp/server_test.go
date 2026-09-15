@@ -633,3 +633,21 @@ func TestHandlerRefusesATokenForAnotherResource(t *testing.T) {
 		t.Errorf("WWW-Authenticate = %q, want substring %q", challenge, want)
 	}
 }
+
+// A bearer guard verifies a token's audience against this transport's resource
+// identifier, and challenges with that resource's metadata. Without one it
+// would refuse every token and point clients at another document.
+func TestNewRefusesAnAuthorizationServerWithNoResource(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+
+	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
+
+	_, err := New(cache.New(nil), Options{Config: cfg, OAuth: oauthSrv})
+	if err == nil {
+		t.Fatal("an authorization server without a resource was accepted")
+	}
+	if !strings.Contains(err.Error(), "resource") {
+		t.Errorf("error does not say what is missing: %v", err)
+	}
+}
