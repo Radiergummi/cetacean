@@ -46,9 +46,17 @@ func tokenFor(t *testing.T, resourcePath string, identity *auth.Identity) string
 func tokenRouter(t *testing.T, opts ...testHandlersOption) http.Handler {
 	t.Helper()
 
+	return newTestRouterWithConfig(t, tokenRouterOptions(t), opts...)
+}
+
+// tokenRouterOptions configures a router that authenticates by bearer token and
+// by nothing else, so a request it answers was answered on the token.
+func tokenRouterOptions(t testing.TB) []routerOption {
+	t.Helper()
+
 	srv := tokenTestServer(testAPIIssuer, "")
 
-	return newTestRouterWithConfig(t, []routerOption{
+	return []routerOption{
 		func(cfg *RouterConfig) {
 			cfg.AuthProvider = &refusingProvider{}
 			cfg.OAuthRoutes = srv.RegisterRoutes
@@ -57,7 +65,7 @@ func tokenRouter(t *testing.T, opts ...testHandlersOption) http.Handler {
 				Resource: srv.ResourceIdentifier(""),
 			}
 		},
-	}, opts...)
+	}
 }
 
 // refusingProvider establishes nothing, so any request that reaches it is one

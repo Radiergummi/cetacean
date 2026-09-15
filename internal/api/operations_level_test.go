@@ -13,6 +13,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -48,6 +49,25 @@ func TestEveryOperationIsGatedAtItsDeclaredTier(t *testing.T) {
 	for _, level := range operationsLevels {
 		routers[level] = newSeededTestRouter(t, withOpsLevel(level))
 	}
+
+	// The same sweep over a token-authenticated caller, with the deployment
+	// pinned high so the token's own ceiling is the only dial. A route reached
+	// through anything but requireLevel would gate one arm and not the other.
+	tokenRouters := make(map[config.OperationsLevel]http.Handler, len(operationsLevels))
+	for _, level := range operationsLevels {
+		tokenRouters[level] = newSeededTestRouterWithConfig(
+			t,
+			tokenRouterOptions(t),
+			withOpsLevel(config.OpsImpactful),
+			withTokenOpsLevel(level),
+		)
+	}
+
+	bearer := tokenFor(t, "", &auth.Identity{
+		Subject: "a3f1c8e2-7b04-4d19-9e55-2c6f0b8a41d7",
+		Email:   "alice@example.com",
+	})
+	asToken := func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+bearer) }
 
 	var declared, gated int
 
@@ -124,6 +144,26 @@ func TestEveryOperationIsGatedAtItsDeclaredTier(t *testing.T) {
 						"the router gates this at tier %d, but the spec declares no "+
 							"operations-level badge for it",
 						observed,
+					)
+				}
+
+				viaToken, admittedToken := observedOperationsLevel(
+					tokenRouters, method, requestPath, asToken,
+				)
+
+				switch {
+				case !admittedToken:
+					t.Errorf(
+						"a token caller is refused with OPS001 at every ceiling "+
+							"including %d, while a session reaches it at %d",
+						config.OpsImpactful, observed,
+					)
+				case viaToken != observed:
+					t.Errorf(
+						"gated at tier %d for a session but %d for a token — the "+
+							"ceiling reaches this route through something other than "+
+							"requireLevel",
+						observed, viaToken,
 					)
 				}
 			})
@@ -262,9 +302,10 @@ func declaredOperationsLevel(op *openapi3.Operation) (config.OperationsLevel, bo
 func observedOperationsLevel(
 	routers map[config.OperationsLevel]http.Handler,
 	method, path string,
+	decorate ...func(*http.Request),
 ) (config.OperationsLevel, bool) {
 	for _, level := range operationsLevels {
-		if !refusesForOperationsLevel(routers[level], method, path) {
+		if !refusesForOperationsLevel(routers[level], method, path, decorate...) {
 			return level, true
 		}
 	}
@@ -276,10 +317,18 @@ func observedOperationsLevel(
 // with OPS001. It reads the problem document's type rather than the status,
 // because ACL002 is a 403 as well and a policy-less test router must never be
 // mistaken for a tier refusal.
-func refusesForOperationsLevel(router http.Handler, method, path string) bool {
+func refusesForOperationsLevel(
+	router http.Handler,
+	method, path string,
+	decorate ...func(*http.Request),
+) bool {
 	req := httptest.NewRequest(method, path, nil)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("If-Match", `"bogus-etag"`)
+
+	for _, d := range decorate {
+		d(req)
+	}
 
 	// No operation streams under application/json today, but one that started
 	// to would otherwise hang the walk until the whole package times out. A

@@ -549,6 +549,18 @@ func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 func newSeededTestRouter(t testing.TB, opts ...testHandlersOption) http.Handler {
 	t.Helper()
 
+	return newSeededTestRouterWithConfig(t, nil, opts...)
+}
+
+// newSeededTestRouterWithConfig is newSeededTestRouter over a router the caller
+// also configures — the token arm of the tier sweep needs both.
+func newSeededTestRouterWithConfig(
+	t testing.TB,
+	routerOpts []routerOption,
+	opts ...testHandlersOption,
+) http.Handler {
+	t.Helper()
+
 	stackLabels := map[string]string{"com.docker.stack.namespace": seededStack}
 
 	c := cache.New(nil)
@@ -604,10 +616,11 @@ func newSeededTestRouter(t testing.TB, opts ...testHandlersOption) http.Handler 
 		pluginRemoveFn: func(context.Context, string, bool) error { return nil },
 	}
 
-	return newTestRouterWithCache(
+	return newTestRouterWithConfig(
 		t,
-		c,
+		routerOpts,
 		append([]testHandlersOption{
+			withCache(c),
 			withWriteClient(seededWriteClient()),
 			withPluginClient(plugins),
 			// The two log routes reach their streamer as soon as the service
