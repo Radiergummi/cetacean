@@ -27,13 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /-/health` reports whether Cetacean is still tracking the cluster, and `/-/metrics` says the same for alerting. The dashboard marks itself stale instead of showing a frozen cluster as a live one
 - `POST /-/resync` and `GET /swarm/plugins` appear in the API specification
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
-- A service's Traefik labels can be read as a graph, from entrypoints through routers and the middleware chain to services, beside the existing structured and raw views
-- A stack's page opens with a topology graph: the networks its services attach to, the configs, secrets and volumes they mount, and each service's running tasks
-- Hovering or focusing a node in either graph dims everything more than one edge away, and either can be linked to a particular node
-- Both graphs can be read with a keyboard: every node that hides detail is focusable, focusing one off screen brings it into frame, and the viewport animations follow the system's reduced-motion setting
-- On a touch screen, tapping a node in either graph opens its detail, with a link to the resource it stands for
-- A stack's topology says where each config, secret and volume is mounted inside the container, and what a service answers to on each network
-- The topology page carries the same zoom, reset and full-screen controls as the other graphs, and stops putting every node and edge in the tab order
+- A stack's page and a service's Traefik labels are each drawn as a graph
 
 ### Changed
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
