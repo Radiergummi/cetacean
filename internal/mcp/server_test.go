@@ -79,6 +79,7 @@ func TestNew(t *testing.T) {
 	srv, err := New(c, Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
+		AuthMode:       "none",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -252,7 +253,7 @@ func TestCloseIsIdempotentUnderConcurrency(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
 
-	srv, err := New(c, Options{Config: cfg, GlobalOpsLevel: config.OpsReadOnly})
+	srv, err := New(c, Options{Config: cfg, GlobalOpsLevel: config.OpsReadOnly, AuthMode: "none"})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -352,26 +353,34 @@ func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
 // Unguarded is reachable only under an auth mode that establishes no identity
 // to begin with. Every other route to it is a refusal, below.
 func TestHandlerWithoutOAuthServesUnguardedUnderNone(t *testing.T) {
-	for _, mode := range []string{"", "none"} {
-		t.Run("mode="+mode, func(t *testing.T) {
-			cfg := config.DefaultMCPConfig()
-			cfg.Enabled = true
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
 
-			srv, err := New(cache.New(nil), Options{Config: cfg, AuthMode: mode})
-			if err != nil {
-				t.Fatalf("New: %v", err)
-			}
+	srv, err := New(cache.New(nil), Options{Config: cfg, AuthMode: "none"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
 
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
-			req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
 
-			srv.Handler().ServeHTTP(rec, req)
+	srv.Handler().ServeHTTP(rec, req)
 
-			if rec.Code == http.StatusUnauthorized {
-				t.Fatalf("status = 401 with no OAuth server configured; want unguarded")
-			}
-		})
+	if rec.Code == http.StatusUnauthorized {
+		t.Fatalf("status = 401 with no OAuth server configured; want unguarded")
+	}
+}
+
+// Unguarded takes the word "none". An unset mode is a caller that never said,
+// and the zero Options is the one route to an open /mcp that a refusal does not
+// already cover.
+func TestNewRefusesAnUnsetAuthMode(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+
+	if _, err := New(cache.New(nil), Options{Config: cfg}); err == nil {
+		t.Fatal("an unset auth mode was accepted")
 	}
 }
 
