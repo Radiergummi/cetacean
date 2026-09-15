@@ -1,6 +1,7 @@
 import TraefikGraph from "./TraefikGraph";
 import type { TraefikIntegration } from "@/api/types";
 import { render } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 const integration: TraefikIntegration = {
@@ -23,9 +24,17 @@ const integration: TraefikIntegration = {
   middlewares: [{ name: "compress", type: "compress" }],
 };
 
+function draw(detail = integration) {
+  return render(
+    <MemoryRouter>
+      <TraefikGraph integration={detail} />
+    </MemoryRouter>,
+  );
+}
+
 describe("TraefikGraph", () => {
   it("draws a node for every entrypoint, router, middleware and service", () => {
-    const { container } = render(<TraefikGraph integration={integration} />);
+    const { container } = draw();
 
     const labels = [
       ["entrypoint:websecure", "websecure"],
@@ -48,19 +57,21 @@ describe("TraefikGraph", () => {
   });
 
   it("puts every node that hides detail in the tab order, and nothing else", () => {
-    const { container } = render(<TraefikGraph integration={integration} />);
+    const { container } = draw();
 
     const focusable = [...container.querySelectorAll(".react-flow__node button")].map((element) =>
       element.getAttribute("aria-label"),
     );
 
+    // The name carries what the face shows, since React Flow's wrapper is a
+    // `role="application"` a screen reader can only tab through.
     expect(focusable.sort()).toEqual([
       "Middleware auth@file",
       "Middleware compress",
       "Router admin",
-      "Router web",
-      "Service metrics",
-      "Service shop",
+      "Router web, Host(`shop.example.com`)",
+      "Service metrics, :9090",
+      "Service shop, http:8080",
       "Unresolved service",
     ]);
 
@@ -71,7 +82,7 @@ describe("TraefikGraph", () => {
   });
 
   it("draws a referenced but undeclared middleware as external", () => {
-    const { container } = render(<TraefikGraph integration={integration} />);
+    const { container } = draw();
     const external = container.querySelector('.react-flow__node[data-id="middleware:auth@file"]');
     const declared = container.querySelector('.react-flow__node[data-id="middleware:compress"]');
 

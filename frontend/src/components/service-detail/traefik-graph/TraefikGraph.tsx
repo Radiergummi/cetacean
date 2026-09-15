@@ -1,6 +1,7 @@
 import { EntrypointNode, MiddlewareNode, RouterNode, ServiceNode } from "./TraefikGraphNodes";
 import type { TraefikIntegration } from "@/api/types";
 import { MeasuredGraph } from "@/components/graph/MeasuredGraph";
+import { useNodeSelection } from "@/components/graph/useNodeSelection";
 import type { LayerConstraints } from "@/lib/graphLayout";
 import { traefikIntegrationToReactFlow } from "@/lib/traefikGraph";
 import { useMemo } from "react";
@@ -21,6 +22,7 @@ const layerConstraints: LayerConstraints = {
 
 export default function TraefikGraph({ integration }: { integration: TraefikIntegration }) {
   const graph = useMemo(() => traefikIntegrationToReactFlow(integration), [integration]);
+  const selection = useNodeSelection();
 
   return (
     <MeasuredGraph
@@ -28,6 +30,7 @@ export default function TraefikGraph({ integration }: { integration: TraefikInte
       nodeTypes={nodeTypes}
       label="Traefik routing"
       layerConstraints={layerConstraints}
+      selection={selection}
     />
   );
 }

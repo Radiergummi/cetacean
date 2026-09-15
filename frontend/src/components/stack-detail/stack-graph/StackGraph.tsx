@@ -1,11 +1,11 @@
 import { mountNodeType, NetworkNode, ServiceNode } from "./StackGraphNodes";
 import type { StackDetail } from "@/api/types";
 import { MeasuredGraph } from "@/components/graph/MeasuredGraph";
+import { useNodeSelection } from "@/components/graph/useNodeSelection";
 import type { LayerConstraints } from "@/lib/graphLayout";
 import { stackToReactFlow, type TaskCount } from "@/lib/stackGraph";
 import { FileText, HardDrive, KeyRound } from "lucide-react";
-import { useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useMemo } from "react";
 
 const nodeTypes = {
   stackNetwork: NetworkNode,
@@ -24,8 +24,6 @@ const nodeTypes = {
   ),
 };
 
-const nodeParam = "node";
-
 // Services attach to networks and mount everything else, so the reading runs
 // network → service → what it carries.
 const layerConstraints: LayerConstraints = {
@@ -43,29 +41,7 @@ export default function StackGraph({
   taskCounts: Record<string, TaskCount>;
 }) {
   const graph = useMemo(() => stackToReactFlow(stack, taskCounts), [stack, taskCounts]);
-  const [params, setParams] = useSearchParams();
-
-  // Replaces rather than pushes: tabbing across the graph is not a trail of
-  // pages to walk back through.
-  const select = useCallback(
-    (id: string | null) => {
-      setParams(
-        (previous) => {
-          const next = new URLSearchParams(previous);
-
-          if (id) {
-            next.set(nodeParam, id);
-          } else {
-            next.delete(nodeParam);
-          }
-
-          return next;
-        },
-        { replace: true },
-      );
-    },
-    [setParams],
-  );
+  const selection = useNodeSelection();
 
   return (
     <MeasuredGraph
@@ -73,7 +49,7 @@ export default function StackGraph({
       nodeTypes={nodeTypes}
       label={`Topology of stack ${stack.name}`}
       layerConstraints={layerConstraints}
-      selection={[params.get(nodeParam), select]}
+      selection={selection}
     />
   );
 }

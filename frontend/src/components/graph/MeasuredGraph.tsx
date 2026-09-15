@@ -8,16 +8,24 @@ import {
   ReactFlowProvider,
   Background,
   useReactFlow,
+  useStore,
   type CoordinateExtent,
   type Edge,
   type Node,
   type NodeTypes,
+  type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 const proOptions = { hideAttribution: true };
 const edgeTypes = { [routedEdgeType]: RoutedEdge };
+
+// React Flow's own grey is fixed at #b1b1b7 whatever the theme, which reads
+// 2.2:1 on a white page — under the 3:1 a graphical object owes. The line and
+// the arrowhead it ends in take the theme's colour instead.
+const edgeColour = "var(--color-muted-foreground)";
+const graphStyle = { "--xy-edge-stroke": edgeColour } as CSSProperties;
 
 // Generous, because the bound is a hard stop rather than a spring: a fling
 // should run out before it lands.
@@ -27,7 +35,25 @@ const maxZoom = 2;
 // Until the first fit tells us what "everything visible" costs, allow anything.
 const looseZoom = 0.05;
 
+const fade = "transition-opacity motion-reduce:transition-none";
 const dimmed = "opacity-15";
+
+/** A viewport held outside the canvas, so it outlives a remount. */
+function useKeptViewport() {
+  const kept = useRef<Viewport | null>(null);
+
+  return useMemo(
+    () => ({
+      keep: (moved: Viewport) => {
+        kept.current = moved;
+      },
+      take: () => kept.current,
+    }),
+    [],
+  );
+}
+
+type KeptViewport = ReturnType<typeof useKeptViewport>;
 
 /** A `useState` pair, so a caller that keeps the selection elsewhere can say so. */
 export type Selection = readonly [string | null, (id: string | null) => void];
@@ -53,18 +79,23 @@ function Canvas({
   label,
   layerConstraints,
   selection,
+  viewport,
 }: {
   graph: Graph;
   nodeTypes: NodeTypes;
   label: string;
   layerConstraints?: LayerConstraints | undefined;
   selection?: Selection | undefined;
+  viewport: KeptViewport;
 }) {
   const [zoomFloor, setZoomFloor] = useState<number | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const own = useState<string | null>(null);
-  const { fitView, getNode, getZoom, setCenter } = useReactFlow();
-  const centred = useRef(false);
+  const { fitView, getNode, getViewport, setCenter, setViewport } = useReactFlow();
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
+  const restored = useRef(false);
+  const shown = useRef<string | null>(null);
 
   const layout = useCallback(
     (placed: Node[], edges: Edge[]) => layoutGraph(placed, edges, layerConstraints),
@@ -88,36 +119,71 @@ function Canvas({
     [bounds],
   );
 
-  // Zoomed out past the fit there is nothing left to see, so what the fit
-  // costs is the floor. Taken in the panel, so it never blocks a later one.
+  // Zoomed out past the fit there is nothing left to see, so what the fit costs
+  // is the floor. Re-taken whenever the frame resizes — a window, a sidebar,
+  // full screen — since that moves what "everything visible" costs.
   useEffect(() => {
-    if (!extent) {
+    if (!extent || !width || !height) {
       return;
     }
 
-    void fitView({ ...glide(), duration: 0 }).then(() => setZoomFloor(getZoom() * 0.8));
-  }, [extent, fitView, getZoom]);
+    void fitView({ ...glide(), duration: 0 }).then(() => {
+      setZoomFloor(getViewport().zoom * 0.8);
 
-  // Waits on the fit, which is what decides the zoom the node is seen at.
+      // A changed shape remounts the canvas. What the reader had panned and
+      // zoomed to outlives that, rather than being thrown away by the refit.
+      const kept = restored.current ? null : viewport.take();
+
+      restored.current = true;
+
+      if (kept) {
+        void setViewport(kept);
+      }
+    });
+  }, [extent, width, height, fitView, getViewport, setViewport, viewport]);
+
+  // A node selected from the keyboard has to be on screen, or the focus ring
+  // lands outside the frame. Only when it is not already there: recentring on
+  // every step would swing the graph about under a reader who can see it.
   useEffect(() => {
-    if (zoomFloor == null || centred.current || !selected) {
+    if (!selected) {
+      shown.current = null;
+
+      return;
+    }
+
+    if (zoomFloor == null || shown.current === selected) {
       return;
     }
 
     const node = getNode(selected);
+    const size = node?.measured;
 
-    if (!node?.measured?.width || !node.measured.height) {
+    if (!node || !size?.width || !size.height) {
       return;
     }
 
-    centred.current = true;
+    shown.current = selected;
+
+    const { x, y, zoom } = getViewport();
+    const left = node.position.x * zoom + x;
+    const top = node.position.y * zoom + y;
+
+    if (
+      left >= 0 &&
+      top >= 0 &&
+      left + size.width * zoom <= width &&
+      top + size.height * zoom <= height
+    ) {
+      return;
+    }
 
     void setCenter(
-      node.position.x + node.measured.width / 2,
-      node.position.y + node.measured.height / 2,
-      glide({ zoom: getZoom() }),
+      node.position.x + size.width / 2,
+      node.position.y + size.height / 2,
+      glide({ zoom }),
     );
-  }, [zoomFloor, selected, getNode, getZoom, setCenter]);
+  }, [zoomFloor, selected, getNode, getViewport, setCenter, width, height]);
 
   const near = useMemo(() => (active ? neighbours(edges, active) : null), [active, edges]);
 
@@ -125,7 +191,7 @@ function Canvas({
     () =>
       nodes.map((node) => ({
         ...node,
-        className: cn("transition-opacity", near && !near.has(node.id) && dimmed),
+        className: cn(fade, near && !near.has(node.id) && dimmed),
       })),
     [nodes, near],
   );
@@ -134,10 +200,7 @@ function Canvas({
     () =>
       edges.map((edge) => ({
         ...edge,
-        className: cn(
-          "transition-opacity",
-          active && edge.source !== active && edge.target !== active && dimmed,
-        ),
+        className: cn(fade, active && edge.source !== active && edge.target !== active && dimmed),
       })),
     [edges, active],
   );
@@ -146,6 +209,7 @@ function Canvas({
     <div
       data-graph-ready={zoomFloor != null || undefined}
       className="size-full"
+      style={graphStyle}
     >
       <ReactFlow
         aria-label={label}
@@ -164,6 +228,7 @@ function Canvas({
         onNodesChange={onNodesChange}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        defaultMarkerColor={edgeColour}
         proOptions={proOptions}
         {...readOnlyKeyboard}
         nodesDraggable={false}
@@ -173,12 +238,27 @@ function Canvas({
         // the links inside a node clickable.
         onNodeMouseEnter={(_, { id }) => setHovered(id)}
         onNodeMouseLeave={() => setHovered(null)}
+        // Not every browser focuses a button it was clicked on, so the press
+        // says what it selected rather than leaving that to the focus above.
+        // A link is already on its way elsewhere; rewriting the URL under it
+        // would take back the navigation it just made.
+        onNodeClick={(event, { id }) => {
+          if (!(event.target as HTMLElement).closest("a")) {
+            select(id);
+          }
+        }}
         onPaneClick={() => select(null)}
+        onMoveEnd={(event, moved) => {
+          // Only what the reader did: a fit reports itself with no event.
+          if (event) {
+            viewport.keep(moved);
+          }
+        }}
         panOnScroll
         minZoom={zoomFloor ?? looseZoom}
         maxZoom={maxZoom}
         {...(extent ? { translateExtent: extent } : {})}
-        className="bg-background transition-opacity duration-200"
+        className="bg-background transition-opacity duration-200 motion-reduce:transition-none"
         style={{ opacity: extent ? 1 : 0 }}
       >
         <Background />
@@ -198,9 +278,15 @@ export function MeasuredGraph(props: {
 }) {
   const shape = useMemo(() => graphShape(props.graph), [props.graph]);
 
+  // Outside the key, so it survives the remount a changed shape forces.
+  const viewport = useKeptViewport();
+
   return (
     <ReactFlowProvider key={shape}>
-      <Canvas {...props} />
+      <Canvas
+        {...props}
+        viewport={viewport}
+      />
     </ReactFlowProvider>
   );
 }

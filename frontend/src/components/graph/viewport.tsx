@@ -1,6 +1,6 @@
 import { Controls, ControlButton, useReactFlow, useStore } from "@xyflow/react";
 import { Fullscreen, Minimize, Undo2, ZoomIn, ZoomOut } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
 const fitViewOptions = { padding: 0.15 };
 
@@ -28,12 +28,39 @@ export const readOnlyKeyboard = {
   disableKeyboardA11y: true,
 } as const;
 
-const controlButton =
-  "border-0 bg-card text-muted-foreground hover:bg-accent hover:text-foreground";
+/**
+ * Refits when the frame changes size — a window, a sidebar, full screen.
+ * Without it the graph keeps a viewport fitted to a frame that is gone, with
+ * nothing but the reset button to say so.
+ */
+export function FitOnResize() {
+  const { fitView } = useReactFlow();
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
 
-// React Flow's own control CSS loads after Tailwind and fills its icons at
-// 12px, which turns a stroked Lucide glyph into a solid blob. Inline wins
-// without a specificity fight.
+  useEffect(() => {
+    if (width && height) {
+      void fitView({ ...glide(), duration: 0 });
+    }
+  }, [width, height, fitView]);
+
+  return null;
+}
+
+// React Flow's own control CSS loads after Tailwind and carries one hardcoded
+// light palette: it is why a class cannot colour these buttons, and why they
+// stayed white on a dark page. Its own variables take the theme instead.
+const controlStyle = {
+  boxShadow: "none",
+  "--xy-controls-button-background-color": "var(--color-card)",
+  "--xy-controls-button-background-color-hover": "var(--color-accent)",
+  "--xy-controls-button-color": "var(--color-muted-foreground)",
+  "--xy-controls-button-color-hover": "var(--color-foreground)",
+  "--xy-controls-button-border-color": "transparent",
+} as CSSProperties;
+
+// The same stylesheet fills an icon at 12px, which turns a stroked Lucide
+// glyph into a solid blob.
 const controlIcon = { fill: "none", width: 16, height: 16, maxWidth: "none", maxHeight: "none" };
 
 /** Zoom, reset and full screen, over whichever graph encloses it. */
@@ -43,15 +70,12 @@ export function GraphControls() {
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
-    const onChange = () => {
-      setFullscreen(document.fullscreenElement === canvas);
-      void fitView(glide());
-    };
+    const onChange = () => setFullscreen(document.fullscreenElement === canvas);
 
     document.addEventListener("fullscreenchange", onChange);
 
     return () => document.removeEventListener("fullscreenchange", onChange);
-  }, [fitView, canvas]);
+  }, [canvas]);
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -69,13 +93,12 @@ export function GraphControls() {
       showFitView={false}
       showInteractive={false}
       className="overflow-hidden rounded-md border bg-card"
-      style={{ boxShadow: "none" }}
+      style={controlStyle}
     >
       <ControlButton
         onClick={() => zoomIn(glide())}
         title="Zoom in"
         aria-label="Zoom in"
-        className={controlButton}
       >
         <ZoomIn style={controlIcon} />
       </ControlButton>
@@ -84,7 +107,6 @@ export function GraphControls() {
         onClick={() => zoomOut(glide())}
         title="Zoom out"
         aria-label="Zoom out"
-        className={controlButton}
       >
         <ZoomOut style={controlIcon} />
       </ControlButton>
@@ -95,7 +117,6 @@ export function GraphControls() {
         }}
         title="Reset view"
         aria-label="Reset view"
-        className={controlButton}
       >
         <Undo2 style={controlIcon} />
       </ControlButton>
@@ -104,7 +125,6 @@ export function GraphControls() {
         onClick={toggleFullscreen}
         title={fullscreen ? "Exit full screen" : "Full screen"}
         aria-label={fullscreen ? "Exit full screen" : "Full screen"}
-        className={controlButton}
       >
         {fullscreen ? <Minimize style={controlIcon} /> : <Fullscreen style={controlIcon} />}
       </ControlButton>

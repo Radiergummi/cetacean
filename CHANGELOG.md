@@ -29,8 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 - A service's Traefik labels can be read as a graph, from entrypoints through routers and the middleware chain to services, beside the existing structured and raw views
 - A stack's page opens with a topology graph: the networks its services attach to, the configs, secrets and volumes they mount, and each service's running tasks
-- Hovering or focusing a node in either graph dims everything more than one edge away; a stack's topology can be linked to a particular node
-- Both graphs can be read with a keyboard: every node that hides detail is focusable, and the viewport animations follow the system's reduced-motion setting
+- Hovering or focusing a node in either graph dims everything more than one edge away, and either can be linked to a particular node
+- Both graphs can be read with a keyboard: every node that hides detail is focusable, focusing one off screen brings it into frame, and the viewport animations follow the system's reduced-motion setting
+- On a touch screen, tapping a node in either graph opens its detail, with a link to the resource it stands for
 - A stack's topology says where each config, secret and volume is mounted inside the container, and what a service answers to on each network
 - The topology page carries the same zoom, reset and full-screen controls as the other graphs, and stops putting every node and edge in the tab order
 

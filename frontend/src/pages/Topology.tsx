@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 import type { JGFGraph } from "../api/types";
 import EmptyState from "../components/EmptyState";
-import { glide, GraphControls, readOnlyKeyboard } from "../components/graph/viewport";
+import { FitOnResize, glide, GraphControls, readOnlyKeyboard } from "../components/graph/viewport";
 import "@xyflow/react/dist/style.css";
 import { LoadingPage } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -113,6 +113,7 @@ function LogicalCanvas({ graph }: { graph: Graph }) {
     >
       <Background />
       <GraphControls />
+      <FitOnResize />
     </ReactFlow>
   );
 }
@@ -187,6 +188,7 @@ function PhysicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean })
       >
         <Background />
         <GraphControls />
+        <FitOnResize />
       </ReactFlow>
     </div>
   );
