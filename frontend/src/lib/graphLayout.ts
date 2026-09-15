@@ -1,4 +1,4 @@
-import { loadElk } from "./layoutElk";
+import { loadElk, type Bounds } from "./layoutElk";
 import type { Edge, Node } from "@xyflow/react";
 import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 
@@ -34,7 +34,7 @@ export async function layoutGraph(
   nodes: Node[],
   edges: Edge[],
   constraints: LayerConstraints = {},
-): Promise<{ nodes: Node[]; edges: Edge[]; bounds: { width: number; height: number } }> {
+): Promise<{ nodes: Node[]; edges: Edge[]; bounds: Bounds }> {
   const elk = await loadElk();
 
   const graph: ElkNode = {

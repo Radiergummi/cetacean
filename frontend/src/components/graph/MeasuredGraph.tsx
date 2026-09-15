@@ -1,15 +1,12 @@
 import { RoutedEdge } from "./RoutedEdge";
+import { graphShape, useMeasuredLayout, type Graph } from "./useMeasuredLayout";
 import { GraphControls, glide, readOnlyKeyboard } from "./viewport";
 import { layoutGraph, routedEdgeType, type LayerConstraints } from "@/lib/graphLayout";
-import { loadElk } from "@/lib/layoutElk";
 import { cn } from "@/lib/utils";
 import {
   ReactFlow,
   ReactFlowProvider,
   Background,
-  useEdgesState,
-  useNodesInitialized,
-  useNodesState,
   useReactFlow,
   type CoordinateExtent,
   type Edge,
@@ -32,11 +29,6 @@ const looseZoom = 0.05;
 
 const dimmed = "opacity-15";
 
-interface Graph {
-  nodes: Node[];
-  edges: Edge[];
-}
-
 /** A `useState` pair, so a caller that keeps the selection elsewhere can say so. */
 export type Selection = readonly [string | null, (id: string | null) => void];
 
@@ -55,10 +47,6 @@ function neighbours(edges: Edge[], active: string) {
   return near;
 }
 
-/**
- * Nodes are rendered unplaced so React Flow can measure them, and ELK is given
- * those measurements.
- */
 function Canvas({
   graph,
   nodeTypes,
@@ -72,15 +60,18 @@ function Canvas({
   layerConstraints?: LayerConstraints | undefined;
   selection?: Selection | undefined;
 }) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
-  const [edges, setEdges] = useEdgesState(graph.edges);
-  const [extent, setExtent] = useState<CoordinateExtent | null>(null);
   const [zoomFloor, setZoomFloor] = useState<number | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const own = useState<string | null>(null);
-  const measured = useNodesInitialized();
-  const { fitView, getNode, getNodes, getZoom, setCenter } = useReactFlow();
+  const { fitView, getNode, getZoom, setCenter } = useReactFlow();
   const centred = useRef(false);
+
+  const layout = useCallback(
+    (placed: Node[], edges: Edge[]) => layoutGraph(placed, edges, layerConstraints),
+    [layerConstraints],
+  );
+
+  const { nodes, edges, onNodesChange, bounds } = useMeasuredLayout(graph, layout);
 
   const [selected, select] = selection ?? own;
 
@@ -88,52 +79,14 @@ function Canvas({
   // half of the gesture reaches whoever owns the selection.
   const active = hovered ?? selected;
 
-  // Started here, the engine downloads while React Flow mounts and measures.
-  useEffect(() => {
-    void loadElk();
-  }, []);
-
-  // A data-only change — a rescaled service, an edited rule — lands on the
-  // nodes already placed. A change of shape remounts instead, via the key.
-  const applyData = useCallback(
-    (placed: Node[]) => {
-      const data = new Map(graph.nodes.map((node) => [node.id, node.data]));
-
-      return placed.map((node) => ({ ...node, data: data.get(node.id) ?? node.data }));
-    },
-    [graph],
-  );
-
-  useEffect(() => {
-    setNodes(applyData);
-  }, [applyData, setNodes]);
-
-  useEffect(() => {
-    if (!measured || extent) {
-      return;
-    }
-
-    let live = true;
-
-    // React Flow's store still holds the data as of the last commit, so the
-    // layout is handed the current data rather than putting stale data back.
-    void layoutGraph(applyData(getNodes()), graph.edges, layerConstraints).then((result) => {
-      if (!live) {
-        return;
-      }
-
-      setNodes(result.nodes);
-      setEdges(result.edges);
-      setExtent([
+  const extent = useMemo<CoordinateExtent | null>(
+    () =>
+      bounds && [
         [-panMargin, -panMargin],
-        [result.bounds.width + panMargin, result.bounds.height + panMargin],
-      ]);
-    });
-
-    return () => {
-      live = false;
-    };
-  }, [measured, extent, graph, applyData, layerConstraints, getNodes, setNodes, setEdges]);
+        [bounds.width + panMargin, bounds.height + panMargin],
+      ],
+    [bounds],
+  );
 
   // Zoomed out past the fit there is nothing left to see, so what the fit
   // costs is the floor. Taken in the panel, so it never blocks a later one.
@@ -243,13 +196,7 @@ export function MeasuredGraph(props: {
   layerConstraints?: LayerConstraints | undefined;
   selection?: Selection | undefined;
 }) {
-  const shape = useMemo(
-    () =>
-      [...props.graph.nodes.map(({ id }) => id), ...props.graph.edges.map(({ id }) => id)].join(
-        "|",
-      ),
-    [props.graph],
-  );
+  const shape = useMemo(() => graphShape(props.graph), [props.graph]);
 
   return (
     <ReactFlowProvider key={shape}>

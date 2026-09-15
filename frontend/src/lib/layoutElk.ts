@@ -22,18 +22,31 @@ export function loadElk(): Promise<ElkInstance> {
   return elkInstance;
 }
 
-const nodeWidth = 224; // matches w-56 (14rem) in ServiceCardNode
+/** What a laid-out graph occupies, which is what a viewport is fitted to. */
+export interface Bounds {
+  width: number;
+  height: number;
+}
+
+// Only reached before React Flow has measured a node.
+const defaultNodeWidth = 224;
 const defaultNodeHeight = 120;
 const groupPadding = 20;
 const groupHeader = 36;
 
 const isGroup = (type?: string) => type === "stackGroup" || type === "nodeGroup";
 
+/** Groups are sized by ELK from their children, so only leaves are measured. */
+const measuredSize = (leaf: Node) => ({
+  width: leaf.measured?.width ?? defaultNodeWidth,
+  height: leaf.measured?.height ?? defaultNodeHeight,
+});
+
 export async function computeLayout(
   nodes: Node[],
   edges: Edge[],
   direction: "RIGHT" | "DOWN" = "RIGHT",
-): Promise<{ nodes: Node[]; edges: Edge[] }> {
+): Promise<{ nodes: Node[]; edges: Edge[]; bounds: Bounds }> {
   const elk = await loadElk();
 
   const groups = nodes.filter((node) => isGroup(node.type));
@@ -46,11 +59,7 @@ export async function computeLayout(
   }
 
   for (const leaf of leaves) {
-    const elkNode: ElkNode = {
-      id: leaf.id,
-      width: nodeWidth,
-      height: ((leaf.data as Record<string, unknown>)?._elkHeight as number) ?? defaultNodeHeight,
-    };
+    const elkNode: ElkNode = { id: leaf.id, ...measuredSize(leaf) };
 
     if (leaf.parentId && groupChildren.has(leaf.parentId)) {
       groupChildren.get(leaf.parentId)!.push(elkNode);
@@ -72,11 +81,7 @@ export async function computeLayout(
 
   for (const leaf of leaves) {
     if (!leaf.parentId) {
-      topLevelChildren.push({
-        id: leaf.id,
-        width: nodeWidth,
-        height: ((leaf.data as Record<string, unknown>)?._elkHeight as number) ?? defaultNodeHeight,
-      });
+      topLevelChildren.push({ id: leaf.id, ...measuredSize(leaf) });
     }
   }
 
@@ -251,6 +256,7 @@ export async function computeLayout(
   });
 
   return {
+    bounds: { width: layouted.width ?? 0, height: layouted.height ?? 0 },
     nodes: resultNodes,
     edges: resultEdges,
   };

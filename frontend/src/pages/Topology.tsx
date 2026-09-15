@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 import type { JGFGraph } from "../api/types";
 import EmptyState from "../components/EmptyState";
-import { GraphControls, readOnlyKeyboard } from "../components/graph/viewport";
+import { glide, GraphControls, readOnlyKeyboard } from "../components/graph/viewport";
 import "@xyflow/react/dist/style.css";
 import { LoadingPage } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -20,9 +20,9 @@ import {
   stackColors,
 } from "../lib/topologyTransform";
 import { getErrorMessage } from "../lib/utils";
-import { useLatestRef } from "@/hooks/useLatestRef";
+import { graphShape, useMeasuredLayout, type Graph } from "@/components/graph/useMeasuredLayout";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
+import { ReactFlow, ReactFlowProvider, Background, useReactFlow } from "@xyflow/react";
 import { Info, Network, Server, X } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 
@@ -87,76 +87,39 @@ function StackLegend({ colors, isMobile }: { colors: Map<string, string>; isMobi
   );
 }
 
-/**
- * Hook: run ELK layout async; only re-layout when the graph structure changes.
- */
-function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [edges, setEdges] = useState<Edge[]>([]);
-  const [ready, setReady] = useState(false);
+function LogicalCanvas({ graph }: { graph: Graph }) {
+  const { nodes, edges, onNodesChange, bounds } = useMeasuredLayout(graph, computeLayout);
+  const { fitView } = useReactFlow();
 
-  // Keep refs so layout effect always uses latest data
-  const nodesRef = useLatestRef(rawNodes);
-  const edgesRef = useLatestRef(rawEdges);
-
-  // Structural fingerprint: only changes when nodes/edges are added/removed
-  const structureKey = useMemo(() => {
-    const nodeKey = rawNodes
-      .map(({ id, parentId }) => `${id}:${parentId ?? ""}`)
-      .sort()
-      .join(",");
-    const edgeKey = rawEdges
-      .map(({ source, target }) => `${source}>${target}`)
-      .sort()
-      .join(",");
-
-    return `${nodeKey}|${edgeKey}`;
-  }, [rawNodes, rawEdges]);
-
-  // Full re-layout only when structure changes
   useEffect(() => {
-    let cancelled = false;
-    computeLayout(nodesRef.current, edgesRef.current).then((result) => {
-      if (!cancelled) {
-        setNodes(result.nodes);
-        setEdges(result.edges);
-        setReady(true);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-    // `structureKey` digests the graph's shape. The layout reads the refs, but
-    // it is the key changing that says the shape moved and a layout is owed.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-run trigger
-  }, [structureKey, nodesRef, edgesRef]);
-
-  // Patch node data in-place when only display data changes (replicas, status, etc.)
-  useEffect(() => {
-    if (!ready) {
-      return;
+    if (bounds) {
+      void fitView(glide());
     }
+  }, [bounds, fitView]);
 
-    const dataMap = new Map(rawNodes.map(({ id, data }) => [id, data]));
-
-    // React Flow owns the node array and is only updated by writing back to it;
-    // patching in place is how its controlled API is driven.
-    // oxlint-disable-next-line react/set-state-in-effect -- React Flow's store is the external system
-    setNodes((previous) =>
-      previous.map((node) => {
-        const data = dataMap.get(node.id);
-
-        return data && data !== node.data ? { ...node, data } : node;
-      }),
-    );
-  }, [rawNodes, ready]);
-
-  return { nodes, edges, ready };
+  return (
+    <ReactFlow
+      aria-label="Cluster network topology"
+      className="bg-background transition-opacity duration-200"
+      style={{ opacity: bounds ? 1 : 0 }}
+      nodes={nodes}
+      edges={edges}
+      onNodesChange={onNodesChange}
+      nodeTypes={logicalNodeTypes}
+      edgeTypes={logicalEdgeTypes}
+      proOptions={{ hideAttribution: true }}
+      nodesDraggable
+      {...readOnlyKeyboard}
+    >
+      <Background />
+      <GraphControls />
+    </ReactFlow>
+  );
 }
 
 function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) {
-  const { nodes: rawNodes, edges: rawEdges } = useMemo(() => networkGraphToReactFlow(data), [data]);
-  const { nodes, edges, ready } = useElkLayout(rawNodes, rawEdges);
+  const graph = useMemo(() => networkGraphToReactFlow(data), [data]);
+  const shape = useMemo(() => graphShape(graph), [graph]);
 
   // The same map the graph itself is coloured from — the legend built its own
   // before, which only agreed with the cards because both hashed the name.
@@ -171,33 +134,17 @@ function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) 
     );
   }
 
-  if (!ready) {
-    return null;
-  }
-
   return (
-    <HighlightProvider edges={rawEdges}>
+    <HighlightProvider edges={graph.edges}>
       <div
         className="relative"
         style={{
           height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)",
         }}
       >
-        <ReactFlow
-          aria-label="Cluster network topology"
-          className="bg-background"
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={logicalNodeTypes}
-          edgeTypes={logicalEdgeTypes}
-          fitView
-          proOptions={{ hideAttribution: true }}
-          nodesDraggable
-          {...readOnlyKeyboard}
-        >
-          <Background />
-          <GraphControls />
-        </ReactFlow>
+        <ReactFlowProvider key={shape}>
+          <LogicalCanvas graph={graph} />
+        </ReactFlowProvider>
         <StackLegend
           key={isMobile ? "mobile" : "desktop"}
           colors={legendColors}
@@ -301,12 +248,10 @@ export default function Topology() {
           !error &&
           view === "logical" &&
           (networkData ? (
-            <ReactFlowProvider>
-              <LogicalView
-                data={networkData}
-                isMobile={isMobile}
-              />
-            </ReactFlowProvider>
+            <LogicalView
+              data={networkData}
+              isMobile={isMobile}
+            />
           ) : (
             <EmptyState message="Network topology unavailable" />
           ))}
