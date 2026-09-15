@@ -39,22 +39,6 @@ function urnToId(urn: string): string {
   return lastColon >= 0 ? urn.slice(lastColon + 1) : urn;
 }
 
-/** Estimate rendered card height for ELK layout (matches ServiceCardNode CSS). */
-function estimateCardHeight(ports?: string[], rollout?: RolloutStatus): number {
-  // base: border(4) + p-3(24) + name(20) + mb(4) + image(16) + mb(4) + replicas(16) + mb(4)
-  let height = 92;
-
-  if (ports && ports.length > 0) {
-    height += ports.length * 16;
-  }
-
-  if (rollout) {
-    height += 20;
-  }
-
-  return height;
-}
-
 /** A rollout still in flight, or undefined once it has settled. */
 export interface RolloutStatus {
   label: string;
@@ -139,7 +123,6 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
         stackColor: stack ? stackColorMap.get(stack) : undefined,
         hasSourceEdge: connectedSources.has(urn),
         hasTargetEdge: connectedTargets.has(urn),
-        _elkHeight: estimateCardHeight(ports, rollout),
       },
     };
 

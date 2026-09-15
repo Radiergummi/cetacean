@@ -35,6 +35,19 @@ describe("computeLayout (ELK)", () => {
     expect(child.position.y).toBeGreaterThanOrEqual(0);
   });
 
+  it("packs a node at the size React Flow measured it", async () => {
+    const nodes: Node[] = [
+      { id: "a", position: { x: 0, y: 0 }, data: {}, measured: { width: 300, height: 400 } },
+      { id: "b", position: { x: 0, y: 0 }, data: {}, measured: { width: 300, height: 40 } },
+    ];
+    const edges: Edge[] = [{ id: "a-b", source: "a", target: "b" }];
+    const result = await computeLayout(nodes, edges);
+
+    // Neither holds unless the sizes ELK packed are the measured ones.
+    expect(result.nodes.find(({ id }) => id === "b")!.position.x).toBeGreaterThanOrEqual(300);
+    expect(result.bounds.height).toBeGreaterThanOrEqual(400);
+  });
+
   it("returns bend points on edges", async () => {
     const nodes: Node[] = [
       { id: "a", position: { x: 0, y: 0 }, data: {} },

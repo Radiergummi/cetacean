@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /-/health` reports whether Cetacean is still tracking the cluster, and `/-/metrics` says the same for alerting. The dashboard marks itself stale instead of showing a frozen cluster as a live one
 - `POST /-/resync` and `GET /swarm/plugins` appear in the API specification
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
+- A stack's page and a service's Traefik labels are each drawn as a graph
 
 ### Changed
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy

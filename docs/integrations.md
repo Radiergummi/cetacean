@@ -29,10 +29,13 @@ A panel shows the tool as enabled unless a `<prefix>enable` label says otherwise
 Traefik's TCP and UDP labels are left to the raw label view; only the HTTP routers, services and middlewares are
 parsed into structure.
 
+The Traefik panel adds a read-only **Graph** view, drawing each entrypoint through the routers listening on it and
+their middleware chains to the service they route to.
+
 ## Editing
 
-Each panel has a structured/raw toggle and a link to the tool's own documentation. Both views are editable when the
-service allows `PATCH`, which requires [operations level][operations-level] 2 and ACL write permission
+Each panel has a view toggle and a link to the tool's own documentation. The structured and raw views are editable
+when the service allows `PATCH`, which requires [operations level][operations-level] 2 and ACL write permission
 on the service. Saving writes the labels back through `PATCH /services/{id}/labels`; every field maps to one Docker
 service label.
 
