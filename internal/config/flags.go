@@ -68,6 +68,7 @@ type Flags struct {
 	SSEBatchInterval *string
 	CORSOrigins      *string
 	TrustedProxies   *string
+	ForwardedHeaders *string
 }
 
 // ParseFlags parses CLI flags from args (typically os.Args[1:]).
@@ -197,6 +198,12 @@ func ParseFlags(args []string) (*Flags, error) {
 		"",
 		"Trusted proxy CIDRs/IPs (env: CETACEAN_TRUSTED_PROXIES)",
 	)
+	forwardedHeaders := fs.String(
+		"forwarded-headers",
+		"",
+		"Forwarding headers the proxy writes: \"x-forwarded\" or \"forwarded\" "+
+			"(env: CETACEAN_FORWARDED_HEADERS, default \"x-forwarded\")",
+	)
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -281,6 +288,8 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.PublicURL = publicURL
 		case "trusted-proxies":
 			f.TrustedProxies = trustedProxies
+		case "forwarded-headers":
+			f.ForwardedHeaders = forwardedHeaders
 		}
 	})
 

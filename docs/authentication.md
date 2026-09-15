@@ -433,6 +433,28 @@ http:
           - url: "http://cetacean:9000"
 ```
 
+## Forwarding headers
+
+Behind a proxy listed in [`server.trusted_proxies`][server.trusted_proxies], Cetacean reads the client address
+and the external origin from forwarding headers. [`server.forwarded_headers`][server.forwarded_headers] names
+which family it reads: `x-forwarded` (the default) for `X-Forwarded-For`, `X-Forwarded-Proto` and
+`X-Forwarded-Host`, or `forwarded` for [`Forwarded`][rfc7239]. The other family is discarded on arrival.
+
+> [!WARNING]
+> Set this to match your proxy. nginx, HAProxy, Traefik and Caddy all write the `x-forwarded` family, and none
+> of them strip an inbound `Forwarded` — it is an unknown request header they pass through untouched. A
+> deployment believing both families would let a client choose the address in its own audit log, and the host
+> in every URL Cetacean publishes.
+
+Stripping the family your proxy does not write costs nothing and is worth doing anyway:
+
+```nginx
+proxy_set_header Forwarded "";
+```
+
+[`server.public_url`][server.public_url] settles the origin half outright: with it set, published URLs come
+from configuration and no header can steer them.
+
 ## TLS
 
 TLS termination works in any auth mode and is required for `cert` mode. Set [`tls.cert`][tls.cert] and
@@ -567,7 +589,9 @@ response schemas.
 [getting-started]: getting-started
 [mcp]: mcp
 [oidc]: configuration#oidc
+[rfc7239]: https://www.rfc-editor.org/rfc/rfc7239
 [rfc9440]: https://www.rfc-editor.org/rfc/rfc9440
+[server.forwarded_headers]: configuration#server.forwarded_headers
 [server.listen_addr]: configuration#server.listen_addr
 [server.public_url]: configuration#server.public_url
 [server.trusted_proxies]: configuration#server.trusted_proxies
