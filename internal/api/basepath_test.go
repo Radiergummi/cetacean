@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func TestBasePathFromContext(t *testing.T) {
@@ -270,7 +271,7 @@ func TestAbsURLOriginIsProxySupplied(t *testing.T) {
 			want: "https://proxy.example.com/services",
 		},
 		{
-			name: "Forwarded wins over the pair it standardizes",
+			name: "Forwarded is read without realIP in front to drop it",
 			peer: &auth.Peer{Addr: netip.MustParseAddr(trusted), Trusted: true},
 			headers: map[string]string{
 				"Forwarded":         `host=rfc7239.example.com;proto=https`,
@@ -363,6 +364,53 @@ func TestAbsURLOriginIsProxySupplied(t *testing.T) {
 			}
 
 			handler.ServeHTTP(httptest.NewRecorder(), req)
+
+			if !called {
+				t.Fatal("handler was never invoked")
+			}
+		})
+	}
+}
+
+// TestAbsURLOriginBehindRealIP: the origin a published URL carries is the
+// proxy's, not one a client named in the family its proxy passes through.
+func TestAbsURLOriginBehindRealIP(t *testing.T) {
+	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
+
+	tests := map[string]struct {
+		headers config.ForwardedHeaders
+		want    string
+	}{
+		"x-forwarded ignores a client-supplied Forwarded": {
+			headers: config.XForwardedHeaders,
+			want:    "https://proxy.example.com/services",
+		},
+		"forwarded ignores a client-supplied X-Forwarded-Host": {
+			headers: config.RFC7239Headers,
+			want:    "https://rfc7239.example.com/services",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			var called bool
+
+			inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				called = true
+
+				if got := absURL(r, "/services"); got != tt.want {
+					t.Errorf("absURL = %q, want %q", got, tt.want)
+				}
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/services", nil)
+			req.Host = "internal:9000"
+			req.RemoteAddr = "10.0.0.1:9999"
+			req.Header.Set("Forwarded", "host=rfc7239.example.com;proto=https")
+			req.Header.Set("X-Forwarded-Host", "proxy.example.com")
+			req.Header.Set("X-Forwarded-Proto", "https")
+
+			realIP(trusted, tt.headers)(inner).ServeHTTP(httptest.NewRecorder(), req)
 
 			if !called {
 				t.Fatal("handler was never invoked")

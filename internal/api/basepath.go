@@ -98,7 +98,7 @@ func requestOrigin(r *http.Request) (scheme, host string) {
 		return scheme, host
 	}
 
-	// RFC 7239 standardizes the pair below it, so Forwarded wins.
+	// realIP left one family standing, so this selects it, not prefers it.
 	forwardedProto, forwardedHost := forwardedOrigin(r.Header.Values("Forwarded"))
 
 	if forwardedProto == "" {

@@ -556,6 +556,7 @@ func main() {
 		CORS:               corsConfig,
 		TLSEnabled:         tlsCfg.Enabled(),
 		TrustedProxies:     cfg.TrustedProxies,
+		ForwardedHeaders:   cfg.ForwardedHeaders,
 		Resyncer:           watcher,
 		Liveness:           watcher,
 		Refresher:          watcher,
