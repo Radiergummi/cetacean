@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /-/health` reports whether Cetacean is still tracking the cluster, and `/-/metrics` says the same for alerting. The dashboard marks itself stale instead of showing a frozen cluster as a live one
 - `POST /-/resync` and `GET /swarm/plugins` appear in the API specification
 - The REST API accepts bearer tokens the authorization server issues, so a script or app can authenticate without a browser session — `oauth.api_tokens` turns it off
-- `oauth.token_operations_level` holds a token-authenticated caller below the tier the deployment runs at, so a token left on a device can read the cluster without changing it
+- `oauth.token_operations_level` holds a token-authenticated caller of the web API below the tier the deployment runs at, so a token left on a device can read the cluster without changing it
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 - A stack's page and a service's Traefik labels are each drawn as a graph
 

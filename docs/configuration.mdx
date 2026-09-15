@@ -276,7 +276,7 @@ consent screen, so one would only sit unused.
 </ConfigParam>
 
 <ConfigParam name="oauth.token_operations_level" env="CETACEAN_OAUTH_TOKEN_OPERATIONS_LEVEL">
-  What a caller holding a token may do: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset, and narrows it rather than replacing it — a token never reaches past the tier the deployment itself runs at. Set it lower to leave a token on a device that can read the cluster but not change it.
+  What a caller holding a token may do on the web API: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset, and narrows it rather than replacing it — a token never reaches past the tier the deployment itself runs at. Set it lower to leave a token on a device that can read the cluster but not change it. `/mcp` is governed by [`mcp.operations_level`][mcp.operations_level] instead: MCP registers its tool list once, so it cannot hold two callers to different tiers.
 </ConfigParam>
 
 <ConfigParam name="oauth.require_resource_indicator" env="CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR" default="true">
@@ -312,7 +312,7 @@ default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token
 </ConfigParam>
 
 <ConfigParam name="mcp.operations_level" env="CETACEAN_MCP_OPERATIONS_LEVEL">
-  Which tools MCP clients may call: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset, and narrows it rather than replacing it — a value above the global one grants nothing. Set it lower to allow writes from the dashboard that agents cannot make.
+  Which tools MCP clients may call: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset, and narrows it rather than replacing it — a value above the global one grants nothing. Set it lower to allow writes from the dashboard that agents cannot make. This is the ceiling for every MCP client, whatever it authenticated with; [`oauth.token_operations_level`][oauth.token_operations_level] governs the web API.
 </ConfigParam>
 
 <ConfigParam name="mcp.max_concurrent_tasks" env="CETACEAN_MCP_MAX_CONCURRENT_TASKS" default="32">

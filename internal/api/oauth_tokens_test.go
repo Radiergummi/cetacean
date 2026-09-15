@@ -196,6 +196,57 @@ func TestATokenReceivesTheSameAllowAsASession(t *testing.T) {
 	}
 }
 
+// A ceiling on tokens reaches the Allow header, not just the refusal: a client
+// that reads what it may do never attempts the write it would be refused.
+func TestATokenCeilingNarrowsTheAllowItReports(t *testing.T) {
+	const subject = "a3f1c8e2-7b04-4d19-9e55-2c6f0b8a41d7"
+
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc-web",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:*"},
+		Audience:    []string{"user:*@example.com"},
+		Permissions: []string{"write"},
+	}}})
+
+	identity := &auth.Identity{Subject: subject, Email: "alice@example.com"}
+
+	opts := []testHandlersOption{
+		withCache(c),
+		withACL(evaluator),
+		withOpsLevel(config.OpsImpactful),
+		withTokenOpsLevel(config.OpsReadOnly),
+	}
+
+	overToken := getWithToken(
+		t,
+		tokenRouter(t, opts...),
+		"/services/svc-web",
+		tokenFor(t, "", identity),
+	)
+	if overToken.Code != http.StatusOK {
+		t.Fatalf("token: status = %d, want 200: %s", overToken.Code, overToken.Body.String())
+	}
+
+	// The grant still reaches write; the ceiling is what stops it, so the two
+	// have to be told apart by the Allow rather than by the ACL.
+	viaToken := overToken.Header().Get("Allow")
+	for _, method := range []string{"DELETE", "PATCH", "PUT", "POST"} {
+		if strings.Contains(viaToken, method) {
+			t.Errorf("Allow over a read-only token = %q, want no %s", viaToken, method)
+		}
+	}
+
+	if !strings.Contains(viaToken, "GET") {
+		t.Errorf("Allow over a read-only token = %q, want GET", viaToken)
+	}
+}
+
 // fixedProvider establishes one identity, standing in for a valid session.
 type fixedProvider struct{ identity *auth.Identity }
 
