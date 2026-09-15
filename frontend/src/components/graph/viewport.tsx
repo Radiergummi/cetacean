@@ -1,3 +1,4 @@
+import type { Bounds } from "@/lib/layoutElk";
 import { Controls, ControlButton, useReactFlow, useStore, type Viewport } from "@xyflow/react";
 import { Fullscreen, Minimize, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -32,6 +33,24 @@ export function useKeptViewport() {
 }
 
 export type KeptViewport = ReturnType<typeof useKeptViewport>;
+
+/**
+ * Whether a kept viewport still shows any of a graph this size. A relayout
+ * moves every node, so coordinates kept across one can name empty canvas.
+ */
+export function showsGraph(
+  { x, y, zoom }: Viewport,
+  bounds: Bounds,
+  width: number,
+  height: number,
+): boolean {
+  const left = -x / zoom;
+  const top = -y / zoom;
+
+  return (
+    left < bounds.width && left + width / zoom > 0 && top < bounds.height && top + height / zoom > 0
+  );
+}
 
 /**
  * React Flow is an editor by default: every node and edge is a tab stop, told

@@ -60,6 +60,34 @@ function connections(edges: Edge[]): string[] {
 }
 
 describe("stackToReactFlow", () => {
+  it("reads a secret's relative target as relative to /run/secrets", () => {
+    const { nodes } = stackToReactFlow(
+      makeStack({
+        services: [
+          makeService("web", {
+            ContainerSpec: {
+              Image: "web:1",
+              Secrets: [
+                { SecretID: "sec-token", SecretName: "token", File: { Name: "db_password" } },
+                { SecretID: "sec-cert", SecretName: "cert", File: { Name: "/etc/tls/cert.pem" } },
+              ],
+            },
+          }),
+        ],
+        secrets: [makeSecret("token"), makeSecret("cert")],
+      }),
+    );
+
+    const data = (id: string) => nodes.find((node) => node.id === id)?.data as never;
+
+    expect(data("secret:sec-token")["mountedBy"]).toEqual([
+      { service: "web", path: "/run/secrets/db_password" },
+    ]);
+    expect(data("secret:sec-cert")["mountedBy"]).toEqual([
+      { service: "web", path: "/etc/tls/cert.pem" },
+    ]);
+  });
+
   it("records where a mount lands and what a service answers to", () => {
     const { nodes } = stackToReactFlow(
       makeStack({

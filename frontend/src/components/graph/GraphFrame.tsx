@@ -10,9 +10,9 @@ function Loading() {
 }
 
 /**
- * Mounts its children only once scrolled into view. They stay unrendered until
- * then, which is what keeps a `lazy()` graph's chunk — React Flow and ELK —
- * unrequested until the graph is looked at.
+ * Mounts its children only once scrolled into view, which keeps a `lazy()`
+ * graph's chunk — React Flow and ELK — unrequested until it is looked at. The
+ * frame follows the window: fixed, a large stack fits at no legible zoom.
  */
 export function GraphFrame({ children }: { children: ReactNode }) {
   const frame = useRef<HTMLDivElement>(null);
@@ -41,7 +41,7 @@ export function GraphFrame({ children }: { children: ReactNode }) {
     <div
       ref={frame}
       data-testid="graph-frame"
-      className="h-96 overflow-hidden rounded-lg border"
+      className="h-[clamp(20rem,60vh,44rem)] overflow-hidden rounded-lg border"
     >
       {seen ? <Suspense fallback={<Loading />}>{children}</Suspense> : <Loading />}
     </div>
