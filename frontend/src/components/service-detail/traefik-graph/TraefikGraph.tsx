@@ -1,5 +1,6 @@
 import { EntrypointNode, MiddlewareNode, RouterNode, ServiceNode } from "./TraefikGraphNodes";
 import type { TraefikIntegration } from "@/api/types";
+import { GraphLegend, dashedMark, mutedMark } from "@/components/graph/GraphLegend";
 import { MeasuredGraph } from "@/components/graph/MeasuredGraph";
 import { useNodeSelection } from "@/components/graph/useNodeSelection";
 import type { LayerConstraints } from "@/lib/graphLayout";
@@ -20,6 +21,15 @@ const layerConstraints: LayerConstraints = {
   traefikService: "LAST",
 };
 
+const legend = (
+  <GraphLegend
+    entries={[
+      { mark: dashedMark, label: "Defined outside this service" },
+      { mark: mutedMark, label: "Unreferenced" },
+    ]}
+  />
+);
+
 export default function TraefikGraph({ integration }: { integration: TraefikIntegration }) {
   const graph = useMemo(() => traefikIntegrationToReactFlow(integration), [integration]);
   const selection = useNodeSelection();
@@ -30,6 +40,7 @@ export default function TraefikGraph({ integration }: { integration: TraefikInte
       nodeTypes={nodeTypes}
       label="Traefik routing"
       layerConstraints={layerConstraints}
+      legend={legend}
       selection={selection}
     />
   );

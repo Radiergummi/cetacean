@@ -4,6 +4,7 @@ import {
   GraphControls,
   glide,
   readOnlyKeyboard,
+  showsGraph,
   useKeptViewport,
   type KeptViewport,
 } from "./viewport";
@@ -13,6 +14,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   Background,
+  Panel,
   useReactFlow,
   useStore,
   type CoordinateExtent,
@@ -21,7 +23,15 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 const proOptions = { hideAttribution: true };
 const edgeTypes = { [routedEdgeType]: RoutedEdge };
@@ -66,6 +76,7 @@ function Canvas({
   nodeTypes,
   label,
   layerConstraints,
+  legend,
   selection,
   viewport,
 }: {
@@ -73,6 +84,7 @@ function Canvas({
   nodeTypes: NodeTypes;
   label: string;
   layerConstraints?: LayerConstraints | undefined;
+  legend?: ReactNode | undefined;
   selection?: Selection | undefined;
   viewport: KeptViewport;
 }) {
@@ -90,7 +102,7 @@ function Canvas({
     [layerConstraints],
   );
 
-  const { nodes, edges, onNodesChange, bounds } = useMeasuredLayout(graph, layout);
+  const { nodes, edges, onNodesChange, bounds, failed } = useMeasuredLayout(graph, layout);
 
   const [selected, select] = selection ?? own;
 
@@ -119,16 +131,17 @@ function Canvas({
       setZoomFloor(Math.min(getViewport().zoom, 1) * 0.8);
 
       // A changed shape remounts the canvas. What the reader had panned and
-      // zoomed to outlives that, rather than being thrown away by the refit.
+      // zoomed to outlives that, rather than being thrown away by the refit —
+      // but only while it still names somewhere the relaid graph occupies.
       const kept = restored.current ? null : viewport.take();
 
       restored.current = true;
 
-      if (kept) {
+      if (kept && bounds && showsGraph(kept, bounds, width, height)) {
         void setViewport(kept);
       }
     });
-  }, [extent, width, height, fitView, getViewport, setViewport, viewport]);
+  }, [extent, bounds, width, height, fitView, getViewport, setViewport, viewport]);
 
   // A node selected from the keyboard has to be on screen, or the focus ring
   // lands outside the frame. Only when it is not already there: recentring on
@@ -173,7 +186,14 @@ function Canvas({
     );
   }, [zoomFloor, selected, getNode, getViewport, setCenter, width, height]);
 
-  const near = useMemo(() => (active ? neighbours(edges, active) : null), [active, edges]);
+  // An id naming no node — a stale `?node=` link, or a resource removed under
+  // SSE — would leave everything a step too far and dim the whole graph.
+  const focus = useMemo(
+    () => (active && nodes.some((node) => node.id === active) ? active : null),
+    [active, nodes],
+  );
+
+  const near = useMemo(() => (focus ? neighbours(edges, focus) : null), [focus, edges]);
 
   const shownNodes = useMemo(
     () =>
@@ -188,10 +208,23 @@ function Canvas({
     () =>
       edges.map((edge) => ({
         ...edge,
-        className: cn(fade, active && edge.source !== active && edge.target !== active && dimmed),
+        className: cn(fade, focus && edge.source !== focus && edge.target !== focus && dimmed),
       })),
-    [edges, active],
+    [edges, focus],
   );
+
+  // The engine loads on demand, so a layout can fail long after the page did
+  // not. Left to the fade below, that reads as a frame that never filled.
+  if (failed) {
+    return (
+      <div
+        role="status"
+        className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground"
+      >
+        The graph could not be drawn. Reload the page to try again.
+      </div>
+    );
+  }
 
   return (
     <div
@@ -250,6 +283,9 @@ function Canvas({
         style={{ opacity: zoomFloor == null ? 0 : 1 }}
       >
         <Background />
+
+        {legend && <Panel position="top-left">{legend}</Panel>}
+
         <GraphControls />
       </ReactFlow>
     </div>
@@ -262,6 +298,7 @@ export function MeasuredGraph(props: {
   nodeTypes: NodeTypes;
   label: string;
   layerConstraints?: LayerConstraints | undefined;
+  legend?: ReactNode | undefined;
   selection?: Selection | undefined;
 }) {
   const shape = useMemo(() => graphShape(props.graph), [props.graph]);

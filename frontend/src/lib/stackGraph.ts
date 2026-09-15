@@ -39,6 +39,13 @@ function shortImage(image: string | undefined): string | undefined {
   return image?.split("@")[0];
 }
 
+/** A secret's target is relative to /run/secrets unless it is an absolute path. */
+function secretPath(target: string | undefined, name: string): string {
+  const file = target || name;
+
+  return file.startsWith("/") ? file : `/run/secrets/${file}`;
+}
+
 function serviceMode(service: Service): { mode: string; replicas?: number | undefined } {
   return service.Spec.Mode.Global
     ? { mode: "global" }
@@ -229,7 +236,7 @@ export function stackToReactFlow(
       );
 
       connect(serviceId, id);
-      mountedAt(id, name, File?.Name ?? `/run/secrets/${SecretName}`);
+      mountedAt(id, name, secretPath(File?.Name, SecretName));
     }
 
     for (const { Type, Source, Target, ReadOnly } of container?.Mounts ?? []) {

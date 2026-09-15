@@ -110,6 +110,24 @@ describe("StackGraph", () => {
     expect(node("network:net-backend").className).toContain("opacity-15");
   });
 
+  it("names what the icons and the two node treatments mean", () => {
+    const { container } = draw(stack);
+    const legend = container.querySelector("[data-testid='graph-legend']");
+
+    expect(legend?.textContent).toContain("Config");
+    expect(legend?.textContent).toContain("Secret");
+    expect(legend?.textContent).toContain("Volume");
+    expect(legend?.textContent).toContain("Not in this stack");
+    expect(legend?.textContent).toContain("Unreferenced");
+  });
+
+  it("dims nothing when the named node is not in the graph", () => {
+    const { container } = draw(stack, { entry: "/?node=service:svc-gone" });
+    const wrappers = [...container.querySelectorAll(".react-flow__node")];
+
+    expect(wrappers.filter((node) => node.className.includes("opacity-15"))).toEqual([]);
+  });
+
   // Edges are not here to check: jsdom lays nothing out, so React Flow never
   // gets the node sizes an edge needs and renders none.
   it("gives each node one tab stop, and React Flow's own wrapper none", () => {

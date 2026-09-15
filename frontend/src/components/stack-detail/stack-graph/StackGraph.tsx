@@ -1,5 +1,6 @@
 import { mountNodeType, NetworkNode, ServiceNode } from "./StackGraphNodes";
 import type { StackDetail } from "@/api/types";
+import { GraphLegend, dashedMark, mutedMark } from "@/components/graph/GraphLegend";
 import { MeasuredGraph } from "@/components/graph/MeasuredGraph";
 import { useNodeSelection } from "@/components/graph/useNodeSelection";
 import type { LayerConstraints } from "@/lib/graphLayout";
@@ -33,6 +34,21 @@ const layerConstraints: LayerConstraints = {
   stackVolume: "LAST",
 };
 
+const legend = (
+  <GraphLegend
+    entries={[
+      { mark: <FileText className="size-3 text-blue-600 dark:text-blue-400" />, label: "Config" },
+      { mark: <KeyRound className="size-3 text-amber-600 dark:text-amber-400" />, label: "Secret" },
+      {
+        mark: <HardDrive className="size-3 text-purple-600 dark:text-purple-400" />,
+        label: "Volume",
+      },
+      { mark: dashedMark, label: "Not in this stack" },
+      { mark: mutedMark, label: "Unreferenced" },
+    ]}
+  />
+);
+
 export default function StackGraph({
   stack,
   taskCounts,
@@ -49,6 +65,7 @@ export default function StackGraph({
       nodeTypes={nodeTypes}
       label={`Topology of stack ${stack.name}`}
       layerConstraints={layerConstraints}
+      legend={legend}
       selection={selection}
     />
   );

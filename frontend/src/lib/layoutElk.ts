@@ -2,22 +2,35 @@ import type { Edge, Node } from "@xyflow/react";
 import type { ELK as ElkInstance, ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 
 /**
- * ELK is a GWT-compiled layout engine and by far the heaviest thing the
- * dashboard ships — 1.6 MB, half a megabyte gzipped. Importing it at module
- * scope put it in the same chunk as React Flow, so the topology page could not
- * draw a single node until all of it had arrived. Loading it on the first
- * layout instead lets the graph render while the engine is still on the wire,
- * and keeps it out of every other route entirely.
- *
- * The promise is cached, so concurrent callers share one instance and one
- * download.
+ * ELK is the heaviest thing the dashboard ships and a layout drops frames, so
+ * it loads on first use and runs in a worker. The promise is cached so callers
+ * share one download; a rejection is not, or a briefly unreachable chunk would
+ * stay unreachable for the life of the tab.
  */
 let elkInstance: Promise<ElkInstance> | null = null;
 
+// jsdom runs the worker script but never answers it, so the suite drives the
+// engine directly. Folded away in a build, which keeps one copy of ELK.
+async function engine(): Promise<ElkInstance> {
+  if (import.meta.env.MODE === "test") {
+    const { default: ELK } = await import("elkjs/lib/elk.bundled.js");
+
+    return new ELK() as ElkInstance;
+  }
+
+  const { default: ELK } = await import("elkjs/lib/elk-api.js");
+
+  return new ELK({
+    workerFactory: () => new Worker(new URL("elkjs/lib/elk-worker.min.js", import.meta.url)),
+  }) as ElkInstance;
+}
+
 export function loadElk(): Promise<ElkInstance> {
-  elkInstance ??= import("elkjs/lib/elk.bundled.js").then(
-    ({ default: ELK }) => new ELK() as ElkInstance,
-  );
+  elkInstance ??= engine().catch((error: unknown) => {
+    elkInstance = null;
+
+    throw error;
+  });
 
   return elkInstance;
 }
@@ -35,6 +48,11 @@ const groupPadding = 20;
 const groupHeader = 36;
 
 const isGroup = (type?: string) => type === "stackGroup" || type === "nodeGroup";
+
+// One ELK edge per source-target pair. Node ids carry their kind, so a key
+// joining the two on a separator they may themselves contain would let two
+// different pairs share one key, and one of the edges go unrouted.
+const pairKey = (source: string, target: string) => JSON.stringify([source, target]);
 
 /** Groups are sized by ELK from their children, so only leaves are measured. */
 const measuredSize = (leaf: Node) => ({
@@ -90,15 +108,15 @@ export async function computeLayout(
   const seenPairs = new Set<string>();
 
   for (const edge of edges) {
-    const pairKey = `${edge.source}:${edge.target}`;
+    const key = pairKey(edge.source, edge.target);
 
-    if (seenPairs.has(pairKey)) {
+    if (seenPairs.has(key)) {
       continue;
     }
 
-    seenPairs.add(pairKey);
+    seenPairs.add(key);
     elkEdges.push({
-      id: pairKey,
+      id: key,
       sources: [edge.source],
       targets: [edge.target],
     });
@@ -242,8 +260,7 @@ export async function computeLayout(
 
   // Map to React Flow edges, injecting ELK bend points
   const resultEdges = edges.map((edge) => {
-    const pairKey = `${edge.source}:${edge.target}`;
-    const points = edgeBendPoints.get(pairKey);
+    const points = edgeBendPoints.get(pairKey(edge.source, edge.target));
 
     return {
       ...edge,

@@ -42,6 +42,19 @@ export type ServiceNodeData = {
 
 const origin = { x: 0, y: 0 };
 
+// Traefik qualifies a reference with the provider that defines it. A swarm
+// service's labels are read by the docker and swarm providers, so a reference
+// carrying either can still name something these same labels declare.
+const ownProviders = ["docker", "swarm"];
+
+function localName(reference: string): string {
+  const at = reference.lastIndexOf("@");
+
+  return at > 0 && ownProviders.includes(reference.slice(at + 1))
+    ? reference.slice(0, at)
+    : reference;
+}
+
 function serviceNode(id: string, data: ServiceNodeData): Node {
   return { id, type: "traefikService", position: origin, data };
 }
@@ -80,17 +93,17 @@ export function traefikIntegrationToReactFlow(integration: TraefikIntegration): 
   }
 
   function referenceMiddleware(name: string, referenced = true): string {
-    const id = `middleware:${name}`;
+    const declared = declaredMiddlewares.find((middleware) => middleware.name === localName(name));
+    const label = declared?.name ?? name;
+    const id = `middleware:${label}`;
 
     if (!middlewareNodes.has(id)) {
-      const declared = declaredMiddlewares.find((middleware) => middleware.name === name);
-
       middlewareNodes.set(id, {
         id,
         type: "traefikMiddleware",
         position: origin,
         data: {
-          name,
+          name: label,
           type: declared?.type,
           config: declared?.config,
           external: declared == null,
@@ -133,7 +146,8 @@ export function traefikIntegrationToReactFlow(integration: TraefikIntegration): 
 
   function referenceService(router: TraefikRouter): string {
     if (router.service) {
-      const declared = declaredServices.find(({ name }) => name === router.service);
+      const reference = localName(router.service);
+      const declared = declaredServices.find(({ name }) => name === reference);
 
       if (declared) {
         return declaredServiceNode(declared, false);

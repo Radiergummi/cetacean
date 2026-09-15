@@ -84,6 +84,49 @@ describe("traefikIntegrationToReactFlow", () => {
     });
   });
 
+  it("resolves a provider-suffixed middleware reference to the one declared here", () => {
+    const { nodes, edges } = traefikIntegrationToReactFlow(
+      makeIntegration({
+        routers: [{ name: "web", middlewares: ["auth@docker", "compress@swarm"], service: "api" }],
+        services: [{ name: "api" }],
+        middlewares: [
+          { name: "auth", type: "basicauth" },
+          { name: "compress", type: "compress" },
+        ],
+      }),
+    );
+
+    expect(
+      nodes.filter((node) => node.type === "traefikMiddleware").map((node) => node.id),
+    ).toEqual(["middleware:auth", "middleware:compress"]);
+    expect(nodeById(nodes, "middleware:auth").data).toMatchObject({
+      name: "auth",
+      type: "basicauth",
+      external: false,
+      referenced: true,
+    });
+    expect(connections(edges)).toEqual([
+      "router:web->middleware:auth",
+      "middleware:auth->middleware:compress",
+      "middleware:compress->service:api",
+    ]);
+  });
+
+  it("resolves a provider-suffixed service reference to the one declared here", () => {
+    const { nodes, edges } = traefikIntegrationToReactFlow(
+      makeIntegration({
+        routers: [{ name: "web", service: "api@docker" }],
+        services: [{ name: "api", port: 8080 }],
+      }),
+    );
+
+    expect(nodes.filter((node) => node.type === "traefikService").map((node) => node.id)).toEqual([
+      "service:api",
+    ]);
+    expect(nodeById(nodes, "service:api").data).toMatchObject({ origin: "declared", port: 8080 });
+    expect(connections(edges)).toEqual(["router:web->service:api"]);
+  });
+
   it("binds a router that names no service to the only service declared here", () => {
     const { edges, nodes } = traefikIntegrationToReactFlow(
       makeIntegration({

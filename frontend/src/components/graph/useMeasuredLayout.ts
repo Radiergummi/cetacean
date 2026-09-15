@@ -41,6 +41,7 @@ export function useMeasuredLayout(graph: Graph, layout: Layout) {
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
   const [edges, setEdges] = useEdgesState(graph.edges);
   const [bounds, setBounds] = useState<Bounds | null>(null);
+  const [failed, setFailed] = useState(false);
   const measured = useNodesInitialized();
   const { getNodes } = useReactFlow();
 
@@ -86,8 +87,14 @@ export function useMeasuredLayout(graph: Graph, layout: Layout) {
         setNodes(result.nodes);
         setEdges(result.edges);
         setBounds(result.bounds);
+        setFailed(false);
       },
       (error: unknown) => {
+        if (!live) {
+          return;
+        }
+
+        setFailed(true);
         console.warn("graph layout failed:", error);
       },
     );
@@ -97,5 +104,5 @@ export function useMeasuredLayout(graph: Graph, layout: Layout) {
     };
   }, [measured, bounds, graph, applyData, layout, getNodes, setNodes, setEdges]);
 
-  return { nodes, edges, onNodesChange, bounds };
+  return { nodes, edges, onNodesChange, bounds, failed };
 }
