@@ -66,7 +66,11 @@ type RouterConfig struct {
 	InlineScriptHashes []string
 
 	TrustedProxies []netip.Prefix
-	Resyncer       Resyncer
+
+	// ForwardedHeaders names the forwarding header family TrustedProxies write.
+	ForwardedHeaders config.ForwardedHeaders
+
+	Resyncer Resyncer
 
 	// Liveness backs the watcher block on /-/health.
 	Liveness LivenessReporter
@@ -903,7 +907,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 
 	stack := NewChain(
 		requestID,
-		realIP(cfg.TrustedProxies),
+		realIP(cfg.TrustedProxies, cfg.ForwardedHeaders),
 		recovery,
 		securityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),
 		cors(cfg.CORS),

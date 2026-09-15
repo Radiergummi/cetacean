@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - JSON, Atom feeds and topology exports above a kilobyte are served as zstd or gzip when the client accepts one
 - Cross-site request forgery protection covers every write. An origin must be in `server.cors.origins`; `server.public_url` is trusted automatically. A wildcard cannot grant writes, so a read-everything deployment must now name its writers
 - Client certificate authentication works behind a TLS-terminating proxy that forwards the certificate in `Client-Cert` (RFC 9440)
-- `Forwarded` (RFC 7239) is read alongside `X-Forwarded-For` when resolving the client address behind a trusted proxy
+- `server.forwarded_headers` names which forwarding headers a trusted proxy writes — `x-forwarded` by default, or `forwarded` for RFC 7239. The family it does not name is discarded, so a client cannot name its own address
 - The MCP authorization server publishes the public key that verifies its access tokens, as a JWK Set at `/oauth/jwks`. Anything checking a token Cetacean issued no longer needs a key that could issue one
 - `GET /-/health` reports whether Cetacean is still tracking the cluster, and `/-/metrics` says the same for alerting. The dashboard marks itself stale instead of showing a frozen cluster as a live one
 - `POST /-/resync` and `GET /swarm/plugins` appear in the API specification

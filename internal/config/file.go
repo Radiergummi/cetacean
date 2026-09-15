@@ -105,16 +105,17 @@ type fileSizingThresholds struct {
 }
 
 type fileServer struct {
-	ListenAddr      *string   `toml:"listen_addr"`
-	Pprof           *bool     `toml:"pprof"`
-	SelfMetrics     *bool     `toml:"self_metrics"`
-	Recommendations *bool     `toml:"recommendations"`
-	SSE             *fileSSE  `toml:"sse"`
-	CORS            *fileCORS `toml:"cors"`
-	OperationsLevel *int      `toml:"operations_level"`
-	BasePath        *string   `toml:"base_path"`
-	PublicURL       *string   `toml:"public_url"`
-	TrustedProxies  *string   `toml:"trusted_proxies"`
+	ListenAddr       *string   `toml:"listen_addr"`
+	Pprof            *bool     `toml:"pprof"`
+	SelfMetrics      *bool     `toml:"self_metrics"`
+	Recommendations  *bool     `toml:"recommendations"`
+	SSE              *fileSSE  `toml:"sse"`
+	CORS             *fileCORS `toml:"cors"`
+	OperationsLevel  *int      `toml:"operations_level"`
+	BasePath         *string   `toml:"base_path"`
+	PublicURL        *string   `toml:"public_url"`
+	TrustedProxies   *string   `toml:"trusted_proxies"`
+	ForwardedHeaders *string   `toml:"forwarded_headers"`
 }
 
 type fileCORS struct {
