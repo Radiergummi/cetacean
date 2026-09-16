@@ -18,6 +18,8 @@ func main() {
 	switch os.Args[1] {
 	case "static":
 		err = runStatic(".")
+	case "sweep":
+		err = runSweep(".")
 	default:
 		err = fmt.Errorf("unknown command %q", os.Args[1])
 	}

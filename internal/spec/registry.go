@@ -263,6 +263,34 @@ func (q *Requirement) validate() error {
 	return nil
 }
 
+// Token is how this document is named in a comment: rfc7636 -> RFC7636,
+// sep-2575 -> SEP-2575.
+func (d *Document) Token() string {
+	upper := strings.ToUpper(d.Name)
+
+	if num, ok := strings.CutPrefix(upper, "SEP-"); ok {
+		return "SEP-" + num
+	}
+
+	return strings.ReplaceAll(upper, "-", "")
+}
+
+// Unregistered lists specifications the tree cites and this registry
+// deliberately says nothing about, each with its reason.
+func Unregistered() (map[string]string, error) {
+	body, err := registryFS.ReadFile("registry/unregistered.yaml")
+	if err != nil {
+		return nil, err
+	}
+
+	out := map[string]string{}
+	if err := yaml.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("spec: registry/unregistered.yaml: %w", err)
+	}
+
+	return out, nil
+}
+
 // Validate reports the document-level rules: the inventory denominator, and
 // that every dismissal carries a reason.
 func (r *Registry) Validate() []error {
