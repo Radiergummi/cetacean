@@ -69,7 +69,7 @@ know refuses startup and names it.
   Enable the recommendation engine, which periodically analyses swarm state and Prometheus metrics to surface findings. See [Recommendations][recommendations].
 </ConfigParam>
 
-<ConfigParam name="server.operations_level" flag="-operations-level" env="CETACEAN_OPERATIONS_LEVEL" default="1">
+<ConfigParam name="server.operations_level" flag="-operations-level" env="CETACEAN_OPERATIONS_LEVEL" default="0">
   Which write operations the [dashboard][dashboard] and the [API][api] expose. `0` is read-only, `1` allows operational actions, `2` adds configuration edits, `3` allows destructive operations. See [Operations level][operations-level] for the breakdown.
 </ConfigParam>
 
@@ -269,7 +269,7 @@ consent screen, so one would only sit unused.
   How long a remembered approval lets a client skip the consent screen (90 days). Keep it above [`oauth.refresh_token_ttl`][oauth.refresh_token_ttl], or an expiring refresh token costs a second prompt. Set `0s` to prompt on every authorization.
 </ConfigParam>
 
-<ConfigParam name="oauth.api_tokens" env="CETACEAN_OAUTH_API_TOKENS" default="true">
+<ConfigParam name="oauth.api_tokens" env="CETACEAN_OAUTH_API_TOKENS" default="false">
   Offer the web API as a protected resource, so a client can obtain a token for it and authenticate with `Authorization: Bearer` instead of a browser session. The API and `/mcp` are separate resources: a token for one is refused by the other, whichever path it sits under. Turning this off makes the API resource undiscoverable as well as unusable — there is no metadata document for it, and the authorize endpoint refuses to mint one.
 </ConfigParam>
 

@@ -141,7 +141,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		flags.OperationsLevel,
 		"CETACEAN_OPERATIONS_LEVEL",
 		fOpsLevel,
-		int(OpsOperational),
+		int(OpsReadOnly),
 		int(OpsReadOnly),
 		int(OpsImpactful),
 	)

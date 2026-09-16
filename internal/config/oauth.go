@@ -82,7 +82,7 @@ func DefaultOAuthConfig() OAuthConfig {
 		RefreshTokenTTL: 720 * time.Hour,
 		ConsentTTL:      2160 * time.Hour, // 90d, well past the refresh token's 30d
 
-		APITokens:                true,
+		APITokens:                false,
 		TokenOperationsLevel:     OpsInherit,
 		RequireResourceIndicator: true,
 		DCREnabled:               true,
