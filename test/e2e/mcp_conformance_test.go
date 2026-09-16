@@ -556,9 +556,9 @@ func TestMCPConformanceResourceNotFound(t *testing.T) {
 		t.Errorf("code = %d, want -32602: %s", got.Body.Error.Code, got.Raw)
 	}
 
-	// SEP-2164 also says the error data SHOULD name the URI that was asked
-	// for, which this server does not do. Pinned as it stands: when the
-	// field appears, this case fails and says so rather than staying quiet.
+	// The spec's example error carries the requested URI in data, though no
+	// statement requires it and this server sends none. Pinned as it stands:
+	// when the field appears, this case fails rather than staying quiet.
 	if _, ok := got.Body.Error.Data["uri"]; ok {
 		t.Errorf("error data now names the uri — the SHOULD is met, so assert it: %s", got.Raw)
 	}
@@ -654,6 +654,11 @@ func TestMCPConformanceSubscriptionStream(t *testing.T) {
 // connections", which is what stops a page the user is browsing from driving
 // their cluster.
 func TestMCPConformanceOriginValidation(t *testing.T) {
+	spec.Satisfies(t,
+		"mcp/transports/origin-validated-on-every-connection",
+		"mcp/transports/invalid-origin-refused-with-403",
+	)
+
 	proc := startConformanceSUT(t)
 
 	probe := func(t *testing.T, origin string) int {
