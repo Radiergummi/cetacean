@@ -14,6 +14,10 @@ requirements:
       If the values are not equal, an error response indicating "invalid_grant"
       MUST be returned.
     url: https://www.rfc-editor.org/rfc/rfc7636#section-4.6
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "	if !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
+        with: "	if false && !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
 
   - id: verifier-character-set
     level: MUST
