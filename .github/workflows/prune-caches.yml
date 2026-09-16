@@ -15,6 +15,7 @@ permissions:
 jobs:
   prune:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       # Idle, not old: an entry still being restored is still earning its
       # space however long ago it was written. Fourteen days clears the

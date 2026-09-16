@@ -9,6 +9,8 @@ E2E_COVERDIR := coverdata
 ## Lint all code
 lint:
 	golangci-lint run ./...
+	actionlint
+	zizmor .github/workflows/
 	cd frontend && npx oxlint
 	cd website && npx oxlint
 

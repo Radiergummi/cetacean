@@ -18,10 +18,10 @@ on:
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
+# Read-only by default: the build runs npm ci and the Astro build, and must not
+# hold a scope that can publish. deploy takes the write scopes on its own.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -30,9 +30,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           # The sitemap's `lastmod` and every page's modified date come from the
           # last commit that touched the file. A shallow clone holds one commit
           # with no parent, so `git log -1 -- <path>` reports *its* date for
@@ -74,7 +76,11 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: build
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

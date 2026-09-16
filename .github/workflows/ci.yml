@@ -16,11 +16,22 @@ on:
 permissions:
   contents: read
 
+# A superseded run has nothing left to report, but without this it runs to
+# completion anyway. Pull requests only: every commit on main owes a SBOM sync
+# and a Pages deploy, and cancelling one leaves that commit unserved. This
+# overrides sbom-sync's own group, which is safe — see the note there.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build-frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -45,8 +56,11 @@ jobs:
   test:
     needs: build-frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -72,8 +86,11 @@ jobs:
   lint-go:
     needs: build-frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -94,10 +111,39 @@ jobs:
       # by a local `make fmt-check`.
       - run: golangci-lint fmt --diff ./... 2>&1 | diff /dev/null -
 
-  lint-frontend:
+  lint-workflows:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      # Installed rather than used as actions. Both publish one, but a
+      # non-GitHub action has to be allowlisted in repository settings, and a
+      # pinned module version and a pinned wheel carry the same guarantee
+      # without the setting.
+      - run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - run: actionlint -color
+      - run: pipx install zizmor==1.30.1
+      # Online, so that an action going known-bad fails a run rather than
+      # waiting to be noticed. zizmor's own version is pinned, which keeps
+      # rule drift out; what drifts here is the advisory data, and that is
+      # the point of running it.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: zizmor .github/workflows/
+
+  lint-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -110,8 +156,11 @@ jobs:
 
   lint-website:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -133,8 +182,11 @@ jobs:
 
   test-frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -146,6 +198,7 @@ jobs:
   sbom-sync:
     needs: build-frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Keeps the committed SBOM current instead of asking the author to.
     #
     # On a pull request from this repository the regenerated artifacts are
@@ -172,12 +225,16 @@ jobs:
       # default rather than adding to it.
       actions: write
     # One sync per branch: two concurrent runs would race the same commit.
+    # The workflow-level group above still cancels this job on a new pull
+    # request push, which is safe: createCommitOnBranch either landed or it
+    # did not, and the superseding run syncs again from the newer head.
     concurrency:
       group: sbom-sync-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           # A pull_request checkout is a detached merge commit by default, which
           # has no branch to commit onto. Check out the head itself.
           ref: ${{ github.event.pull_request.head.sha || github.ref }}

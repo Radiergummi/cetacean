@@ -29,7 +29,7 @@ Open `http://localhost:5173`. Vite proxies resource paths to the Go backend, so 
 ```bash
 make check       # Full suite: lint + format check + tests
 make test        # Go tests only
-make lint        # golangci-lint + oxlint
+make lint        # golangci-lint + actionlint + zizmor + oxlint
 make fmt         # Auto-format Go + frontend code
 make build       # Frontend, MCP widgets, and the binary that embeds them
 ```
@@ -68,6 +68,7 @@ test: add integration tests for search endpoint
 
 - **Go**: `gofmt` + `golangci-lint`. Match existing patterns — stdlib `net/http`, `log/slog`, no frameworks.
 - **Frontend**: `oxlint` + `oxfmt`. React 19 with TypeScript, Tailwind CSS v4, shadcn/ui components.
+- **Workflows**: `actionlint` + `zizmor`. Pin every action by commit SHA with the version in a trailing comment.
 - Don't refactor code unrelated to your change.
 
 ## Architecture
