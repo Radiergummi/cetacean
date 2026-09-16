@@ -5,10 +5,10 @@ url: https://www.rfc-editor.org/rfc/rfc9068
 
 inventory:
   from: >-
-    RFC 9068 §2.1's four statements about the header, and §2.2's seven REQUIRED
-    claims. §4, which this server also implements as its own resource server,
-    is not registered yet.
-  count: 11
+    RFC 9068 §2.1's four statements about the header, §2.2's seven REQUIRED
+    claims, and §4's thirteen, which this server is subject to as its own
+    resource server.
+  count: 24
 
 requirements:
   - id: tokens-are-signed
@@ -125,3 +125,107 @@ requirements:
       - file: internal/oauth/jwt.go
         replace: "\t\tJTIID:     base64.RawURLEncoding.EncodeToString(jtiBytes),"
         with: "\t\tJTIID:     \"\","
+
+  # § 4, validating
+
+  - id: as-advertises-keys-and-issuer
+    level: SHOULD
+    text: >-
+      Authorization servers SHOULD use OAuth 2.0 Authorization Server Metadata
+      [RFC8414] to advertise to resource servers their signing keys via
+      "jwks_uri" and what "iss" claim value to expect via the "issuer" metadata
+      value.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+
+  - id: discovery-documents-agree
+    level: MUST
+    text: >-
+      If an authorization server supports both OAuth 2.0 Authorization Server
+      Metadata and OpenID Connect discovery, the values provided MUST be
+      consistent across the two publication methods.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+
+  - id: typ-verified-on-receipt
+    level: MUST
+    text: >-
+      The resource server MUST verify that the "typ" header value is "at+jwt"
+      or "application/at+jwt" and reject tokens carrying any other value.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif !strings.EqualFold(hdr.Typ, accessTokenType) &&"
+        with: "\tif false && !strings.EqualFold(hdr.Typ, accessTokenType) &&"
+
+  - id: iss-exactly-matches
+    level: MUST
+    text: >-
+      The issuer identifier for the authorization server (which is typically
+      obtained during discovery) MUST exactly match the value of the "iss"
+      claim.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif payload.Issuer != t.Issuer {"
+        with: "\tif payload.Issuer != t.Issuer && false {"
+
+  - id: aud-names-this-resource
+    level: MUST
+    text: >-
+      The resource server MUST validate that the "aud" claim contains a
+      resource indicator value corresponding to an identifier the resource
+      server expects for itself. The JWT access token MUST be rejected if "aud"
+      does not contain a resource indicator of the current resource server as a
+      valid audience.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif !slices.Contains(payload.Audience, aud) {"
+        with: "\tif !slices.Contains(payload.Audience, aud) && false {"
+
+  - id: signature-validated-with-declared-alg
+    level: MUST
+    text: >-
+      The resource server MUST validate the signature of all incoming JWT
+      access tokens according to [RFC7515] using the algorithm specified in the
+      JWT "alg" Header Parameter. The resource server MUST reject any JWT in
+      which the value of "alg" is "none". The resource server MUST use the keys
+      provided by the authorization server.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif !verifyES256(&t.signer.PublicKey, parts[0]+\".\"+parts[1], parts[2]) {"
+        with: "\tif false && !verifyES256(&t.signer.PublicKey, parts[0]+\".\"+parts[1], parts[2]) {"
+
+  - id: current-time-before-exp
+    level: MUST
+    text: >-
+      The current time MUST be before the time represented by the "exp" claim.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif time.Unix(payload.ExpiresAt, 0).Before(time.Now()) {"
+        with: "\tif time.Unix(payload.ExpiresAt, 0).Before(time.Now()) && false {"
+
+  - id: failure-answers-invalid-token
+    level: MUST
+    text: >-
+      In case of any failure in the validation checks listed above, the
+      authorization server response MUST include the error code
+      "invalid_token".
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+
+dismissed:
+  asymmetric-signing-recommended: >-
+    RECOMMENDED, not normative, and met anyway: this server signs with ES256.
+  different-keys-for-id-tokens: >-
+    A MAY about signing ID tokens with a separate key. This server issues no ID
+    tokens.
+  resource-server-validates-in-this-manner: >-
+    The umbrella over the five bullets that follow it; each is registered here
+    on its own.
+  encrypted-token-rejected: >-
+    Conditional on encryption negotiated at registration time, which this
+    server neither offers nor accepts.
+  authorization-claims-inform-the-decision: >-
+    A SHOULD the specification itself puts beyond its scope. What the ACL does
+    with a token's claims is internal/auth's, not this profile's.

@@ -15,6 +15,8 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	josejwt "github.com/go-jose/go-jose/v4/jwt"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // mockIDPServer is a configurable mock OIDC identity provider that serves
@@ -1028,6 +1030,8 @@ func TestAuthenticate_ValidBearerToken(t *testing.T) {
 }
 
 func TestAuthenticate_ExpiredBearerToken(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/failure-answers-invalid-token")
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
