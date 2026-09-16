@@ -8,6 +8,7 @@ import (
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/compose"
@@ -352,11 +353,17 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err := s.checkRead(ctx, "stack", resourceID); err != nil {
 			return nil, err
 		}
+		// Filtered before either answer is built: the compose document is a
+		// projection of these same members, so exporting the unfiltered stack
+		// would hand back what the label withholds.
+		stack = cluster.FilterStackDetail(s.acl, auth.IdentityFromContext(ctx), stack)
+
 		if subResource == "compose" {
 			return composeDoc(
 				compose.FromStack(stack, s.filterNetworks(ctx, s.cache.ListNetworks())),
 			)
 		}
+
 		return stack, nil
 
 	case "configs":
