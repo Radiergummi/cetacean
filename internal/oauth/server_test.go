@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // newTestServer constructs a Server with in-memory stores, a known signing key,
@@ -209,6 +210,8 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 // challenge comparison. A short one is refused by validateCodeVerifier first,
 // with the same invalid_grant, and never reaches the comparison at all.
 func TestTokenExchangeWrongVerifier(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7636/verifier-must-match-challenge")
+
 	s := newTestServer(t)
 
 	const (
@@ -254,6 +257,8 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8707/unknown-resource-refused")
+
 	s := newTestServer(t)
 	s.cfg.OAuth.RequireResourceIndicator = false
 
@@ -591,6 +596,8 @@ func TestHTTPQuotedString(t *testing.T) {
 // in the flow, so a vector from the RFC is what says it computes the same
 // challenge a client does rather than merely agreeing with itself.
 func TestS256MatchesTheRFC7636Vector(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7636/verifier-character-set")
+
 	const (
 		verifier  = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
 		challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"

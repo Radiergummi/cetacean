@@ -1,0 +1,29 @@
+source: RFC 8707
+title: Resource Indicators for OAuth 2.0
+reviewed: 2026-09-16
+url: https://www.rfc-editor.org/rfc/rfc8707
+
+inventory:
+  from: Manual read of RFC 8707 §2; authorization-server statements only.
+  count: 2
+
+requirements:
+  - id: single-resource-per-token
+    level: MUST
+    text: >-
+      The authorization server MUST NOT issue an access token that is valid for
+      resources other than those the client requested.
+    url: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+    discriminator: resource is not one this server issues tokens for
+    mutants:
+      - file: internal/oauth/resource.go
+        replace: "\tid, ok := s.canonical[raw[0]]\n\tif !ok {"
+        with: "\tid, ok := s.canonical[raw[0]]\n\tif !ok && false {"
+
+  - id: unknown-resource-refused
+    level: MUST
+    text: >-
+      If the requested resource is unknown [...] the authorization server MUST
+      return an error response with "invalid_target".
+    url: https://www.rfc-editor.org/rfc/rfc8707#section-2
+    discriminator: invalid_target
