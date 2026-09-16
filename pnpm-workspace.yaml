@@ -1,0 +1,26 @@
+packages:
+  - frontend
+  - website
+
+# pnpm runs no dependency's install script unless it is named here. These four
+# ask for one: esbuild fetches its platform binary, msw copies its service
+# worker, libxmljs2 compiles a native addon, and vue-demi picks a Vue build.
+# Anything else that starts asking is a question, not a default.
+allowBuilds:
+  esbuild: true
+  libxmljs2: true
+  msw: true
+  vue-demi: true
+
+# Version floors, carried over from the `overrides` blocks the two package.json
+# files used to hold: pnpm does not read npm's field, so leaving them there
+# would drop the constraint silently. One map now covers both packages, which
+# is the safe direction for a floor.
+overrides:
+  brace-expansion: ">=5.0.9"
+  fast-uri: ">=4.1.2"
+  hono: ">=4.12.34"
+  ip-address: ">=10.3.1"
+  postcss: ">=8.5.23"
+  undici: ">=7.29.0"
+  vite: "^8.0.0"
