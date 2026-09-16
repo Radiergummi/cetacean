@@ -207,7 +207,7 @@ spec-report:
 spec-report-full: build
 	rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
 	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
-	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) CETACEAN_E2E_BINARY=$(PWD)/$(E2E_BINARY) \
+	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) \
 	  go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...
 	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit,e2e
 

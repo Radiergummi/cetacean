@@ -34,9 +34,9 @@ var gaps = map[string]string{
 		"notifications and never asserts that nothing else arrives on the stream.",
 }
 
-// dismissed says why there is nothing of ours to test. Every non-covered check
-// has to be argued here, with no fallback: an upstream addition fails this
-// generator until somebody decides what it is.
+// dismissed says why there is nothing of ours to test. A check absent from
+// here becomes a registered requirement instead, which the static gate fails
+// on until a test claims it — so an upstream addition is never silent.
 var dismissed = map[string]string{
 	"sep-2575-client-populates-meta":                  reasonClientSide,
 	"sep-2575-client-retry-supported-version":         reasonClientSide,
@@ -111,6 +111,8 @@ func run() error {
 		return err
 	}
 
+	seen := map[string]bool{}
+
 	for _, sep := range seps {
 		raw := fmt.Sprintf("%s%s/src/seps/sep-%d.yaml", rawBase, upstreamRev, sep)
 
@@ -126,7 +128,7 @@ func run() error {
 
 		path := filepath.Join(dir, fmt.Sprintf("sep-%d.yaml", sep))
 
-		out, err := render(&doc, raw, reviewed(path))
+		out, err := render(&doc, raw, reviewed(path), seen)
 		if err != nil {
 			return fmt.Errorf("sep-%d: %w", sep, err)
 		}
@@ -138,7 +140,31 @@ func run() error {
 		fmt.Fprintf(os.Stderr, "spec-genmcp: wrote %s\n", path)
 	}
 
-	return nil
+	return unconsumed(seen)
+}
+
+// unconsumed refuses a table entry for a check upstream no longer publishes.
+// It is the sweep's stale-dismissal rule applied to this file's own tables: a
+// reason for something that does not exist is worse than no reason.
+func unconsumed(seen map[string]bool) error {
+	var stale []string
+
+	for _, table := range []map[string]string{dismissed, gaps, levels} {
+		for check := range table {
+			if !seen[check] {
+				stale = append(stale, check)
+			}
+		}
+	}
+
+	if len(stale) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"upstream no longer publishes %s; drop the entry from scripts/spec-genmcp",
+		strings.Join(slices.Sorted(slices.Values(stale)), ", "),
+	)
 }
 
 func fetch(url string) ([]byte, error) {
@@ -198,7 +224,7 @@ func reviewed(path string) string {
 	return prev.Reviewed
 }
 
-func render(doc *upstreamDoc, raw, reviewed string) ([]byte, error) {
+func render(doc *upstreamDoc, raw, reviewed string, seen map[string]bool) ([]byte, error) {
 	prefix := fmt.Sprintf("sep-%d-", doc.SEP)
 
 	var (
@@ -213,18 +239,13 @@ func render(doc *upstreamDoc, raw, reviewed string) ([]byte, error) {
 		}
 
 		checks++
+		seen[r.Check] = true
 
-		if _, skip := dismissed[r.Check]; !skip {
+		reason, skip := dismissed[r.Check]
+		if !skip {
 			reqs = append(reqs, r)
 
 			continue
-		}
-
-		reason, ok := dismissed[r.Check]
-		if !ok {
-			return nil, fmt.Errorf(
-				"%s is new upstream: register it by leaving it out of the dismissed table "+
-					"and claiming it from a test, or dismiss it there with a reason", r.Check)
 		}
 
 		dismiss[strings.TrimPrefix(r.Check, prefix)] = reason

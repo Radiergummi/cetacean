@@ -84,11 +84,21 @@ func runReport(root, claims, suites string) error {
 
 	summary := summarise(reg, static, ran, strings.Contains(suites, "e2e"))
 
+	// Only a document the tree actually cites belongs in the numerator: the
+	// denominator counts citations, and a family named nowhere is in neither.
+	covered := 0
+
+	for _, d := range reg.Documents {
+		if len(cited[d.Token()]) > 0 {
+			covered++
+		}
+	}
+
 	// Never a bare ratio: a number without its denominator reads as a
 	// compliance claim no suite here can support.
 	fmt.Fprintf(os.Stderr,
 		"spec: %d requirements across %d documents (%d of %d cited specifications)\n",
-		summary.Total, len(reg.Documents), len(reg.Documents), len(cited))
+		summary.Total, len(reg.Documents), covered, len(cited))
 	fmt.Fprintf(os.Stderr,
 		"  %d exercised by %s, %d not run, %d gaps, %d deferred, %d uncovered\n",
 		summary.Exercised, suites,
@@ -100,7 +110,7 @@ func runReport(root, claims, suites string) error {
 
 	if len(summary.Uncovered) > 0 {
 		return fmt.Errorf(
-			"%d requirement(s) claimed by a test that did not run",
+			"%d requirement(s) nothing in this run exercised",
 			len(summary.Uncovered),
 		)
 	}

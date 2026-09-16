@@ -13,6 +13,7 @@ RFC4180: "CSV. renderCSV implements it (internal/api/csv.go: CRLF, escaping) wit
 RFC4287: "Atom 1.0. internal/api/atom implements the feed/entry/author structs, tested in atom_test.go. Implemented, not yet registered."
 RFC4648: "base64url alphabet, used via encoding/base64. No behaviour of ours to test."
 RFC5005: "Feed Paging and Archiving. Atom next/prev links are implemented in internal/api/atom_handlers.go, tested by TestPaginationLinks and TestRenderPaginationLinks. Implemented, not yet registered."
+RFC5280: "X.509 certificate and CRL profile, named where the mTLS mode is documented. Client certificates are parsed by crypto/x509 (internal/auth/cert.go); the profile is the standard library's to enforce, not ours."
 RFC5789: "PATCH. internal/api/allow.go emits Accept-Patch per resource type, tested in allow_test.go; the formats it advertises are RFC 7396 and RFC 6902. Implemented, not yet registered."
 RFC5869: "HKDF key derivation, used via golang.org/x/crypto/hkdf's Extract and Expand. No behaviour of ours to test."
 RFC6265: "Explains why the e2e OIDC harness must use \"localhost\" (cookies are host-only). The browser enforces this, not us."
