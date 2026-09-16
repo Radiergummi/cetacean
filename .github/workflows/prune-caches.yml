@@ -1,0 +1,47 @@
+name: Prune caches
+
+# Nothing garbage-collects Actions caches. Every key that embeds a dependency
+# hash orphans its predecessor on the next bump — setup-go, setup-node,
+# golangci-lint and CodeQL's ~1 GB Go dependency cache alike — and the 10 GB
+# repository limit is reached long before LRU evicts the right entry.
+on:
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      # Idle, not old: an entry still being restored is still earning its
+      # space however long ago it was written. Fourteen days clears the
+      # weekly CodeQL schedule, so a cache it reads only on that cadence
+      # survives to be read.
+      - name: Delete caches idle for 14 days
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          freed=0
+          count=0
+
+          while IFS=$'\t' read -r id size key; do
+            [ -n "$id" ] || continue
+            echo "::notice::pruning $key ($((size / 1048576)) MiB)"
+            gh api -X DELETE "repos/$REPO/actions/caches/$id" --silent
+            freed=$((freed + size))
+            count=$((count + 1))
+          done < <(
+            gh api --paginate "repos/$REPO/actions/caches?per_page=100" \
+              --jq ".actions_caches[]
+                    | select(.last_accessed_at < \"$cutoff\")
+                    | [.id, .size_in_bytes, .key]
+                    | @tsv"
+          )
+
+          echo "Pruned $count entries, freed $((freed / 1048576)) MiB" >> "$GITHUB_STEP_SUMMARY"
