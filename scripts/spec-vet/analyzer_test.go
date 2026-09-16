@@ -8,7 +8,5 @@ import (
 
 func TestAnalyzer(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), Analyzer,
-		"github.com/radiergummi/cetacean/claims",
-		"github.com/radiergummi/cetacean/aliased",
-	)
+		"github.com/radiergummi/cetacean/claims")
 }

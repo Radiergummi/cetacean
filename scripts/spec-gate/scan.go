@@ -99,7 +99,7 @@ func Scan(root string) ([]Claim, []error) {
 // ScanFile extracts the claims one test file makes. go/parser applies no build
 // constraints, which is what lets this reach test/e2e at all; the price is no
 // type information, so how a claim may be written is scripts/spec-vet's to
-// enforce. The only error here is a file that does not parse.
+// enforce.
 func ScanFile(path string) ([]Claim, []error) {
 	fset := token.NewFileSet()
 
@@ -111,6 +111,8 @@ func ScanFile(path string) ([]Claim, []error) {
 	if !importsSpec(file) {
 		return nil, nil
 	}
+
+	var errs []error
 
 	tagged := needsABuildTag(file)
 
@@ -138,20 +140,18 @@ func ScanFile(path string) ([]Claim, []error) {
 				return true
 			}
 
-			if len(call.Args) < 2 {
-				return true
-			}
-
-			// A non-literal id is spec-vet's to report; skipping it here
-			// leaves the requirement looking unclaimed, which fails closed.
 			for _, arg := range call.Args[1:] {
 				lit, ok := arg.(*ast.BasicLit)
 				if !ok || lit.Kind != token.STRING {
+					errs = append(errs, unreadable(path, fset, arg.Pos()))
+
 					continue
 				}
 
 				id, err := strconv.Unquote(lit.Value)
 				if err != nil {
+					errs = append(errs, unreadable(path, fset, arg.Pos()))
+
 					continue
 				}
 
@@ -168,7 +168,16 @@ func ScanFile(path string) ([]Claim, []error) {
 		})
 	}
 
-	return claims, nil
+	return claims, errs
+}
+
+// unreadable reports a claim this scan could not extract an id from, which
+// would otherwise leave the inventory short without anything saying so — a
+// requirement with another claimant stays green. Why the form is refused is
+// scripts/spec-vet's to explain.
+func unreadable(path string, fset *token.FileSet, pos token.Pos) error {
+	return fmt.Errorf("%s:%d: claim id is not a string literal; this claim is not counted",
+		path, fset.Position(pos).Line)
 }
 
 // importsSpec reports whether this file can contain a claim at all.
