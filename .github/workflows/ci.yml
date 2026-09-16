@@ -16,6 +16,14 @@ on:
 permissions:
   contents: read
 
+# A superseded run has nothing left to report, but without this it runs to
+# completion anyway. Pull requests only: every commit on main owes a SBOM sync
+# and a Pages deploy, and cancelling one leaves that commit unserved. This
+# overrides sbom-sync's own group, which is safe — see the note there.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build-frontend:
     runs-on: ubuntu-latest
@@ -172,6 +180,9 @@ jobs:
       # default rather than adding to it.
       actions: write
     # One sync per branch: two concurrent runs would race the same commit.
+    # The workflow-level group above still cancels this job on a new pull
+    # request push, which is safe: createCommitOnBranch either landed or it
+    # did not, and the superseding run syncs again from the newer head.
     concurrency:
       group: sbom-sync-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: false
