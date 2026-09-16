@@ -19,7 +19,11 @@ var citationRE = regexp.MustCompile(`(?i)\b(RFC[ -]?[0-9]{3,4}|SEP[ -]?[0-9]{3,4
 // a specification: the registry states each token to register or dismiss it,
 // and the gate's tests state tokens as fixtures. Counting either would let a
 // token self-cite and hide a stale dismissal.
-var mechanismPrefixes = []string{"internal/spec/registry/", "scripts/spec-gate/"}
+var mechanismPrefixes = []string{
+	"internal/spec/registry/",
+	"scripts/spec-gate/",
+	"scripts/spec-vet/",
+}
 
 // Citations maps each specification the tree names to the files naming it.
 // Every tracked file counts: a citation in the root binary or the changelog is

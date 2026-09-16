@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -47,123 +48,71 @@ func TestOne(t *testing.T) {
 	}
 }
 
-func TestScanFileRejectsANonLiteralClaim(t *testing.T) {
-	p := writeTemp(t, "b_test.go", `package x
-
-import (
-	"testing"
-
-	"github.com/radiergummi/cetacean/internal/spec"
-)
-
-func TestTwo(t *testing.T) {
-	id := "mcp/sep-2575/a"
-	spec.Satisfies(t, id)
-}
-`)
-
-	_, errs := ScanFile(p)
-	if len(errs) != 1 {
-		t.Fatalf("errors = %v, want one about the non-literal argument", errs)
-	}
-}
-
-// The gate matches on the selector name, so an alias would break it silently
-// in both directions.
-func TestScanFileRejectsAnAliasedImport(t *testing.T) {
-	p := writeTemp(t, "c_test.go", `package x
-
-import (
-	"testing"
-
-	sp "github.com/radiergummi/cetacean/internal/spec"
-)
-
-func TestThree(t *testing.T) {
-	sp.Satisfies(t, "mcp/sep-2575/a")
-}
-`)
-
-	_, errs := ScanFile(p)
-	if len(errs) != 1 {
-		t.Fatalf("errors = %v, want one about the import alias", errs)
-	}
-}
-
-func TestScanFileRejectsACallWithNoArguments(t *testing.T) {
-	p := writeTemp(t, "d_test.go", `package x
-
-import (
-	"testing"
-
-	"github.com/radiergummi/cetacean/internal/spec"
-)
-
-func TestFour(t *testing.T) {
-	spec.Satisfies()
-}
-`)
-
-	_, errs := ScanFile(p)
-	if len(errs) != 1 {
-		t.Fatalf("errors = %v, want one about the missing arguments", errs)
-	}
-}
-
-// A claim registers its cleanup when it runs, and cleanups run
-// last-registered-first — so a helper called first registers one that fires
-// after the claim's own and can no longer withhold it.
-func TestScanFileRejectsAClaimThatIsNotFirst(t *testing.T) {
+// How a claim may be written is scripts/spec-vet's to enforce; what this scan
+// must not do is invent one. Each case below is invisible to it, which leaves
+// the requirement looking unclaimed — the direction that fails closed.
+func TestScanFileReadsNoClaimItCannotSee(t *testing.T) {
 	const preamble = `package x
 
 import (
 	"testing"
 
-	"github.com/radiergummi/cetacean/internal/spec"
+	%s"github.com/radiergummi/cetacean/internal/spec"
 )
 
 `
 
 	cases := []struct {
-		name    string
-		body    string
-		refused bool
+		name  string
+		alias string
+		body  string
 	}{{
-		name: "after a helper that registers a cleanup",
-		body: `func TestLate(t *testing.T) {
-	s := newTestServer(t)
-	spec.Satisfies(t, "mcp/sep-2575/a")
-	_ = s
-}`,
-		refused: true,
-	}, {
-		name: "first, after t.Helper",
-		body: `func TestEarly(t *testing.T) {
-	t.Helper()
-	spec.Satisfies(t, "mcp/sep-2575/a")
+		name: "a non-literal id",
+		body: `func TestTwo(t *testing.T) {
+	id := "mcp/sep-2575/a"
+	spec.Satisfies(t, id)
 }`,
 	}, {
-		name: "first, after a declaration",
-		body: `func TestAfterConst(t *testing.T) {
-	const id = "x"
-	spec.Satisfies(t, "mcp/sep-2575/a")
-	_ = id
+		name:  "an aliased import",
+		alias: "sp ",
+		body: `func TestThree(t *testing.T) {
+	sp.Satisfies(t, "mcp/sep-2575/a")
+}`,
+	}, {
+		name: "a call naming no requirement",
+		body: `func TestFour(t *testing.T) {
+	spec.Satisfies(t)
 }`,
 	}}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, errs := ScanFile(writeTemp(t, "o_test.go", preamble+tc.body+"\n"))
+			src := fmt.Sprintf(preamble, tc.alias) + tc.body + "\n"
 
-			switch {
-			case tc.refused && len(errs) != 1:
-				t.Fatalf("errors = %v, want one about the call order", errs)
-			case tc.refused && !strings.Contains(errs[0].Error(), "must come first"):
-				t.Errorf("error does not name the rule: %v", errs[0])
-			case !tc.refused && len(errs) != 0:
-				t.Fatalf("errors = %v, want none", errs)
+			claims, errs := ScanFile(writeTemp(t, "o_test.go", src))
+			if len(errs) != 0 {
+				t.Fatalf("errors = %v, want none — spec-vet reports these", errs)
+			}
+
+			if len(claims) != 0 {
+				t.Fatalf("claims = %+v, want none", claims)
 			}
 		})
+	}
+}
+
+// Fixtures under testdata are not code of ours, and spec-vet keeps claims
+// there that name requirements the registry does not have.
+func TestTestFilesSkipsTestdata(t *testing.T) {
+	files, err := TestFiles(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, f := range files {
+		if slices.Contains(strings.Split(f, "/"), "testdata") {
+			t.Errorf("%s is under testdata", f)
+		}
 	}
 }
 

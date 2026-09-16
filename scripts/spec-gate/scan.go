@@ -10,11 +10,14 @@ import (
 	"go/token"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strconv"
+	"strings"
 )
 
-// specImport is the only import path a claim may come from, and it may not be
-// aliased: the scan has no type information and matches the selector name.
+// specImport is the only import path a claim may come from. It may not be
+// aliased and its ids must be literals, because this scan has no type
+// information — scripts/spec-vet is what holds callers to both.
 const specImport = "github.com/radiergummi/cetacean/internal/spec"
 
 type Claim struct {
@@ -39,7 +42,12 @@ func TestFiles(root string) ([]string, error) {
 	}
 
 	files := make([]string, 0, len(rel))
+
 	for _, p := range rel {
+		if slices.Contains(strings.Split(p, "/"), "testdata") {
+			continue
+		}
+
 		files = append(files, root+"/"+p)
 	}
 
@@ -88,8 +96,10 @@ func Scan(root string) ([]Claim, []error) {
 	return claims, errs
 }
 
-// ScanFile parses one test file. go/parser applies no build constraints, which
-// is what lets this reach test/e2e at all.
+// ScanFile extracts the claims one test file makes. go/parser applies no build
+// constraints, which is what lets this reach test/e2e at all; the price is no
+// type information, so how a claim may be written is scripts/spec-vet's to
+// enforce. The only error here is a file that does not parse.
 func ScanFile(path string) ([]Claim, []error) {
 	fset := token.NewFileSet()
 
@@ -98,19 +108,8 @@ func ScanFile(path string) ([]Claim, []error) {
 		return nil, []error{fmt.Errorf("%s: %w", path, err)}
 	}
 
-	var errs []error
-
-	imported, alias := importState(file)
-	if alias != "" {
-		errs = append(errs, fmt.Errorf(
-			"%s: internal/spec is imported as %q; claims are matched by selector name, so it must not be aliased",
-			path,
-			alias,
-		))
-	}
-
-	if !imported {
-		return nil, errs
+	if !importsSpec(file) {
+		return nil, nil
 	}
 
 	tagged := needsABuildTag(file)
@@ -139,38 +138,20 @@ func ScanFile(path string) ([]Claim, []error) {
 				return true
 			}
 
-			if err := claimOrder(path, fset, fn, call.Pos()); err != nil {
-				errs = append(errs, err)
-			}
-
 			if len(call.Args) < 2 {
-				errs = append(errs, fmt.Errorf(
-					"%s:%d: %s calls Satisfies with no requirement id",
-					path,
-					fset.Position(call.Pos()).Line,
-					fn.Name.Name,
-				))
-
 				return true
 			}
 
+			// A non-literal id is spec-vet's to report; skipping it here
+			// leaves the requirement looking unclaimed, which fails closed.
 			for _, arg := range call.Args[1:] {
 				lit, ok := arg.(*ast.BasicLit)
 				if !ok || lit.Kind != token.STRING {
-					errs = append(errs, fmt.Errorf(
-						"%s:%d: %s passes a non-literal requirement id; the gate cannot see through it",
-						path,
-						fset.Position(arg.Pos()).Line,
-						fn.Name.Name,
-					))
-
 					continue
 				}
 
 				id, err := strconv.Unquote(lit.Value)
 				if err != nil {
-					errs = append(errs, fmt.Errorf("%s: %w", path, err))
-
 					continue
 				}
 
@@ -187,68 +168,18 @@ func ScanFile(path string) ([]Claim, []error) {
 		})
 	}
 
-	return claims, errs
+	return claims, nil
 }
 
-// claimOrder refuses a claim that is not the first thing its function does.
-// Cleanups run last-registered-first, so a helper called earlier registers one
-// that runs AFTER the claim's own and cannot withhold it for a test that helper
-// then fails. A claim inside a closure is held to the same rule.
-func claimOrder(path string, fset *token.FileSet, fn *ast.FuncDecl, pos token.Pos) error {
-	if fn.Body == nil {
-		return nil
-	}
-
-	for _, stmt := range fn.Body.List {
-		if pos >= stmt.Pos() && pos <= stmt.End() {
-			return nil
-		}
-
-		var earlier *ast.CallExpr
-
-		ast.Inspect(stmt, func(n ast.Node) bool {
-			call, ok := n.(*ast.CallExpr)
-			if !ok || earlier != nil {
-				return true
-			}
-
-			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Helper" {
-				return true
-			}
-
-			earlier = call
-
-			return false
-		})
-
-		if earlier != nil {
-			return fmt.Errorf(
-				"%s:%d: %s calls Satisfies after other work; it must come first, "+
-					"or a cleanup registered earlier runs after the claim and cannot withhold it",
-				path, fset.Position(pos).Line, fn.Name.Name,
-			)
-		}
-	}
-
-	return nil
-}
-
-// importState reports whether internal/spec is imported and under what alias.
-func importState(file *ast.File) (bool, string) {
+// importsSpec reports whether this file can contain a claim at all.
+func importsSpec(file *ast.File) bool {
 	for _, imp := range file.Imports {
-		p, err := strconv.Unquote(imp.Path.Value)
-		if err != nil || p != specImport {
-			continue
+		if p, err := strconv.Unquote(imp.Path.Value); err == nil && p == specImport {
+			return true
 		}
-
-		if imp.Name != nil && imp.Name.Name != "spec" {
-			return true, imp.Name.Name
-		}
-
-		return true, ""
 	}
 
-	return false, ""
+	return false
 }
 
 // needsABuildTag reports whether a default `go test ./...` skips this file —
