@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -166,9 +168,9 @@ import (
 }
 
 // A file the ordinary lane compiles has no excuse for a claim that did not
-// run, whatever build constraint it carries.
+// run, whether its constraint names this platform or merely spares it.
 func TestAGOOSConstraintDoesNotMarkAClaimTagged(t *testing.T) {
-	const body = `//go:build !windows
+	const body = `//go:build %s
 
 package x
 
@@ -183,12 +185,18 @@ func TestFour(t *testing.T) {
 }
 `
 
-	claims, errs := ScanFile(writeTemp(t, "d_test.go", body))
-	if len(errs) != 0 {
-		t.Fatalf("errors = %v", errs)
-	}
+	for _, constraint := range []string{"!windows", runtime.GOOS, runtime.GOARCH} {
+		t.Run(constraint, func(t *testing.T) {
+			source := writeTemp(t, "d_test.go", fmt.Sprintf(body, constraint))
 
-	if len(claims) != 1 || claims[0].Tagged {
-		t.Fatalf("claim = %+v, want one that is not tagged", claims)
+			claims, errs := ScanFile(source)
+			if len(errs) != 0 {
+				t.Fatalf("errors = %v", errs)
+			}
+
+			if len(claims) != 1 || claims[0].Tagged {
+				t.Fatalf("claim = %+v, want one that is not tagged", claims)
+			}
+		})
 	}
 }

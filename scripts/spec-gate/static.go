@@ -25,7 +25,7 @@ func runStatic(root string) error {
 		return fmt.Errorf("%d problem(s)", len(errs))
 	}
 
-	fmt.Fprintf(os.Stderr, "spec: %d requirements across %d documents, all claimed\n",
+	fmt.Fprintf(os.Stderr, "spec: %d requirements across %d documents, all accounted for\n",
 		len(reg.All()), len(reg.Documents))
 
 	return nil

@@ -10,8 +10,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/spec"
 )
 
-// citationRE matches the way specifications are named in comments and prose.
-var citationRE = regexp.MustCompile(`\b(RFC[ -]?[0-9]{3,4}|SEP[ -]?[0-9]{3,4})\b`)
+// citationRE matches the way specifications are named in comments, prose and
+// links. Case-insensitive because an rfc-editor.org URL spells the number in
+// lower case, and a link is as much a citation as a sentence.
+var citationRE = regexp.MustCompile(`(?i)\b(RFC[ -]?[0-9]{3,4}|SEP[ -]?[0-9]{3,4})\b`)
 
 // mechanismPrefixes name this mechanism's own files rather than a consumer of
 // a specification: the registry states each token to register or dismiss it,
@@ -64,9 +66,16 @@ func checkSweep(reg *spec.Registry, cited map[string][]string) []error {
 		registered[d.Token()] = true
 	}
 
-	dismissed, err := spec.Unregistered()
+	raw, err := spec.Unregistered()
 	if err != nil {
 		return []error{err}
+	}
+
+	// Both sides canonicalise, or a dismissal spelled "RFC 1918" never meets
+	// the citation it answers.
+	dismissed := make(map[string]string, len(raw))
+	for name, reason := range raw {
+		dismissed[spec.Token(name)] = reason
 	}
 
 	return sweepErrors(cited, registered, dismissed)

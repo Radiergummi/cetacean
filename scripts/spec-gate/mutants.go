@@ -170,6 +170,15 @@ func kill(root, id string, m spec.Mutant, names, pkgs []string) error {
 		return fmt.Errorf("%s: mutant does not compile (%s)\n%s", id, m.File, out)
 	}
 
+	// A claimant that is not a top-level Test matches no -run filter, and a
+	// run of nothing exits 0 exactly as a surviving mutant does.
+	if strings.Contains(string(out), "no tests to run") {
+		return fmt.Errorf(
+			"%s: no claimant matched -run; %s must name top-level tests",
+			id, strings.Join(names, ", "),
+		)
+	}
+
 	if err != nil {
 		return nil
 	}

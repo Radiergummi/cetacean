@@ -9,6 +9,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os/exec"
+	"runtime"
 	"strconv"
 )
 
@@ -142,9 +143,9 @@ func ScanFile(path string) ([]Claim, []error) {
 				errs = append(errs, err)
 			}
 
-			if len(call.Args) == 0 {
+			if len(call.Args) < 2 {
 				errs = append(errs, fmt.Errorf(
-					"%s:%d: %s calls Satisfies with no arguments",
+					"%s:%d: %s calls Satisfies with no requirement id",
 					path,
 					fset.Position(call.Pos()).Line,
 					fn.Name.Name,
@@ -192,7 +193,7 @@ func ScanFile(path string) ([]Claim, []error) {
 // claimOrder refuses a claim that is not the first thing its function does.
 // Cleanups run last-registered-first, so a helper called earlier registers one
 // that runs AFTER the claim's own and cannot withhold it for a test that helper
-// then fails. A claim nested inside a closure is not checked.
+// then fails. A claim inside a closure is held to the same rule.
 func claimOrder(path string, fset *token.FileSet, fn *ast.FuncDecl, pos token.Pos) error {
 	if fn.Body == nil {
 		return nil
@@ -251,9 +252,9 @@ func importState(file *ast.File) (bool, string) {
 }
 
 // needsABuildTag reports whether a default `go test ./...` skips this file —
-// that is, whether its constraint is false with no tag set. A file excluded
-// only by GOOS, like //go:build !windows, still runs in the ordinary lane and
-// has no excuse for a claim that did not.
+// that is, whether its constraint is false with nothing but this platform's
+// own tags set. A file excluded only by GOOS still runs in the ordinary lane
+// and has no excuse for a claim that did not.
 func needsABuildTag(file *ast.File) bool {
 	for _, group := range file.Comments {
 		for _, c := range group.List {
@@ -266,11 +267,26 @@ func needsABuildTag(file *ast.File) bool {
 				continue
 			}
 
-			if !expr.Eval(func(string) bool { return false }) {
+			if !expr.Eval(platformTag) {
 				return true
 			}
 		}
 	}
 
 	return false
+}
+
+// platformTag reports whether the toolchain sets this tag for an ordinary
+// build here. Only the implicit ones: a tag the lane would have to be asked
+// for is what this is trying to find.
+func platformTag(tag string) bool {
+	switch tag {
+	case runtime.GOOS, runtime.GOARCH:
+		return true
+	case "unix":
+		return runtime.GOOS != "windows" && runtime.GOOS != "js" &&
+			runtime.GOOS != "plan9" && runtime.GOOS != "wasip1"
+	default:
+		return false
+	}
 }
