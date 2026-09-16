@@ -201,6 +201,20 @@ func load() (*Registry, error) {
 	return reg, nil
 }
 
+// NewForTest builds a registry in memory. scripts/spec-gate is a different
+// package and cannot reach the unexported constructor, so its tests need this
+// even though nothing shipped calls it.
+func NewForTest(family, name string, reqs []Requirement) (*Registry, error) {
+	reg := &Registry{byID: map[string]*Requirement{}}
+	doc := &Document{Family: family, Name: name, Requirements: reqs}
+
+	if err := reg.add(doc); err != nil {
+		return nil, err
+	}
+
+	return reg, nil
+}
+
 func (r *Registry) add(doc *Document) error {
 	for i := range doc.Requirements {
 		q := &doc.Requirements[i]
