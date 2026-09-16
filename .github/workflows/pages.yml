@@ -34,6 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           # The sitemap's `lastmod` and every page's modified date come from the
           # last commit that touched the file. A shallow clone holds one commit
           # with no parent, so `git log -1 -- <path>` reports *its* date for
