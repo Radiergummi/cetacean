@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -77,6 +78,22 @@ func TestLoadLockfileReportsAnAbsentImporter(t *testing.T) {
 
 	if _, err := loadLockfile(path, "website"); err == nil {
 		t.Fatal("expected an error naming the missing importer")
+	}
+}
+
+// A lockfile that will not parse is the likelier failure of the two, and
+// reporting it as an absent importer sends the reader to the wrong question.
+func TestLoadLockfileReportsAMalformedDocument(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pnpm-lock.yaml")
+	write(t, path, "importers:\n\t- tab indentation is not YAML\n")
+
+	_, err := loadLockfile(path, "frontend")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+
+	if strings.Contains(err.Error(), "declares importer") {
+		t.Errorf("parse failure reported as a missing importer: %v", err)
 	}
 }
 

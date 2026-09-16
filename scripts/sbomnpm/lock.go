@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -49,8 +51,12 @@ func loadLockfile(path, want string) (*lockfile, error) {
 
 	for {
 		var doc lockfile
-		if err := decoder.Decode(&doc); err != nil {
-			return nil, fmt.Errorf("no document in %s declares importer %q: %w", path, want, err)
+
+		switch err := decoder.Decode(&doc); {
+		case errors.Is(err, io.EOF):
+			return nil, fmt.Errorf("no document in %s declares importer %q", path, want)
+		case err != nil:
+			return nil, fmt.Errorf("read %s: %w", path, err)
 		}
 
 		if _, ok := doc.Importers[want]; ok {
