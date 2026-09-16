@@ -13,17 +13,17 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
-	"github.com/radiergummi/cetacean/internal/mcp/oauth"
+	"github.com/radiergummi/cetacean/internal/oauth"
 )
 
 // The base path reaches the published URLs, not the routes: the prefix is
 // already stripped by the time the mux sees a request.
 func withOAuthRoutes(basePath string) routerOption {
 	srv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://swarm.example",
-		BasePath:    basePath,
-		MCPResource: "https://swarm.example" + basePath + "/mcp",
-		MCP: config.MCPConfig{
+		Issuer:   "https://swarm.example",
+		BasePath: basePath,
+		Resource: "https://swarm.example" + basePath + "/mcp",
+		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  time.Hour,
 			RefreshTokenTTL: 720 * time.Hour,
 			DCREnabled:      true,

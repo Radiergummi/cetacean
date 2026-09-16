@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -64,7 +65,7 @@ func TestConsentPageRender(t *testing.T) {
 		"http://localhost:9999/cb",
 		challenge,
 		"state123",
-		s.cfg.MCPResource,
+		s.cfg.Resource,
 	)
 	req := httptest.NewRequest(http.MethodGet, rawURL, nil)
 	req = withIdentity(req, "alice", "alice@example.com")
@@ -92,6 +93,17 @@ func TestConsentPageRender(t *testing.T) {
 	if !strings.Contains(csp, "frame-ancestors 'none'") {
 		t.Errorf("CSP = %q, want frame-ancestors 'none'", csp)
 	}
+
+	// The literal name, not the constant: a consent form in flight is matched by
+	// what is on the wire, so renaming the constant costs a re-prompt and must
+	// be a visible decision rather than a silent one.
+	var names []string
+	for _, cookie := range rec.Result().Cookies() {
+		names = append(names, cookie.Name)
+	}
+	if !slices.Contains(names, "oauth_csrf_nonce") {
+		t.Errorf("cookies = %q, want one named oauth_csrf_nonce", names)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +121,7 @@ func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
 		"http://attacker.example.com/steal",
 		challenge,
 		"state",
-		s.cfg.MCPResource,
+		s.cfg.Resource,
 	)
 	req := httptest.NewRequest(http.MethodGet, rawURL, nil)
 	req = withIdentity(req, "alice", "")
@@ -152,7 +164,7 @@ func TestConsentApproveProducesCode(t *testing.T) {
 		"http://localhost:7777/cb",
 		challenge,
 		"stateXYZ",
-		s.cfg.MCPResource,
+		s.cfg.Resource,
 	)
 	getReq := httptest.NewRequest(http.MethodGet, rawURL, nil)
 	getReq = withIdentity(getReq, "bob", "bob@example.com")
@@ -273,7 +285,10 @@ func TestConsentRefusesACSRFTokenSignedWithTheRoot(t *testing.T) {
 		url.Values{
 			"state":                 {state},
 			consentFingerprintField: {fingerprint},
-			"csrf_token":            {csrfMAC(testRoot, nonce, state, fingerprint)},
+			"csrf_token": {csrfMAC(testRoot, nonce, consentBinding{
+				State:       state,
+				Fingerprint: fingerprint,
+			})},
 		}.Encode(),
 	))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -281,5 +296,89 @@ func TestConsentRefusesACSRFTokenSignedWithTheRoot(t *testing.T) {
 
 	if verifyCSRFToken(req, km.csrf) {
 		t.Error("a CSRF token signed with the root verified against the derived key")
+	}
+}
+
+// A token verifies for the request it was issued against and no other. Swapping
+// any field the page carried in a hidden input has to break it, or the consent
+// the user gave would cover a request they never saw.
+func TestConsentTokenIsBoundToTheWholeRequest(t *testing.T) {
+	km := mustDeriveKeys(t, testRoot)
+
+	const nonce = "test-nonce"
+	issued := consentBinding{
+		State:               "test-state",
+		Fingerprint:         "test-fingerprint",
+		ClientID:            "https://client.example/id",
+		RedirectURI:         "https://client.example/callback",
+		CodeChallenge:       computeS256Challenge(authorizeVerifier),
+		CodeChallengeMethod: "S256",
+		ResponseType:        "code",
+		Resource:            "https://swarm.example.com/first",
+	}
+	token := csrfMAC(km.csrf, nonce, issued)
+
+	submit := func(b consentBinding) *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(
+			url.Values{
+				"state":                 {b.State},
+				consentFingerprintField: {b.Fingerprint},
+				"client_id":             {b.ClientID},
+				"redirect_uri":          {b.RedirectURI},
+				"code_challenge":        {b.CodeChallenge},
+				"code_challenge_method": {b.CodeChallengeMethod},
+				"response_type":         {b.ResponseType},
+				"resource":              {b.Resource},
+				"csrf_token":            {token},
+			}.Encode(),
+		))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: nonce})
+
+		return req
+	}
+
+	if !verifyCSRFToken(submit(issued), km.csrf) {
+		t.Fatal("the request it was issued for did not verify")
+	}
+
+	swapped := map[string]func(*consentBinding){
+		"state":        func(b *consentBinding) { b.State = "other-state" },
+		"fingerprint":  func(b *consentBinding) { b.Fingerprint = "other-fingerprint" },
+		"client_id":    func(b *consentBinding) { b.ClientID = "https://attacker.example/id" },
+		"redirect_uri": func(b *consentBinding) { b.RedirectURI = "https://attacker.example/cb" },
+		"code_challenge": func(b *consentBinding) {
+			b.CodeChallenge = computeS256Challenge("a" + authorizeVerifier)
+		},
+		"code_challenge_method": func(b *consentBinding) { b.CodeChallengeMethod = "plain" },
+		"response_type":         func(b *consentBinding) { b.ResponseType = "token" },
+		"resource":              func(b *consentBinding) { b.Resource = "https://swarm.example.com/second" },
+	}
+
+	for field, swap := range swapped {
+		t.Run(field, func(t *testing.T) {
+			tampered := issued
+			swap(&tampered)
+
+			if verifyCSRFToken(submit(tampered), km.csrf) {
+				t.Errorf("a token issued for another %s verified", field)
+			}
+		})
+	}
+}
+
+// Length-prefixing is what stops one field's content spelling the next one's.
+// Without it a client-chosen state could carry the fingerprint's bytes and a
+// token issued for one pair would verify for a different one.
+func TestConsentTokenFieldsCannotSpellEachOther(t *testing.T) {
+	km := mustDeriveKeys(t, testRoot)
+
+	const nonce = "test-nonce"
+
+	left := csrfMAC(km.csrf, nonce, consentBinding{State: "ab", Fingerprint: "cd"})
+	right := csrfMAC(km.csrf, nonce, consentBinding{State: "a", Fingerprint: "bcd"})
+
+	if left == right {
+		t.Error("fields ran together; the MAC does not length-prefix them")
 	}
 }

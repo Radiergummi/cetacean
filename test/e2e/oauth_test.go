@@ -90,14 +90,15 @@ func startOAuth(
 		"CETACEAN_ACL_POLICY_FILE":      policy,
 		"CETACEAN_OPERATIONS_LEVEL":     "2",
 		"CETACEAN_MCP":                  "true",
-		"CETACEAN_MCP_ISSUER":           oauthIssuer,
-		"CETACEAN_MCP_SIGNING_KEY":      oauthSigningKey,
+		"CETACEAN_OAUTH_ENABLED":        "true",
+		"CETACEAN_OAUTH_ISSUER":         oauthIssuer,
+		"CETACEAN_OAUTH_SIGNING_KEY":    oauthSigningKey,
 		"CETACEAN_DATA_DIR":             dataDir,
 
 		// The production default is 10 registrations per IP per hour, which the
 		// cases below would exhaust; the limit itself is driven by its own test,
 		// on a SUT whose bucket nothing else shares.
-		"CETACEAN_MCP_DCR_RATE_LIMIT": "500",
+		"CETACEAN_OAUTH_DCR_RATE_LIMIT": "500",
 	}
 
 	maps.Copy(environment, extra)
@@ -525,7 +526,7 @@ func requestConsent(
 	}
 
 	for _, cookie := range readSetCookies(outcome.header) {
-		if cookie.Name == "mcp_csrf_nonce" && cookie.Value != "" {
+		if cookie.Name == "oauth_csrf_nonce" && cookie.Value != "" {
 			page.cookie = cookie
 		}
 	}
@@ -555,7 +556,7 @@ func requireConsentPage(t *testing.T, page consentPage) consentPage {
 	}
 
 	if page.cookie == nil {
-		t.Fatal("consent page issued no mcp_csrf_nonce cookie")
+		t.Fatal("consent page issued no oauth_csrf_nonce cookie")
 	}
 
 	for _, required := range []string{"csrf_token", "consent_fingerprint", "client_id"} {
@@ -668,13 +669,14 @@ func refreshGrant(
 	t *testing.T,
 	proc *sut.Process,
 	discovery oauthDiscovery,
-	refreshToken, resource string,
+	refreshToken, clientID, resource string,
 ) httpOutcome {
 	t.Helper()
 
 	form := url.Values{}
 	form.Set("grant_type", "refresh_token")
 	form.Set("refresh_token", refreshToken)
+	form.Set("client_id", clientID)
 
 	if resource != "" {
 		form.Set("resource", resource)
@@ -727,7 +729,7 @@ type refreshReplayOutcome struct {
 
 // driveRefreshReplay runs a whole grant through rotation and then replays the
 // consumed token, reporting what happened to the family. resource is sent when
-// non-empty and omitted otherwise, which is the axis finding D-5 turns on.
+// non-empty and omitted otherwise.
 func driveRefreshReplay(
 	t *testing.T,
 	proc *sut.Process,
@@ -737,13 +739,13 @@ func driveRefreshReplay(
 ) refreshReplayOutcome {
 	t.Helper()
 
-	original, _ := completeFlow(t, proc, discovery, persona, clientName)
+	original, clientID := completeFlow(t, proc, discovery, persona, clientName)
 
 	rotated := requireTokens(
-		t, refreshGrant(t, proc, discovery, original.RefreshToken, resource),
+		t, refreshGrant(t, proc, discovery, original.RefreshToken, clientID, resource),
 	)
 
-	replay := refreshGrant(t, proc, discovery, original.RefreshToken, resource)
+	replay := refreshGrant(t, proc, discovery, original.RefreshToken, clientID, resource)
 	requireOAuthError(t, replay, http.StatusBadRequest, "invalid_grant")
 
 	var failure oauthError
@@ -759,7 +761,7 @@ func driveRefreshReplay(
 		)
 	}
 
-	after := refreshGrant(t, proc, discovery, rotated.RefreshToken, resource)
+	after := refreshGrant(t, proc, discovery, rotated.RefreshToken, clientID, resource)
 
 	return refreshReplayOutcome{
 		replayStatus:      replay.status,
@@ -817,7 +819,7 @@ func completeFlow(
 // Access tokens
 // ---------------------------------------------------------------------------
 
-// accessTokenClaims is the JWT payload internal/mcp/oauth/jwt.go mints. The
+// accessTokenClaims is the JWT payload internal/oauth/jwt.go mints. The
 // lane decodes rather than verifies: the signature is the server's business,
 // and the assertion worth making from outside is that the claims describe the
 // identity and audience the flow established.
@@ -1172,12 +1174,14 @@ func TestMCPOAuthFlow(t *testing.T) {
 			newAuthorizeRequest(discovery, clientID, challenge, "state-unauth"),
 		)
 
-		if page.outcome.status != http.StatusUnauthorized {
-			t.Fatalf("status = %d, want 401; body: %s", page.outcome.status, page.outcome.body)
+		// This lane runs headers mode, which reads a credential HTTP cannot ask
+		// for, so the refusal is 403 rather than a 401 with a challenge.
+		if page.outcome.status != http.StatusForbidden {
+			t.Fatalf("status = %d, want 403; body: %s", page.outcome.status, page.outcome.body)
 		}
 
-		if !strings.Contains(page.outcome.body, "AUT001") {
-			t.Errorf("401 body does not name AUT001: %s", page.outcome.body)
+		if !strings.Contains(page.outcome.body, "AUT006") {
+			t.Errorf("403 body does not name AUT006: %s", page.outcome.body)
 		}
 	})
 
@@ -1607,10 +1611,11 @@ func TestMCPOAuthFlow(t *testing.T) {
 	})
 
 	t.Run("refresh_rotates", func(t *testing.T) {
-		original, _ := completeFlow(t, proc, discovery, oauthGranted, "e2e-rotation")
+		original, clientID := completeFlow(t, proc, discovery, oauthGranted, "e2e-rotation")
 
 		rotated := requireTokens(
-			t, refreshGrant(t, proc, discovery, original.RefreshToken, discovery.resource),
+			t,
+			refreshGrant(t, proc, discovery, original.RefreshToken, clientID, discovery.resource),
 		)
 
 		if rotated.RefreshToken == original.RefreshToken {
@@ -1650,20 +1655,21 @@ func TestMCPOAuthFlow(t *testing.T) {
 		// A mismatched resource parameter is almost always a client typo, and
 		// the token must survive it — otherwise a misconfigured client
 		// silently costs its user a re-authorization.
-		tokens, _ := completeFlow(t, proc, discovery, oauthGranted, "e2e-typo")
+		tokens, clientID := completeFlow(t, proc, discovery, oauthGranted, "e2e-typo")
 
 		typo := refreshGrant(
-			t, proc, discovery, tokens.RefreshToken, "https://elsewhere.example.com/mcp",
+			t, proc, discovery, tokens.RefreshToken, clientID,
+			"https://elsewhere.example.com/mcp",
 		)
 		requireOAuthError(t, typo, http.StatusBadRequest, "invalid_target")
 
 		requireTokens(
-			t, refreshGrant(t, proc, discovery, tokens.RefreshToken, discovery.resource),
+			t, refreshGrant(t, proc, discovery, tokens.RefreshToken, clientID, discovery.resource),
 		)
 	})
 
 	t.Run("revocation_ends_the_grant", func(t *testing.T) {
-		tokens, _ := completeFlow(t, proc, discovery, oauthGranted, "e2e-revoke")
+		tokens, clientID := completeFlow(t, proc, discovery, oauthGranted, "e2e-revoke")
 
 		form := url.Values{}
 		form.Set("token", tokens.RefreshToken)
@@ -1673,7 +1679,7 @@ func TestMCPOAuthFlow(t *testing.T) {
 			t.Fatalf("revoke: status = %d, want 200; body: %s", outcome.status, outcome.body)
 		}
 
-		after := refreshGrant(t, proc, discovery, tokens.RefreshToken, discovery.resource)
+		after := refreshGrant(t, proc, discovery, tokens.RefreshToken, clientID, discovery.resource)
 		requireOAuthError(t, after, http.StatusBadRequest, "invalid_grant")
 
 		// RFC 7009 §2.2: an unknown token is still a 200, so a caller cannot
@@ -1716,7 +1722,7 @@ func TestMCPOAuthFlow(t *testing.T) {
 		// harness through a pipe a goroutine copies, so a record written
 		// before the response was flushed can still arrive after the client
 		// has read it.
-		logs := awaitLog(t, proc, mark, "MCP CIMD fetch failed")
+		logs := awaitLog(t, proc, mark, "CIMD fetch failed")
 
 		if !strings.Contains(logs, "SSRF protection blocked request") {
 			t.Error("the CIMD fetch failed for some reason other than the SSRF guard; " +
@@ -1725,17 +1731,16 @@ func TestMCPOAuthFlow(t *testing.T) {
 	})
 }
 
-// Drives the same replay down the one path that still reaches
-// RefreshTokenStore.Rotate: a refresh carrying no `resource` parameter, which
-// only a server with mcp.require_resource_indicator off accepts. The store's
-// detection is live, so D-5 is an ordering bug in the handler in front of it.
+// Drives the same replay from the deployment that turned the resource
+// indicator off, whose refreshes carry no `resource` at all. Detection must not
+// depend on the parameter that decides which resource a token is for.
 func TestMCPOAuthTheftDetectionWithoutTheResourceIndicator(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
 	fixtures.DeployBaseline(t, env)
 
 	proc := startOAuth(t, env, t.TempDir(), map[string]string{
-		"CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR": "false",
+		"CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR": "false",
 	})
 
 	discovery := discoverOAuth(t, proc)
@@ -1771,7 +1776,7 @@ func TestMCPOAuthDCRRateLimit(t *testing.T) {
 	const limit = 3
 
 	proc := startOAuth(t, env, t.TempDir(), map[string]string{
-		"CETACEAN_MCP_DCR_RATE_LIMIT": strconv.Itoa(limit),
+		"CETACEAN_OAUTH_DCR_RATE_LIMIT": strconv.Itoa(limit),
 	})
 
 	discovery := discoverOAuth(t, proc)
@@ -1805,7 +1810,7 @@ func TestMCPOAuthDCRRateLimit(t *testing.T) {
 }
 
 // TestMCPOAuthStateSurvivesARestart drives the second half of the rotation
-// property: mcp-tokens.json holds the live tokens, the grant families and their
+// property: oauth-tokens.json holds the live tokens, the grant families and their
 // rotation history, written as one unit. History that failed to persist would
 // disable theft detection silently, with every token still working.
 func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
@@ -1815,38 +1820,30 @@ func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 
 	dataDir := t.TempDir()
 
-	// Both processes run with mcp.require_resource_indicator off and every
-	// refresh below omits it: under D-5 a refresh carrying `resource` is
-	// answered before Rotate is consulted, so the persisted rotation history
-	// would be unobservable. Revert to the default once D-5 is fixed.
-	withoutIndicator := map[string]string{
-		"CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR": "false",
-	}
-
-	first := startOAuth(t, env, dataDir, withoutIndicator)
+	first := startOAuth(t, env, dataDir, nil)
 	discovery := discoverOAuth(t, first)
 
-	survivor, _ := completeFlow(t, first, discovery, oauthGranted, "e2e-restart-survivor")
-	victim, _ := completeFlow(t, first, discovery, oauthGranted, "e2e-restart-victim")
+	survivor, survivorID := completeFlow(t, first, discovery, oauthGranted, "e2e-restart-survivor")
+	victim, victimID := completeFlow(t, first, discovery, oauthGranted, "e2e-restart-victim")
 
 	// Consume the victim's token before the restart, so its replay afterwards
 	// is a replay of a token this process never saw issued.
 	rotatedVictim := requireTokens(
-		t, refreshGrant(t, first, discovery, victim.RefreshToken, ""),
+		t, refreshGrant(t, first, discovery, victim.RefreshToken, victimID, discovery.resource),
 	)
 
 	first.Stop()
 
-	statePath := filepath.Join(dataDir, "mcp-tokens.json")
+	statePath := filepath.Join(dataDir, "oauth-tokens.json")
 	if _, err := os.Stat(statePath); err != nil {
 		t.Fatalf("no OAuth state was written to %s: %v", statePath, err)
 	}
 
-	second := startOAuth(t, env, dataDir, withoutIndicator)
+	second := startOAuth(t, env, dataDir, nil)
 
 	t.Run("the_access_token_still_verifies", func(t *testing.T) {
 		// Stable signing key, so a token minted by the previous process is
-		// still a valid one. Without CETACEAN_MCP_SIGNING_KEY this is what
+		// still a valid one. Without CETACEAN_OAUTH_SIGNING_KEY this is what
 		// the startup warning is about.
 		if _, status := mcpWithToken(
 			t, second, survivor.AccessToken, "tools/list", nil,
@@ -1858,7 +1855,9 @@ func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 
 	t.Run("the_refresh_token_still_rotates", func(t *testing.T) {
 		rotated := requireTokens(
-			t, refreshGrant(t, second, discovery, survivor.RefreshToken, ""),
+			t, refreshGrant(
+				t, second, discovery, survivor.RefreshToken, survivorID, discovery.resource,
+			),
 		)
 
 		if rotated.RefreshToken == survivor.RefreshToken {
@@ -1873,14 +1872,18 @@ func TestMCPOAuthStateSurvivesARestart(t *testing.T) {
 	})
 
 	t.Run("theft_detection_survives", func(t *testing.T) {
-		replay := refreshGrant(t, second, discovery, victim.RefreshToken, "")
+		replay := refreshGrant(
+			t, second, discovery, victim.RefreshToken, victimID, discovery.resource,
+		)
 		requireOAuthError(t, replay, http.StatusBadRequest, "invalid_grant")
 
 		// The distinguishing assertion. A server that merely forgot the
 		// consumed token would reject the replay above and leave the live one
 		// working; only a server that still knows the token was *consumed*
 		// burns the family.
-		after := refreshGrant(t, second, discovery, rotatedVictim.RefreshToken, "")
+		after := refreshGrant(
+			t, second, discovery, rotatedVictim.RefreshToken, victimID, discovery.resource,
+		)
 
 		if after.status == http.StatusOK {
 			t.Error(
@@ -1905,8 +1908,8 @@ func TestMCPOAuthWithoutDCROrCIMD(t *testing.T) {
 	fixtures.DeployBaseline(t, env)
 
 	proc := startOAuth(t, env, t.TempDir(), map[string]string{
-		"CETACEAN_MCP_DCR_ENABLED":  "false",
-		"CETACEAN_MCP_CIMD_ENABLED": "false",
+		"CETACEAN_OAUTH_DCR_ENABLED":  "false",
+		"CETACEAN_OAUTH_CIMD_ENABLED": "false",
 	})
 
 	discovery := discoverOAuth(t, proc)
@@ -1961,7 +1964,7 @@ func TestMCPOAuthWithoutDCROrCIMD(t *testing.T) {
 
 		// Refused *before* the fetch: the point of disabling CIMD is that the
 		// server stops making outbound requests to URLs a client chose.
-		if strings.Contains(written, "MCP CIMD fetch failed") {
+		if strings.Contains(written, "CIMD fetch failed") {
 			t.Error("the server attempted a CIMD fetch with CIMD disabled")
 		}
 	})

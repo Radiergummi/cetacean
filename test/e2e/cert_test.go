@@ -205,9 +205,11 @@ func TestUntrustedPeerClientCertIsIgnored(t *testing.T) {
 		t.Fatalf("read body: %v\n--- binary output ---\n%s", err, proc.Logs())
 	}
 
-	if resp.StatusCode != http.StatusUnauthorized {
+	// cert mode reads a credential HTTP cannot ask for, so a refusal carries no
+	// challenge and is a 403 rather than a 401.
+	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf(
-			"status = %d, want 401 (a forged Client-Cert from an untrusted peer must be rejected); body: %s\n--- binary output ---\n%s",
+			"status = %d, want 403 (a forged Client-Cert from an untrusted peer must be rejected); body: %s\n--- binary output ---\n%s",
 			resp.StatusCode,
 			body,
 			proc.Logs(),

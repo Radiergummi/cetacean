@@ -29,7 +29,7 @@ type ClientRegistration struct {
 	// ApplicationType is the OIDC application type, "native" or "web", and
 	// governs which redirect URIs are acceptable: "web" requires https and
 	// forbids loopback. It defaults to "native" rather than OIDC's "web",
-	// which would reject the redirect URIs MCP clients overwhelmingly use.
+	// which would reject the loopback and custom-scheme URIs clients use.
 	ApplicationType string `json:"application_type,omitempty"`
 }
 

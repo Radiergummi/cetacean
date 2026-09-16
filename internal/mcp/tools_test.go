@@ -396,6 +396,7 @@ func newToolTestServer(
 		Config:         cfg,
 		GlobalOpsLevel: opsLevel,
 		WriteClient:    wc,
+		AuthMode:       "none",
 	}
 	for _, fn := range overrides {
 		fn(&o)

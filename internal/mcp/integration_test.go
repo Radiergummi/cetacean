@@ -15,7 +15,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
-	"github.com/radiergummi/cetacean/internal/mcp/oauth"
+	"github.com/radiergummi/cetacean/internal/oauth"
 )
 
 // jsonrpcEnvelope captures the subset of a JSON-RPC response we assert on.
@@ -104,6 +104,7 @@ func TestMCPEndToEnd(t *testing.T) {
 	srv, err := New(c, Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
+		AuthMode:       "none",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -211,8 +212,8 @@ func TestMCPEndToEnd(t *testing.T) {
 }
 
 // newOAuthIntegrationServer wires an MCP server with OAuth + ACL identical to
-// production. Returns the handler, a TokenIssuer for minting bearer tokens, and
-// the OAuth server (kept for cleanup / future assertions).
+// production. The returned TokenIssuer shares the server's root key, so tokens
+// it mints verify — which is what makes these tests end-to-end.
 func newOAuthIntegrationServer(
 	t *testing.T,
 	c *cache.Cache,
@@ -224,13 +225,7 @@ func newOAuthIntegrationServer(
 	cfg.Enabled = true
 	key := []byte("integration-test-signing-key-32B!")
 
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  key,
-	})
+	oauthSrv := oauthServerFor(key)
 
 	srv, err := New(c, Options{
 		Config:         cfg,

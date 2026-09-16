@@ -23,7 +23,7 @@ import (
 
 // oauthRoutesSource is the file the OAuth endpoint inventory is parsed from,
 // relative to this package's directory.
-const oauthRoutesSource = "../../internal/mcp/oauth/server.go"
+const oauthRoutesSource = "../../internal/oauth/server.go"
 
 // oauthEndpoints returns every pattern Server.RegisterRoutes attaches to the
 // mux, as "METHOD /path". basePath is elided because the router registers them

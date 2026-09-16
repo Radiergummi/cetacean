@@ -51,7 +51,7 @@ func TestMetadataAdvertisesCIMD(t *testing.T) {
 // switch, or an operator who turned CIMD off still tells clients to use it.
 func TestMetadataOmitsCIMDWhenDisabled(t *testing.T) {
 	s := newTestServer(t)
-	s.cfg.MCP.CIMDEnabled = false
+	s.cfg.OAuth.CIMDEnabled = false
 
 	if _, present := fetchASMetadata(t, s)["client_id_metadata_document_supported"]; present {
 		t.Error("CIMD advertised while disabled")
@@ -64,7 +64,7 @@ func TestMetadataOmitsCIMDWhenDisabled(t *testing.T) {
 // the setting is a false assurance.
 func TestCIMDDisabledRejectsHTTPSClientID(t *testing.T) {
 	s := newTestServer(t)
-	s.cfg.MCP.CIMDEnabled = false
+	s.cfg.OAuth.CIMDEnabled = false
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize", nil)
 

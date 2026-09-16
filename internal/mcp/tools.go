@@ -246,7 +246,7 @@ func (s *Server) registerTools() {
 				if req.Params.Task != nil {
 					var release context.CancelFunc
 
-					ctx, release = detachTaskContext(ctx, s.detachedTaskBudget())
+					ctx, release = detachTaskContext(ctx, detachedTaskBudget)
 					defer release()
 				}
 
@@ -812,6 +812,4 @@ func detachTaskContext(
 // not from mcp.task_ttl, which is how long a *finished* result is kept. A
 // deployment that discards results quickly would otherwise have its writes
 // abandoned mid-flight.
-func (s *Server) detachedTaskBudget() time.Duration {
-	return 2 * cluster.ConvergenceTimeout
-}
+const detachedTaskBudget = 2 * cluster.ConvergenceTimeout

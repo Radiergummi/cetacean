@@ -10,7 +10,7 @@ import (
 
 // TestOIDCDiscoveryServesASMetadata verifies that the OIDC Discovery 1.0
 // well-known location serves the identical RFC 8414 AS metadata document,
-// per the MCP 2025-11-25 authorization-server discovery enhancement.
+// per the 2025-11-25 authorization-server discovery enhancement.
 func TestOIDCDiscoveryServesASMetadata(t *testing.T) {
 	s := newTestServer(t)
 	mux := http.NewServeMux()

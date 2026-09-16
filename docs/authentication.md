@@ -80,11 +80,17 @@ These paths skip authentication in every mode:
 | `/api`, `/api/*`                                  | API documentation and the JSON-LD context                |
 | `/assets/*`                                       | Dashboard static assets                                  |
 | `/auth`, `/auth/*`                                | Login, callback, logout and `whoami`                     |
-| `/mcp`                                            | The [MCP server][mcp] runs its own bearer-token check    |
+| `/mcp`                                            | The [MCP server][mcp] guards itself — see below          |
 | `/.well-known/*`                                  | OAuth discovery documents, unauthenticated by spec       |
 | `/oauth/token`, `/oauth/revoke`, `/oauth/register` | Carry their own credentials in the request body          |
 
-`/oauth/authorize` is not exempt: a user must authenticate before granting an MCP client access.
+What guards `/mcp` depends on the configuration: with [`oauth.enabled`][oauth.enabled] the MCP server verifies
+a bearer token it issued; with the authorization server off, the active mode must be listed in
+[`mcp.auth_bypass`][mcp.auth_bypass] — there is no bearer check then, and the upstream provider authenticates
+every request instead. Cetacean refuses to start with neither.
+
+`/oauth/authorize` is not exempt: a user must authenticate before granting a client access. That is also why
+the authorization server cannot run under the `none` mode — there would be no one to ask.
 
 ## Refused requests
 
@@ -385,10 +391,6 @@ secrets:
   - proxy_secret
 ```
 
-> [!NOTE]
-> [`auth.headers.trusted_proxies`][auth.headers.trusted_proxies] is deprecated. Use `server.trusted_proxies`,
-> which takes precedence when both are set.
-
 ### Proxy examples
 
 **[nginx](https://nginx.org/)** with OAuth2 Proxy:
@@ -574,7 +576,6 @@ response schemas.
 [api]: api
 [auth.cert.ca]: configuration#auth.cert.ca
 [auth.headers.subject]: configuration#auth.headers.subject
-[auth.headers.trusted_proxies]: configuration#auth.headers.trusted_proxies
 [auth.mode]: configuration#auth.mode
 [auth.oidc.client_id]: configuration#auth.oidc.client_id
 [auth.oidc.client_secret]: configuration#auth.oidc.client_secret
@@ -588,6 +589,8 @@ response schemas.
 [configuration]: configuration
 [getting-started]: getting-started
 [mcp]: mcp
+[mcp.auth_bypass]: configuration#mcp.auth_bypass
+[oauth.enabled]: configuration#oauth.enabled
 [oidc]: configuration#oidc
 [rfc7239]: https://www.rfc-editor.org/rfc/rfc7239
 [rfc9440]: https://www.rfc-editor.org/rfc/rfc9440

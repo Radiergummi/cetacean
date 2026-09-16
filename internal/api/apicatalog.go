@@ -11,13 +11,13 @@ import (
 const apiCatalogPath = "/.well-known/api-catalog"
 
 // oauthProtectedResourcePath is spelled again here because internal/api and
-// internal/mcp deliberately do not import each other.
+// internal/oauth deliberately do not import each other.
 const oauthProtectedResourcePath = "/.well-known/oauth-protected-resource"
 
 // catalogMounts is what the router mounted, which is what the catalog may
-// claim. MCP is off by default, and its OAuth server is wired only when
-// auth.mode is not "none" — so MCP can be reachable while the metadata
-// document describing it does not exist.
+// claim. MCP is off by default, and the authorization server is wired only
+// when oauth.enabled — so MCP can be reachable while the metadata document
+// describing it does not exist.
 type catalogMounts struct {
 	mcp           bool
 	oauthMetadata bool

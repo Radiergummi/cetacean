@@ -77,6 +77,7 @@ func newLogTestServer(t *testing.T, c *cache.Cache, logs LogStreamer) *Server {
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
 		Logs:           logs,
+		AuthMode:       "none",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)

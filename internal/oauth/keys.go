@@ -13,12 +13,14 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 )
 
-// Changing any of these changes every derived key: live tokens stop verifying
-// and consent forms in flight are refused.
+// Changing any of these changes every derived key: live tokens stop verifying,
+// the published kid changes, and consent forms in flight are refused. They are
+// opaque derivation labels rather than API, so there is never a reason to tidy
+// their spelling.
 const (
-	hkdfSalt    = "cetacean/mcp/hkdf/v1"
-	csrfKeyInfo = "cetacean/mcp/csrf/v1"
-	signKeyInfo = "cetacean/mcp/jwt/es256/v1"
+	hkdfSalt    = "cetacean/oauth/hkdf/v1"
+	csrfKeyInfo = "cetacean/oauth/csrf/v1"
+	signKeyInfo = "cetacean/oauth/jwt/es256/v1"
 )
 
 const derivedKeyBytes = 32

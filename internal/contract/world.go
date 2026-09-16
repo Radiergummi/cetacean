@@ -26,7 +26,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/mcp"
-	"github.com/radiergummi/cetacean/internal/mcp/oauth"
 )
 
 // Identifiers the fixture uses. Sweeps address resources through these rather
@@ -163,16 +162,10 @@ func NewWorld(t *testing.T) *World {
 		evaluator,
 	)
 
-	// Handler installs its bearer-token middleware only when OAuth is non-nil,
-	// so without a Server here /mcp is unauthenticated and every ACL persona
-	// reads everything. This one never mints or verifies a token, since
-	// AuthBypass routes every request through the upstream provider.
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.test",
-		MCPResource: "https://cetacean.test/mcp",
-		MCP:         config.MCPConfig{Enabled: true, OperationsLevel: config.OpsInherit},
-	})
-
+	// No authorization server: resolveGuard takes a non-nil one as the guard
+	// and never consults AuthBypass, which would put a bearer check in front of
+	// every ACL persona. Leaving it nil resolves to the upstream guard, which is
+	// what a bypassed mode runs in production.
 	authProvider := headersProvider()
 
 	mcpServer, err := mcp.New(c, mcp.Options{
@@ -183,7 +176,6 @@ func NewWorld(t *testing.T) *World {
 			AuthBypass:      []string{"headers"},
 		},
 		GlobalOpsLevel: config.OpsImpactful,
-		OAuth:          oauthSrv,
 		AuthMode:       "headers",
 		AuthProvider:   authProvider,
 	})

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -13,7 +14,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
-	"github.com/radiergummi/cetacean/internal/mcp/oauth"
+	"github.com/radiergummi/cetacean/internal/oauth"
 )
 
 // fakeAuthProvider returns a fixed identity (or error) without touching the
@@ -32,6 +33,44 @@ func (p *fakeAuthProvider) Authenticate(
 
 func (p *fakeAuthProvider) RegisterRoutes(_ *http.ServeMux) {}
 
+// The issuer and resource the test authorization server advertises. A token
+// only verifies when its issuer and audience match these exactly, which is why
+// they are named rather than spelled at each site.
+const (
+	testIssuer   = "https://cetacean.example.com"
+	testResource = testIssuer + "/mcp"
+)
+
+// oauthServerFor builds an authorization server the way main.go does, sharing
+// the root key so a token minted against it verifies. The tests want the real
+// verifier, not a stand-in.
+func oauthServerFor(key []byte) *oauth.Server {
+	return oauth.NewServer(oauth.ServerConfig{
+		Issuer:     testIssuer,
+		BasePath:   "",
+		Resource:   testResource,
+		OAuth:      config.DefaultOAuthConfig(),
+		SigningKey: key,
+	})
+}
+
+// tokenFor mints a bearer token the server from oauthServerFor will accept.
+func tokenFor(t *testing.T, key []byte, claims oauth.AccessTokenClaims) string {
+	t.Helper()
+
+	issuer, err := oauth.NewTokenIssuer(key, testIssuer, testResource)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
+	}
+
+	token, err := issuer.IssueAccessToken(claims, config.DefaultOAuthConfig().AccessTokenTTL)
+	if err != nil {
+		t.Fatalf("IssueAccessToken: %v", err)
+	}
+
+	return token
+}
+
 func TestNew(t *testing.T) {
 	c := cache.New(nil)
 	cfg := config.DefaultMCPConfig()
@@ -40,6 +79,7 @@ func TestNew(t *testing.T) {
 	srv, err := New(c, Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
+		AuthMode:       "none",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -66,13 +106,7 @@ func TestHandlerEmits401WithoutBearerWhenOAuthConfigured(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
 
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  []byte("test-secret-32-bytes-long-padding"),
-	})
+	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
 	srv, err := New(c, Options{
 		Config: cfg,
@@ -106,30 +140,13 @@ func TestHandlerAcceptsValidBearer(t *testing.T) {
 	cfg.Enabled = true
 
 	key := []byte("test-secret-32-bytes-long-padding")
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  key,
-	})
+	oauthSrv := oauthServerFor(key)
 
-	issuer, err := oauth.NewTokenIssuer(
-		key,
-		"https://cetacean.example.com",
-		"https://cetacean.example.com/mcp",
-	)
-	if err != nil {
-		t.Fatalf("NewTokenIssuer: %v", err)
-	}
-	token, err := issuer.IssueAccessToken(oauth.AccessTokenClaims{
+	token := tokenFor(t, key, oauth.AccessTokenClaims{
 		Subject:  "user@example.com",
 		Groups:   []string{"ops"},
 		ClientID: "test-client",
-	}, cfg.AccessTokenTTL)
-	if err != nil {
-		t.Fatalf("issue token: %v", err)
-	}
+	})
 
 	srv, err := New(c, Options{
 		Config: cfg,
@@ -165,13 +182,7 @@ func TestHandlerAuthBypassUsesUpstreamIdentity(t *testing.T) {
 	cfg.Enabled = true
 	cfg.AuthBypass = []string{"cert"}
 
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  []byte("test-secret-32-bytes-long-padding"),
-	})
+	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
 	provider := &fakeAuthProvider{id: &auth.Identity{
 		Subject:  "spiffe://example.org/agent/runner",
@@ -211,13 +222,7 @@ func TestHandlerAuthBypassFallsBackWhenUpstreamFails(t *testing.T) {
 	cfg.Enabled = true
 	cfg.AuthBypass = []string{"cert"}
 
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  []byte("test-secret-32-bytes-long-padding"),
-	})
+	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
 	provider := &fakeAuthProvider{err: errors.New("no client certificate")}
 
@@ -248,7 +253,7 @@ func TestCloseIsIdempotentUnderConcurrency(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
 
-	srv, err := New(c, Options{Config: cfg, GlobalOpsLevel: config.OpsReadOnly})
+	srv, err := New(c, Options{Config: cfg, GlobalOpsLevel: config.OpsReadOnly, AuthMode: "none"})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -274,13 +279,7 @@ func TestHandlerAuthBypassIgnoredWhenModeNotListed(t *testing.T) {
 	cfg.Enabled = true
 	cfg.AuthBypass = []string{"cert"} // listed mode
 
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  []byte("test-secret-32-bytes-long-padding"),
-	})
+	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
 	// Provider would succeed, but the active mode (oidc) is NOT in AuthBypass.
 	provider := &fakeAuthProvider{id: &auth.Identity{Subject: "u", Provider: "oidc"}}
@@ -304,6 +303,195 @@ func TestHandlerAuthBypassIgnoredWhenModeNotListed(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401 when active mode is not in AuthBypass", rec.Code)
+	}
+}
+
+// The identity a bearer token yields is the whole input to the ACL, so every
+// field of it is load-bearing — including the ones left empty, which is why the
+// comparison is exact rather than field-by-field.
+func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
+	c := cache.New(nil)
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+
+	key := []byte("test-secret-32-bytes-long-padding")
+	oauthSrv := oauthServerFor(key)
+
+	token := tokenFor(t, key, oauth.AccessTokenClaims{
+		Subject:  "user@example.com",
+		Groups:   []string{"ops"},
+		ClientID: "test-client",
+	})
+
+	srv, err := New(c, Options{Config: cfg, OAuth: oauthSrv})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	var got *auth.Identity
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = auth.IdentityFromContext(r.Context())
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("Authorization", "Bearer "+token)
+	srv.bearerAuth(next).ServeHTTP(httptest.NewRecorder(), req)
+
+	want := &auth.Identity{
+		Subject:  "user@example.com",
+		Groups:   []string{"ops"},
+		Provider: oauth.ProviderName,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identity = %+v, want %+v", got, want)
+	}
+}
+
+// Without an authorization server there is no bearer middleware, which is only
+// safe because auth mode "none" is the only configuration that reaches here.
+// Many tool tests depend on it incidentally; this one says so.
+// Unguarded is reachable only under an auth mode that establishes no identity
+// to begin with. Every other route to it is a refusal, below.
+func TestHandlerWithoutOAuthServesUnguardedUnderNone(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+
+	srv, err := New(cache.New(nil), Options{Config: cfg, AuthMode: "none"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusUnauthorized {
+		t.Fatalf("status = 401 with no OAuth server configured; want unguarded")
+	}
+}
+
+// Unguarded takes the word "none". An unset mode is a caller that never said,
+// and the zero Options is the one route to an open /mcp that a refusal does not
+// already cover.
+func TestNewRefusesAnUnsetAuthMode(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+
+	if _, err := New(cache.New(nil), Options{Config: cfg}); err == nil {
+		t.Fatal("an unset auth mode was accepted")
+	}
+}
+
+// The construction that would have served the cluster's write surface to
+// anyone: a mode that establishes an identity, nothing to verify a token
+// against, and no bypass to fall back on. main's config validation refuses it
+// too; this is the same refusal in the package that owns the endpoint.
+func TestNewRefusesAConfigurationThatWouldServeUnguarded(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+
+	_, err := New(cache.New(nil), Options{
+		Config:       cfg,
+		AuthMode:     "oidc",
+		AuthProvider: &fakeAuthProvider{id: &auth.Identity{Subject: "alice"}},
+	})
+	if err == nil {
+		t.Fatal("a mode with neither a verifier nor a bypass was accepted")
+	}
+	if !strings.Contains(err.Error(), "unauthenticated") {
+		t.Errorf("error does not say what is at stake: %v", err)
+	}
+}
+
+// A bypass names a mode; it still needs the provider that answers for it.
+// Without one the upstream guard would have nothing to call.
+func TestNewRefusesABypassWithNoProvider(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+	cfg.AuthBypass = []string{"cert"}
+
+	_, err := New(cache.New(nil), Options{Config: cfg, AuthMode: "cert"})
+	if err == nil {
+		t.Fatal("a bypass without a provider was accepted")
+	}
+}
+
+// The mTLS deployment: no authorization server at all, because these clients
+// cannot drive a browser consent screen. The upstream provider is the guard.
+func TestHandlerWithoutOAuthAuthenticatesABypassedMode(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+	cfg.AuthBypass = []string{"cert"}
+
+	provider := &fakeAuthProvider{id: &auth.Identity{
+		Subject:  "spiffe://example.org/agent/runner",
+		Provider: "cert",
+	}}
+
+	srv, err := New(cache.New(nil), Options{
+		Config:       cfg,
+		AuthMode:     "cert",
+		AuthProvider: provider,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	body := strings.NewReader(
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}`,
+	)
+	req := httptest.NewRequest(http.MethodPost, "/mcp", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusUnauthorized {
+		t.Fatalf("bypass identity rejected: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// With no authorization server there is no second chance: whatever the upstream
+// provider refuses is refused, including the identity it declines to establish
+// while writing a redirect nobody reads. The refusal is 403, not 401: no
+// challenge can ask for the credential these modes read, which is the same
+// ruling the API endpoints answer under.
+func TestHandlerWithoutOAuthRefusesWhatUpstreamRefuses(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+	cfg.AuthBypass = []string{"cert"}
+
+	for name, provider := range map[string]*fakeAuthProvider{
+		"an error":           {err: errors.New("no client certificate")},
+		"no identity at all": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv, err := New(cache.New(nil), Options{
+				Config:       cfg,
+				AuthMode:     "cert",
+				AuthProvider: provider,
+			})
+			if err != nil {
+				t.Fatalf("New: %v", err)
+			}
+
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
+			req.Header.Set("Content-Type", "application/json")
+
+			srv.Handler().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want 403", rec.Code)
+			}
+
+			if challenge := rec.Header().Get("WWW-Authenticate"); challenge != "" {
+				t.Fatalf("WWW-Authenticate = %q, want none on a 403", challenge)
+			}
+		})
 	}
 }
 

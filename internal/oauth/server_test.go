@@ -19,10 +19,11 @@ import (
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	cfg := ServerConfig{
-		Issuer:      "https://cetacean.test",
-		BasePath:    "",
-		MCPResource: "https://cetacean.test/mcp",
-		MCP: config.MCPConfig{
+		Issuer:          "https://cetacean.test",
+		BasePath:        "",
+		Resource:        "https://cetacean.test/resource",
+		ResourceMounted: true,
+		OAuth: config.OAuthConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,
 			ConsentTTL:               testConsentTTL,
@@ -46,9 +47,9 @@ func newPersistingServer(t *testing.T, path, resource string) *Server {
 	t.Helper()
 
 	s := NewServer(ServerConfig{
-		Issuer:      "https://cetacean.test",
-		MCPResource: resource,
-		MCP: config.MCPConfig{
+		Issuer:   "https://cetacean.test",
+		Resource: resource,
+		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  time.Hour,
 			RefreshTokenTTL: 720 * time.Hour,
 			ConsentTTL:      testConsentTTL,
@@ -122,7 +123,7 @@ func TestASMetadata(t *testing.T) {
 
 	// DCR disabled: registration_endpoint must be absent.
 	s2 := newTestServer(t)
-	s2.cfg.MCP.DCREnabled = false
+	s2.cfg.OAuth.DCREnabled = false
 	s2.clients = nil
 	rec2 := httptest.NewRecorder()
 	s2.HandleMetadata(
@@ -155,7 +156,7 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost:8080/callback",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.MCPResource,
+		Resource:      s.cfg.Resource,
 		Subject:       "user@example.com",
 		Groups:        []string{"admin"},
 	})
@@ -212,7 +213,7 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost/cb",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.MCPResource,
+		Resource:      s.cfg.Resource,
 		Subject:       "user",
 	})
 
@@ -246,7 +247,7 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 
 func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
 	s := newTestServer(t)
-	s.cfg.MCP.RequireResourceIndicator = false
+	s.cfg.OAuth.RequireResourceIndicator = false
 
 	verifier := "test-verifier-for-resource"
 	challenge := computeS256Challenge(verifier)
@@ -254,7 +255,7 @@ func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost/cb",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.MCPResource,
+		Resource:      s.cfg.Resource,
 		Subject:       "user",
 	})
 
@@ -264,7 +265,7 @@ func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
 		"redirect_uri":  {"http://localhost/cb"},
 		"client_id":     {"test-client"},
 		"code_verifier": {verifier},
-		"resource":      {"https://other.server/mcp"},
+		"resource":      {"https://other.server/resource"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -295,12 +296,13 @@ func TestTokenExchangeRefreshHappy(t *testing.T) {
 		Subject:  "user",
 		Groups:   []string{"g1"},
 		ClientID: "test-client",
-		Resource: s.cfg.MCPResource,
+		Resource: s.cfg.Resource,
 	}, time.Hour)
 
 	form := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {refreshToken},
+		"client_id":     {"test-client"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -335,13 +337,49 @@ func TestTokenExchangeRefreshHappy(t *testing.T) {
 // TestTokenExchangeRefreshTheft
 // ---------------------------------------------------------------------------
 
+// RFC 6749 §6 requires client_id of a client that does not authenticate, and
+// every client here is one. An absent parameter is a malformed request, not a
+// grant that failed to match.
+func TestTokenExchangeRefreshWithoutClientID(t *testing.T) {
+	s := newTestServer(t)
+
+	refreshToken := s.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "user",
+		ClientID: "test-client",
+		Resource: s.cfg.Resource,
+	}, time.Hour)
+
+	form := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {refreshToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	w := httptest.NewRecorder()
+	s.HandleToken(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "invalid_request") {
+		t.Errorf("error = %s, want invalid_request", w.Body.String())
+	}
+
+	// The grant must survive: a malformed request is the client's bug, and
+	// burning the family would make it the user's.
+	if _, ok := s.refreshTokens.Validate(refreshToken); !ok {
+		t.Error("a request missing client_id consumed the refresh token")
+	}
+}
+
 func TestTokenExchangeRefreshTheft(t *testing.T) {
 	s := newTestServer(t)
 
 	refreshToken := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user",
 		ClientID: "test-client",
-		Resource: s.cfg.MCPResource,
+		Resource: s.cfg.Resource,
 	}, time.Hour)
 
 	// First rotation — consumes the original token.
@@ -354,6 +392,7 @@ func TestTokenExchangeRefreshTheft(t *testing.T) {
 	form := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {refreshToken},
+		"client_id":     {"test-client"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -388,7 +427,7 @@ func TestRevocation(t *testing.T) {
 	token := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user",
 		ClientID: "test-client",
-		Resource: s.cfg.MCPResource,
+		Resource: s.cfg.Resource,
 	}, time.Hour)
 
 	form := url.Values{"token": {token}}
@@ -460,17 +499,18 @@ func TestCodeVerifier_RFC7636Length(t *testing.T) {
 
 func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 	srv := newTestServer(t)
-	// Issue a refresh token bound to MCPResource.
+	// Issue a refresh token bound to the configured resource.
 	rt := srv.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "u@e",
 		ClientID: "https://example.com/client",
-		Resource: srv.cfg.MCPResource,
+		Resource: srv.cfg.Resource,
 	}, time.Hour)
 
 	form := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {rt},
-		"resource":      {"https://other-cetacean.example.com/mcp"}, // mismatch
+		"resource":      {"https://other-cetacean.example.com/resource"}, // mismatch
+		"client_id":     {"https://example.com/client"},
 	}
 
 	rec := httptest.NewRecorder()
@@ -506,20 +546,14 @@ func TestWriteUnauthorized(t *testing.T) {
 		t.Fatalf("expected 401, got %d", rec.Code)
 	}
 
-	wwwAuth := rec.Header().Get("WWW-Authenticate")
-	if wwwAuth == "" {
-		t.Fatal("expected WWW-Authenticate header")
-	}
-	if !strings.Contains(wwwAuth, `resource_metadata=`) {
-		t.Errorf("WWW-Authenticate missing resource_metadata: %q", wwwAuth)
-	}
-	if !strings.Contains(wwwAuth, `error="invalid_token"`) {
-		t.Errorf("WWW-Authenticate missing error: %q", wwwAuth)
-	}
-	// Must contain the PRM URL.
-	expectedURL := s.cfg.Issuer + "/.well-known/oauth-protected-resource"
-	if !strings.Contains(wwwAuth, expectedURL) {
-		t.Errorf("WWW-Authenticate missing PRM URL %q: %q", expectedURL, wwwAuth)
+	// Asserted whole rather than by substring: the realm and the parameter order
+	// are what a client parses, and a piecewise check cannot see either change.
+	want := `Bearer realm="cetacean", ` +
+		`resource_metadata="https://cetacean.test/.well-known/oauth-protected-resource", ` +
+		`error="invalid_token"`
+
+	if got := rec.Header().Get("WWW-Authenticate"); got != want {
+		t.Errorf("WWW-Authenticate = %q, want %q", got, want)
 	}
 }
 

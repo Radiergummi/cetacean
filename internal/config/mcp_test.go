@@ -1,14 +1,27 @@
 package config
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/hex"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
+
+// clearMCPEnv unsets every variable loadMCP reads, so a test asserting the file
+// or default layer cannot be swayed by the ambient environment. The list tracks
+// loadMCP: add a setting there and add it here.
+func clearMCPEnv(t *testing.T) {
+	t.Helper()
+
+	for _, key := range []string{
+		"CETACEAN_MCP",
+		"CETACEAN_MCP_OPERATIONS_LEVEL",
+		"CETACEAN_MCP_MAX_CONCURRENT_TASKS",
+		"CETACEAN_MCP_TASK_TTL",
+		"CETACEAN_MCP_MAX_TASK_TTL",
+		"CETACEAN_MCP_AUTH_BYPASS",
+	} {
+		t.Setenv(key, "")
+	}
+}
 
 func TestMCPConfigDefaults(t *testing.T) {
 	cfg := DefaultMCPConfig()
@@ -16,54 +29,17 @@ func TestMCPConfigDefaults(t *testing.T) {
 	if cfg.Enabled {
 		t.Error("MCP should be disabled by default")
 	}
-	if cfg.AccessTokenTTL != time.Hour {
-		t.Errorf("access token TTL = %v, want 1h", cfg.AccessTokenTTL)
-	}
-	if cfg.RefreshTokenTTL != 720*time.Hour {
-		t.Errorf("refresh token TTL = %v, want 720h", cfg.RefreshTokenTTL)
-	}
-
-	// A remembered approval must outlive the refresh token, or remembering
-	// buys nothing: skipping the prompt once the token expires is the point.
-	if cfg.ConsentTTL <= cfg.RefreshTokenTTL {
-		t.Errorf(
-			"consent TTL = %v, want longer than the refresh token TTL %v",
-			cfg.ConsentTTL,
-			cfg.RefreshTokenTTL,
-		)
-	}
 	if cfg.OperationsLevel != OpsInherit {
 		t.Errorf("operations level = %v, want OpsInherit", cfg.OperationsLevel)
 	}
-	if !cfg.DCREnabled {
-		t.Error("DCR should be enabled by default")
-	}
-	if !cfg.CIMDEnabled {
-		t.Error("CIMD should be enabled by default")
-	}
-	if !cfg.RequireResourceIndicator {
-		t.Error("RFC 8707 resource indicator should be required by default")
-	}
-	if cfg.DCRRateLimit != 10 {
-		t.Errorf("DCR rate limit = %d, want 10", cfg.DCRRateLimit)
-	}
-	if cfg.DCRMaxClients != 1000 {
-		t.Errorf("DCR max clients = %d, want 1000", cfg.DCRMaxClients)
+	if cfg.MaxConcurrentTasks != 32 {
+		t.Errorf("max concurrent tasks = %d, want 32", cfg.MaxConcurrentTasks)
 	}
 }
 
 func TestMCPConfigFromEnv(t *testing.T) {
 	t.Setenv("CETACEAN_MCP", "true")
-	t.Setenv("CETACEAN_MCP_SIGNING_KEY", envSigningKey)
-	t.Setenv("CETACEAN_MCP_ACCESS_TOKEN_TTL", "2h")
-	t.Setenv("CETACEAN_MCP_REFRESH_TOKEN_TTL", "48h")
-	t.Setenv("CETACEAN_MCP_CONSENT_TTL", "96h")
 	t.Setenv("CETACEAN_MCP_OPERATIONS_LEVEL", "2")
-	t.Setenv("CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR", "false")
-	t.Setenv("CETACEAN_MCP_DCR_ENABLED", "false")
-	t.Setenv("CETACEAN_MCP_DCR_RATE_LIMIT", "25")
-	t.Setenv("CETACEAN_MCP_DCR_MAX_CLIENTS", "500")
-	t.Setenv("CETACEAN_MCP_CIMD_ENABLED", "false")
 	t.Setenv("CETACEAN_MCP_AUTH_BYPASS", "cert,headers")
 
 	cfg, err := Load(nil, nil)
@@ -74,84 +50,74 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	if !cfg.MCP.Enabled {
 		t.Error("MCP should be enabled")
 	}
-	if cfg.MCP.SigningKey != envSigningKey {
-		t.Errorf("signing key = %q, want %q", cfg.MCP.SigningKey, envSigningKey)
-	}
-	if cfg.MCP.AccessTokenTTL != 2*time.Hour {
-		t.Errorf("access token TTL = %v, want 2h", cfg.MCP.AccessTokenTTL)
-	}
-	if cfg.MCP.RefreshTokenTTL != 48*time.Hour {
-		t.Errorf("refresh TTL = %v, want 48h", cfg.MCP.RefreshTokenTTL)
-	}
-	if cfg.MCP.ConsentTTL != 96*time.Hour {
-		t.Errorf("consent TTL = %v, want 96h", cfg.MCP.ConsentTTL)
-	}
 	if cfg.MCP.OperationsLevel != OpsConfiguration {
 		t.Errorf("ops level = %v, want OpsConfiguration", cfg.MCP.OperationsLevel)
-	}
-	if cfg.MCP.RequireResourceIndicator {
-		t.Error("RequireResourceIndicator should be false")
-	}
-	if cfg.MCP.DCREnabled {
-		t.Error("DCREnabled should be false")
-	}
-	if cfg.MCP.DCRRateLimit != 25 {
-		t.Errorf("DCR rate limit = %d, want 25", cfg.MCP.DCRRateLimit)
-	}
-	if cfg.MCP.DCRMaxClients != 500 {
-		t.Errorf("DCR max clients = %d, want 500", cfg.MCP.DCRMaxClients)
-	}
-	if cfg.MCP.CIMDEnabled {
-		t.Error("CIMDEnabled should be false")
 	}
 	if got := cfg.MCP.AuthBypass; len(got) != 2 || got[0] != "cert" || got[1] != "headers" {
 		t.Errorf("AuthBypass = %v, want [cert headers]", got)
 	}
 }
 
-func TestMCPConfigIssuerOverride(t *testing.T) {
-	t.Setenv("CETACEAN_MCP_ISSUER", "https://cetacean.example.com/")
+// The bypass moved up out of [mcp.oauth] when that section dissolved; it is
+// MCP's, not the authorization server's.
+func TestMCPConfigFromFile(t *testing.T) {
+	clearMCPEnv(t)
 
-	cfg, err := Load(nil, nil)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
+	enabled := true
+	opsLevel := 2
+	maxTasks := 8
+	taskTTL := "20m"
+	maxTaskTTL := "2h"
 
-	if cfg.MCP.Issuer != "https://cetacean.example.com" {
-		t.Errorf("Issuer = %q, want trailing slash trimmed", cfg.MCP.Issuer)
-	}
-}
-
-func TestMCPConfigIssuerInvalid(t *testing.T) {
-	cases := map[string]string{
-		"bad scheme": "ftp://cetacean.example.com",
-		"no host":    "https://",
-		"has query":  "https://cetacean.example.com?foo=bar",
-	}
-	for name, raw := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Setenv("CETACEAN_MCP_ISSUER", raw)
-			if _, err := Load(nil, nil); err == nil {
-				t.Errorf("expected error for %q", raw)
-			}
-		})
-	}
-}
-
-func TestMCPConfigIssuerFromFile(t *testing.T) {
-	t.Setenv("CETACEAN_MCP_ISSUER", "")
-
-	want := "https://cetacean.example.com"
 	fc := &fileConfig{
-		MCP: &fileMCP{Issuer: &want},
+		MCP: &fileMCP{
+			Enabled:            &enabled,
+			OperationsLevel:    &opsLevel,
+			MaxConcurrentTasks: &maxTasks,
+			TaskTTL:            &taskTTL,
+			MaxTaskTTL:         &maxTaskTTL,
+			AuthBypass:         []string{"cert"},
+		},
 	}
 
 	cfg, err := Load(fc, nil)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.MCP.Issuer != want {
-		t.Errorf("Issuer = %q, want %q", cfg.MCP.Issuer, want)
+
+	if !cfg.MCP.Enabled {
+		t.Error("MCP.Enabled should be true from file")
+	}
+	if cfg.MCP.OperationsLevel != OpsConfiguration {
+		t.Errorf("OperationsLevel = %v, want OpsConfiguration", cfg.MCP.OperationsLevel)
+	}
+	if cfg.MCP.MaxConcurrentTasks != 8 {
+		t.Errorf("MaxConcurrentTasks = %d, want 8", cfg.MCP.MaxConcurrentTasks)
+	}
+	if cfg.MCP.TaskTTL != 20*time.Minute {
+		t.Errorf("TaskTTL = %v, want 20m", cfg.MCP.TaskTTL)
+	}
+	if cfg.MCP.MaxTaskTTL != 2*time.Hour {
+		t.Errorf("MaxTaskTTL = %v, want 2h", cfg.MCP.MaxTaskTTL)
+	}
+	if got := cfg.MCP.AuthBypass; len(got) != 1 || got[0] != "cert" {
+		t.Errorf("AuthBypass = %v, want [cert]", got)
+	}
+}
+
+func TestMCPConfigEnvWinsOverFile(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_TASK_TTL", "30m")
+
+	fileTTL := "20m"
+	fc := &fileConfig{MCP: &fileMCP{TaskTTL: &fileTTL}}
+
+	cfg, err := Load(fc, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.MCP.TaskTTL != 30*time.Minute {
+		t.Errorf("TaskTTL = %v, want 30m (env should win over file)", cfg.MCP.TaskTTL)
 	}
 }
 
@@ -164,124 +130,6 @@ func TestMCPEffectiveOperationsLevel(t *testing.T) {
 	explicit := MCPConfig{OperationsLevel: OpsConfiguration}
 	if got := explicit.EffectiveOperationsLevel(OpsImpactful); got != OpsConfiguration {
 		t.Errorf("explicit level should override global, got %v", got)
-	}
-}
-
-func TestMCPConfigFromFile(t *testing.T) {
-	// Clear all MCP env vars so file values are used.
-	t.Setenv("CETACEAN_MCP", "")
-	t.Setenv("CETACEAN_MCP_SIGNING_KEY", "")
-	t.Setenv("CETACEAN_MCP_ACCESS_TOKEN_TTL", "")
-	t.Setenv("CETACEAN_MCP_REFRESH_TOKEN_TTL", "")
-	t.Setenv("CETACEAN_MCP_OPERATIONS_LEVEL", "")
-	t.Setenv("CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR", "")
-	t.Setenv("CETACEAN_MCP_DCR_ENABLED", "")
-	t.Setenv("CETACEAN_MCP_DCR_RATE_LIMIT", "")
-	t.Setenv("CETACEAN_MCP_DCR_MAX_CLIENTS", "")
-	t.Setenv("CETACEAN_MCP_CIMD_ENABLED", "")
-	t.Setenv("CETACEAN_MCP_AUTH_BYPASS", "")
-
-	enabled := true
-	signingKey := "fafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafa"
-	accessTTL := "2h"
-	refreshTTL := "48h"
-	opsLevel := 2
-	requireRI := false
-	dcrEnabled := false
-	dcrRate := 5
-	dcrMax := 500
-	cimdEnabled := false
-
-	fc := &fileConfig{
-		MCP: &fileMCP{
-			Enabled:         &enabled,
-			SigningKey:      &signingKey,
-			AccessTokenTTL:  &accessTTL,
-			RefreshTokenTTL: &refreshTTL,
-			OperationsLevel: &opsLevel,
-			OAuth: &fileMCPOAuth{
-				RequireResourceIndicator: &requireRI,
-				DCREnabled:               &dcrEnabled,
-				DCRRateLimit:             &dcrRate,
-				DCRMaxClients:            &dcrMax,
-				CIMDEnabled:              &cimdEnabled,
-			},
-		},
-	}
-
-	cfg, err := Load(fc, nil)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	if !cfg.MCP.Enabled {
-		t.Error("MCP.Enabled should be true from file")
-	}
-	if cfg.MCP.SigningKey != signingKey {
-		t.Errorf("SigningKey = %q, want %q", cfg.MCP.SigningKey, signingKey)
-	}
-	if cfg.MCP.AccessTokenTTL != 2*time.Hour {
-		t.Errorf("AccessTokenTTL = %v, want 2h", cfg.MCP.AccessTokenTTL)
-	}
-	if cfg.MCP.RefreshTokenTTL != 48*time.Hour {
-		t.Errorf("RefreshTokenTTL = %v, want 48h", cfg.MCP.RefreshTokenTTL)
-	}
-	if cfg.MCP.OperationsLevel != OpsConfiguration {
-		t.Errorf("OperationsLevel = %v, want OpsConfiguration", cfg.MCP.OperationsLevel)
-	}
-	if cfg.MCP.RequireResourceIndicator {
-		t.Error("RequireResourceIndicator should be false from file")
-	}
-	if cfg.MCP.DCREnabled {
-		t.Error("DCREnabled should be false from file")
-	}
-	if cfg.MCP.DCRRateLimit != 5 {
-		t.Errorf("DCRRateLimit = %d, want 5", cfg.MCP.DCRRateLimit)
-	}
-	if cfg.MCP.DCRMaxClients != 500 {
-		t.Errorf("DCRMaxClients = %d, want 500", cfg.MCP.DCRMaxClients)
-	}
-	if cfg.MCP.CIMDEnabled {
-		t.Error("CIMDEnabled should be false from file")
-	}
-}
-
-func TestMCPConfigEnvWinsOverFile(t *testing.T) {
-	// File says 2h, env says 3h — env must win.
-	t.Setenv("CETACEAN_MCP_ACCESS_TOKEN_TTL", "3h")
-
-	fileTTL := "2h"
-	fc := &fileConfig{
-		MCP: &fileMCP{
-			AccessTokenTTL: &fileTTL,
-		},
-	}
-
-	cfg, err := Load(fc, nil)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	if cfg.MCP.AccessTokenTTL != 3*time.Hour {
-		t.Errorf("AccessTokenTTL = %v, want 3h (env should win over file)", cfg.MCP.AccessTokenTTL)
-	}
-}
-
-func TestMCPConfigDCRRateLimitValidation(t *testing.T) {
-	t.Setenv("CETACEAN_MCP_DCR_RATE_LIMIT", "0")
-
-	_, err := Load(nil, nil)
-	if err == nil {
-		t.Error("expected error for DCRRateLimit=0")
-	}
-}
-
-func TestMCPConfigDCRMaxClientsValidation(t *testing.T) {
-	t.Setenv("CETACEAN_MCP_DCR_MAX_CLIENTS", "-1")
-
-	_, err := Load(nil, nil)
-	if err == nil {
-		t.Error("expected error for DCRMaxClients=-1")
 	}
 }
 
@@ -308,7 +156,7 @@ func TestMCPConfigOpsLevelOutOfRange(t *testing.T) {
 }
 
 func TestMCPConfigAuthBypass(t *testing.T) {
-	t.Setenv("CETACEAN_MCP_AUTH_BYPASS", "client1,client2,client3")
+	t.Setenv("CETACEAN_MCP_AUTH_BYPASS", "cert,headers,tailscale")
 
 	cfg, err := Load(nil, nil)
 	if err != nil {
@@ -318,8 +166,34 @@ func TestMCPConfigAuthBypass(t *testing.T) {
 	if len(cfg.MCP.AuthBypass) != 3 {
 		t.Errorf("AuthBypass len = %d, want 3", len(cfg.MCP.AuthBypass))
 	}
-	if cfg.MCP.AuthBypass[0] != "client1" {
-		t.Errorf("AuthBypass[0] = %q, want client1", cfg.MCP.AuthBypass[0])
+	if cfg.MCP.AuthBypass[0] != "cert" {
+		t.Errorf("AuthBypass[0] = %q, want cert", cfg.MCP.AuthBypass[0])
+	}
+}
+
+// The bypass hands /mcp to the upstream provider, and /mcp is exempt from
+// cross-origin protection on the grounds that it carries no ambient credential.
+// A mode that authenticates from a session cookie makes that false, so the rule
+// the documentation states is enforced here rather than trusted.
+func TestMCPConfigAuthBypassRefusesUnsafeModes(t *testing.T) {
+	for _, mode := range []string{"oidc", "none", "not-a-mode"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("CETACEAN_MCP_AUTH_BYPASS", mode)
+
+			if _, err := Load(nil, nil); err == nil {
+				t.Fatalf("auth_bypass accepted %q", mode)
+			}
+		})
+	}
+}
+
+// Every bypassable mode must be one auth.mode actually accepts, or the list
+// names a mode no deployment can be running.
+func TestBypassableModesAreRealAuthModes(t *testing.T) {
+	for _, mode := range bypassableAuthModes {
+		if !validModes[mode] {
+			t.Errorf("bypassableAuthModes names %q, which is not an auth mode", mode)
+		}
 	}
 }
 
@@ -492,310 +366,5 @@ func TestLoadMCP_MaxTaskTTL_File(t *testing.T) {
 
 	if cfg.MaxTaskTTL != 2*time.Hour {
 		t.Errorf("MaxTaskTTL = %v, want 2h", cfg.MaxTaskTTL)
-	}
-}
-
-// TestLoadMCP_ConsentTTL_ZeroDisables — docs/mcp.md documents
-// CETACEAN_MCP_CONSENT_TTL=0 as the way to turn remembered approvals off, and
-// ConsentStore.Enabled() honours a zero TTL by never remembering. Rejecting it
-// at parse time meant the documented setting failed startup instead.
-func TestLoadMCP_ConsentTTL_ZeroDisables(t *testing.T) {
-	t.Setenv("CETACEAN_MCP_CONSENT_TTL", "0")
-
-	cfg, err := loadMCP(nil)
-	if err != nil {
-		t.Fatalf("loadMCP rejected the documented way to disable consent: %v", err)
-	}
-
-	if cfg.ConsentTTL != 0 {
-		t.Errorf("ConsentTTL = %v, want 0", cfg.ConsentTTL)
-	}
-}
-
-func TestLoadMCP_ConsentTTL_RejectsNegative(t *testing.T) {
-	t.Setenv("CETACEAN_MCP_CONSENT_TTL", "-1h")
-
-	if _, err := loadMCP(nil); err == nil {
-		t.Error("loadMCP accepted a negative consent TTL, want an error")
-	}
-}
-
-func TestLoadMCP_SigningKeyFromFile(t *testing.T) {
-	dir := t.TempDir()
-	keyPath := filepath.Join(dir, "mcp_signing_key")
-	if err := os.WriteFile(keyPath, append([]byte(fileSigningKey), '\n'), 0600); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Setenv("CETACEAN_MCP_SIGNING_KEY_FILE", keyPath)
-
-	cfg, err := loadMCP(nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.SigningKey != fileSigningKey {
-		t.Errorf("signing key = %q, want %q", cfg.SigningKey, fileSigningKey)
-	}
-}
-
-func TestLoadMCP_SigningKeyEnvBeatsFile(t *testing.T) {
-	dir := t.TempDir()
-	keyPath := filepath.Join(dir, "mcp_signing_key")
-	if err := os.WriteFile(keyPath, []byte(fileSigningKey), 0600); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Setenv("CETACEAN_MCP_SIGNING_KEY", envBeatsFile)
-	t.Setenv("CETACEAN_MCP_SIGNING_KEY_FILE", keyPath)
-
-	cfg, err := loadMCP(nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.SigningKey != envBeatsFile {
-		t.Errorf("signing key = %q, want %q", cfg.SigningKey, envBeatsFile)
-	}
-}
-
-func TestLoadMCP_SigningKeyFileMissing(t *testing.T) {
-	t.Setenv("CETACEAN_MCP_SIGNING_KEY_FILE", filepath.Join(t.TempDir(), "absent"))
-
-	if _, err := loadMCP(nil); err == nil {
-		t.Fatal("expected an error for an unreadable _FILE path, got nil")
-	}
-}
-
-// Every configured key must decode to 32 bytes, so these are hex.
-const (
-	testSigningKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	envSigningKey  = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-	fileSigningKey = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-	envBeatsFile   = "ebebebebebebebebebebebebebebebebebebebebebebebebebebebebebebebeb"
-)
-
-func TestLoadMCP_SigningKeyThatIsNotKeyMaterialIsRejected(t *testing.T) {
-	refused := map[string]string{
-		"too short":                  "short",
-		"a passphrase":               "correct-horse-battery-staple-abc",
-		"hex of the wrong length":    "0123456789abcdef0123456789abcdef",
-		"base64 of the wrong length": "bm90LXRoaXJ0eS10d28tYnl0ZXMtbG9uZw==",
-	}
-
-	for name, key := range refused {
-		t.Run(name, func(t *testing.T) {
-			t.Setenv("CETACEAN_MCP_SIGNING_KEY", key)
-
-			if _, err := loadMCP(nil); err == nil {
-				t.Fatalf("%q was accepted; only 32 bytes of hex or base64 may be", key)
-			}
-		})
-	}
-}
-
-func TestLoadMCP_SigningKeyFromFileIsCheckedToo(t *testing.T) {
-	dir := t.TempDir()
-	keyPath := filepath.Join(dir, "mcp_signing_key")
-	if err := os.WriteFile(keyPath, []byte("too-short"), 0600); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Setenv("CETACEAN_MCP_SIGNING_KEY_FILE", keyPath)
-
-	if _, err := loadMCP(nil); err == nil {
-		t.Fatal("expected an error for a short signing key read from a file, got nil")
-	}
-}
-
-func TestLoadMCP_SigningKeyOfKeyMaterialIsAccepted(t *testing.T) {
-	t.Setenv("CETACEAN_MCP_SIGNING_KEY", testSigningKey)
-
-	cfg, err := loadMCP(nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.SigningKey != testSigningKey {
-		t.Errorf("signing key = %q, want the test key", cfg.SigningKey)
-	}
-}
-
-// An unset key is not a bad key: one is generated instead.
-func TestLoadMCP_UnsetSigningKeyIsStillAllowed(t *testing.T) {
-	cfg, err := loadMCP(nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.SigningKey != "" {
-		t.Errorf("signing key = %q, want empty", cfg.SigningKey)
-	}
-}
-
-func TestMCPIssuer(t *testing.T) {
-	tests := []struct {
-		name       string
-		issuer     string
-		publicURL  string
-		listenAddr string
-		tlsEnabled bool
-		want       string
-		wantOK     bool
-	}{
-		{
-			name:       "explicit issuer wins",
-			issuer:     "https://cetacean.example.com",
-			listenAddr: ":9000",
-			want:       "https://cetacean.example.com",
-			wantOK:     true,
-		},
-		{
-			name:       "public_url is used when mcp.issuer is unset",
-			publicURL:  "https://cetacean.example.com",
-			listenAddr: ":9000",
-			want:       "https://cetacean.example.com",
-			wantOK:     true,
-		},
-		{
-			name:       "mcp.issuer overrides public_url",
-			issuer:     "https://mcp.example.com",
-			publicURL:  "https://cetacean.example.com",
-			listenAddr: ":9000",
-			want:       "https://mcp.example.com",
-			wantOK:     true,
-		},
-		{
-			name:       "default listen address has no host",
-			listenAddr: ":9000",
-			want:       "http://:9000",
-			wantOK:     false,
-		},
-		{
-			name:       "wildcard bind is not reachable",
-			listenAddr: "0.0.0.0:9000",
-			want:       "http://0.0.0.0:9000",
-			wantOK:     false,
-		},
-		{
-			name:       "unspecified IPv6 bind is not reachable",
-			listenAddr: "[::]:9000",
-			want:       "http://[::]:9000",
-			wantOK:     false,
-		},
-		{
-			name:       "explicit host derives",
-			listenAddr: "cetacean.internal:9000",
-			want:       "http://cetacean.internal:9000",
-			wantOK:     true,
-		},
-		{
-			name:       "TLS derives https",
-			listenAddr: "cetacean.internal:9000",
-			tlsEnabled: true,
-			want:       "https://cetacean.internal:9000",
-			wantOK:     true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{
-				ListenAddr: tt.listenAddr,
-				PublicURL:  tt.publicURL,
-				MCP:        MCPConfig{Issuer: tt.issuer},
-			}
-
-			got, ok := cfg.MCPIssuer(tt.tlsEnabled)
-
-			if got != tt.want {
-				t.Errorf("issuer = %q, want %q", got, tt.want)
-			}
-			if ok != tt.wantOK {
-				t.Errorf("ok = %v, want %v", ok, tt.wantOK)
-			}
-		})
-	}
-}
-
-func TestMCPIssuerRequired(t *testing.T) {
-	tests := []struct {
-		name       string
-		authMode   string
-		authBypass []string
-		want       bool
-	}{
-		{
-			name:     "auth mode none never needs OAuth",
-			authMode: "none",
-			want:     false,
-		},
-		{
-			name:     "auth mode with no bypass configured needs OAuth",
-			authMode: "cert",
-			want:     true,
-		},
-		{
-			name:       "auth mode listed in AuthBypass is fully bypassed",
-			authMode:   "cert",
-			authBypass: []string{"cert"},
-			want:       false,
-		},
-		{
-			name:       "auth mode not listed while another mode is bypassed still needs OAuth",
-			authMode:   "oidc",
-			authBypass: []string{"cert"},
-			want:       true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{MCP: MCPConfig{AuthBypass: tt.authBypass}}
-
-			if got := cfg.MCPIssuerRequired(tt.authMode); got != tt.want {
-				t.Errorf("MCPIssuerRequired(%q) = %v, want %v", tt.authMode, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestSigningKeyBytes(t *testing.T) {
-	raw := bytes.Repeat([]byte{0xAB}, 32)
-
-	tests := []struct {
-		name        string
-		key         string
-		wantRoot    []byte
-		wantDecoded bool
-	}{
-		{"hex", hex.EncodeToString(raw), raw, true},
-		{"standard base64", base64.StdEncoding.EncodeToString(raw), raw, true},
-		{"raw url base64", base64.RawURLEncoding.EncodeToString(raw), raw, true},
-		{
-			"a passphrase is its own bytes",
-			"correct-horse-battery-staple-abc",
-			[]byte("correct-horse-battery-staple-abc"),
-			false,
-		},
-		{
-			// 32 hex characters decode to 16 bytes, not 32. A decoder that
-			// checks only "is this hex" would take it.
-			"hex-looking but half the length",
-			"abcdefabcdefabcdefabcdefabcdefab",
-			[]byte("abcdefabcdefabcdefabcdefabcdefab"),
-			false,
-		},
-		{"unset", "", []byte(""), false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			root, decoded := SigningKeyBytes(tt.key)
-
-			if !bytes.Equal(root, tt.wantRoot) {
-				t.Errorf("root = %x, want %x", root, tt.wantRoot)
-			}
-
-			if decoded != tt.wantDecoded {
-				t.Errorf("decoded = %v, want %v", decoded, tt.wantDecoded)
-			}
-		})
 	}
 }

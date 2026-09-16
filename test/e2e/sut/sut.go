@@ -150,8 +150,7 @@ func StartExpectingExit(t *testing.T, cfg Config) (int, string) {
 			// examined to distinguish a genuine Wait failure (not an
 			// *exec.ExitError) from an ordinary non-zero exit.
 			if proc.waitErr != nil {
-				var exitErr *exec.ExitError
-				if !errors.As(proc.waitErr, &exitErr) {
+				if _, ok := errors.AsType[*exec.ExitError](proc.waitErr); !ok {
 					t.Fatalf("Wait: %v", proc.waitErr)
 				}
 			}
