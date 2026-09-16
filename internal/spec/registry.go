@@ -160,6 +160,10 @@ func load() (*Registry, error) {
 			return fmt.Errorf("spec: %s must live in a family directory", p)
 		}
 
+		if strings.Contains(family, "/") {
+			return fmt.Errorf("spec: %s: family segment cannot contain /", p)
+		}
+
 		body, err := registryFS.ReadFile(p)
 		if err != nil {
 			return err
@@ -184,6 +188,10 @@ func load() (*Registry, error) {
 }
 
 func (r *Registry) add(doc *Document) error {
+	if strings.Contains(doc.Family, "/") {
+		return fmt.Errorf("%s: family segment cannot contain /", doc.Key())
+	}
+
 	for i := range doc.Requirements {
 		q := &doc.Requirements[i]
 		q.Document = doc
@@ -229,4 +237,33 @@ func (q *Requirement) validate() error {
 	}
 
 	return nil
+}
+
+// Validate reports the document-level rules: the inventory denominator, and
+// that every dismissal carries a reason.
+func (r *Registry) Validate() []error {
+	var errs []error
+
+	for _, doc := range r.Documents {
+		for id, reason := range doc.Dismissed {
+			if strings.TrimSpace(reason) == "" {
+				errs = append(errs, fmt.Errorf("%s: dismissal %q has no reason", doc.Key(), id))
+			}
+		}
+
+		if doc.Inventory == nil {
+			continue
+		}
+
+		accounted := len(doc.Requirements) + len(doc.Dismissed)
+		if accounted != doc.Inventory.Count {
+			errs = append(errs, fmt.Errorf(
+				"%s: %d requirements + %d dismissed = %d, but the inventory declares %d",
+				doc.Key(), len(doc.Requirements), len(doc.Dismissed),
+				accounted, doc.Inventory.Count,
+			))
+		}
+	}
+
+	return errs
 }

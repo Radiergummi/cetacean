@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -59,5 +60,64 @@ func mustUnmarshal(t *testing.T, in string, out any) {
 
 	if err := yaml.Unmarshal([]byte(in), out); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+	}
+}
+
+// The denominator is the vacuity guard: without it the cheapest way to green
+// the gate is to delete the requirement, and nothing would notice.
+func TestInventoryCountMustAccountForEveryRequirement(t *testing.T) {
+	doc := &Document{
+		Family: "test", Name: "doc",
+		Inventory:    &Inventory{Count: 3},
+		Requirements: []Requirement{{ID: "a", Level: MUST, Text: "x"}},
+		Dismissed:    map[string]string{"b": "not ours"},
+	}
+
+	reg := &Registry{byID: map[string]*Requirement{}}
+	if err := reg.add(doc); err != nil {
+		t.Fatal(err)
+	}
+
+	errs := reg.Validate()
+	if len(errs) != 1 {
+		t.Fatalf("errors = %v, want exactly one about the inventory", errs)
+	}
+
+	if !strings.Contains(errs[0].Error(), "3") {
+		t.Errorf("error does not name the expected count: %v", errs[0])
+	}
+}
+
+func TestDismissalNeedsAReason(t *testing.T) {
+	doc := &Document{
+		Family: "test", Name: "doc",
+		Requirements: []Requirement{{ID: "a", Level: MUST, Text: "x"}},
+		Dismissed:    map[string]string{"b": "   "},
+	}
+
+	reg := &Registry{byID: map[string]*Requirement{}}
+	if err := reg.add(doc); err != nil {
+		t.Fatal(err)
+	}
+
+	if errs := reg.Validate(); len(errs) != 1 {
+		t.Fatalf("errors = %v, want one about the empty dismissal reason", errs)
+	}
+}
+
+func TestFamilyCannotContainASlash(t *testing.T) {
+	doc := &Document{
+		Family: "oauth/nested", Name: "doc",
+		Requirements: []Requirement{{ID: "a", Level: MUST, Text: "x"}},
+	}
+
+	reg := &Registry{byID: map[string]*Requirement{}}
+	err := reg.add(doc)
+	if err == nil {
+		t.Fatal("want an error about family containing /")
+	}
+
+	if !strings.Contains(err.Error(), "/") {
+		t.Errorf("error does not mention the slash: %v", err)
 	}
 }
