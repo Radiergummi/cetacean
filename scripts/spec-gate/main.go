@@ -23,7 +23,9 @@ func main() {
 	case "sweep":
 		err = runSweep(".")
 	case "report":
-		err = report_(os.Args[2:])
+		err = reportCmd(os.Args[2:])
+	case "mutants":
+		err = mutantsCmd(os.Args[2:])
 	default:
 		err = fmt.Errorf("unknown command %q", os.Args[1])
 	}
@@ -34,10 +36,10 @@ func main() {
 	}
 }
 
-// report_ parses the report command's own flags. The claims directory is where
+// reportCmd parses the report command's own flags. The claims directory is where
 // a run wrote its records; the suites are which lanes that run included, which
 // is what tells a requirement nothing exercised from one nothing ran.
-func report_(args []string) error {
+func reportCmd(args []string) error {
 	fs := flag.NewFlagSet("report", flag.ExitOnError)
 	claims := fs.String("claims", ".spec-claims", "directory holding the run's .claims files")
 	suites := fs.String("suites", "unit", "comma-separated lanes this run included")
@@ -54,4 +56,15 @@ func report_(args []string) error {
 	}
 
 	return runReport(".", *claims, included)
+}
+
+func mutantsCmd(args []string) error {
+	fs := flag.NewFlagSet("mutants", flag.ExitOnError)
+	only := fs.String("only", "", "run one requirement's mutants, by full id")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	return runMutants(".", *only)
 }

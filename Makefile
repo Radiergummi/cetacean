@@ -1,4 +1,4 @@
-.PHONY: lint lint-docs typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-genmcp spec-report spec-report-full
+.PHONY: lint lint-docs typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-genmcp spec-report spec-report-full spec-mutants
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
@@ -187,6 +187,12 @@ cover:
 spec:
 	go run ./scripts/spec-gate static
 	go run ./scripts/spec-gate sweep
+
+## Prove each requirement's tests refuse its mutants
+#
+# Minutes rather than seconds, so it has its own CI job and is not in `check`.
+spec-mutants:
+	go run ./scripts/spec-gate mutants
 
 ## Report what the unit suite exercised
 #
