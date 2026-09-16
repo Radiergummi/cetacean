@@ -25,3 +25,7 @@ requirements:
       If the requested resource is unknown [...] the authorization server MUST
       return an error response with "invalid_target".
     url: https://www.rfc-editor.org/rfc/rfc8707#section-2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t// RFC 8707 resource indicator validation.\n\tif _, err := s.resources.effectiveResource(\n\t\tresourceAll,\n\t\ts.cfg.OAuth.RequireResourceIndicator,\n\t); err != nil {\n\t\twriteTokenError(w, http.StatusBadRequest, \"invalid_target\", err.Error())"
+        with: "\t// RFC 8707 resource indicator validation.\n\tif _, err := s.resources.effectiveResource(\n\t\tresourceAll,\n\t\ts.cfg.OAuth.RequireResourceIndicator,\n\t); err != nil {\n\t\twriteTokenError(w, http.StatusBadRequest, \"invalid_request\", err.Error())"
