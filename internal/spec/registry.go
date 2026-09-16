@@ -259,17 +259,22 @@ func (q *Requirement) validate() error {
 	return nil
 }
 
-// Token is how this document is named in a comment: rfc7636 -> RFC7636,
-// sep-2575 -> SEP-2575.
-func (d *Document) Token() string {
-	upper := strings.ToUpper(d.Name)
+// Token canonicalises a specification's name to the one spelling the sweep
+// compares on: "RFC 7636", "rfc7636" and "RFC-7636" all become "RFC7636";
+// "SEP 2575" becomes "SEP-2575". A registered document and a citation of it
+// have to land on the same string, so both sides call this.
+func Token(name string) string {
+	upper := strings.ToUpper(strings.NewReplacer(" ", "", "-", "").Replace(name))
 
-	if num, ok := strings.CutPrefix(upper, "SEP-"); ok {
+	if num, ok := strings.CutPrefix(upper, "SEP"); ok {
 		return "SEP-" + num
 	}
 
-	return strings.ReplaceAll(upper, "-", "")
+	return upper
 }
+
+// Token is how this document is named in a comment.
+func (d *Document) Token() string { return Token(d.Name) }
 
 // Unregistered lists specifications the tree cites and this registry
 // deliberately says nothing about, each with its reason.

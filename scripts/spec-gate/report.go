@@ -3,8 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/radiergummi/cetacean/internal/spec"
@@ -22,42 +21,8 @@ type Summary struct {
 	Uncovered []string
 }
 
-// ReadClaims collects every claim written into dir, mapping a requirement to
-// the tests that recorded it.
-func ReadClaims(dir string) (map[string][]string, error) {
-	files, err := filepath.Glob(filepath.Join(dir, "*.claims"))
-	if err != nil {
-		return nil, err
-	}
-
-	out := map[string][]string{}
-
-	for _, f := range files {
-		body, err := os.ReadFile(f) // #nosec G304 -- a claims directory named on the command line
-		if err != nil {
-			return nil, err
-		}
-
-		for line := range strings.Lines(string(body)) {
-			id, name, ok := strings.Cut(strings.TrimRight(line, "\n"), "\t")
-			if !ok || id == "" {
-				continue
-			}
-
-			out[id] = append(out[id], name)
-		}
-	}
-
-	return out, nil
-}
-
 // summarise classifies every requirement against what this invocation ran.
-func summarise(
-	reg *spec.Registry,
-	static []Claim,
-	ran map[string][]string,
-	suites map[string]bool,
-) Summary {
+func summarise(reg *spec.Registry, static []Claim, ran map[string][]string, e2e bool) Summary {
 	tagged := map[string]bool{}
 	untagged := map[string]bool{}
 
@@ -82,19 +47,19 @@ func summarise(
 			out.Gaps++
 		case len(ran[id]) > 0:
 			out.Exercised++
-		case tagged[id] && !untagged[id] && !suites["e2e"]:
+		case tagged[id] && !untagged[id] && !e2e:
 			out.NotRun++
 		default:
 			out.Uncovered = append(out.Uncovered, id)
 		}
 	}
 
-	sort.Strings(out.Uncovered)
+	slices.Sort(out.Uncovered)
 
 	return out
 }
 
-func runReport(root, claims string, suites map[string]bool) error {
+func runReport(root, claims, suites string) error {
 	reg, err := spec.Load()
 	if err != nil {
 		return err
@@ -107,7 +72,7 @@ func runReport(root, claims string, suites map[string]bool) error {
 		return fmt.Errorf("%d problem(s) scanning for claims", len(errs))
 	}
 
-	ran, err := ReadClaims(claims)
+	ran, err := spec.ReadClaims(claims)
 	if err != nil {
 		return err
 	}
@@ -117,7 +82,7 @@ func runReport(root, claims string, suites map[string]bool) error {
 		return err
 	}
 
-	summary := summarise(reg, static, ran, suites)
+	summary := summarise(reg, static, ran, strings.Contains(suites, "e2e"))
 
 	// Never a bare ratio: a number without its denominator reads as a
 	// compliance claim no suite here can support.
@@ -126,7 +91,7 @@ func runReport(root, claims string, suites map[string]bool) error {
 		summary.Total, len(reg.Documents), len(reg.Documents), len(cited))
 	fmt.Fprintf(os.Stderr,
 		"  %d exercised by %s, %d not run, %d gaps, %d deferred, %d uncovered\n",
-		summary.Exercised, strings.Join(suiteNames(suites), "+"),
+		summary.Exercised, suites,
 		summary.NotRun, summary.Gaps, summary.Deferred, len(summary.Uncovered))
 
 	for _, id := range summary.Uncovered {
@@ -141,15 +106,4 @@ func runReport(root, claims string, suites map[string]bool) error {
 	}
 
 	return nil
-}
-
-func suiteNames(suites map[string]bool) []string {
-	names := make([]string, 0, len(suites))
-	for name := range suites {
-		names = append(names, name)
-	}
-
-	sort.Strings(names)
-
-	return names
 }

@@ -48,7 +48,7 @@ func report(errs []error) {
 // reason that is empty, every deferred requirement with nothing pinning it,
 // and every claim naming a requirement the registry does not have.
 func checkStatic(reg *spec.Registry, claims []Claim) []error {
-	claimed := map[string][]Claim{}
+	claimed := map[string]bool{}
 
 	var errs []error
 
@@ -62,12 +62,12 @@ func checkStatic(reg *spec.Registry, claims []Claim) []error {
 			continue
 		}
 
-		claimed[c.ID] = append(claimed[c.ID], c)
+		claimed[c.ID] = true
 	}
 
 	for _, q := range reg.All() {
 		id := q.FullID()
-		has := len(claimed[id]) > 0
+		has := claimed[id]
 
 		switch {
 		case q.Deferred != "":

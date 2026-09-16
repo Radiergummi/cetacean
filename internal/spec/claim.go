@@ -57,8 +57,9 @@ func sanitise(name string) string {
 	return strings.NewReplacer("\t", "_", "\n", "_", "\r", "_").Replace(name)
 }
 
-// appendClaims writes one file per process. O_APPEND line writes are atomic on
-// a local filesystem, so concurrent packages need no coordination.
+// appendClaims writes one file per process. Separate processes need no
+// coordination — an O_APPEND write is atomic — but the tests of one package
+// run concurrently, and claimMu is what keeps their records whole.
 func appendClaims(dir, name string, ids []string) error {
 	// #nosec G703 -- the claims directory is a test-harness path taken from
 	// the environment by the developer running the suite, never a request.
@@ -86,4 +87,34 @@ func appendClaims(dir, name string, ids []string) error {
 	_, err = f.WriteString(b.String())
 
 	return err
+}
+
+// ReadClaims collects every claim written into dir, mapping a requirement to
+// the tests that recorded it. It is the reader for appendClaims' format, and
+// lives beside it so the two cannot drift.
+func ReadClaims(dir string) (map[string][]string, error) {
+	files, err := filepath.Glob(filepath.Join(dir, "*.claims"))
+	if err != nil {
+		return nil, err
+	}
+
+	out := map[string][]string{}
+
+	for _, f := range files {
+		body, err := os.ReadFile(f) // #nosec G304 -- the claims directory again
+		if err != nil {
+			return nil, err
+		}
+
+		for line := range strings.Lines(string(body)) {
+			id, name, ok := strings.Cut(strings.TrimRight(line, "\n"), "\t")
+			if !ok || id == "" {
+				continue
+			}
+
+			out[id] = append(out[id], name)
+		}
+	}
+
+	return out, nil
 }

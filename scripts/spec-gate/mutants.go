@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/radiergummi/cetacean/internal/spec"
@@ -55,43 +54,25 @@ func overlayFor(dir, file, mutated string) (string, error) {
 	return path, os.WriteFile(path, body, 0o600)
 }
 
-// checkMutable reports every requirement whose mutants nothing here can run.
-// An e2e-tagged claimant needs the whole Docker environment, so a mutant with
-// only those cannot be verified and must not be reported as killed.
-func checkMutable(reg *spec.Registry, claims []Claim, only string) []error {
-	var errs []error
-
-	for _, q := range reg.All() {
-		id := q.FullID()
-		if len(q.Mutants) == 0 || (only != "" && only != id) {
+// claimants returns the tests that claim this requirement from outside a build
+// tag, with the packages they live in. An e2e-tagged claimant needs the whole
+// Docker environment, so a mutant with only those cannot be verified here and
+// must not be reported as killed.
+func claimants(claims []Claim, id string) (names, pkgs []string) {
+	for _, c := range claims {
+		if c.ID != id || c.Tagged {
 			continue
 		}
 
-		if len(untaggedClaimants(claims, id)) == 0 {
-			errs = append(errs, fmt.Errorf(
-				"%s: has mutants but no claimant outside a build tag; nothing here can kill them",
-				id))
-		}
+		names = append(names, c.Func)
+		pkgs = append(pkgs, "./"+filepath.Dir(c.File)+"/")
 	}
 
-	return errs
+	return slices.Compact(slices.Sorted(slices.Values(names))),
+		slices.Compact(slices.Sorted(slices.Values(pkgs)))
 }
 
-func untaggedClaimants(claims []Claim, id string) []string {
-	var names []string
-
-	for _, c := range claims {
-		if c.ID == id && !c.Tagged {
-			names = append(names, c.Func)
-		}
-	}
-
-	sort.Strings(names)
-
-	return slices.Compact(names)
-}
-
-func runMutants(root, only string) error {
+func runMutants(root string) error {
 	reg, err := spec.Load()
 	if err != nil {
 		return err
@@ -104,25 +85,28 @@ func runMutants(root, only string) error {
 		return fmt.Errorf("%d problem(s) scanning for claims", len(errs))
 	}
 
-	errs = checkMutable(reg, claims, only)
-
 	var ran int
 
 	for _, q := range reg.All() {
-		id := q.FullID()
-		if len(q.Mutants) == 0 || (only != "" && only != id) {
+		if len(q.Mutants) == 0 {
 			continue
 		}
 
-		names := untaggedClaimants(claims, id)
+		id := q.FullID()
+
+		names, pkgs := claimants(claims, id)
 		if len(names) == 0 {
+			errs = append(errs, fmt.Errorf(
+				"%s: has mutants but no claimant outside a build tag; nothing here can kill them",
+				id))
+
 			continue
 		}
 
 		for _, m := range q.Mutants {
 			ran++
 
-			if err := kill(root, id, m, names); err != nil {
+			if err := kill(root, id, m, names, pkgs); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -142,7 +126,7 @@ func runMutants(root, only string) error {
 // kill runs the requirement's claimants against the mutated tree. The test
 // command exiting 0 means the mutant survived: the tests pass whether or not
 // the requirement holds, so they are not what is enforcing it.
-func kill(root, id string, m spec.Mutant, names []string) error {
+func kill(root, id string, m spec.Mutant, names, pkgs []string) error {
 	path := filepath.Join(root, m.File)
 
 	src, err := os.ReadFile(path) // #nosec G304 -- a path from the embedded registry
@@ -168,12 +152,14 @@ func kill(root, id string, m spec.Mutant, names []string) error {
 
 	// #nosec G204 -- every argument comes from the embedded registry or the
 	// claim scan of this repository's own test files.
-	cmd := exec.CommandContext(context.Background(), "go", "test",
-		"-overlay="+overlay,
+	argv := append([]string{
+		"test",
+		"-overlay=" + overlay,
 		"-count=1",
-		"-run=^("+strings.Join(names, "|")+")$",
-		"./"+filepath.Dir(m.File)+"/",
-	)
+		"-run=^(" + strings.Join(names, "|") + ")$",
+	}, pkgs...)
+
+	cmd := exec.CommandContext(context.Background(), "go", argv...)
 	cmd.Dir = root
 
 	out, err := cmd.CombinedOutput()

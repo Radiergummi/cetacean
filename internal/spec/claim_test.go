@@ -1,8 +1,6 @@
 package spec
 
 import (
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -10,29 +8,24 @@ import (
 
 const knownID = "oauth/rfc7636/verifier-must-match-challenge"
 
-// readClaims returns every claim line written into dir.
+// readClaims returns every "id<TAB>name" record written into dir.
 func readClaims(t *testing.T, dir string) []string {
 	t.Helper()
 
-	entries, err := filepath.Glob(filepath.Join(dir, "*.claims"))
+	claims, err := ReadClaims(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var lines []string
 
-	for _, e := range entries {
-		body, err := os.ReadFile(e)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		for l := range strings.SplitSeq(strings.TrimSpace(string(body)), "\n") {
-			if l != "" {
-				lines = append(lines, l)
-			}
+	for id, names := range claims {
+		for _, name := range names {
+			lines = append(lines, id+"\t"+name)
 		}
 	}
+
+	slices.Sort(lines)
 
 	return lines
 }
@@ -111,5 +104,25 @@ func (r *recordingTB) Helper()           {}
 func (r *recordingTB) runCleanups() {
 	for i := range slices.Backward(r.cleanups) {
 		r.cleanups[i]()
+	}
+}
+
+func TestReadClaimsGroupsEveryRecordByRequirement(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(ClaimsEnv, dir)
+
+	for _, name := range []string{"first", "second"} {
+		t.Run(name, func(t *testing.T) {
+			Satisfies(t, knownID)
+		})
+	}
+
+	got, err := ReadClaims(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got[knownID]) != 2 {
+		t.Fatalf("claims = %v, want two records for %s", got, knownID)
 	}
 }

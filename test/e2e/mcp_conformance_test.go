@@ -678,10 +678,8 @@ func TestMCPConformanceOriginValidation(t *testing.T) {
 		}
 	})
 
-	// The suite expects a 2xx here: the request comes from the address this
-	// deployment publishes. The Origin guard reads server.cors.origins alone,
-	// so naming only server.public_url is not enough — the CSRF guard trusts
-	// that setting and this one does not. Pinned as it stands.
+	// The suite expects a 2xx here. Deferred in the registry, which carries
+	// the reason; this pins the answer as it stands.
 	t.Run("this deployment's own origin is refused too", func(t *testing.T) {
 		if status := probe(t, conformanceIssuer); status != http.StatusForbidden {
 			t.Errorf(
@@ -799,13 +797,4 @@ func firstToolName(t *testing.T, proc *sut.Process) string {
 	}
 
 	return name
-}
-
-func keysOf(m map[string]any) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-
-	return out
 }

@@ -320,12 +320,7 @@ func repayload(
 ) string {
 	t.Helper()
 
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		t.Fatalf("token has %d segments, want 3", len(parts))
-	}
-
-	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	raw, err := base64.RawURLEncoding.DecodeString(segment(t, token, 1))
 	if err != nil {
 		t.Fatalf("decode payload: %v", err)
 	}
@@ -342,14 +337,7 @@ func repayload(
 		t.Fatalf("marshal payload: %v", err)
 	}
 
-	signingInput := parts[0] + "." + base64.RawURLEncoding.EncodeToString(encoded)
-
-	sig, err := signES256(issuer.signer, signingInput)
-	if err != nil {
-		t.Fatalf("signES256: %v", err)
-	}
-
-	return signingInput + "." + sig
+	return resign(t, issuer, segment(t, token, 0), base64.RawURLEncoding.EncodeToString(encoded))
 }
 
 // RFC 9207 §2.4: a client validates the iss of an authorization response only

@@ -8,20 +8,6 @@ import (
 	"testing"
 )
 
-func TestNormaliseCitation(t *testing.T) {
-	for in, want := range map[string]string{
-		"RFC 7636": "RFC7636",
-		"RFC7636":  "RFC7636",
-		"SEP-2575": "SEP-2575",
-		"SEP 2575": "SEP-2575",
-		"SEP2575":  "SEP-2575",
-	} {
-		if got := normaliseCitation(in); got != want {
-			t.Errorf("normaliseCitation(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestACitedButUnregisteredSpecificationFailsTheSweep(t *testing.T) {
 	cited := map[string][]string{
 		"RFC7636": {"internal/oauth/server.go"},
