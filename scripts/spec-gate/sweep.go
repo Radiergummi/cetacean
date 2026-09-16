@@ -19,6 +19,11 @@ var citationRE = regexp.MustCompile(`\b(RFC[ -]?[0-9]{3,4}|SEP[ -]?[0-9]{3,4})\b
 // vendored, generated, or somebody else's prose.
 var sweptDirs = []string{"internal", "docs", "api", "test"}
 
+// registryPrefix is excluded from citations: every registered document names
+// its own RFC/SEP, and every unregistered.yaml line names its own token, so
+// counting them would make a token self-cite and hide a stale dismissal.
+const registryPrefix = "internal/spec/registry/"
+
 func normaliseCitation(in string) string {
 	upper := strings.ToUpper(strings.NewReplacer(" ", "", "-", "").Replace(in))
 
@@ -46,6 +51,10 @@ func Citations(root string) (map[string][]string, error) {
 		}
 
 		rel := string(p)
+
+		if strings.HasPrefix(rel, registryPrefix) {
+			continue
+		}
 
 		body, err := os.ReadFile(root + "/" + rel)
 		if err != nil {

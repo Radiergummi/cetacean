@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -51,5 +54,55 @@ func TestAStaleDismissalFailsTheSweep(t *testing.T) {
 	)
 	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "RFC9999") {
 		t.Fatalf("errors = %v, want one about the stale dismissal", errs)
+	}
+}
+
+// TestCitationsExcludesTheRegistryTreeFromItsOwnSweep guards against a token
+// self-citing: unregistered.yaml writes "RFC9999:" as a map key, and a
+// registered document names its own RFC in "source:"/"url:". Neither is a
+// real citation, or a stale dismissal could never be caught.
+func TestCitationsExcludesTheRegistryTreeFromItsOwnSweep(t *testing.T) {
+	root := t.TempDir()
+
+	writeFixtureFile(t, root, "internal/spec/registry/unregistered.yaml",
+		"RFC9999: a token only this file names\n")
+	writeFixtureFile(t, root, "internal/real.go",
+		"// package cites.go names nothing here.\npackage internal\n")
+	gitInitFixture(t, root)
+
+	cited, err := Citations(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if files, ok := cited["RFC9999"]; ok {
+		t.Fatalf("RFC9999 reported as cited (%v); the registry tree self-cites", files)
+	}
+}
+
+func writeFixtureFile(t *testing.T, root, rel, body string) {
+	t.Helper()
+
+	p := filepath.Join(root, rel)
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func gitInitFixture(t *testing.T, root string) {
+	t.Helper()
+
+	for _, args := range [][]string{{"init", "-q"}, {"add", "-A"}} {
+		// #nosec G204 -- args are fixed literals plus t.TempDir(), never
+		// caller input.
+		cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", root}, args...)...)
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
 	}
 }
