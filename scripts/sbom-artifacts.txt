@@ -1,0 +1,7 @@
+# What build-sbom.sh writes, read by the Makefile, scripts/commit-sbom.sh and
+# .githooks/pre-commit. Listed explicitly because internal/api/sbom/ also holds
+# Go source, so the directory is not a usable stand-in.
+internal/api/sbom/sbom.cdx.json
+internal/api/sbom/licensetexts.json
+internal/api/sbom/notices.txt
+THIRD_PARTY_LICENSES
