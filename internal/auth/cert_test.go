@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -409,9 +410,14 @@ func TestCertProvider_DNSSANsOnly_NoSubject(t *testing.T) {
 
 func TestCertProvider_MiddlewareRefusesWithoutChallenge(t *testing.T) {
 	p := &CertProvider{}
-	handler := Middleware(p)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("inner handler should not be called")
-	}))
+	handler := Middleware(
+		p,
+		APITokens{},
+	)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Fatal("inner handler should not be called")
+		}),
+	)
 
 	r := httptest.NewRequest("GET", "/nodes", nil)
 	w := httptest.NewRecorder()
@@ -469,6 +475,46 @@ func TestCertProvider_WhoamiRefusesAsTheMiddlewareDoes(t *testing.T) {
 	}
 	if got := w.Header().Get("WWW-Authenticate"); got != "" {
 		t.Errorf("WWW-Authenticate = %q, want none", got)
+	}
+}
+
+// A refusal that named its own code keeps it. The resource challenge is added
+// because it is informative, but it names a credential that cannot answer a
+// rejected certificate: promoted to 401, a conformant client would follow
+// resource_metadata to /oauth/authorize, which demands that same certificate.
+func TestCertProvider_ResourceChallengeDoesNotRewriteTheRefusal(t *testing.T) {
+	tokens := APITokens{Verifier: &stubVerifier{}, Resource: "https://cetacean.test"}
+
+	w, _ := serve(&CertProvider{}, tokens, httptest.NewRequest("GET", "/nodes", nil))
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "client certificate required") {
+		t.Errorf("detail = %q, want the certificate's own reason", body)
+	}
+
+	var named bool
+	for _, c := range w.Result().Header.Values("WWW-Authenticate") {
+		if strings.Contains(c, "resource_metadata=") {
+			named = true
+		}
+	}
+	if !named {
+		t.Error("403 with no challenge naming the resource's metadata")
+	}
+
+	// The registry code reaches a registered writer only; the fallback the
+	// assertions above read carries the status and detail instead.
+	prev := globalErrorWriter.Load()
+	t.Cleanup(func() { globalErrorWriter.Store(prev) })
+
+	var code string
+	SetErrorWriter(func(_ http.ResponseWriter, _ *http.Request, c, _ string) { code = c })
+	serve(&CertProvider{}, tokens, httptest.NewRequest("GET", "/nodes", nil))
+
+	if code != "AUT005" {
+		t.Errorf("code = %q, want AUT005", code)
 	}
 }
 

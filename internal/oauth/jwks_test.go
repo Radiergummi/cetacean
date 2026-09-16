@@ -17,8 +17,8 @@ func newJWKSTestServer(t *testing.T) *Server {
 	t.Helper()
 
 	return NewServer(ServerConfig{
-		Issuer:   "https://swarm.example",
-		Resource: "https://swarm.example/resource",
+		Issuer:    "https://swarm.example",
+		Resources: []Resource{{Path: "/resource", Realm: "cetacean"}},
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  time.Hour,
 			RefreshTokenTTL: 720 * time.Hour,
@@ -138,7 +138,7 @@ func TestPublishedKeyVerifiesAToken(t *testing.T) {
 	token, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
 		Subject:  "alice",
 		ClientID: "https://client.example/id.json",
-	}, time.Hour)
+	}, s.resources.fallback, time.Hour)
 	if err != nil {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}
@@ -184,9 +184,9 @@ func TestMetadataAdvertisesTheKeySet(t *testing.T) {
 
 func TestMetadataOmitsTheKeySetWithoutAKey(t *testing.T) {
 	s := NewServer(ServerConfig{
-		Issuer:   "https://swarm.example",
-		Resource: "https://swarm.example/resource",
-		OAuth:    config.OAuthConfig{AccessTokenTTL: time.Hour},
+		Issuer:    "https://swarm.example",
+		Resources: []Resource{{Path: "/resource", Realm: "cetacean"}},
+		OAuth:     config.OAuthConfig{AccessTokenTTL: time.Hour},
 	})
 
 	rec := httptest.NewRecorder()

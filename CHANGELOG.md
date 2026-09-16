@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The MCP authorization server publishes the public key that verifies its access tokens, as a JWK Set at `/oauth/jwks`. Anything checking a token Cetacean issued no longer needs a key that could issue one
 - `GET /-/health` reports whether Cetacean is still tracking the cluster, and `/-/metrics` says the same for alerting. The dashboard marks itself stale instead of showing a frozen cluster as a live one
 - `POST /-/resync` and `GET /swarm/plugins` appear in the API specification
+- The REST API accepts bearer tokens the authorization server issues, so a script or app can authenticate without a browser session — `oauth.api_tokens` turns it off
+- `oauth.token_operations_level` holds a token-authenticated caller of the web API below the tier the deployment runs at, so a token left on a device can read the cluster without changing it
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 - A stack's page and a service's Traefik labels are each drawn as a graph
 
@@ -35,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** a setting the schema does not know refuses startup and is named, rather than being ignored — a config file still carrying `[mcp.oauth]` will not start
 - **Breaking:** `auth.headers.trusted_proxies` is gone — use `server.trusted_proxies`, which headers mode already required
 - **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`, and accepts only `cert`, `headers` and `tailscale` — a listed mode authenticates `/mcp` on its own, so `oauth.enabled` can stay off
+- **Breaking:** `/mcp`'s protected resource metadata moved to `/.well-known/oauth-protected-resource/mcp`; the root document describes the API, whose tokens do not open `/mcp`. A client following `resource_metadata` from the 401 is unaffected
+- **Breaking:** a token request sending no `resource` parameter binds to the web API, not `/mcp`. An MCP client that cannot send one needs `oauth.api_tokens` off to keep working
+- **Breaking:** `mcp.operations_level` narrows `server.operations_level` instead of replacing it. Set above the global tier it now grants nothing; set below, it caps as before
 - **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` is not read — delete it, and every client authorizes once more
 - **Breaking:** the `refresh_token` grant at `/oauth/token` requires `client_id`; a request without it is refused with `invalid_request`
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address — set `server.public_url` or list the proxy
@@ -52,6 +57,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
 
 ### Fixed
+- Authorization server metadata is served at the address RFC 8414 has a client derive, as well as under `server.base_path`
+- An access token whose `aud` is an array, or whose `typ` differs only in letter case, is accepted — both are conformant shapes that were refused
+- A token carrying a future `nbf`, or no `sub`, is refused
+- The authorization server advertises that it sends `iss` on authorization responses, so a client actually enforces the mix-up check the responses already carry
+- Both discovery documents name the scopes the authorization server supports — none — so a client asks for no scope instead of guessing at one
+- A 401 from the API names where a token comes from even when the request carried no credential, which is what makes cold discovery work
+- Protected resource metadata is served at the address RFC 9728 has a client derive — the well-known segment after the host — as well as under `server.base_path`. Behind a proxy, forward `/.well-known/*` from the host root too
+- The deployment root is accepted as a resource identifier with or without its trailing slash
+- A token request missing `grant_type`, `code` or `refresh_token` is refused with `invalid_request` rather than `invalid_grant`, which told clients to discard a working grant
+- A repeated RFC 8707 `resource` parameter is refused with `invalid_target` instead of binding the token to whichever came first
+- A 401 for a request carrying no credential no longer reports `invalid_token`, per RFC 6750
+- An access token cannot authorize a new client: consent requires the identity your auth provider established, not one a token carries
+- An ACL grant written against an email address matches a token as well as a browser session. MCP clients were silently denied everything such a grant allowed
 - A replayed refresh token revokes the whole grant family and the remembered approval again; sending the `resource` parameter — which every conformant client does — had the request refused before theft detection could run
 - Everything that does not describe the cluster keeps working while the Docker daemon is unreachable — the dashboard's own icons and manifest, the API catalogue, the OpenSearch description, `/profile` and the OAuth endpoints that issue a token
 - A Docker Engine too old for Cetacean says so at startup instead of coming up and serving empty pages. Cetacean speaks Docker API 1.46, which means Engine 26.1 or newer

@@ -58,14 +58,22 @@ func DefaultMCPConfig() MCPConfig {
 	}
 }
 
-// EffectiveOperationsLevel returns the operations level to apply to MCP clients.
-// When OperationsLevel is OpsInherit, the supplied global level is returned.
+// EffectiveOperationsLevel returns the operations level to apply to MCP clients:
+// the global one, narrowed by this transport's own. A transport override is a
+// ceiling and never a second dial, so one set above the deployment's tier grants
+// nothing the deployment refused.
 func (m MCPConfig) EffectiveOperationsLevel(global OperationsLevel) OperationsLevel {
-	if m.OperationsLevel == OpsInherit {
+	return capLevel(m.OperationsLevel, global)
+}
+
+// capLevel narrows global by level, which may be OpsInherit for "no ceiling of
+// its own".
+func capLevel(level, global OperationsLevel) OperationsLevel {
+	if level == OpsInherit {
 		return global
 	}
 
-	return m.OperationsLevel
+	return min(level, global)
 }
 
 // loadMCP builds an MCPConfig from a file section and env vars, applying the
@@ -126,7 +134,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 
 	// OpsInherit (-1) is a sentinel that cannot be expressed in the [0,3] range
 	// accepted by resolveInt, so we handle it manually.
-	opsLevel, err := resolveMCPOpsLevel(fOpsLevel)
+	opsLevel, err := resolveOpsCeiling("CETACEAN_MCP_OPERATIONS_LEVEL", fOpsLevel)
 	if err != nil {
 		return MCPConfig{}, err
 	}
@@ -172,11 +180,10 @@ func checkAuthBypass(modes []string) error {
 	return nil
 }
 
-// resolveMCPOpsLevel reads CETACEAN_MCP_OPERATIONS_LEVEL and the file value,
-// returning OpsInherit when neither is set. Unlike the global ops level,
-// OpsInherit (-1) is a valid result here.
-func resolveMCPOpsLevel(file *int) (OperationsLevel, error) {
-	const envKey = "CETACEAN_MCP_OPERATIONS_LEVEL"
+// resolveOpsCeiling reads a transport's own operations level from envKey and
+// the file value, returning OpsInherit when neither is set. Unlike the global
+// ops level, OpsInherit (-1) is a valid result here.
+func resolveOpsCeiling(envKey string, file *int) (OperationsLevel, error) {
 	const min, max = int(OpsReadOnly), int(OpsImpactful)
 
 	if raw := os.Getenv(envKey); raw != "" {

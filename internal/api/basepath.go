@@ -147,15 +147,33 @@ func publicURLMiddleware(publicURL string, next http.Handler) http.Handler {
 	})
 }
 
+// derivedWellKnownPrefix covers the documents a client builds a URL for by
+// inserting the well-known segment after the authority, so they are addressed
+// from the host root however this deployment is mounted. Only the OAuth family
+// does that: openid-configuration appends to the issuer, and the catalog is ours.
+const derivedWellKnownPrefix = "/.well-known/oauth-"
+
 // basePathMiddleware strips the base path prefix from incoming requests,
 // stores the base path in context, and redirects trailing slashes.
 // If basePath is "", it is a no-op.
-func basePathMiddleware(basePath string, next http.Handler) http.Handler {
+func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handler) http.Handler {
 	if basePath == "" {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
+
+		// RFC 9728 §3.1 and RFC 8414 §3 build their URL by inserting the well-known
+		// segment after the host, so a client derives a path the prefix check would
+		// refuse. Only the documents registered there: the SPA fallback answers
+		// whatever is left unrouted, which would put the dashboard at the host root.
+		if strings.HasPrefix(path, derivedWellKnownPrefix) && routes.serves(r) {
+			ctx := context.WithValue(r.Context(), basePathKey, basePath)
+			next.ServeHTTP(w, r.WithContext(ctx))
+
+			return
+		}
+
 		if !strings.HasPrefix(path, basePath+"/") && path != basePath {
 			http.NotFound(w, r)
 			return

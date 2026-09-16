@@ -19,10 +19,9 @@ import (
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	cfg := ServerConfig{
-		Issuer:          "https://cetacean.test",
-		BasePath:        "",
-		Resource:        "https://cetacean.test/resource",
-		ResourceMounted: true,
+		Issuer:    "https://cetacean.test",
+		BasePath:  "",
+		Resources: []Resource{{Path: "/resource", Realm: "cetacean"}},
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,
@@ -41,14 +40,15 @@ func newTestServer(t *testing.T) *Server {
 }
 
 // newPersistingServer is newTestServer wired to a state file at path, for tests
-// that restart a server over the same durable state. resource stays explicit:
-// these tests pin it to the audience their fixture tokens were written for.
-func newPersistingServer(t *testing.T, path, resource string) *Server {
+// that restart a server over the same durable state. The resource path stays
+// explicit: these tests pin it to the audience their fixture tokens were written
+// for.
+func newPersistingServer(t *testing.T, path, resourcePath string) *Server {
 	t.Helper()
 
 	s := NewServer(ServerConfig{
-		Issuer:   "https://cetacean.test",
-		Resource: resource,
+		Issuer:    "https://cetacean.test",
+		Resources: []Resource{{Path: resourcePath, Realm: "cetacean"}},
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  time.Hour,
 			RefreshTokenTTL: 720 * time.Hour,
@@ -156,7 +156,7 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost:8080/callback",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.Resource,
+		Resource:      s.resources.fallback,
 		Subject:       "user@example.com",
 		Groups:        []string{"admin"},
 	})
@@ -192,7 +192,7 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 	}
 
 	// Verify the JWT contains the expected audience.
-	claims, err := s.tokenIssuer.VerifyAccessToken(resp.AccessToken)
+	claims, err := s.tokenIssuer.VerifyAccessToken(resp.AccessToken, s.resources.fallback)
 	if err != nil {
 		t.Fatalf("verify access token: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost/cb",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.Resource,
+		Resource:      s.resources.fallback,
 		Subject:       "user",
 	})
 
@@ -255,7 +255,7 @@ func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost/cb",
 		CodeChallenge: challenge,
-		Resource:      s.cfg.Resource,
+		Resource:      s.resources.fallback,
 		Subject:       "user",
 	})
 
@@ -296,7 +296,7 @@ func TestTokenExchangeRefreshHappy(t *testing.T) {
 		Subject:  "user",
 		Groups:   []string{"g1"},
 		ClientID: "test-client",
-		Resource: s.cfg.Resource,
+		Resource: s.resources.fallback,
 	}, time.Hour)
 
 	form := url.Values{
@@ -346,7 +346,7 @@ func TestTokenExchangeRefreshWithoutClientID(t *testing.T) {
 	refreshToken := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user",
 		ClientID: "test-client",
-		Resource: s.cfg.Resource,
+		Resource: s.resources.fallback,
 	}, time.Hour)
 
 	form := url.Values{
@@ -379,7 +379,7 @@ func TestTokenExchangeRefreshTheft(t *testing.T) {
 	refreshToken := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user",
 		ClientID: "test-client",
-		Resource: s.cfg.Resource,
+		Resource: s.resources.fallback,
 	}, time.Hour)
 
 	// First rotation — consumes the original token.
@@ -427,7 +427,7 @@ func TestRevocation(t *testing.T) {
 	token := s.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "user",
 		ClientID: "test-client",
-		Resource: s.cfg.Resource,
+		Resource: s.resources.fallback,
 	}, time.Hour)
 
 	form := url.Values{"token": {token}}
@@ -503,7 +503,7 @@ func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 	rt := srv.refreshTokens.Issue(RefreshTokenData{
 		Subject:  "u@e",
 		ClientID: "https://example.com/client",
-		Resource: srv.cfg.Resource,
+		Resource: srv.resources.fallback,
 	}, time.Hour)
 
 	form := url.Values{
@@ -533,26 +533,24 @@ func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestWriteUnauthorized
+// TestUnauthorizedHeader
 // ---------------------------------------------------------------------------
 
-func TestWriteUnauthorized(t *testing.T) {
+func TestUnauthorizedHeader(t *testing.T) {
 	s := newTestServer(t)
 
-	rec := httptest.NewRecorder()
-	s.WriteUnauthorized(rec, "invalid_token")
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rec.Code)
-	}
+	got := s.UnauthorizedHeader(s.resources.fallback, "invalid_token")
 
 	// Asserted whole rather than by substring: the realm and the parameter order
 	// are what a client parses, and a piecewise check cannot see either change.
+	// The metadata URL carries the resource's own path, so it names this
+	// resource rather than whichever one sits at the root.
 	want := `Bearer realm="cetacean", ` +
-		`resource_metadata="https://cetacean.test/.well-known/oauth-protected-resource", ` +
+		`resource_metadata="https://cetacean.test/.well-known/oauth-protected-resource` +
+		testResourcePath + `", ` +
 		`error="invalid_token"`
 
-	if got := rec.Header().Get("WWW-Authenticate"); got != want {
+	if got != want {
 		t.Errorf("WWW-Authenticate = %q, want %q", got, want)
 	}
 }

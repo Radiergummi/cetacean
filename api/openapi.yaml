@@ -5908,7 +5908,12 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: Bearer token for machine-to-machine OIDC authentication
+      description: >-
+        Bearer token for machine-to-machine authentication: an access token this
+        deployment's OAuth 2.1 authorization server issued for the API, or in
+        `oidc` mode an ID token from the configured IdP. A token issued for the
+        `/mcp` resource is refused here; the 401 names the API's own protected
+        resource metadata document.
 
   # ── Parameters ───────────────────────────────────────────────────────
 

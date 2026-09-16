@@ -38,7 +38,7 @@ func (p *fakeAuthProvider) RegisterRoutes(_ *http.ServeMux) {}
 // they are named rather than spelled at each site.
 const (
 	testIssuer   = "https://cetacean.example.com"
-	testResource = testIssuer + "/mcp"
+	testResource = testIssuer + MountPath
 )
 
 // oauthServerFor builds an authorization server the way main.go does, sharing
@@ -46,9 +46,12 @@ const (
 // verifier, not a stand-in.
 func oauthServerFor(key []byte) *oauth.Server {
 	return oauth.NewServer(oauth.ServerConfig{
-		Issuer:     testIssuer,
-		BasePath:   "",
-		Resource:   testResource,
+		Issuer:   testIssuer,
+		BasePath: "",
+		Resources: []oauth.Resource{
+			{Path: "", Realm: "cetacean"},
+			{Path: MountPath, Realm: "cetacean-mcp"},
+		},
 		OAuth:      config.DefaultOAuthConfig(),
 		SigningKey: key,
 	})
@@ -58,12 +61,16 @@ func oauthServerFor(key []byte) *oauth.Server {
 func tokenFor(t *testing.T, key []byte, claims oauth.AccessTokenClaims) string {
 	t.Helper()
 
-	issuer, err := oauth.NewTokenIssuer(key, testIssuer, testResource)
+	issuer, err := oauth.NewTokenIssuer(key, testIssuer)
 	if err != nil {
 		t.Fatalf("NewTokenIssuer: %v", err)
 	}
 
-	token, err := issuer.IssueAccessToken(claims, config.DefaultOAuthConfig().AccessTokenTTL)
+	token, err := issuer.IssueAccessToken(
+		claims,
+		testResource,
+		config.DefaultOAuthConfig().AccessTokenTTL,
+	)
 	if err != nil {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}
@@ -109,8 +116,9 @@ func TestHandlerEmits401WithoutBearerWhenOAuthConfigured(t *testing.T) {
 	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
 	srv, err := New(c, Options{
-		Config: cfg,
-		OAuth:  oauthSrv,
+		Config:   cfg,
+		OAuth:    oauthSrv,
+		Resource: testResource,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -149,8 +157,9 @@ func TestHandlerAcceptsValidBearer(t *testing.T) {
 	})
 
 	srv, err := New(c, Options{
-		Config: cfg,
-		OAuth:  oauthSrv,
+		Config:   cfg,
+		OAuth:    oauthSrv,
+		Resource: testResource,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -193,6 +202,7 @@ func TestHandlerAuthBypassUsesUpstreamIdentity(t *testing.T) {
 	srv, err := New(c, Options{
 		Config:       cfg,
 		OAuth:        oauthSrv,
+		Resource:     testResource,
 		AuthMode:     "cert",
 		AuthProvider: provider,
 	})
@@ -229,6 +239,7 @@ func TestHandlerAuthBypassFallsBackWhenUpstreamFails(t *testing.T) {
 	srv, err := New(c, Options{
 		Config:       cfg,
 		OAuth:        oauthSrv,
+		Resource:     testResource,
 		AuthMode:     "cert",
 		AuthProvider: provider,
 	})
@@ -287,6 +298,7 @@ func TestHandlerAuthBypassIgnoredWhenModeNotListed(t *testing.T) {
 	srv, err := New(c, Options{
 		Config:       cfg,
 		OAuth:        oauthSrv,
+		Resource:     testResource,
 		AuthMode:     "oidc",
 		AuthProvider: provider,
 	})
@@ -323,7 +335,7 @@ func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
 		ClientID: "test-client",
 	})
 
-	srv, err := New(c, Options{Config: cfg, OAuth: oauthSrv})
+	srv, err := New(c, Options{Config: cfg, OAuth: oauthSrv, Resource: testResource})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -577,5 +589,74 @@ func TestServerDiscoverOmitsIconsWithoutABaseURL(t *testing.T) {
 
 	if bytes.Contains(envelope.Result, []byte(`"icons"`)) {
 		t.Errorf("icons advertised with no base URL to build them from: %s", envelope.Result)
+	}
+}
+
+// The other half of the separation: a token minted for the deployment root — the
+// credential an ordinary API client holds — must not reach this transport, and
+// the refusal must send the client to this transport's own metadata document.
+//
+// The audiences differ by one path segment and one is a prefix of the other,
+// which is exactly the pair a containment reading would conflate.
+func TestHandlerRefusesATokenForAnotherResource(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+
+	key := []byte("test-secret-32-bytes-long-padding")
+	oauthSrv := oauthServerFor(key)
+
+	issuer, err := oauth.NewTokenIssuer(key, testIssuer)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
+	}
+
+	// testIssuer alone is the deployment root, where testResource is /mcp beneath it.
+	token, err := issuer.IssueAccessToken(oauth.AccessTokenClaims{
+		Subject:  "user@example.com",
+		ClientID: "test-client",
+	}, testIssuer, config.DefaultOAuthConfig().AccessTokenTTL)
+	if err != nil {
+		t.Fatalf("IssueAccessToken: %v", err)
+	}
+
+	srv, err := New(cache.New(nil), Options{Config: cfg, OAuth: oauthSrv, Resource: testResource})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(srv.Close)
+
+	req := httptest.NewRequest(http.MethodPost, MountPath, strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401: %s", rec.Code, rec.Body.String())
+	}
+
+	challenge := rec.Header().Get("WWW-Authenticate")
+	want := `resource_metadata="` + testIssuer +
+		`/.well-known/oauth-protected-resource` + MountPath + `"`
+	if !strings.Contains(challenge, want) {
+		t.Errorf("WWW-Authenticate = %q, want substring %q", challenge, want)
+	}
+}
+
+// A bearer guard verifies a token's audience against this transport's resource
+// identifier, and challenges with that resource's metadata. Without one it
+// would refuse every token and point clients at another document.
+func TestNewRefusesAnAuthorizationServerWithNoResource(t *testing.T) {
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+
+	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
+
+	_, err := New(cache.New(nil), Options{Config: cfg, OAuth: oauthSrv})
+	if err == nil {
+		t.Fatal("an authorization server without a resource was accepted")
+	}
+	if !strings.Contains(err.Error(), "resource") {
+		t.Errorf("error does not say what is missing: %v", err)
 	}
 }

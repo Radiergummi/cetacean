@@ -38,6 +38,7 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!DOCTYPE htm
   .btn-deny { background: #f1f5f9; color: #374151; }
   .btn-deny:hover { background: #e2e8f0; }
   .warning { background: #fff7ed; border-left: 4px solid #f97316; padding: 10px 14px; border-radius: 4px; font-size: 0.85rem; margin: 16px 0; }
+  .resource-id { display: block; font-size: 0.8rem; color: #7c2d12; word-break: break-all; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -53,7 +54,9 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!DOCTYPE htm
   Authorizing as: <strong>{{.Subject}}</strong>{{if .Email}} ({{.Email}}){{end}}
 </div>
 <div class="warning">
-  This will grant <strong>{{.ClientName}}</strong> access to your Cetacean instance. Only approve if you trust this application.
+  {{if .ResourcePath}}This will grant <strong>{{.ClientName}}</strong> access to <strong>{{.ResourcePath}}</strong> on your Cetacean instance, and to nothing else on it.{{else}}This will grant <strong>{{.ClientName}}</strong> access to your whole Cetacean instance.{{end}}
+  It acts as you, with exactly the access you have. Only approve if you trust this application.
+  <span class="resource-id">{{.ResourceID}}</span>
 </div>
 {{if .RememberedFor}}<div class="warning">Approving will be remembered for <strong>{{.ClientName}}</strong> for {{.RememberedFor}}, or until you revoke its access.</div>{{end}}
 <form method="POST" action="{{.ActionURL}}">
@@ -114,6 +117,13 @@ type consentData struct {
 	CodeChallengeMethod string
 	State               string
 	Resource            string
+
+	// ResourceID is the identifier the grant will bind to, and ResourcePath
+	// where it sits under the deployment root — empty for the root itself.
+	// Resource is the raw request parameter the form resubmits, which may be
+	// absent, so it cannot say what is being authorized.
+	ResourceID   string
+	ResourcePath string
 
 	// Fingerprint hashes the metadata this page was rendered from. It rides
 	// along in a hidden field and is covered by CSRFToken, so the POST can
