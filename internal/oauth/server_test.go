@@ -586,3 +586,25 @@ func TestHTTPQuotedString(t *testing.T) {
 		}
 	}
 }
+
+// RFC 7636 Appendix B's worked example. Ours is the only S256 implementation
+// in the flow, so a vector from the RFC is what says it computes the same
+// challenge a client does rather than merely agreeing with itself.
+func TestS256MatchesTheRFC7636Vector(t *testing.T) {
+	const (
+		verifier  = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+		challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+	)
+
+	if err := validateCodeVerifier(verifier); err != nil {
+		t.Fatalf("the RFC's own verifier is refused as malformed: %v", err)
+	}
+
+	if got := computeS256Challenge(verifier); got != challenge {
+		t.Errorf("challenge = %q, want the RFC's %q", got, challenge)
+	}
+
+	if !verifySHA256Challenge(verifier, challenge) {
+		t.Error("the RFC's verifier and challenge do not verify against each other")
+	}
+}
