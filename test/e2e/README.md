@@ -311,12 +311,12 @@ than a standing claim:
   live in the shipped binary.
 - The ACL case that a digest never names a resource behind a grant.
 - Three answers the MCP conformance suite disagrees with, each pinned as it stands by the lane
-  above. The Origin guard reads `server.cors.origins` alone, so a deployment naming only
-  `server.public_url` has a browser client at its own origin refused with 403 — the CSRF guard
-  trusts that setting and this one does not. A resource-not-found error does not echo the
-  requested URI in its `data` field, which SEP-2164 says it SHOULD. And a request whose `_meta`
-  omits `clientCapabilities` is answered `-32021` by mcp-go where the suite reads SEP-2575 as
-  requiring `-32602`; that code is the SDK's, not ours.
+  above. The Origin guard's over-refusal is a deferred requirement in
+  `internal/spec/registry/mcp/transports.yaml`, which carries the reason. The other two are not
+  requirements: a resource-not-found error does not echo the requested URI in its `data` field,
+  which the spec shows in an example but requires nowhere; and a request whose `_meta` omits
+  `clientCapabilities` is answered `-32021`, which is what SEP-2575 asks for and what the suite
+  reports as a failure.
 - The authorization code flow itself, from outside. The lane covers the metadata document a client
   reads first; the suite's `authorization-code-grant` scenario needs a browser and a registered
   redirect URI. The OpenID Foundation suite does not close this either: every authorization-server
