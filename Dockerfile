@@ -6,7 +6,7 @@ WORKDIR /app
 # to arrive before the install and ahead of the sources that invalidate it.
 COPY --link package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY --link frontend/package.json frontend/
-RUN corepack enable pnpm || npm install -g "pnpm@$(node -p 'require("./package.json").packageManager.split("@")[1]')"
+RUN npm install -g "pnpm@$(node -p 'require("./package.json").packageManager.split("@")[1]')"
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --filter frontend...
 COPY --link frontend/ frontend/

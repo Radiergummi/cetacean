@@ -5,9 +5,6 @@ inputs:
   cache:
     description: Restore and save the pnpm store. Off for jobs that publish signed artifacts.
     default: "true"
-  install:
-    description: Run pnpm install. Off for jobs that only need the toolchain.
-    default: "true"
 
 runs:
   using: composite
@@ -31,6 +28,5 @@ runs:
         key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
         restore-keys: pnpm-${{ runner.os }}-
 
-    - if: inputs.install == 'true'
-      shell: bash
+    - shell: bash
       run: pnpm install --frozen-lockfile

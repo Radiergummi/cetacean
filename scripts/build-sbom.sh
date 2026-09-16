@@ -45,9 +45,6 @@ echo "==> npm packages (production only)"
 # resolve a pnpm workspace, and of the generators that can, none carries the
 # tarball hashes through. See scripts/sbomnpm.
 ( cd "$repo_root" && go run ./scripts/sbomnpm \
-    -lockfile pnpm-lock.yaml \
-    -importer frontend \
-    -store node_modules/.pnpm \
     -bom-ref-prefix "frontend@$(jq -r .version frontend/package.json)" \
     -out "$tmp/npm.cdx.json" )
 

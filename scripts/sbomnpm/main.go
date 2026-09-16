@@ -14,30 +14,32 @@ import (
 	cyclonedx "github.com/CycloneDX/cyclonedx-go"
 )
 
+// The workspace package whose production dependencies ship, and where pnpm
+// keeps the lockfile and the unpacked packages. Run from the repository root.
+const (
+	lockPath     = "pnpm-lock.yaml"
+	importerName = "frontend"
+	storeRoot    = "node_modules/.pnpm"
+)
+
 func main() {
-	lockPath := flag.String("lockfile", "pnpm-lock.yaml", "path to pnpm-lock.yaml")
-	importerName := flag.String(
-		"importer",
-		"frontend",
-		"workspace package whose production closure to render",
-	)
-	store := flag.String(
-		"store",
-		"node_modules/.pnpm",
-		"pnpm virtual store holding the unpacked packages",
-	)
 	ref := flag.String("bom-ref-prefix", "frontend@0.0.0", "prefix for each component's bom-ref")
 	out := flag.String("out", "", "output file (default stdout)")
 	flag.Parse()
 
-	if err := run(*lockPath, *importerName, *store, *ref, *out); err != nil {
+	if err := run(*ref, *out); err != nil {
 		fmt.Fprintln(os.Stderr, "sbomnpm:", err)
 		os.Exit(1)
 	}
 }
 
-func run(lockPath, importerName, store, ref, out string) error {
+func run(ref, out string) error {
 	lock, err := loadLockfile(lockPath, importerName)
+	if err != nil {
+		return err
+	}
+
+	store, err := openStore(storeRoot)
 	if err != nil {
 		return err
 	}

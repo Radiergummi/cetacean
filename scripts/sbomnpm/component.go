@@ -8,9 +8,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	cyclonedx "github.com/CycloneDX/cyclonedx-go"
+)
+
+// A name and a version arrive from the lockfile and end up in a path, so they
+// are checked against npm's grammar rather than trusted: either one carrying a
+// separator or a parent reference would otherwise walk out of the store.
+var (
+	validName    = regexp.MustCompile(`^(@[A-Za-z0-9][\w.-]*/)?[A-Za-z0-9][\w.-]*$`)
+	validVersion = regexp.MustCompile(`^[A-Za-z0-9][\w.+-]*$`)
 )
 
 // errNotInstalled reports a package the lockfile names and the store does not
@@ -29,23 +38,51 @@ type packageManifest struct {
 	Bugs        json.RawMessage `json:"bugs"`
 }
 
-// storeDir locates the unpacked package inside pnpm's virtual store. A store
-// entry is named for the package and version with `/` replaced by `+`, and
-// carries a suffix naming the peers it was resolved against.
-func storeDir(store, name, version string) (string, error) {
-	mangled := strings.ReplaceAll(name, "/", "+") + "@" + version
+// store is pnpm's virtual store, listed once: resolving the closure against it
+// is several hundred lookups, and re-listing a directory of well over a
+// thousand entries for each of them is the whole cost of the run.
+type store struct {
+	root    string
+	entries []string
+}
 
-	entries, err := os.ReadDir(store)
+func openStore(root string) (*store, error) {
+	entries, err := os.ReadDir(root)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
+	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		if entry.Name() != mangled && !strings.HasPrefix(entry.Name(), mangled+"_") {
+		names = append(names, entry.Name())
+	}
+
+	return &store{root: root, entries: names}, nil
+}
+
+// dir locates the unpacked package. A store entry is named for the package and
+// version with `/` replaced by `+`, and carries a suffix naming the peers it
+// was resolved against.
+func (s *store) dir(name, version string) (string, error) {
+	if !validName.MatchString(name) || !validVersion.MatchString(version) {
+		return "", fmt.Errorf("refusing %q@%q: not a package name and version", name, version)
+	}
+
+	mangled := strings.ReplaceAll(name, "/", "+") + "@" + version
+
+	for _, entry := range s.entries {
+		if entry != mangled && !strings.HasPrefix(entry, mangled+"_") {
 			continue
 		}
 
-		dir := filepath.Join(store, entry.Name(), "node_modules", filepath.FromSlash(name))
+		dir := filepath.Join(s.root, entry, "node_modules", filepath.FromSlash(name))
+
+		// The grammar above already forbids it; this holds even if it changes.
+		root := filepath.Clean(s.root) + string(filepath.Separator)
+		if !strings.HasPrefix(filepath.Clean(dir), root) {
+			return "", fmt.Errorf("refusing %s: outside %s", dir, s.root)
+		}
+
 		if _, err := os.Stat(dir); err == nil {
 			return dir, nil
 		}
@@ -56,8 +93,8 @@ func storeDir(store, name, version string) (string, error) {
 
 // component renders one package as a CycloneDX component in the shape the
 // licenses page and the license-text harvester read back.
-func component(store, ref, name, version, integrity string) (cyclonedx.Component, error) {
-	dir, err := storeDir(store, name, version)
+func component(store *store, ref, name, version, integrity string) (cyclonedx.Component, error) {
+	dir, err := store.dir(name, version)
 	if err != nil {
 		return cyclonedx.Component{}, err
 	}

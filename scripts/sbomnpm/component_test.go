@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -94,7 +95,12 @@ func TestStoreDirFindsPeerSuffixedEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := storeDir(store, "@base-ui/react", "1.8.0")
+	opened, err := openStore(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := opened.dir("@base-ui/react", "1.8.0")
 	if err != nil {
 		t.Fatalf("storeDir: %v", err)
 	}
@@ -104,13 +110,50 @@ func TestStoreDirFindsPeerSuffixedEntries(t *testing.T) {
 	}
 
 	// A longer version must not be matched by a shorter one's prefix.
-	if _, err := storeDir(store, "@base-ui/react", "1.8"); err == nil {
+	if _, err := opened.dir("@base-ui/react", "1.8"); err == nil {
 		t.Error("1.8 should not match the entry for 1.8.0")
 	}
 }
 
 func TestStoreDirReportsUninstalledPackages(t *testing.T) {
-	if _, err := storeDir(t.TempDir(), "only-on-windows", "1.0.0"); err == nil {
+	if _, err := mustOpen(t, t.TempDir()).dir("only-on-windows", "1.0.0"); err == nil {
 		t.Fatal("expected errNotInstalled")
 	}
+}
+
+// The lockfile is an input, so a name that would walk out of the store has to
+// be refused rather than resolved.
+func TestStoreDirRefusesTraversal(t *testing.T) {
+	store := t.TempDir()
+
+	for _, bad := range []struct{ name, version string }{
+		{"../../etc", "1.0.0"},
+		{"@scope/../../etc", "1.0.0"},
+		{"a/b/c", "1.0.0"},
+		{"pkg", "../../1.0.0"},
+		{"pkg", "1.0.0/../.."},
+		{"/absolute", "1.0.0"},
+	} {
+		if _, err := mustOpen(t, store).dir(bad.name, bad.version); err == nil {
+			t.Errorf("storeDir(%q, %q) was accepted", bad.name, bad.version)
+		}
+	}
+
+	// Ordinary names must still resolve.
+	for _, good := range []string{"react", "@base-ui/react", "lodash.merge", "vue-demi"} {
+		if _, err := mustOpen(t, store).dir(good, "1.0.0"); errors.Is(err, nil) {
+			t.Errorf("%q should reach the not-installed path, not be refused", good)
+		}
+	}
+}
+
+func mustOpen(t *testing.T, root string) *store {
+	t.Helper()
+
+	opened, err := openStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return opened
 }
