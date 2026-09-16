@@ -1,4 +1,4 @@
-.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec
+.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-genmcp
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
@@ -171,6 +171,14 @@ cover:
 spec:
 	go run ./scripts/spec-gate static
 	go run ./scripts/spec-gate sweep
+
+## Regenerate the MCP registry families from upstream
+#
+# Needs network: it fetches the conformance suite's own requirement files at
+# the revision scripts/spec-genmcp pins. Not part of `check`.
+spec-genmcp:
+	go run ./scripts/spec-genmcp
+	git diff --exit-code internal/spec/registry/mcp/
 
 ## Run all checks (lint + type check + format check + test + spec)
 check: lint typecheck fmt-check test spec
