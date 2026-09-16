@@ -13,8 +13,8 @@ allowBuilds:
 
 # Version floors, carried over from the `overrides` blocks the two package.json
 # files used to hold: pnpm does not read npm's field, so leaving them there
-# would drop the constraint silently. One map now covers both packages, which
-# is the safe direction for a floor.
+# would drop the constraint silently. One map covers both packages now, so the
+# entry that is a ceiling rather than a floor has to name whose ceiling it is.
 overrides:
   brace-expansion: ">=5.0.9"
   fast-uri: ">=4.1.2"
@@ -22,4 +22,4 @@ overrides:
   ip-address: ">=10.3.1"
   postcss: ">=8.5.23"
   undici: ">=7.29.0"
-  vite: "^8.0.0"
+  "astro>vite": "^8.0.0"
