@@ -38,20 +38,22 @@ go test ./internal/cache/       # one package
 go run .
 ```
 
+The frontend and the website are one pnpm workspace, driven from the repository
+root. `pnpm install` covers both; the version of pnpm is pinned by
+`packageManager` and the Node version by `.nvmrc`.
+
 ```bash
-cd frontend
-npm run dev                     # Vite on :5173, proxies to :9000
-npm run build                   # -> frontend/dist
-npm run build:widgets           # -> frontend/dist-widgets (a go build prerequisite)
-npm run check                   # tsc only, faster than a build
-npx vitest run
+pnpm --filter frontend dev              # Vite on :5173, proxies to :9000
+pnpm --filter frontend build            # -> frontend/dist
+pnpm --filter frontend build:widgets    # -> frontend/dist-widgets (a go build prerequisite)
+pnpm --filter frontend check            # tsc only, faster than a build
+pnpm --filter frontend exec vitest run
 ```
 
 ```bash
-cd website
-npm run sync-assets             # generates src/data/errors.json; needed before `check` in a clean tree
-npm run dev                     # Astro on :4321
-npm run check                   # astro check, covers .astro as well as .ts
+pnpm --filter website sync-assets       # generates src/data/errors.json; needed before `check` in a clean tree
+pnpm --filter website dev               # Astro on :4321
+pnpm --filter website check             # astro check, covers .astro as well as .ts
 ```
 
 Docker: `docker build -t cetacean:latest .`, then `docker stack deploy -c compose.yaml cetacean`.

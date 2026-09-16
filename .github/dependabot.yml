@@ -84,9 +84,10 @@ updates:
         update-types:
           - version-update:semver-patch
 
-  # Dashboard SPA. Production deps shipped to users.
+  # The pnpm workspace: the dashboard SPA shipped to users and the Astro
+  # docs site share one lockfile at the root, so one entry covers both.
   - package-ecosystem: npm
-    directory: /frontend
+    directory: /
     schedule:
       interval: weekly
       day: monday
@@ -98,53 +99,31 @@ updates:
       include: scope
     labels:
       - dependencies
-      - frontend
+      - npm
     groups:
       # Lint/format tooling gets its own PR. A new oxlint release can promote
-      # fresh rules into the `correctness` category, which fails lint-frontend
+      # fresh rules into the `correctness` category, which fails the lint jobs
       # on code that was green before. Kept separate so that never blocks the
       # security updates in the group below. oxlint/oxfmt are pinned to exact
-      # versions in package.json for the same reason.
-      frontend-lint:
+      # versions for the same reason.
+      lint-tooling:
         patterns:
           - "oxlint"
           - "oxfmt"
         update-types:
           - minor
           - patch
-      # One PR for every other minor and patch frontend bump. Majors are
-      # excluded from the group so a grouped PR stays mergeable on sight;
-      # each major then arrives on its own and can be reviewed and tested
-      # without holding up the safe bumps beside it.
-      frontend:
+      # One PR for every other minor and patch bump. Majors are excluded so a
+      # grouped PR stays mergeable on sight; each major then arrives on its
+      # own and can be reviewed and tested without holding up the safe bumps
+      # beside it. Workspace membership is not expressible as a pattern, so
+      # the frontend and the website share this group.
+      npm:
         patterns:
           - "*"
         exclude-patterns:
           - "oxlint"
           - "oxfmt"
-        update-types:
-          - minor
-          - patch
-
-  # Marketing/docs site (Astro).
-  - package-ecosystem: npm
-    directory: /website
-    schedule:
-      interval: weekly
-      day: monday
-      time: "08:00"
-      timezone: Europe/Berlin
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: chore(deps)
-      include: scope
-    labels:
-      - dependencies
-      - website
-    groups:
-      website-all:
-        patterns:
-          - "*"
         update-types:
           - minor
           - patch

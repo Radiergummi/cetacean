@@ -19,7 +19,7 @@ docker swarm init
 
 # Run backend and frontend dev server side by side:
 go run .                              # Terminal 1: Go backend on :9000
-cd frontend && npm run dev            # Terminal 2: Vite dev server on :5173
+pnpm --filter frontend dev           # Terminal 2: Vite dev server on :5173
 ```
 
 Open `http://localhost:5173`. Vite proxies resource paths to the Go backend, so you get hot-reload with live data.

@@ -42,11 +42,12 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@types/unist": "^3.0.3",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
-    "typescript": "^6.0.3"
-  },
-  "overrides": {
+    "typescript": "^6.0.3",
+    "unified": "^11.0.5",
+    "vfile": "^6.0.3",
     "vite": "^8.0.0"
   },
   "allowScripts": {

@@ -1,0 +1,29 @@
+{
+  "name": "cetacean",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": "^24",
+    "pnpm": "^12"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^24",
+      "onFail": "warn"
+    }
+  },
+  "scripts": {
+    "build": "pnpm --filter frontend build && pnpm --filter frontend build:widgets",
+    "check": "pnpm -r check",
+    "lint": "pnpm -r lint",
+    "fmt": "pnpm -r fmt",
+    "fmt:check": "pnpm -r fmt:check"
+  },
+  "msw": {
+    "workerDirectory": [
+      "website/public/demo"
+    ]
+  }
+}

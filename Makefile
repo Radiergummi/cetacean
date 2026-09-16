@@ -10,29 +10,29 @@ E2E_COVERDIR := coverdata
 lint:
 	golangci-lint run ./...
 	actionlint
-	zizmor .github/workflows/
-	cd frontend && npx oxlint
-	cd website && npx oxlint
+	zizmor --config .github/zizmor.yml .github/workflows/
+	pnpm --filter frontend exec oxlint
+	pnpm --filter website exec oxlint
 
 ## Type-check the frontend and the website
 # The website's error reference is generated from Go source, and `astro check`
 # type-checks the module that imports it, so the generated file has to exist
 # before the check runs.
 typecheck:
-	cd frontend && npm run check
-	cd website && npm run sync-assets && npm run check
+	pnpm --filter frontend check
+	pnpm --filter website sync-assets && pnpm --filter website check
 
 ## Format all code in place
 fmt:
 	golangci-lint fmt ./...
-	cd frontend && npx oxfmt --write .
-	cd website && npx oxfmt --write .
+	pnpm --filter frontend exec oxfmt --write .
+	pnpm --filter website exec oxfmt --write .
 
 ## Check formatting without modifying files
 fmt-check:
 	golangci-lint fmt --diff ./... 2>&1 | diff /dev/null -
-	cd frontend && npx oxfmt --check .
-	cd website && npx oxfmt --check .
+	pnpm --filter frontend exec oxfmt --check .
+	pnpm --filter website exec oxfmt --check .
 
 ## Build everything
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -42,15 +42,15 @@ LDFLAGS := -X github.com/radiergummi/cetacean/internal/version.Version=$(VERSION
            -X github.com/radiergummi/cetacean/internal/version.Commit=$(COMMIT) \
            -X github.com/radiergummi/cetacean/internal/version.Date=$(DATE)
 
-build: frontend/node_modules
-	cd frontend && npm run build
-	cd frontend && npm run build:widgets
+build: node_modules
+	pnpm --filter frontend build
+	pnpm --filter frontend build:widgets
 	go build -ldflags "$(LDFLAGS)" -o cetacean .
 
-## Install the frontend dependencies the build embeds. Not phony: the stamp is
-## the directory itself, so a second `make build` skips the install.
-frontend/node_modules: frontend/package-lock.json
-	cd frontend && npm ci
+## Install the workspace the build embeds. Not phony: the stamp is the
+## directory itself, so a second `make build` skips the install.
+node_modules: pnpm-lock.yaml
+	pnpm install --frozen-lockfile
 	@touch $@
 
 ## Run all tests
@@ -59,7 +59,7 @@ test:
 
 ## Run end-to-end tests
 test-e2e:
-	cd frontend && npx playwright test
+	pnpm --filter frontend exec playwright test
 
 ## Run the end-to-end stack suite (local only; needs Docker)
 ## -p 1 serialises packages: each reserves the same lane ports, so parallel

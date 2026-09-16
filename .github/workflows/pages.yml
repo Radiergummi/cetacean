@@ -18,7 +18,7 @@ on:
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
-# Read-only by default: the build runs npm ci and the Astro build, and must not
+# Read-only by default: the build runs pnpm install and the Astro build, and must not
 # hold a scope that can publish. deploy takes the write scopes on its own.
 permissions:
   contents: read
@@ -42,9 +42,7 @@ jobs:
           # build refuses a shallow clone rather than publish that.
           fetch-depth: 0
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 25
+      - uses: ./.github/actions/node
 
       # The website build generates its error reference from internal/api; see
       # website/package.json's sync-assets script.
@@ -53,20 +51,16 @@ jobs:
           go-version-file: go.mod
 
       - name: Build demo SPA
-        working-directory: frontend
         run: |
-          npm ci
-          mkdir -p ../website/public/demo
-          npm run build:demo
+          mkdir -p website/public/demo
+          pnpm --filter frontend build:demo
 
       - name: Build website
-        working-directory: website
         run: |
-          npm ci
           # Diagrams in docs/ are rendered to SVG at build time by a headless
           # browser; without it every mermaid block fails the build.
-          npx playwright install --with-deps chromium
-          npm run build
+          pnpm --filter website exec playwright install --with-deps chromium
+          pnpm --filter website build
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
