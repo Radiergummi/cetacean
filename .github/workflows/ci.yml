@@ -111,6 +111,32 @@ jobs:
       # by a local `make fmt-check`.
       - run: golangci-lint fmt --diff ./... 2>&1 | diff /dev/null -
 
+  lint-workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      # Installed rather than used as actions. Both publish one, but a
+      # non-GitHub action has to be allowlisted in repository settings, and a
+      # pinned module version and a pinned wheel carry the same guarantee
+      # without the setting.
+      - run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - run: actionlint -color
+      - run: pipx install zizmor==1.30.1
+      # Online, so that an action going known-bad fails a run rather than
+      # waiting to be noticed. zizmor's own version is pinned, which keeps
+      # rule drift out; what drifts here is the advisory data, and that is
+      # the point of running it.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: zizmor .github/workflows/
+
   lint-frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 10
