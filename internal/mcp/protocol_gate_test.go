@@ -159,3 +159,47 @@ func TestDiscoverAdvertisesOnlyTheSupportedVersion(t *testing.T) {
 		t.Fatalf("supportedVersions = %v, want %v", result.SupportedVersions, want)
 	}
 }
+
+// TestLaterVersionRejectionAdvertisesOnlyTheSupportedVersion pins the payload a
+// client actually retries from. mcp-go treats anything sorting after the
+// current revision as modern, so a later version reaches its own rejection —
+// which lists every revision the SDK knows, four of them refused here.
+func TestLaterVersionRejectionAdvertisesOnlyTheSupportedVersion(t *testing.T) {
+	handler := newTestServer(t).Handler()
+
+	for _, version := range []string{"2027-01-01", "v999.0.0"} {
+		t.Run(version, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(
+				`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{`+
+					`"io.modelcontextprotocol/protocolVersion":"`+version+`",`+
+					`"io.modelcontextprotocol/clientCapabilities":{}}}}`,
+			))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept", "application/json, text/event-stream")
+			req.Header.Set(mcplib.HeaderProtocolVersion, version)
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			var envelope struct {
+				Error *struct {
+					Data struct {
+						Supported []string `json:"supported"`
+					} `json:"data"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+				t.Fatalf("decode rejection: %v (body %q)", err, rec.Body.String())
+			}
+
+			if envelope.Error == nil {
+				t.Fatalf("version %q was accepted (status %d)", version, rec.Code)
+			}
+
+			want := []string{mcplib.LATEST_PROTOCOL_VERSION}
+			if !slices.Equal(envelope.Error.Data.Supported, want) {
+				t.Errorf("supported = %v, want %v", envelope.Error.Data.Supported, want)
+			}
+		})
+	}
+}
