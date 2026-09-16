@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"maps"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -91,18 +92,19 @@ func TestAnAmbientModeInAuthBypassRefusesToStart(t *testing.T) {
 	)
 }
 
-// A deployment upgrading past the rename must be told where its setting went,
-// not merely that startup failed.
-func TestARemovedVariableRefusesToStartAndNamesItsReplacement(t *testing.T) {
+// A config file written for an older release carries [mcp.oauth]. Starting
+// anyway would read none of it and run on defaults the operator did not pick.
+func TestAConfigFileCarryingAMovedSectionRefusesToStart(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "cetacean.toml")
+	body := "[auth]\nmode = \"none\"\n\n[mcp.oauth]\ncimd_enabled = false\n"
+
+	if err := os.WriteFile(file, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
 	startupRefusal(t,
-		map[string]string{
-			"CETACEAN_AUTH_MODE":        "none",
-			"CETACEAN_MCP_CIMD_ENABLED": "false",
-		},
-		map[string]string{
-			"CETACEAN_MCP_CIMD_ENABLED":   "the variable that is set",
-			"CETACEAN_OAUTH_CIMD_ENABLED": "the one that replaced it",
-		},
+		map[string]string{"CETACEAN_CONFIG": file},
+		map[string]string{"mcp.oauth.cimd_enabled": "the key nothing decodes"},
 	)
 }
 
