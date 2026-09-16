@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
 
 ### Fixed
+- Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
 - Authorization server metadata is served at the address RFC 8414 has a client derive, as well as under `server.base_path`
 - An access token whose `aud` is an array, or whose `typ` differs only in letter case, is accepted — both are conformant shapes that were refused
 - A token carrying a future `nbf`, or no `sub`, is refused

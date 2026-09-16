@@ -33,8 +33,9 @@ var singularType = map[string]string{
 
 // canonicalResolvers lists the collections whose detail paths accept a name as
 // well as an ID. Volumes and stacks are absent because both are keyed by name
-// already; tasks because a task's name is derived from its parent and the
-// cache has no resolver for it. Adding tasks means adding that resolver first.
+// already; tasks because their names are scoped to a service rather than
+// unique, so they are addressed by traversal rather than here — the resolver
+// they need is cluster.ResolveTask.
 var canonicalResolvers = map[string]canonicalResolver{
 	"services": func(c *cache.Cache, identifier string) (string, string, bool, error) {
 		svc, found, err := c.ResolveService(identifier)

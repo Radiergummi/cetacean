@@ -163,7 +163,10 @@ and there isn't one.
 
 Global services have no slots. Their tasks render as `<service>.<node>`, so the
 identifier in the traversal form is the node ID or hostname, and an unplaced
-global task is addressable only by its own ID.
+global task is addressable only by its own ID. The live preference still
+applies: updating a global service leaves the replaced record on the same node,
+under the same name, so `<service>.<node>` names several records exactly as a
+slot does.
 
 That rule cannot be written here alone. `internal/mcp`'s `resolveTask` already
 resolves `<service>.<slot>` for `describe`, `get_logs` and `remove_task`, and it
