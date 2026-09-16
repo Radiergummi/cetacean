@@ -35,4 +35,3 @@ requirements:
       HTTP 403 Forbidden. The HTTP response body MAY comprise a JSON-RPC error
       response that has no id.
     url: https://modelcontextprotocol.io/specification/draft/basic/transports/streamable-http#security--endpoint
-    discriminator: origin

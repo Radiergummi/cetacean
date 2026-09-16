@@ -3,6 +3,8 @@ package oauth
 import (
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // --- AuthCodeStore tests ---
@@ -34,6 +36,8 @@ func TestAuthCodeStoreRoundTrip(t *testing.T) {
 }
 
 func TestAuthCodeSingleUse(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc6749/code-must-be-valid")
+
 	s := NewAuthCodeStore()
 	code := s.Issue(AuthCodeData{Subject: "u"}, 60*time.Second)
 	if _, ok := s.Redeem(code); !ok {
@@ -45,6 +49,8 @@ func TestAuthCodeSingleUse(t *testing.T) {
 }
 
 func TestAuthCodeExpired(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc6749/code-must-be-valid")
+
 	s := NewAuthCodeStore()
 	code := s.Issue(AuthCodeData{Subject: "u"}, -time.Second) // already expired
 	if _, ok := s.Redeem(code); ok {
@@ -53,6 +59,8 @@ func TestAuthCodeExpired(t *testing.T) {
 }
 
 func TestAuthCodeUnknownCode(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc6749/code-must-be-valid")
+
 	s := NewAuthCodeStore()
 	if _, ok := s.Redeem("definitely-not-a-real-code"); ok {
 		t.Fatal("unknown code should not be redeemable")

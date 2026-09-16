@@ -21,6 +21,7 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // RFC 8707 §2 lets a client send `resource` more than once, to ask for a token
@@ -487,6 +488,11 @@ func mustDecodeB64(t *testing.T, s string) []byte {
 // prevents: a stolen code redeemed by an attacker's client. Both checks were
 // already there; deleting either left every test in this package passing.
 func TestTheAuthorizationCodeIsBoundToItsClientAndRedirectURI(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc6749/code-bound-to-client",
+		"oauth/rfc6749/code-bound-to-redirect-uri",
+	)
+
 	// At least 43 characters, or validateCodeVerifier refuses on length before
 	// either binding is consulted — and answers invalid_grant either way, which
 	// is how the same confusion hid a broken PKCE check here once.
