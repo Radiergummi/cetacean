@@ -88,6 +88,8 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19023` | Tracing: CETACEAN_OTEL_ENDPOINT, driven against a stand-in OTLP collector |
 | `19024` | Goroutine leaks: what streaming connections leave behind once they close |
 | `19025` | SSE fan-out isolation: what a client that has stopped reading costs the others |
+| `19026` | The authorization server's opt-in: the configurations the binary refuses, and the mTLS shape that runs without one |
+| `19027` | Conformance: the MCP specification's own requirements against `/mcp`, and the authorization server's metadata document |
 | `19090` | Prometheus (the metrics lane's, published for the host-side SUT) |
 | `19104` | Caddy, mTLS termination |
 
@@ -199,6 +201,44 @@ what it was always meant to be. Where a spec must watch something transient — 
 sentinel, which exists only while a page is outstanding — hold the response open with `page.route`
 rather than racing it.
 
+## The conformance lane
+
+`mcp_conformance_test.go` is the official [MCP conformance suite][mcp-conformance]'s server
+checks, carried over rather than shelled out to. It is the one lane written from outside: every
+other MCP test here builds its requests with the same code that answers them, so they agree with
+themselves rather than with the specification. Driving it is what found that a client on a
+revision newer than `2026-07-28` was told four older ones were supported, each of which
+`requireModernProtocol` then refused.
+
+Each case quotes the requirement it reads from and names its SEP. The four the lane covers:
+
+| SEP | What it pins |
+| --- | ------------ |
+| 2575 | The stateless core: `server/discover`, `_meta` validation, the protocol-version header, method-not-found as 404, the subscription stream's acknowledgement and `subscriptionId` |
+| 2243 | The standard request headers — names compared case-insensitively, values case-sensitively, `Mcp-Name` parsed with the surrounding whitespace excluded |
+| 2549 | Caching hints on every cacheable result |
+| 2164 | What reading a resource that is not there answers |
+
+**Why carry the cases rather than run the suite.** Pointed at this server, the suite reports
+134 checks: 92 pass, 40 are excused and 2 say nothing either way. Roughly 35 of the excused ones
+are the suite unable to test us at all — its scenarios call its own reference server's fixtures by
+name (`test_simple_text`, `test://static-text`, `json_schema_2020_12_tool`, a tool annotated with
+`x-mcp-header`), and a server exposing a Swarm has none of them and should not. Another handful
+probe capabilities we do not implement. Running it needs `npx`, a network, and a pin to a
+prerelease alpha, because the stable `0.1.x` line carries no `2026-07-28` scenarios at all and
+this server refuses every older revision. What was worth keeping is the requirement behind each
+check, which is what this file holds.
+
+**What did not carry over.** The suite validates every message it receives against the spec's
+own JSON schema (`wire-schema-valid`, one check per scenario). Reproducing that means vendoring a
+180 KB draft schema plus the method-to-definition mapping and the errata patches the suite applies
+to it — more machinery than the rest of this lane put together, and it tracks a draft. Not done;
+worth revisiting when the revision is final.
+
+Three cases pin an answer the suite disagrees with, each written so that fixing the behaviour
+fails the test rather than passing quietly — the property the suite's expected-failures baseline
+provided. They are listed under [Deferred](#deferred).
+
 ## Running it against the race detector
 
 ```bash
@@ -270,6 +310,17 @@ than a standing claim:
   `oauth_test.go` does cover is that an `https://` client_id takes the CIMD path and that the guard is
   live in the shipped binary.
 - The ACL case that a digest never names a resource behind a grant.
+- Three answers the MCP conformance suite disagrees with, each pinned as it stands by the lane
+  above. The Origin guard reads `server.cors.origins` alone, so a deployment naming only
+  `server.public_url` has a browser client at its own origin refused with 403 — the CSRF guard
+  trusts that setting and this one does not. A resource-not-found error does not echo the
+  requested URI in its `data` field, which SEP-2164 says it SHOULD. And a request whose `_meta`
+  omits `clientCapabilities` is answered `-32021` by mcp-go where the suite reads SEP-2575 as
+  requiring `-32602`; that code is the SDK's, not ours.
+- The authorization code flow itself, from outside. The lane covers the metadata document a client
+  reads first; the suite's `authorization-code-grant` scenario needs a browser and a registered
+  redirect URI. The OpenID Foundation suite does not close this either: every authorization-server
+  plan it publishes is an OIDC or FAPI profile, and Cetacean issues `at+jwt` with no ID token.
 - ~~The OTLP tracing wiring.~~ Covered by `tracing_test.go`, which drives `CETACEAN_OTEL_ENDPOINT`
   against a stand-in collector. Driving it is what found that the documented endpoint exported
   nowhere: `WithEndpointURL` appends no signal path, so a collector base URL posted to `/` and the
@@ -289,3 +340,4 @@ than a standing claim:
 [design]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md
 [topology]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md#topology
 [coverage]: ../../docs/specs/2026-09-10-e2e-test-harness-design.md#coverage
+[mcp-conformance]: https://github.com/modelcontextprotocol/conformance
