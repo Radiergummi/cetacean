@@ -40,6 +40,7 @@ linters:
         - G704  # SSRF — Prometheus proxy URL comes from server config, not user input
         - G705  # XSS — response body is server-generated JSON, not user content
         - G706  # log injection — false positive on panic recovery logging
+        - G703  # spec claims path is a developer-supplied test harness directory
     gocritic:
       disabled-checks:
         - ifElseChain  # stylistic, not a bug
