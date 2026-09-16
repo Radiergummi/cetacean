@@ -140,6 +140,26 @@ var loaded = sync.OnceValues(load)
 // Load parses the embedded registry once per process.
 func Load() (*Registry, error) { return loaded() }
 
+// familyAndName parses a walked path like "registry/oauth/rfc7636.yaml",
+// returning the family and document name. It errors if the family is empty
+// or contains slashes, naming the offending path.
+func familyAndName(p string) (family, name string, err error) {
+	rel := strings.TrimPrefix(p, "registry/")
+
+	family, file := path.Split(rel)
+	family = strings.TrimSuffix(family, "/")
+
+	if family == "" {
+		return "", "", fmt.Errorf("spec: %s must live in a family directory", p)
+	}
+
+	if strings.Contains(family, "/") {
+		return "", "", fmt.Errorf("spec: %s: family segment cannot contain /", p)
+	}
+
+	return family, strings.TrimSuffix(file, ".yaml"), nil
+}
+
 func load() (*Registry, error) {
 	reg := &Registry{byID: map[string]*Requirement{}}
 
@@ -153,15 +173,9 @@ func load() (*Registry, error) {
 			return nil
 		}
 
-		family, file := path.Split(rel)
-		family = strings.TrimSuffix(family, "/")
-
-		if family == "" {
-			return fmt.Errorf("spec: %s must live in a family directory", p)
-		}
-
-		if strings.Contains(family, "/") {
-			return fmt.Errorf("spec: %s: family segment cannot contain /", p)
+		family, name, err := familyAndName(p)
+		if err != nil {
+			return err
 		}
 
 		body, err := registryFS.ReadFile(p)
@@ -169,7 +183,7 @@ func load() (*Registry, error) {
 			return err
 		}
 
-		doc := &Document{Family: family, Name: strings.TrimSuffix(file, ".yaml")}
+		doc := &Document{Family: family, Name: name}
 		if err := yaml.Unmarshal(body, doc); err != nil {
 			return fmt.Errorf("spec: %s: %w", p, err)
 		}
@@ -188,10 +202,6 @@ func load() (*Registry, error) {
 }
 
 func (r *Registry) add(doc *Document) error {
-	if strings.Contains(doc.Family, "/") {
-		return fmt.Errorf("%s: family segment cannot contain /", doc.Key())
-	}
-
 	for i := range doc.Requirements {
 		q := &doc.Requirements[i]
 		q.Document = doc
