@@ -1106,7 +1106,9 @@ func (s *Server) resolveClientMeta(
 	}, false, ""
 }
 
-// redirectWithError sends an OAuth error redirect to redirect_uri.
+// redirectWithError sends an OAuth error redirect to redirect_uri. The caller
+// must have matched redirectURIRaw against the client's registered set first:
+// this is the sink for an open redirect, and the guard lives a call away.
 func (s *Server) redirectWithError(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -1129,7 +1131,7 @@ func (s *Server) redirectWithError(
 	// to attribute the failure before acting on it.
 	q.Set("iss", s.cfg.issuerID())
 	u.RawQuery = q.Encode()
-	//nolint:gosec // G710: callers (handleAuthorizePOST) exact-match redirectURIRaw against the client's registered redirect_uris before invoking this; the target is a pre-validated URI, not open redirect.
+	//nolint:gosec // G710: both callers (handleAuthorizeGET and handleAuthorizePOST) exact-match redirectURIRaw against the client's registered redirect_uris before invoking this; the target is a pre-validated URI, not open redirect.
 	http.Redirect(w, r, u.String(), http.StatusFound)
 }
 
