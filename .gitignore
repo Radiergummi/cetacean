@@ -58,6 +58,10 @@ docs/task-state-timeline-plan.md
 cetacean
 coverdata/
 .spec-claims/
+
+# go build ./scripts/<name> drops its binary here.
+/spec-gate
+/spec-genmcp
 frontend/dist/
 frontend/dist-widgets/
 website/dist/

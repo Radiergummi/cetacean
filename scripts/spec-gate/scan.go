@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 	"go/ast"
+	"go/build/constraint"
 	"go/parser"
 	"go/token"
 	"os/exec"
 	"strconv"
-	"strings"
 )
 
 // specImport is the only import path a claim may come from, and it may not be
@@ -112,7 +112,7 @@ func ScanFile(path string) ([]Claim, []error) {
 		return nil, errs
 	}
 
-	tagged := hasBuildConstraint(file)
+	tagged := needsABuildTag(file)
 
 	var claims []Claim
 
@@ -250,10 +250,23 @@ func importState(file *ast.File) (bool, string) {
 	return false, ""
 }
 
-func hasBuildConstraint(file *ast.File) bool {
+// needsABuildTag reports whether a default `go test ./...` skips this file —
+// that is, whether its constraint is false with no tag set. A file excluded
+// only by GOOS, like //go:build !windows, still runs in the ordinary lane and
+// has no excuse for a claim that did not.
+func needsABuildTag(file *ast.File) bool {
 	for _, group := range file.Comments {
 		for _, c := range group.List {
-			if strings.HasPrefix(c.Text, "//go:build") {
+			if !constraint.IsGoBuild(c.Text) {
+				continue
+			}
+
+			expr, err := constraint.Parse(c.Text)
+			if err != nil {
+				continue
+			}
+
+			if !expr.Eval(func(string) bool { return false }) {
 				return true
 			}
 		}

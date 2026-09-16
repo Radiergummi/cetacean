@@ -183,12 +183,28 @@ func TestJWTReusedJTIsAreDistinct(t *testing.T) {
 func reheader(t *testing.T, issuer *TokenIssuer, token, header string) string {
 	t.Helper()
 
+	return resign(t, issuer, base64.RawURLEncoding.EncodeToString([]byte(header)),
+		segment(t, token, 1))
+}
+
+// segment returns one base64url part of a compact JWS, still encoded.
+func segment(t *testing.T, token string, i int) string {
+	t.Helper()
+
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		t.Fatalf("token has %d segments, want 3", len(parts))
 	}
 
-	signingInput := base64.RawURLEncoding.EncodeToString([]byte(header)) + "." + parts[1]
+	return parts[i]
+}
+
+// resign joins an encoded header and payload and signs them afresh, which is
+// what makes an edited token verifiable rather than merely malformed.
+func resign(t *testing.T, issuer *TokenIssuer, header, payload string) string {
+	t.Helper()
+
+	signingInput := header + "." + payload
 
 	sig, err := signES256(issuer.signer, signingInput)
 	if err != nil {

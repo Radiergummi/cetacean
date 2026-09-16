@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/radiergummi/cetacean/internal/spec"
@@ -12,28 +13,17 @@ import (
 // citationRE matches the way specifications are named in comments and prose.
 var citationRE = regexp.MustCompile(`\b(RFC[ -]?[0-9]{3,4}|SEP[ -]?[0-9]{3,4})\b`)
 
-// sweptDirs are where we talk about specifications. Everything else is
-// vendored, generated, or somebody else's prose.
-var sweptDirs = []string{"internal", "docs", "api", "test"}
-
-// registryPrefix is excluded from citations: every registered document names
-// its own RFC/SEP, and every unregistered.yaml line names its own token, so
-// counting them would make a token self-cite and hide a stale dismissal.
-const registryPrefix = "internal/spec/registry/"
-
-func normaliseCitation(in string) string {
-	upper := strings.ToUpper(strings.NewReplacer(" ", "", "-", "").Replace(in))
-
-	if num, ok := strings.CutPrefix(upper, "SEP"); ok {
-		return "SEP-" + num
-	}
-
-	return upper
-}
+// mechanismPrefixes name this mechanism's own files rather than a consumer of
+// a specification: the registry states each token to register or dismiss it,
+// and the gate's tests state tokens as fixtures. Counting either would let a
+// token self-cite and hide a stale dismissal.
+var mechanismPrefixes = []string{"internal/spec/registry/", "scripts/spec-gate/"}
 
 // Citations maps each specification the tree names to the files naming it.
+// Every tracked file counts: a citation in the root binary or the changelog is
+// as much an unaccounted specification as one in internal/.
 func Citations(root string) (map[string][]string, error) {
-	tracked, err := gitLsFiles(root, append([]string{"--"}, sweptDirs...)...)
+	tracked, err := gitLsFiles(root)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +31,9 @@ func Citations(root string) (map[string][]string, error) {
 	cited := map[string][]string{}
 
 	for _, rel := range tracked {
-		if strings.HasPrefix(rel, registryPrefix) {
+		if slices.ContainsFunc(mechanismPrefixes, func(p string) bool {
+			return strings.HasPrefix(rel, p)
+		}) {
 			continue
 		}
 
@@ -53,7 +45,7 @@ func Citations(root string) (map[string][]string, error) {
 		seen := map[string]bool{}
 
 		for _, m := range citationRE.FindAllString(string(body), -1) {
-			token := normaliseCitation(m)
+			token := spec.Token(m)
 			if seen[token] {
 				continue
 			}
@@ -108,8 +100,17 @@ func sweepErrors(
 		}
 	}
 
-	for token := range dismissed {
-		if len(cited[token]) == 0 && !registered[token] {
+	for token, reason := range dismissed {
+		if registered[token] {
+			errs = append(errs, fmt.Errorf(
+				"%s is registered, so its registry/unregistered.yaml dismissal (%q) is dead",
+				token, reason,
+			))
+
+			continue
+		}
+
+		if len(cited[token]) == 0 {
 			errs = append(errs, fmt.Errorf(
 				"%s is dismissed in registry/unregistered.yaml but nothing cites it any more",
 				token,

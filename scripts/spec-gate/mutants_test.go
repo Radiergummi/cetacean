@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -73,17 +74,32 @@ func TestOverlayNamesTheSourceFile(t *testing.T) {
 	}
 }
 
-// A mutant with no claimant that runs here proves nothing, so the gate has to
-// say so rather than report it killed.
-func TestAMutantWithOnlyATaggedClaimantIsAnError(t *testing.T) {
-	reg := registryWith(t, spec.Requirement{
-		ID: "a", Level: spec.MUST, Text: "x",
-		Mutants: []spec.Mutant{{File: "internal/oauth/resource.go", Replace: "x", With: "y"}},
-	})
+// A mutant whose only claimant is behind a build tag cannot be run here, so the
+// gate has to say so rather than report it killed.
+func TestAMutantWithOnlyATaggedClaimantHasNoRunnableClaimants(t *testing.T) {
+	claims := []Claim{{ID: "test/doc/a", Func: "TestE2E", File: "e2e/e_test.go", Tagged: true}}
 
-	claims := []Claim{{ID: "test/doc/a", Func: "TestE2E", File: "e_test.go", Tagged: true}}
+	if names, _ := claimants(claims, "test/doc/a"); len(names) != 0 {
+		t.Fatalf("names = %v, want none", names)
+	}
+}
 
-	if errs := checkMutable(reg, claims, ""); len(errs) != 1 {
-		t.Fatalf("errors = %v, want one about the missing untagged claimant", errs)
+// The packages to run come from the claimants: a claimant outside the mutated
+// file's package would otherwise be filtered out and read as "survived".
+func TestClaimantsReportThePackagesTheirTestsLiveIn(t *testing.T) {
+	claims := []Claim{
+		{ID: "test/doc/a", Func: "TestB", File: "internal/oauth/b_test.go"},
+		{ID: "test/doc/a", Func: "TestA", File: "internal/oauth/a_test.go"},
+		{ID: "test/doc/a", Func: "TestC", File: "internal/mcp/c_test.go"},
+	}
+
+	names, pkgs := claimants(claims, "test/doc/a")
+
+	if !slices.Equal(names, []string{"TestA", "TestB", "TestC"}) {
+		t.Errorf("names = %v", names)
+	}
+
+	if !slices.Equal(pkgs, []string{"./internal/mcp/", "./internal/oauth/"}) {
+		t.Errorf("pkgs = %v", pkgs)
 	}
 }

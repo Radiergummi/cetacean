@@ -7,11 +7,12 @@ package main
 import (
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,35 +27,6 @@ const rawBase = "https://raw.githubusercontent.com/modelcontextprotocol/conforma
 
 var seps = []int{2575, 2243, 2549, 2164}
 
-// covered names the upstream checks a test of ours exercises. It is a decision
-// rather than a derivation: the suite's ids say what could be observed, not
-// what this server answers for.
-var covered = map[string]bool{
-	"sep-2575-server-implements-discover":             true,
-	"sep-2575-server-declares-prompts-in-discover":    true,
-	"sep-2575-server-rejects-undeclared-capability":   true,
-	"sep-2575-missing-capability-http-400":            true,
-	"sep-2575-server-unsupported-version-error":       true,
-	"sep-2575-http-server-header-mismatch-400":        true,
-	"sep-2575-http-server-unsupported-version-400":    true,
-	"sep-2575-http-server-method-not-found-404":       true,
-	"sep-2575-server-sends-subscription-ack":          true,
-	"sep-2575-server-tags-subscription-id":            true,
-	"sep-2575-server-honors-notification-filter":      true,
-	"sep-2243-header-name-case-insensitive":           true,
-	"sep-2243-server-reject-invalid-headers":          true,
-	"sep-2243-server-reject-error-code":               true,
-	"sep-2549-tools-list-caching-hints":               true,
-	"sep-2549-prompts-list-caching-hints":             true,
-	"sep-2549-resources-list-caching-hints":           true,
-	"sep-2549-resources-templates-list-caching-hints": true,
-	"sep-2549-resources-read-caching-hints":           true,
-	"sep-2549-ttl-non-negative":                       true,
-	"sep-2549-cache-scope-valid":                      true,
-	"sep-2164-no-empty-contents":                      true,
-	"sep-2164-error-code":                             true,
-}
-
 // gaps are requirements of ours that no test reaches yet. They are registered
 // rather than dismissed: the obligation is real, only the evidence is missing.
 var gaps = map[string]string{
@@ -62,10 +34,23 @@ var gaps = map[string]string{
 		"notifications and never asserts that nothing else arrives on the stream.",
 }
 
-// dismissed says why there is nothing of ours to test. An id with a -client-
-// segment gets the reason its own name states; everything else has to be
-// argued here, and an upstream addition fails this generator until it is.
+// dismissed says why there is nothing of ours to test. Every non-covered check
+// has to be argued here, with no fallback: an upstream addition fails this
+// generator until somebody decides what it is.
 var dismissed = map[string]string{
+	"sep-2575-client-populates-meta":                  reasonClientSide,
+	"sep-2575-client-retry-supported-version":         reasonClientSide,
+	"sep-2575-http-client-sends-version-header":       reasonClientSide,
+	"sep-2575-client-declares-elicitation-capability": reasonClientSide,
+	"sep-2575-client-declares-roots-capability":       reasonClientSide,
+	"sep-2575-client-declares-sampling-capability":    reasonClientSide,
+	"sep-2243-client-includes-standard-headers":       reasonClientSide,
+	"sep-2243-client-supports-custom-headers":         reasonClientSide,
+	"sep-2243-client-mirrors-designated-params":       reasonClientSide,
+	"sep-2243-client-reject-invalid-tool":             reasonClientSide,
+	"sep-2243-client-encode-values":                   reasonClientSide,
+	"sep-2243-client-base64-unsafe":                   reasonClientSide,
+	"sep-2243-client-omit-null":                       reasonClientSide,
 	"sep-2575-http-version-header-matches-meta": "Addressed to the client sending the " +
 		"header; the obligation it puts on this server is http-server-header-mismatch-400.",
 	"sep-2575-server-sends-prompts-list-changed-on-subscription": "The prompt catalog is " +
@@ -229,7 +214,7 @@ func render(doc *upstreamDoc, raw, reviewed string) ([]byte, error) {
 
 		checks++
 
-		if covered[r.Check] || gaps[r.Check] != "" {
+		if _, skip := dismissed[r.Check]; !skip {
 			reqs = append(reqs, r)
 
 			continue
@@ -237,13 +222,9 @@ func render(doc *upstreamDoc, raw, reviewed string) ([]byte, error) {
 
 		reason, ok := dismissed[r.Check]
 		if !ok {
-			if !strings.Contains(r.Check, "-client-") {
-				return nil, fmt.Errorf(
-					"%s is neither covered nor dismissed; add it to one of the tables in "+
-						"scripts/spec-genmcp", r.Check)
-			}
-
-			reason = reasonClientSide
+			return nil, fmt.Errorf(
+				"%s is new upstream: register it by leaving it out of the dismissed table "+
+					"and claiming it from a test, or dismiss it there with a reason", r.Check)
 		}
 
 		dismiss[strings.TrimPrefix(r.Check, prefix)] = reason
@@ -294,14 +275,7 @@ func render(doc *upstreamDoc, raw, reviewed string) ([]byte, error) {
 	if len(dismiss) > 0 {
 		fmt.Fprintf(&b, "dismissed:\n")
 
-		ids := make([]string, 0, len(dismiss))
-		for id := range dismiss {
-			ids = append(ids, id)
-		}
-
-		sort.Strings(ids)
-
-		for _, id := range ids {
+		for _, id := range slices.Sorted(maps.Keys(dismiss)) {
 			b.WriteString(folded("  "+id, dismiss[id]))
 		}
 	}

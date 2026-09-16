@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,12 +9,10 @@ import (
 func writeTemp(t *testing.T, name, body string) string {
 	t.Helper()
 
-	p := filepath.Join(t.TempDir(), name)
-	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	root := t.TempDir()
+	writeFixtureFile(t, root, name, body)
 
-	return p
+	return filepath.Join(root, name)
 }
 
 func TestScanFileFindsLiteralClaims(t *testing.T) {
@@ -165,5 +162,33 @@ import (
 				t.Fatalf("errors = %v, want none", errs)
 			}
 		})
+	}
+}
+
+// A file the ordinary lane compiles has no excuse for a claim that did not
+// run, whatever build constraint it carries.
+func TestAGOOSConstraintDoesNotMarkAClaimTagged(t *testing.T) {
+	const body = `//go:build !windows
+
+package x
+
+import (
+	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
+)
+
+func TestFour(t *testing.T) {
+	spec.Satisfies(t, "mcp/sep-2575/a")
+}
+`
+
+	claims, errs := ScanFile(writeTemp(t, "d_test.go", body))
+	if len(errs) != 0 {
+		t.Fatalf("errors = %v", errs)
+	}
+
+	if len(claims) != 1 || claims[0].Tagged {
+		t.Fatalf("claim = %+v, want one that is not tagged", claims)
 	}
 }

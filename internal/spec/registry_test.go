@@ -158,3 +158,25 @@ func TestFamilyAndName(t *testing.T) {
 		})
 	}
 }
+
+// A registered document and a citation of it have to canonicalise to the same
+// string, or the sweep reads the document as uncited.
+func TestTokenCanonicalisesEverySpellingTheTreeUses(t *testing.T) {
+	for in, want := range map[string]string{
+		"RFC 7636": "RFC7636",
+		"RFC-7636": "RFC7636",
+		"rfc7636":  "RFC7636",
+		"SEP 2575": "SEP-2575",
+		"SEP2575":  "SEP-2575",
+		"sep-2575": "SEP-2575",
+	} {
+		if got := Token(in); got != want {
+			t.Errorf("Token(%q) = %q, want %q", in, got, want)
+		}
+	}
+
+	doc := &Document{Family: "oauth", Name: "rfc7636"}
+	if doc.Token() != Token("RFC 7636") {
+		t.Errorf("document token %q disagrees with the cited spelling", doc.Token())
+	}
+}
