@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/spec"
 	"github.com/radiergummi/cetacean/test/e2e/fixtures"
 	"github.com/radiergummi/cetacean/test/e2e/harness"
 	"github.com/radiergummi/cetacean/test/e2e/sut"
@@ -202,6 +203,11 @@ func (r conformanceResult) refused(t *testing.T, what string, status, code int) 
 // is how a client learns what to speak, so the versions it names are the ones
 // the gate must then accept.
 func TestMCPConformanceDiscover(t *testing.T) {
+	spec.Satisfies(t,
+		"mcp/sep-2575/server-implements-discover",
+		"mcp/sep-2575/server-declares-prompts-in-discover",
+	)
+
 	proc := startConformanceSUT(t)
 
 	result := call(t, proc, conformanceRequest{Method: "server/discover"}).
@@ -245,6 +251,11 @@ func TestMCPConformanceDiscover(t *testing.T) {
 // Every client request must carry protocolVersion and clientCapabilities in
 // _meta; clientInfo is optional. On HTTP a request that does not is a 400.
 func TestMCPConformanceRequestMeta(t *testing.T) {
+	spec.Satisfies(t,
+		"mcp/sep-2575/server-rejects-undeclared-capability",
+		"mcp/sep-2575/missing-capability-http-400",
+	)
+
 	proc := startConformanceSUT(t)
 
 	full := map[string]any{
@@ -283,6 +294,12 @@ func TestMCPConformanceRequestMeta(t *testing.T) {
 // field carried in the request body _meta" — and a server that does not
 // implement the requested version answers 400 listing the ones it does.
 func TestMCPConformanceProtocolVersionHeader(t *testing.T) {
+	spec.Satisfies(t,
+		"mcp/sep-2575/server-unsupported-version-error",
+		"mcp/sep-2575/http-server-header-mismatch-400",
+		"mcp/sep-2575/http-server-unsupported-version-400",
+	)
+
 	proc := startConformanceSUT(t)
 
 	t.Run("header absent", func(t *testing.T) {
@@ -330,6 +347,8 @@ func TestMCPConformanceProtocolVersionHeader(t *testing.T) {
 // methods are the ones the revision removed, which a client carried over from
 // an older era is most likely to try.
 func TestMCPConformanceMethodNotFound(t *testing.T) {
+	spec.Satisfies(t, "mcp/sep-2575/http-server-method-not-found-404")
+
 	proc := startConformanceSUT(t)
 
 	for _, method := range []string{
@@ -359,6 +378,12 @@ func TestMCPConformanceMethodNotFound(t *testing.T) {
 // values, returning HTTP 400" with error code -32020 — while comparing header
 // *names* case-insensitively and header *values* case-sensitively.
 func TestMCPConformanceStandardHeaders(t *testing.T) {
+	spec.Satisfies(t,
+		"mcp/sep-2243/header-name-case-insensitive",
+		"mcp/sep-2243/server-reject-invalid-headers",
+		"mcp/sep-2243/server-reject-error-code",
+	)
+
 	proc := startConformanceSUT(t)
 
 	tool := firstToolName(t, proc)
@@ -442,6 +467,16 @@ func TestMCPConformanceStandardHeaders(t *testing.T) {
 // returned by each cacheable method: ttlMs, a non-negative integer, and
 // cacheScope, which is "public" or "private".
 func TestMCPConformanceCachingHints(t *testing.T) {
+	spec.Satisfies(t,
+		"mcp/sep-2549/tools-list-caching-hints",
+		"mcp/sep-2549/prompts-list-caching-hints",
+		"mcp/sep-2549/resources-list-caching-hints",
+		"mcp/sep-2549/resources-templates-list-caching-hints",
+		"mcp/sep-2549/resources-read-caching-hints",
+		"mcp/sep-2549/ttl-non-negative",
+		"mcp/sep-2549/cache-scope-valid",
+	)
+
 	proc := startConformanceSUT(t)
 
 	resources := call(t, proc, conformanceRequest{Method: "resources/list"}).
@@ -498,6 +533,11 @@ func TestMCPConformanceCachingHints(t *testing.T) {
 // "Servers MUST NOT return an empty contents array for a non-existent
 // resource" and SHOULD answer -32602 instead.
 func TestMCPConformanceResourceNotFound(t *testing.T) {
+	spec.Satisfies(t,
+		"mcp/sep-2164/no-empty-contents",
+		"mcp/sep-2164/error-code",
+	)
+
 	proc := startConformanceSUT(t)
 
 	const missing = "cetacean://service/no-such-service-for-conformance"
@@ -531,6 +571,11 @@ func TestMCPConformanceResourceNotFound(t *testing.T) {
 // _meta". mcp_stream_test.go drives this stream for its ACL filtering and
 // scans past the acknowledgement; the ordering and the tag are what this adds.
 func TestMCPConformanceSubscriptionStream(t *testing.T) {
+	spec.Satisfies(t,
+		"mcp/sep-2575/server-sends-subscription-ack",
+		"mcp/sep-2575/server-tags-subscription-id",
+	)
+
 	proc := startConformanceSUT(t)
 
 	payload, err := json.Marshal(map[string]any{
