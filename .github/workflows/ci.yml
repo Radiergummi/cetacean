@@ -32,15 +32,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm ci
-      - run: cd frontend && npm run build
-      - run: cd frontend && npm run build:widgets
-      - run: cd frontend && mkdir -p ../website/public/demo && npm run build:demo
+      - uses: ./.github/actions/node
+      - run: pnpm --filter frontend build
+      - run: pnpm --filter frontend build:widgets
+      - run: mkdir -p website/public/demo && pnpm --filter frontend build:demo
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: frontend-dist
@@ -142,7 +137,7 @@ jobs:
       # the point of running it.
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: zizmor .github/workflows/
+        run: zizmor --config .github/zizmor.yml .github/workflows/
 
   lint-frontend:
     runs-on: ubuntu-latest
@@ -151,15 +146,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm ci
-      - run: cd frontend && npx oxlint
-      - run: cd frontend && npx oxfmt --check .
-      - run: cd frontend && npm run check
+      - uses: ./.github/actions/node
+      - run: pnpm --filter frontend exec oxlint
+      - run: pnpm --filter frontend exec oxfmt --check .
+      - run: pnpm --filter frontend check
 
   lint-website:
     runs-on: ubuntu-latest
@@ -168,11 +158,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: website/package-lock.json
+      - uses: ./.github/actions/node
 
       # `astro check` type-checks `src/lib/errors.ts`, which imports the error
       # reference generated from internal/api; see website/package.json's
@@ -181,11 +167,10 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - run: cd website && npm ci
-      - run: cd website && npx oxlint
-      - run: cd website && npx oxfmt --check .
-      - run: cd website && npm run sync-assets
-      - run: cd website && npm run check
+      - run: pnpm --filter website exec oxlint
+      - run: pnpm --filter website exec oxfmt --check .
+      - run: pnpm --filter website sync-assets
+      - run: pnpm --filter website check
 
   test-frontend:
     runs-on: ubuntu-latest
@@ -194,13 +179,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm ci
-      - run: cd frontend && npm test -- --run
+      - uses: ./.github/actions/node
+      - run: pnpm --filter frontend test --run
 
   sbom-sync:
     needs: build-frontend
@@ -248,12 +228,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm ci
+      - uses: ./.github/actions/node
       # cyclonedx-gomod compiles the package, so main.go's //go:embed
       # frontend/dist/* needs the built frontend. Reuse the build-frontend
       # artifact rather than rebuilding it here.
