@@ -1,15 +1,24 @@
 package oauth
 
 import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	jose "github.com/go-jose/go-jose/v4"
 
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -364,4 +373,190 @@ func TestMetadataAdvertisesTheIssParameter(t *testing.T) {
 		t.Errorf("authorization_response_iss_parameter_supported = %v, want true",
 			doc["authorization_response_iss_parameter_supported"])
 	}
+}
+
+// RFC 7515 Appendix A.3's worked ES256 example. ECDSA signing is randomised,
+// so the RFC's signature cannot be reproduced — only verified, which is the
+// half that matters: signES256 and verifyES256 are ours, and every other test
+// here signs with the code it then verifies with.
+func TestES256VerificationMatchesTheRFC7515Vector(t *testing.T) {
+	const (
+		signingInput = "eyJhbGciOiJFUzI1NiJ9." +
+			"eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFt" +
+			"cGxlLmNvbS9pc19yb290Ijp0cnVlfQ"
+		signature = "DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSA" +
+			"pmWQxfKTUJqPP3-Kg6NU1Q"
+
+		// The public half of the appendix's JWK.
+		x = "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU"
+		y = "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"
+	)
+
+	// SEC 1 uncompressed point: 0x04 || X || Y, the shape the coordinates of
+	// an EC JWK concatenate to.
+	point := append([]byte{4}, append(mustDecodeB64(t, x), mustDecodeB64(t, y)...)...)
+
+	pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), point)
+	if err != nil {
+		t.Fatalf("parse the RFC's public key: %v", err)
+	}
+
+	if !verifyES256(pub, signingInput, signature) {
+		t.Error("the RFC's own signature does not verify")
+	}
+
+	// Without this, a verifier that returns true unconditionally passes.
+	if verifyES256(pub, signingInput+"x", signature) {
+		t.Error("a signature over different input verified")
+	}
+}
+
+// RFC 7638 §3.1's worked example, which pins the thumbprint rule itself: the
+// required members only, in lexicographic order, with no whitespace. thumbprint
+// delegates that to go-jose, and this is what says go-jose reads the RFC the
+// same way.
+func TestJWKThumbprintMatchesTheRFC7638Vector(t *testing.T) {
+	const (
+		modulus = "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAt" +
+			"VT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn6" +
+			"4tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FD" +
+			"W2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n9" +
+			"1CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINH" +
+			"aQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw"
+
+		want = "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
+	)
+
+	key := &rsa.PublicKey{N: new(big.Int).SetBytes(mustDecodeB64(t, modulus)), E: 65537}
+
+	sum, err := (&jose.JSONWebKey{Key: key}).Thumbprint(crypto.SHA256)
+	if err != nil {
+		t.Fatalf("thumbprint: %v", err)
+	}
+
+	if got := base64.RawURLEncoding.EncodeToString(sum); got != want {
+		t.Errorf("thumbprint = %q, want the RFC's %q", got, want)
+	}
+}
+
+// The vector above is RSA, so it cannot cover our own kid. Building the EC
+// member set by RFC 7638 §3.2's rule — crv, kty, x, y, no whitespace — is what
+// makes the golden kid a statement about the spec rather than about the last
+// run. The uncompressed point carries both coordinates at full width.
+func TestKIDIsTheRFC7638ThumbprintOfTheSigningKey(t *testing.T) {
+	km := mustDeriveKeys(t, testRoot)
+
+	const coordinateBytes = 32
+
+	point, err := km.signer.PublicKey.Bytes()
+	if err != nil {
+		t.Fatalf("encode the signing key: %v", err)
+	}
+
+	encode := func(b []byte) string {
+		return base64.RawURLEncoding.EncodeToString(b)
+	}
+
+	members := fmt.Sprintf(
+		`{"crv":"P-256","kty":"EC","x":%q,"y":%q}`,
+		encode(point[1:1+coordinateBytes]),
+		encode(point[1+coordinateBytes:]),
+	)
+
+	sum := sha256.Sum256([]byte(members))
+
+	if got := encode(sum[:]); got != km.kid {
+		t.Errorf("kid = %q, but RFC 7638 computes %q", km.kid, got)
+	}
+}
+
+// mustDecodeB64 reads a base64url value copied out of an RFC.
+func mustDecodeB64(t *testing.T, s string) []byte {
+	t.Helper()
+
+	b, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		t.Fatalf("decode %q: %v", s, err)
+	}
+
+	return b
+}
+
+// RFC 6749 §4.1.3 binds a code to the client it was issued to and to the
+// redirect_uri used to obtain it, and RFC 9700 §4.5 names what the first one
+// prevents: a stolen code redeemed by an attacker's client. Both checks were
+// already there; deleting either left every test in this package passing.
+func TestTheAuthorizationCodeIsBoundToItsClientAndRedirectURI(t *testing.T) {
+	// At least 43 characters, or validateCodeVerifier refuses on length before
+	// either binding is consulted — and answers invalid_grant either way, which
+	// is how the same confusion hid a broken PKCE check here once.
+	const (
+		verifier = "test-verifier-long-enough-for-the-code-binding-cases"
+		redirect = "http://localhost/cb"
+	)
+
+	exchange := func(t *testing.T, clientID, redirectURI string) oauthErrorResponse {
+		t.Helper()
+
+		s := newTestServer(t)
+
+		code := seedAuthCode(s, AuthCodeData{
+			ClientID:      "test-client",
+			RedirectURI:   redirect,
+			CodeChallenge: computeS256Challenge(verifier),
+			Resource:      s.resources.fallback,
+			Subject:       "user",
+		})
+
+		form := url.Values{
+			"grant_type":    {"authorization_code"},
+			"code":          {code},
+			"redirect_uri":  {redirectURI},
+			"client_id":     {clientID},
+			"code_verifier": {verifier},
+		}
+
+		req := httptest.NewRequest(
+			http.MethodPost,
+			"/oauth/token",
+			strings.NewReader(form.Encode()),
+		)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rec := httptest.NewRecorder()
+		s.HandleToken(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+		}
+
+		var out oauthErrorResponse
+		if err := json.NewDecoder(rec.Body).Decode(&out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+
+		return out
+	}
+
+	// The description is asserted, not just the code: every refusal on this
+	// path is invalid_grant, so the code alone cannot say which check ran.
+	assert := func(t *testing.T, got oauthErrorResponse, names string) {
+		t.Helper()
+
+		if got.Error != "invalid_grant" {
+			t.Errorf("error = %q, want invalid_grant", got.Error)
+		}
+
+		if !strings.Contains(got.ErrorDescription, names) {
+			t.Errorf("description = %q, want it to name %q", got.ErrorDescription, names)
+		}
+	}
+
+	t.Run("another client", func(t *testing.T) {
+		assert(t, exchange(t, "attacker-client", redirect), "client_id mismatch")
+	})
+
+	t.Run("another redirect_uri", func(t *testing.T) {
+		assert(t, exchange(t, "test-client", "http://localhost/elsewhere"), "redirect_uri mismatch")
+	})
 }
