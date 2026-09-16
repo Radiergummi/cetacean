@@ -75,10 +75,6 @@ type Requirement struct {
 	Deferred string `yaml:"deferred"`
 	Gap      string `yaml:"gap"`
 
-	// Discriminator names the string that tells this refusal apart from its
-	// neighbours when several share one error code.
-	Discriminator string `yaml:"discriminator"`
-
 	Mutants []Mutant `yaml:"mutants"`
 
 	Document *Document `yaml:"-"`

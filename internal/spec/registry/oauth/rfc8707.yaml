@@ -14,7 +14,6 @@ requirements:
       The authorization server MUST NOT issue an access token that is valid for
       resources other than those the client requested.
     url: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
-    discriminator: resource is not one this server issues tokens for
     mutants:
       - file: internal/oauth/resource.go
         replace: "\tid, ok := s.canonical[raw[0]]\n\tif !ok {"
@@ -26,4 +25,3 @@ requirements:
       If the requested resource is unknown [...] the authorization server MUST
       return an error response with "invalid_target".
     url: https://www.rfc-editor.org/rfc/rfc8707#section-2
-    discriminator: invalid_target

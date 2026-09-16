@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"slices"
 	"testing"
@@ -28,16 +29,16 @@ const conformanceVersion = "2026-07-28"
 
 var conformanceIssuer = fmt.Sprintf("http://127.0.0.1:%d", conformancePort)
 
-// omitHeader in a case's Headers removes a default rather than overriding it,
-// which is how the missing-header requirements get exercised at all.
-const omitHeader = "\x00omit"
-
 // conformanceRequest is one request with every header and _meta field under the
 // case's control, so a case can violate exactly one rule and nothing else.
 type conformanceRequest struct {
 	Method  string
 	Params  map[string]any
 	Headers map[string]string
+
+	// OmitHeaders removes a default rather than overriding it, which is how the
+	// missing-header requirements get exercised at all.
+	OmitHeaders []string
 
 	// Meta replaces the default _meta; NoMeta sends none at all.
 	Meta   map[string]any
@@ -128,13 +129,11 @@ func call(t *testing.T, proc *sut.Process, c conformanceRequest) conformanceResu
 		headers["Mcp-Name"] = uri
 	}
 
+	for _, k := range c.OmitHeaders {
+		delete(headers, k)
+	}
+
 	for k, v := range c.Headers {
-		if v == omitHeader {
-			delete(headers, k)
-
-			continue
-		}
-
 		headers[k] = v
 	}
 
@@ -288,8 +287,8 @@ func TestMCPConformanceProtocolVersionHeader(t *testing.T) {
 
 	t.Run("header absent", func(t *testing.T) {
 		call(t, proc, conformanceRequest{
-			Method:  "tools/list",
-			Headers: map[string]string{"Mcp-Protocol-Version": omitHeader},
+			Method:      "tools/list",
+			OmitHeaders: []string{"Mcp-Protocol-Version"},
 		}).refused(t, "no version header", http.StatusBadRequest, -32022)
 	})
 
@@ -377,19 +376,17 @@ func TestMCPConformanceStandardHeaders(t *testing.T) {
 	}, {
 		name: "Mcp-Method absent",
 		request: conformanceRequest{
-			Method:  "tools/list",
-			Headers: map[string]string{"Mcp-Method": omitHeader},
+			Method:      "tools/list",
+			OmitHeaders: []string{"Mcp-Method"},
 		},
 	}, {
 		// RFC 9110 §3.2: field names are case-insensitive. The value is not,
 		// and the next case is the same request with the case moved into it.
 		name: "mcp-method spelled in lower case",
 		request: conformanceRequest{
-			Method: "tools/list",
-			Headers: map[string]string{
-				"Mcp-Method": omitHeader,
-				"mcp-method": "tools/list",
-			},
+			Method:      "tools/list",
+			OmitHeaders: []string{"Mcp-Method"},
+			Headers:     map[string]string{"mcp-method": "tools/list"},
 		},
 		accepted: true,
 	}, {
@@ -408,9 +405,9 @@ func TestMCPConformanceStandardHeaders(t *testing.T) {
 	}, {
 		name: "Mcp-Name absent",
 		request: conformanceRequest{
-			Method:  "tools/call",
-			Params:  map[string]any{"name": tool, "arguments": map[string]any{}},
-			Headers: map[string]string{"Mcp-Name": omitHeader},
+			Method:      "tools/call",
+			Params:      map[string]any{"name": tool, "arguments": map[string]any{}},
+			OmitHeaders: []string{"Mcp-Name"},
 		},
 	}, {
 		// RFC 9110 §5.5: parsing excludes optional whitespace before the value
@@ -478,7 +475,7 @@ func TestMCPConformanceCachingHints(t *testing.T) {
 
 			switch {
 			case !ok:
-				t.Errorf("no ttlMs on the result: %v", keysOf(result))
+				t.Errorf("no ttlMs on the result: %v", slices.Sorted(maps.Keys(result)))
 			case ttl < 0 || ttl != float64(int64(ttl)):
 				t.Errorf("ttlMs = %v, want a non-negative integer", ttl)
 			case ttl == 0:

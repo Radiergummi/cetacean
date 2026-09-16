@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -107,5 +108,62 @@ func TestFour(t *testing.T) {
 	_, errs := ScanFile(p)
 	if len(errs) != 1 {
 		t.Fatalf("errors = %v, want one about the missing arguments", errs)
+	}
+}
+
+// A claim registers its cleanup when it runs, and cleanups run
+// last-registered-first — so a helper called first registers one that fires
+// after the claim's own and can no longer withhold it.
+func TestScanFileRejectsAClaimThatIsNotFirst(t *testing.T) {
+	const preamble = `package x
+
+import (
+	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
+)
+
+`
+
+	cases := []struct {
+		name    string
+		body    string
+		refused bool
+	}{{
+		name: "after a helper that registers a cleanup",
+		body: `func TestLate(t *testing.T) {
+	s := newTestServer(t)
+	spec.Satisfies(t, "mcp/sep-2575/a")
+	_ = s
+}`,
+		refused: true,
+	}, {
+		name: "first, after t.Helper",
+		body: `func TestEarly(t *testing.T) {
+	t.Helper()
+	spec.Satisfies(t, "mcp/sep-2575/a")
+}`,
+	}, {
+		name: "first, after a declaration",
+		body: `func TestAfterConst(t *testing.T) {
+	const id = "x"
+	spec.Satisfies(t, "mcp/sep-2575/a")
+	_ = id
+}`,
+	}}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, errs := ScanFile(writeTemp(t, "o_test.go", preamble+tc.body+"\n"))
+
+			switch {
+			case tc.refused && len(errs) != 1:
+				t.Fatalf("errors = %v, want one about the call order", errs)
+			case tc.refused && !strings.Contains(errs[0].Error(), "must come first"):
+				t.Errorf("error does not name the rule: %v", errs[0])
+			case !tc.refused && len(errs) != 0:
+				t.Fatalf("errors = %v, want none", errs)
+			}
+		})
 	}
 }

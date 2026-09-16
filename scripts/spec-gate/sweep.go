@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 
@@ -36,22 +33,14 @@ func normaliseCitation(in string) string {
 
 // Citations maps each specification the tree names to the files naming it.
 func Citations(root string) (map[string][]string, error) {
-	args := append([]string{"-C", root, "ls-files", "-z", "--"}, sweptDirs...)
-
-	out, err := exec.CommandContext(context.Background(), "git", args...).Output()
+	tracked, err := gitLsFiles(root, append([]string{"--"}, sweptDirs...)...)
 	if err != nil {
-		return nil, fmt.Errorf("git ls-files: %w", err)
+		return nil, err
 	}
 
 	cited := map[string][]string{}
 
-	for p := range bytes.SplitSeq(out, []byte{0}) {
-		if len(p) == 0 {
-			continue
-		}
-
-		rel := string(p)
-
+	for _, rel := range tracked {
 		if strings.HasPrefix(rel, registryPrefix) {
 			continue
 		}
