@@ -9,6 +9,10 @@ on:
 # token that can push to main, move tags and publish images.
 permissions: {}
 
+# Nothing here restores a cache, either. These jobs sign and attest what they
+# produce, and a tag run resolves its caches against the default branch — so a
+# cache is one input to an attested artifact that the tag itself never built.
+
 jobs:
   # The committed SBOM is embedded in the binary, and main is allowed to carry
   # it stale for a run or two: a Dependabot PR merges without one and
@@ -26,11 +30,11 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          package-manager-cache: false
       - run: cd frontend && npm ci
       # cyclonedx-gomod compiles the package, so main.go's //go:embed needs the
       # built frontend present.
@@ -71,8 +75,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          package-manager-cache: false
       - run: cd frontend && npm ci
       # Both bundles: main.go embeds frontend/dist and frontend/dist-widgets,
       # so go build cannot resolve its //go:embed without the widget build.
@@ -80,6 +83,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false
       - name: Build binary
         env:
           GOOS: ${{ matrix.os }}
