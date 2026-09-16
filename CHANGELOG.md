@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A stack's page and a service's Traefik labels are each drawn as a graph
 
 ### Changed
-- **Breaking:** the OAuth authorization server is opt-in — set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server at all
+- **Breaking:** the OAuth authorization server is opt-in — set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
 - **Breaking:** a setting the schema does not know refuses startup and is named, rather than being ignored — a config file still carrying `[mcp.oauth]` will not start
 - **Breaking:** `auth.headers.trusted_proxies` is gone — use `server.trusted_proxies`, which headers mode already required
@@ -58,40 +58,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
-- Authorization server metadata is served at the address RFC 8414 has a client derive, as well as under `server.base_path`
+- Both discovery documents are served at the address their RFC has a client derive, as well as under `server.base_path`. Behind a proxy, forward `/.well-known/*` from the host root too
 - An access token whose `aud` is an array, or whose `typ` differs only in letter case, is accepted — both are conformant shapes that were refused
-- A token carrying a future `nbf`, or no `sub`, is refused
 - The authorization server advertises that it sends `iss` on authorization responses, so a client actually enforces the mix-up check the responses already carry
-- Both discovery documents name the scopes the authorization server supports — none — so a client asks for no scope instead of guessing at one
-- Protected resource metadata is served at the address RFC 9728 has a client derive — the well-known segment after the host — as well as under `server.base_path`. Behind a proxy, forward `/.well-known/*` from the host root too
-- The deployment root is accepted as a resource identifier with or without its trailing slash
 - A token request missing `grant_type`, `code` or `refresh_token` is refused with `invalid_request` rather than `invalid_grant`, which told clients to discard a working grant
 - A repeated RFC 8707 `resource` parameter is refused with `invalid_target` instead of binding the token to whichever came first
-- A 401 names where a token comes from even when the request carried no credential, and no longer calls that `invalid_token` — RFC 6750 reserves the error for a token that was actually sent. Cold discovery works off the challenge
+- A 401 names where a token comes from even when the request carried no credential, and no longer calls that `invalid_token` — RFC 6750 reserves that for a token actually sent, so cold discovery works off the challenge
 - An ACL grant written against an email address matches a token as well as a browser session. MCP clients were silently denied everything such a grant allowed
-- A replayed refresh token revokes the whole grant family and the remembered approval again; sending the `resource` parameter — which every conformant client does — had the request refused before theft detection could run
+- Refresh-token theft detection works in the configuration everyone runs: a replayed token revokes the grant family and the remembered approval, where two separate checks refused the request before detection could run
 - Everything that does not describe the cluster keeps working while the Docker daemon is unreachable — the dashboard's own icons and manifest, the API catalogue, the OpenSearch description, `/profile` and the OAuth endpoints that issue a token
 - A Docker Engine too old for Cetacean says so at startup instead of coming up and serving empty pages. Cetacean speaks Docker API 1.46, which means Engine 26.1 or newer
-- The CSV alternate a filtered listing advertises downloads the rows you are looking at; it dropped the query, so following the link returned everything
-- The dashboard can be installed as an app under OIDC authentication; the browser's manifest request was made without credentials and rejected
 - A recommendation that measured zero no longer reads as one that measured nothing — a service using essentially no CPU reported an empty `current`
 - Header-based authentication works behind a reverse proxy again; it was answering 401 to every request
-- A failed `GET /auth/whoami` records why in the log, so a misconfigured proxy leaves something to debug
 - Asking an endpoint for a format it does not serve now says so, instead of answering with JSON
 - A malformed `filter` is reported as an error again on a request carrying `If-None-Match: *`
-- An address matching no route answers `404` with a problem document, rather than `200` and the dashboard, when the client said it cannot use a web page
+- An address matching no route answers `404` with a problem document rather than `200` and the dashboard — on a write, and on a read from a client that said it cannot use a web page
 - A format an `Accept` header rules out with `;q=0` is refused with `406` instead of served anyway
 - `/favicon.ico` and the dashboard's other static files are no longer refused with `406` when a client asks for them as an image
 - Deep links into a service whose name contains a dot, such as `/services/web.api/logs`, open instead of answering 404
-- A write to a path that does not exist answers `404`, instead of `200` and the dashboard's HTML
-- A CSV download of a filtered list is no longer cut to fifty rows by an `offset=0` the caller added for good measure. Only a limit truncates; an offset still says where to start
 - `/index.html` opens behind a hardened reverse proxy. It redirected to `/.html`, a dot-segment path nginx and Apache refuse by default, and the redirect was permanent; both spellings now serve the entry point directly
 - A transient hiccup in the five-minutely re-sync no longer reports the cluster as unreachable for the next five minutes. The stream ending is what marks a disconnection; a stalled cache still shows as stale
-- A resource deleted while a write held `If-Match` on it stays deleted, instead of reappearing in every listing until the next re-sync
 - A cluster operation run as an MCP task can no longer outlive the process. Detaching it from the request dropped its deadline too, so a wedged Docker call held its goroutine and its connection open forever
 - A write that loses a race answers `409` naming the conflict, instead of a bare `500 Docker Engine Error`
 - A `PATCH` to a service's resources, healthcheck, update policy, rollback policy, log driver or container config no longer discards an edit made just before it
-- `If-Match` can refuse the lost update it exists for: the condition is now evaluated against the engine rather than the cache
 - Every identifier a response hands out works under `server.base_path`. Listings, and a task's links to its service and node, left the deployment and answered 404
 - Relabelling a node needs operations level 2 over the API, matching MCP. It was gated with draining and demoting
 - `POST /-/resync` requires authentication. It is still not gated on the operations level, so a read-only deployment keeps its refresh button
@@ -105,11 +94,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Feed alternate links carry only the parameters the feed they point at reads
 - A client that subscribes over MCP only to "the list changed" is notified again; with an authorization policy configured it was silently never told anything
 - A service change asked for through the MCP tasks extension reaches the engine. It never did, and reported back as `cancelled`
-- Refresh-token theft detection works in the configuration everyone runs. Replaying a rotated token was refused as unknown before the detection could revoke the grant family
 - Authorization policy changes are picked up when the file is replaced by a rename, as a deployment, several editors and a ConfigMap update all do
 - The error reference page at `/api/errors` renders instead of showing "Something went wrong"
-- The API documentation, the playground script, the JSON-LD context and the attribution documents are cacheable, and compressed once rather than on every request
-- Documentation pages no longer advertise a `.html` canonical URL that nothing links to
+- The API documentation, the playground script, the JSON-LD context and the attribution documents are cacheable
 
 ## [0.14.0] - 2026-09-10
 
