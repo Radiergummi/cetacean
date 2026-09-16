@@ -27,6 +27,29 @@ updates:
         patterns:
           - "*"
 
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+      include: scope
+    labels:
+      - dependencies
+      - docker
+    # Both Dockerfiles live at the root, so one entry covers them. The bases
+    # carry a tag and a digest together — the tag names what is pinned, the
+    # digest is what is actually pulled. A Dockerfile FROM takes no trailing
+    # comment, so the action convention does not transfer here.
+    groups:
+      docker:
+        patterns:
+          - "*"
+
   - package-ecosystem: gomod
     directory: /
     schedule:

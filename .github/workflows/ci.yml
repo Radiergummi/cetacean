@@ -104,7 +104,7 @@ jobs:
           # when a new release ships stricter rules (e.g. 2.12.0 added
           # govet/inline, modernize/slicesbackward, broader gosec/G124).
           # Bump in lockstep with the local Homebrew formula.
-          version: v2.12.2
+          version: v2.13.2
       # `golangci-lint run` does not evaluate the `formatters:` section of
       # .golangci.yml (gofmt/goimports/golines) — only `golangci-lint fmt`
       # does. Without this step misformatted Go passes CI and is caught only
