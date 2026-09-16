@@ -1,4 +1,4 @@
-.PHONY: lint lint-docs typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover
+.PHONY: lint lint-docs typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
@@ -180,8 +180,13 @@ cover:
 	go tool cover -func=cover.out | tail -1
 	@echo "HTML report: go tool cover -html=cover.out"
 
-## Run all checks (lint + type check + format check + test)
-check: lint typecheck fmt-check test
+## Check the requirement registry against the test suite
+spec:
+	go run ./scripts/spec-gate static
+	go run ./scripts/spec-gate sweep
+
+## Run all checks (lint + type check + format check + test + spec)
+check: lint typecheck fmt-check test spec
 
 ## Run the Go benchmark suite, writing results to bench.txt
 #
