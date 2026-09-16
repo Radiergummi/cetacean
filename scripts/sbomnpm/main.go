@@ -46,6 +46,7 @@ func run(ref, out string) error {
 
 	keys := lock.closure(importerName)
 	components := make([]cyclonedx.Component, 0, len(keys))
+	seen := make(map[string]bool, len(keys))
 
 	for _, key := range keys {
 		name, version := splitKey(key)
@@ -53,9 +54,19 @@ func run(ref, out string) error {
 			continue
 		}
 
+		// One package resolved against two sets of peers is two snapshot keys
+		// but one component: a bom-ref carries no peer suffix, so emitting
+		// both would put the same ref on the document twice.
+		id := name + "@" + version
+		if seen[id] {
+			continue
+		}
+
+		seen[id] = true
+
 		// A link: or file: dependency has no registry tarball and no entry
 		// here; it is part of the workspace, not of what it ships.
-		pkg, ok := lock.Packages[name+"@"+version]
+		pkg, ok := lock.Packages[id]
 		if !ok {
 			continue
 		}
