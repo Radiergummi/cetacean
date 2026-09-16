@@ -18,10 +18,10 @@ on:
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
+# Read-only by default: the build runs npm ci and the Astro build, and must not
+# hold a scope that can publish. deploy takes the write scopes on its own.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -78,6 +78,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: build
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
