@@ -71,6 +71,8 @@ func TestJWTSignAndVerify(t *testing.T) {
 }
 
 func TestJWTExpiredToken(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/current-time-before-exp")
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, err := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "user@example.com", ClientID: "c1"},
@@ -86,6 +88,8 @@ func TestJWTExpiredToken(t *testing.T) {
 }
 
 func TestJWTWrongSigningKey(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/signature-validated-with-declared-alg")
+
 	issuer1 := mustTokenIssuer(t, []byte("key-one-32-bytes-long-padding!!!"), testIssuer)
 	issuer2 := mustTokenIssuer(t, []byte("key-two-32-bytes-long-padding!!!"), testIssuer)
 	token, _ := issuer1.IssueAccessToken(
@@ -99,6 +103,8 @@ func TestJWTWrongSigningKey(t *testing.T) {
 }
 
 func TestJWTWrongAudience(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/aud-names-this-resource")
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, _ := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
@@ -111,6 +117,8 @@ func TestJWTWrongAudience(t *testing.T) {
 }
 
 func TestJWTWrongIssuer(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/iss-exactly-matches")
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, _ := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
@@ -286,7 +294,10 @@ func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
 }
 
 func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc9068/typ-is-at-jwt")
+	spec.Satisfies(t,
+		"oauth/rfc9068/typ-is-at-jwt",
+		"oauth/rfc9068/typ-verified-on-receipt",
+	)
 
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 
