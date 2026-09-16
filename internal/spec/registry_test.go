@@ -105,19 +105,56 @@ func TestDismissalNeedsAReason(t *testing.T) {
 	}
 }
 
-func TestFamilyCannotContainASlash(t *testing.T) {
-	doc := &Document{
-		Family: "oauth/nested", Name: "doc",
-		Requirements: []Requirement{{ID: "a", Level: MUST, Text: "x"}},
+func TestFamilyAndName(t *testing.T) {
+	tests := []struct {
+		path    string
+		family  string
+		name    string
+		wantErr bool
+		errVal  string
+	}{
+		{
+			path:    "registry/oauth/rfc7636.yaml",
+			family:  "oauth",
+			name:    "rfc7636",
+			wantErr: false,
+		},
+		{
+			path:    "registry/oauth/nested/deep.yaml",
+			family:  "",
+			name:    "",
+			wantErr: true,
+			errVal:  "oauth/nested",
+		},
+		{
+			path:    "registry/stray.yaml",
+			family:  "",
+			name:    "",
+			wantErr: true,
+			errVal:  "stray.yaml",
+		},
 	}
 
-	reg := &Registry{byID: map[string]*Requirement{}}
-	err := reg.add(doc)
-	if err == nil {
-		t.Fatal("want an error about family containing /")
-	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			fam, nam, err := familyAndName(tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
+			}
 
-	if !strings.Contains(err.Error(), "/") {
-		t.Errorf("error does not mention the slash: %v", err)
+			if tt.wantErr {
+				if !strings.Contains(err.Error(), tt.errVal) {
+					t.Errorf("error %q does not contain %q", err, tt.errVal)
+				}
+				return
+			}
+
+			if fam != tt.family {
+				t.Errorf("family = %q, want %q", fam, tt.family)
+			}
+			if nam != tt.name {
+				t.Errorf("name = %q, want %q", nam, tt.name)
+			}
+		})
 	}
 }
