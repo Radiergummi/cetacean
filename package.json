@@ -20,5 +20,8 @@
     "lint": "pnpm -r lint",
     "fmt": "pnpm -r fmt",
     "fmt:check": "pnpm -r fmt:check"
+  },
+  "devDependencies": {
+    "@cyclonedx/cdxgen": "^12.8.4"
   }
 }

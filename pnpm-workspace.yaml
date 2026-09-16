@@ -2,13 +2,12 @@ packages:
   - frontend
   - website
 
-# pnpm runs no dependency's install script unless it is named here. These four
+# pnpm runs no dependency's install script unless it is named here. These three
 # ask for one: esbuild fetches its platform binary, msw copies its service
-# worker, libxmljs2 compiles a native addon, and vue-demi picks a Vue build.
+# worker, and vue-demi picks a Vue build against the installed version.
 # Anything else that starts asking is a question, not a default.
 allowBuilds:
   esbuild: true
-  libxmljs2: true
   msw: true
   vue-demi: true
 

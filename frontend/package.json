@@ -46,7 +46,6 @@
     "zod": "^4.6.2"
   },
   "devDependencies": {
-    "@cyclonedx/cyclonedx-npm": "^6.0.1",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
