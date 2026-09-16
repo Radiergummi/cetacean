@@ -65,6 +65,21 @@ func TestAnEmptyReasonFailsTheGate(t *testing.T) {
 	}
 }
 
+// The claim keeps the requirement pinned, so only the empty-reason rule can
+// fire here, not the separate "deferred, but no test pins" rule.
+func TestADeferredEmptyReasonFailsTheGate(t *testing.T) {
+	reg := registryWith(t, spec.Requirement{
+		ID: "a", Level: spec.MUST, Text: "x", Deferred: "   ",
+	})
+
+	claims := []Claim{{ID: "test/doc/a", Func: "TestPin", File: "x_test.go"}}
+
+	errs := checkStatic(reg, claims)
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "empty reason") {
+		t.Fatalf("errors = %v, want one about the empty deferred reason", errs)
+	}
+}
+
 func TestAClaimForAnUnknownRequirementFailsTheGate(t *testing.T) {
 	reg := registryWith(t, spec.Requirement{ID: "a", Level: spec.MUST, Text: "x"})
 
