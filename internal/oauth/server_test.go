@@ -483,6 +483,8 @@ func TestRevocationUnknownToken(t *testing.T) {
 // TestCodeVerifier_RFC7636Length covers M-18: PKCE verifier length and
 // alphabet enforcement against RFC 7636 §4.1.
 func TestCodeVerifier_RFC7636Length(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7636/verifier-character-set")
+
 	cases := []struct {
 		name     string
 		verifier string
