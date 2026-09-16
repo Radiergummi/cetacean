@@ -81,3 +81,64 @@ func TestNewServerLeavesTheCallersResourcesAlone(t *testing.T) {
 		t.Errorf("Path = %q, want it as the caller wrote it", resources[0].Path)
 	}
 }
+
+// The property resource indicators exist for: an identifier is matched whole,
+// so a token minted for one resource is refused at another even when one path
+// sits beneath the other. Nothing else pins it — every other Identify test
+// presents a token at the resource it was minted for, which passes whether
+// identifiers are compared whole or by prefix.
+func TestATokenDoesNotReachAResourceItWasNotMintedFor(t *testing.T) {
+	const issuer = "https://cetacean.test"
+
+	root := Resource{Path: "", Realm: "cetacean"}
+	sub := Resource{Path: "/sub", Realm: "cetacean-sub"}
+
+	s := NewServer(ServerConfig{
+		Issuer:     issuer,
+		Resources:  []Resource{root, sub},
+		OAuth:      config.OAuthConfig{AccessTokenTTL: time.Hour},
+		SigningKey: []byte("test-signing-key-32bytes-padded!!"),
+	})
+
+	rootID := s.cfg.identifierOf(root)
+	subID := s.cfg.identifierOf(sub)
+
+	if rootID == subID {
+		t.Fatalf("both resources resolved to %q, so this proves nothing", rootID)
+	}
+
+	mint := func(t *testing.T, audience string) string {
+		t.Helper()
+
+		token, err := s.tokenIssuer.IssueAccessToken(
+			AccessTokenClaims{Subject: "alice@example.com", ClientID: "test-client"},
+			audience,
+			s.cfg.OAuth.AccessTokenTTL,
+		)
+		if err != nil {
+			t.Fatalf("IssueAccessToken for %s: %v", audience, err)
+		}
+
+		return token
+	}
+
+	for _, c := range []struct {
+		name             string
+		mintedFor, shown string
+	}{
+		{"the root's token at the resource beneath it", rootID, subID},
+		{"a sub-resource's token at the root above it", subID, rootID},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			token := mint(t, c.mintedFor)
+
+			if _, err := s.Identify(token, c.mintedFor); err != nil {
+				t.Fatalf("the token was refused at its own resource: %v", err)
+			}
+
+			if _, err := s.Identify(token, c.shown); err == nil {
+				t.Errorf("a token audienced for %s was accepted at %s", c.mintedFor, c.shown)
+			}
+		})
+	}
+}

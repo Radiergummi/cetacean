@@ -205,10 +205,18 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 // TestTokenExchangeWrongVerifier
 // ---------------------------------------------------------------------------
 
+// Both verifiers are RFC 7636 shaped, so the refusal can only come from the
+// challenge comparison. A short one is refused by validateCodeVerifier first,
+// with the same invalid_grant, and never reaches the comparison at all.
 func TestTokenExchangeWrongVerifier(t *testing.T) {
 	s := newTestServer(t)
 
-	challenge := computeS256Challenge("correct-verifier")
+	const (
+		correct = "correct-verifier-correct-verifier-correct-ver"
+		wrong   = "wrong-verifier-wrong-verifier-wrong-verifier-"
+	)
+
+	challenge := computeS256Challenge(correct)
 	code := seedAuthCode(s, AuthCodeData{
 		ClientID:      "test-client",
 		RedirectURI:   "http://localhost/cb",
@@ -222,7 +230,7 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 		"code":          {code},
 		"redirect_uri":  {"http://localhost/cb"},
 		"client_id":     {"test-client"},
-		"code_verifier": {"wrong-verifier"},
+		"code_verifier": {wrong},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
