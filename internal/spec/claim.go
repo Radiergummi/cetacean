@@ -16,10 +16,9 @@ const ClaimsEnv = "CETACEAN_SPEC_CLAIMS"
 var claimMu sync.Mutex
 
 // Satisfies records that the calling test exercises these requirements.
-//
 // Call it BEFORE any helper that registers a cleanup: cleanups run
-// last-registered-first, so an assertion deferred by an earlier one runs after
-// this claim and cannot withhold it.
+// last-registered-first, so an assertion deferred by an earlier one would
+// run after this claim and could not withhold it.
 func Satisfies(t testing.TB, ids ...string) {
 	t.Helper()
 
@@ -61,6 +60,8 @@ func sanitise(name string) string {
 // appendClaims writes one file per process. O_APPEND line writes are atomic on
 // a local filesystem, so concurrent packages need no coordination.
 func appendClaims(dir, name string, ids []string) error {
+	// #nosec G703 -- the claims directory is a test-harness path taken from
+	// the environment by the developer running the suite, never a request.
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
@@ -70,8 +71,7 @@ func appendClaims(dir, name string, ids []string) error {
 	claimMu.Lock()
 	defer claimMu.Unlock()
 
-	// #nosec G304,G703 -- the claims directory is a test-harness path taken
-	// from the environment by the developer running the suite, never a request.
+	// #nosec G703 -- same claims directory, opened for this process's file.
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
