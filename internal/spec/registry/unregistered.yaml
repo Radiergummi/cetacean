@@ -46,7 +46,6 @@ RFC8594: "Deprecation header is planned for the JGF topology endpoints (docs/spe
 RFC8615: "Defines the /.well-known/ convention generally. The documents we actually serve there (RFC 8414, RFC 9728) carry the testable requirements."
 RFC8631: "service-desc Link relation. internal/api/middleware.go emits it, tested in test/e2e/deployment_test.go. Implemented, not yet registered."
 RFC8941: "Structured Field Values. decodeClientCert parses the Byte Sequence form of Client-Cert (internal/auth/cert.go), tested in clientcert_test.go. Implemented, not yet registered."
-RFC9068: "JWT Profile for OAuth 2.0 Access Tokens. typ/aud/claims handling is implemented (internal/oauth/jwt.go) and tested throughout conformance_test.go. Implemented, not yet registered."
 RFC9110: "HTTP Semantics. Content negotiation, ETags and conditional requests implement it across internal/api, tested extensively (etag_test.go, precondition_test.go, and more). Implemented, not yet registered."
 RFC9207: "iss parameter mix-up attack protection. Implemented in internal/auth/oidc.go, tested by TestCallback_RFC9207_IssuerValidation. Implemented, not yet registered."
 RFC9264: "Linkset. internal/api/linkset implements the JSON serialization, tested in linkset_test.go. Implemented, not yet registered."

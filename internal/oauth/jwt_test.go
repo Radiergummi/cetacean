@@ -12,6 +12,8 @@ import (
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 const testKey = "test-secret-key-32-bytes-long!!!"
@@ -36,6 +38,8 @@ func mustTokenIssuer(t *testing.T, root []byte, issuer string) *TokenIssuer {
 }
 
 func TestJWTSignAndVerify(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/tokens-are-signed")
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	claims := AccessTokenClaims{
 		Subject:  "user@example.com",
@@ -219,6 +223,17 @@ func resign(t *testing.T, issuer *TokenIssuer, header, payload string) string {
 var requiredClaims = []string{"iss", "exp", "aud", "sub", "client_id", "iat", "jti"}
 
 func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9068/typ-is-at-jwt",
+		"oauth/rfc9068/claim-iss-required",
+		"oauth/rfc9068/claim-exp-required",
+		"oauth/rfc9068/claim-aud-required",
+		"oauth/rfc9068/claim-sub-required",
+		"oauth/rfc9068/claim-client-id-required",
+		"oauth/rfc9068/claim-iat-required",
+		"oauth/rfc9068/claim-jti-required",
+	)
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
@@ -271,6 +286,8 @@ func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
 }
 
 func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/typ-is-at-jwt")
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
@@ -467,15 +484,27 @@ func TestPackedSignatureWithALeadingZeroInRVerifies(t *testing.T) {
 	}
 }
 
-func TestVerifyRefusesHS256(t *testing.T) {
-	issuer := mustTokenIssuer(t, testRoot, testIssuer)
-
-	header := base64.RawURLEncoding.EncodeToString(
-		[]byte(`{"alg":"HS256","typ":"at+jwt"}`),
+// "none" is the algorithm RFC 9068 §2.1 forbids outright. RS256 it requires
+// among those supported, and this server issues and accepts ES256 alone — so
+// this pins the divergence rather than asserting it away.
+func TestVerifyRefusesEveryAlgorithmButES256(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9068/alg-is-not-none",
+		"oauth/rfc9068/rs256-among-supported-algorithms",
 	)
 
-	_, err := issuer.VerifyAccessToken(header+".e30.c2ln", testTokenAudience)
-	if !errors.Is(err, ErrMalformedToken) {
-		t.Errorf("error = %v, want ErrMalformedToken", err)
+	issuer := mustTokenIssuer(t, testRoot, testIssuer)
+
+	for _, alg := range []string{"none", "HS256", "RS256"} {
+		t.Run(alg, func(t *testing.T) {
+			header := base64.RawURLEncoding.EncodeToString(
+				[]byte(`{"alg":"` + alg + `","typ":"at+jwt"}`),
+			)
+
+			_, err := issuer.VerifyAccessToken(header+".e30.c2ln", testTokenAudience)
+			if !errors.Is(err, ErrMalformedToken) {
+				t.Errorf("error = %v, want ErrMalformedToken", err)
+			}
+		})
 	}
 }
