@@ -129,6 +129,17 @@ func ScanFile(path string) ([]Claim, []error) {
 				return true
 			}
 
+			if len(call.Args) == 0 {
+				errs = append(errs, fmt.Errorf(
+					"%s:%d: %s calls Satisfies with no arguments",
+					path,
+					fset.Position(call.Pos()).Line,
+					fn.Name.Name,
+				))
+
+				return true
+			}
+
 			for _, arg := range call.Args[1:] {
 				lit, ok := arg.(*ast.BasicLit)
 				if !ok || lit.Kind != token.STRING {

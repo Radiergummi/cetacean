@@ -89,3 +89,23 @@ func TestThree(t *testing.T) {
 		t.Fatalf("errors = %v, want one about the import alias", errs)
 	}
 }
+
+func TestScanFileRejectsACallWithNoArguments(t *testing.T) {
+	p := writeTemp(t, "d_test.go", `package x
+
+import (
+	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
+)
+
+func TestFour(t *testing.T) {
+	spec.Satisfies()
+}
+`)
+
+	_, errs := ScanFile(p)
+	if len(errs) != 1 {
+		t.Fatalf("errors = %v, want one about the missing arguments", errs)
+	}
+}
