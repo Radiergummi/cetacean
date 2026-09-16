@@ -1,43 +1,15 @@
 package mcp
 
 import (
-	"strings"
-
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// resolveTask returns the task with this ID or rendered name. The other seven
-// types resolve inside the cache, which owns the ID keying; a task cannot,
-// since its name is derived by internal/cluster, which imports the cache.
-// Splitting first turns a scan of every task into one service's replicas.
+// resolveTask returns the task with this ID or rendered name. The rule lives
+// in internal/cluster so REST cannot disagree about what a task name denotes.
 func (s *Server) resolveTask(identifier string) (swarm.Task, bool, error) {
-	if task, ok := s.cache.GetTask(identifier); ok {
-		return task, true, nil
-	}
-
-	// Cut at the *last* separator: Docker permits a dot in a service name,
-	// while neither half of the suffix cluster.TaskName appends can hold one.
-	// No separator at all is not a miss either — an unassigned global task
-	// renders as the bare service name — so the scan below decides.
-	serviceName := identifier
-	if dot := strings.LastIndex(identifier, "."); dot >= 0 {
-		serviceName = identifier[:dot]
-	}
-
-	service, ok, err := s.cache.ResolveService(serviceName)
-	if err != nil || !ok {
-		return swarm.Task{}, false, err
-	}
-
-	for _, task := range s.cache.ListTasksByService(service.ID) {
-		if cluster.TaskName(task, &service) == identifier {
-			return task, true, nil
-		}
-	}
-
-	return swarm.Task{}, false, nil
+	return cluster.ResolveTask(s.cache, identifier)
 }
 
 // resolved turns a resolver's (value, found, error) into the (value, error)
