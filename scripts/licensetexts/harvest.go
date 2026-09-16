@@ -272,7 +272,7 @@ func npmDir(root, name, version string) (string, error) {
 	if found == "" {
 		return "", fmt.Errorf(
 			"npm package %s@%s is not installed under %s — "+
-				"run npm install before harvesting",
+				"run pnpm install before harvesting",
 			name, version, root,
 		)
 	}
