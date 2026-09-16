@@ -118,16 +118,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      # Installed rather than used as actions. Both publish one, but a
-      # non-GitHub action has to be allowlisted in repository settings, and a
-      # pinned module version and a pinned wheel carry the same guarantee
-      # without the setting.
-      - run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      # actionlint ships no action, and building it from source costs a Go
+      # toolchain and a module download to produce a binary that runs in a
+      # second. Take the published build and pin its digest, which is a
+      # tighter claim than a tag on an action would be.
+      - env:
+          VERSION: 1.7.12
+          SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          curl -fsSL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v$VERSION/actionlint_${VERSION}_linux_amd64.tar.gz"
+          echo "$SHA256  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz actionlint
+          sudo install -m 0755 actionlint /usr/local/bin/actionlint
+          rm actionlint actionlint.tar.gz
       - run: actionlint -color
+      # zizmor's own action is composite and installs it the same way, so
+      # there is nothing to win by spending an allowlist entry on it.
       - run: pipx install zizmor==1.30.1
       # Online, so that an action going known-bad fails a run rather than
       # waiting to be noticed. zizmor's own version is pinned, which keeps
