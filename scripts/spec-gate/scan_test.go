@@ -49,8 +49,8 @@ func TestOne(t *testing.T) {
 }
 
 // How a claim may be written is scripts/spec-vet's to enforce; what this scan
-// must not do is invent one. Each case below is invisible to it, which leaves
-// the requirement looking unclaimed — the direction that fails closed.
+// must not do is invent one. It reports the id it could not read, because a
+// requirement with another claimant would otherwise stay green.
 func TestScanFileReadsNoClaimItCannotSee(t *testing.T) {
 	const preamble = `package x
 
@@ -63,16 +63,19 @@ import (
 `
 
 	cases := []struct {
-		name  string
-		alias string
-		body  string
+		name     string
+		alias    string
+		body     string
+		reported bool
 	}{{
 		name: "a non-literal id",
 		body: `func TestTwo(t *testing.T) {
 	id := "mcp/sep-2575/a"
 	spec.Satisfies(t, id)
 }`,
+		reported: true,
 	}, {
+		// Nothing here resolves the alias, so there is no call to report.
 		name:  "an aliased import",
 		alias: "sp ",
 		body: `func TestThree(t *testing.T) {
@@ -90,21 +93,26 @@ import (
 			src := fmt.Sprintf(preamble, tc.alias) + tc.body + "\n"
 
 			claims, errs := ScanFile(writeTemp(t, "o_test.go", src))
-			if len(errs) != 0 {
-				t.Fatalf("errors = %v, want none — spec-vet reports these", errs)
-			}
-
 			if len(claims) != 0 {
 				t.Fatalf("claims = %+v, want none", claims)
+			}
+
+			if tc.reported && len(errs) != 1 {
+				t.Fatalf("errors = %v, want one naming the claim it could not read", errs)
+			}
+
+			if !tc.reported && len(errs) != 0 {
+				t.Fatalf("errors = %v, want none", errs)
 			}
 		})
 	}
 }
 
-// Fixtures under testdata are not code of ours, and spec-vet keeps claims
-// there that name requirements the registry does not have.
+// Fixtures under testdata are not code of ours. spec-vet keeps claims there
+// naming requirements the registry does not have, so a regression here is a
+// loud unknown-requirement error rather than a phantom claim.
 func TestTestFilesSkipsTestdata(t *testing.T) {
-	files, err := TestFiles(".")
+	files, err := TestFiles("../..")
 	if err != nil {
 		t.Fatal(err)
 	}

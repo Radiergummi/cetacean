@@ -1,4 +1,4 @@
-package aliased
+package claims
 
 import (
 	"testing"
@@ -7,5 +7,5 @@ import (
 )
 
 func TestAliased(t *testing.T) {
-	sp.Satisfies(t, "oauth/rfc7636/verifier-must-match-challenge")
+	sp.Satisfies(t, "fixture/not-a-document/not-a-requirement")
 }

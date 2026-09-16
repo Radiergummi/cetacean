@@ -2,7 +2,6 @@ package main
 
 import (
 	"go/ast"
-	"go/printer"
 	"go/token"
 	"go/types"
 	"strconv"
@@ -23,10 +22,7 @@ var Analyzer = &analysis.Analyzer{
 }
 
 func run(pass *analysis.Pass) (any, error) {
-	// The defining package's own tests call Satisfies to exercise it, not to
-	// claim through it, and the gate cannot read them anyway: it matches a
-	// spec. selector, which a call from inside the package does not have.
-	if strings.TrimSuffix(pass.Pkg.Path(), "_test") == specPath {
+	if !imports(pass.Pkg) {
 		return nil, nil
 	}
 
@@ -49,20 +45,16 @@ func run(pass *analysis.Pass) (any, error) {
 }
 
 // isSatisfies resolves the callee rather than matching its spelling, which is
-// what the parser-based scan cannot do.
+// what the parser-based scan cannot do. Only the qualified form: an
+// unqualified call comes from inside internal/spec, which imports returns
+// false for.
 func isSatisfies(pass *analysis.Pass, call *ast.CallExpr) bool {
-	var name *ast.Ident
-
-	switch fun := call.Fun.(type) {
-	case *ast.SelectorExpr:
-		name = fun.Sel
-	case *ast.Ident:
-		name = fun
-	default:
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
 		return false
 	}
 
-	fn, ok := pass.TypesInfo.Uses[name].(*types.Func)
+	fn, ok := pass.TypesInfo.Uses[sel.Sel].(*types.Func)
 	if !ok || fn.Name() != "Satisfies" || fn.Pkg() == nil {
 		return false
 	}
@@ -70,9 +62,8 @@ func isSatisfies(pass *analysis.Pass, call *ast.CallExpr) bool {
 	return fn.Pkg().Path() == specPath
 }
 
-// checkImport holds the no-alias rule. Nothing here needs it — the callee is
-// resolved by type — but scripts/spec-gate matches the selector name, so an
-// alias would make every claim in the file invisible to the gate.
+// checkImport holds the no-alias rule, which exists for scripts/spec-gate
+// rather than for anything here.
 func checkImport(pass *analysis.Pass, file *ast.File) {
 	for _, imp := range file.Imports {
 		path, err := strconv.Unquote(imp.Path.Value)
@@ -87,6 +78,23 @@ func checkImport(pass *analysis.Pass, file *ast.File) {
 				imp.Name.Name)
 		}
 	}
+}
+
+// imports reports whether this package can contain a claim at all. It is also
+// false for internal/spec itself, whose own tests call Satisfies to exercise
+// it rather than to claim through it.
+func imports(pkg *types.Package) bool {
+	if pkg.Path() == specPath {
+		return false
+	}
+
+	for _, dep := range pkg.Imports() {
+		if dep.Path() == specPath {
+			return true
+		}
+	}
+
+	return false
 }
 
 func checkCall(pass *analysis.Pass, file *ast.File, call *ast.CallExpr) {
@@ -113,11 +121,9 @@ func checkCall(pass *analysis.Pass, file *ast.File, call *ast.CallExpr) {
 	checkOrder(pass, file, call)
 }
 
-// checkOrder refuses a claim that is not the first thing its function does.
-// Cleanups run last-registered-first, so a helper called earlier registers one
-// that runs after the claim's own and cannot withhold it when that helper
-// fails. The enclosing function is the innermost one: a subtest's claim rides
-// on the subtest's own t, which the parent's cleanups cannot reach.
+// checkOrder holds the ordering rule stated on spec.Satisfies. The enclosing
+// function is the innermost one: a subtest's claim rides on its own t, which
+// the parent's cleanups cannot reach.
 func checkOrder(pass *analysis.Pass, file *ast.File, call *ast.CallExpr) {
 	body := innermostBody(file, call.Pos())
 	if body == nil {
@@ -131,9 +137,9 @@ func checkOrder(pass *analysis.Pass, file *ast.File, call *ast.CallExpr) {
 
 		if earlier := firstCall(stmt); earlier != nil {
 			pass.Reportf(call.Pos(),
-				"Satisfies must be the first statement; %s runs before it, and a cleanup it "+
+				"Satisfies must be the first statement; %s(...) runs before it, and a cleanup it "+
 					"registers would run after the claim and could not withhold it",
-				render(pass.Fset, earlier))
+				types.ExprString(earlier.Fun))
 
 			return
 		}
@@ -183,14 +189,4 @@ func firstCall(stmt ast.Stmt) *ast.CallExpr {
 	})
 
 	return found
-}
-
-func render(fset *token.FileSet, call *ast.CallExpr) string {
-	var b strings.Builder
-
-	if err := printer.Fprint(&b, fset, call.Fun); err != nil {
-		return "an earlier call"
-	}
-
-	return b.String() + "(...)"
 }
