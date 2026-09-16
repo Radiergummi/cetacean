@@ -32,17 +32,26 @@ type Claim struct {
 // requirements; go list would omit test/e2e entirely, because its build
 // constraint excludes every file in the package.
 func TestFiles(root string) ([]string, error) {
-	cmd := exec.CommandContext(
-		context.Background(),
-		"git",
-		"-C",
-		root,
-		"ls-files",
-		"-z",
-		"*_test.go",
-	)
+	rel, err := gitLsFiles(root, "*_test.go")
+	if err != nil {
+		return nil, err
+	}
 
-	out, err := cmd.Output()
+	files := make([]string, 0, len(rel))
+	for _, p := range rel {
+		files = append(files, root+"/"+p)
+	}
+
+	return files, nil
+}
+
+// gitLsFiles lists tracked files matching args, relative to root. Tracked, not
+// walked: a walk also finds .worktrees/ copies of this tree, whose claims would
+// mask uncovered requirements here.
+func gitLsFiles(root string, args ...string) ([]string, error) {
+	argv := append([]string{"-C", root, "ls-files", "-z"}, args...)
+
+	out, err := exec.CommandContext(context.Background(), "git", argv...).Output()
 	if err != nil {
 		return nil, fmt.Errorf("git ls-files: %w", err)
 	}
@@ -51,7 +60,7 @@ func TestFiles(root string) ([]string, error) {
 
 	for p := range bytes.SplitSeq(out, []byte{0}) {
 		if len(p) > 0 {
-			files = append(files, root+"/"+string(p))
+			files = append(files, string(p))
 		}
 	}
 
@@ -129,6 +138,10 @@ func ScanFile(path string) ([]Claim, []error) {
 				return true
 			}
 
+			if err := claimOrder(path, fset, fn, call.Pos()); err != nil {
+				errs = append(errs, err)
+			}
+
 			if len(call.Args) == 0 {
 				errs = append(errs, fmt.Errorf(
 					"%s:%d: %s calls Satisfies with no arguments",
@@ -174,6 +187,49 @@ func ScanFile(path string) ([]Claim, []error) {
 	}
 
 	return claims, errs
+}
+
+// claimOrder refuses a claim that is not the first thing its function does.
+// Cleanups run last-registered-first, so a helper called earlier registers one
+// that runs AFTER the claim's own and cannot withhold it for a test that helper
+// then fails. A claim nested inside a closure is not checked.
+func claimOrder(path string, fset *token.FileSet, fn *ast.FuncDecl, pos token.Pos) error {
+	if fn.Body == nil {
+		return nil
+	}
+
+	for _, stmt := range fn.Body.List {
+		if pos >= stmt.Pos() && pos <= stmt.End() {
+			return nil
+		}
+
+		var earlier *ast.CallExpr
+
+		ast.Inspect(stmt, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || earlier != nil {
+				return true
+			}
+
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Helper" {
+				return true
+			}
+
+			earlier = call
+
+			return false
+		})
+
+		if earlier != nil {
+			return fmt.Errorf(
+				"%s:%d: %s calls Satisfies after other work; it must come first, "+
+					"or a cleanup registered earlier runs after the claim and cannot withhold it",
+				path, fset.Position(pos).Line, fn.Name.Name,
+			)
+		}
+	}
+
+	return nil
 }
 
 // importState reports whether internal/spec is imported and under what alias.
