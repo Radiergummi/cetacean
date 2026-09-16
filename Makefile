@@ -1,10 +1,13 @@
-.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-genmcp
+.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-genmcp spec-report spec-report-full
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
 E2E_BINARY   := cetacean.cover
 E2E_RACE_BIN := cetacean.race
 E2E_COVERDIR := coverdata
+
+# Where a run writes what it exercised. Gitignored.
+SPEC_CLAIMS  := .spec-claims
 
 ## Lint all code
 lint:
@@ -171,6 +174,23 @@ cover:
 spec:
 	go run ./scripts/spec-gate static
 	go run ./scripts/spec-gate sweep
+
+## Report what the unit suite exercised
+#
+# Both report targets clear the claims directory first: a stale <pid>.claims
+# from an earlier run would satisfy a requirement this run never reached.
+spec-report:
+	rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
+	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
+	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit
+
+## Report what the unit and e2e suites exercised together
+spec-report-full: build
+	rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
+	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
+	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) CETACEAN_E2E_BINARY=$(PWD)/$(E2E_BINARY) \
+	  go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...
+	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit,e2e
 
 ## Regenerate the MCP registry families from upstream
 #
