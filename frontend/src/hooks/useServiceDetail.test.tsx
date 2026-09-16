@@ -12,9 +12,11 @@ interface StreamEvent {
 }
 
 let subscriber: ((event: StreamEvent) => void) | undefined;
+const streamPaths: (string | undefined)[] = [];
 
 vi.mock("./useResourceStream", () => ({
-  useResourceStream: (_path: string, listener: (event: never) => void) => {
+  useResourceStream: (path: string | undefined, listener: (event: never) => void) => {
+    streamPaths.push(path);
     subscriber = listener as (event: StreamEvent) => void;
 
     return { connected: true };
@@ -35,7 +37,9 @@ vi.mock("./useMonitoringStatus", () => ({
   isCadvisorReady: () => false,
 }));
 
-vi.mock("./useRecommendations", () => ({ useRecommendations: () => ({ items: [] }) }));
+vi.mock("./useRecommendations", () => ({
+  useRecommendations: () => ({ items: [{ targetId: "svc1" }, { targetId: "web_api" }] }),
+}));
 vi.mock("./useTaskMetrics", () => ({ useTaskMetrics: () => ({}) }));
 
 vi.mock("@/api/client", async (importOriginal) => ({
@@ -60,6 +64,8 @@ const service = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  streamPaths.length = 0;
   vi.mocked(api.service).mockResolvedValue({
     data: { service },
     allowedMethods: new Set<string>(),
@@ -104,5 +110,60 @@ describe("useServiceDetail", () => {
     emit({ type: "task", action: "update", id: "task1" });
 
     expect(invalidate).not.toHaveBeenCalledWith(composeKey);
+  });
+
+  it("matches recommendations against the canonical ID", async () => {
+    const { result } = renderHook(() => useServiceDetail("web_api"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(result.current.service).not.toBeNull());
+
+    expect(result.current.serviceRecommendations).toEqual([
+      expect.objectContaining({ targetId: "svc1" }),
+    ]);
+  });
+
+  it("requests history for the canonical ID, not the route parameter", async () => {
+    renderHook(() => useServiceDetail("web_api"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(api.history).toHaveBeenCalled());
+
+    expect(api.history).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: "svc1" }),
+      expect.anything(),
+    );
+  });
+
+  it("subscribes to the SSE path of the canonical ID", async () => {
+    renderHook(() => useServiceDetail("web_api"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(streamPaths.at(-1)).toBe("/services/svc1"));
+  });
+
+  // Navigating between two services must not fetch the old one's activity
+  // against the new one's page while the first fetch is still in flight.
+  it("holds side data until the fetch for this key answers", async () => {
+    let settle = (): void => {};
+    vi.mocked(api.service).mockReturnValue(
+      new Promise((resolve) => {
+        settle = () => resolve({ data: { service }, allowedMethods: new Set<string>() } as never);
+      }) as never,
+    );
+
+    renderHook(() => useServiceDetail("web_api"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    expect(api.history).not.toHaveBeenCalled();
+    expect(streamPaths.at(-1)).toBe("/services/web_api");
+
+    settle();
+
+    await waitFor(() => expect(api.history).toHaveBeenCalled());
   });
 });

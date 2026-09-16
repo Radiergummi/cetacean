@@ -10,7 +10,8 @@ export default function SecretDetail() {
   const { data, history, error, retry, allowedMethods } = useDetailResource(
     id,
     api.secret,
-    `/secrets/${id}`,
+    "/secrets",
+    { idOf: (detail) => detail.secret.ID },
   );
 
   if (error) {

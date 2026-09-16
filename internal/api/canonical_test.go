@@ -516,3 +516,82 @@ func countHTTPRequests(t *testing.T, status int) float64 {
 
 	return total
 }
+
+// grammarCollections is the set of segments the friendly-URL grammar reads as
+// a collection. It lives here because the pair-chain parser does not exist
+// yet; the parser takes ownership of it when it lands.
+var grammarCollections = map[string]bool{
+	"services": true,
+	"nodes":    true,
+	"configs":  true,
+	"secrets":  true,
+	"networks": true,
+	"volumes":  true,
+	"tasks":    true,
+	"stacks":   true,
+}
+
+// parsesAsPairChain reports whether a route pattern has the shape the grammar
+// consumes as two (collection, identifier) pairs — two applications of the
+// splitter the middleware itself uses, so the two cannot describe a path
+// differently. The edge table is deliberately not consulted: an edge that does
+// not exist today is one 2b may declare.
+func parsesAsPairChain(pattern string) bool {
+	// A pattern registered without a method carries no space to cut: the SPA
+	// fallback and the mounts beside it are the ones that look like that.
+	_, path, found := strings.Cut(pattern, " ")
+	if !found {
+		path = pattern
+	}
+
+	collection, identifier, rest := splitResourcePath(path)
+	via, target, _ := splitResourcePath(rest)
+
+	return grammarCollections[collection] && identifier != "" &&
+		grammarCollections[via] && target != ""
+}
+
+// No registered route may parse as a pair chain, because the middleware
+// answers such a path itself and never reaches the mux. Adding
+// `GET /services/{id}/networks/{x}` would be shadowed silently, which is the
+// one failure mode of the grammar that no other test can see.
+func TestNoRouteIsShadowedByThePairChainGrammar(t *testing.T) {
+	patterns := routerPatterns(t)
+	if len(patterns) == 0 {
+		t.Fatal("no routes recorded, so this sweep checks nothing")
+	}
+
+	for _, pattern := range patterns {
+		if parsesAsPairChain(pattern) {
+			t.Errorf("route %q parses as a pair chain and would never be reached", pattern)
+		}
+	}
+}
+
+// The invariant is only worth having if it can fail, and a test that passes
+// because its parser never matches anything is the way it silently stops.
+func TestPairChainParseRecognisesTheShapeItGuards(t *testing.T) {
+	shadowed := []string{
+		"GET /services/{id}/networks/{name}",
+		"GET /stacks/{stack}/services/{name}",
+		"DELETE /nodes/{id}/tasks/{taskID}",
+	}
+
+	for _, pattern := range shadowed {
+		if !parsesAsPairChain(pattern) {
+			t.Errorf("pattern %q should parse as a pair chain", pattern)
+		}
+	}
+
+	safe := []string{
+		"GET /services/{id}/networks",
+		"GET /-/licenses/texts/{id}",
+		"GET /metrics/labels/{name}",
+	}
+
+	for _, pattern := range safe {
+		if parsesAsPairChain(pattern) {
+			t.Errorf("pattern %q should not parse as a pair chain", pattern)
+		}
+	}
+}

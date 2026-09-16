@@ -119,7 +119,8 @@ export default function NetworkDetail() {
   const { data, history, error, retry, allowedMethods } = useDetailResource(
     id,
     api.network,
-    `/networks/${id}`,
+    "/networks",
+    { idOf: (detail) => detail.network.Id },
   );
 
   if (error) {

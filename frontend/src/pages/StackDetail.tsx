@@ -40,7 +40,8 @@ export default function StackDetail() {
     data: stack,
     error,
     allowedMethods,
-  } = useDetailResource<StackDetailType>(name, api.stack, `/stacks/${name}`, {
+  } = useDetailResource<StackDetailType>(name, api.stack, "/stacks", {
+    idOf: (stack) => stack.name,
     history: false,
     extraQueryKeys,
   });

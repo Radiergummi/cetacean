@@ -52,13 +52,22 @@ export function useServiceDetail(id: string | undefined) {
   const [cpuActual, setCpuActual] = useState<number | undefined>();
   const [memActual, setMemActual] = useState<number | undefined>();
   const { items: recommendations } = useRecommendations();
-  const serviceRecommendations = useMemo(
-    () => recommendations.filter(({ targetId }) => targetId === id),
-    [recommendations, id],
-  );
 
   const abortRef = useRef<AbortController | null>(null);
   const sseAbortRef = useRef<AbortController | null>(null);
+
+  // The route parameter may be a name; everything addressed by ID waits for
+  // the fetch to answer. The key it resolved from is kept alongside it, so
+  // navigating to another service cannot fetch the previous one's side data.
+  const [resolved, setResolved] = useState<{ key: string; id: string } | null>(null);
+  const serviceId = resolved && resolved.key === id ? resolved.id : null;
+
+  // A recommendation names its target by ID, so a name-addressed page matches
+  // none of them until the fetch has answered.
+  const serviceRecommendations = useMemo(
+    () => recommendations.filter(({ targetId }) => targetId === serviceId),
+    [recommendations, serviceId],
+  );
 
   const applyDerivedState = useCallback((service: Service) => {
     const {
@@ -88,6 +97,7 @@ export function useServiceDetail(id: string | undefined) {
       api
         .service(id, signal)
         .then(({ data: response, allowedMethods: methods }) => {
+          setResolved({ key: id, id: response.service.ID });
           setService(response.service);
           setChanges(response.changes ?? []);
           setIntegrations(response.integrations ?? []);
@@ -105,7 +115,7 @@ export function useServiceDetail(id: string | undefined) {
 
   const fetchSideData = useCallback(
     (signal: AbortSignal) => {
-      if (!id) {
+      if (!serviceId) {
         return;
       }
 
@@ -115,10 +125,10 @@ export function useServiceDetail(id: string | undefined) {
         }
       };
 
-      api.serviceTasks(id, signal).then(setTasks).catch(ignore);
-      api.history({ resourceId: id, limit: 10 }, signal).then(setHistory).catch(ignore);
+      api.serviceTasks(serviceId, signal).then(setTasks).catch(ignore);
+      api.history({ resourceId: serviceId, limit: 10 }, signal).then(setHistory).catch(ignore);
     },
-    [id],
+    [serviceId],
   );
 
   const refetchService = useCallback(() => {
@@ -164,16 +174,26 @@ export function useServiceDetail(id: string | undefined) {
     abortRef.current = controller;
 
     fetchService(controller.signal);
-    fetchSideData(controller.signal);
 
     return () => controller.abort();
-  }, [id, fetchService, fetchSideData]);
+  }, [id, fetchService]);
 
-  useResourceStream(`/services/${id}`, (event) => {
-    if (!id) {
+  useEffect(() => {
+    if (!serviceId) {
       return;
     }
 
+    const controller = new AbortController();
+    fetchSideData(controller.signal);
+
+    return () => controller.abort();
+  }, [serviceId, fetchSideData]);
+
+  // Falls back to the route parameter so a failed fetch still has a stream to
+  // be revived by; the two agree whenever the URL is already canonical.
+  const streamKey = serviceId ?? id;
+
+  useResourceStream(streamKey ? `/services/${streamKey}` : undefined, (event) => {
     sseAbortRef.current?.abort();
     const controller = new AbortController();
     sseAbortRef.current = controller;

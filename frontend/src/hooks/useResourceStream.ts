@@ -28,11 +28,17 @@ export const sseEventTypes = [
  * Opens an EventSource to the given path and dispatches parsed events.
  * Returns connection status for use by the ConnectionStatus component.
  */
-export function useResourceStream(path: string, listener: SSEListener) {
+export function useResourceStream(path: string | undefined, listener: SSEListener) {
   const [connected, setConnected] = useState(true);
   const listenerRef = useLatestRef(listener);
 
   useEffect(() => {
+    // A detail page cannot name its stream until it knows the resource's
+    // canonical ID, and no path at all is how it says so.
+    if (!path) {
+      return;
+    }
+
     const handler = (event: MessageEvent) => {
       try {
         listenerRef.current(JSON.parse(event.data) as SSEEvent);

@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef } from "react";
  * and topology to trigger background refetches on data changes.
  */
 export function useDebouncedInvalidation(
-  ssePath: string,
+  ssePath: string | undefined,
   queryKeys: readonly (readonly unknown[])[],
   delay = 500,
 ) {
