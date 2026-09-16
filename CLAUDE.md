@@ -93,11 +93,13 @@ These bite across the codebase; the per-component rules live in `.claude/ARCHITE
   syntax, status codes. A shortcut that passes the tests we happened to write is still wrong.
 - Structured logging via `log/slog` throughout.
 - A requirement from an external specification belongs in `internal/spec/registry/`,
-  claimed by the test that exercises it with `spec.Satisfies` as that test's first
-  statement. `make spec` fails on a requirement nothing claims or a cited
-  specification nothing accounts for; `make spec-mutants` fails when a requirement's
-  mutants survive its claimants. The `mcp/sep-*.yaml` families are generated — edit
-  `scripts/spec-genmcp` and run `make spec-genmcp`, not the files.
+  claimed by the test that exercises it with `spec.Satisfies` as the first statement
+  of the test or subtest holding the `t` it is given. `make spec` fails on a
+  requirement nothing claims, a cited specification nothing accounts for, and — via
+  `scripts/spec-vet`, a `go vet` tool — a claim written in a form the gate cannot
+  read. `make spec-mutants` fails when a requirement's mutants survive its
+  claimants. The `mcp/sep-*.yaml` families are generated — edit `scripts/spec-genmcp`
+  and run `make spec-genmcp`, not the files.
 
 ## Code style
 

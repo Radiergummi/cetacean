@@ -5,6 +5,7 @@
 E2E_BINARY   := cetacean.cover
 E2E_RACE_BIN := cetacean.race
 E2E_COVERDIR := coverdata
+SPEC_VET     := spec-vet
 
 # Where a run writes what it exercised. Gitignored.
 SPEC_CLAIMS  := .spec-claims
@@ -171,9 +172,15 @@ cover:
 	@echo "HTML report: go tool cover -html=cover.out"
 
 ## Check the requirement registry against the test suite
+#
+# spec-vet holds callers to what the static scan can read, so the two run
+# together: a claim it refuses is one the scan silently does not see.
 spec:
 	go run ./scripts/spec-gate static
 	go run ./scripts/spec-gate sweep
+	@go build -o $(SPEC_VET) ./scripts/spec-vet
+	go vet -vettool=$(PWD)/$(SPEC_VET) ./...
+	go vet -tags e2e -vettool=$(PWD)/$(SPEC_VET) ./test/e2e/...
 
 ## Prove each requirement's tests refuse its mutants
 #
