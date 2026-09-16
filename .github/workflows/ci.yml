@@ -77,6 +77,11 @@ jobs:
           path: frontend
       - run: go build .
       - run: go test -race ./...
+      - run: go run ./scripts/spec-gate static
+      - run: go run ./scripts/spec-gate sweep
+      # The spec gate parses the e2e tree but cannot know it compiles: its
+      # build tag keeps it out of every other job.
+      - run: go vet -tags e2e ./test/e2e/...
 
   lint-go:
     needs: build-frontend
