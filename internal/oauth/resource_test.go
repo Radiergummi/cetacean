@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // The first configured resource is the default, so the order a deployment lists
@@ -147,6 +148,8 @@ func TestATokenDoesNotReachAResourceItWasNotMintedFor(t *testing.T) {
 // a configured one is a different resource and must be refused. Matching by
 // prefix here is the audience confusion the parameter exists to prevent.
 func TestAnIdentifierExtendingAConfiguredResourceIsRefused(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8707/single-resource-per-token")
+
 	s := newTestServer(t)
 
 	for _, suffix := range []string{
