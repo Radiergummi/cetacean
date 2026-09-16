@@ -1,0 +1,26 @@
+source: RFC 7636
+title: Proof Key for Code Exchange by OAuth Public Clients
+reviewed: 2026-09-16
+url: https://www.rfc-editor.org/rfc/rfc7636
+
+inventory:
+  from: Manual read of RFC 7636 §4; server-side normative statements only.
+  count: 2
+
+requirements:
+  - id: verifier-must-match-challenge
+    level: MUST
+    text: >-
+      If the values are not equal, an error response indicating "invalid_grant"
+      MUST be returned.
+    url: https://www.rfc-editor.org/rfc/rfc7636#section-4.6
+    discriminator: code_verifier does not match code_challenge
+
+  - id: verifier-character-set
+    level: MUST
+    text: >-
+      code_verifier = high-entropy cryptographic random STRING using the
+      unreserved characters [A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~" from
+      Section 2.3 of RFC 3986, with a minimum length of 43 characters and a
+      maximum length of 128 characters.
+    url: https://www.rfc-editor.org/rfc/rfc7636#section-4.1
