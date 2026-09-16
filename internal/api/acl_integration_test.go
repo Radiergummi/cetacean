@@ -1055,10 +1055,7 @@ func TestServiceScaleACL_DeniedByResourceName(t *testing.T) {
 			func(s swarm.Service) string { return s.Spec.Name },
 		),
 	)(
-		requireLevel(
-			config.OpsOperational,
-			config.OpsImpactful,
-		)(
+		handlersAt(config.OpsImpactful).requireLevel(config.OpsOperational)(
 			http.HandlerFunc(h.HandleScaleService),
 		),
 	)
@@ -1114,10 +1111,7 @@ func TestServiceScaleACL_AllowedByResourceName(t *testing.T) {
 			func(s swarm.Service) string { return s.Spec.Name },
 		),
 	)(
-		requireLevel(
-			config.OpsOperational,
-			config.OpsImpactful,
-		)(
+		handlersAt(config.OpsImpactful).requireLevel(config.OpsOperational)(
 			http.HandlerFunc(h.HandleScaleService),
 		),
 	)
@@ -1161,10 +1155,7 @@ func TestTaskRemoveACL_ResolvesToParentService(t *testing.T) {
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
 	handler := h.requireWriteACL(h.taskServiceResource)(
-		requireLevel(
-			config.OpsImpactful,
-			config.OpsImpactful,
-		)(
+		handlersAt(config.OpsImpactful).requireLevel(config.OpsImpactful)(
 			http.HandlerFunc(h.HandleRemoveTask),
 		),
 	)
@@ -1201,10 +1192,7 @@ func TestTaskRemoveACL_DeniedWhenParentServiceNotGranted(t *testing.T) {
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
 	handler := h.requireWriteACL(h.taskServiceResource)(
-		requireLevel(
-			config.OpsImpactful,
-			config.OpsImpactful,
-		)(
+		handlersAt(config.OpsImpactful).requireLevel(config.OpsImpactful)(
 			http.HandlerFunc(h.HandleRemoveTask),
 		),
 	)
@@ -1612,10 +1600,7 @@ func TestGetUnlockKey_BlockedAtOpsLevel0(t *testing.T) {
 		},
 	}))
 
-	handler := requireLevel(
-		config.OpsImpactful,
-		config.OpsReadOnly,
-	)(
+	handler := handlersAt(config.OpsReadOnly).requireLevel(config.OpsImpactful)(
 		http.HandlerFunc(h.HandleGetUnlockKey),
 	)
 

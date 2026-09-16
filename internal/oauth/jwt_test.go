@@ -24,10 +24,10 @@ const (
 )
 
 // None of these tests is testing the constructor's error.
-func mustTokenIssuer(t *testing.T, root []byte, issuer, audience string) *TokenIssuer {
+func mustTokenIssuer(t *testing.T, root []byte, issuer string) *TokenIssuer {
 	t.Helper()
 
-	ti, err := NewTokenIssuer(root, issuer, audience)
+	ti, err := NewTokenIssuer(root, issuer)
 	if err != nil {
 		t.Fatalf("NewTokenIssuer: %v", err)
 	}
@@ -36,18 +36,14 @@ func mustTokenIssuer(t *testing.T, root []byte, issuer, audience string) *TokenI
 }
 
 func TestJWTSignAndVerify(t *testing.T) {
-	issuer := mustTokenIssuer(t,
-		[]byte(testKey),
-		"https://cetacean.example.com",
-		"https://cetacean.example.com/resource",
-	)
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	claims := AccessTokenClaims{
 		Subject:  "user@example.com",
 		Groups:   []string{"ops", "dev"},
 		ClientID: "cetacean-client-abc",
 	}
 
-	token, err := issuer.IssueAccessToken(claims, time.Hour)
+	token, err := issuer.IssueAccessToken(claims, testTokenAudience, time.Hour)
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
@@ -55,7 +51,7 @@ func TestJWTSignAndVerify(t *testing.T) {
 		t.Fatal("token is empty")
 	}
 
-	parsed, err := issuer.VerifyAccessToken(token)
+	parsed, err := issuer.VerifyAccessToken(token, testTokenAudience)
 	if err != nil {
 		t.Fatalf("verify: %v", err)
 	}
@@ -71,67 +67,61 @@ func TestJWTSignAndVerify(t *testing.T) {
 }
 
 func TestJWTExpiredToken(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com", "resource")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, err := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "user@example.com", ClientID: "c1"},
+		testTokenAudience,
 		-time.Hour, // already expired
 	)
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
-	if _, err := issuer.VerifyAccessToken(token); err == nil {
+	if _, err := issuer.VerifyAccessToken(token, testTokenAudience); err == nil {
 		t.Fatal("expected error for expired token")
 	}
 }
 
 func TestJWTWrongSigningKey(t *testing.T) {
-	issuer1 := mustTokenIssuer(t,
-		[]byte("key-one-32-bytes-long-padding!!!"),
-		"https://cetacean.example.com",
-		"resource",
-	)
-	issuer2 := mustTokenIssuer(t,
-		[]byte("key-two-32-bytes-long-padding!!!"),
-		"https://cetacean.example.com",
-		"resource",
-	)
+	issuer1 := mustTokenIssuer(t, []byte("key-one-32-bytes-long-padding!!!"), testIssuer)
+	issuer2 := mustTokenIssuer(t, []byte("key-two-32-bytes-long-padding!!!"), testIssuer)
 	token, _ := issuer1.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
+		testTokenAudience,
 		time.Hour,
 	)
-	if _, err := issuer2.VerifyAccessToken(token); err == nil {
+	if _, err := issuer2.VerifyAccessToken(token, testTokenAudience); err == nil {
 		t.Fatal("expected error for wrong signing key")
 	}
 }
 
 func TestJWTWrongAudience(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com", "resource")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, _ := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
+		testTokenAudience,
 		time.Hour,
 	)
-	other := *issuer
-	other.Audience = "wrong"
-	if _, err := other.VerifyAccessToken(token); err == nil {
+	if _, err := issuer.VerifyAccessToken(token, testIssuer+"/other"); err == nil {
 		t.Fatal("expected error for wrong audience")
 	}
 }
 
 func TestJWTWrongIssuer(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com", "resource")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, _ := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
+		testTokenAudience,
 		time.Hour,
 	)
 	other := *issuer
 	other.Issuer = "https://attacker.example.com"
-	if _, err := other.VerifyAccessToken(token); err == nil {
+	if _, err := other.VerifyAccessToken(token, testTokenAudience); err == nil {
 		t.Fatal("expected error for wrong issuer")
 	}
 }
 
 func TestJWTMalformedToken(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com", "resource")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	// Each case names the sentinel it must surface, since callers map those to
 	// WWW-Authenticate error codes.
 	cases := []struct {
@@ -145,7 +135,7 @@ func TestJWTMalformedToken(t *testing.T) {
 		{"!!.!!.!!", ErrMalformedToken},  // three segments but header isn't valid base64
 	}
 	for _, c := range cases {
-		_, err := issuer.VerifyAccessToken(c.token)
+		_, err := issuer.VerifyAccessToken(c.token, testTokenAudience)
 		if err == nil {
 			t.Errorf("token %q: expected error, got nil", c.token)
 			continue
@@ -158,12 +148,12 @@ func TestJWTMalformedToken(t *testing.T) {
 
 func TestJWTMissingSigningKey(t *testing.T) {
 	issuer := &TokenIssuer{
-		Issuer:   "https://cetacean.example.com",
-		Audience: "resource",
+		Issuer: testIssuer,
 		// signer deliberately zero
 	}
 	if _, err := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e"},
+		testTokenAudience,
 		time.Hour,
 	); !errors.Is(
 		err,
@@ -171,15 +161,19 @@ func TestJWTMissingSigningKey(t *testing.T) {
 	) {
 		t.Errorf("IssueAccessToken with empty key: got %v, want ErrMissingKey", err)
 	}
-	if _, err := issuer.VerifyAccessToken("a.b.c"); !errors.Is(err, ErrMissingKey) {
+	if _, err := issuer.VerifyAccessToken("a.b.c", testTokenAudience); !errors.Is(
+		err,
+		ErrMissingKey,
+	) {
 		t.Errorf("VerifyAccessToken with empty key: got %v, want ErrMissingKey", err)
 	}
 }
 
 func TestJWTReusedJTIsAreDistinct(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com", "resource")
-	t1, _ := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e", ClientID: "c1"}, time.Hour)
-	t2, _ := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e", ClientID: "c1"}, time.Hour)
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
+	claims := AccessTokenClaims{Subject: "u@e", ClientID: "c1"}
+	t1, _ := issuer.IssueAccessToken(claims, testTokenAudience, time.Hour)
+	t2, _ := issuer.IssueAccessToken(claims, testTokenAudience, time.Hour)
 	if t1 == t2 {
 		t.Fatal("two issued tokens are byte-identical; jti must randomize")
 	}
@@ -209,16 +203,12 @@ func reheader(t *testing.T, issuer *TokenIssuer, token, header string) string {
 var requiredClaims = []string{"iss", "exp", "aud", "sub", "client_id", "iat", "jti"}
 
 func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
-	issuer := mustTokenIssuer(t,
-		[]byte(testKey),
-		"https://cetacean.example.com",
-		"https://cetacean.example.com/resource",
-	)
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
 		Subject:  "user@example.com",
 		ClientID: "cetacean-client-abc",
-	}, time.Hour)
+	}, testTokenAudience, time.Hour)
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
@@ -265,12 +255,12 @@ func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
 }
 
 func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com", "resource")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
 		Subject:  "u@e",
 		ClientID: "client-1",
-	}, time.Hour)
+	}, testTokenAudience, time.Hour)
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
@@ -289,7 +279,8 @@ func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
 
 	for _, c := range refused {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := issuer.VerifyAccessToken(reheader(t, issuer, token, c.header))
+			_, err := issuer.VerifyAccessToken(reheader(t, issuer, token, c.header),
+				testTokenAudience)
 			if !errors.Is(err, ErrMalformedToken) {
 				t.Errorf("got %v, want errors.Is(ErrMalformedToken)", err)
 			}
@@ -298,14 +289,16 @@ func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
 
 	t.Run("the media type spelled in full is accepted", func(t *testing.T) {
 		full := `{"alg":"ES256","typ":"application/at+jwt"}`
-		if _, err := issuer.VerifyAccessToken(reheader(t, issuer, token, full)); err != nil {
+		if _, err := issuer.VerifyAccessToken(
+			reheader(t, issuer, token, full), testTokenAudience,
+		); err != nil {
 			t.Errorf("application/at+jwt: %v, want accepted (RFC 9068 §4)", err)
 		}
 	})
 }
 
 func TestJWTRefusesToMintWithoutARequiredClaim(t *testing.T) {
-	issuer := mustTokenIssuer(t, []byte(testKey), "https://cetacean.example.com", "resource")
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 
 	// sub and client_id come from the caller, so they are the two that can
 	// arrive missing. No resource server may accept a token without them.
@@ -319,7 +312,9 @@ func TestJWTRefusesToMintWithoutARequiredClaim(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if _, err := issuer.IssueAccessToken(c.claims, time.Hour); !errors.Is(
+			if _, err := issuer.IssueAccessToken(
+				c.claims, testTokenAudience, time.Hour,
+			); !errors.Is(
 				err,
 				ErrIncompleteClaims,
 			) {
@@ -330,12 +325,12 @@ func TestJWTRefusesToMintWithoutARequiredClaim(t *testing.T) {
 }
 
 func TestTokenIsES256WithAKeyID(t *testing.T) {
-	issuer := mustTokenIssuer(t, testRoot, testIssuer, testTokenAudience)
+	issuer := mustTokenIssuer(t, testRoot, testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
 		Subject:  "alice",
 		ClientID: "https://client.example/id.json",
-	}, time.Hour)
+	}, testTokenAudience, time.Hour)
 	if err != nil {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}
@@ -370,12 +365,12 @@ func TestTokenIsES256WithAKeyID(t *testing.T) {
 }
 
 func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
-	issuer := mustTokenIssuer(t, testRoot, testIssuer, testTokenAudience)
+	issuer := mustTokenIssuer(t, testRoot, testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
 		Subject:  "alice",
 		ClientID: "https://client.example/id.json",
-	}, time.Hour)
+	}, testTokenAudience, time.Hour)
 	if err != nil {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}
@@ -393,7 +388,10 @@ func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
 
 	forged := signingInput + "." + base64.RawURLEncoding.EncodeToString(der)
 
-	if _, err := issuer.VerifyAccessToken(forged); !errors.Is(err, ErrInvalidSig) {
+	if _, err := issuer.VerifyAccessToken(forged, testTokenAudience); !errors.Is(
+		err,
+		ErrInvalidSig,
+	) {
 		t.Errorf("error = %v, want ErrInvalidSig", err)
 	}
 }
@@ -412,7 +410,7 @@ func TestPackedSignatureWithALeadingZeroInRVerifies(t *testing.T) {
 		candidate, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
 			Subject:  "alice",
 			ClientID: "https://client.example/id.json",
-		}, time.Hour)
+		}, s.resources.fallback, time.Hour)
 		if err != nil {
 			t.Fatalf("IssueAccessToken: %v", err)
 		}
@@ -454,13 +452,13 @@ func TestPackedSignatureWithALeadingZeroInRVerifies(t *testing.T) {
 }
 
 func TestVerifyRefusesHS256(t *testing.T) {
-	issuer := mustTokenIssuer(t, testRoot, testIssuer, testTokenAudience)
+	issuer := mustTokenIssuer(t, testRoot, testIssuer)
 
 	header := base64.RawURLEncoding.EncodeToString(
 		[]byte(`{"alg":"HS256","typ":"at+jwt"}`),
 	)
 
-	_, err := issuer.VerifyAccessToken(header + ".e30.c2ln")
+	_, err := issuer.VerifyAccessToken(header+".e30.c2ln", testTokenAudience)
 	if !errors.Is(err, ErrMalformedToken) {
 		t.Errorf("error = %v, want ErrMalformedToken", err)
 	}

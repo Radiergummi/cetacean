@@ -10,17 +10,32 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// requireLevel returns middleware that blocks requests when the configured
-// operations level is below the required level for this endpoint.
-func requireLevel(required, configured config.OperationsLevel) Constructor {
+// levelFor is the operations tier this caller may reach. A token is a
+// credential left on a device, so a deployment may hold it below the tier it
+// runs at; anything else is the deployment's own.
+func (h *Handlers) levelFor(r *http.Request) config.OperationsLevel {
+	if auth.IdentityFromContext(r.Context()).FromToken() {
+		return h.tokenOperationsLevel
+	}
+
+	return h.operationsLevel
+}
+
+// requireLevel refuses an operation the caller's tier does not reach. The
+// comparison is per request rather than per route: two callers on one route can
+// stand at different tiers.
+func (h *Handlers) requireLevel(required config.OperationsLevel) Constructor {
 	return func(next http.Handler) http.Handler {
-		if configured >= required {
-			return next
-		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if level := h.levelFor(r); level >= required {
+				next.ServeHTTP(w, r)
+
+				return
+			}
+
 			writeErrorCode(w, r, "OPS001",
 				"this operation requires operations level "+strconv.Itoa(int(required))+
-					", but the server is configured at level "+strconv.Itoa(int(configured)))
+					", but the caller is at level "+strconv.Itoa(int(h.levelFor(r))))
 		})
 	}
 }

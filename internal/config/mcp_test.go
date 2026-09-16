@@ -127,9 +127,16 @@ func TestMCPEffectiveOperationsLevel(t *testing.T) {
 		t.Errorf("OpsInherit should fall back to global, got %v", got)
 	}
 
-	explicit := MCPConfig{OperationsLevel: OpsConfiguration}
-	if got := explicit.EffectiveOperationsLevel(OpsImpactful); got != OpsConfiguration {
-		t.Errorf("explicit level should override global, got %v", got)
+	lower := MCPConfig{OperationsLevel: OpsConfiguration}
+	if got := lower.EffectiveOperationsLevel(OpsImpactful); got != OpsConfiguration {
+		t.Errorf("a lower level should narrow the global, got %v", got)
+	}
+
+	// A transport override is a ceiling, not a second dial: reaching past the
+	// tier the deployment runs at would grant what the deployment refused.
+	higher := MCPConfig{OperationsLevel: OpsImpactful}
+	if got := higher.EffectiveOperationsLevel(OpsOperational); got != OpsOperational {
+		t.Errorf("a higher level should not raise the global, got %v", got)
 	}
 }
 

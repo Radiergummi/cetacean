@@ -253,6 +253,7 @@ type oauthDiscovery struct {
 	tokenURL      string
 	revokeURL     string
 	registerURL   string
+	jwksURL       string
 	cimdSupported bool
 	prmURL        string
 	metadataBody  string
@@ -263,6 +264,7 @@ type asMetadataDocument struct {
 	AuthorizationEndpoint                  string   `json:"authorization_endpoint"`
 	TokenEndpoint                          string   `json:"token_endpoint"`
 	RevocationEndpoint                     string   `json:"revocation_endpoint"`
+	JWKSURI                                string   `json:"jwks_uri"`
 	RegistrationEndpoint                   string   `json:"registration_endpoint"`
 	ClientIDMetadataDocumentSupported      bool     `json:"client_id_metadata_document_supported"`
 	CodeChallengeMethodsSupported          []string `json:"code_challenge_methods_supported"`
@@ -309,8 +311,10 @@ func discoverOAuth(t *testing.T, proc *sut.Process) oauthDiscovery {
 		t.Fatalf("WWW-Authenticate = %q carries no resource_metadata parameter", header)
 	}
 
-	if got := params["error"]; got != "invalid_token" {
-		t.Errorf("WWW-Authenticate error = %q, want invalid_token", got)
+	// No token was sent, and RFC 6750 §3.1 keeps an error code out of the
+	// challenge then: nothing is wrong with a credential that never arrived.
+	if got, ok := params["error"]; ok {
+		t.Errorf("WWW-Authenticate carries error=%q for a request with no token", got)
 	}
 
 	prmOutcome := oauthGet(t, proc, prmURL, readPersona{})
@@ -346,6 +350,7 @@ func discoverOAuth(t *testing.T, proc *sut.Process) oauthDiscovery {
 		tokenURL:      metadata.TokenEndpoint,
 		revokeURL:     metadata.RevocationEndpoint,
 		registerURL:   metadata.RegistrationEndpoint,
+		jwksURL:       metadata.JWKSURI,
 		cimdSupported: metadata.ClientIDMetadataDocumentSupported,
 		prmURL:        prmURL,
 		metadataBody:  asOutcome.body,
@@ -2034,11 +2039,18 @@ func TestMCPOAuthPublishesItsVerificationKey(t *testing.T) {
 	fixtures.DeployBaseline(t, env)
 
 	proc := startOAuth(t, env, t.TempDir(), nil)
+	discovery := discoverOAuth(t, proc)
 
-	outcome := oauthGet(t, proc, proc.BaseURL+"/oauth/jwks", readPersona{})
+	// Followed from jwks_uri rather than a path spelled here: a client has only
+	// the advertised URL, so that is the one that has to resolve.
+	if discovery.jwksURL == "" {
+		t.Fatal("AS metadata advertises no jwks_uri, so a client cannot verify a token")
+	}
+
+	outcome := oauthGet(t, proc, discovery.jwksURL, readPersona{})
 	if outcome.status != http.StatusOK {
-		t.Fatalf("GET /oauth/jwks = %d, want 200 without credentials; body: %s",
-			outcome.status, outcome.body)
+		t.Fatalf("GET %s = %d, want 200 without credentials; body: %s",
+			discovery.jwksURL, outcome.status, outcome.body)
 	}
 
 	var set struct {

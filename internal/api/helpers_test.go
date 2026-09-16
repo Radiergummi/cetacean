@@ -22,17 +22,18 @@ import (
 )
 
 type testHandlersConfig struct {
-	cache           *cache.Cache
-	broadcaster     *sse.Broadcaster
-	dockerClient    DockerLogStreamer
-	systemClient    DockerSystemClient
-	writeClient     DockerWriteClient
-	pluginClient    DockerPluginClient
-	ready           <-chan struct{}
-	promClient      *prometheus.Client
-	operationsLevel config.OperationsLevel
-	aclEval         *acl.Evaluator
-	recEngine       *recommendations.Engine
+	cache                *cache.Cache
+	broadcaster          *sse.Broadcaster
+	dockerClient         DockerLogStreamer
+	systemClient         DockerSystemClient
+	writeClient          DockerWriteClient
+	pluginClient         DockerPluginClient
+	ready                <-chan struct{}
+	promClient           *prometheus.Client
+	operationsLevel      config.OperationsLevel
+	tokenOperationsLevel *config.OperationsLevel
+	aclEval              *acl.Evaluator
+	recEngine            *recommendations.Engine
 }
 
 type testHandlersOption func(*testHandlersConfig)
@@ -47,6 +48,12 @@ func withWriteClient(wc DockerWriteClient) testHandlersOption {
 
 func withOpsLevel(level config.OperationsLevel) testHandlersOption {
 	return func(cfg *testHandlersConfig) { cfg.operationsLevel = level }
+}
+
+// withTokenOpsLevel holds a token-authenticated caller below the deployment's
+// own tier, which is what a deployment configuring the ceiling gets.
+func withTokenOpsLevel(level config.OperationsLevel) testHandlersOption {
+	return func(cfg *testHandlersConfig) { cfg.tokenOperationsLevel = &level }
 }
 
 func withPromClient(pc *prometheus.Client) testHandlersOption {
@@ -97,7 +104,7 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		opt(&cfg)
 	}
 
-	return NewHandlers(
+	handlers := NewHandlers(
 		cfg.cache,
 		cfg.broadcaster,
 		cfg.dockerClient,
@@ -110,6 +117,12 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		cfg.recEngine,
 		cfg.aclEval,
 	)
+
+	if cfg.tokenOperationsLevel != nil {
+		handlers.SetTokenOperationsLevel(*cfg.tokenOperationsLevel)
+	}
+
+	return handlers
 }
 
 // decodeZstd decompresses a zstd response body, failing the test if it is

@@ -125,7 +125,7 @@ func (h *Handlers) setAllow(
 
 	hasPatch := false
 	for _, spec := range resourceWriteMethods[resourceType] {
-		if h.operationsLevel >= spec.tier && canWrite {
+		if h.levelFor(r) >= spec.tier && canWrite {
 			methods = append(methods, spec.method)
 			if spec.method == "PATCH" {
 				hasPatch = true
@@ -153,7 +153,7 @@ func (h *Handlers) setAllowSubResource(
 	resourceExpr string,
 ) {
 	methods := []string{"GET", "HEAD"}
-	if h.operationsLevel >= tier {
+	if h.levelFor(r) >= tier {
 		id := auth.IdentityFromContext(r.Context())
 		if h.acl.Can(id, "write", resourceExpr) {
 			methods = append(methods, method)
@@ -175,7 +175,7 @@ var listCreateMethods = map[string]config.OperationsLevel{
 func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resourceType string) {
 	methods := []string{"GET", "HEAD"}
 
-	if tier, ok := listCreateMethods[resourceType]; ok && h.operationsLevel >= tier {
+	if tier, ok := listCreateMethods[resourceType]; ok && h.levelFor(r) >= tier {
 		id := auth.IdentityFromContext(r.Context())
 		if h.acl.Can(id, "write", resourceType+":*") {
 			methods = append(methods, "POST")

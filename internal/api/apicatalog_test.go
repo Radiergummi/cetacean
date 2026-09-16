@@ -231,12 +231,22 @@ func TestAPICatalogCarriesItemLinks(t *testing.T) {
 // TestAPICatalogOmitsUnmountedAPIs holds the catalog to what the process
 // serves. A catalog keyed on "is MCP on" alone would advertise a metadata
 // document that does not exist when auth.mode is "none".
+//
+// Each resource's document is asserted by its full URL, not by the shared
+// prefix: one is the other's prefix, so a substring check cannot tell whether a
+// client would be sent to the document describing the endpoint it asked about.
 func TestAPICatalogOmitsUnmountedAPIs(t *testing.T) {
+	const (
+		apiMeta = `"http://cetacean.example.com/.well-known/oauth-protected-resource"`
+		mcpMeta = `"http://cetacean.example.com/.well-known/oauth-protected-resource/mcp"`
+	)
+
 	tests := []struct {
 		name        string
 		mounts      catalogMounts
 		wantMCPItem bool
-		wantMetaDoc bool
+		wantAPIMeta bool
+		wantMCPMeta bool
 	}{
 		{
 			name:   "neither mounted",
@@ -248,10 +258,32 @@ func TestAPICatalogOmitsUnmountedAPIs(t *testing.T) {
 			wantMCPItem: true,
 		},
 		{
-			name:        "MCP with an authorization server",
+			name:        "MCP with an authorization server, API tokens off",
 			mounts:      catalogMounts{mcp: true, oauthMetadata: true},
 			wantMCPItem: true,
-			wantMetaDoc: true,
+			wantMCPMeta: true,
+		},
+		{
+			name:        "both resources offered",
+			mounts:      catalogMounts{mcp: true, oauthMetadata: true, apiTokens: true},
+			wantMCPItem: true,
+			wantAPIMeta: true,
+			wantMCPMeta: true,
+		},
+		{
+			name:        "the API alone is a resource",
+			mounts:      catalogMounts{oauthMetadata: true, apiTokens: true},
+			wantAPIMeta: true,
+		},
+		{
+			// The document only exists because the authorization server mounted
+			// it, so naming it without one would advertise a 404. main.go cannot
+			// currently produce this combination; the guard is what keeps that
+			// true of the catalog rather than of the wiring.
+			name:   "API tokens without an authorization server names nothing",
+			mounts: catalogMounts{mcp: true, apiTokens: true},
+
+			wantMCPItem: true,
 		},
 	}
 
@@ -270,12 +302,14 @@ func TestAPICatalogOmitsUnmountedAPIs(t *testing.T) {
 				t.Errorf("names /mcp = %v, want %v; body: %s", names, tt.wantMCPItem, body)
 			}
 
-			meta := strings.Contains(body, "oauth-protected-resource")
-			if meta != tt.wantMetaDoc {
-				t.Errorf(
-					"names the protected resource metadata = %v, want %v; body: %s",
-					meta, tt.wantMetaDoc, body,
-				)
+			if got := strings.Contains(body, apiMeta); got != tt.wantAPIMeta {
+				t.Errorf("names the API's metadata = %v, want %v; body: %s",
+					got, tt.wantAPIMeta, body)
+			}
+
+			if got := strings.Contains(body, mcpMeta); got != tt.wantMCPMeta {
+				t.Errorf("names /mcp's metadata = %v, want %v; body: %s",
+					got, tt.wantMCPMeta, body)
 			}
 		})
 	}

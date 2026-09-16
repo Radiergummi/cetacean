@@ -88,6 +88,11 @@ type RouterConfig struct {
 	// endpoints (/.well-known/*, /oauth/*) on the mux. Wired by main.go from
 	// internal/oauth.
 	OAuthRoutes func(mux *http.ServeMux, basePath string)
+
+	// APITokens lets the auth middleware accept a bearer token this deployment's
+	// authorization server issued for the API. Its zero value accepts none, which
+	// is every deployment that runs no such server or has oauth.api_tokens off.
+	APITokens auth.APITokens
 }
 
 // listFeeds builds feedHandlers for a resource list endpoint. Every one of
@@ -162,6 +167,14 @@ func (r *routeRecorder) route(req *http.Request) string {
 	return pattern
 }
 
+// serves reports whether a route of its own answers req, rather than the
+// catch-all standing behind every path no route claims.
+func (r *routeRecorder) serves(req *http.Request) bool {
+	pattern := r.route(req)
+
+	return pattern != "" && pattern != "/"
+}
+
 func NewRouter(cfg RouterConfig) http.Handler {
 	handler, _ := newRouter(cfg)
 
@@ -187,9 +200,9 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 
 	mux := &routeRecorder{mux: http.NewServeMux()}
 
-	tier1 := requireLevel(config.OpsOperational, h.operationsLevel)
-	tier2 := requireLevel(config.OpsConfiguration, h.operationsLevel)
-	tier3 := requireLevel(config.OpsImpactful, h.operationsLevel)
+	tier1 := h.requireLevel(config.OpsOperational)
+	tier2 := h.requireLevel(config.OpsConfiguration)
+	tier3 := h.requireLevel(config.OpsImpactful)
 
 	// ACL wrappers for write endpoints.
 	svcACL := h.requireWriteACL(
@@ -306,6 +319,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET "+apiCatalogPath, HandleAPICatalog(catalogMounts{
 		mcp:           cfg.MCPHandler != nil,
 		oauthMetadata: cfg.OAuthRoutes != nil,
+		apiTokens:     cfg.APITokens.Verifier != nil,
 	}))
 	mux.HandleFunc("GET /api/errors", contentNegotiated(HandleErrorIndex, feedHandlers{}, spa))
 	mux.HandleFunc(
@@ -912,7 +926,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		securityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),
 		cors(cfg.CORS),
 		crossOriginProtection(cfg.CORS, cfg.PublicURL),
-		auth.Middleware(authProvider),
+		auth.Middleware(authProvider, cfg.APITokens),
 		negotiate,
 		requireReady(h, mux),
 		discoveryLinks,
@@ -931,7 +945,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 
 	return publicURLMiddleware(
 		cfg.PublicURL,
-		basePathMiddleware(cfg.BasePath, stack.Then(mux)),
+		basePathMiddleware(cfg.BasePath, mux, stack.Then(mux)),
 	), mux.patterns
 }
 

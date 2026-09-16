@@ -102,13 +102,14 @@ detection banner that tells you which exporter is missing.
 
 ## Add authentication
 
-By default anyone who can reach Cetacean can read everything and perform operational writes (scale, update image,
-roll back, restart), so do this before exposing it beyond a trusted network. Set [`auth.mode`][auth.mode] to
-`oidc`, `tailscale`, `cert`, or `headers`; see [Authentication][authentication] for the settings each mode needs.
-TLS termination is available in any mode via [`tls.cert`][tls.cert] and [`tls.key`][tls.key].
+By default anyone who can reach Cetacean can read everything, so do this before exposing it beyond a trusted
+network. Set [`auth.mode`][auth.mode] to `oidc`, `tailscale`, `cert`, or `headers`; see
+[Authentication][authentication] for the settings each mode needs. TLS termination is available in any mode via
+[`tls.cert`][tls.cert] and [`tls.key`][tls.key].
 
 Independently of who is signed in, [`server.operations_level`][server.operations_level] caps what Cetacean may
-change at all. Set it to `0` for a read-only deployment.
+change at all. It is `0` — read-only — until you raise it, so a deployment that writes anything says so on
+purpose. Set it to `1` for operational writes (scale, update image, roll back, restart).
 
 ## When something is wrong
 
