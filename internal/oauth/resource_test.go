@@ -142,3 +142,25 @@ func TestATokenDoesNotReachAResourceItWasNotMintedFor(t *testing.T) {
 		})
 	}
 }
+
+// RFC 8707 binds a token to one resource, so an identifier that merely extends
+// a configured one is a different resource and must be refused. Matching by
+// prefix here is the audience confusion the parameter exists to prevent.
+func TestAnIdentifierExtendingAConfiguredResourceIsRefused(t *testing.T) {
+	s := newTestServer(t)
+
+	for _, suffix := range []string{
+		"/not-a-resource",
+		"-suffixed",
+		"/../elsewhere",
+	} {
+		t.Run(suffix, func(t *testing.T) {
+			raw := s.resources.fallback + suffix
+
+			got, err := s.resources.effectiveResource([]string{raw}, false)
+			if err == nil {
+				t.Fatalf("%q was accepted and resolved to %q", raw, got)
+			}
+		})
+	}
+}
