@@ -554,3 +554,33 @@ func TestTheAuthorizationCodeIsBoundToItsClientAndRedirectURI(t *testing.T) {
 		assert(t, exchange(t, "test-client", "http://localhost/elsewhere"), "redirect_uri mismatch")
 	})
 }
+
+// RFC 8414 §3.1 has the document queried with GET. The discovery routes are
+// registered method-qualified, so a write to one is refused rather than
+// answered with a metadata document.
+func TestTheMetadataDocumentIsServedOnlyForGET(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8414/queried-with-get")
+
+	s := newTestServer(t)
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux, "")
+
+	for _, method := range []string{
+		http.MethodPost,
+		http.MethodPut,
+		http.MethodDelete,
+	} {
+		t.Run(method, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, httptest.NewRequest(
+				method,
+				"/.well-known/oauth-authorization-server",
+				nil,
+			))
+
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Errorf("status = %d, want 405", rec.Code)
+			}
+		})
+	}
+}
