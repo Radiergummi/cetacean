@@ -535,3 +535,31 @@ func TestNegotiate_YAMLSuffixOnlyWhereYAMLIsServed(t *testing.T) {
 		}
 	}
 }
+
+// A middleware that matches on a path matches the one the mux will route, so
+// negotiate strips the suffix before any of them run. /-/resync is the case
+// that proves it: it is the one exception to the /-/ exemption, and with the
+// suffix still on, the prefix matched and the exception did not.
+func TestAnExtensionSuffixDoesNotSkipAuthentication(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{func(cfg *RouterConfig) { cfg.AuthProvider = &refusingProvider{} }},
+		withCache(cache.New(nil)),
+	)
+
+	for _, path := range []string{
+		"/-/resync",
+		"/-/resync.json",
+		"/-/resync.html",
+		"/-/resync.csv",
+	} {
+		t.Run(path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path, nil))
+
+			if w.Code != http.StatusUnauthorized {
+				t.Errorf("status = %d, want 401: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
