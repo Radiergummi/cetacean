@@ -196,3 +196,84 @@ func TestCertProvider_MalformedHeader(t *testing.T) {
 		})
 	}
 }
+
+// RFC 8941 §3.3.5 puts the floor for a Byte Sequence at 16384 octets after
+// decoding. A DER certificate with a large extension reaches that, and a cap
+// short of it would refuse a legitimate client.
+func TestDecodeClientCertTakes16384Octets(t *testing.T) {
+	spec.Satisfies(t, "http/rfc8941/byte-sequences-hold-16384-octets")
+
+	raw := make([]byte, 16384)
+	for i := range raw {
+		raw[i] = byte(i)
+	}
+
+	got, err := decodeClientCert(":" + base64.StdEncoding.EncodeToString(raw) + ":")
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != len(raw) {
+		t.Errorf("decoded %d octets, want %d", len(got), len(raw))
+	}
+}
+
+// RFC 8941 §4.2.7 asks a parser not to fail on non-zero pad bits, and to fail
+// on the base64 alphabet and on line feeds. Padding and line feeds are where
+// encoding/base64 and the specification part company.
+func TestDecodeClientCertBase64Tolerances(t *testing.T) {
+	t.Run("non-zero pad bits are accepted", func(t *testing.T) {
+		spec.Satisfies(t, "http/rfc8941/non-zero-pad-bits-do-not-fail")
+
+		if _, err := decodeClientCert(":/x==:"); err != nil {
+			t.Errorf("non-zero pad bits refused: %v", err)
+		}
+	})
+
+	t.Run("missing padding is refused", func(t *testing.T) {
+		spec.Satisfies(t, "http/rfc8941/missing-padding-does-not-fail")
+
+		if _, err := decodeClientCert(":aGk:"); err == nil {
+			t.Error("unpadded base64 was accepted; the deferral is stale")
+		}
+	})
+
+	t.Run("a character outside the alphabet is refused", func(t *testing.T) {
+		spec.Satisfies(t, "http/rfc8941/the-alphabet-and-line-feeds-are-enforced")
+
+		if _, err := decodeClientCert(":aGk*:"); err == nil {
+			t.Error("a character outside the base64 alphabet was accepted")
+		}
+	})
+
+	t.Run("a line feed is accepted", func(t *testing.T) {
+		spec.Satisfies(t, "http/rfc8941/the-alphabet-and-line-feeds-are-enforced")
+
+		if _, err := decodeClientCert(":aG\nk=:"); err != nil {
+			t.Errorf("a line feed was refused: %v; the deferral is stale", err)
+		}
+	})
+}
+
+// RFC 8941 §4.2 wants a field whose parse failed treated as absent, not as
+// whatever the failed parse left behind. The decoder is where that has to
+// hold: x509 refuses the bytes downstream either way, which would let a
+// decoder that handed back the raw value pass unnoticed.
+func TestDecodeClientCertYieldsNothingWhenItFails(t *testing.T) {
+	spec.Satisfies(t, "http/rfc8941/a-failed-parse-ignores-the-field")
+
+	for name, value := range map[string]string{
+		"not base64":        ":not base64!:",
+		"no colons":         "aGk=",
+		"no trailing colon": ":aGk=",
+	} {
+		t.Run(name, func(t *testing.T) {
+			der, err := decodeClientCert(value)
+			if err == nil {
+				t.Fatalf("decoded %q as %q", value, der)
+			}
+			if der != nil {
+				t.Errorf("a failed parse returned %d octets, want none", len(der))
+			}
+		})
+	}
+}
