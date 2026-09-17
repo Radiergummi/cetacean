@@ -19,9 +19,18 @@ import (
 	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestPreconditionOnServiceEnv(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9110/if-match-is-evaluated-before-the-method",
+		"http/rfc9110/a-false-if-match-stops-the-method",
+		"http/rfc9110/a-failed-precondition-may-answer-412",
+		"http/rfc9110/preconditions-are-evaluated-before-the-action",
+	)
+
 	// stubEnvWriteClient lets a PATCH that reaches the handler actually
 	// succeed, so "admitted"/"unaffected" subtests can assert the real 200
 	// rather than merely "not 412" — a check a handler-side panic would pass
@@ -628,4 +637,42 @@ func newSeededTestRouterWithConfig(
 			withDockerClient(&mockLogStreamer{}),
 		}, opts...)...,
 	)
+}
+
+// RFC 9110 §13.2.1 says to ignore every precondition when the same request
+// without them would not have answered 2xx or 412 — so a write against a
+// resource that is gone should answer 404, conditional or not. This pins the
+// 412 it answers instead, which comes from reading §13.2.2's precedence list
+// on its own.
+func TestAPreconditionOnAMissingResourceAnswers412(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/preconditions-are-ignored-when-the-answer-is-not-2xx")
+
+	router := newTestRouterWithCache(t, cache.New(nil))
+
+	unconditional := httptest.NewRequest(
+		http.MethodPatch, "/services/gone/env", strings.NewReader(`{"A":"2"}`),
+	)
+	unconditional.Header.Set("Content-Type", "application/json")
+	plain := httptest.NewRecorder()
+	router.ServeHTTP(plain, unconditional)
+
+	if plain.Code != http.StatusNotFound {
+		t.Fatalf("without a precondition the answer is %d, not 404; this test proves nothing",
+			plain.Code)
+	}
+
+	conditional := httptest.NewRequest(
+		http.MethodPatch, "/services/gone/env", strings.NewReader(`{"A":"2"}`),
+	)
+	conditional.Header.Set("Content-Type", "application/json")
+	conditional.Header.Set("If-Match", `"whatever"`)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, conditional)
+
+	if rec.Code == http.StatusNotFound {
+		t.Error("the precondition was ignored and the 404 stood; the deferral is stale")
+	}
+	if rec.Code != http.StatusPreconditionFailed {
+		t.Errorf("status = %d, want 412; the deferral no longer describes the code", rec.Code)
+	}
 }

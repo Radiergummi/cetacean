@@ -709,6 +709,8 @@ func TestUnauthorizedHeader(t *testing.T) {
 }
 
 func TestHTTPQuotedString(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/a-quoted-pair-only-escapes-what-it-must")
+
 	cases := []struct {
 		in, want string
 	}{
