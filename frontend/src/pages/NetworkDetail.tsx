@@ -120,7 +120,6 @@ export default function NetworkDetail() {
     id,
     api.network,
     "/networks",
-    { idOf: (detail) => detail.network.Id },
   );
 
   if (error) {

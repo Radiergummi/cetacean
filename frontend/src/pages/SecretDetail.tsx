@@ -11,7 +11,6 @@ export default function SecretDetail() {
     id,
     api.secret,
     "/secrets",
-    { idOf: (detail) => detail.secret.ID },
   );
 
   if (error) {

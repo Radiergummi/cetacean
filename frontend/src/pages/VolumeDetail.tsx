@@ -26,7 +26,6 @@ export default function VolumeDetail() {
     name,
     api.volume,
     "/volumes",
-    { idOf: (detail) => detail.volume.Name },
   );
 
   if (error) {

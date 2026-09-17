@@ -55,10 +55,7 @@ export default function NodeDetail() {
     history,
     error,
     allowedMethods,
-  } = useDetailResource<Node>(id, api.node, "/nodes", {
-    idOf: (node) => node.ID,
-    extraQueryKeys,
-  });
+  } = useDetailResource<Node>(id, api.node, "/nodes", { extraQueryKeys });
 
   const { data: tasks } = useQuery({
     queryKey: ["node-tasks", id],

@@ -15,7 +15,6 @@ export default function ConfigDetail() {
     id,
     api.config,
     "/configs",
-    { idOf: (detail) => detail.config.ID },
   );
 
   if (error) {

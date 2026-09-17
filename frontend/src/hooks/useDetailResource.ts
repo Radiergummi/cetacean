@@ -4,9 +4,7 @@ import { useDebouncedInvalidation } from "./useDebouncedInvalidation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
-export interface DetailResourceOptions<T> {
-  /** Where the canonical identifier sits on the fetched resource. */
-  idOf: (data: T) => string;
+export interface DetailResourceOptions {
   /** Fetch history for this resource (default: true). */
   history?: boolean | undefined;
   /** Additional React Query keys to invalidate on SSE events. */
@@ -17,10 +15,10 @@ export function useDetailResource<T>(
   key: string | undefined,
   fetchFn: (key: string, signal?: AbortSignal) => Promise<FetchResult<T>>,
   collection: string,
-  options: DetailResourceOptions<T>,
+  options?: DetailResourceOptions | undefined,
 ) {
   const queryClient = useQueryClient();
-  const { idOf, extraQueryKeys, history: fetchHistory = true } = options;
+  const { extraQueryKeys, history: fetchHistory = true } = options ?? {};
 
   // The route parameter keys the queries: it is unique per URL and known on
   // the first render, where the canonical ID is not.
@@ -34,15 +32,12 @@ export function useDetailResource<T>(
 
   const data = resourceQuery.data?.data ?? null;
 
-  // The SSE path is the one thing that still needs the canonical ID: an
-  // EventSource would otherwise have to follow the redirect itself.
-  const canonicalId = data ? idOf(data) : null;
-
-  // Until there is an ID the stream falls back to the route path: a failed
-  // fetch exhausts its retries, and the reconnect's sync is what revives the
-  // page. The two spellings agree whenever the URL is already canonical, so
-  // the common request never reopens the stream.
-  const ssePath = canonicalId ? `${collection}/${canonicalId}` : routePath;
+  // The stream is the one thing that still needs the canonical spelling: an
+  // EventSource would otherwise have to follow the redirect itself. The
+  // response names itself in `@id`, so no page has to say where its type keeps
+  // an ID. Until it answers the route path stands in — a failed fetch exhausts
+  // its retries, and the reconnect's sync is what revives the page.
+  const ssePath = resourceQuery.data?.canonicalPath ?? routePath;
 
   // History resolves its own names now, given the type to resolve against, so
   // it asks alongside the first fetch rather than behind it. The singular is

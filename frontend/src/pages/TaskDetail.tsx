@@ -50,10 +50,7 @@ export default function TaskDetail() {
     data: task,
     error,
     allowedMethods,
-  } = useDetailResource<Task>(id, api.task, "/tasks", {
-    idOf: (task) => task.ID,
-    history: false,
-  });
+  } = useDetailResource<Task>(id, api.task, "/tasks", { history: false });
 
   const [service, setService] = useState<Service | null>(null);
   const [node, setNode] = useState<Node | null>(null);
