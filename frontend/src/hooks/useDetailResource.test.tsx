@@ -50,13 +50,15 @@ function renderForKey(key: string) {
 }
 
 describe("useDetailResource", () => {
-  it("requests history for the canonical ID, not the route parameter", async () => {
+  // The identifier travels in a query parameter no redirect rewrites, so the
+  // server resolves it — but only against a type, which is what must be sent.
+  it("asks history for the route parameter and the type to resolve it against", async () => {
     renderForKey("worker-2");
 
     await waitFor(() => expect(api.history).toHaveBeenCalled());
 
     expect(api.history).toHaveBeenCalledWith(
-      expect.objectContaining({ resourceId: "n0d3id" }),
+      expect.objectContaining({ resourceId: "worker-2", type: "node" }),
       expect.anything(),
     );
   });
@@ -81,7 +83,9 @@ describe("useDetailResource", () => {
     expect(streamPaths.at(-1)).toBe("/nodes/worker-2");
   });
 
-  it("names neither stream nor history while the first fetch is in flight", async () => {
+  // Serializing history behind the fetch would cost a round-trip on every
+  // detail page to serve the name-addressed load, which is the rare one.
+  it("asks for history without waiting for the first fetch to answer", async () => {
     let settle = (): void => {};
     vi.mocked(api.node).mockReturnValue(
       new Promise((resolve) => {
@@ -91,14 +95,11 @@ describe("useDetailResource", () => {
 
     renderForKey("worker-2");
 
-    // History is what must wait: it takes its identifier in a query parameter
-    // no redirect rewrites, so asking before the ID is known returns nothing.
-    expect(api.history).not.toHaveBeenCalled();
+    await waitFor(() => expect(api.history).toHaveBeenCalled());
     expect(streamPaths.at(-1)).toBe("/nodes/worker-2");
 
     settle();
 
-    await waitFor(() => expect(api.history).toHaveBeenCalled());
-    expect(streamPaths.at(-1)).toBe("/nodes/n0d3id");
+    await waitFor(() => expect(streamPaths.at(-1)).toBe("/nodes/n0d3id"));
   });
 });

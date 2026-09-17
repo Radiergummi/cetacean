@@ -110,26 +110,10 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 
 		id, resource, found, err := resolve(h.cache, identifier)
 
-		if ambiguous, ok := errors.AsType[*cache.AmbiguousNameError](err); ok {
-			// The report names every candidate ID, so it is cut to the ones
-			// this caller may read. A type-level grant answers "could this
-			// identity ever read a node", a different question. Fewer than two
-			// survivors is no ambiguity the caller can see.
-			identity := auth.IdentityFromContext(r.Context())
-			readable := acl.Filter(
-				h.acl, identity, "read", ambiguous.IDs,
-				func(id string) string { return singularType[collection] + ":" + id },
-			)
-			if len(readable) < 2 {
+		if _, ok := errors.AsType[*cache.AmbiguousNameError](err); ok {
+			if !h.reportAmbiguousName(w, r, singularType[collection], err) {
 				next.ServeHTTP(w, r)
-
-				return
 			}
-
-			writeErrorCode(w, r, "API015", (&cache.AmbiguousNameError{
-				Name: ambiguous.Name,
-				IDs:  readable,
-			}).Error())
 
 			return
 		}
@@ -165,4 +149,36 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 		w.Header().Set("Location", target)
 		w.WriteHeader(http.StatusTemporaryRedirect)
 	})
+}
+
+// reportAmbiguousName answers a name matching several resources of one type
+// with API015, naming only the candidates this caller may read: a type-level
+// grant answers "could this identity ever read a node", a different question.
+// Fewer than two survivors is no ambiguity the caller can see, so it reports
+// nothing and says so, leaving the request to be answered as it stands.
+func (h *Handlers) reportAmbiguousName(
+	w http.ResponseWriter,
+	r *http.Request,
+	singular string,
+	err error,
+) bool {
+	ambiguous, ok := errors.AsType[*cache.AmbiguousNameError](err)
+	if !ok {
+		return false
+	}
+
+	readable := acl.Filter(
+		h.acl, auth.IdentityFromContext(r.Context()), "read", ambiguous.IDs,
+		func(id string) string { return singular + ":" + id },
+	)
+	if len(readable) < 2 {
+		return false
+	}
+
+	writeErrorCode(w, r, "API015", (&cache.AmbiguousNameError{
+		Name: ambiguous.Name,
+		IDs:  readable,
+	}).Error())
+
+	return true
 }

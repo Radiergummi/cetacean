@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
 - A detail page reached by name, like `/services/shop_web`, shows its activity and updates live instead of sitting empty
+- `GET /history` and the MCP `get_events` tool narrow by a resource name as well as an ID, instead of answering an empty timeline
 - Authorization server metadata is served at the address RFC 8414 has a client derive, as well as under `server.base_path`
 - An access token whose `aud` is an array, or whose `typ` differs only in letter case, is accepted — both are conformant shapes that were refused
 - A token carrying a future `nbf`, or no `sub`, is refused

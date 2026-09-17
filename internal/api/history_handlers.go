@@ -8,6 +8,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // --- History ---
@@ -30,9 +31,16 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 			limit = n
 		}
 	}
+	// `resourceId` is a query parameter, so the canonical redirect never
+	// reaches it and a caller holding a name would read an empty timeline.
+	resourceID, err := cluster.ResolveIdentifier(h.cache, q.Get("type"), q.Get("resourceId"))
+	if h.reportAmbiguousName(w, r, q.Get("type"), err) {
+		return
+	}
+
 	entries := h.cache.History().List(cache.HistoryQuery{
 		Type:       cache.EventType(q.Get("type")),
-		ResourceID: q.Get("resourceId"),
+		ResourceID: resourceID,
 		Limit:      limit,
 	})
 	if entries == nil {

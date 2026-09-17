@@ -409,10 +409,10 @@ post-removal redirect to `/stacks/<stack>`. The information architecture is
 already stack-first — only the URL is not. The leaf's `to` becomes the
 stack-scoped form and the trail needs no other change.
 
-#### The route param resolves to the canonical ID exactly once
+#### An identifier a redirect cannot reach is resolved where it is read
 
-This is the rule that closes both of Phase 1's unverified items, and the one
-part of 2a already in the tree. Two independent reasons for it:
+This is the rule that closes both of Phase 1's unverified items. Two
+independent reasons for it, and they turned out to want different answers:
 
 - `api.history({ resourceId })` is keyed by resource **ID**, and a query
   parameter is not a path, so no redirect rewrites it. A name returned an empty
@@ -421,12 +421,28 @@ part of 2a already in the tree. Two independent reasons for it:
 - The per-resource SSE subscription would otherwise depend on `EventSource`
   following a `307`. That is specified behaviour, but it is untested here.
 
-Concretely: `useDetailResource` keeps the route parameter as its query key — it
-is stable and unique per URL, where the canonical ID is unknown on the first
-render — and takes the ID from the **fetched resource** for the SSE
-subscription and the history query. History waits for it. The stream falls back
-to the route path until the fetch answers, so a page whose fetch failed still
-has something to be revived by; that keeps the `EventSource` redirect
+The first is a **server-side** fact, and the first version of this fixed it on
+the client: the page waited for its own fetch to answer, took the ID off the
+fetched resource, and only then asked for history. That worked, and it was the
+wrong place. `/history` and MCP's `get_events` have the same defect for every
+other caller — an agent working from the name the user said reads an empty
+timeline and is told nothing — and a rule both transports must apply belongs in
+`internal/cluster`. `cluster.ResolveIdentifier` is that rule: it turns a name
+into the ID the ring keys by, scoped by the type the caller already sends, and
+leaves an identifier that matches nothing alone, because the ring outlives the
+cache's knowledge of a resource.
+
+So history no longer waits. It asks with the route parameter and its type,
+alongside the first fetch, and the round-trip the client-side version added to
+every detail page — to serve the name-addressed load, which is the rare one —
+is gone with it.
+
+The second reason is genuinely client-side, and the rule survives for it alone:
+`useDetailResource` keeps the route parameter as its query key — stable and
+unique per URL, where the canonical ID is unknown on the first render — and
+takes the ID from the **fetched resource** for the SSE path. The stream falls
+back to the route path until the fetch answers, so a page whose fetch failed
+still has something to be revived by; that keeps the `EventSource` redirect
 dependency for one connection on a name-addressed load, which is the accepted
 price of not leaving a failed page with no way back.
 

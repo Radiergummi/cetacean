@@ -67,9 +67,9 @@ export function useServiceDetail(id: string | undefined) {
   const abortRef = useRef<AbortController | null>(null);
   const sseAbortRef = useRef<AbortController | null>(null);
 
-  // The route parameter may be a name; everything addressed by ID waits for
-  // the fetch to answer. The key it resolved from is kept alongside it, so
-  // navigating to another service cannot fetch the previous one's history.
+  // The route parameter may be a name, and the recommendation match and the
+  // stream path are keyed by ID. The key it resolved from is kept alongside
+  // it, so neither reads the previous service's ID during a navigation.
   const [resolved, setResolved] = useState<{ key: string; id: string } | null>(null);
   const serviceId = resolved && resolved.key === id ? resolved.id : null;
 
@@ -124,32 +124,23 @@ export function useServiceDetail(id: string | undefined) {
     [id, applyDerivedState],
   );
 
-  // Tasks are addressed by path, so the redirect reaches them and the route
-  // parameter is enough. History takes its identifier in a query parameter,
-  // which no redirect rewrites, so it is the one that waits for the ID.
-  const fetchTasks = useCallback(
+  // Both take the route parameter: the redirect reaches tasks, and history
+  // resolves a name itself given the type to resolve it against.
+  const fetchSideData = useCallback(
     (signal: AbortSignal) => {
       if (!id) {
         return;
       }
 
-      api.serviceTasks(id, signal).then(setTasks).catch(ignoreUnlessAborted(signal));
+      const ignore = ignoreUnlessAborted(signal);
+
+      api.serviceTasks(id, signal).then(setTasks).catch(ignore);
+      api
+        .history({ resourceId: id, type: "service", limit: 10 }, signal)
+        .then(setHistory)
+        .catch(ignore);
     },
     [id],
-  );
-
-  const fetchHistory = useCallback(
-    (signal: AbortSignal) => {
-      if (!serviceId) {
-        return;
-      }
-
-      api
-        .history({ resourceId: serviceId, limit: 10 }, signal)
-        .then(setHistory)
-        .catch(ignoreUnlessAborted(signal));
-    },
-    [serviceId],
   );
 
   const refetchService = useCallback(() => {
@@ -195,17 +186,10 @@ export function useServiceDetail(id: string | undefined) {
     abortRef.current = controller;
 
     fetchService(controller.signal);
-    fetchTasks(controller.signal);
+    fetchSideData(controller.signal);
 
     return () => controller.abort();
-  }, [id, fetchService, fetchTasks]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchHistory(controller.signal);
-
-    return () => controller.abort();
-  }, [fetchHistory]);
+  }, [id, fetchService, fetchSideData]);
 
   // Falls back to the route parameter so a failed fetch still has a stream to
   // be revived by; the two agree whenever the URL is already canonical.
@@ -215,8 +199,7 @@ export function useServiceDetail(id: string | undefined) {
     sseAbortRef.current?.abort();
     const controller = new AbortController();
     sseAbortRef.current = controller;
-    fetchTasks(controller.signal);
-    fetchHistory(controller.signal);
+    fetchSideData(controller.signal);
 
     // The per-service stream also delivers task events for this service's
     // tasks, so only treat `resource` as a Service when the event is actually

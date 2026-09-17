@@ -34,10 +34,8 @@ export function useDetailResource<T>(
 
   const data = resourceQuery.data?.data ?? null;
 
-  // Everything after the first fetch addresses the resource by its canonical
-  // ID. A name reaches the resource itself through a redirect, but history
-  // takes its identifier in a query parameter, which no redirect rewrites —
-  // so a name-addressed page would show an empty feed.
+  // The SSE path is the one thing that still needs the canonical ID: an
+  // EventSource would otherwise have to follow the redirect itself.
   const canonicalId = data ? idOf(data) : null;
 
   // Until there is an ID the stream falls back to the route path: a failed
@@ -46,10 +44,16 @@ export function useDetailResource<T>(
   // the common request never reopens the stream.
   const ssePath = canonicalId ? `${collection}/${canonicalId}` : routePath;
 
+  // History resolves its own names now, given the type to resolve against, so
+  // it asks alongside the first fetch rather than behind it. The singular is
+  // the spelling the ring records, as `resourcePath` also assumes.
+  const resourceType = collection.replace(/^\//, "").replace(/s$/, "");
+
   const historyQuery = useQuery({
     queryKey: ["detail-history", routePath],
-    queryFn: ({ signal }) => api.history({ resourceId: canonicalId!, limit: 10 }, signal),
-    enabled: !!canonicalId && fetchHistory,
+    queryFn: ({ signal }) =>
+      api.history({ resourceId: key!, type: resourceType, limit: 10 }, signal),
+    enabled: !!key && fetchHistory,
   });
 
   const invalidationKeys: (readonly unknown[])[] = [["detail", routePath]];

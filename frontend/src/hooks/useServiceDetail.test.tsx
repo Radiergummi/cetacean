@@ -124,7 +124,9 @@ describe("useServiceDetail", () => {
     ]);
   });
 
-  it("requests history for the canonical ID, not the route parameter", async () => {
+  // The identifier travels in a query parameter no redirect rewrites, so the
+  // server resolves it — but only against a type, which is what must be sent.
+  it("asks history for the route parameter and the type to resolve it against", async () => {
     renderHook(() => useServiceDetail("web_api"), {
       wrapper: createWrapper(createTestQueryClient()),
     });
@@ -132,7 +134,7 @@ describe("useServiceDetail", () => {
     await waitFor(() => expect(api.history).toHaveBeenCalled());
 
     expect(api.history).toHaveBeenCalledWith(
-      expect.objectContaining({ resourceId: "svc1" }),
+      expect.objectContaining({ resourceId: "web_api", type: "service" }),
       expect.anything(),
     );
   });
@@ -145,10 +147,9 @@ describe("useServiceDetail", () => {
     await waitFor(() => expect(streamPaths.at(-1)).toBe("/services/svc1"));
   });
 
-  // Navigating between two services must not fetch the old one's activity
-  // against the new one's page while the first fetch is still in flight. Tasks
-  // are addressed by path, so they carry no such risk and must not be delayed.
-  it("holds history for the fetch to answer, but asks for tasks at once", async () => {
+  // Both are keyed by the route parameter, so neither has anything to wait
+  // for: tasks are reached by the redirect and history resolves its own name.
+  it("asks for tasks and history without waiting for the first fetch", async () => {
     let settle = (): void => {};
     vi.mocked(api.service).mockReturnValue(
       new Promise((resolve) => {
@@ -160,12 +161,15 @@ describe("useServiceDetail", () => {
       wrapper: createWrapper(createTestQueryClient()),
     });
 
-    expect(api.history).not.toHaveBeenCalled();
     expect(api.serviceTasks).toHaveBeenCalledWith("web_api", expect.anything());
+    expect(api.history).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: "web_api" }),
+      expect.anything(),
+    );
     expect(streamPaths.at(-1)).toBe("/services/web_api");
 
     settle();
 
-    await waitFor(() => expect(api.history).toHaveBeenCalled());
+    await waitFor(() => expect(streamPaths.at(-1)).toBe("/services/svc1"));
   });
 });
