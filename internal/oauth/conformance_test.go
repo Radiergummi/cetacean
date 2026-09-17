@@ -555,32 +555,36 @@ func TestTheAuthorizationCodeIsBoundToItsClientAndRedirectURI(t *testing.T) {
 	})
 }
 
-// RFC 8414 §3.1 has the document queried with GET. The discovery routes are
-// registered method-qualified, so a write to one is refused rather than
-// answered with a metadata document.
-func TestTheMetadataDocumentIsServedOnlyForGET(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc8414/queried-with-get")
+// RFC 8414 §3.1 and RFC 9728 §3.1 have their documents queried with GET. The
+// discovery routes are registered method-qualified, so a write to one is
+// refused rather than answered with a metadata document.
+func TestTheDiscoveryDocumentsAreServedOnlyForGET(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc8414/queried-with-get",
+		"oauth/rfc9728/queried-with-get",
+	)
 
 	s := newTestServer(t)
 	mux := http.NewServeMux()
 	s.RegisterRoutes(mux, "")
 
-	for _, method := range []string{
-		http.MethodPost,
-		http.MethodPut,
-		http.MethodDelete,
+	for _, path := range []string{
+		"/.well-known/oauth-authorization-server",
+		"/.well-known/oauth-protected-resource" + testResourcePath,
 	} {
-		t.Run(method, func(t *testing.T) {
-			rec := httptest.NewRecorder()
-			mux.ServeHTTP(rec, httptest.NewRequest(
-				method,
-				"/.well-known/oauth-authorization-server",
-				nil,
-			))
+		for _, method := range []string{
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodDelete,
+		} {
+			t.Run(method+" "+path, func(t *testing.T) {
+				rec := httptest.NewRecorder()
+				mux.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
 
-			if rec.Code != http.StatusMethodNotAllowed {
-				t.Errorf("status = %d, want 405", rec.Code)
-			}
-		})
+				if rec.Code != http.StatusMethodNotAllowed {
+					t.Errorf("status = %d, want 405", rec.Code)
+				}
+			})
+		}
 	}
 }

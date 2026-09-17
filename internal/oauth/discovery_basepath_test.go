@@ -26,6 +26,7 @@ func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc8414/well-known-segment-precedes-the-path-component",
 		"oauth/rfc8414/issuer-matches-the-retrieval-url",
+		"oauth/rfc9728/well-known-segment-precedes-the-path-component",
 	)
 
 	cfg := ServerConfig{

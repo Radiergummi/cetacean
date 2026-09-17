@@ -21,6 +21,8 @@ func TestBothDocumentsSayThereAreNoScopes(t *testing.T) {
 		"oauth/rfc8414/scopes-supported-recommended",
 		"oauth/rfc8414/document-at-well-known-path",
 		"oauth/rfc8414/zero-element-claims-omitted",
+		"oauth/rfc9728/scopes-supported-recommended",
+		"oauth/rfc9728/zero-value-parameters-omitted",
 	)
 
 	s := newTestServer(t)
