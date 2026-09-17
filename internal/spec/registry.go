@@ -262,9 +262,11 @@ func (q *Requirement) validate() error {
 // Token canonicalises a specification's name to the one spelling the sweep
 // compares on: "RFC 7636", "rfc7636" and "RFC-7636" all become "RFC7636";
 // "SEP 2575" becomes "SEP-2575". A registered document and a citation of it
-// have to land on the same string, so both sides call this.
+// have to land on the same string, so both sides call this. The dot goes too,
+// so a document named by version — "OAuth 2.1", filed as oauth-2-1.yaml —
+// meets its citations.
 func Token(name string) string {
-	upper := strings.ToUpper(strings.NewReplacer(" ", "", "-", "").Replace(name))
+	upper := strings.ToUpper(strings.NewReplacer(" ", "", "-", "", ".", "").Replace(name))
 
 	if num, ok := strings.CutPrefix(upper, "SEP"); ok {
 		return "SEP-" + num

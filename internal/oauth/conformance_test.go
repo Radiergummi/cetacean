@@ -29,6 +29,8 @@ import (
 // rather than honour the first and drop the rest — a token audienced for a
 // resource the client did not settle on is the confusion the parameter prevents.
 func TestRepeatedResourceIndicatorIsRefused(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/parameters-appear-once")
+
 	s := newTestServer(t)
 	s.cfg.OAuth.RequireResourceIndicator = false
 
@@ -973,5 +975,211 @@ func TestARefreshTokenDoesNotReachAnotherConfiguredResource(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "invalid_target") {
 		t.Errorf("body must mention invalid_target: %s", rec.Body.String())
+	}
+}
+
+// OAuth 2.1 §2.3 requires a registered redirect URI to be an absolute URI.
+func TestARelativeRedirectURICannotBeRegistered(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/redirect-uri-is-absolute")
+
+	s := newTestServer(t)
+
+	status, _ := registerClient(t, s, `{"redirect_uris": ["/callback"]}`)
+	if status == http.StatusCreated {
+		t.Error("a relative redirect URI was registered")
+	}
+}
+
+// OAuth 2.1 §2.3 forbids a fragment on a registered redirect URI. This pins
+// the divergence: the scheme is all isValidRedirectURI looks at.
+func TestARedirectURIWithAFragmentIsRegistered(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/redirect-uri-has-no-fragment")
+
+	s := newTestServer(t)
+
+	status, reg := registerClient(t, s, `{
+		"redirect_uris": ["https://client.example/cb#fragment"]
+	}`)
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; the deferral no longer describes the code", status)
+	}
+	if reg.RedirectURIs[0] != "https://client.example/cb#fragment" {
+		t.Errorf("redirect_uris = %v", reg.RedirectURIs)
+	}
+}
+
+// OAuth 2.1 §2.3 keeps a query string a client registered: the response
+// parameters are added to it, not put in its place.
+func TestTheRegisteredRedirectQuerySurvivesTheResponse(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/redirect-uri-query-is-retained")
+
+	const registered = "https://client.example/cb?tenant=acme"
+
+	s := newTestServer(t)
+	meta := &ClientMetadata{RedirectURIs: []string{registered}}
+
+	rec := httptest.NewRecorder()
+	s.issueCodeAndRedirect(
+		rec,
+		httptest.NewRequest(http.MethodGet, "/oauth/authorize", nil),
+		meta,
+		AuthCodeData{ClientID: testClientID, RedirectURI: registered},
+		"xyz",
+	)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302: %s", rec.Code, rec.Body.String())
+	}
+
+	location, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse Location: %v", err)
+	}
+	if got := location.Query().Get("tenant"); got != "acme" {
+		t.Errorf("tenant = %q, want acme: the registered query was dropped", got)
+	}
+	if location.Query().Get("code") == "" {
+		t.Error("no code in the redirect")
+	}
+}
+
+// OAuth 2.1 §3.2 fixes POST as the token endpoint's method, so the route has
+// to say so rather than answering whatever arrives.
+func TestTheTokenEndpointIsPostOnly(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/token-endpoint-uses-post")
+
+	s := newTestServer(t)
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux, "")
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/oauth/token", nil))
+
+	if rec.Code == http.StatusOK || rec.Code == http.StatusBadRequest {
+		t.Errorf("GET /oauth/token reached the handler: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// OAuth 2.1 §3.2 makes a parameter sent without a value the same as one that
+// was not sent: an empty resource is the absent resource, not a mismatch.
+func TestAnEmptyResourceParameterIsTheAbsentOne(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/empty-parameters-are-treated-as-omitted")
+
+	s := newTestServer(t)
+
+	const verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+	code := seedAuthCode(s, AuthCodeData{
+		ClientID:      "test-client",
+		RedirectURI:   "http://localhost:8080/callback",
+		CodeChallenge: computeS256Challenge(verifier),
+		Resource:      s.resources.fallback,
+		Subject:       "user@example.com",
+	})
+
+	form := url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"redirect_uri":  {"http://localhost:8080/callback"},
+		"client_id":     {"test-client"},
+		"code_verifier": {verifier},
+		"resource":      {""},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	s.HandleToken(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("an empty resource was read as a value: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// OAuth 2.1 §3.2.2 makes grant_type required, and a request without one a
+// malformed request rather than an unsupported grant.
+func TestATokenRequestWithoutAGrantTypeIsRefused(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/grant-type-required")
+
+	s := newTestServer(t)
+
+	req := httptest.NewRequest(
+		http.MethodPost, "/oauth/token", strings.NewReader("client_id=test-client"),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	s.HandleToken(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+
+	var errResp oauthErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if errResp.Error != "invalid_request" {
+		t.Errorf("error = %q, want invalid_request", errResp.Error)
+	}
+}
+
+// OAuth 2.1 §3.2.3 keeps a response carrying tokens out of every cache
+// between here and the client.
+func TestATokenResponseIsNotStored(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/token-responses-are-not-stored")
+
+	rec := httptest.NewRecorder()
+	writeTokenResponse(rec, tokenResponse{AccessToken: "t", TokenType: "Bearer"})
+
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+}
+
+// OAuth 2.1 §4.3 keeps refresh tokens confidential in storage. The store
+// holds a hash: the value a client presents is never written down.
+func TestTheRefreshTokenStoreHoldsNoRawToken(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/refresh-tokens-are-kept-confidential")
+
+	s := NewRefreshTokenStore()
+	raw := s.Issue(RefreshTokenData{Subject: "u", ClientID: "c"}, time.Hour)
+
+	if raw == "" {
+		t.Fatal("no token issued")
+	}
+	if _, ok := s.tokens[raw]; ok {
+		t.Error("the raw refresh token is a key in the store")
+	}
+	if _, ok := s.Validate(raw); !ok {
+		t.Error("the issued token does not validate")
+	}
+}
+
+// OAuth 2.1 §4.3 binds a refresh token to the client it was issued to, and
+// that binding is checked even though no client here authenticates.
+func TestARefreshTokenDoesNotWorkForAnotherClient(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/refresh-token-bound-to-its-client")
+
+	s := newTestServer(t)
+
+	rt := s.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "alice@example.com",
+		ClientID: "the-client-it-was-issued-to",
+		Resource: s.resources.fallback,
+	}, time.Hour)
+
+	form := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {rt},
+		"client_id":     {"somebody-else"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	s.HandleToken(rec, req)
+
+	if rec.Code == http.StatusOK {
+		t.Fatalf("another client refreshed the grant: %s", rec.Body.String())
 	}
 }

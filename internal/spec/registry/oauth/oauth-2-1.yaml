@@ -1,0 +1,515 @@
+source: OAuth 2.1
+title: The OAuth 2.1 Authorization Framework
+revision: draft-ietf-oauth-v2-1-16
+reviewed: 2026-09-17
+url:
+  - https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/
+  - https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.txt
+
+inventory:
+  from: >-
+    §2 through §4 of draft-16 — client registration and authentication, the
+    protocol endpoints, and the authorization code, client credentials and
+    refresh token grants. This is the framework's own normative content for an
+    authorization server, and the part of the document no other entry in this
+    registry already holds. §1 is the introduction and terminology; §5 is RFC
+    6750's bearer usage, §7 is RFC 9700's security BCP, §8 is RFC 8252's
+    native-app guidance, and all three are registered against those documents,
+    whose text is the normative home. §6 binds whoever defines an extension,
+    §9 binds a browser-based client this deployment does not ship, §10 is
+    informative and §11 is IANA's. A statement §2-§4 restates from a
+    registered document is dismissed with a pointer rather than registered
+    twice, and those pointers are most of what follows.
+  count: 101
+
+requirements:
+  - id: one-client-id-is-one-client-type
+    level: SHOULD
+    text: >-
+      A single client_id SHOULD NOT be treated as more than one type of client.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.1
+
+  - id: redirect-uri-is-absolute
+    level: MUST
+    text: >-
+      The redirect URI MUST be an absolute URI as defined by Section 4.3 of
+      [RFC3986].
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.3
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\tif u.Scheme == \"https\" {\n\t\treturn true\n\t}\n\treturn isLoopbackURI(rawURI)"
+        with: "\tif u.Scheme == \"https\" || u.Scheme == \"\" {\n\t\treturn true\n\t}\n\treturn isLoopbackURI(rawURI)"
+
+  - id: redirect-uri-query-is-retained
+    level: MUST
+    text: >-
+      The redirect URI MAY include a query string component (Appendix C.1),
+      which MUST be retained when adding additional query parameters.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.3
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tredirectURI, _ := url.Parse(code.RedirectURI)\n\tq := redirectURI.Query()"
+        with: "\tredirectURI, _ := url.Parse(code.RedirectURI)\n\tq := url.Values{}"
+
+  - id: redirect-uri-has-no-fragment
+    level: MUST
+    text: >-
+      The redirect URI MUST NOT include a fragment component.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.3
+    deferred: >-
+      isValidRedirectURI checks the scheme and nothing else, so a client may
+      register https://client.example/cb#anything and be redirected to it. The
+      authorization response is still readable — the code goes into the query,
+      which url.URL writes before the fragment — but the client registered a
+      URI this document does not allow, and the one place to refuse it is the
+      same guard that decides the scheme.
+
+  - id: multiple-redirect-uris-may-be-registered
+    level: MAY
+    text: >-
+      The authorization server MAY allow the client to register multiple
+      redirect URIs.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.3.1
+
+  - id: invalid-redirect-uri-is-not-followed
+    level: MUST
+    text: >-
+      If an authorization request fails validation due to a missing, invalid,
+      or mismatching redirect URI, the authorization server SHOULD inform the
+      resource owner of the error and MUST NOT automatically redirect the user
+      agent to the invalid redirect URI.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.3.5
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif !meta.HasRedirectURI(redirectURIRaw) {\n\t\trenderErrorPage(w, http.StatusBadRequest,\n\t\t\t\"redirect_uri is not registered for this client\")\n\t\treturn\n\t}\n\n\t// From here on redirect_uri is verified — errors can redirect."
+        with: "\tif !meta.HasRedirectURI(redirectURIRaw) {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\",\n\t\t\t\"redirect_uri is not registered for this client\")\n\t\treturn\n\t}\n\n\t// From here on redirect_uri is verified — errors can redirect."
+
+  - id: third-party-scripts-not-on-the-redirect-endpoint
+    level: SHOULD
+    text: >-
+      The client SHOULD NOT include any third-party scripts (e.g.,
+      third-party analytics, social plug-ins, ad networks) in the redirect URI
+      endpoint response.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.3.6
+
+  - id: artifacts-are-not-left-in-the-redirect-uri
+    level: SHOULD
+    text: >-
+      Instead, it SHOULD extract the artifacts from the URI and redirect the
+      user agent again to another endpoint without exposing the artifacts (in
+      the URI or elsewhere).
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.3.6
+
+  - id: client-authentication-needs-confidential-credentials
+    level: MUST
+    text: >-
+      The authorization server MUST only rely on client authentication if the
+      process of issuance/registration and distribution of the underlying
+      credentials ensures their confidentiality.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.4
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\tif isSymmetricAuthMethod(authMethod) {"
+        with: "\tif false && isSymmetricAuthMethod(authMethod) {"
+
+  - id: redirect-uri-registration-stands-in-for-authentication
+    level: SHOULD
+    text: >-
+      When client authentication is not possible, the authorization server
+      SHOULD employ other means to validate the client's identity -- for
+      example, by requiring the registration of the client redirect URI or
+      enlisting the resource owner to confirm identity.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.4
+
+  - id: unauthenticated-client-exposure-is-limited
+    level: MUST
+    text: >-
+      The authorization server MUST consider the security implications of
+      interacting with unauthenticated clients and take measures to limit the
+      potential exposure of tokens issued to such clients, (e.g., limiting the
+      lifetime of refresh tokens).
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.4
+    mutants:
+      - file: internal/oauth/store.go
+        replace: "\tnewExpiry := time.Now().Add(ttl)\n\tif entry.grantExpiresAt.Before(newExpiry) {\n\t\tnewExpiry = entry.grantExpiresAt\n\t}"
+        with: "\tnewExpiry := time.Now().Add(ttl)"
+
+  - id: privileges-follow-the-client-identification-process
+    level: MUST
+    text: >-
+      The privileges an authorization server associates with a certain client
+      identity MUST depend on the assessment of the overall process for client
+      identification and client credential lifecycle management.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.4
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif data.Verified && s.consent.Enabled() {"
+        with: "\tif s.consent.Enabled() {"
+
+  - id: token-endpoint-uses-post
+    level: MUST
+    text: >-
+      The client MUST use the HTTP POST method when making requests to the
+      token endpoint.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tmux.HandleFunc(\"POST \"+basePath+\"/oauth/token\", s.HandleToken)"
+        with: "\tmux.HandleFunc(basePath+\"/oauth/token\", s.HandleToken)"
+
+  - id: empty-parameters-are-treated-as-omitted
+    level: MUST
+    text: >-
+      Parameters sent without a value MUST be treated as if they were omitted
+      from the request.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif resourceForm != \"\" &&\n\t\ts.resources.canonicalSpelling(resourceForm) !=\n\t\t\ts.resources.canonicalSpelling(codeData.Resource) {"
+        with: "\tif s.resources.canonicalSpelling(resourceForm) !=\n\t\ts.resources.canonicalSpelling(codeData.Resource) {"
+
+  - id: parameters-appear-once
+    level: MUST
+    text: >-
+      Request and response parameters defined by this specification MUST NOT
+      be included more than once.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2
+    mutants:
+      - file: internal/oauth/resource.go
+        replace: "\tif len(raw) > 1 {"
+        with: "\tif len(raw) > 99 {"
+
+  - id: grant-type-required
+    level: MUST
+    text: >-
+      grant_type. REQUIRED.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2.2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tcase \"\":\n\t\t// A missing parameter, not an unknown value: only a grant type that is\n\t\t// present and unsupported gets unsupported_grant_type.\n\t\twriteTokenError(w, http.StatusBadRequest, \"invalid_request\",\n\t\t\t\"grant_type is required\")\n\tdefault:"
+        with: "\tdefault:"
+
+  - id: access-token-required-in-the-response
+    level: MUST
+    text: >-
+      access_token. REQUIRED. The access token issued by the authorization
+      server.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2.3
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\tAccessToken:  accessToken,\n\t\tTokenType:    \"Bearer\",\n\t\tExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),\n\t\tRefreshToken: refreshToken,\n\t})\n}\n\nfunc (s *Server) handleRefreshTokenGrant"
+        with: "\t\tTokenType:    \"Bearer\",\n\t\tExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),\n\t\tRefreshToken: refreshToken,\n\t})\n\t_ = accessToken\n}\n\nfunc (s *Server) handleRefreshTokenGrant"
+
+  - id: token-type-required-in-the-response
+    level: MUST
+    text: >-
+      token_type. REQUIRED. The type of the token issued as described in
+      Section 6.1.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2.3
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\tAccessToken:  accessToken,\n\t\tTokenType:    \"Bearer\",\n\t\tExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),\n\t\tRefreshToken: refreshToken,\n\t})\n}\n\nfunc (s *Server) handleRefreshTokenGrant"
+        with: "\t\tAccessToken:  accessToken,\n\t\tExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),\n\t\tRefreshToken: refreshToken,\n\t})\n}\n\nfunc (s *Server) handleRefreshTokenGrant"
+
+  - id: expires-in-recommended
+    level: SHOULD
+    text: >-
+      expires_in. RECOMMENDED. The lifetime in seconds of the access token.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2.3
+
+  - id: refresh-token-optional-in-the-response
+    level: MAY
+    text: >-
+      refresh_token. OPTIONAL. The refresh token, which can be used to obtain
+      new access tokens.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2.3
+
+  - id: token-responses-are-not-stored
+    level: MUST
+    text: >-
+      The authorization server MUST include the HTTP Cache-Control response
+      header field (see Section 5.2 of [RFC9111]) with a value of no-store in
+      any response containing tokens, credentials, or other sensitive
+      information.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2.3
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "func writeTokenResponse(w http.ResponseWriter, resp tokenResponse) {\n\tw.Header().Set(\"Content-Type\", \"application/json\")\n\tw.Header().Set(\"Cache-Control\", \"no-store\")"
+        with: "func writeTokenResponse(w http.ResponseWriter, resp tokenResponse) {\n\tw.Header().Set(\"Content-Type\", \"application/json\")"
+
+  - id: error-parameter-required
+    level: MUST
+    text: >-
+      error. REQUIRED. A single ASCII [USASCII] error code.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2.4
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t_ = json.NewEncoder(w).Encode(oauthErrorResponse{Error: code, ErrorDescription: desc})"
+        with: "\t_ = json.NewEncoder(w).Encode(oauthErrorResponse{ErrorDescription: desc})"
+
+  - id: error-description-optional
+    level: MAY
+    text: >-
+      error_description. OPTIONAL. Human-readable ASCII [USASCII] text
+      providing additional information.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2.4
+
+  - id: client-credentials-grant-not-offered
+    level: MUST
+    text: >-
+      The client credentials grant type MUST only be used by confidential
+      clients.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.2
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\t\tif gt != \"authorization_code\" && gt != \"refresh_token\" {"
+        with: "\t\tif gt != \"authorization_code\" && gt != \"refresh_token\" &&\n\t\t\tgt != \"client_credentials\" {"
+
+  - id: refresh-tokens-are-kept-confidential
+    level: MUST
+    text: >-
+      Refresh tokens MUST be kept confidential in transit and storage, and
+      shared only among the authorization server and the client to whom the
+      refresh tokens were issued.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.3
+    mutants:
+      - file: internal/oauth/store.go
+        replace: "func hashToken(raw string) string {"
+        with: "func hashToken(raw string) string {\n\tif true {\n\t\treturn raw\n\t}"
+
+  - id: refresh-token-bound-to-its-client
+    level: MUST
+    text: >-
+      The authorization server MUST maintain the binding between a refresh
+      token and the client to whom it was issued.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.3
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\tif clientID != bound.ClientID {"
+        with: "\t\tif false && clientID != bound.ClientID {"
+
+  - id: refresh-tokens-are-unguessable
+    level: MUST
+    text: >-
+      The authorization server MUST ensure that refresh tokens cannot be
+      generated, modified, or guessed to produce valid refresh tokens by
+      unauthorized parties.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.3
+    mutants:
+      - file: internal/oauth/store.go
+        replace: "\tif _, err := rand.Read(b); err != nil {"
+        with: "\tif _, err := rand.Read(b[:0]); err != nil {"
+
+  - id: a-new-refresh-token-may-be-issued
+    level: MAY
+    text: >-
+      The authorization server MAY issue a new refresh token, in which case
+      the client MUST discard the old refresh token and replace it with the
+      new refresh token.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.3.2
+
+  - id: the-old-refresh-token-may-be-revoked
+    level: MAY
+    text: >-
+      The authorization server MAY revoke the old refresh token after issuing
+      a new refresh token to the client.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.3.3
+
+dismissed:
+  client-registration-includes: >-
+    The sentence introducing what a registration must include — the redirect
+    URIs and the client type. Both are registered where they are stated:
+    oauth/rfc7591/redirect-uris-must-be-registered and, for the type,
+    one-client-id-is-one-client-type above.
+  clients-with-credentials-protect-them: >-
+    Binds a client holding credentials. None is issued here: every registration
+    is public and a symmetric token_endpoint_auth_method is refused.
+  client-confidence-informs-sensitive-access: >-
+    Weighs confidence in a client's identity for the Client Credentials grant
+    and for how often to prompt. The grant is not offered, and the prompting
+    rule is registered as privileges-follow-the-client-identification-process.
+  client-id-is-not-a-credential: >-
+    The token endpoint authenticates no client at all. What a grant rests on
+    is the PKCE verifier or the refresh token itself — registered as
+    oauth/rfc9700/code-challenge-bound-to-the-code and
+    refresh-token-bound-to-its-client above.
+  third-party-client-ids-need-impersonation-care: >-
+    Points at §7.4, the sub claim. That rule is registered as
+    oauth/rfc9700/sub-is-the-resource-owner; the subject of a token here is
+    always the person who approved it, never the client.
+  complete-redirect-uri-is-registered: >-
+    Two rules already held elsewhere: that a redirect URI must be registered
+    at all (oauth/rfc7591/redirect-uris-must-be-registered) and that the
+    comparison is a string comparison, path included
+    (oauth/rfc9700/redirect-uri-compared-as-strings).
+  redirect-uri-matches-exactly-but-for-a-loopback-port: >-
+    The exact-match rule and its loopback-port exception. The exception is
+    where this server diverges, recorded against
+    oauth/rfc9700/loopback-ports-vary and oauth/rfc8252/any-loopback-port-accepted.
+  private-use-schemes-are-reverse-domain-named: >-
+    Constrains private-use URI schemes, which this server refuses outright —
+    stricter than the rule, and recorded as
+    oauth/rfc8252/three-redirect-options-offered.
+  private-use-schemes-without-a-period-are-rejected: >-
+    The floor under the rule above, for schemes none of which are accepted.
+  clients-expose-no-open-redirectors: >-
+    Registered as oauth/rfc9700/client-exposes-no-open-redirector, where the
+    relying party's redirect parameter is pinned.
+  state-may-customize-a-request: >-
+    A permission to the client, offered instead of varying the redirect URI.
+  redirect-uri-is-sent-when-several-are-registered: >-
+    Binds the client composing the authorization request. This server requires
+    redirect_uri on every request, whatever a client registered.
+  clients-prevent-csrf: >-
+    Registered as oauth/rfc9700/client-prevents-csrf.
+  pkce-may-serve-as-csrf-protection: >-
+    Registered as a dismissal against RFC 9700's identical sentence: the
+    relying party carries state on every request and never needs this.
+  state-is-one-time-and-bound-to-the-user-agent: >-
+    Registered as oauth/rfc9700/state-is-one-time-and-bound-to-the-user-agent.
+  clients-prevent-mix-up-across-servers: >-
+    Conditional on a client interacting with two or more authorization
+    servers. The relying party is configured with exactly one issuer.
+  only-the-issuer-that-was-asked-is-processed: >-
+    The mix-up defense, registered as oauth/rfc9700/received-issuer-compared
+    and mismatched-issuer-aborts.
+  own-scripts-run-first-if-third-party-ones-are-present: >-
+    Conditional on including third-party scripts in the redirect endpoint,
+    which the relying party's callback does not: it answers with a redirect
+    and no body at all.
+  any-confidential-client-authentication-may-be-accepted: >-
+    A permission covering confidential clients, of which there are none.
+  asymmetric-client-authentication-recommended: >-
+    Constrains how client authentication is done. None is performed.
+  jwt-client-authentication-follows-rfc7523bis: >-
+    Conditional on JWT client authentication, which this server does not
+    accept.
+  a-client-uses-one-authentication-method: >-
+    Binds a client authenticating. None does.
+  client-secret-parameters-are-supported: >-
+    Conditional on supporting confidential clients in possession of a client
+    secret. This server issues none.
+  client-secret-client-id-required: >-
+    The client_id parameter of the client-secret authentication method, which
+    is not offered.
+  client-secret-parameter-required: >-
+    The client_secret parameter of a method that is not offered.
+  client-credentials-stay-out-of-the-request-uri: >-
+    Constrains where client credentials travel. None is ever sent.
+  http-basic-may-authenticate-a-client: >-
+    A permission to accept HTTP Basic from a client holding a secret.
+  client-secret-endpoints-resist-brute-force: >-
+    Conditional on an endpoint using client-secret authentication. None does;
+    what the registration endpoint is rate-limited against is registration
+    itself, registered as oauth/rfc7591/registration-may-be-rate-limited.
+  any-suitable-authentication-scheme-may-be-supported: >-
+    A permission over authentication schemes, none of which are supported.
+  other-authentication-methods-map-to-a-registration-record: >-
+    Conditional on supporting another authentication method.
+  extension-grants-may-add-endpoints: >-
+    Binds whoever defines an extension grant.
+  token-endpoint-url-has-no-fragment: >-
+    Constrains the endpoint URL. It is a literal path registered on the mux,
+    not a value this server composes, so there is no fragment to exclude.
+  unrecognized-token-parameters-are-ignored: >-
+    The token endpoint reads the parameters it knows by name out of the parsed
+    form and never enumerates it. An unrecognized parameter is not seen, so
+    there is no branch that could refuse one and none to pin.
+  confidential-clients-authenticate-at-the-token-endpoint: >-
+    Binds confidential clients, of which there are none.
+  token-request-client-id-optional: >-
+    The general declaration §4.1.3 narrows into an obligation for a client
+    that does not authenticate — which is every client here, and which
+    oauth/rfc6749/code-bound-to-client pins.
+  confidential-clients-authenticate-per-section-3-2-1: >-
+    The same obligation restated in the token request parameters.
+  token-endpoint-processing-rules: >-
+    The sentence introducing the list of checks. The checks themselves are
+    RFC 6749 §4.1.3's five statements, registered against that document.
+  token-lifetime-is-documented-when-omitted: >-
+    Conditional on omitting expires_in, which this server always sends.
+  clients-do-not-rely-on-the-stated-lifetime: >-
+    Binds the client reading the response.
+  scope-in-the-response: >-
+    Required when the granted scope differs from the requested one. This
+    deployment defines no scopes, so both are the empty set — which is what
+    oauth/rfc9700/tokens-restricted-to-resources-and-actions records.
+  refresh-token-issuance-follows-a-risk-assessment: >-
+    An instruction to the deployment: whether refresh tokens are issued at all
+    is oauth.refresh_token_ttl.
+  other-grants-may-replace-refresh-tokens: >-
+    Describes what a client does when refresh tokens are withheld.
+  refresh-tokens-bound-to-scope-and-resource: >-
+    Registered as oauth/rfc9700/refresh-tokens-bound-to-the-resource.
+  clients-ignore-unrecognized-response-values: >-
+    Binds the client reading the token response.
+  a-401-may-name-the-authentication-schemes: >-
+    A permission conditional on supporting client authentication.
+  authorization-header-failures-answer-401: >-
+    Conditional on a client having attempted to authenticate via the
+    Authorization header field. This endpoint reads no such credential, so the
+    condition cannot arise.
+  error-code-charset: >-
+    Constrains the bytes of the error parameter. Every code this endpoint
+    writes is a literal in the source — invalid_request, invalid_grant,
+    invalid_target, unsupported_grant_type — all inside the set.
+  error-description-charset: >-
+    Constrains the bytes of error_description. Every description this endpoint
+    writes is a literal too, or a message whose only interpolation is a byte
+    offset; no client-supplied value reaches one.
+  error-uri-optional: >-
+    An optional member this server does not emit.
+  error-uri-charset: >-
+    Constrains a member this server does not emit.
+  code-grant-type-required: >-
+    §4.1.3 restating §3.2.2's grant_type, registered as grant-type-required.
+  code-verifier-required-with-a-challenge: >-
+    Registered as oauth/rfc9700/code-challenge-bound-to-the-code.
+  code-verifier-forbidden-without-a-challenge: >-
+    Registered as oauth/rfc9700/pkce-downgrade-refused.
+  code-grant-client-id-required-without-authentication: >-
+    Every client here is unauthenticated, so client_id is always required and
+    always compared against the one the code was issued to — which is
+    oauth/rfc6749/code-bound-to-client.
+  one-access-token-per-code: >-
+    Registered as oauth/rfc9700/code-invalidated-after-first-use.
+  a-second-code-request-is-denied-and-revokes: >-
+    The denial is oauth/rfc9700/code-invalidated-after-first-use; the
+    revocation is deferred there as tokens-revoked-on-code-replay.
+  code-grant-processing-rules: >-
+    The sentence introducing §4.1.3's list of checks.
+  a-code-without-a-challenge-is-rejected: >-
+    Registered as oauth/rfc9700/pkce-downgrade-refused.
+  client-credentials-scope-optional: >-
+    A parameter of a grant this server does not offer.
+  client-credentials-authenticates-the-client: >-
+    Conditional on the client credentials grant, which is not offered.
+  refresh-binding-is-verified-when-the-client-can-authenticate: >-
+    Conditional on the client identity being authenticable. It never is here,
+    so what stands is the unconditional binding, registered as
+    refresh-token-bound-to-its-client.
+  rotation-or-sender-constraining-without-client-authentication: >-
+    Registered as oauth/rfc9700/public-client-refresh-tokens-rotate.
+  refresh-token-parameter-required: >-
+    The bare REQUIRED declaration. A request without it presents no grant at
+    all and is refused as an unknown token, not by a check of its own.
+  refresh-request-scope-optional: >-
+    A parameter this deployment has no scopes for.
+  refresh-scope-does-not-grow: >-
+    Constrains a requested scope against the granted one. Neither exists here.
+  refresh-request-confidential-client-authentication: >-
+    Binds confidential clients, of which there are none.
+  refresh-grant-processing-rules: >-
+    The sentence introducing §4.3.1's list of checks.
+  refresh-replay-is-detected: >-
+    Registered as oauth/rfc9700/refresh-replay-detected.
+  encoded-grant-ids-need-integrity: >-
+    Conditional on encoding the grant into the refresh token value. The token
+    is an opaque random string and the grant is looked up by hash.
+  a-new-refresh-token-keeps-the-scope: >-
+    Constrains the scope carried across a rotation. There is none to carry.
+  refresh-tokens-may-be-revoked-on-a-security-event: >-
+    Registered as
+    oauth/rfc9700/refresh-tokens-may-be-revoked-on-a-security-event.
+  refresh-tokens-expire-when-idle: >-
+    Registered as oauth/rfc9700/refresh-tokens-expire-when-idle.

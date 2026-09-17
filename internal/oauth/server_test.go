@@ -160,6 +160,13 @@ func TestASMetadata(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestTokenExchangeWithPKCE(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/oauth-2-1/access-token-required-in-the-response",
+		"oauth/oauth-2-1/token-type-required-in-the-response",
+		"oauth/oauth-2-1/expires-in-recommended",
+		"oauth/oauth-2-1/refresh-token-optional-in-the-response",
+	)
+
 	s := newTestServer(t)
 
 	verifier := "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
@@ -203,6 +210,9 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 	if resp.TokenType != "Bearer" {
 		t.Errorf("token_type = %q", resp.TokenType)
 	}
+	if resp.ExpiresIn <= 0 {
+		t.Errorf("expires_in = %d, want the token's lifetime in seconds", resp.ExpiresIn)
+	}
 
 	// Verify the JWT contains the expected audience.
 	claims, err := s.tokenIssuer.VerifyAccessToken(resp.AccessToken, s.resources.fallback)
@@ -225,6 +235,8 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc7636/verifier-must-match-challenge",
 		"oauth/rfc9700/code-challenge-bound-to-the-code",
+		"oauth/oauth-2-1/error-parameter-required",
+		"oauth/oauth-2-1/error-description-optional",
 	)
 
 	s := newTestServer(t)
@@ -264,6 +276,9 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 	}
 	if errResp.Error != "invalid_grant" {
 		t.Errorf("error = %q, want invalid_grant", errResp.Error)
+	}
+	if errResp.ErrorDescription == "" {
+		t.Error("error_description is absent; the refusal says only that it happened")
 	}
 }
 

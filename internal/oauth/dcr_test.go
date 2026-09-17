@@ -81,6 +81,7 @@ func TestDCRRejectsSymmetricAuth(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc7591/error-code-required",
 		"oauth/rfc7591/error-description-optional",
+		"oauth/oauth-2-1/client-authentication-needs-confidential-credentials",
 	)
 
 	s := newTestServer(t)
@@ -112,7 +113,10 @@ func TestDCRRejectsSymmetricAuth(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDCRRejectsUnsupportedGrantType(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc7591/inconsistent-registration-is-refused")
+	spec.Satisfies(t,
+		"oauth/rfc7591/inconsistent-registration-is-refused",
+		"oauth/oauth-2-1/client-credentials-grant-not-offered",
+	)
 
 	s := newTestServer(t)
 
@@ -168,7 +172,10 @@ func TestDCRRejectsUnsupportedResponseType(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDCRMissingRedirectURIs(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc7591/redirect-uris-must-be-registered")
+	spec.Satisfies(t,
+		"oauth/rfc7591/redirect-uris-must-be-registered",
+		"oauth/oauth-2-1/redirect-uri-registration-stands-in-for-authentication",
+	)
 
 	s := newTestServer(t)
 
@@ -326,6 +333,7 @@ func TestDCREchoesExplicitApplicationType(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc8252/client-type-recorded",
 		"oauth/rfc7591/response-may-carry-extension-fields",
+		"oauth/oauth-2-1/one-client-id-is-one-client-type",
 	)
 
 	s := newTestServer(t)

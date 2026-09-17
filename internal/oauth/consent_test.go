@@ -121,6 +121,8 @@ func TestConsentPageRender(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/invalid-redirect-uri-is-not-followed")
+
 	s := newTestServer(t)
 	challenge := computeS256Challenge("verifier")
 	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
@@ -491,7 +493,10 @@ func TestConsentPageNamesTheResourceBeingAuthorized(t *testing.T) {
 // client can register any name it likes. The consent page says so, and an
 // approval it wins is never remembered.
 func TestADynamicallyRegisteredClientIsLabelledSelfAsserted(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc7591/metadata-is-self-asserted")
+	spec.Satisfies(t,
+		"oauth/rfc7591/metadata-is-self-asserted",
+		"oauth/oauth-2-1/privileges-follow-the-client-identification-process",
+	)
 
 	s := newTestServer(t)
 	challenge := computeS256Challenge("verifier")
