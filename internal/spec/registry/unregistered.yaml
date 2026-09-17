@@ -29,7 +29,6 @@ RFC8037: "EdDSA considered and rejected in favour of ES256 (docs/specs/2026-09-1
 RFC8594: "Deprecation header is planned for the JGF topology endpoints (docs/specs/2026-04-03-jgf-topology-design.md) but not implemented yet. No code of ours to test."
 RFC8615: "Defines the /.well-known/ convention generally. The documents we actually serve there (RFC 8414, RFC 9728) carry the testable requirements."
 RFC8631: "service-desc, service-doc and service-meta link relations. The document carries exactly one RFC 2119 statement, §7's, and it binds the consumer: a service description may be wrong, so be ready for runtime errors. Registering the relation names is IANA's act, not a clause. internal/api/middleware.go emits service-desc, covered by test/e2e/deployment_test.go."
-RFC8941: "Structured Field Values. decodeClientCert parses the Byte Sequence form of Client-Cert (internal/auth/cert.go), tested in clientcert_test.go. Implemented, not yet registered."
 RFC9110: "HTTP Semantics. Content negotiation, ETags and conditional requests implement it across internal/api, tested extensively (etag_test.go, precondition_test.go, and more). Implemented, not yet registered."
 RFC9264: "Linkset. internal/api/linkset implements the JSON serialization, tested in linkset_test.go. Implemented, not yet registered."
 RFC9421: "Named in a comment as the thing we deliberately do not implement."
