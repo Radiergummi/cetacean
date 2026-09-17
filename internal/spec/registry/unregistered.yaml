@@ -41,7 +41,6 @@ RFC7638: "JWK Thumbprint. Section 3.2's canonical member-set rule is checked aga
 RFC8037: "EdDSA considered and rejected in favour of ES256 (docs/specs/2026-09-11-mcp-asymmetric-token-signing-design.md). Not implemented, so nothing of ours to test."
 RFC8252: "OAuth for Native Apps. Loopback redirect URIs are allowed for native DCR clients (internal/oauth/dcr.go), tested by TestDCRNativeApplicationTypeAllowsLoopback. Implemented, not yet registered."
 RFC8288: "Web Linking. Link headers (feed alternates, pagination) are implemented across internal/api, tested by TestFeedLinkHeaders and others. Implemented, not yet registered."
-RFC8414: "Authorization Server Metadata. Implemented as the AS discovery document; planned for the first hand-written OAuth registry batch per the design doc. Implemented, not yet registered."
 RFC8594: "Deprecation header is planned for the JGF topology endpoints (docs/specs/2026-04-03-jgf-topology-design.md) but not implemented yet. No code of ours to test."
 RFC8615: "Defines the /.well-known/ convention generally. The documents we actually serve there (RFC 8414, RFC 9728) carry the testable requirements."
 RFC8631: "service-desc Link relation. internal/api/middleware.go emits it, tested in test/e2e/deployment_test.go. Implemented, not yet registered."

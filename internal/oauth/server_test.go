@@ -80,6 +80,14 @@ func seedAuthCode(s *Server, data AuthCodeData) string {
 // ---------------------------------------------------------------------------
 
 func TestASMetadata(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc8414/issuer-required",
+		"oauth/rfc8414/authorization-endpoint-required",
+		"oauth/rfc8414/token-endpoint-required",
+		"oauth/rfc8414/response-types-supported-required",
+		"oauth/rfc8414/response-is-200-json",
+	)
+
 	s := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-authorization-server", nil)
 	rec := httptest.NewRecorder()

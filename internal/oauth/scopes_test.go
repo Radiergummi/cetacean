@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // RFC 8414 §2 recommends scopes_supported, and RFC 9728 allows it per resource.
@@ -15,6 +17,12 @@ import (
 // raw JSON because a Go nil slice and an empty one differ on the wire — null
 // versus [] — and only the second says what is meant.
 func TestBothDocumentsSayThereAreNoScopes(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc8414/scopes-supported-recommended",
+		"oauth/rfc8414/document-at-well-known-path",
+		"oauth/rfc8414/zero-element-claims-omitted",
+	)
+
 	s := newTestServer(t)
 	mux := http.NewServeMux()
 	s.RegisterRoutes(mux, "")
