@@ -635,31 +635,41 @@ func TestHistoryUpdated(t *testing.T) {
 	})
 }
 
-// RFC 4151 asks the authority name to be fully qualified and lowercase. It is
-// the host the feed was reached on, so neither holds for a deployment that
-// has not set server.public_url. These pin what it does today.
-func TestFeedIDCarriesTheHostAsItArrived(t *testing.T) {
-	t.Run("a short name is not qualified", func(t *testing.T) {
-		spec.Satisfies(t, "http/rfc4151/authority-name-is-fully-qualified")
+// RFC 4151 §2.1's authorityName is a DNS name or an email address — never a
+// host:port — and is wanted in lowercase, so that two spellings of one name
+// cannot mint two identifiers for one feed.
+func TestFeedIDNormalizesTheAuthority(t *testing.T) {
+	spec.Satisfies(t, "http/rfc4151/authority-name-is-lowercase")
 
+	const want = "tag:swarm.example.com,2026:/history"
+
+	for _, host := range []string{
+		"swarm.example.com",
+		"Swarm.Example.COM",
+		"swarm.example.com:9000",
+		"SWARM.EXAMPLE.COM:443",
+	} {
 		req := httptest.NewRequest("GET", "/history", nil)
-		req.Host = "cetacean"
+		req.Host = host
 
-		if got, want := feedID(req), "tag:cetacean,2026:/history"; got != want {
-			t.Errorf("feedID = %q, want %q; the deferral is stale", got, want)
+		if got := feedID(req); got != want {
+			t.Errorf("Host %q: feedID = %q, want %q", host, got, want)
 		}
-	})
+	}
+}
 
-	t.Run("case is carried through", func(t *testing.T) {
-		spec.Satisfies(t, "http/rfc4151/authority-name-is-lowercase")
+// The authority is still whatever host the request arrived on, so a
+// deployment that has not set server.public_url mints one that is not fully
+// qualified. Normalizing the spelling does not settle which name it is.
+func TestFeedIDCarriesAnUnqualifiedHost(t *testing.T) {
+	spec.Satisfies(t, "http/rfc4151/authority-name-is-fully-qualified")
 
-		req := httptest.NewRequest("GET", "/history", nil)
-		req.Host = "Swarm.Example.COM"
+	req := httptest.NewRequest("GET", "/history", nil)
+	req.Host = "cetacean"
 
-		if got, want := feedID(req), "tag:Swarm.Example.COM,2026:/history"; got != want {
-			t.Errorf("feedID = %q, want %q; the deferral is stale", got, want)
-		}
-	})
+	if got, want := feedID(req), "tag:cetacean,2026:/history"; got != want {
+		t.Errorf("feedID = %q, want %q; the deferral is stale", got, want)
+	}
 }
 
 // RFC 4151 §2.1 keeps percent-encoding out of a minted tag. r.URL.Path is
