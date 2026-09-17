@@ -193,14 +193,14 @@ func TestCanonicalIdentifierAmbiguousNameIs409(t *testing.T) {
 	}
 }
 
-// The 409 hands over every candidate ID, so it is cut to the ones the caller
-// may read. A type-level grant answers "could this identity ever read a node",
-// which is not the same question.
-func TestCanonicalIdentifierAmbiguityNamesOnlyReadableCandidates(t *testing.T) {
+// The 409 hands over every candidate ID, so a caller the policy does not let
+// near the name learns none of them; the request falls through and is answered
+// as an unresolved name.
+func TestCanonicalIdentifierAmbiguityNamesNoCandidateWithoutAGrant(t *testing.T) {
 	evaluator := acl.NewEvaluator()
 	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{
 		{
-			Resources:   []string{"node:nodeaaaaaaaaaa"},
+			Resources:   []string{"node:other-host"},
 			Audience:    []string{"*"},
 			Permissions: []string{"read"},
 		},
@@ -217,13 +217,49 @@ func TestCanonicalIdentifierAmbiguityNamesOnlyReadableCandidates(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// One readable candidate is no ambiguity this caller can act on, so the
-	// name falls through and is answered as an unresolved one.
 	if w.Code == http.StatusConflict {
-		t.Fatalf("status = 409 for a caller who may read one candidate; body: %s", w.Body.String())
+		t.Fatalf("status = 409 for a caller with no grant on the name; body: %s", w.Body.String())
 	}
-	if strings.Contains(w.Body.String(), "nodebbbbbbbbbb") {
-		t.Errorf("body names a candidate the caller may not read: %s", w.Body.String())
+
+	for _, id := range []string{"nodeaaaaaaaaaa", "nodebbbbbbbbbb"} {
+		if strings.Contains(w.Body.String(), id) {
+			t.Errorf("body names candidate %s the caller may not read: %s", id, w.Body.String())
+		}
+	}
+}
+
+// A node grant is matched against the hostname, so the grant that covers these
+// twins is the one naming the hostname they share. Filtering the candidates by
+// their IDs instead left this caller with a 404 for a name it may read.
+func TestCanonicalIdentifierAmbiguityReportsToAGrantOnTheSharedName(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"node:twin"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	router := newTestRouterWithCache(t, canonicalTestCache(), withACL(evaluator))
+
+	req := httptest.NewRequest(http.MethodGet, "/nodes/twin", nil)
+	req.Header.Set("Accept", "application/json")
+	req = req.WithContext(
+		auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "alice"}),
+	)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body: %s", w.Code, w.Body.String())
+	}
+
+	for _, id := range []string{"nodeaaaaaaaaaa", "nodebbbbbbbbbb"} {
+		if !strings.Contains(w.Body.String(), id) {
+			t.Errorf("body does not name candidate %s: %s", id, w.Body.String())
+		}
 	}
 }
 

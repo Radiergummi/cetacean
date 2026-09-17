@@ -152,10 +152,9 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 }
 
 // reportAmbiguousName answers a name matching several resources of one type
-// with API015, naming only the candidates this caller may read: a type-level
-// grant answers "could this identity ever read a node", a different question.
-// Fewer than two survivors is no ambiguity the caller can see, so it reports
-// nothing and says so, leaving the request to be answered as it stands.
+// with API015, and only for a caller who may read them: the report names every
+// candidate ID. Fewer than two survivors is no ambiguity the caller can see, so
+// it reports nothing and says so, leaving the request to be answered as it stands.
 func (h *Handlers) reportAmbiguousName(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -167,9 +166,13 @@ func (h *Handlers) reportAmbiguousName(
 		return false
 	}
 
+	// Every candidate is keyed by the name that was asked for, because that is
+	// what a grant matches: a node pattern is compared to its hostname, and an
+	// ID only stands in for a node that has none — which an ambiguous one,
+	// sharing a hostname with another, never is.
 	readable := acl.Filter(
 		h.acl, auth.IdentityFromContext(r.Context()), "read", ambiguous.IDs,
-		func(id string) string { return singular + ":" + id },
+		func(string) string { return singular + ":" + ambiguous.Name },
 	)
 	if len(readable) < 2 {
 		return false

@@ -5,6 +5,23 @@ import type { SSEEvent } from "./useResourceStream";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
+/**
+ * The singular each collection's history ring records. A wrong type reads as an
+ * empty feed rather than an error, so the mapping is stated, not derived.
+ */
+const historyTypes = {
+  "/services": "service",
+  "/nodes": "node",
+  "/tasks": "task",
+  "/configs": "config",
+  "/secrets": "secret",
+  "/networks": "network",
+  "/volumes": "volume",
+  "/stacks": "stack",
+} as const;
+
+export type DetailCollection = keyof typeof historyTypes;
+
 export interface DetailResourceOptions<T> {
   /** Fetch history for this resource (default: true). */
   history?: boolean | undefined;
@@ -30,7 +47,7 @@ export interface DetailResourceActions<T> {
 export function useDetailResource<T>(
   key: string | undefined,
   fetchFn: (key: string, signal?: AbortSignal) => Promise<FetchResult<T>>,
-  collection: string,
+  collection: DetailCollection,
   options?: DetailResourceOptions<T> | undefined,
 ) {
   const queryClient = useQueryClient();
@@ -59,9 +76,8 @@ export function useDetailResource<T>(
   const ssePath = resourceQuery.data?.canonicalPath ?? routePath;
 
   // History resolves its own names now, given the type to resolve against, so
-  // it asks alongside the first fetch rather than behind it. The singular is
-  // the spelling the ring records, as `resourcePath` also assumes.
-  const resourceType = collection.replace(/^\//, "").replace(/s$/, "");
+  // it asks alongside the first fetch rather than behind it.
+  const resourceType = historyTypes[collection];
 
   const historyQuery = useQuery({
     queryKey: historyKey,
