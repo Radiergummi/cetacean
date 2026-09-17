@@ -46,6 +46,12 @@ var allowedMethods = strings.Join([]string{
 	"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
 }, ", ")
 
+// authorizationEndpointPath is reached by redirecting the user agent, never
+// by fetch, so RFC 9700 §2.6 forbids CORS on it: reflecting an origin would
+// let a page on that origin read the consent form and the CSRF token in it.
+// The base path is already stripped by the time this middleware runs.
+const authorizationEndpointPath = "/oauth/authorize"
+
 // allowedHeaders lists request headers the API accepts in cross-origin
 // requests.
 var allowedHeaders = strings.Join([]string{
@@ -82,6 +88,11 @@ func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == authorizationEndpointPath {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			origin := r.Header.Get("Origin")
 			if origin == "" {
 				next.ServeHTTP(w, r)

@@ -616,8 +616,8 @@ func authorizationCode(
 	))
 
 	outcome := decide(t, proc, discovery, persona, page, "approve", nil)
-	if outcome.status != http.StatusFound {
-		t.Fatalf("approve: status = %d, want 302; body: %s", outcome.status, outcome.body)
+	if outcome.status != http.StatusSeeOther {
+		t.Fatalf("approve: status = %d, want 303; body: %s", outcome.status, outcome.body)
 	}
 
 	query := outcome.location(t).Query()
@@ -1404,7 +1404,7 @@ func TestMCPOAuthFlow(t *testing.T) {
 			newAuthorizeRequest(discovery, clientID, challenge, "state-second"),
 		))
 
-		if page.outcome.status == http.StatusFound {
+		if page.outcome.status == http.StatusSeeOther {
 			t.Error("the second authorization skipped the consent page for a " +
 				"self-registered client")
 		}
@@ -1998,8 +1998,8 @@ func TestMCPOAuthWithoutDCROrCIMD(t *testing.T) {
 func assertRedirectError(t *testing.T, outcome httpOutcome, wantError string) {
 	t.Helper()
 
-	if outcome.status != http.StatusFound {
-		t.Fatalf("status = %d, want 302; body: %s", outcome.status, outcome.body)
+	if outcome.status != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303; body: %s", outcome.status, outcome.body)
 	}
 
 	query := outcome.location(t).Query()

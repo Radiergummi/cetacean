@@ -167,23 +167,41 @@ func TestCORSExposesSessionHeader(t *testing.T) {
 
 // RFC 9700 §2.6 forbids CORS at the authorization endpoint: the client reaches
 // it by redirecting the user agent, never by fetch, so reflecting an origin
-// there only lets a page on it read the consent form and the CSRF nonce in it.
-// This pins the divergence — the middleware wraps the whole mux, OAuth routes
-// included, and knows nothing about which path it is answering for.
-func TestCORSAnswersForTheAuthorizationEndpoint(t *testing.T) {
+// there would only let a page on it read the consent form and the CSRF token
+// in it. The request still reaches the handler — it is the headers that stay
+// off.
+func TestCORSIsNotAnsweredForTheAuthorizationEndpoint(t *testing.T) {
 	spec.Satisfies(t, "oauth/rfc9700/no-cors-at-the-authorization-endpoint")
 
 	cfg := &CORSConfig{AllowedOrigins: []string{"https://example.com"}}
+
+	var reached bool
 	handler := cors(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached = true
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	r := httptest.NewRequest("GET", "/oauth/authorize?response_type=code", nil)
-	r.Header.Set("Origin", "https://example.com")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodOptions} {
+		t.Run(method, func(t *testing.T) {
+			reached = false
 
-	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
-		t.Errorf("ACAO = %q, want the origin reflected; the deferral is stale", got)
+			r := httptest.NewRequest(method, "/oauth/authorize?response_type=code", nil)
+			r.Header.Set("Origin", "https://example.com")
+			if method == http.MethodOptions {
+				r.Header.Set("Access-Control-Request-Method", "POST")
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+
+			if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+				t.Errorf("ACAO = %q, want none at the authorization endpoint", got)
+			}
+			if got := w.Header().Get("Access-Control-Allow-Methods"); got != "" {
+				t.Errorf("Allow-Methods = %q, want none: there is no preflight to answer", got)
+			}
+			if !reached {
+				t.Error("the request did not reach the handler")
+			}
+		})
 	}
 }

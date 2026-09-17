@@ -83,8 +83,8 @@ func TestRepeatedResourceIndicatorIsRefused(t *testing.T) {
 		s.HandleAuthorize(rec, req)
 
 		// Redirect-borne, because redirect_uri was validated before this check.
-		if rec.Code != http.StatusFound {
-			t.Fatalf("status = %d, want a 302 carrying the error: %s", rec.Code, rec.Body.String())
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status = %d, want a 303 carrying the error: %s", rec.Code, rec.Body.String())
 		}
 		loc, err := url.Parse(rec.Header().Get("Location"))
 		if err != nil {
@@ -771,9 +771,9 @@ func TestTheConsentPageLoadsNothingFromElsewhere(t *testing.T) {
 }
 
 // RFC 9700 §4.12 forbids a 307 on a redirect that may carry the user's
-// credentials, because a 307 makes the browser repeat the POST body to the
-// target. 302 is what this server sends; §4.12 would rather have a 303.
-func TestTheAuthorizationResponseRedirectIsNota307(t *testing.T) {
+// credentials — a 307 makes the browser repeat the POST body to the target —
+// and asks for 303 See Other in its place.
+func TestTheAuthorizationResponseRedirectIsA303(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc9700/no-307-redirect",
 		"oauth/rfc9700/credential-redirects-use-303",
@@ -802,8 +802,8 @@ func TestTheAuthorizationResponseRedirectIsNota307(t *testing.T) {
 	if postRec.Code == http.StatusTemporaryRedirect {
 		t.Fatal("the authorization response redirect is a 307; the POST body repeats to the client")
 	}
-	if postRec.Code != http.StatusFound {
-		t.Errorf("status = %d, want 302; the deferral no longer describes the code", postRec.Code)
+	if postRec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want 303 See Other", postRec.Code)
 	}
 }
 
@@ -990,21 +990,30 @@ func TestARelativeRedirectURICannotBeRegistered(t *testing.T) {
 	}
 }
 
-// OAuth 2.1 §2.3 forbids a fragment on a registered redirect URI. This pins
-// the divergence: the scheme is all isValidRedirectURI looks at.
-func TestARedirectURIWithAFragmentIsRegistered(t *testing.T) {
+// OAuth 2.1 §2.3 forbids a fragment component on a registered redirect URI,
+// value or no value.
+func TestARedirectURIWithAFragmentIsRefused(t *testing.T) {
 	spec.Satisfies(t, "oauth/oauth-2-1/redirect-uri-has-no-fragment")
 
 	s := newTestServer(t)
 
-	status, reg := registerClient(t, s, `{
-		"redirect_uris": ["https://client.example/cb#fragment"]
-	}`)
-	if status != http.StatusCreated {
-		t.Fatalf("status = %d, want 201; the deferral no longer describes the code", status)
+	for _, uri := range []string{
+		"https://client.example/cb#fragment",
+		"https://client.example/cb#",
+		"http://127.0.0.1:49152/cb#fragment",
+	} {
+		status, _ := registerClient(t, s, `{"redirect_uris": ["`+uri+`"]}`)
+		if status == http.StatusCreated {
+			t.Errorf("%s was registered; it carries a fragment component", uri)
+		}
 	}
-	if reg.RedirectURIs[0] != "https://client.example/cb#fragment" {
-		t.Errorf("redirect_uris = %v", reg.RedirectURIs)
+
+	// The same URI without one still registers, so the check is the fragment
+	// and not the host.
+	if status, _ := registerClient(t, s, `{
+		"redirect_uris": ["https://client.example/cb"]
+	}`); status != http.StatusCreated {
+		t.Errorf("status = %d, want 201 for a fragmentless URI", status)
 	}
 }
 
@@ -1027,8 +1036,8 @@ func TestTheRegisteredRedirectQuerySurvivesTheResponse(t *testing.T) {
 		"xyz",
 	)
 
-	if rec.Code != http.StatusFound {
-		t.Fatalf("status = %d, want 302: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303: %s", rec.Code, rec.Body.String())
 	}
 
 	location, err := url.Parse(rec.Header().Get("Location"))
