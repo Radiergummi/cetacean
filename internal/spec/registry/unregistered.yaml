@@ -30,7 +30,6 @@ RFC8594: "Deprecation header is planned for the JGF topology endpoints (docs/spe
 RFC8615: "Defines the /.well-known/ convention generally. The documents we actually serve there (RFC 8414, RFC 9728) carry the testable requirements."
 RFC8631: "service-desc, service-doc and service-meta link relations. The document carries exactly one RFC 2119 statement, §7's, and it binds the consumer: a service description may be wrong, so be ready for runtime errors. Registering the relation names is IANA's act, not a clause. internal/api/middleware.go emits service-desc, covered by test/e2e/deployment_test.go."
 RFC9110: "HTTP Semantics. Content negotiation, ETags and conditional requests implement it across internal/api, tested extensively (etag_test.go, precondition_test.go, and more). Implemented, not yet registered."
-RFC9264: "Linkset. internal/api/linkset implements the JSON serialization, tested in linkset_test.go. Implemented, not yet registered."
 RFC9421: "Named in a comment as the thing we deliberately do not implement."
 SEP-414: "Trace-context propagation over MCP _meta, exercised informally in internal/mcp/tracing. Out of scope for the four MCP SEPs the registry targets (SEP-2575/2243/2549/2164)."
 SEP-837: "application_type validation for DCR, tested in internal/oauth/dcr_test.go. Out of scope for the four MCP SEPs the registry targets."

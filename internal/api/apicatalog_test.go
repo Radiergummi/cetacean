@@ -334,6 +334,11 @@ func TestAPICatalogOmitsUnmountedAPIs(t *testing.T) {
 // must carry the prefix, or it addresses a path the deployment does not
 // serve.
 func TestAPICatalogIsAbsoluteUnderABasePath(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9264/an-anchor-is-not-a-relative-reference",
+		"http/rfc9264/an-href-is-not-a-relative-reference",
+	)
+
 	router := newBasePathTestRouter(t, "/cetacean")
 
 	doc := fetchCatalog(t, router, "/cetacean"+apiCatalogPath, "")
@@ -346,6 +351,12 @@ func TestAPICatalogIsAbsoluteUnderABasePath(t *testing.T) {
 	for _, target := range targets {
 		if !strings.HasPrefix(target.Href, "http://cetacean.example.com/cetacean") {
 			t.Errorf("href %q does not carry the base path", target.Href)
+		}
+	}
+
+	for anchor := range doc.contexts(t) {
+		if !strings.HasPrefix(anchor, "http://cetacean.example.com/cetacean") {
+			t.Errorf("anchor %q is a relative reference", anchor)
 		}
 	}
 }
@@ -408,5 +419,33 @@ func TestAPICatalogAnswersHEADWithTheLinkRelation(t *testing.T) {
 
 	if !named {
 		t.Errorf("HEAD names no api-catalog relation: %v", rec.Header().Values("Link"))
+	}
+}
+
+// RFC 9264 §4 would rather have title* than title, so a reader outside the
+// HTTP exchange can tell what language a label is in. This pins the choice:
+// the catalog writes title, with an untagged English string.
+func TestAPICatalogTitlesAreUntagged(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9264/title-star-is-preferred")
+
+	router := newSeededTestRouter(t)
+	doc := fetchCatalog(t, router, apiCatalogPath, "")
+
+	body, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(body), `"title*"`) {
+		t.Error("the catalog emits title*; the deferral is stale")
+	}
+
+	var titled bool
+	for _, target := range doc.targets(t) {
+		if target.Title != "" {
+			titled = true
+		}
+	}
+	if !titled {
+		t.Error("no target carries a title at all, so nothing is deferred")
 	}
 }
