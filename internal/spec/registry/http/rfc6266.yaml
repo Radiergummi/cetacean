@@ -1,0 +1,50 @@
+source: RFC 6266
+title: Use of the Content-Disposition Header Field in HTTP
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc6266
+
+inventory:
+  from: >-
+    RFC 6266 §3, §4.1, §4.2, §4.3 and §4.4 in full. §2 is the RFC 2119
+    boilerplate. This deployment is a sender — it offers CSV downloads with a
+    filename — so §3's sender rule is ours and the recipient statements, which
+    bind the browser saving the file, are not.
+  count: 10
+
+requirements:
+  - id: generated-field-is-valid
+    level: MUST
+    text: >-
+      Senders MUST NOT generate Content-Disposition header fields that are
+      invalid.
+    url: https://www.rfc-editor.org/rfc/rfc6266#section-3
+    mutants:
+      - file: internal/api/csv.go
+        replace: "\t\tcase r == '-', r == '_', r == '.':\n\t\t\treturn r"
+        with: "\t\tcase r == '-', r == '_', r == '.', r == '\"':\n\t\t\treturn r"
+
+dismissed:
+  recipients-recover-rather-than-reject: >-
+    Binds the recipient parsing an invalid field. This deployment sends and
+    never reads one.
+  optional-whitespace-between-tokens: >-
+    A grammar note about where whitespace may appear. The field this deployment
+    builds has one fixed shape.
+  unknown-disposition-types-treated-as-attachment: >-
+    Binds the recipient. This deployment sends "attachment" and nothing else.
+  filename-star-preferred-over-filename: >-
+    Binds the recipient choosing between the two spellings. This deployment
+    sends the ASCII "filename" alone, having already reduced the name to
+    characters that need no encoding.
+  recipients-write-only-where-entitled: >-
+    Binds the recipient saving the file to disk.
+  recipients-choose-a-safe-extension: >-
+    Binds the recipient mapping a media type to a file extension.
+  recipients-strip-confusing-characters: >-
+    Binds the recipient, and is the rule this deployment already applies on the
+    sending side: filenamePart reduces the name to letters, digits, "-", "_"
+    and ".".
+  recipients-substitute-dangerous-names: >-
+    Binds the recipient guarding against names like ".." or a device name.
+  recipients-ignore-unknown-parameters: >-
+    Binds the recipient. This deployment sends "filename" alone.

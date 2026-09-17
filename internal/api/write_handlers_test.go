@@ -21,6 +21,8 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 type mockServiceLifecycleWriter struct {
@@ -1223,6 +1225,10 @@ func TestHandlePatchNodeLabels_Add(t *testing.T) {
 }
 
 func TestHandlePatchNodeLabels_WrongContentType(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc5789/patch-document-suits-the-resource",
+	)
+
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "node1"})
 	h := newTestHandlers(t, withCache(c), withWriteClient(&mockWriteClient{}))

@@ -1,0 +1,123 @@
+source: RFC 9727
+title: "api-catalog: A Well-Known URI and Link Relation to Help Discovery of APIs"
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc9727
+
+inventory:
+  from: >-
+    RFC 9727 §2, §4.1, §4.2, §5.1, §5.3, §5.4, §6.1, §6.2 and §8 in full. §1.2
+    is the BCP 14 boilerplate and §3 carries no keyword. This deployment is a
+    Publisher: it serves one catalog describing the APIs this process mounts.
+  count: 26
+
+requirements:
+  - id: catalog-at-the-well-known-path
+    level: MUST
+    text: >-
+      The API catalog MUST be named "api-catalog" in a well-known location as
+      described by [WELL-KNOWN].
+    url: https://www.rfc-editor.org/rfc/rfc9727#section-2
+    mutants:
+      - file: internal/api/apicatalog.go
+        replace: "const apiCatalogPath = \"/.well-known/api-catalog\""
+        with: "const apiCatalogPath = \"/.well-known/api-index\""
+
+  - id: get-returns-a-catalog-document
+    level: MUST
+    text: >-
+      SHALL resolve an HTTPS GET request to /.well-known/api-catalog and return
+      an API catalog document (as described in Section 4).
+    url: https://www.rfc-editor.org/rfc/rfc9727#section-2
+
+  - id: head-returns-the-link-relation
+    level: MUST
+    text: >-
+      SHALL resolve an HTTPS HEAD request to /.well-known/api-catalog with a
+      response including a Link header with the relation(s) defined in
+      Section 3.
+    url: https://www.rfc-editor.org/rfc/rfc9727#section-2
+
+  - id: catalog-links-to-api-endpoints
+    level: MUST
+    text: >-
+      The API catalog MUST include hyperlinks to API endpoints.
+    url: https://www.rfc-editor.org/rfc/rfc9727#section-4.1
+
+  - id: catalog-is-linkset-json
+    level: MUST
+    text: >-
+      The Publisher MUST publish the API catalog document in the Linkset format
+      application/linkset+json (Section 4.2 of [RFC9264]).
+    url: https://www.rfc-editor.org/rfc/rfc9727#section-4.2
+
+  - id: linkset-carries-a-profile-parameter
+    level: SHOULD
+    text: >-
+      The Linkset SHOULD include a profile parameter (Section 5 of [RFC9264])
+      with a Profile URI [RFC7284] value of
+      "https://www.rfc-editor.org/info/rfc9727" to indicate the Linkset is an
+      API catalog.
+    url: https://www.rfc-editor.org/rfc/rfc9727#section-4.2
+    deferred: >-
+      The catalog is served as application/linkset+json with no profile
+      parameter, so a client that has followed the api-catalog link relation
+      knows what it is holding but one that stumbled on the media type alone
+      does not. Adding it is a content-type change on one endpoint, which is
+      why it is recorded rather than done in passing.
+
+dismissed:
+  catalog-includes-useful-metadata: >-
+    A RECOMMENDED about extra metadata. The catalog names each API's endpoint
+    and its description document, which is what a client needs to go further.
+  additional-formats-may-be-negotiated: >-
+    A MAY to offer formats beyond Linkset at the same URI.
+  existing-catalogs-also-publish-a-linkset: >-
+    Conditional on already publishing a catalog in another format, which this
+    deployment did not.
+  existing-catalogs-may-negotiate: >-
+    The MAY that accompanies the condition above.
+  multi-domain-catalogs-recommended: >-
+    A RECOMMENDED for APIs spread over several domains. This process serves one
+    deployment at one origin.
+  third-party-catalogs-may-be-linked: >-
+    A MAY about linking a catalog this deployment is not the authority for.
+  caching-and-compression-considered: >-
+    A SHOULD about network overhead. The catalog carries an ETag and is
+    compressed with the rest of the API above a kilobyte.
+  operational-best-practice-followed: >-
+    A RECOMMENDED covering monitoring and maintenance practice, with no
+    testable shape.
+  legacy-versions-may-be-listed: >-
+    A MAY about advertising deprecated APIs. This deployment publishes one
+    version of each.
+  catalog-is-proofread: >-
+    A RECOMMENDED about the release process, not the code.
+  path-suffix-is-appended-to-well-known: >-
+    §6.1 restating the location for the IANA registration. The behaviour is
+    catalog-at-the-well-known-path.
+  well-known-location-supports-linkset: >-
+    §6.2 restating catalog-is-linkset-json for the registry entry, with the MAY
+    for further formats.
+  tls-should-be-used: >-
+    TLS is the deployment's, terminated by whatever fronts this process.
+  well-known-security-considerations: >-
+    A SHOULD pointing at RFC 8615 §4's considerations for the /.well-known/
+    space as a whole.
+  catalog-is-security-reviewed: >-
+    A SHOULD about reviewing the catalog before deployment. Its contents are
+    generated from the routes this process mounts, not written by hand.
+  catalog-is-read-only-externally: >-
+    The catalog is generated per request from the mount table; there is no
+    write path to it at all.
+  write-privileges-are-restricted: >-
+    The second half of the rule above, about who may change a catalog this
+    deployment does not store.
+  rate-limiting-recommended: >-
+    A RECOMMENDED against abuse. The endpoint is a cheap read behind the same
+    limits as the rest of the API.
+  public-apis-are-audited: >-
+    A SHOULD about auditing for internal APIs leaked into a public catalog.
+    What this catalog lists is what this process mounts.
+  private-apis-are-access-controlled: >-
+    A SHOULD about CORS and access control for an internal catalog. The
+    catalog is subject to the same auth as every other route.
