@@ -9,7 +9,6 @@ RFC2119: "Defines the MUST/SHOULD/MAY vocabulary our own spec.Level type borrows
 RFC3339: "Timestamp format, used via time.RFC3339. No behaviour of ours to test."
 RFC3986: "URI Generic Syntax. The document carries no RFC 2119 keyword anywhere — it states its rules in ABNF and lowercase prose, so there is no clause to register a level against. §6.2.3's empty-path normalization is implemented for OAuth resource identifiers (internal/oauth/resource.go), pinned by TestTheRootIdentifierIsAcceptedWithATrailingSlash."
 RFC4180: "CSV. Informational, and with no RFC 2119 keyword anywhere — its rules are stated in lowercase prose, so there is no clause to register a level against. renderCSV implements the CRLF line breaks and quote doubling (internal/api/csv.go), pinned by csv_test.go."
-RFC4287: "Atom 1.0. internal/api/atom implements the feed/entry/author structs, tested in atom_test.go. Implemented, not yet registered."
 RFC4648: "base64url alphabet, used via encoding/base64. No behaviour of ours to test."
 RFC5280: "X.509 certificate and CRL profile, named where the mTLS mode is documented. Client certificates are parsed by crypto/x509 (internal/auth/cert.go); the profile is the standard library's to enforce, not ours."
 RFC5869: "HKDF key derivation, used via golang.org/x/crypto/hkdf's Extract and Expand. No behaviour of ours to test."
