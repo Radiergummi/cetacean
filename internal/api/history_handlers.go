@@ -33,13 +33,15 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	// `resourceId` is a query parameter, so the canonical redirect never
 	// reaches it and a caller holding a name would read an empty timeline.
-	resourceID, err := cluster.ResolveIdentifier(h.cache, q.Get("type"), q.Get("resourceId"))
-	if h.reportAmbiguousName(w, r, q.Get("type"), err) {
+	resourceType := q.Get("type")
+
+	resourceID, err := cluster.ResolveIdentifier(h.cache, resourceType, q.Get("resourceId"))
+	if h.reportAmbiguousName(w, r, resourceType, err) {
 		return
 	}
 
 	entries := h.cache.History().List(cache.HistoryQuery{
-		Type:       cache.EventType(q.Get("type")),
+		Type:       cache.EventType(resourceType),
 		ResourceID: resourceID,
 		Limit:      limit,
 	})

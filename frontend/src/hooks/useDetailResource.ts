@@ -40,8 +40,11 @@ export function useDetailResource<T>(
   // the first render, where the canonical ID is not.
   const routePath = key ? `${collection}/${key}` : undefined;
 
+  const detailKey = useMemo(() => ["detail", routePath], [routePath]);
+  const historyKey = useMemo(() => ["detail-history", routePath], [routePath]);
+
   const resourceQuery = useQuery({
-    queryKey: ["detail", routePath],
+    queryKey: detailKey,
     queryFn: ({ signal }) => fetchFn(key!, signal),
     enabled: !!key,
   });
@@ -61,23 +64,21 @@ export function useDetailResource<T>(
   const resourceType = collection.replace(/^\//, "").replace(/s$/, "");
 
   const historyQuery = useQuery({
-    queryKey: ["detail-history", routePath],
+    queryKey: historyKey,
     queryFn: ({ signal }) =>
       api.history({ resourceId: key!, type: resourceType, limit: 10 }, signal),
     enabled: !!key && fetchHistory,
   });
 
-  const invalidationKeys: (readonly unknown[])[] = [["detail", routePath]];
+  const invalidationKeys: (readonly unknown[])[] = [detailKey];
 
   if (fetchHistory) {
-    invalidationKeys.push(["detail-history", routePath]);
+    invalidationKeys.push(historyKey);
   }
 
   if (extraQueryKeys) {
     invalidationKeys.push(...extraQueryKeys);
   }
-
-  const detailKey = ["detail", routePath];
 
   const handleEvent = useCallback(
     (event: SSEEvent) => {
@@ -91,8 +92,7 @@ export function useDetailResource<T>(
         },
       });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onEvent, queryClient, routePath],
+    [onEvent, queryClient, detailKey],
   );
 
   useDebouncedInvalidation(ssePath, invalidationKeys, 500, onEvent ? handleEvent : undefined);
@@ -112,10 +112,10 @@ export function useDetailResource<T>(
   );
 
   const retry = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["detail", routePath] });
+    void queryClient.invalidateQueries({ queryKey: detailKey });
 
     if (fetchHistory) {
-      void queryClient.invalidateQueries({ queryKey: ["detail-history", routePath] });
+      void queryClient.invalidateQueries({ queryKey: historyKey });
     }
 
     if (extraQueryKeys) {
@@ -123,7 +123,7 @@ export function useDetailResource<T>(
         void queryClient.invalidateQueries({ queryKey: [...queryKey] });
       }
     }
-  }, [queryClient, routePath, fetchHistory, extraQueryKeys]);
+  }, [queryClient, detailKey, historyKey, fetchHistory, extraQueryKeys]);
 
   return { data, history, error, retry, allowedMethods };
 }
