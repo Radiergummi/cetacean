@@ -24,7 +24,7 @@ export function useDetailResource<T>(
 
   // The route parameter keys the queries: it is unique per URL and known on
   // the first render, where the canonical ID is not.
-  const routePath = `${collection}/${key}`;
+  const routePath = key ? `${collection}/${key}` : undefined;
 
   const resourceQuery = useQuery({
     queryKey: ["detail", routePath],

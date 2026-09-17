@@ -146,8 +146,9 @@ describe("useServiceDetail", () => {
   });
 
   // Navigating between two services must not fetch the old one's activity
-  // against the new one's page while the first fetch is still in flight.
-  it("holds side data until the fetch for this key answers", async () => {
+  // against the new one's page while the first fetch is still in flight. Tasks
+  // are addressed by path, so they carry no such risk and must not be delayed.
+  it("holds history for the fetch to answer, but asks for tasks at once", async () => {
     let settle = (): void => {};
     vi.mocked(api.service).mockReturnValue(
       new Promise((resolve) => {
@@ -160,6 +161,7 @@ describe("useServiceDetail", () => {
     });
 
     expect(api.history).not.toHaveBeenCalled();
+    expect(api.serviceTasks).toHaveBeenCalledWith("web_api", expect.anything());
     expect(streamPaths.at(-1)).toBe("/services/web_api");
 
     settle();

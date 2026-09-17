@@ -20,6 +20,15 @@ there is no way to *address* one — so a link to "the `smtp-password` config th
 One canonical URL per resource, and a grammar of friendly addresses that
 redirect to it.
 
+A friendly address is **accepted, not generated**. The API resolves one
+wherever it appears; the dashboard keeps emitting IDs. Accepting costs one
+middleware and serves everyone who holds a name rather than an ID — an operator
+with `curl -L`, a person pasting a link into a chat, an agent working from what
+the user said. Generating would tax every link site, put a redirect on every
+navigation, and manufacture URLs whose target can move. The two halves are
+separable and only the first is worth its price; "What the dashboard emits"
+draws the line.
+
 A friendly URL is a chain of `(collection, identifier)` **pairs** followed by an
 optional **suffix**:
 
@@ -312,14 +321,14 @@ detail route's parameter is handed straight to `api.service(param)`, and `fetch`
 follows the `307` transparently, so `/services/shop_web` already fetches the
 right resource.
 
-It does not yet render *correctly*, though, and the two items this phase left
-open — whether an SSE subscription survives the redirect, and where the
-canonical ID has to be substituted — turn out to be one question with one
-answer, given under 2a: the route parameter is resolved to the canonical ID
-exactly once, and everything downstream of the first fetch uses the ID. Until
-that lands, a name-addressed detail page is a page whose activity feed is
-silently empty. Phase 1 is therefore complete as an *API* capability and
-incomplete as a dashboard one, which is the honest way to describe it.
+It did not render *correctly*, though, and the two items this phase left open
+— whether an SSE subscription survives the redirect, and where the canonical ID
+has to be substituted — turned out to be one question with one answer: the
+route parameter is resolved to the canonical ID exactly once, and everything
+downstream of the first fetch uses the ID. That has since landed, under "The
+route param resolves to the canonical ID exactly once" below, so Phase 1 is
+complete in both senses. Before it, a name-addressed detail page was a page
+whose activity feed was silently empty.
 
 ### Phase 2a — stack-scoped names
 
@@ -331,12 +340,23 @@ the reader wrote, which is what makes it the form people type and paste, and it
 is also what makes a breadcrumb mean something. It needs one edge — no adjacency
 table, no reverse direction, no cross-reference scans.
 
-Link generation switches to names for the types whose names are stable and
-unique: services, configs, secrets, networks, volumes, stacks. **Nodes and tasks
-keep ID URLs.** A node hostname can both collide — that is what `API015` is for
-— and change, and a task has no name of its own, so keeping them on IDs means
-the dashboard never has to render a disambiguation page, which is the only
-expensive UI this design could otherwise force.
+**Link generation does not switch.** An earlier draft had the dashboard emit
+names for every type whose names are stable and unique — services, configs,
+secrets, networks, volumes, stacks — with nodes and tasks exempted, because a
+hostname can both collide and change while a task has no name of its own. That
+exemption was the argument against the idea rather than a detail of it: the
+mechanism was being declined for the one type where names are hard, while the
+machinery behind it — the all-matches scan, `API015`, the ACL filter on the
+candidate list, a disambiguation page — still had to exist and stay correct.
+
+What a generated name would buy is readability in the address bar of a page the
+reader is already looking at, since a dashboard link is machine-written and
+clicked immediately. What it costs is a redirect on every navigation, the link
+sites below, bookmarks whose target can move, and a standing tax on every
+future feature that carries an identifier somewhere a redirect cannot reach — a
+query parameter, a request body, an SSE subscription. The first such feature
+was already in the tree and silently broken; see "The route param resolves to
+the canonical ID exactly once".
 
 Docker's name charset (`[a-zA-Z0-9][a-zA-Z0-9_.-]*`) is URL-safe, so there is no
 encoding work.
@@ -354,25 +374,28 @@ makes "2b is cheap to pick up" true rather than aspirational. The single-pair
 fast path must stay a map lookup: a path of two or three segments never
 consults the edge table.
 
-#### One link builder
+#### What the dashboard emits
 
-`lib/searchConstants.ts`'s `resourcePath(type, id, name?)` already takes both an
-ID and a name, and already returns name paths for volumes and stacks. It has
-three consumers — `ActivityFeed`, `SearchPalette`, `SearchPage` — so teaching it
-to prefer the name fixes those at once.
+IDs, with two exceptions, both cases where a human reads the URL rather than
+merely following it:
 
-The other ~92 literal `` `/services/${id}` ``-shaped sites across `pages/` and
-`hooks/` should migrate to it. That is the bulk of 2a's frontend diff; it is
-mechanical, and it is worth doing on its own terms, because a single link
-builder is how the stack-scoped form ends up consistent rather than appearing on
-three pages out of twelve.
+- **The breadcrumb leaf**, whose `to` becomes the stack-scoped form on the
+  pages where it is a link at all — see "Breadcrumbs already model this".
+- **A deliberate copy affordance**, if one is added. A URL a person asks for in
+  order to paste it somewhere else is the case names exist for.
 
-`resourcePath` needs the stack name to build the scoped form and does not
-currently receive it. Search results and history entries carry a resource's name
-but not its stack label, so either the signature grows a `stack?` parameter that
-callers holding one supply, or the scoped form is reserved for pages that
-already know the stack. The former is preferable; the latter is the fallback
-where a caller cannot obtain it cheaply.
+`lib/searchConstants.ts`'s `resourcePath(type, id, name?)` keeps doing what it
+does today: ID paths for the ID-keyed types, name paths for volumes and stacks,
+which are keyed by name anyway. It does **not** grow a `stack?` parameter.
+Nothing outside the breadcrumb needs the scoped form, and the breadcrumb
+already holds the stack — which dissolves the one genuinely hard problem in the
+earlier draft, since search results and history entries carry a resource's name
+but no stack label and could not have supplied one.
+
+The ~92 literal `` `/services/${id}` ``-shaped sites across `pages/` and
+`hooks/` stay as they are. Consolidating them behind one builder is worth doing
+on its own terms, but it is tidying rather than this design's work, and
+bundling it in made 2a look several times more expensive than it is.
 
 List pages need nothing: `useSwarmQuery` subscribes to the collection path
 (`/services`), which carries no identifier and is never redirected.
@@ -388,24 +411,31 @@ stack-scoped form and the trail needs no other change.
 
 #### The route param resolves to the canonical ID exactly once
 
-This is the rule that closes both of Phase 1's unverified items, and there are
-three independent reasons for it rather than the one I first wrote down:
+This is the rule that closes both of Phase 1's unverified items, and the one
+part of 2a already in the tree. Two independent reasons for it:
 
+- `api.history({ resourceId })` is keyed by resource **ID**, and a query
+  parameter is not a path, so no redirect rewrites it. A name returned an empty
+  list, which a name-addressed detail page rendered as an activity feed with
+  nothing in it — wrong, and silent about being wrong.
 - The per-resource SSE subscription would otherwise depend on `EventSource`
-  following a `307`. That is specified behaviour, but it is untested here and
-  needing it at all is avoidable.
-- `api.history({ resourceId })` is keyed by resource **ID**. A name returns an
-  empty list, so a name-addressed detail page would silently show no activity —
-  and `useDetailResource` passes its `key` straight through to that call today.
-- `useDetailResource`'s React Query key *is* the `ssePath` string, so a name URL
-  and an ID URL for one resource would occupy two cache entries and never share
-  a fetch.
+  following a `307`. That is specified behaviour, but it is untested here.
 
 Concretely: `useDetailResource` keeps the route parameter as its query key — it
-is stable and unique per URL — and takes the canonical ID from the **fetched
-resource** for the SSE subscription and the history query, both of which then
-enable only once the first fetch resolves. A detail page has nothing to render
-before then in any case.
+is stable and unique per URL, where the canonical ID is unknown on the first
+render — and takes the ID from the **fetched resource** for the SSE
+subscription and the history query. History waits for it. The stream falls back
+to the route path until the fetch answers, so a page whose fetch failed still
+has something to be revived by; that keeps the `EventSource` redirect
+dependency for one connection on a name-addressed load, which is the accepted
+price of not leaving a failed page with no way back.
+
+An earlier draft gave a third reason: that a name URL and an ID URL would
+occupy two React Query cache entries and never share a fetch. They do, and it
+is a consequence of keying by the route parameter rather than a defect to fix —
+there is no canonical ID to key by before the first fetch resolves. Two entries
+for the few name-addressed visits this design leaves — a breadcrumb followed
+upward, a URL someone typed — is not worth a mechanism.
 
 #### Docs
 
@@ -415,7 +445,9 @@ the compose-name rule.
 #### What 2a does not need
 
 The adjacency table beyond its one row, `API016`, relationship verification in
-the reverse direction, and the O(services) cross-reference scans.
+the reverse direction, the O(services) cross-reference scans, and — the change
+from the earlier draft — the link-generation migration and the `stack?`
+parameter it would have needed.
 
 ### Phase 2b — relationship traversals (deferred)
 
@@ -433,17 +465,18 @@ up is a concrete consumer that wants to *address* a relationship — a link in
 documentation, an MCP resource URI, an export format — rather than the symmetry
 being tidy.
 
-Two pieces of 2b are worth extracting and landing with 2a instead, because
-neither depends on a traversal URL ever being served:
+Two pieces of 2b were worth extracting and landing ahead of it, because neither
+depends on a traversal URL ever being served. Both are in the tree:
 
-- **`cluster.ResolveTask`,** because MCP resolves `<service>.<slot>` to a dead
-  record today (see "Addressing a task"). That is a shipped defect, independent
-  of whether any traversal URL is ever served.
-- **The shadowing invariant test.** It costs nothing now and it is the thing
-  that will silently break: adding `GET /services/{id}/networks/{x}` in a year
+- **`cluster.ResolveTask`,** because MCP resolved `<service>.<slot>` to a dead
+  record (see "Addressing a task") — a shipped defect, independent of whether
+  any traversal URL is ever served.
+- **The shadowing invariant test.** It costs nothing and it is the thing that
+  would silently break: adding `GET /services/{id}/networks/{x}` in a year
   would lose to the grammar with no failing test, and today the router has
   exactly one four-segment route (`/-/licenses/texts/{id}`), under a prefix no
-  collection claims.
+  collection claims. It carries its own meta-test, since a sweep whose parser
+  stops matching anything passes for the wrong reason.
 
 ## Discoverability
 
@@ -480,25 +513,26 @@ fail, which is the standard the rest of this should meet.
   request keeps costing one map lookup.
 - The shadowing invariant, brought forward from 2b because it costs nothing and
   is the thing that breaks silently: walk the router's registered patterns and
-  assert none of them would parse as a pair chain.
+  assert none of them would parse as a pair chain. **Shipped**, in
+  `internal/api/canonical_test.go`.
 
 **Phase 2a, dashboard:**
 
-- `resourcePath` returns the stack-scoped form when it knows the stack and the
-  flat name form when it does not, for every type it handles — a table test, so
-  a type added later has to decide.
 - A name-addressed detail page subscribes to the SSE path of the resolved **ID**
   and requests history for the resolved **ID**. Both are assertions about what
   the page asks for rather than what it renders, because the failure they guard
-  is silent: an activity feed that is empty rather than wrong.
-- The same resource reached by name and by ID produces one React Query cache
-  entry, not two.
+  is silent: an activity feed that is empty rather than wrong. **Shipped**, in
+  `useDetailResource.test.tsx` and `useServiceDetail.test.tsx`.
+- The breadcrumb leaf of a stacked service links to
+  `/stacks/<stack>/services/<name>`, and every other generated link still
+  carries an ID. The second half is the one worth asserting: once the form
+  resolves, emitting a name becomes the easy thing to do by accident.
 
-**`cluster.ResolveTask`, extracted from 2b:**
+**`cluster.ResolveTask`, extracted from 2b** — shipped:
 
 - A slot holding a live task and one or more replaced records resolves to the
-  live one. This fails against the current `internal/mcp` implementation, which
-  is the point of writing it.
+  live one. This failed against the `internal/mcp` implementation it replaced,
+  which was the point of writing it.
 - A slot holding only terminal records resolves to nothing rather than to the
   most recent of them.
 - A global service's task resolves by node, and an unplaced one only by ID.

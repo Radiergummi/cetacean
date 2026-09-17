@@ -33,8 +33,8 @@ export function useResourceStream(path: string | undefined, listener: SSEListene
   const listenerRef = useLatestRef(listener);
 
   useEffect(() => {
-    // A detail page cannot name its stream until it knows the resource's
-    // canonical ID, and no path at all is how it says so.
+    // No path means there is nothing to subscribe to yet — a detail page
+    // without a route parameter says so this way.
     if (!path) {
       return;
     }

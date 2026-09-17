@@ -534,15 +534,10 @@ var grammarCollections = map[string]bool{
 // parsesAsPairChain reports whether a route pattern has the shape the grammar
 // consumes as two (collection, identifier) pairs — two applications of the
 // splitter the middleware itself uses, so the two cannot describe a path
-// differently. The edge table is deliberately not consulted: an edge that does
-// not exist today is one 2b may declare.
+// differently. The edge table is deliberately not consulted.
 func parsesAsPairChain(pattern string) bool {
-	// A pattern registered without a method carries no space to cut: the SPA
-	// fallback and the mounts beside it are the ones that look like that.
-	_, path, found := strings.Cut(pattern, " ")
-	if !found {
-		path = pattern
-	}
+	// The SPA fallback and the mounts beside it are registered without a method.
+	path := pattern[strings.LastIndex(pattern, " ")+1:]
 
 	collection, identifier, rest := splitResourcePath(path)
 	via, target, _ := splitResourcePath(rest)

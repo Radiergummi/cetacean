@@ -28,6 +28,17 @@ import { escapePromQL } from "../lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+/**
+ * A request the page replaced, or navigated away from, is not a failure.
+ */
+function ignoreUnlessAborted(signal: AbortSignal) {
+  return (error: unknown) => {
+    if (!signal.aborted) {
+      console.warn(error);
+    }
+  };
+}
+
 export function useServiceDetail(id: string | undefined) {
   const queryClient = useQueryClient();
   const [service, setService] = useState<Service | null>(null);
@@ -58,7 +69,7 @@ export function useServiceDetail(id: string | undefined) {
 
   // The route parameter may be a name; everything addressed by ID waits for
   // the fetch to answer. The key it resolved from is kept alongside it, so
-  // navigating to another service cannot fetch the previous one's side data.
+  // navigating to another service cannot fetch the previous one's history.
   const [resolved, setResolved] = useState<{ key: string; id: string } | null>(null);
   const serviceId = resolved && resolved.key === id ? resolved.id : null;
 
@@ -113,20 +124,30 @@ export function useServiceDetail(id: string | undefined) {
     [id, applyDerivedState],
   );
 
-  const fetchSideData = useCallback(
+  // Tasks are addressed by path, so the redirect reaches them and the route
+  // parameter is enough. History takes its identifier in a query parameter,
+  // which no redirect rewrites, so it is the one that waits for the ID.
+  const fetchTasks = useCallback(
+    (signal: AbortSignal) => {
+      if (!id) {
+        return;
+      }
+
+      api.serviceTasks(id, signal).then(setTasks).catch(ignoreUnlessAborted(signal));
+    },
+    [id],
+  );
+
+  const fetchHistory = useCallback(
     (signal: AbortSignal) => {
       if (!serviceId) {
         return;
       }
 
-      const ignore = (error: unknown) => {
-        if (!signal.aborted) {
-          console.warn(error);
-        }
-      };
-
-      api.serviceTasks(serviceId, signal).then(setTasks).catch(ignore);
-      api.history({ resourceId: serviceId, limit: 10 }, signal).then(setHistory).catch(ignore);
+      api
+        .history({ resourceId: serviceId, limit: 10 }, signal)
+        .then(setHistory)
+        .catch(ignoreUnlessAborted(signal));
     },
     [serviceId],
   );
@@ -174,20 +195,17 @@ export function useServiceDetail(id: string | undefined) {
     abortRef.current = controller;
 
     fetchService(controller.signal);
+    fetchTasks(controller.signal);
 
     return () => controller.abort();
-  }, [id, fetchService]);
+  }, [id, fetchService, fetchTasks]);
 
   useEffect(() => {
-    if (!serviceId) {
-      return;
-    }
-
     const controller = new AbortController();
-    fetchSideData(controller.signal);
+    fetchHistory(controller.signal);
 
     return () => controller.abort();
-  }, [serviceId, fetchSideData]);
+  }, [fetchHistory]);
 
   // Falls back to the route parameter so a failed fetch still has a stream to
   // be revived by; the two agree whenever the URL is already canonical.
@@ -197,7 +215,8 @@ export function useServiceDetail(id: string | undefined) {
     sseAbortRef.current?.abort();
     const controller = new AbortController();
     sseAbortRef.current = controller;
-    fetchSideData(controller.signal);
+    fetchTasks(controller.signal);
+    fetchHistory(controller.signal);
 
     // The per-service stream also delivers task events for this service's
     // tasks, so only treat `resource` as a Service when the event is actually
