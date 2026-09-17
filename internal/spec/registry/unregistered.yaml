@@ -55,7 +55,6 @@ RFC9652: "Link-Template header. writeLinkTemplate implements it (internal/api/pa
 RFC9700: "OAuth 2.0 Security BCP. Section 4.5's authorization-code-injection protection is one of the bugs that motivated this registry (see the design doc), tested by TestTheAuthorizationCodeIsBoundToItsClientAndRedirectURI. Implemented, not yet registered."
 RFC9722: "RP-Initiated Logout. Implemented in internal/auth/oidc.go, tested by the TestLogout_RFC9722 suite. Implemented, not yet registered."
 RFC9727: "API catalog. internal/api/apicatalog.go implements it, including its one MUST (each item names a member API), tested in apicatalog_test.go. Implemented, not yet registered."
-RFC9728: "Protected Resource Metadata. Implemented as the PRM discovery document; planned for the first OAuth registry batch per the design doc. Implemented, not yet registered."
 SEP-414: "Trace-context propagation over MCP _meta, exercised informally in internal/mcp/tracing. Out of scope for the four MCP SEPs the registry targets (SEP-2575/2243/2549/2164)."
 SEP-837: "application_type validation for DCR, tested in internal/oauth/dcr_test.go. Out of scope for the four MCP SEPs the registry targets."
 SEP-1303: "Tool input-validation error shape, characterized by internal/mcp/tool_error_test.go. Out of scope for the four MCP SEPs the registry targets."
