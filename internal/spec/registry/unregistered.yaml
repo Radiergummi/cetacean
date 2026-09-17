@@ -23,7 +23,6 @@ RFC6598: "CGNAT block (100.64.0.0/10), added alongside net.IP.IsPrivate for CIMD
 RFC6648: "Deprecates the X- header prefix. Named in the changelog for the X-Request-ID to Request-Id rename, which is done. No behaviour of ours to test."
 RFC6901: "JSON Pointer syntax. normalizePath only strips a leading \"/\" for flat-map keys; no escaping (~0/~1) or nested traversal of ours to test."
 RFC6902: "JSON Patch. applyJSONPatch implements add/remove/replace/test (internal/api/jsonpatch.go), extensively tested in jsonpatch_test.go. Implemented, not yet registered."
-RFC7009: "Token revocation. The /oauth/revoke endpoint is implemented (internal/oauth/server.go) and exercised in server_test.go. Implemented, not yet registered."
 RFC7230: "HTTP/1.1 message syntax. The 401 WWW-Authenticate quoted-string follows its quoting rules, tested by TestMCPIntegration_UnauthorizedHeaderUsesRFC7230Quoting. Implemented, not yet registered."
 RFC7231: "HTTP semantics for Accept parsing. Content negotiation with q-values and wildcards is implemented in internal/api's dispatcher. Implemented, not yet registered."
 RFC7233: "Range requests. Pagination accepts an items Range header (internal/api/pagination.go), tested by the TestParsePagination_Range family in pagination_test.go. Implemented, not yet registered."
