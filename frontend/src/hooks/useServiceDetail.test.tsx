@@ -2,13 +2,14 @@ import { composeQueryKey } from "../components/ComposeSection";
 import { useServiceDetail } from "./useServiceDetail";
 import { api } from "@/api/client";
 import { createTestQueryClient, createWrapper } from "@/test/mocks";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 interface StreamEvent {
   type: string;
   action: string;
   id: string;
+  resource?: unknown | undefined;
 }
 
 let subscriber: ((event: StreamEvent) => void) | undefined;
@@ -67,8 +68,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   streamPaths.length = 0;
   vi.mocked(api.service).mockResolvedValue({
-    data: { service },
+    data: { service, changes: [{ path: "Image" }], integrations: [{ kind: "traefik" }] },
     allowedMethods: new Set<string>(),
+    canonicalPath: "/services/svc1",
   } as never);
   vi.mocked(api.serviceTasks).mockResolvedValue([] as never);
   vi.mocked(api.history).mockResolvedValue([] as never);
@@ -153,7 +155,12 @@ describe("useServiceDetail", () => {
     let settle = (): void => {};
     vi.mocked(api.service).mockReturnValue(
       new Promise((resolve) => {
-        settle = () => resolve({ data: { service }, allowedMethods: new Set<string>() } as never);
+        settle = () =>
+          resolve({
+            data: { service },
+            allowedMethods: new Set<string>(),
+            canonicalPath: "/services/svc1",
+          } as never);
       }) as never,
     );
 
@@ -171,5 +178,30 @@ describe("useServiceDetail", () => {
     settle();
 
     await waitFor(() => expect(streamPaths.at(-1)).toBe("/services/svc1"));
+  });
+  // A service event carries the service alone. Writing it into the cache as
+  // the whole detail would drop the spec changes and integrations that came
+  // with the fetch, and nothing on the page would say where they went.
+  it("keeps changes and integrations when an event carries only the service", async () => {
+    const { result } = renderHook(() => useServiceDetail("web_api"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(result.current.service).not.toBeNull());
+    expect(result.current.changes).toHaveLength(1);
+
+    act(() => {
+      subscriber?.({
+        type: "service",
+        action: "update",
+        id: "svc1",
+        resource: { ...service, Spec: { ...service.Spec, Name: "renamed" } },
+      });
+    });
+
+    await waitFor(() => expect(result.current.service?.Spec.Name).toBe("renamed"));
+
+    expect(result.current.changes).toHaveLength(1);
+    expect(result.current.integrations).toHaveLength(1);
   });
 });

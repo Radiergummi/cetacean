@@ -1,24 +1,26 @@
-import { api, emptyMethods, headAllowedMethods } from "../api/client";
+import { api, headAllowedMethods } from "../api/client";
 import type {
   ContainerConfig,
   Healthcheck,
-  HistoryEntry,
   Integration,
   PortConfig,
   Service,
+  ServiceDetail,
   ServiceMount,
   SpecChange,
   Task,
 } from "../api/types";
 import { composeQueryKey } from "../components/ComposeSection";
 import type { ServiceResourceShape } from "../components/service-detail";
+import type { DetailResourceActions } from "../hooks/useDetailResource";
+import { useDetailResource } from "../hooks/useDetailResource";
 import {
   isCadvisorReady,
   isPrometheusReady,
   useMonitoringStatus,
 } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
-import { useResourceStream } from "../hooks/useResourceStream";
+import type { SSEEvent } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { deriveServiceSubResources } from "../lib/deriveServiceState";
@@ -27,6 +29,10 @@ import { cpuThresholds, memoryThresholds } from "../lib/resourceThresholds";
 import { escapePromQL } from "../lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+// Stable empties, so an absent list does not remount every consumer.
+const emptyChanges: SpecChange[] = [];
+const emptyIntegrations: Integration[] = [];
 
 /**
  * A request the page replaced, or navigated away from, is not a failure.
@@ -41,10 +47,7 @@ function ignoreUnlessAborted(signal: AbortSignal) {
 
 export function useServiceDetail(id: string | undefined) {
   const queryClient = useQueryClient();
-  const [service, setService] = useState<Service | null>(null);
-  const [changes, setChanges] = useState<SpecChange[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [envVars, setEnvVars] = useState<Record<string, string> | null>(null);
   const [serviceResources, setServiceResources] = useState<ServiceResourceShape | null>(null);
   const [serviceLabels, setServiceLabels] = useState<Record<string, string> | null>(null);
@@ -52,33 +55,16 @@ export function useServiceDetail(id: string | undefined) {
   const [specPorts, setSpecPorts] = useState<PortConfig[] | null>(null);
   const [serviceMounts, setServiceMounts] = useState<ServiceMount[] | null>(null);
   const [containerConfig, setContainerConfig] = useState<ContainerConfig | null>(null);
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const monitoring = useMonitoringStatus();
-  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
   const [canChangeEndpointMode, setCanChangeEndpointMode] = useState(false);
   const hasPrometheus = isPrometheusReady(monitoring);
   const hasCadvisor = isCadvisorReady(monitoring);
-  const [error, setError] = useState(false);
   const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
   const [cpuActual, setCpuActual] = useState<number | undefined>();
   const [memActual, setMemActual] = useState<number | undefined>();
   const { items: recommendations } = useRecommendations();
 
-  const abortRef = useRef<AbortController | null>(null);
   const sseAbortRef = useRef<AbortController | null>(null);
-
-  // The route parameter may be a name, and the recommendation match and the
-  // stream path are keyed by ID. The key it resolved from is kept alongside
-  // it, so neither reads the previous service's ID during a navigation.
-  const [resolved, setResolved] = useState<{ key: string; id: string } | null>(null);
-  const serviceId = resolved && resolved.key === id ? resolved.id : null;
-
-  // A recommendation names its target by ID, so a name-addressed page matches
-  // none of them until the fetch has answered.
-  const serviceRecommendations = useMemo(
-    () => recommendations.filter(({ targetId }) => targetId === serviceId),
-    [recommendations, serviceId],
-  );
 
   const applyDerivedState = useCallback((service: Service) => {
     const {
@@ -99,56 +85,77 @@ export function useServiceDetail(id: string | undefined) {
     setContainerConfig(containerConfig);
   }, []);
 
-  const fetchService = useCallback(
+  // Tasks are the one side request this page still owns: they are a
+  // collection of their own rather than part of the detail response.
+  const fetchTasks = useCallback(
     (signal: AbortSignal) => {
       if (!id) {
         return;
       }
 
-      api
-        .service(id, signal)
-        .then(({ data: response, allowedMethods: methods }) => {
-          setResolved({ key: id, id: response.service.ID });
-          setService(response.service);
-          setChanges(response.changes ?? []);
-          setIntegrations(response.integrations ?? []);
-          applyDerivedState(response.service);
-          setAllowedMethods(methods);
-        })
-        .catch(() => {
-          if (!signal.aborted) {
-            setError(true);
-          }
-        });
-    },
-    [id, applyDerivedState],
-  );
-
-  // Both take the route parameter: the redirect reaches tasks, and history
-  // resolves a name itself given the type to resolve it against.
-  const fetchSideData = useCallback(
-    (signal: AbortSignal) => {
-      if (!id) {
-        return;
-      }
-
-      const ignore = ignoreUnlessAborted(signal);
-
-      api.serviceTasks(id, signal).then(setTasks).catch(ignore);
-      api
-        .history({ resourceId: id, type: "service", limit: 10 }, signal)
-        .then(setHistory)
-        .catch(ignore);
+      api.serviceTasks(id, signal).then(setTasks).catch(ignoreUnlessAborted(signal));
     },
     [id],
   );
 
-  const refetchService = useCallback(() => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    fetchService(controller.signal);
-  }, [fetchService]);
+  // The per-service stream also delivers task events for this service's tasks,
+  // so only treat `resource` as a Service when the event is a service event —
+  // otherwise the page's own resource would be replaced with a Task.
+  const onEvent = useCallback(
+    (event: SSEEvent, { setData, refetch }: DetailResourceActions<ServiceDetail>) => {
+      sseAbortRef.current?.abort();
+      const controller = new AbortController();
+      sseAbortRef.current = controller;
+      fetchTasks(controller.signal);
+
+      if (event.type === "service" && event.resource) {
+        setData((previous) => ({ ...previous, service: event.resource as Service }));
+      } else if (event.type === "service" || event.type === "sync") {
+        // Service deletions and full syncs come without a payload — refetch to
+        // pick up the new state (or surface 404 on delete).
+        refetch();
+      }
+
+      // The compose document is a projection of the spec, so a task event does
+      // not change it; an expanded section would otherwise keep showing the
+      // file the service was exported as before the update.
+      if (event.type === "service" || event.type === "sync") {
+        void queryClient.invalidateQueries({ queryKey: [...composeQueryKey(`service:${id}`)] });
+      }
+    },
+    [fetchTasks, id, queryClient],
+  );
+
+  const {
+    data: detail,
+    history,
+    error,
+    retry: refetchService,
+    allowedMethods,
+  } = useDetailResource<ServiceDetail>(id, api.service, "/services", { onEvent });
+
+  const service = detail?.service ?? null;
+  const changes = detail?.changes ?? emptyChanges;
+  const integrations = detail?.integrations ?? emptyIntegrations;
+
+  // A recommendation names its target by ID, so a name-addressed page matches
+  // none of them until the fetch has answered.
+  const serviceRecommendations = useMemo(
+    () => recommendations.filter(({ targetId }) => targetId === service?.ID),
+    [recommendations, service?.ID],
+  );
+
+  // The sub-resource editors write their own results back, so these cannot be
+  // derived on the fly — the fetch seeds them and a save replaces them.
+  // Seeding during render rather than in an effect is React's own answer to
+  // state that follows a value: an effect would show one frame of the previous
+  // service's sub-resources first.
+  const [derivedFrom, setDerivedFrom] = useState<Service | null>(null);
+
+  if (service && service !== derivedFrom) {
+    setDerivedFrom(service);
+    applyDerivedState(service);
+  }
 
   useEffect(() => {
     api
@@ -181,46 +188,11 @@ export function useServiceDetail(id: string | undefined) {
       return;
     }
 
-    abortRef.current?.abort();
     const controller = new AbortController();
-    abortRef.current = controller;
-
-    fetchService(controller.signal);
-    fetchSideData(controller.signal);
+    fetchTasks(controller.signal);
 
     return () => controller.abort();
-  }, [id, fetchService, fetchSideData]);
-
-  // Falls back to the route parameter so a failed fetch still has a stream to
-  // be revived by; the two agree whenever the URL is already canonical.
-  const streamKey = serviceId ?? id;
-
-  useResourceStream(streamKey ? `/services/${streamKey}` : undefined, (event) => {
-    sseAbortRef.current?.abort();
-    const controller = new AbortController();
-    sseAbortRef.current = controller;
-    fetchSideData(controller.signal);
-
-    // The per-service stream also delivers task events for this service's
-    // tasks, so only treat `resource` as a Service when the event is actually
-    // a service event — otherwise we'd clobber state with a Task.
-    if (event.type === "service" && event.resource) {
-      const svc = event.resource as Service;
-      setService(svc);
-      applyDerivedState(svc);
-    } else if (event.type === "service" || event.type === "sync") {
-      // Service deletions and full syncs come without a payload — refetch to
-      // pick up the new state (or surface 404 on delete).
-      fetchService(controller.signal);
-    }
-
-    // The compose document is a projection of the spec, so a task event does
-    // not change it; an expanded section would otherwise keep showing the
-    // file the service was exported as before the update.
-    if (event.type === "service" || event.type === "sync") {
-      void queryClient.invalidateQueries({ queryKey: [...composeQueryKey(`service:${id}`)] });
-    }
-  });
+  }, [id, fetchTasks]);
 
   useEffect(() => {
     return () => sseAbortRef.current?.abort();

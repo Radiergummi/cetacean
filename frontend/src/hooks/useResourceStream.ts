@@ -3,14 +3,14 @@ import { apiPath } from "@/lib/basePath";
 import { openEventStream } from "@/lib/eventStream";
 import { createContext, useContext, useEffect, useState } from "react";
 
-interface SSEEvent {
+export interface SSEEvent {
   type: string;
   action: string;
   id: string;
   resource?: unknown | undefined;
 }
 
-type SSEListener = (event: SSEEvent) => void;
+export type SSEListener = (event: SSEEvent) => void;
 
 export const sseEventTypes = [
   "node",

@@ -1,4 +1,5 @@
 import { useLatestRef } from "./useLatestRef";
+import type { SSEListener } from "./useResourceStream";
 import { useResourceStream } from "./useResourceStream";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
@@ -12,26 +13,35 @@ export function useDebouncedInvalidation(
   ssePath: string | undefined,
   queryKeys: readonly (readonly unknown[])[],
   delay = 500,
+  onEvent?: SSEListener | undefined,
 ) {
   const queryClient = useQueryClient();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryKeysRef = useLatestRef(queryKeys);
+  const onEventRef = useLatestRef(onEvent);
 
   useResourceStream(
     ssePath,
-    useCallback(() => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
+    useCallback(
+      (event) => {
+        // One stream serves both: a second useResourceStream for a caller that
+        // wants the events themselves would open a second EventSource.
+        onEventRef.current?.(event);
 
-      debounceRef.current = setTimeout(() => {
-        debounceRef.current = null;
-
-        for (const key of queryKeysRef.current) {
-          void queryClient.invalidateQueries({ queryKey: [...key] });
+        if (debounceRef.current) {
+          clearTimeout(debounceRef.current);
         }
-      }, delay);
-    }, [queryClient, delay, queryKeysRef]),
+
+        debounceRef.current = setTimeout(() => {
+          debounceRef.current = null;
+
+          for (const key of queryKeysRef.current) {
+            void queryClient.invalidateQueries({ queryKey: [...key] });
+          }
+        }, delay);
+      },
+      [queryClient, delay, queryKeysRef, onEventRef],
+    ),
   );
 
   useEffect(() => {
