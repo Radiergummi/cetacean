@@ -443,6 +443,8 @@ func TestTokenExchangeRefreshTheft(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRevocation(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7009/refresh-token-revocation-supported")
+
 	s := newTestServer(t)
 
 	token := s.refreshTokens.Issue(RefreshTokenData{
@@ -484,6 +486,103 @@ func TestRevocationUnknownToken(t *testing.T) {
 	// RFC 7009: always 200 even for unknown tokens.
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+// The hint is advisory: this server looks a token up the one way it can, so a
+// client that guesses the type wrong still gets its token revoked.
+func TestRevocationIgnoresAWrongTokenTypeHint(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7009/hint-failure-searches-every-token-type")
+
+	s := newTestServer(t)
+
+	token := s.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "user",
+		ClientID: "test-client",
+		Resource: s.resources.fallback,
+	}, time.Hour)
+
+	form := url.Values{"token": {token}, "token_type_hint": {"access_token"}}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/revoke", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.HandleRevoke(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	if _, valid := s.refreshTokens.Validate(token); valid {
+		t.Error("a wrong token_type_hint left the refresh token usable")
+	}
+}
+
+// Revocation reaches the grant, not the tokens already minted from it: an
+// access token is a self-contained JWT this server never sees again.
+func TestRevocationDoesNotReachAnAccessToken(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7009/access-token-revocation-supported",
+		"oauth/rfc7009/cascade-to-access-tokens",
+	)
+
+	s := newTestServer(t)
+
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
+
+	access, err := issuer.IssueAccessToken(
+		AccessTokenClaims{Subject: "user", ClientID: "test-client"},
+		testTokenAudience,
+		time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("issue access token: %v", err)
+	}
+
+	refresh := s.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "user",
+		ClientID: "test-client",
+		Resource: s.resources.fallback,
+	}, time.Hour)
+
+	for _, token := range []string{refresh, access} {
+		form := url.Values{"token": {token}}
+		req := httptest.NewRequest(
+			http.MethodPost, "/oauth/revoke", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		s.HandleRevoke(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rec.Code)
+		}
+	}
+
+	// The grant is gone, so no further token can be refreshed out of it.
+	if _, valid := s.refreshTokens.Validate(refresh); valid {
+		t.Error("the refresh token survived revocation")
+	}
+
+	// The access token is not, and keeps working until it expires.
+	if _, err := issuer.VerifyAccessToken(access, testTokenAudience); err != nil {
+		t.Errorf("revocation reached an access token after all: %v", err)
+	}
+}
+
+// A request naming no token is answered 200 rather than the invalid_request
+// §2.2.1 provides for, so a client that misspells the parameter is told its
+// token is gone when nothing was looked at.
+func TestRevocationWithoutATokenIsAccepted(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7009/token-parameter-required")
+
+	s := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/revoke", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.HandleRevoke(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want the 200 this server currently answers", rec.Code)
 	}
 }
 
