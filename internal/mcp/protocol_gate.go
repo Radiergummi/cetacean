@@ -8,8 +8,8 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 )
 
-// ProtocolVersion is the single MCP revision Cetacean implements. Older
-// revisions are refused by requireModernProtocol.
+// ProtocolVersion is the single MCP revision Cetacean implements. Every other
+// revision, older or newer, is refused by requireModernProtocol.
 const ProtocolVersion = mcplib.LATEST_PROTOCOL_VERSION
 
 // maxIDSniffBytes bounds how much of a rejected request body we read to recover
