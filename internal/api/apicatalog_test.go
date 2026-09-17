@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/api/linkset"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // catalogDocument is the wire shape, declared separately from linkset.Document
@@ -127,9 +129,18 @@ func fetchCatalog(
 // media type rather than "not 404", since the SPA fallback answers every
 // unrouted path with 200 and HTML.
 func TestAPICatalogTargetsAnswerAsAdvertised(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9727/catalog-at-the-well-known-path",
+		"http/rfc9727/get-returns-a-catalog-document",
+		"http/rfc9727/catalog-is-linkset-json",
+		"http/rfc9727/linkset-carries-a-profile-parameter",
+	)
+
 	router := newSeededTestRouter(t)
 
-	doc := fetchCatalog(t, router, apiCatalogPath, "")
+	// Spelled out rather than taken from apiCatalogPath: RFC 9727 §2 fixes the
+	// name, so a test that followed the constant would follow it anywhere.
+	doc := fetchCatalog(t, router, "/.well-known/api-catalog", "")
 
 	targets := doc.targets(t)
 	if len(targets) == 0 {
@@ -199,6 +210,10 @@ func TestAPICatalogTargetsAnswerAsAdvertised(t *testing.T) {
 // member API. A catalog of service-desc and describedby links alone is a
 // sitemap of one API, which is not what this URI means.
 func TestAPICatalogCarriesItemLinks(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9727/catalog-links-to-api-endpoints",
+	)
+
 	router := newSeededTestRouter(t)
 
 	doc := fetchCatalog(t, router, apiCatalogPath, "")
@@ -363,5 +378,35 @@ func TestAPICatalogETagIsStable(t *testing.T) {
 		if etag != first {
 			t.Fatalf("ETag changed between identical requests: %q then %q", first, etag)
 		}
+	}
+}
+
+// RFC 9727 §2: a HEAD to the catalog answers with the api-catalog link relation,
+// so a client can confirm what it found without pulling the document.
+func TestAPICatalogAnswersHEADWithTheLinkRelation(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9727/head-returns-the-link-relation")
+
+	router := newSeededTestRouter(t)
+
+	req := httptest.NewRequest(http.MethodHead, apiCatalogPath, nil)
+	req.Host = "cetacean.example.com"
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var named bool
+
+	for _, link := range rec.Header().Values("Link") {
+		if strings.Contains(link, `rel="api-catalog"`) {
+			named = true
+		}
+	}
+
+	if !named {
+		t.Errorf("HEAD names no api-catalog relation: %v", rec.Header().Values("Link"))
 	}
 }

@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // newClientCert builds a self-signed certificate, parsed and DER-encoded, so a
@@ -69,6 +71,10 @@ func spiffeURI(t *testing.T, raw string) []*url.URL {
 // TestCertProvider_HeaderFromTrustedProxy: a forwarded certificate builds
 // identity by the same path a presented one takes, SPIFFE URI SAN included.
 func TestCertProvider_HeaderFromTrustedProxy(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9440/consuming-the-field-is-configurable",
+	)
+
 	_, der := newClientCert(t, "alice", spiffeURI(t, "spiffe://example.org/workload/api"))
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -96,6 +102,10 @@ func TestCertProvider_HeaderFromTrustedProxy(t *testing.T) {
 // TestCertProvider_HeaderFromUntrustedPeerRejected: anyone can send the
 // header, and RFC 9440 §3 allows believing it only from a trusted TTRP.
 func TestCertProvider_HeaderFromUntrustedPeerRejected(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9440/accepted-only-from-a-trusted-proxy",
+	)
+
 	_, der := newClientCert(t, "mallory", nil)
 
 	for name, request := range map[string]func(*http.Request) *http.Request{
@@ -140,6 +150,10 @@ func TestCertProvider_PeerCertificateWinsOverHeader(t *testing.T) {
 // replacing, the client's value arrives first — taking it would let anyone
 // reaching the proxy pick their identity.
 func TestCertProvider_DuplicateHeaderRejected(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9440/client-cert-is-a-singleton",
+	)
+
 	_, mallory := newClientCert(t, "mallory", nil)
 	_, alice := newClientCert(t, "alice", nil)
 

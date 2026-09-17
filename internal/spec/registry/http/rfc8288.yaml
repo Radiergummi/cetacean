@@ -1,0 +1,60 @@
+source: RFC 8288
+title: Web Linking
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc8288
+
+inventory:
+  from: >-
+    RFC 8288 §3 through §3.4.2 in full — the Link header serialisation this
+    deployment produces. §1.1 is the RFC 2119 boilerplate. §2 governs defining
+    and registering relation types, which this deployment does not do: every
+    rel it emits is already in the IANA registry.
+  count: 14
+
+requirements:
+  - id: rel-is-present-and-single
+    level: MUST
+    text: >-
+      The rel parameter MUST be present but MUST NOT appear more than once in a
+      given link-value; occurrences after the first MUST be ignored by parsers.
+    url: https://www.rfc-editor.org/rfc/rfc8288#section-3.3
+    mutants:
+      - file: internal/api/pagination.go
+        replace: "\t\tlinks = append(links, buildLink(offset+limit)+`; rel=\"next\"`)"
+        with: "\t\tlinks = append(links, buildLink(offset+limit))"
+
+dismissed:
+  both-param-forms-are-parseable: >-
+    Binds a recipient parsing token and quoted-string values. This deployment
+    produces links and parses none.
+  relative-targets-are-resolved: >-
+    Binds the parser resolving a relative URI-Reference. The links here are
+    built by absPath, which resolves against the deployment's public URL before
+    the header is written.
+  relative-anchors-are-resolved: >-
+    Binds the parser, for an anchor parameter this deployment does not emit.
+  links-are-ignored-without-their-anchor: >-
+    Binds a link application handling an anchor this deployment does not emit.
+  extension-relations-are-absolute-and-quoted: >-
+    Constrains extension relation types. Every rel emitted here — next, prev,
+    item, self, describedby, service-desc — is a registered token.
+  media-value-is-quoted-when-punctuated: >-
+    Constrains the media attribute, which this deployment does not emit.
+  media-appears-once: >-
+    Constrains an attribute this deployment does not emit.
+  title-appears-once: >-
+    Constrains the title attribute, which this deployment does not emit: a link
+    here is named by its rel.
+  title-star-appears-once: >-
+    Constrains an attribute this deployment does not emit.
+  title-star-wins-over-title: >-
+    A SHOULD for an application reading both spellings, neither of which is
+    emitted.
+  type-appears-once: >-
+    Constrains the type attribute. The feed alternates emit it once per link by
+    construction.
+  extension-attributes-may-use-rfc8187: >-
+    A MAY about encoding extension target attributes. This deployment emits
+    none.
+  extension-attribute-star-form-wins: >-
+    A SHOULD for an application reading both forms of an extension attribute.

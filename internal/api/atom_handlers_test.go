@@ -370,6 +370,7 @@ func testSearchFeedData(
 }
 
 func TestPaginationLinks(t *testing.T) {
+
 	t.Run("self and alternate only when not full page", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
 		entries := make([]cache.HistoryEntry, 3)

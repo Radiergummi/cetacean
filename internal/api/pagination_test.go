@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestParsePagination_Defaults(t *testing.T) {
@@ -117,6 +119,8 @@ type testItem struct {
 }
 
 func TestWritePaginationLinks_FirstPage(t *testing.T) {
+	spec.Satisfies(t, "http/rfc8288/rel-is-present-and-single")
+
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
 	writePaginationLinks(w, r, 100, 10, 0)
@@ -625,6 +629,10 @@ func TestRangeRequest_EndToEnd(t *testing.T) {
 }
 
 func TestWriteLinkTemplate(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9652/link-and-anchor-are-strings",
+	)
+
 	t.Run("sets Link-Template header", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/services", nil)
 		w := httptest.NewRecorder()
