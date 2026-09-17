@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -150,10 +151,15 @@ func isLoopbackURI(rawURI string) bool {
 }
 
 // isValidRedirectURI reports whether a redirect URI is acceptable for DCR:
-// must be https:// or a loopback http:// URI.
+// must be https:// or a loopback http:// URI, and carry no fragment. The
+// fragment is checked on the raw string: a bare "#" parses to an empty
+// Fragment, and OAuth 2.1 §2.3 excludes the component, not just a value.
 func isValidRedirectURI(rawURI string) bool {
 	u, err := url.Parse(rawURI)
 	if err != nil {
+		return false
+	}
+	if strings.Contains(rawURI, "#") {
 		return false
 	}
 	if u.Scheme == "https" {

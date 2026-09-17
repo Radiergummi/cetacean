@@ -191,7 +191,7 @@ sequenceDiagram
     cetacean->>you: sign in through the configured auth provider
     cetacean->>you: consent screen naming the client
     you-->>cetacean: approve
-    cetacean-->>client: 302 with the code and iss
+    cetacean-->>client: 303 with the code and iss
     client->>cetacean: POST /oauth/token, code and PKCE verifier
     cetacean-->>client: access token and refresh token
     client->>cetacean: POST /mcp, Bearer token
