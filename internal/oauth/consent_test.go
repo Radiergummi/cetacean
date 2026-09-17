@@ -481,3 +481,42 @@ func TestConsentPageNamesTheResourceBeingAuthorized(t *testing.T) {
 		t.Errorf("both resources ask for the same thing: %s", rootGrant)
 	}
 }
+
+// RFC 7591 §5 requires client metadata to be treated as self-asserted: a rogue
+// client can register any name it likes. The consent page says so, and an
+// approval it wins is never remembered.
+func TestADynamicallyRegisteredClientIsLabelledSelfAsserted(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7591/metadata-is-self-asserted")
+
+	s := newTestServer(t)
+	challenge := computeS256Challenge("verifier")
+	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
+
+	rawURL := authorizeURL(
+		clientID,
+		"http://localhost:9999/cb",
+		challenge,
+		"state123",
+		s.resources.fallback,
+	)
+	req := httptest.NewRequest(http.MethodGet, rawURL, nil)
+	req = withIdentity(req, "alice", "alice@example.com")
+	rec := httptest.NewRecorder()
+
+	s.HandleAuthorize(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "Self-registered") {
+		t.Error("a self-asserted client name is presented without saying so")
+	}
+	if strings.Contains(body, `<span class="badge badge-verified">`) {
+		t.Error("a dynamically registered client is presented as verified")
+	}
+	if strings.Contains(body, "will be remembered") {
+		t.Error("an approval for a self-asserted client is offered as remembered")
+	}
+}
