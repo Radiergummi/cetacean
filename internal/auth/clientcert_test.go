@@ -245,11 +245,14 @@ func TestDecodeClientCertBase64Tolerances(t *testing.T) {
 		}
 	})
 
-	t.Run("a line feed is accepted", func(t *testing.T) {
+	t.Run("a line feed is refused", func(t *testing.T) {
 		spec.Satisfies(t, "http/rfc8941/the-alphabet-and-line-feeds-are-enforced")
 
-		if _, err := decodeClientCert(":aG\nk=:"); err != nil {
-			t.Errorf("a line feed was refused: %v; the deferral is stale", err)
+		// encoding/base64 strips both before decoding, so neither reaches it.
+		for _, value := range []string{":aG\nk=:", ":aG\rk=:"} {
+			if _, err := decodeClientCert(value); err == nil {
+				t.Errorf("%q was accepted; encoded data may not carry a line break", value)
+			}
 		}
 	})
 }

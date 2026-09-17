@@ -130,6 +130,13 @@ func decodeClientCert(value string) ([]byte, error) {
 		)
 	}
 
+	// RFC 8941 §4.2.7 requires a line feed in encoded data to fail. Checked
+	// here because encoding/base64 strips CR and LF before decoding and has
+	// no setting that says otherwise.
+	if strings.ContainsAny(value, "\r\n") {
+		return nil, fmt.Errorf("Client-Cert contains a line break")
+	}
+
 	der, err := base64.StdEncoding.DecodeString(value[1 : len(value)-1])
 	if err != nil {
 		return nil, fmt.Errorf("Client-Cert is not valid base64: %w", err)
