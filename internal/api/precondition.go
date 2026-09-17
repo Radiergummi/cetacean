@@ -43,11 +43,12 @@ func (h *Handlers) precond(rep representationFunc) Constructor {
 			value, err := rep(r)
 			switch {
 			case errors.Is(err, errNoRepresentation):
-				// RFC 9110 §13.2.2: no current representation means the
-				// precondition fails. 412, not 404 — evaluating the condition
-				// comes first.
-				writeErrorCode(w, r, "API013",
-					"the resource has no current representation")
+				// RFC 9110 §13.2.1: a precondition is ignored when the answer
+				// without it would be neither 2xx nor 412, and for a resource
+				// that is gone that answer is 404. Only the handler can say
+				// so, so the request goes through to it unconditioned.
+				next.ServeHTTP(w, r)
+
 				return
 			case err != nil:
 				// The condition could not be evaluated at all. Reporting 412

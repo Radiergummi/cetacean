@@ -74,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Header-based authentication works behind a reverse proxy again; it was answering 401 to every request
 - Asking an endpoint for a format it does not serve now says so, instead of answering with JSON
 - A malformed `filter` is reported as an error again on a request carrying `If-None-Match: *`
+- A write carrying `If-Match` against a resource that no longer exists answers `404`, not `412` — the validator was not what was wrong with it
 - Atom feed identifiers drop the port and lowercase the host, so one feed reached two ways is one feed and not two
 - An address matching no route answers `404` with a problem document rather than `200` and the dashboard — on a write, and on a read from a client that said it cannot use a web page
 - A format an `Accept` header rules out with `;q=0` is refused with `406` instead of served anyway

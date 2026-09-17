@@ -623,12 +623,13 @@ func TestCodedETagSuffixesAreStrippable(t *testing.T) {
 }
 
 // RFC 9110 §8.8.2.1 forbids a Last-Modified later than the time the response
-// was generated. The value here is the engine's own timestamp, written out
-// unclamped, so an engine whose clock runs ahead produces one.
-func TestLastModifiedIsWrittenUnclamped(t *testing.T) {
+// was generated, and replaces such a value with that time. The engine stamps
+// these, so a manager whose clock runs ahead is all it takes.
+func TestLastModifiedIsClampedToNow(t *testing.T) {
 	spec.Satisfies(t, "http/rfc9110/last-modified-is-not-in-the-future")
 
-	future := time.Now().Add(24 * time.Hour).UTC().Truncate(time.Second)
+	sent := time.Now()
+	future := sent.Add(24 * time.Hour)
 
 	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
@@ -638,8 +639,26 @@ func TestLastModifiedIsWrittenUnclamped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse Last-Modified: %v", err)
 	}
-	if !got.After(time.Now()) {
-		t.Error("the future timestamp was clamped; the deferral is stale")
+	if got.After(time.Now()) {
+		t.Errorf("Last-Modified = %s, which is still in the future", got)
+	}
+	// Clamped to the origination date rather than dropped or zeroed.
+	if got.Before(sent.Add(-time.Minute)) {
+		t.Errorf("Last-Modified = %s, want roughly %s", got, sent)
+	}
+}
+
+// A timestamp that is merely old is carried through untouched: the clamp is
+// a ceiling, not a rewrite.
+func TestLastModifiedInThePastIsUntouched(t *testing.T) {
+	past := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
+
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	w := httptest.NewRecorder()
+	writeCachedJSONTimed(w, r, map[string]string{"status": "ok"}, past)
+
+	if got := w.Header().Get("Last-Modified"); got != "Sun, 15 Jun 2025 10:30:00 GMT" {
+		t.Errorf("Last-Modified = %q, want the value it was given", got)
 	}
 }
 
