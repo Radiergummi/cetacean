@@ -14,6 +14,7 @@ import (
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestWriteCachedAtom(t *testing.T) {
@@ -80,6 +81,12 @@ func TestWriteCachedAtom(t *testing.T) {
 }
 
 func TestFeedID(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc4151/no-tag-under-a-future-date",
+		"http/rfc4151/the-date-may-be-past-or-present",
+		"http/rfc4151/the-day-and-month-may-be-omitted",
+	)
+
 	t.Run("uses Host header", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
 		req.Host = "swarm.example.com"
@@ -370,6 +377,7 @@ func testSearchFeedData(
 }
 
 func TestPaginationLinks(t *testing.T) {
+	spec.Satisfies(t, "http/rfc5005/a-paged-feed-carries-a-paging-relation")
 
 	t.Run("self and alternate only when not full page", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
@@ -618,4 +626,77 @@ func TestHistoryUpdated(t *testing.T) {
 			t.Errorf("historyUpdated = %v, want %v", got, emptyFeedEpoch)
 		}
 	})
+}
+
+// RFC 4151 asks the authority name to be fully qualified and lowercase. It is
+// the host the feed was reached on, so neither holds for a deployment that
+// has not set server.public_url. These pin what it does today.
+func TestFeedIDCarriesTheHostAsItArrived(t *testing.T) {
+	t.Run("a short name is not qualified", func(t *testing.T) {
+		spec.Satisfies(t, "http/rfc4151/authority-name-is-fully-qualified")
+
+		req := httptest.NewRequest("GET", "/history", nil)
+		req.Host = "cetacean"
+
+		if got, want := feedID(req), "tag:cetacean,2026:/history"; got != want {
+			t.Errorf("feedID = %q, want %q; the deferral is stale", got, want)
+		}
+	})
+
+	t.Run("case is carried through", func(t *testing.T) {
+		spec.Satisfies(t, "http/rfc4151/authority-name-is-lowercase")
+
+		req := httptest.NewRequest("GET", "/history", nil)
+		req.Host = "Swarm.Example.COM"
+
+		if got, want := feedID(req), "tag:Swarm.Example.COM,2026:/history"; got != want {
+			t.Errorf("feedID = %q, want %q; the deferral is stale", got, want)
+		}
+	})
+}
+
+// RFC 4151 §2.1 keeps percent-encoding out of a minted tag. r.URL.Path is
+// already decoded, so the specific part carries the characters themselves.
+func TestFeedIDIsNotPercentEncoded(t *testing.T) {
+	spec.Satisfies(t, "http/rfc4151/tags-are-not-percent-encoded")
+
+	req := httptest.NewRequest("GET", "/services/my%20service/history", nil)
+	req.Host = "swarm.example.com"
+
+	got := feedID(req)
+	if strings.Contains(got, "%") {
+		t.Errorf("feedID = %q, want no percent-encoding", got)
+	}
+	if !strings.Contains(got, "my service") {
+		t.Errorf("feedID = %q, want the decoded path", got)
+	}
+}
+
+// RFC 5005 §4.1 asks a publisher to make duplicate removal unambiguous — a
+// reader reconciling two pages has to tell one entry from another, and the
+// same entry on both pages from two. Each entry's id names the history event
+// it came from, so it is stable across pages and unique within one.
+func TestFeedEntryIDsIdentifyTheEvent(t *testing.T) {
+	spec.Satisfies(t, "http/rfc5005/duplicate-removal-is-unambiguous")
+
+	req := httptest.NewRequest("GET", "/history", nil)
+	entries := []cache.HistoryEntry{
+		{ID: 7, Type: "service", Name: "api", Action: "created"},
+		{ID: 8, Type: "service", Name: "api", Action: "updated"},
+	}
+
+	got := historyToFeedEntries(req, entries)
+	if len(got) != 2 {
+		t.Fatalf("got %d entries, want 2", len(got))
+	}
+
+	if got[0].ID != "urn:cetacean:history:7" || got[1].ID != "urn:cetacean:history:8" {
+		t.Errorf("ids = %q, %q; want them to name the event", got[0].ID, got[1].ID)
+	}
+
+	// Two events that differ only in their action still differ by id, which
+	// is what stops a reader collapsing them into one.
+	if got[0].ID == got[1].ID {
+		t.Error("two events share an id")
+	}
 }
