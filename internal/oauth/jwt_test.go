@@ -240,6 +240,7 @@ func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
 		"oauth/rfc9068/claim-client-id-required",
 		"oauth/rfc9068/claim-iat-required",
 		"oauth/rfc9068/claim-jti-required",
+		"oauth/rfc6750/tokens-are-audience-restricted",
 	)
 
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
