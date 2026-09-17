@@ -25,7 +25,7 @@ export default function VolumeDetail() {
   const { data, history, error, retry, allowedMethods } = useDetailResource(
     name,
     api.volume,
-    `/volumes/${name}`,
+    "/volumes",
   );
 
   if (error) {

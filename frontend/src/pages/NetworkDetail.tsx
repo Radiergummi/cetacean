@@ -119,7 +119,7 @@ export default function NetworkDetail() {
   const { data, history, error, retry, allowedMethods } = useDetailResource(
     id,
     api.network,
-    `/networks/${id}`,
+    "/networks",
   );
 
   if (error) {

@@ -224,3 +224,103 @@ func TestResolveTaskPrefersTheLiveTaskOnANode(t *testing.T) {
 		t.Errorf("ResolveTask(agent.node-2) = %q, want %q", task.ID, "zzz-live")
 	}
 }
+
+// A name-addressed history query is the reason this exists: the identifier
+// travels in a query parameter, which the canonical redirect never rewrites.
+func TestResolveIdentifierTurnsANameIntoTheIDTheRingKeysBy(t *testing.T) {
+	c := newTestCache()
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "shop_web"}},
+	})
+
+	id, err := cluster.ResolveIdentifier(c, "service", "shop_web")
+	if err != nil {
+		t.Fatalf("ResolveIdentifier(service, shop_web) = %v", err)
+	}
+
+	if id != "svc1" {
+		t.Errorf("ResolveIdentifier(service, shop_web) = %q, want %q", id, "svc1")
+	}
+}
+
+// The ring outlives the cache's knowledge of a resource, so an entry for one
+// that has since been removed has to stay reachable by the ID it was stored
+// under.
+func TestResolveIdentifierPassesAnUnmatchedIdentifierThrough(t *testing.T) {
+	c := newTestCache()
+
+	for _, resourceType := range []string{"service", "volume", "nonsense", ""} {
+		id, err := cluster.ResolveIdentifier(c, resourceType, "gone")
+		if err != nil {
+			t.Fatalf("ResolveIdentifier(%q, gone) = %v", resourceType, err)
+		}
+
+		if id != "gone" {
+			t.Errorf("ResolveIdentifier(%q, gone) = %q, want %q", resourceType, id, "gone")
+		}
+	}
+}
+
+// Volumes and stacks are keyed by name, so there is nothing to resolve and the
+// identifier must survive a type that has no resolver.
+func TestResolveIdentifierLeavesANameKeyedTypeAlone(t *testing.T) {
+	c := newTestCache()
+
+	id, err := cluster.ResolveIdentifier(c, "volume", "pgdata")
+	if err != nil {
+		t.Fatalf("ResolveIdentifier(volume, pgdata) = %v", err)
+	}
+
+	if id != "pgdata" {
+		t.Errorf("ResolveIdentifier(volume, pgdata) = %q, want %q", id, "pgdata")
+	}
+}
+
+// Without a type the search spans every type, which is worth doing only while
+// the answer is unambiguous.
+func TestResolveIdentifierWithoutATypeResolvesOnlyAUniqueMatch(t *testing.T) {
+	c := newTestCache()
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "unique"}},
+	})
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "shared"}},
+	})
+	c.SetSecret(swarm.Secret{
+		ID:   "sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "shared"}},
+	})
+
+	id, err := cluster.ResolveIdentifier(c, "", "unique")
+	if err != nil {
+		t.Fatalf("ResolveIdentifier(, unique) = %v", err)
+	}
+
+	if id != "svc1" {
+		t.Errorf("ResolveIdentifier(, unique) = %q, want %q", id, "svc1")
+	}
+
+	// A config and a secret both named "shared" answer different questions,
+	// and picking either would be picking whichever map ranged first.
+	id, err = cluster.ResolveIdentifier(c, "", "shared")
+	if err != nil {
+		t.Fatalf("ResolveIdentifier(, shared) = %v", err)
+	}
+
+	if id != "shared" {
+		t.Errorf("ResolveIdentifier(, shared) = %q, want it left alone", id)
+	}
+
+	// Naming the type is what makes it answerable.
+	id, err = cluster.ResolveIdentifier(c, "secret", "shared")
+	if err != nil {
+		t.Fatalf("ResolveIdentifier(secret, shared) = %v", err)
+	}
+
+	if id != "sec1" {
+		t.Errorf("ResolveIdentifier(secret, shared) = %q, want %q", id, "sec1")
+	}
+}

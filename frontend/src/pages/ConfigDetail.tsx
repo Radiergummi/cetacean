@@ -14,7 +14,7 @@ export default function ConfigDetail() {
   const { data, history, error, retry, allowedMethods } = useDetailResource(
     id,
     api.config,
-    `/configs/${id}`,
+    "/configs",
   );
 
   if (error) {

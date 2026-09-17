@@ -315,7 +315,11 @@ func (s *Server) readTools() []toolDef {
 					mcplib.Items(map[string]any{"type": "string"}),
 				),
 				mcplib.WithString("resource",
-					mcplib.Description("Only entries for this resource ID."),
+					mcplib.Description(
+						"Only entries for this resource, named by its ID or its name. "+
+							"A name is resolved against `types` when exactly one is given, "+
+							"and otherwise only when no other type claims it.",
+					),
 				),
 				mcplib.WithNumber("limit",
 					mcplib.Description(
