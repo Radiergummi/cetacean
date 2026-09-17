@@ -22,7 +22,7 @@ func newTestServer(t *testing.T) *Server {
 	cfg := ServerConfig{
 		Issuer:    "https://cetacean.test",
 		BasePath:  "",
-		Resources: []Resource{{Path: "/resource", Realm: "cetacean"}},
+		Resources: []Resource{{Path: "/resource", Realm: "cetacean", Name: "Cetacean Resource"}},
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,

@@ -852,10 +852,18 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	// granting an agent MCP access is not granting it DELETE /services/{id}.
 	var resources []oauth.Resource
 	if d.cfg.OAuth.APITokens {
-		resources = append(resources, oauth.Resource{Path: "", Realm: "cetacean"})
+		resources = append(resources, oauth.Resource{
+			Path:  "",
+			Realm: "cetacean",
+			Name:  "Cetacean API",
+		})
 	}
 	if d.cfg.MCP.Enabled {
-		resources = append(resources, oauth.Resource{Path: mcp.MountPath, Realm: "cetacean-mcp"})
+		resources = append(resources, oauth.Resource{
+			Path:  mcp.MountPath,
+			Realm: "cetacean-mcp",
+			Name:  "Cetacean MCP",
+		})
 	}
 
 	srv := oauth.NewServer(oauth.ServerConfig{

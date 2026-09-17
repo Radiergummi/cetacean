@@ -39,12 +39,6 @@ requirements:
       end user. It is RECOMMENDED that protected resource metadata include this
       field.
     url: https://www.rfc-editor.org/rfc/rfc9728#section-2
-    deferred: >-
-      No document publishes resource_name. The resources are the deployment
-      root and the paths mounted beneath it, whose names would be this
-      deployment's own; the end user reaching the consent screen is told which
-      resource by the screen, not by the metadata. Pinned so that adding the
-      field is a decision, not a drive-by.
 
   - id: document-at-well-known-url
     level: MUST
@@ -139,7 +133,8 @@ dismissed:
     Constrains a parameter this deployment omits. No resource response is
     signed.
   resource-name-may-be-internationalized: >-
-    A MAY about a field this deployment does not publish.
+    A MAY. The name is published untagged — one deployment, one name, with no
+    locale-specific variants for a client to choose between.
   resource-documentation-may-be-internationalized: >-
     A MAY. The documentation URL is one link to the API reference, in English,
     with no locale-tagged variants.
@@ -162,13 +157,14 @@ dismissed:
     A MAY addressed to whatever displays the names. Nothing here displays them.
   untagged-values-carry-no-language-assumption: >-
     Binds the party using an untagged human-readable value. This deployment
-    publishes one such value, its documentation URL, and consumes none.
+    publishes two, the resource name and the documentation URL, and consumes
+    none.
   untagged-instance-recommended: >-
     A RECOMMENDED about accompanying tagged fields with an untagged one. Every
     field here is untagged already, which is the shape it asks for.
   untagged-values-widely-displayable: >-
-    A RECOMMENDED about the content of untagged human-readable values. The one
-    published is a URL.
+    A RECOMMENDED about the content of untagged human-readable values. Those
+    published are a URL and a short ASCII name.
   signed-metadata-may-be-provided: >-
     A MAY. This deployment publishes plain JSON metadata only.
   signed-metadata-is-signed-or-maced: >-
