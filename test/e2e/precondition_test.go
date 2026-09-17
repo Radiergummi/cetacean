@@ -347,14 +347,20 @@ func TestPreconditionSweep(t *testing.T) {
 
 	for route, target := range preconditionTargets(fixture) {
 		t.Run(route, func(t *testing.T) {
-			// RFC 9110 §13.2.2: a resource with no current representation fails
-			// the precondition, ahead of the 404 the request would otherwise
-			// receive. `*` matches any representation at all, so a 412 here can
-			// only mean there is none.
-			assertPreconditionFailed(t, "no current representation", precondRequest(
+			// RFC 9110 §13.2.1: a precondition is ignored when the answer
+			// without it would be neither 2xx nor 412. `*` is false for a
+			// resource with no representation, and the 404 stands anyway —
+			// the client's validator is not what is wrong with the request.
+			absent := precondRequest(
 				t, proc, target.method, target.missing,
 				map[string]string{"If-Match": "*"}, "", "",
-			))
+			)
+			if absent.status != http.StatusNotFound {
+				t.Errorf(
+					"%s %s with If-Match *: status = %d, want 404 (body: %s)",
+					target.method, target.missing, absent.status, absent.body,
+				)
+			}
 
 			if target.liveExcuse != "" {
 				t.Logf("only the no-representation case is driven here: %s", target.liveExcuse)
