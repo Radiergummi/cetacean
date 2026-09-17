@@ -21,7 +21,6 @@ RFC6266: "Content-Disposition. filenamePart() implements the quoted-string rule 
 RFC6570: "URI Template syntax named in Link-Template values (e.g. \"/services/{id}\"). We emit the literal template text; the client expands it. No expansion logic of ours to test."
 RFC6598: "CGNAT block (100.64.0.0/10), added alongside net.IP.IsPrivate for CIMD's SSRF guard (internal/oauth/cimd.go), tested directly by address in cimd_test.go. Implemented, not yet registered."
 RFC6648: "Deprecates the X- header prefix. Named in the changelog for the X-Request-ID to Request-Id rename, which is done. No behaviour of ours to test."
-RFC6750: "Bearer Token Usage. Case-insensitive scheme comparison and the WWW-Authenticate on a missing credential are implemented (internal/auth/oidc.go, internal/auth/token.go) and tested in token_test.go. Implemented, not yet registered."
 RFC6901: "JSON Pointer syntax. normalizePath only strips a leading \"/\" for flat-map keys; no escaping (~0/~1) or nested traversal of ours to test."
 RFC6902: "JSON Patch. applyJSONPatch implements add/remove/replace/test (internal/api/jsonpatch.go), extensively tested in jsonpatch_test.go. Implemented, not yet registered."
 RFC7009: "Token revocation. The /oauth/revoke endpoint is implemented (internal/oauth/server.go) and exercised in server_test.go. Implemented, not yet registered."

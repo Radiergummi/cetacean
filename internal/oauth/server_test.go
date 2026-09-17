@@ -560,6 +560,12 @@ func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestUnauthorizedHeader(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc6750/challenge-uses-the-bearer-scheme",
+		"oauth/rfc6750/challenge-carries-an-auth-param",
+		"oauth/rfc6750/error-attribute-on-a-failed-token",
+	)
+
 	s := newTestServer(t)
 
 	got := s.UnauthorizedHeader(s.resources.fallback, "invalid_token")

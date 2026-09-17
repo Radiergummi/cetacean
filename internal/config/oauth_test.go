@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // Every configured key must decode to 32 bytes, so these are hex.
@@ -46,6 +48,8 @@ func clearOAuthEnv(t *testing.T) {
 }
 
 func TestOAuthConfigDefaults(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc6750/tokens-are-short-lived")
+
 	cfg := DefaultOAuthConfig()
 
 	// The server issues tokens, so it is the last thing that should arrive

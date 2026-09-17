@@ -152,6 +152,8 @@ func TestAResourceEchoedInTheQueryIsNotARepeat(t *testing.T) {
 // carries no error code — there is nothing wrong with a token never sent. An
 // invalid one does carry it.
 func TestChallengeOmitsTheErrorCodeWithoutACredential(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc6750/no-error-code-without-a-credential")
+
 	s := newTestServer(t)
 
 	bare := s.UnauthorizedHeader(s.resources.fallback, "")
