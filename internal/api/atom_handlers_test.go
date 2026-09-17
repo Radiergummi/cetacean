@@ -85,6 +85,8 @@ func TestFeedID(t *testing.T) {
 		"http/rfc4151/no-tag-under-a-future-date",
 		"http/rfc4151/the-date-may-be-past-or-present",
 		"http/rfc4151/the-day-and-month-may-be-omitted",
+		"http/rfc4287/no-whitespace-in-a-date-or-an-iri",
+		"http/rfc4287/an-id-is-an-iri",
 	)
 
 	t.Run("uses Host header", func(t *testing.T) {
@@ -377,7 +379,12 @@ func testSearchFeedData(
 }
 
 func TestPaginationLinks(t *testing.T) {
-	spec.Satisfies(t, "http/rfc5005/a-paged-feed-carries-a-paging-relation")
+	spec.Satisfies(t,
+		"http/rfc5005/a-paged-feed-carries-a-paging-relation",
+		"http/rfc4287/a-feed-has-a-self-link",
+		"http/rfc4287/a-feed-may-carry-further-links",
+		"http/rfc4287/a-rel-is-a-non-empty-name",
+	)
 
 	t.Run("self and alternate only when not full page", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
@@ -677,7 +684,10 @@ func TestFeedIDIsNotPercentEncoded(t *testing.T) {
 // same entry on both pages from two. Each entry's id names the history event
 // it came from, so it is stable across pages and unique within one.
 func TestFeedEntryIDsIdentifyTheEvent(t *testing.T) {
-	spec.Satisfies(t, "http/rfc5005/duplicate-removal-is-unambiguous")
+	spec.Satisfies(t,
+		"http/rfc5005/duplicate-removal-is-unambiguous",
+		"http/rfc4287/an-id-is-unique",
+	)
 
 	req := httptest.NewRequest("GET", "/history", nil)
 	entries := []cache.HistoryEntry{
@@ -698,5 +708,96 @@ func TestFeedEntryIDsIdentifyTheEvent(t *testing.T) {
 	// is what stops a reader collapsing them into one.
 	if got[0].ID == got[1].ID {
 		t.Error("two events share an id")
+	}
+}
+
+// RFC 4287 §4.1.1 lets a feed carry the author for all of its entries, which
+// is what this one does: every entry is the deployment's own record, so none
+// names an author of its own.
+func TestTheFeedCarriesTheAuthorForItsEntries(t *testing.T) {
+	spec.Satisfies(t, "http/rfc4287/a-feed-has-an-author")
+
+	req := httptest.NewRequest("GET", "/history", nil)
+	req.Host = "swarm.example.com"
+
+	rec := httptest.NewRecorder()
+	renderAtom(rec, req, testFeedData(req, []cache.HistoryEntry{{ID: 1}}, 0, 50))
+
+	var parsed struct {
+		Author []struct {
+			Name string `xml:"name"`
+		} `xml:"author"`
+		Entries []struct {
+			Author []struct{} `xml:"author"`
+		} `xml:"entry"`
+	}
+	if err := xml.Unmarshal(rec.Body.Bytes(), &parsed); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, rec.Body.String())
+	}
+
+	if len(parsed.Author) != 1 || parsed.Author[0].Name == "" {
+		t.Fatalf("feed author = %+v, want exactly one with a name", parsed.Author)
+	}
+	for i, entry := range parsed.Entries {
+		if len(entry.Author) != 0 {
+			t.Errorf("entry %d carries its own author, so the feed's is not what covers it", i)
+		}
+	}
+}
+
+// RFC 4287 §4.2.6 wants an atom:id that survives the document moving. The
+// feed's is built from the host the request arrived on, so it does not. This
+// pins that; entry ids, which do not depend on the host, are unaffected.
+func TestTheFeedIDChangesWithTheHost(t *testing.T) {
+	spec.Satisfies(t, "http/rfc4287/an-id-does-not-change")
+
+	first := httptest.NewRequest("GET", "/history", nil)
+	first.Host = "swarm.example.com"
+
+	second := httptest.NewRequest("GET", "/history", nil)
+	second.Host = "swarm.internal"
+
+	if feedID(first) == feedID(second) {
+		t.Error("the feed id survived a change of host; the deferral is stale")
+	}
+
+	entries := []cache.HistoryEntry{{ID: 1}}
+	if historyToFeedEntries(first, entries)[0].ID != historyToFeedEntries(second, entries)[0].ID {
+		t.Error("an entry id changed with the host too")
+	}
+}
+
+// RFC 4287 §4.1.1 allows one alternate per combination of type and hreflang,
+// and §4.2.7.3 makes a link's type a media type. The feed's alternate is the
+// HTML view of the same resource, and there is exactly one of it.
+func TestTheFeedHasOneTypedAlternate(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc4287/a-feed-has-one-alternate-per-type",
+		"http/rfc4287/a-link-type-is-a-mime-type",
+	)
+
+	req := httptest.NewRequest("GET", "/history", nil)
+	links := atomPaginationLinks(req, testFeedData(req, make([]cache.HistoryEntry, 3), 0, 50))
+
+	seen := map[string]int{}
+	for _, l := range links {
+		if l.Rel != "alternate" {
+			continue
+		}
+
+		seen[l.Type]++
+
+		if !strings.Contains(l.Type, "/") {
+			t.Errorf("alternate type = %q, want a media type", l.Type)
+		}
+	}
+
+	if len(seen) == 0 {
+		t.Fatal("the feed carries no alternate link at all")
+	}
+	for mediaType, count := range seen {
+		if count != 1 {
+			t.Errorf("%d alternates share type %q, want one", count, mediaType)
+		}
 	}
 }
