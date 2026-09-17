@@ -25,6 +25,8 @@ func keyFor(subject, clientID, resource string) ConsentKey {
 }
 
 func TestConsentFingerprintIgnoresRedirectURIOrder(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/multiple-redirect-uris-may-be-registered")
+
 	// CIMD documents are client-controlled and array order carries no meaning,
 	// so re-prompting on a reordering would be noise.
 	a := consentFingerprint(&ClientMetadata{

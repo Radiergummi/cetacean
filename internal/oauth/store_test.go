@@ -94,7 +94,11 @@ func TestRefreshTokenStoreRoundTrip(t *testing.T) {
 }
 
 func TestRefreshTokenRotation(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc9700/public-client-refresh-tokens-rotate")
+	spec.Satisfies(t,
+		"oauth/rfc9700/public-client-refresh-tokens-rotate",
+		"oauth/oauth-2-1/a-new-refresh-token-may-be-issued",
+		"oauth/oauth-2-1/the-old-refresh-token-may-be-revoked",
+	)
 
 	s := NewRefreshTokenStore()
 	old := s.Issue(RefreshTokenData{Subject: "u", ClientID: "c"}, 720*time.Hour)
@@ -128,6 +132,8 @@ func TestRefreshTokenRotation(t *testing.T) {
 // per-token TTL but never pushes the grant past its absolute expiry. A token
 // rotated with a long TTL after the family expires must fail to validate.
 func TestRefreshTokenGrantFamilyAbsoluteExpiry(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/unauthenticated-client-exposure-is-limited")
+
 	s := NewRefreshTokenStore()
 
 	original := s.Issue(RefreshTokenData{Subject: "u", ClientID: "c"}, 10*time.Millisecond)
@@ -217,6 +223,8 @@ func TestRefreshTokenUnknownToken(t *testing.T) {
 }
 
 func TestRefreshTokenGrantIDDiffers(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/refresh-tokens-are-unguessable")
+
 	s := NewRefreshTokenStore()
 	a := s.Issue(RefreshTokenData{Subject: "u"}, time.Hour)
 	b := s.Issue(RefreshTokenData{Subject: "u"}, time.Hour)

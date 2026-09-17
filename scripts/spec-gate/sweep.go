@@ -12,8 +12,12 @@ import (
 
 // citationRE matches the way specifications are named in comments, prose and
 // links. Case-insensitive because an rfc-editor.org URL spells the number in
-// lower case, and a link is as much a citation as a sentence.
-var citationRE = regexp.MustCompile(`(?i)\b(RFC[ -]?[0-9]{3,4}|SEP[ -]?[0-9]{3,4})\b`)
+// lower case, and a link is as much a citation as a sentence. Not every
+// specification has a number: OAuth 2.1 is still an Internet-Draft, and the
+// tree names it the only way there is.
+var citationRE = regexp.MustCompile(
+	`(?i)\b(RFC[ -]?[0-9]{3,4}|SEP[ -]?[0-9]{3,4}|OAuth[ -]?2\.1)\b`,
+)
 
 // mechanismPrefixes name this mechanism's own files rather than a consumer of
 // a specification: the registry states each token to register or dismiss it,

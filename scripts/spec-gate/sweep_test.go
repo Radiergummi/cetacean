@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestACitedButUnregisteredSpecificationFailsTheSweep(t *testing.T) {
@@ -90,5 +92,40 @@ func gitInitFixture(t *testing.T, root string) {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
+	}
+}
+
+// TestCitationREMatchesAnUnnumberedSpecification covers the documents that
+// have no RFC number to be named by. OAuth 2.1 is one, and the tree names it
+// in prose eighteen times.
+func TestCitationREMatchesAnUnnumberedSpecification(t *testing.T) {
+	// The registry files the document as oauth-2-1.yaml, and the tree names it
+	// in prose. Both sides canonicalise, so both have to land on one token.
+	if got := spec.Token("oauth-2-1"); got != "OAUTH21" {
+		t.Errorf("the document name tokenises to %q, want OAUTH21", got)
+	}
+
+	cases := map[string]string{
+		"OAuth 2.1 authorization server": "OAUTH21",
+		"per OAuth 2.1 Section 2.3.1":    "OAUTH21",
+		"RFC 7636":                       "RFC7636",
+	}
+
+	for input, want := range cases {
+		match := citationRE.FindString(input)
+		if match == "" {
+			t.Errorf("%q matched nothing, want %s", input, want)
+
+			continue
+		}
+		if got := spec.Token(match); got != want {
+			t.Errorf("%q: token = %q, want %q", input, got, want)
+		}
+	}
+
+	// OAuth 2.0 is the predecessor, named all over the RFCs this tree cites,
+	// and is not this document.
+	if match := citationRE.FindString("the OAuth 2.0 framework"); match != "" {
+		t.Errorf("OAuth 2.0 matched %q", match)
 	}
 }

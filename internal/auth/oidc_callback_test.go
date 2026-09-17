@@ -258,6 +258,11 @@ func buildCallbackRequest(cookies []*http.Cookie, query url.Values) *http.Reques
 // --- End-to-end callback tests ---
 
 func TestCallback_HappyPath(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/oauth-2-1/artifacts-are-not-left-in-the-redirect-uri",
+		"oauth/oauth-2-1/third-party-scripts-not-on-the-redirect-endpoint",
+	)
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -284,6 +289,15 @@ func TestCallback_HappyPath(t *testing.T) {
 	location := resp.Header.Get("Location")
 	if location != "/dashboard" {
 		t.Errorf("redirect location = %q, want %q", location, "/dashboard")
+	}
+	if strings.Contains(location, "code=") || strings.Contains(location, "state=") {
+		t.Errorf("the callback carried the authorization artifacts onward: %s", location)
+	}
+	// The body is net/http's own one-line redirect notice and nothing else:
+	// no script of ours to run, and none of anybody else's.
+	if body := w.Body.String(); strings.Contains(body, "<script") ||
+		strings.Contains(body, "https://") {
+		t.Errorf("the callback endpoint served third-party content: %s", body)
 	}
 
 	// Should have set a session cookie.
