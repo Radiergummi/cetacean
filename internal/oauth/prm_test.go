@@ -52,14 +52,8 @@ func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 		t.Errorf("bearer_methods_supported = %v, want [header]", doc.BearerMethodsSupported)
 	}
 
-	// resource_name is RECOMMENDED and deliberately absent, so decoding into
-	// the struct cannot see it arriving.
-	var raw map[string]any
-	if err := json.Unmarshal(body, &raw); err != nil {
-		t.Fatalf("decode PRM: %v", err)
-	}
-	if name, present := raw["resource_name"]; present {
-		t.Errorf("resource_name = %v, but no document publishes one", name)
+	if doc.ResourceName != "Cetacean Resource" {
+		t.Errorf("resource_name = %q, want the resource's display name", doc.ResourceName)
 	}
 }
 
