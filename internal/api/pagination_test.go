@@ -269,6 +269,8 @@ func TestSortItems_InvalidKey(t *testing.T) {
 }
 
 func TestParsePagination_RangeBasic(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/range-is-an-optional-feature")
+
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Range", "items 0-24")
 
@@ -329,6 +331,8 @@ func TestParsePagination_QueryParamsOverrideRange(t *testing.T) {
 }
 
 func TestParsePagination_RangeNonItemsUnitIgnored(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/an-unknown-range-unit-is-ignored")
+
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Range", "bytes 0-1023")
 
@@ -349,6 +353,8 @@ func TestParsePagination_RangeNonItemsUnitIgnored(t *testing.T) {
 }
 
 func TestParsePagination_RangeMultipartError(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/an-invalid-ranges-specifier-may-be-refused")
+
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Range", "items 0-9, 50-59")
 
@@ -379,6 +385,11 @@ func TestParsePagination_InvalidQueryParamsFallBackToRange(t *testing.T) {
 }
 
 func TestWriteCollectionResponse_RangePartial(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9110/a-satisfiable-range-answers-206",
+		"http/rfc9110/content-range-states-the-complete-length",
+	)
+
 	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
 	r.Header.Set("Range", "items 0-9")
 	w := httptest.NewRecorder()
@@ -442,6 +453,11 @@ func TestWriteCollectionResponse_RangeFullCollection(t *testing.T) {
 }
 
 func TestWriteCollectionResponse_RangeBeyondTotal(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9110/an-unsatisfiable-range-answers-416",
+		"http/rfc9110/a-416-carries-an-unsatisfied-range",
+	)
+
 	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
 	r.Header.Set("Range", "items 50-59")
 	w := httptest.NewRecorder()
@@ -659,4 +675,47 @@ func TestWriteLinkTemplate(t *testing.T) {
 			t.Errorf("Link-Template = %q, want %q", got, want)
 		}
 	})
+}
+
+// RFC 9110 §14.1.2 requires a range parser to survive a numeral larger than
+// the integer type behind it. strconv.Atoi reports the overflow, and an
+// unparseable range is treated as no range rather than as an error.
+func TestParsePagination_RangeOverflowIsIgnored(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/large-range-numerals-do-not-overflow")
+
+	for _, header := range []string{
+		"items 99999999999999999999-99999999999999999999",
+		"items 0-99999999999999999999",
+	} {
+		limit, offset, matched, err := parseItemsRange(header)
+		if err != nil {
+			t.Errorf("%q: err = %v, want none", header, err)
+		}
+		if matched {
+			t.Errorf("%q: parsed as limit=%d offset=%d, want no range at all",
+				header, limit, offset)
+		}
+	}
+}
+
+// RFC 9110 §13.1.5 wants If-Range evaluated on a Range request. It is not
+// read, so this pins that the range is served whatever the client's copy is.
+func TestParsePagination_IfRangeIsNotEvaluated(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/if-range-is-evaluated")
+
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Range", "items 0-9")
+	r.Header.Set("If-Range", `"a-validator-that-is-not-current"`)
+
+	p, err := parsePagination(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !p.RangeReq {
+		t.Fatal("the Range header was not honoured at all")
+	}
+	if p.Limit != 10 || p.Offset != 0 {
+		t.Errorf("limit=%d offset=%d, want 10 and 0; the deferral is stale", p.Limit, p.Offset)
+	}
 }
