@@ -489,6 +489,7 @@ func mustDecodeB64(t *testing.T, s string) []byte {
 // already there; deleting either left every test in this package passing.
 func TestTheAuthorizationCodeIsBoundToItsClientAndRedirectURI(t *testing.T) {
 	spec.Satisfies(t,
+		"oauth/rfc9700/code-injection-mitigated",
 		"oauth/rfc6749/code-bound-to-client",
 		"oauth/rfc6749/code-bound-to-redirect-uri",
 	)
@@ -608,6 +609,7 @@ func TestAuthorizeRefusesARequestWithoutPKCE(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc8252/pkce-supported-for-native-clients",
 		"oauth/rfc8252/pkce-missing-is-rejected",
+		"oauth/rfc9700/pkce-downgrade-refused",
 	)
 
 	s := newTestServer(t)
@@ -666,7 +668,10 @@ func TestAPrivateUseSchemeRedirectIsRefused(t *testing.T) {
 // is matched byte for byte, so an app handed an ephemeral port by the operating
 // system is refused with the one it registered.
 func TestALoopbackRedirectMustReuseTheRegisteredPort(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc8252/any-loopback-port-accepted")
+	spec.Satisfies(t,
+		"oauth/rfc8252/any-loopback-port-accepted",
+		"oauth/rfc9700/loopback-ports-vary",
+	)
 
 	s := newTestServer(t)
 
@@ -692,5 +697,281 @@ func TestALoopbackRedirectMustReuseTheRegisteredPort(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400 for an unregistered loopback port", rec.Code)
+	}
+}
+
+// RFC 9700 §2.4 removes the resource owner password credentials grant outright.
+func TestThePasswordGrantIsNotSupported(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/password-grant-not-used")
+
+	s := newTestServer(t)
+
+	form := url.Values{
+		"grant_type": {"password"},
+		"username":   {"alice"},
+		"password":   {"hunter2"},
+		"client_id":  {"test-client"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	s.HandleToken(rec, req)
+
+	if rec.Code == http.StatusOK {
+		t.Fatalf("the password grant was honoured: %s", rec.Body.String())
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Error != "unsupported_grant_type" {
+		t.Errorf("error = %q, want unsupported_grant_type", resp.Error)
+	}
+}
+
+// RFC 9700 §4.2.4 wants nothing third-party on the page the authorization
+// endpoint renders: a request to another origin from it carries the referrer,
+// and a script from one could read the form.
+func TestTheConsentPageLoadsNothingFromElsewhere(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/authorization-page-has-no-third-party-resources")
+
+	s := newTestServer(t)
+	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
+
+	rawURL := authorizeURL(
+		clientID,
+		"http://localhost:9999/cb",
+		computeS256Challenge("verifier"),
+		"state123",
+		s.resources.fallback,
+	)
+	req := withIdentity(httptest.NewRequest(http.MethodGet, rawURL, nil), "alice", "")
+	rec := httptest.NewRecorder()
+
+	s.HandleAuthorize(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	for _, absolute := range []string{"http://", "https://", "//"} {
+		for _, attr := range []string{`src="`, `href="`} {
+			if strings.Contains(body, attr+absolute) {
+				t.Errorf("the consent page references %s%s", attr, absolute)
+			}
+		}
+	}
+}
+
+// RFC 9700 §4.12 forbids a 307 on a redirect that may carry the user's
+// credentials, because a 307 makes the browser repeat the POST body to the
+// target. 302 is what this server sends; §4.12 would rather have a 303.
+func TestTheAuthorizationResponseRedirectIsNota307(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9700/no-307-redirect",
+		"oauth/rfc9700/credential-redirects-use-303",
+	)
+
+	s := newTestServer(t)
+	clientID := registeredClient(t, s, []string{"http://localhost:7777/cb"})
+
+	rawURL := authorizeURL(
+		clientID,
+		"http://localhost:7777/cb",
+		computeS256Challenge("verifier-approve"),
+		"stateXYZ",
+		s.resources.fallback,
+	)
+	getRec := httptest.NewRecorder()
+	s.HandleAuthorize(getRec, withIdentity(
+		httptest.NewRequest(http.MethodGet, rawURL, nil), "bob", "bob@example.com",
+	))
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("consent page: status = %d", getRec.Code)
+	}
+
+	postRec := submitConsent(t, s, getRec, "approve", "bob", "bob@example.com", nil)
+
+	if postRec.Code == http.StatusTemporaryRedirect {
+		t.Fatal("the authorization response redirect is a 307; the POST body repeats to the client")
+	}
+	if postRec.Code != http.StatusFound {
+		t.Errorf("status = %d, want 302; the deferral no longer describes the code", postRec.Code)
+	}
+}
+
+// RFC 9700 §4.2.4 would have a replayed code revoke everything issued from it.
+// This pins the divergence: the replay is refused, and the tokens the first
+// redemption produced go on working.
+func TestAReplayedCodeLeavesItsTokensAlone(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/tokens-revoked-on-code-replay")
+
+	s := newTestServer(t)
+
+	const verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+	code := seedAuthCode(s, AuthCodeData{
+		ClientID:      "test-client",
+		RedirectURI:   "http://localhost:8080/callback",
+		CodeChallenge: computeS256Challenge(verifier),
+		Resource:      s.resources.fallback,
+		Subject:       "user@example.com",
+	})
+
+	redeem := func() *httptest.ResponseRecorder {
+		form := url.Values{
+			"grant_type":    {"authorization_code"},
+			"code":          {code},
+			"redirect_uri":  {"http://localhost:8080/callback"},
+			"client_id":     {"test-client"},
+			"code_verifier": {verifier},
+		}
+		req := httptest.NewRequest(
+			http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()),
+		)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		s.HandleToken(rec, req)
+
+		return rec
+	}
+
+	first := redeem()
+	if first.Code != http.StatusOK {
+		t.Fatalf("first redemption: status = %d: %s", first.Code, first.Body.String())
+	}
+
+	var issued tokenResponse
+	if err := json.NewDecoder(first.Body).Decode(&issued); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if replay := redeem(); replay.Code == http.StatusOK {
+		t.Fatal("the code was redeemed twice")
+	}
+
+	if _, ok := s.refreshTokens.Validate(issued.RefreshToken); !ok {
+		t.Error("the replay revoked the refresh token; the deferral is stale")
+	}
+	if _, err := s.tokenIssuer.VerifyAccessToken(
+		issued.AccessToken, s.resources.fallback,
+	); err != nil {
+		t.Errorf("the access token stopped verifying: %v", err)
+	}
+}
+
+// RFC 9700 §4.10 wants access tokens bound to the client instance that got
+// them. This pins the half that is missing: nothing about the caller is
+// checked, so a token verifies on its own wherever it turns up.
+func TestAnAccessTokenIsBoundToNoCaller(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/tokens-sender-constrained-and-audience-restricted")
+
+	s := newTestServer(t)
+
+	token, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
+		Subject:  "user@example.com",
+		ClientID: "test-client",
+	}, s.resources.fallback, time.Hour)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	claims, err := s.tokenIssuer.VerifyAccessToken(token, s.resources.fallback)
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if claims.Subject != "user@example.com" {
+		t.Fatalf("sub = %q", claims.Subject)
+	}
+
+	// cnf is what a sender-constrained token carries the key confirmation in.
+	segments := strings.Split(token, ".")
+	if len(segments) != 3 {
+		t.Fatalf("token has %d segments, want 3", len(segments))
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(segments[1])
+	if err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(payload, &body); err != nil {
+		t.Fatalf("parse payload: %v", err)
+	}
+	if _, ok := body["cnf"]; ok {
+		t.Error("the token carries a cnf claim; it is sender-constrained after all")
+	}
+}
+
+// RFC 9700 §4.1.3 wants the registered and requested redirection URIs compared
+// as strings, which is exactly what a prefix match is not: a client that
+// registered https://client.example/cb would then also be redirected to
+// https://client.example/cb.attacker.test/steal.
+func TestARedirectURIExtendingARegisteredOneIsRefused(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/redirect-uri-compared-as-strings")
+
+	meta := &ClientMetadata{RedirectURIs: []string{"https://client.example/cb"}}
+
+	if meta.HasRedirectURI("https://client.example/cb.attacker.test/steal") {
+		t.Error("a redirect URI extending the registered one was accepted")
+	}
+	if !meta.HasRedirectURI("https://client.example/cb") {
+		t.Error("the registered redirect URI itself was refused")
+	}
+}
+
+// RFC 9700 §4.14.2 binds a refresh token to the resources the owner consented
+// to. Both resources here are configured, so the refusal can only come from
+// the grant's own binding rather than from the resource indicator being
+// unknown to the server.
+func TestARefreshTokenDoesNotReachAnotherConfiguredResource(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/refresh-tokens-bound-to-the-resource")
+
+	root := Resource{Path: "", Realm: "cetacean"}
+	sub := Resource{Path: "/sub", Realm: "cetacean-sub"}
+
+	s := NewServer(ServerConfig{
+		Issuer:    "https://cetacean.test",
+		Resources: []Resource{root, sub},
+		OAuth: config.OAuthConfig{
+			AccessTokenTTL:  time.Hour,
+			RefreshTokenTTL: 720 * time.Hour,
+		},
+		SigningKey: []byte("test-signing-key-32bytes-padded!!"),
+	})
+
+	rootID := s.cfg.identifierOf(root)
+	subID := s.cfg.identifierOf(sub)
+	if rootID == subID {
+		t.Fatalf("both resources resolved to %q, so this proves nothing", rootID)
+	}
+
+	rt := s.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "alice@example.com",
+		ClientID: "test-client",
+		Resource: rootID,
+	}, time.Hour)
+
+	form := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {rt},
+		"resource":      {subID},
+		"client_id":     {"test-client"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	s.HandleToken(rec, req)
+
+	if rec.Code == http.StatusOK {
+		t.Fatalf("a grant bound to %s was refreshed for %s: %s", rootID, subID, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "invalid_target") {
+		t.Errorf("body must mention invalid_target: %s", rec.Body.String())
 	}
 }

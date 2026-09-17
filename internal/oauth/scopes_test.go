@@ -68,6 +68,8 @@ func TestBothDocumentsSayThereAreNoScopes(t *testing.T) {
 // ignored, and omitted from the response because the granted and requested scopes
 // both reduce to the empty set, which §5.1 makes optional to report.
 func TestARequestedScopeIsIgnoredRatherThanRefused(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/tokens-restricted-to-resources-and-actions")
+
 	s := newTestServer(t)
 
 	const (

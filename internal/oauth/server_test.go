@@ -81,6 +81,9 @@ func seedAuthCode(s *Server, data AuthCodeData) string {
 
 func TestASMetadata(t *testing.T) {
 	spec.Satisfies(t,
+		"oauth/rfc9700/as-metadata-published",
+		"oauth/rfc9700/pkce-support-detectable",
+		"oauth/rfc9700/pkce-support-advertised-in-metadata",
 		"oauth/rfc8414/issuer-required",
 		"oauth/rfc8414/authorization-endpoint-required",
 		"oauth/rfc8414/token-endpoint-required",
@@ -219,7 +222,10 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 // challenge comparison. A short one is refused by validateCodeVerifier first,
 // with the same invalid_grant, and never reaches the comparison at all.
 func TestTokenExchangeWrongVerifier(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc7636/verifier-must-match-challenge")
+	spec.Satisfies(t,
+		"oauth/rfc7636/verifier-must-match-challenge",
+		"oauth/rfc9700/code-challenge-bound-to-the-code",
+	)
 
 	s := newTestServer(t)
 
@@ -266,7 +272,10 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc8707/unknown-resource-refused")
+	spec.Satisfies(t,
+		"oauth/rfc8707/unknown-resource-refused",
+		"oauth/rfc9700/resource-parameter-may-select-the-server",
+	)
 
 	s := newTestServer(t)
 	s.cfg.OAuth.RequireResourceIndicator = false

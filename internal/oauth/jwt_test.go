@@ -111,6 +111,7 @@ func TestJWTWrongSigningKey(t *testing.T) {
 
 func TestJWTWrongAudience(t *testing.T) {
 	spec.Satisfies(t,
+		"oauth/rfc9700/wrong-audience-refused",
 		"oauth/rfc9068/aud-names-this-resource",
 		"oauth/rfc7519/aud-mismatch-is-rejected",
 	)
@@ -246,6 +247,8 @@ var requiredClaims = []string{"iss", "exp", "aud", "sub", "client_id", "iat", "j
 
 func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
 	spec.Satisfies(t,
+		"oauth/rfc9700/aud-claim-may-restrict-the-audience",
+		"oauth/rfc9700/sub-is-the-resource-owner",
 		"oauth/rfc9068/typ-is-at-jwt",
 		"oauth/rfc9068/claim-iss-required",
 		"oauth/rfc9068/claim-exp-required",

@@ -863,6 +863,8 @@ func postRefreshGrant(t *testing.T, s *Server, token string) *httptest.ResponseR
 }
 
 func TestTheftAtTheTokenEndpointClearsConsent(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/refresh-tokens-may-be-revoked-on-a-security-event")
+
 	s, token := consentServer(t)
 
 	// A legitimate refresh, then a replay of the token it consumed. Both go
@@ -1026,6 +1028,8 @@ func TestConsentPageDisclosesRemembering(t *testing.T) {
 }
 
 func TestIssueCodeRefusesAnUnregisteredRedirect(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/no-open-redirector-at-the-authorization-endpoint")
+
 	s := newTestServer(t)
 	meta := &ClientMetadata{RedirectURIs: []string{"https://example.com/cb"}}
 

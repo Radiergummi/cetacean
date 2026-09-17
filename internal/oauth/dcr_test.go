@@ -417,7 +417,10 @@ func TestDCRIgnoresUnrecognisedClientMetadata(t *testing.T) {
 // RFC 7591 §3.2.1 wants a client_id that is not currently valid for any other
 // registered client.
 func TestDCRMintsADistinctClientIDPerRegistration(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc7591/client-id-unique-per-client")
+	spec.Satisfies(t,
+		"oauth/rfc7591/client-id-unique-per-client",
+		"oauth/rfc9700/client-id-not-chosen-by-the-client",
+	)
 
 	s := newTestServer(t)
 
@@ -435,7 +438,10 @@ func TestDCRMintsADistinctClientIDPerRegistration(t *testing.T) {
 // site on the local machine, or a non-HTTP application-specific URL. Plain
 // HTTP anywhere else is none of the three.
 func TestDCRRefusesAPlainHTTPRedirectOffLoopback(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc7591/redirect-uri-forms-are-limited")
+	spec.Satisfies(t,
+		"oauth/rfc7591/redirect-uri-forms-are-limited",
+		"oauth/rfc9700/http-redirect-uris-refused-except-loopback",
+	)
 
 	s := newTestServer(t)
 

@@ -453,6 +453,7 @@ func TestCallback_RFC9207_IssuerValidation(t *testing.T) {
 
 func TestCallback_RFC9207_IssuerMismatch(t *testing.T) {
 	spec.Satisfies(t,
+		"oauth/rfc9700/mismatched-issuer-aborts",
 		"oauth/rfc9207/client-compares-iss-to-the-issuer",
 		"oauth/rfc9207/client-rejects-a-mismatched-iss",
 	)
@@ -502,6 +503,8 @@ func TestCallback_IdPError(t *testing.T) {
 }
 
 func TestCallback_StateMismatch(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/client-prevents-csrf")
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -525,6 +528,8 @@ func TestCallback_StateMismatch(t *testing.T) {
 }
 
 func TestCallback_MissingStateCookie(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/state-is-one-time-and-bound-to-the-user-agent")
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -603,6 +608,8 @@ func TestCallback_MissingVerifierCookie(t *testing.T) {
 }
 
 func TestCallback_NonceMismatch(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/nonce-validated-in-the-id-token")
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -785,6 +792,8 @@ func TestCallback_MissingCode(t *testing.T) {
 // --- Cookie clearing on error paths ---
 
 func TestCallback_ClearsCookiesOnAllErrors(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/state-invalidated-after-first-use")
+
 	flowCookieNames := []string{
 		"cetacean_auth_state",
 		"cetacean_auth_nonce",
@@ -1272,7 +1281,10 @@ func TestCallback_StoresIDTokenHintInSession(t *testing.T) {
 // --- RFC 9207: mandatory iss parameter when IdP advertises support ---
 
 func TestCallback_RFC9207_IssRequired_MissingIss_Rejected(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc9207/client-rejects-a-missing-iss-from-a-supporting-server")
+	spec.Satisfies(t,
+		"oauth/rfc9207/client-rejects-a-missing-iss-from-a-supporting-server",
+		"oauth/rfc9700/iss-evaluated-per-rfc9207",
+	)
 
 	idp := newMockIDP(t, "test-client")
 	idp.issSupported = true
@@ -1331,6 +1343,8 @@ func TestCallback_RFC9207_IssRequired_ValidIss_Accepted(t *testing.T) {
 }
 
 func TestCallback_RFC9207_IssRequired_WrongIss_Rejected(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/received-issuer-compared")
+
 	idp := newMockIDP(t, "test-client")
 	idp.issSupported = true
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
@@ -1417,5 +1431,38 @@ func TestCallback_RFC9207_IssRequired_ClearsCookies(t *testing.T) {
 		if !cleared[name] {
 			t.Errorf("cookie %s not cleared on missing iss error", name)
 		}
+	}
+}
+
+// RFC 9700 §4.5.3.2 wants every token disregarded until the nonce check
+// succeeds — refusing the request is not enough if a session is signed anyway.
+func TestCallback_NonceMismatchIssuesNoSession(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/tokens-disregarded-until-the-nonce-checks")
+
+	idp := newMockIDP(t, "test-client")
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	cookies, state, _, _ := initiateLogin(t, p)
+
+	idToken := idp.issueIDToken(t, "wrong-nonce", time.Now().Add(time.Hour))
+	idp.setTokenHandler(t, idToken, time.Now().Add(time.Hour))
+
+	query := url.Values{"code": {"code"}, "state": {state}}
+	w := httptest.NewRecorder()
+	p.handleCallback(w, buildCallbackRequest(cookies, query))
+
+	// The live header map, not Result(): a refusal that answers and then
+	// carries on sets these after the status was snapshotted, so they never
+	// reach the wire — and reading the wire would call that a pass.
+	for _, cookie := range w.Header().Values("Set-Cookie") {
+		if strings.HasPrefix(cookie, "__Host-cetacean_session=;") {
+			continue
+		}
+		if strings.HasPrefix(cookie, "__Host-cetacean_session=") {
+			t.Error("a session was signed from an ID token whose nonce did not match")
+		}
+	}
+	if location := w.Header().Get("Location"); location != "" {
+		t.Errorf("the callback went on to sign the user in: %s", location)
 	}
 }
