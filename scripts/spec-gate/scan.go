@@ -140,6 +140,12 @@ func ScanFile(path string) ([]Claim, []error) {
 				return true
 			}
 
+			// go/parser applies no type checking, so a call that names no
+			// arguments at all reaches here even though it cannot compile.
+			if len(call.Args) == 0 {
+				return true
+			}
+
 			for _, arg := range call.Args[1:] {
 				lit, ok := arg.(*ast.BasicLit)
 				if !ok || lit.Kind != token.STRING {

@@ -9,6 +9,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"net/textproto"
 	"slices"
 	"testing"
 	"time"
@@ -145,6 +146,15 @@ func call(t *testing.T, proc *sut.Process, c conformanceRequest) conformanceResu
 	}
 
 	for k, v := range headers {
+		// Written into the map directly when a case spelled the name in
+		// something other than the canonical form: Set canonicalises it, and
+		// the case-insensitivity requirement would never reach the wire.
+		if k != textproto.CanonicalMIMEHeaderKey(k) {
+			req.Header[k] = []string{v}
+
+			continue
+		}
+
 		req.Header.Set(k, v)
 	}
 

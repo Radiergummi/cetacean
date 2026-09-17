@@ -552,11 +552,11 @@ func TestRevocationDoesNotReachAnAccessToken(t *testing.T) {
 
 	s := newTestServer(t)
 
-	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
-
-	access, err := issuer.IssueAccessToken(
+	// The server's own issuer, or revocation could not reach the token even in
+	// principle and this proves nothing about what revocation does.
+	access, err := s.tokenIssuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "user", ClientID: "test-client"},
-		testTokenAudience,
+		s.resources.fallback,
 		time.Hour,
 	)
 	if err != nil {
@@ -588,7 +588,7 @@ func TestRevocationDoesNotReachAnAccessToken(t *testing.T) {
 	}
 
 	// The access token is not, and keeps working until it expires.
-	if _, err := issuer.VerifyAccessToken(access, testTokenAudience); err != nil {
+	if _, err := s.tokenIssuer.VerifyAccessToken(access, s.resources.fallback); err != nil {
 		t.Errorf("revocation reached an access token after all: %v", err)
 	}
 }
