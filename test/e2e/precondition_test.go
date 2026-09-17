@@ -348,17 +348,29 @@ func TestPreconditionSweep(t *testing.T) {
 	for route, target := range preconditionTargets(fixture) {
 		t.Run(route, func(t *testing.T) {
 			// RFC 9110 §13.2.1: a precondition is ignored when the answer
-			// without it would be neither 2xx nor 412. `*` is false for a
-			// resource with no representation, and the 404 stands anyway —
-			// the client's validator is not what is wrong with the request.
+			// without it would be neither 2xx nor 412. Read as parity rather
+			// than as a status, because a route that refuses this bodyless
+			// request before it looks the resource up states the rule just as
+			// well as one that answers 404.
+			unconditional := precondRequest(
+				t, proc, target.method, target.missing, nil, "", "",
+			)
+			if unconditional.status == http.StatusPreconditionFailed {
+				t.Fatalf(
+					"%s %s answers 412 with no precondition; parity proves nothing here (body: %s)",
+					target.method, target.missing, unconditional.body,
+				)
+			}
+
 			absent := precondRequest(
 				t, proc, target.method, target.missing,
 				map[string]string{"If-Match": "*"}, "", "",
 			)
-			if absent.status != http.StatusNotFound {
+			if absent.status != unconditional.status {
 				t.Errorf(
-					"%s %s with If-Match *: status = %d, want 404 (body: %s)",
-					target.method, target.missing, absent.status, absent.body,
+					"%s %s: If-Match * moved the answer from %d to %d (body: %s)",
+					target.method, target.missing,
+					unconditional.status, absent.status, absent.body,
 				)
 			}
 
