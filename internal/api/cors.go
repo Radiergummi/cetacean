@@ -49,7 +49,7 @@ var allowedMethods = strings.Join([]string{
 // authorizationEndpointPath is reached by redirecting the user agent, never
 // by fetch, so RFC 9700 §2.6 forbids CORS on it: reflecting an origin would
 // let a page on that origin read the consent form and the CSRF token in it.
-// The base path is already stripped by the time this middleware runs.
+// The base path and any extension suffix are stripped before this runs.
 const authorizationEndpointPath = "/oauth/authorize"
 
 // allowedHeaders lists request headers the API accepts in cross-origin

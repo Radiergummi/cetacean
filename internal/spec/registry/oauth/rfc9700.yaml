@@ -137,6 +137,12 @@ requirements:
       - file: internal/api/cors.go
         replace: "\t\t\tif r.URL.Path == authorizationEndpointPath {"
         with: "\t\t\tif false && r.URL.Path == authorizationEndpointPath {"
+      # The exemption is a path match, so where negotiate sits decides whether
+      # it sees the path the mux routes. Behind it, /oauth/authorize.html is
+      # answered with the origin reflected.
+      - file: internal/api/router.go
+        replace: "\t\tnegotiate,\n\t\tsecurityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),\n\t\tcors(cfg.CORS),\n\t\tcrossOriginProtection(cfg.CORS, cfg.PublicURL),\n\t\tauth.Middleware(authProvider, cfg.APITokens),\n"
+        with: "\t\tsecurityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),\n\t\tcors(cfg.CORS),\n\t\tcrossOriginProtection(cfg.CORS, cfg.PublicURL),\n\t\tauth.Middleware(authProvider, cfg.APITokens),\n\t\tnegotiate,\n"
 
   - id: no-open-redirector-at-the-authorization-endpoint
     level: MUST

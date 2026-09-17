@@ -74,7 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Header-based authentication works behind a reverse proxy again; it was answering 401 to every request
 - Asking an endpoint for a format it does not serve now says so, instead of answering with JSON
 - A malformed `filter` is reported as an error again on a request carrying `If-None-Match: *`
-- The OAuth authorization endpoint no longer reflects an origin or answers a preflight; a page on an allowed origin could read the consent form and the token in it
+- The OAuth authorization endpoint no longer reflects an origin or answers a preflight, at any spelling of its address; a page on an allowed origin could read the consent form and the token in it
 - The authorization response redirects with `303 See Other` rather than `302 Found`
 - A redirect URI carrying a fragment is refused at registration
 - A write carrying `If-Match` against a resource that no longer exists answers `404`, not `412` — the validator was not what was wrong with it
@@ -90,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A `PATCH` to a service's resources, healthcheck, update policy, rollback policy, log driver or container config no longer discards an edit made just before it
 - Every identifier a response hands out works under `server.base_path`. Listings, and a task's links to its service and node, left the deployment and answered 404
 - Relabelling a node needs operations level 2 over the API, matching MCP. It was gated with draining and demoting
-- `POST /-/resync` requires authentication. It is still not gated on the operations level, so a read-only deployment keeps its refresh button
+- `POST /-/resync` requires authentication at any spelling of its address — `/-/resync.json` skipped it entirely. It is still not gated on the operations level, so a read-only deployment keeps its refresh button
 - A task no longer sits at `starting` for minutes after it is running, which also left the running count short and anything waiting for a service to settle waiting
 - Recommendations are complete right after a restart, instead of missing every sizing finding for the first five minutes
 - A rolling update no longer truncates whatever was in flight: shutdown waits up to five seconds for in-flight requests

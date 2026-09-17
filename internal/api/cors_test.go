@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/radiergummi/cetacean/internal/cache"
+
 	"github.com/radiergummi/cetacean/internal/spec"
 )
 
@@ -203,5 +205,41 @@ func TestCORSIsNotAnsweredForTheAuthorizationEndpoint(t *testing.T) {
 				t.Error("the request did not reach the handler")
 			}
 		})
+	}
+}
+
+// The same rule through the assembled router, which is the only place the
+// spellings the endpoint answers to are all reachable: a base path, and an
+// extension suffix negotiate strips on the way in.
+func TestTheAuthorizationEndpointReflectsNoOriginAtAnySpelling(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/no-cors-at-the-authorization-endpoint")
+
+	for _, basePath := range []string{"", "/a/b"} {
+		for _, suffix := range []string{"", ".html", ".json"} {
+			t.Run(basePath+"/oauth/authorize"+suffix, func(t *testing.T) {
+				router := newTestRouterWithConfig(
+					t,
+					[]routerOption{
+						withBasePath(basePath),
+						withOAuthRoutes(basePath),
+						withCORS("https://example.com"),
+					},
+					withCache(cache.New(nil)),
+				)
+
+				r := httptest.NewRequest(
+					http.MethodGet,
+					basePath+"/oauth/authorize"+suffix+"?response_type=code",
+					nil,
+				)
+				r.Header.Set("Origin", "https://example.com")
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, r)
+
+				if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+					t.Errorf("ACAO = %q, want none at the authorization endpoint", got)
+				}
+			})
+		}
 	}
 }
