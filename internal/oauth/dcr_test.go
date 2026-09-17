@@ -26,6 +26,15 @@ func newDCRRequest(t *testing.T, body string) *http.Request {
 // ---------------------------------------------------------------------------
 
 func TestDCRRegister(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7591/metadata-fields-are-optional",
+		"oauth/rfc7591/redirect-uris-metadata-supported",
+		"oauth/rfc7591/open-registration-allowed",
+		"oauth/rfc7591/client-id-required",
+		"oauth/rfc7591/client-id-issued-at-optional",
+		"oauth/rfc7591/public-clients-may-register",
+	)
+
 	s := newTestServer(t)
 
 	body := `{
@@ -69,6 +78,11 @@ func TestDCRRegister(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDCRRejectsSymmetricAuth(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7591/error-code-required",
+		"oauth/rfc7591/error-description-optional",
+	)
+
 	s := newTestServer(t)
 
 	body := `{
@@ -88,6 +102,9 @@ func TestDCRRejectsSymmetricAuth(t *testing.T) {
 	if errResp.Error != "invalid_client_metadata" {
 		t.Errorf("error = %q, want invalid_client_metadata", errResp.Error)
 	}
+	if errResp.ErrorDescription == "" {
+		t.Error("error_description is absent; the refusal says only that it happened")
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +112,8 @@ func TestDCRRejectsSymmetricAuth(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDCRRejectsUnsupportedGrantType(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7591/inconsistent-registration-is-refused")
+
 	s := newTestServer(t)
 
 	body := `{
@@ -121,6 +140,8 @@ func TestDCRRejectsUnsupportedGrantType(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDCRRejectsUnsupportedResponseType(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7591/inconsistent-registration-is-refused")
+
 	s := newTestServer(t)
 
 	body := `{
@@ -147,6 +168,8 @@ func TestDCRRejectsUnsupportedResponseType(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDCRMissingRedirectURIs(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7591/redirect-uris-must-be-registered")
+
 	s := newTestServer(t)
 
 	body := `{"client_name": "App"}`
@@ -163,6 +186,8 @@ func TestDCRMissingRedirectURIs(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDCRRateLimit(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7591/registration-may-be-rate-limited")
+
 	// Configure a small rate limit (3/hour) for testing.
 	cfg := ServerConfig{
 		Issuer:    "https://cetacean.test",
@@ -277,6 +302,11 @@ func registerClient(t *testing.T, s *Server, body string) (int, ClientRegistrati
 // these clients use. Defaulting to "native" avoids rejecting a correct client
 // that simply did not send the field.
 func TestDCRDefaultsApplicationTypeToNative(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7591/defaults-may-be-provisioned",
+		"oauth/rfc7591/all-registered-metadata-returned",
+	)
+
 	s := newTestServer(t)
 
 	status, reg := registerClient(t, s, `{
@@ -293,7 +323,10 @@ func TestDCRDefaultsApplicationTypeToNative(t *testing.T) {
 }
 
 func TestDCREchoesExplicitApplicationType(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc8252/client-type-recorded")
+	spec.Satisfies(t,
+		"oauth/rfc8252/client-type-recorded",
+		"oauth/rfc7591/response-may-carry-extension-fields",
+	)
 
 	s := newTestServer(t)
 
@@ -350,5 +383,104 @@ func TestDCRNativeApplicationTypeAllowsLoopback(t *testing.T) {
 	}`)
 	if status != http.StatusCreated {
 		t.Fatalf("native client with a loopback redirect was rejected: status %d", status)
+	}
+}
+
+// RFC 7591 §2 requires metadata the server does not understand to be ignored,
+// which is what lets a client send a richer registration than this endpoint
+// reads — including the software statement §3.1.1 permits ignoring outright.
+func TestDCRIgnoresUnrecognisedClientMetadata(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7591/unknown-metadata-is-ignored",
+		"oauth/rfc7591/software-statement-may-be-ignored",
+	)
+
+	s := newTestServer(t)
+
+	status, reg := registerClient(t, s, `{
+		"client_name": "Rich client",
+		"redirect_uris": ["https://client.example/cb"],
+		"logo_uri": "https://client.example/logo.png",
+		"contacts": ["ops@client.example"],
+		"software_id": "4NRB1-0XZABZI9E6-5SM3R",
+		"software_statement": "eyJhbGciOiJSUzI1NiJ9.e30.c2ln",
+		"invented_by_nobody": {"nested": true}
+	}`)
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want 201: metadata this server does not read was refused", status)
+	}
+	if reg.ClientName != "Rich client" {
+		t.Errorf("client_name = %q, want %q", reg.ClientName, "Rich client")
+	}
+}
+
+// RFC 7591 §3.2.1 wants a client_id that is not currently valid for any other
+// registered client.
+func TestDCRMintsADistinctClientIDPerRegistration(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7591/client-id-unique-per-client")
+
+	s := newTestServer(t)
+
+	const body = `{"redirect_uris": ["https://client.example/cb"]}`
+
+	_, first := registerClient(t, s, body)
+	_, second := registerClient(t, s, body)
+
+	if first.ClientID == "" || first.ClientID == second.ClientID {
+		t.Errorf("two registrations share client_id %q", first.ClientID)
+	}
+}
+
+// RFC 7591 §5 limits a registered redirection URI to a TLS-protected site, a
+// site on the local machine, or a non-HTTP application-specific URL. Plain
+// HTTP anywhere else is none of the three.
+func TestDCRRefusesAPlainHTTPRedirectOffLoopback(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7591/redirect-uri-forms-are-limited")
+
+	s := newTestServer(t)
+
+	status, _ := registerClient(t, s, `{
+		"redirect_uris": ["http://client.example/cb"]
+	}`)
+	if status == http.StatusCreated {
+		t.Error("a cleartext redirect URI off the local machine was registered")
+	}
+}
+
+// RFC 7591 §3 puts registration behind a transport-layer security mechanism.
+// This pins the divergence: the handler registers a client over whatever
+// transport reached it, because TLS is the deployment's to terminate.
+func TestDCRRegistersOverAPlaintextRequest(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7591/registration-endpoint-requires-tls")
+
+	s := newTestServer(t)
+
+	req := newDCRRequest(t, `{"redirect_uris": ["https://client.example/cb"]}`)
+	if req.TLS != nil {
+		t.Fatal("the request under test is not the cleartext one")
+	}
+
+	rec := httptest.NewRecorder()
+	s.HandleRegister(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want 201; the deferral no longer describes the code", rec.Code)
+	}
+}
+
+// RFC 7591 §3 fixes the method and the media type the registration endpoint
+// answers on, so the route has to spell both out.
+func TestDCRRouteAcceptsAJSONPost(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7591/registration-accepts-json-post")
+
+	s := newTestServer(t)
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux, "")
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, newDCRRequest(t, `{"redirect_uris": ["https://client.example/cb"]}`))
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("POST /oauth/register = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
 }
