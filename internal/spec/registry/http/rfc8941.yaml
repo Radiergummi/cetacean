@@ -69,15 +69,10 @@ requirements:
       Sections 3.1 and 3.3; therefore, parsers MUST fail on characters outside
       the base64 alphabet and on line feeds in encoded data.
     url: https://www.rfc-editor.org/rfc/rfc8941#section-4.2.7
-    deferred: >-
-      Half of it holds: a character outside the alphabet fails. A line feed
-      does not — encoding/base64 strips CR and LF before decoding, by design,
-      and offers no way to ask it not to. Nothing reaches this decoder with a
-      raw newline in it today, because net/http refuses a header value
-      carrying one, so the gap is between the decoder and the specification
-      rather than between the deployment and an attacker. Closing it means
-      rejecting the two bytes before handing the value to the standard
-      library.
+    mutants:
+      - file: internal/auth/cert.go
+        replace: "\tif strings.ContainsAny(value, \"\\r\\n\") {"
+        with: "\tif false && strings.ContainsAny(value, \"\\r\\n\") {"
 
 dismissed:
   behaviour-matches-the-algorithms: >-
