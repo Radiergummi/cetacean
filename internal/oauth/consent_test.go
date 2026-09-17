@@ -59,7 +59,12 @@ func withIdentity(r *http.Request, subject, email string) *http.Request {
 // ---------------------------------------------------------------------------
 
 func TestConsentPageRender(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc8252/no-silent-authorization")
+	spec.Satisfies(t,
+		"oauth/rfc8252/no-silent-authorization",
+		"oauth/rfc9700/clickjacking-prevented",
+		"oauth/rfc9700/csp-used-against-framing",
+		"oauth/rfc9700/csp-combined-with-a-legacy-defence",
+	)
 
 	s := newTestServer(t)
 	challenge := computeS256Challenge("verifier")

@@ -89,6 +89,8 @@ func TestNewServerLeavesTheCallersResourcesAlone(t *testing.T) {
 // presents a token at the resource it was minted for, which passes whether
 // identifiers are compared whole or by prefix.
 func TestATokenDoesNotReachAResourceItWasNotMintedFor(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/tokens-audience-restricted")
+
 	const issuer = "https://cetacean.test"
 
 	root := Resource{Path: "", Realm: "cetacean"}

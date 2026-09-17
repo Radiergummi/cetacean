@@ -35,7 +35,6 @@ RFC8941: "Structured Field Values. decodeClientCert parses the Byte Sequence for
 RFC9110: "HTTP Semantics. Content negotiation, ETags and conditional requests implement it across internal/api, tested extensively (etag_test.go, precondition_test.go, and more). Implemented, not yet registered."
 RFC9264: "Linkset. internal/api/linkset implements the JSON serialization, tested in linkset_test.go. Implemented, not yet registered."
 RFC9421: "Named in a comment as the thing we deliberately do not implement."
-RFC9700: "OAuth 2.0 Security BCP. Section 4.5's authorization-code-injection protection is one of the bugs that motivated this registry (see the design doc), tested by TestTheAuthorizationCodeIsBoundToItsClientAndRedirectURI. Implemented, not yet registered."
 SEP-414: "Trace-context propagation over MCP _meta, exercised informally in internal/mcp/tracing. Out of scope for the four MCP SEPs the registry targets (SEP-2575/2243/2549/2164)."
 SEP-837: "application_type validation for DCR, tested in internal/oauth/dcr_test.go. Out of scope for the four MCP SEPs the registry targets."
 SEP-1303: "Tool input-validation error shape, characterized by internal/mcp/tool_error_test.go. Out of scope for the four MCP SEPs the registry targets."
