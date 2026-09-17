@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // testConsentTTL is long enough that no test crosses it by accident; the tests
@@ -739,6 +741,8 @@ func TestChangedMetadataRePrompts(t *testing.T) {
 }
 
 func TestDynamicallyRegisteredClientNeverSkipsTheConsentPage(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8252/previous-approval-needs-a-proven-client")
+
 	s := newTestServer(t)
 
 	const clientID = "dcr-generated-client-id"

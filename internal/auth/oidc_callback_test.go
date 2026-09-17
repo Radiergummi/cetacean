@@ -33,7 +33,7 @@ type mockIDPServer struct {
 	issSupported bool
 
 	// endSessionEndpoint controls whether the discovery document advertises
-	// an end_session_endpoint (RFC 9722). Set before calling newProviderWithIDP.
+	// an end_session_endpoint. Set before calling newProviderWithIDP.
 	endSessionEndpoint bool
 
 	// tokenHandler can be overridden per-test to customize the token response.
@@ -426,6 +426,8 @@ func TestCallback_SessionTTL_UsesIDTokenExpiry(t *testing.T) {
 }
 
 func TestCallback_RFC9207_IssuerValidation(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9207/client-extracts-the-iss-parameter")
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -450,6 +452,11 @@ func TestCallback_RFC9207_IssuerValidation(t *testing.T) {
 }
 
 func TestCallback_RFC9207_IssuerMismatch(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9207/client-compares-iss-to-the-issuer",
+		"oauth/rfc9207/client-rejects-a-mismatched-iss",
+	)
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -1092,9 +1099,14 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 	return nil
 }
 
-// --- RFC 9722: RP-initiated logout ---
+// --- OpenID Connect RP-Initiated Logout 1.0 ---
 
-func TestLogout_RFC9722_RedirectsToEndSessionEndpoint(t *testing.T) {
+func TestLogout_RPInitiated_RedirectsToEndSessionEndpoint(t *testing.T) {
+	spec.Satisfies(t,
+		"openid/rp-initiated-logout/id-token-hint-included",
+		"openid/rp-initiated-logout/id-token-hint-accompanies-the-redirect-uri",
+	)
+
 	idp := newMockIDP(t, "test-client")
 	idp.endSessionEndpoint = true
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
@@ -1171,7 +1183,7 @@ func TestLogout_RFC9722_RedirectsToEndSessionEndpoint(t *testing.T) {
 	}
 }
 
-func TestLogout_RFC9722_NoEndSession_LocalLogout(t *testing.T) {
+func TestLogout_RPInitiated_NoEndSession_LocalLogout(t *testing.T) {
 	// IdP does NOT advertise end_session_endpoint.
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
@@ -1189,7 +1201,7 @@ func TestLogout_RFC9722_NoEndSession_LocalLogout(t *testing.T) {
 	}
 }
 
-func TestLogout_RFC9722_NoSession_StillRedirectsToIdP(t *testing.T) {
+func TestLogout_RPInitiated_NoSession_StillRedirectsToIdP(t *testing.T) {
 	// End session endpoint is available but no session cookie.
 	// Should still redirect to IdP (without id_token_hint).
 	idp := newMockIDP(t, "test-client")
@@ -1260,6 +1272,8 @@ func TestCallback_StoresIDTokenHintInSession(t *testing.T) {
 // --- RFC 9207: mandatory iss parameter when IdP advertises support ---
 
 func TestCallback_RFC9207_IssRequired_MissingIss_Rejected(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9207/client-rejects-a-missing-iss-from-a-supporting-server")
+
 	idp := newMockIDP(t, "test-client")
 	idp.issSupported = true
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")

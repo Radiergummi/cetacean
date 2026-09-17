@@ -71,7 +71,10 @@ func TestJWTSignAndVerify(t *testing.T) {
 }
 
 func TestJWTExpiredToken(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc9068/current-time-before-exp")
+	spec.Satisfies(t,
+		"oauth/rfc9068/current-time-before-exp",
+		"oauth/rfc7519/exp-is-in-the-future",
+	)
 
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, err := issuer.IssueAccessToken(
@@ -88,7 +91,11 @@ func TestJWTExpiredToken(t *testing.T) {
 }
 
 func TestJWTWrongSigningKey(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc9068/signature-validated-with-declared-alg")
+	spec.Satisfies(t,
+		"oauth/rfc9068/signature-validated-with-declared-alg",
+		"oauth/rfc7515/a-signature-must-validate",
+		"oauth/rfc7515/no-successful-validation-means-invalid",
+	)
 
 	issuer1 := mustTokenIssuer(t, []byte("key-one-32-bytes-long-padding!!!"), testIssuer)
 	issuer2 := mustTokenIssuer(t, []byte("key-two-32-bytes-long-padding!!!"), testIssuer)
@@ -103,7 +110,10 @@ func TestJWTWrongSigningKey(t *testing.T) {
 }
 
 func TestJWTWrongAudience(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc9068/aud-names-this-resource")
+	spec.Satisfies(t,
+		"oauth/rfc9068/aud-names-this-resource",
+		"oauth/rfc7519/aud-mismatch-is-rejected",
+	)
 
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, _ := issuer.IssueAccessToken(
@@ -133,6 +143,8 @@ func TestJWTWrongIssuer(t *testing.T) {
 }
 
 func TestJWTMalformedToken(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7519/failed-validation-rejects-the-jwt")
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	// Each case names the sentinel it must surface, since callers map those to
 	// WWW-Authenticate error codes.
@@ -182,6 +194,8 @@ func TestJWTMissingSigningKey(t *testing.T) {
 }
 
 func TestJWTReusedJTIsAreDistinct(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7519/jti-is-collision-resistant")
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	claims := AccessTokenClaims{Subject: "u@e", ClientID: "c1"}
 	t1, _ := issuer.IssueAccessToken(claims, testTokenAudience, time.Hour)
@@ -370,6 +384,11 @@ func TestJWTRefusesToMintWithoutARequiredClaim(t *testing.T) {
 }
 
 func TestTokenIsES256WithAKeyID(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7515/alg-present-and-processed",
+		"oauth/rfc7515/alg-accurately-represents-the-signature",
+	)
+
 	issuer := mustTokenIssuer(t, testRoot, testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
@@ -410,6 +429,11 @@ func TestTokenIsES256WithAKeyID(t *testing.T) {
 }
 
 func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7518/ecdsa-signature-is-64-octets",
+		"oauth/rfc7518/ecdsa-signature-keeps-leading-zeros",
+	)
+
 	issuer := mustTokenIssuer(t, testRoot, testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
@@ -432,6 +456,15 @@ func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
 	}
 
 	forged := signingInput + "." + base64.RawURLEncoding.EncodeToString(der)
+
+	// A signature shorter than one coordinate is the case the length check is
+	// actually load-bearing for: R and S are sliced out at fixed offsets, so
+	// without it a truncated signature indexes past the end rather than failing.
+	truncated := signingInput + "." + base64.RawURLEncoding.EncodeToString(der[:8])
+
+	if _, err := issuer.VerifyAccessToken(truncated, testTokenAudience); err == nil {
+		t.Error("a truncated signature was accepted")
+	}
 
 	if _, err := issuer.VerifyAccessToken(forged, testTokenAudience); !errors.Is(
 		err,
@@ -503,6 +536,10 @@ func TestVerifyRefusesEveryAlgorithmButES256(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc9068/alg-is-not-none",
 		"oauth/rfc9068/rs256-among-supported-algorithms",
+		"oauth/rfc7519/hs256-and-none-implemented",
+		"oauth/rfc7519/unacceptable-algorithms-rejected",
+		"oauth/rfc7515/unacceptable-algorithms-are-invalid",
+		"oauth/rfc7518/unsecured-jws-not-accepted-by-default",
 	)
 
 	issuer := mustTokenIssuer(t, testRoot, testIssuer)
@@ -518,5 +555,57 @@ func TestVerifyRefusesEveryAlgorithmButES256(t *testing.T) {
 				t.Errorf("error = %v, want ErrMalformedToken", err)
 			}
 		})
+	}
+}
+
+// RFC 7519 §4 lets a parser take the lexically last of two members with the same
+// name, which encoding/json does. A token carrying the expected audience first
+// and another second must therefore be refused: the alternative — taking the
+// first — would let a second member be appended to any token to widen it.
+func TestADuplicateAudienceClaimTakesTheLastValue(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7519/duplicate-claim-names-resolved")
+
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
+
+	token, err := issuer.IssueAccessToken(
+		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
+		testTokenAudience,
+		time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	raw, err := base64.RawURLEncoding.DecodeString(segment(t, token, 1))
+	if err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+
+	// Appended by hand: encoding/json cannot emit two members of one name.
+	const elsewhere = testIssuer + "/elsewhere"
+
+	doubled := strings.Replace(
+		string(raw),
+		`"aud":"`+testTokenAudience+`"`,
+		`"aud":"`+testTokenAudience+`","aud":"`+elsewhere+`"`,
+		1,
+	)
+	if doubled == string(raw) {
+		t.Fatalf("payload does not carry aud in the expected shape: %s", raw)
+	}
+
+	edited := resign(
+		t, issuer,
+		segment(t, token, 0),
+		base64.RawURLEncoding.EncodeToString([]byte(doubled)),
+	)
+
+	if _, err := issuer.VerifyAccessToken(edited, testTokenAudience); err == nil {
+		t.Error("a second aud member widened the token's audience")
+	}
+
+	// And the last value is what was read, rather than the claim being dropped.
+	if _, err := issuer.VerifyAccessToken(edited, elsewhere); err != nil {
+		t.Errorf("the last aud member was not the one honoured: %v", err)
 	}
 }

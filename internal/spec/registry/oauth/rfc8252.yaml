@@ -1,0 +1,173 @@
+source: RFC 8252
+title: OAuth 2.0 for Native Apps
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc8252
+
+inventory:
+  from: >-
+    RFC 8252 §5 through §8.12 in full — the best practice itself. §2 is the RFC
+    2119 boilerplate. This deployment is the authorization server native apps
+    register with; the statements binding the app are accounted for here but
+    are not ours to meet.
+  count: 31
+
+requirements:
+  - id: pkce-supported-for-native-clients
+    level: MUST
+    text: >-
+      Public native app clients MUST implement the Proof Key for Code Exchange
+      (PKCE [RFC7636]) extension to OAuth, and authorization servers MUST
+      support PKCE for such clients.
+    url: https://www.rfc-editor.org/rfc/rfc8252#section-6
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif codeChallenge == \"\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\","
+        with: "\tif codeChallenge == \"\" && false {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\","
+
+  - id: three-redirect-options-offered
+    level: MUST
+    text: >-
+      To fully support this best practice, authorization servers MUST offer at
+      least the three redirect URI options described in the following
+      subsections to native apps.
+    url: https://www.rfc-editor.org/rfc/rfc8252#section-7
+    deferred: >-
+      Two of the three are offered: a claimed https URI and a loopback http
+      one. A private-use URI scheme is refused — isValidRedirectURI admits
+      https and loopback http and nothing else. An app that can only receive a
+      redirect on its own scheme cannot register here.
+
+  - id: any-loopback-port-accepted
+    level: MUST
+    text: >-
+      The authorization server MUST allow any port to be specified at the time
+      of the request for loopback IP redirect URIs, to accommodate clients that
+      obtain an available ephemeral port from the operating system at the time
+      of the request.
+    url: https://www.rfc-editor.org/rfc/rfc8252#section-7.3
+    deferred: >-
+      redirect_uri is matched byte for byte against the registered set, port
+      included, so an app that registered one loopback port and was handed
+      another by the operating system is refused. Relaxing it means comparing
+      loopback URIs by scheme, host and path while ignoring the port, and
+      nothing else — which is a change to the exact-match rule that RFC 6749
+      §3.1.2.3 and the audited code-injection bug both rest on.
+
+  - id: pkce-missing-is-rejected
+    level: SHOULD
+    text: >-
+      Authorization servers SHOULD reject authorization requests from native
+      apps that don't use PKCE by returning an error message, as defined in
+      Section 4.4.1 of PKCE [RFC7636].
+    url: https://www.rfc-editor.org/rfc/rfc8252#section-8.1
+
+  - id: client-type-recorded
+    level: MUST
+    text: >-
+      Authorization servers MUST record the client type in the client
+      registration details in order to identify and process requests
+      accordingly.
+    url: https://www.rfc-editor.org/rfc/rfc8252#section-8.4
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\tapplicationType := req.ApplicationType\n\tif applicationType == \"\" {"
+        with: "\tapplicationType := \"\"\n\t_ = req.ApplicationType\n\tif applicationType == \"\" {"
+
+  - id: redirect-uri-registered-and-exact-matched
+    level: MUST
+    text: >-
+      Authorization servers MUST require clients to register their complete
+      redirect URI (including the path component) and reject authorization
+      requests that specify a redirect URI that doesn't exactly match the one
+      that was registered.
+    url: https://www.rfc-editor.org/rfc/rfc8252#section-8.4
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "\treturn slices.Contains(m.RedirectURIs, uri)"
+        with: "\treturn uri != \"\" || slices.Contains(m.RedirectURIs, uri)"
+
+  - id: client-authentication-not-required
+    level: SHOULD
+    text: >-
+      For this reason, and those stated in Section 5.3.1 of [RFC6819], it is
+      NOT RECOMMENDED for authorization servers to require client
+      authentication of public native apps clients using a shared secret.
+    url: https://www.rfc-editor.org/rfc/rfc8252#section-8.5
+
+  - id: no-silent-authorization
+    level: SHOULD
+    text: >-
+      As stated in Section 10.2 of OAuth 2.0 [RFC6749], the authorization
+      server SHOULD NOT process authorization requests automatically without
+      user consent or interaction, except when the identity of the client can
+      be assured.
+    url: https://www.rfc-editor.org/rfc/rfc8252#section-8.6
+
+  - id: previous-approval-needs-a-proven-client
+    level: SHOULD
+    text: >-
+      This includes the case where the user has previously approved an
+      authorization request for a given client id -- unless the identity of the
+      client can be proven, the request SHOULD be processed as if no previous
+      request had been approved.
+    url: https://www.rfc-editor.org/rfc/rfc8252#section-8.6
+
+dismissed:
+  external-user-agent-used: >-
+    Binds the native app's choice of user-agent.
+  browser-selection-criteria-may-vary: >-
+    A MAY about which browser the app launches.
+  browser-is-the-recommended-user-agent: >-
+    A RECOMMENDED addressed to the app.
+  other-authorizing-user-agents-allowed: >-
+    A MAY about user-agents other than a browser, chosen by the app.
+  in-app-browser-tabs-recommended: >-
+    A RECOMMENDED about the app's platform integration.
+  app-chooses-its-redirect-option: >-
+    A MAY addressed to the app, over the options
+    three-redirect-options-offered is meant to give it.
+  private-use-scheme-is-reverse-domain: >-
+    Binds the app naming its scheme. This server accepts no private-use scheme
+    at all — see three-redirect-options-offered.
+  client-type-recorded-forward-reference: >-
+    §7.2 pointing at §8.4's rule, which is client-type-recorded.
+  claimed-https-preferred-by-apps: >-
+    A SHOULD addressed to the app choosing between redirect options.
+  ip-version-not-assumed: >-
+    A SHOULD NOT addressed to the app binding its loopback listener.
+  loopback-bound-on-both-ip-versions: >-
+    A RECOMMENDED addressed to the app binding its loopback listener.
+  implicit-flow-not-recommended: >-
+    A NOT RECOMMENDED about a flow this server does not implement:
+    response_types_supported is ["code"].
+  localhost-not-recommended: >-
+    A NOT RECOMMENDED addressed to the app writing its redirect URI. This
+    server accepts both spellings, because refusing the one an app registered
+    would strand it with no way to receive a redirect at all.
+  native-apps-are-public-clients: >-
+    A classification, not an obligation. Every client here is public:
+    token_endpoint_auth_methods_supported is ["none"].
+  private-use-schemes-enforced-as-reverse-domain: >-
+    A SHOULD about which private-use schemes to reject. This server rejects
+    every one of them.
+  private-use-schemes-without-a-period-rejected: >-
+    The minimum bar for the rule above, met by rejecting the whole class.
+  platform-specific-registration-data-allowed: >-
+    A MAY about asking for a package or bundle name. Registration here takes
+    RFC 7591's fields and SEP-837's application_type.
+  static-secret-implies-a-public-client: >-
+    Conditional on requiring a shared secret from native clients, which this
+    server does not — see client-authentication-not-required.
+  claimed-https-redirects-may-prove-identity: >-
+    A MAY naming one way to prove a client's identity. This server proves it by
+    CIMD instead, which is what previous-approval-needs-a-proven-client turns
+    on.
+  platform-identity-features-may-be-accepted: >-
+    A MAY about operating-system identity signals, which a server reached over
+    HTTP cannot see.
+  cross-app-request-forgery-state: >-
+    A RECOMMENDED addressed to the app, about the state parameter it sends.
+  embedded-user-agents-may-be-blocked: >-
+    The MUST NOT binds the app; the MAY lets an authorization endpoint try to
+    detect an embedded user-agent. This server does not sniff user-agents —
+    the heuristic is unreliable and blocks legitimate clients.

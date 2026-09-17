@@ -1,0 +1,70 @@
+source: OpenID Connect RP-Initiated Logout 1.0
+title: OpenID Connect RP-Initiated Logout 1.0
+revision: errata set 2
+reviewed: 2026-09-17
+url: https://openid.net/specs/openid-connect-rpinitiated-1_0.html
+
+inventory:
+  from: >-
+    Section 2's fourteen statements — the parameters of the logout request and
+    the methods it may be sent with. This deployment is a Relying Party: it
+    redirects the End-User to the provider's end_session_endpoint and operates
+    no Logout Endpoint of its own, so Sections 3 through 5, which bind the
+    OpenID Provider and its metadata, are out of scope.
+  count: 14
+
+requirements:
+  - id: id-token-hint-included
+    level: SHOULD
+    text: >-
+      id_token_hint: RECOMMENDED. ID Token previously issued by the OP to the
+      RP passed to the Logout Endpoint as a hint about the End-User's current
+      authenticated session with the Client.
+    url: https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\t\tif idTokenHint != \"\" {\n\t\t\tq.Set(\"id_token_hint\", idTokenHint)"
+        with: "\t\tif idTokenHint != \"\" && false {\n\t\t\tq.Set(\"id_token_hint\", idTokenHint)"
+
+  - id: id-token-hint-accompanies-the-redirect-uri
+    level: SHOULD
+    text: >-
+      An id_token_hint is also RECOMMENDED when this parameter is included.
+    url: https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout
+
+dismissed:
+  logout-hint-optional: >-
+    An OPTIONAL parameter whose meaning is the provider's to define. This
+    deployment knows the End-User only by the ID token it already sends.
+  client-id-optional: >-
+    An OPTIONAL parameter this deployment always sends, so a provider can
+    attribute the request even where the hint is absent.
+  client-id-matches-the-id-token: >-
+    Binds the OpenID Provider verifying the pair. This deployment sends both
+    from one session and cannot disagree with itself.
+  post-logout-redirect-uri-optional: >-
+    An OPTIONAL parameter this deployment sends whenever a post-logout URL is
+    derived from the configured redirect URL.
+  post-logout-redirect-uri-scheme: >-
+    The URI is the origin of the configured redirect URL, so its scheme is the
+    deployment's — a local deployment on http://localhost sets it deliberately.
+  post-logout-redirect-uri-alternate-scheme: >-
+    A MAY for native-application callbacks. This is a browser session and the
+    URI is an https or http origin.
+  post-logout-redirect-uri-registered: >-
+    The value MUST already be registered at the provider. It is derived from
+    the configured redirect URL's origin, and registering it is the operator's
+    step — docs/authentication.md says so.
+  state-optional: >-
+    An OPTIONAL round-trip value. Nothing here needs to survive the logout
+    redirect: the session is cleared before the browser leaves.
+  ui-locales-optional: >-
+    An OPTIONAL language preference. This deployment negotiates no locale with
+    the provider.
+  ui-locales-failure-is-not-an-error: >-
+    A SHOULD NOT binding the provider, for a parameter this deployment does not
+    send.
+  provider-supports-get-and-post: >-
+    Binds the OpenID Provider's Logout Endpoint.
+  rp-may-use-get-or-post: >-
+    A MAY this deployment exercises by redirecting the browser, which is a GET.

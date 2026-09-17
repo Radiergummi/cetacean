@@ -174,6 +174,8 @@ func TestChallengeOmitsTheErrorCodeWithoutACredential(t *testing.T) {
 // A validator that took only one shape would refuse a conformant token — and
 // ours would then misclassify it as another issuer's and hand it to the provider.
 func TestAudienceIsAcceptedInBothShapes(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7519/aud-may-be-a-single-string")
+
 	s := newTestServer(t)
 	aud := s.resources.fallback
 
@@ -219,6 +221,8 @@ func TestAudienceIsAcceptedInBothShapes(t *testing.T) {
 // into typ. Refusing a conformant token over letter case would route it to the
 // upstream provider as though it were another issuer's.
 func TestTokenTypeIsCaseInsensitive(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7515/typ-read-as-a-full-media-type")
+
 	s := newTestServer(t)
 	aud := s.resources.fallback
 
@@ -246,6 +250,8 @@ func TestTokenTypeIsCaseInsensitive(t *testing.T) {
 // RFC 7519 §4.1.5: a token must not be accepted before its nbf. Never minted
 // here, so the check only ever sees one another issuer set.
 func TestNotBeforeIsHonoured(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7519/nbf-has-passed")
+
 	s := newTestServer(t)
 	aud := s.resources.fallback
 
@@ -346,6 +352,8 @@ func repayload(
 // when the server advertises that it sends one. Every response here carries iss,
 // so without the flag the mix-up defence goes unenforced by conformant clients.
 func TestMetadataAdvertisesTheIssParameter(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9207/iss-support-advertised-in-metadata")
+
 	s := newTestServer(t)
 
 	rec := httptest.NewRecorder()
@@ -371,6 +379,8 @@ func TestMetadataAdvertisesTheIssParameter(t *testing.T) {
 // half that matters: signES256 and verifyES256 are ours, and every other test
 // here signs with the code it then verifies with.
 func TestES256VerificationMatchesTheRFC7515Vector(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7515/signature-validated-against-the-signing-input")
+
 	const (
 		signingInput = "eyJhbGciOiJFUzI1NiJ9." +
 			"eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFt" +
@@ -588,5 +598,99 @@ func TestTheDiscoveryDocumentsAreServedOnlyForGET(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// RFC 8252 §6 and §8.1: PKCE is not optional here. A request with no
+// code_challenge is refused at the authorization endpoint rather than issuing a
+// code no verifier could ever redeem.
+func TestAuthorizeRefusesARequestWithoutPKCE(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc8252/pkce-supported-for-native-clients",
+		"oauth/rfc8252/pkce-missing-is-rejected",
+	)
+
+	s := newTestServer(t)
+
+	const redirectURI = "http://localhost:8617/cb"
+	clientID := registeredClient(t, s, []string{redirectURI})
+
+	// The method is sent and the challenge is not, so the refusal can only come
+	// from the challenge check — with that check gone the request would reach
+	// the consent page instead.
+	q := url.Values{
+		"response_type":         {"code"},
+		"client_id":             {clientID},
+		"redirect_uri":          {redirectURI},
+		"code_challenge_method": {"S256"},
+		"resource":              {s.resources.fallback},
+	}
+
+	rec := httptest.NewRecorder()
+	s.HandleAuthorize(rec, withIdentity(
+		httptest.NewRequest(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil),
+		fixtureSubject, fixtureEmail,
+	))
+
+	location, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse Location: %v", err)
+	}
+
+	if got := location.Query().Get("error"); got != "invalid_request" {
+		t.Errorf("error = %q, want invalid_request; body %s", got, rec.Body.String())
+	}
+	if location.Query().Get("code") != "" {
+		t.Error("a code was issued for a request carrying no code_challenge")
+	}
+}
+
+// RFC 8252 §7 wants three redirect options offered to native apps. A private-use
+// URI scheme is the one this server does not accept, so an app that can only be
+// reached on its own scheme cannot register.
+func TestAPrivateUseSchemeRedirectIsRefused(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8252/three-redirect-options-offered")
+
+	s := newTestServer(t)
+
+	status, _ := registerClient(t, s, `{
+		"redirect_uris": ["com.example.app:/oauth2redirect"],
+		"application_type": "native"
+	}`)
+	if status == http.StatusCreated {
+		t.Error("a private-use URI scheme was accepted; §7.1 is offered after all")
+	}
+}
+
+// RFC 8252 §7.3 wants any loopback port accepted at request time. redirect_uri
+// is matched byte for byte, so an app handed an ephemeral port by the operating
+// system is refused with the one it registered.
+func TestALoopbackRedirectMustReuseTheRegisteredPort(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8252/any-loopback-port-accepted")
+
+	s := newTestServer(t)
+
+	const registered = "http://127.0.0.1:8617/cb"
+	clientID := registeredClient(t, s, []string{registered})
+
+	q := url.Values{
+		"response_type": {"code"},
+		"client_id":     {clientID},
+		"redirect_uri":  {"http://127.0.0.1:53211/cb"},
+		"code_challenge": {
+			computeS256Challenge("verifier-padded-to-the-RFC-7636-minimum-length"),
+		},
+		"code_challenge_method": {"S256"},
+		"resource":              {s.resources.fallback},
+	}
+
+	rec := httptest.NewRecorder()
+	s.HandleAuthorize(rec, withIdentity(
+		httptest.NewRequest(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil),
+		fixtureSubject, fixtureEmail,
+	))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for an unregistered loopback port", rec.Code)
 	}
 }

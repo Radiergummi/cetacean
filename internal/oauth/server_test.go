@@ -86,6 +86,7 @@ func TestASMetadata(t *testing.T) {
 		"oauth/rfc8414/token-endpoint-required",
 		"oauth/rfc8414/response-types-supported-required",
 		"oauth/rfc8414/response-is-200-json",
+		"oauth/rfc8252/client-authentication-not-required",
 	)
 
 	s := newTestServer(t)

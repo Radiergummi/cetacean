@@ -39,7 +39,7 @@ type OIDCProvider struct {
 	session               *SessionCodec
 	issuer                string // for RFC 9207 iss validation
 	issRequired           bool   // true if IdP advertises authorization_response_iss_parameter_supported
-	endSessionEndpoint    string // RFC 9722 RP-initiated logout; empty if not supported
+	endSessionEndpoint    string // OIDC RP-initiated logout; empty if not supported
 	postLogoutRedirectURL string // derived from RedirectURL origin
 	basePath              string
 }
@@ -61,7 +61,7 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCProviderConfig) (*OIDCProvider
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
 
-	// Extract additional discovery claims for RFC 9207 and RFC 9722.
+	// Extract additional discovery claims for RFC 9207 and RP-initiated logout.
 	var disco struct {
 		IssSupported       bool   `json:"authorization_response_iss_parameter_supported"`
 		EndSessionEndpoint string `json:"end_session_endpoint"`
@@ -363,7 +363,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Store the raw ID token for RP-initiated logout (RFC 9722 id_token_hint).
+	// Store the raw ID token for RP-initiated logout (id_token_hint).
 	p.session.Set(w, identity, ttl, rawIDToken)
 
 	http.Redirect(w, r, redirectURL, http.StatusFound)
@@ -426,7 +426,8 @@ func (p *OIDCProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleLogout clears the local session and, if the IdP supports it,
-// redirects to the IdP's end_session_endpoint per RFC 9722.
+// redirects to the IdP's end_session_endpoint per OpenID Connect
+// RP-Initiated Logout 1.0.
 func (p *OIDCProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 	// Read the ID token hint before clearing the session.
 	var idTokenHint string

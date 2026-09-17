@@ -28,7 +28,7 @@ const maxCookieValueLen = 3800
 type sessionEnvelope struct {
 	Identity    *Identity `json:"id"`
 	ExpiresAt   int64     `json:"exp"`
-	IDTokenHint string    `json:"idt,omitempty"` // raw ID token for RP-initiated logout (RFC 9722)
+	IDTokenHint string    `json:"idt,omitempty"` // raw ID token for RP-initiated logout
 }
 
 // SessionCodec signs and verifies session cookies using HMAC-SHA256.
@@ -62,7 +62,7 @@ func NewSessionCodecWithKey(hexKey string) (*SessionCodec, error) {
 // Set serializes the identity with an expiry, signs it and sets it as a cookie.
 // Raw claims are excluded to stay under the browser's ~4KB limit. The optional
 // idTokenHint is kept for RP-initiated logout, and dropped if the cookie would
-// exceed that limit — RFC 9722 makes it OPTIONAL, so logout degrades.
+// exceed that limit — the hint is RECOMMENDED, not required, so logout degrades.
 func (s *SessionCodec) Set(
 	w http.ResponseWriter,
 	id *Identity,

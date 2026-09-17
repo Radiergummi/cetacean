@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // serveMetadata returns an http.HandlerFunc that serves a ClientMetadata JSON
@@ -221,6 +223,8 @@ func TestCIMDFetchCachesResults(t *testing.T) {
 
 // TestCIMDFetchHasRedirectURI verifies the exact-match helper.
 func TestCIMDFetchHasRedirectURI(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8252/redirect-uri-registered-and-exact-matched")
+
 	meta := &ClientMetadata{
 		ClientID:     "https://example.com/client",
 		RedirectURIs: []string{"https://example.com/cb", "https://example.com/cb2"},

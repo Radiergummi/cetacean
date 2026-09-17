@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/config"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // newDCRRequest builds a POST /oauth/register request with the given JSON body.
@@ -291,6 +293,8 @@ func TestDCRDefaultsApplicationTypeToNative(t *testing.T) {
 }
 
 func TestDCREchoesExplicitApplicationType(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8252/client-type-recorded")
+
 	s := newTestServer(t)
 
 	status, reg := registerClient(t, s, `{
@@ -336,6 +340,8 @@ func TestDCRWebApplicationTypeRejectsLoopbackRedirect(t *testing.T) {
 // TestDCRNativeApplicationTypeAllowsLoopback guards the other direction — the
 // default must keep working for the clients it exists for.
 func TestDCRNativeApplicationTypeAllowsLoopback(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8252/client-type-recorded")
+
 	s := newTestServer(t)
 
 	status, _ := registerClient(t, s, `{
