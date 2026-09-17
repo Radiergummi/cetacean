@@ -18,23 +18,22 @@ requirements:
       address or a simple domain name) MUST be fully qualified.
     url: https://www.rfc-editor.org/rfc/rfc4151#section-2.1
     deferred: >-
-      The authority name is the host the feed was reached on, and a deployment
+      The authority name is the host the feed was reached on, so a deployment
       reached by a short name — a service name on a Swarm overlay, a bare
-      hostname on a LAN — mints a tag whose authority is not fully qualified.
-      Only server.public_url makes it permanent, which the feed's own comment
-      already says; requiring it would make feeds unavailable to a deployment
-      that has not set it.
+      hostname on a LAN — still mints a tag whose authority is not fully
+      qualified. server.public_url settles it, and nothing else can: the only
+      alternative is refusing to serve a feed at all until it is configured,
+      which would take the feeds away from every development setup.
 
   - id: authority-name-is-lowercase
     level: SHOULD
     text: >-
       It is RECOMMENDED that the domain name should be in lowercase form.
     url: https://www.rfc-editor.org/rfc/rfc4151#section-2.1
-    deferred: >-
-      The host is carried through with whatever case it arrived in, so two
-      spellings of one name mint two identifiers for one feed. The same fix
-      serves both this and the qualification above: derive the authority from
-      server.public_url alone and normalize it once.
+    mutants:
+      - file: internal/api/feed_handlers.go
+        replace: "\treturn strings.ToLower(host)"
+        with: "\treturn host"
 
   - id: tags-are-not-percent-encoded
     level: SHOULD

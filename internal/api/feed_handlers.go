@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -414,9 +415,21 @@ func (h *Handlers) filterHistoryACL(
 func feedID(r *http.Request) string {
 	return fmt.Sprintf(
 		"tag:%s,2026:%s",
-		originHostOf(r),
+		tagAuthority(originHostOf(r)),
 		absPath(r.Context(), r.URL.Path),
 	)
+}
+
+// tagAuthority reduces a request host to an RFC 4151 authorityName, which
+// admits a DNS name or an email address and so no port, and which §2.1 wants
+// lowercase. Two spellings of one host would otherwise mint two feed
+// identifiers for one feed.
+func tagAuthority(host string) string {
+	if bare, _, err := net.SplitHostPort(host); err == nil {
+		host = bare
+	}
+
+	return strings.ToLower(host)
 }
 
 // parseFeedPagination reads ?before= and ?limit= from the query string.
