@@ -15,6 +15,8 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // registeredClient registers a DCR client in the server's registry and
@@ -57,6 +59,8 @@ func withIdentity(r *http.Request, subject, email string) *http.Request {
 // ---------------------------------------------------------------------------
 
 func TestConsentPageRender(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8252/no-silent-authorization")
+
 	s := newTestServer(t)
 	challenge := computeS256Challenge("verifier")
 	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
