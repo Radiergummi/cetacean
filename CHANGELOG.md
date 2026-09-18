@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
 - **Breaking:** `server.operations_level` defaults to `0`, read-only. A deployment that never set it could perform operational writes, and on `auth.mode=none` could do so unauthenticated — set it to `1` to keep that
 - **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale` and `headers` — no challenge can ask for the credential those modes read
+- Signing in from an address ending in `.atom`, `.csv` or `.json` returns to that resource's page, not the file
 
 ### Removed
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
