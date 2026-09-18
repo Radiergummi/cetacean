@@ -923,11 +923,15 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		requestID,
 		realIP(cfg.TrustedProxies, cfg.ForwardedHeaders),
 		recovery,
+		// Ahead of everything that matches on a path, because it rewrites the
+		// one they match: a suffix left on until later made /-/resync.json
+		// miss the exemption list's own exception and skip authentication,
+		// and /oauth/authorize.html miss the CORS exemption.
+		negotiate,
 		securityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),
 		cors(cfg.CORS),
 		crossOriginProtection(cfg.CORS, cfg.PublicURL),
 		auth.Middleware(authProvider, cfg.APITokens),
-		negotiate,
 		requireReady(h, mux),
 		discoveryLinks,
 		requestLogger,

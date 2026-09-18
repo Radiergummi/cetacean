@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -412,11 +413,34 @@ func (h *Handlers) filterHistoryACL(
 // it permanent, which is what RFC 4151 asks of it.
 // The year 2026 is the date the tag namespace was minted and must remain constant.
 func feedID(r *http.Request) string {
+	authority, port := tagAuthority(originHostOf(r))
+	specific := absPath(r.Context(), r.URL.Path)
+
+	// Two deployments on one host are two feeds. The authority cannot say so
+	// and the specific part is the only other thing that can.
+	if port != "" {
+		specific = port + ":" + specific
+	}
+
 	return fmt.Sprintf(
 		"tag:%s,2026:%s",
-		originHostOf(r),
-		absPath(r.Context(), r.URL.Path),
+		authority,
+		specific,
 	)
+}
+
+// tagAuthority splits a request host into an RFC 4151 authorityName and the
+// port no such name may carry. It admits a DNS name or an email address, so
+// neither a port nor an IPv6 literal's colons can stay: either ends the
+// tagging entity early and leaves the authority empty. §2.1 wants lowercase.
+func tagAuthority(host string) (authority, port string) {
+	if bare, p, err := net.SplitHostPort(host); err == nil {
+		host, port = bare, p
+	}
+
+	host = strings.Trim(host, "[]")
+
+	return strings.ToLower(strings.ReplaceAll(host, ":", "-")), port
 }
 
 // parseFeedPagination reads ?before= and ?limit= from the query string.

@@ -56,13 +56,10 @@ requirements:
     text: >-
       The redirect URI MUST NOT include a fragment component.
     url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.3
-    deferred: >-
-      isValidRedirectURI checks the scheme and nothing else, so a client may
-      register https://client.example/cb#anything and be redirected to it. The
-      authorization response is still readable — the code goes into the query,
-      which url.URL writes before the fragment — but the client registered a
-      URI this document does not allow, and the one place to refuse it is the
-      same guard that decides the scheme.
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\tif strings.Contains(rawURI, \"#\") {"
+        with: "\tif false && strings.Contains(rawURI, \"#\") {"
 
   - id: multiple-redirect-uris-may-be-registered
     level: MAY

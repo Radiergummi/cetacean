@@ -128,7 +128,7 @@ func TestPreconditionOnServiceEnv(t *testing.T) {
 		}
 	})
 
-	t.Run("wildcard on a missing resource is 412 not 404", func(t *testing.T) {
+	t.Run("wildcard on a missing resource is 404 not 412", func(t *testing.T) {
 		router := newTestRouterWithCache(t, cache.New(nil))
 		req := httptest.NewRequest("PATCH", "/services/gone/env",
 			strings.NewReader(`{"B":"2"}`))
@@ -136,8 +136,8 @@ func TestPreconditionOnServiceEnv(t *testing.T) {
 		req.Header.Set("If-Match", "*")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
-		if rec.Code != http.StatusPreconditionFailed {
-			t.Errorf("status = %d, want 412 (RFC 9110 §13.2.2)", rec.Code)
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want 404 (RFC 9110 §13.2.1)", rec.Code)
 		}
 	})
 }
@@ -514,18 +514,24 @@ func seededWriteClient() *mockWriteClient {
 	}
 }
 
-// Covers the one builder that reads the daemon rather than the cache: a plugin
-// genuinely gone is a 412, but a daemon that could not be reached leaves the
-// condition unevaluable.
+// Covers the one builder that reads the daemon rather than the cache. A plugin
+// genuinely gone is the resource's own 404 — RFC 9110 §13.2.1 keeps the
+// precondition out of the way of it — but a daemon that could not be reached
+// leaves the condition unevaluable, which is a different answer entirely. And
+// the 404 the pass-through counts on has to hold even if the plugin comes back.
 func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 	cases := []struct {
 		name       string
 		inspectErr error
+		removeErr  error
 		wantStatus int
 	}{
-		{"missing plugin", cerrdefs.ErrNotFound, http.StatusPreconditionFailed},
-		{"daemon unavailable", cerrdefs.ErrUnavailable, http.StatusServiceUnavailable},
-		{"unexpected failure", errors.New("boom"), http.StatusInternalServerError},
+		{"missing plugin", cerrdefs.ErrNotFound, cerrdefs.ErrNotFound, http.StatusNotFound},
+		{"daemon unavailable", cerrdefs.ErrUnavailable, nil, http.StatusServiceUnavailable},
+		{"unexpected failure", errors.New("boom"), nil, http.StatusInternalServerError},
+		// The remove would succeed: the plugin was installed between the two
+		// reads. A 204 here is a write nothing compared the validator against.
+		{"installed since the inspect", cerrdefs.ErrNotFound, nil, http.StatusNotFound},
 	}
 
 	for _, tc := range cases {
@@ -535,7 +541,7 @@ func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 				pluginInspectFn: func(context.Context, string) (*types.Plugin, error) {
 					return nil, tc.inspectErr
 				},
-				pluginRemoveFn: func(context.Context, string, bool) error { return nil },
+				pluginRemoveFn: func(context.Context, string, bool) error { return tc.removeErr },
 			}))
 
 			req := httptest.NewRequest("DELETE", "/plugins/plug1", nil)
@@ -639,40 +645,43 @@ func newSeededTestRouterWithConfig(
 	)
 }
 
-// RFC 9110 §13.2.1 says to ignore every precondition when the same request
-// without them would not have answered 2xx or 412 — so a write against a
-// resource that is gone should answer 404, conditional or not. This pins the
-// 412 it answers instead, which comes from reading §13.2.2's precedence list
-// on its own.
-func TestAPreconditionOnAMissingResourceAnswers412(t *testing.T) {
+// RFC 9110 §13.2.1: a precondition is ignored when the answer without it
+// would be neither 2xx nor 412. A write against a resource that is gone
+// answers 404, and carrying If-Match must not turn that into a 412 — the
+// client's validator is not the problem, the missing resource is.
+func TestAPreconditionDoesNotMaskAMissingResource(t *testing.T) {
 	spec.Satisfies(t, "http/rfc9110/preconditions-are-ignored-when-the-answer-is-not-2xx")
 
 	router := newTestRouterWithCache(t, cache.New(nil))
 
-	unconditional := httptest.NewRequest(
-		http.MethodPatch, "/services/gone/env", strings.NewReader(`{"A":"2"}`),
-	)
-	unconditional.Header.Set("Content-Type", "application/json")
-	plain := httptest.NewRecorder()
-	router.ServeHTTP(plain, unconditional)
+	answer := func(t *testing.T, ifMatch string) int {
+		t.Helper()
 
-	if plain.Code != http.StatusNotFound {
+		req := httptest.NewRequest(
+			http.MethodPatch, "/services/gone/env", strings.NewReader(`{"A":"2"}`),
+		)
+		req.Header.Set("Content-Type", "application/json")
+		if ifMatch != "" {
+			req.Header.Set("If-Match", ifMatch)
+		}
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		return rec.Code
+	}
+
+	unconditional := answer(t, "")
+	if unconditional != http.StatusNotFound {
 		t.Fatalf("without a precondition the answer is %d, not 404; this test proves nothing",
-			plain.Code)
+			unconditional)
 	}
 
-	conditional := httptest.NewRequest(
-		http.MethodPatch, "/services/gone/env", strings.NewReader(`{"A":"2"}`),
-	)
-	conditional.Header.Set("Content-Type", "application/json")
-	conditional.Header.Set("If-Match", `"whatever"`)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, conditional)
-
-	if rec.Code == http.StatusNotFound {
-		t.Error("the precondition was ignored and the 404 stood; the deferral is stale")
-	}
-	if rec.Code != http.StatusPreconditionFailed {
-		t.Errorf("status = %d, want 412; the deferral no longer describes the code", rec.Code)
+	// Both spellings: a specific validator, and the wildcard, which §13.1.1
+	// makes false precisely when there is no current representation.
+	for _, ifMatch := range []string{`"whatever"`, "*"} {
+		if got := answer(t, ifMatch); got != unconditional {
+			t.Errorf("If-Match %s: status = %d, want %d — the precondition was evaluated",
+				ifMatch, got, unconditional)
+		}
 	}
 }

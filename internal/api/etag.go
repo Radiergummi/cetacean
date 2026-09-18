@@ -274,6 +274,14 @@ func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastMod
 	w.Header().Set("Cache-Control", "no-cache")
 
 	if !lastModified.IsZero() {
+		// RFC 9110 §8.8.2.1: a value later than the response's own origination
+		// date is replaced by it. The engine stamps these, and a manager whose
+		// clock runs ahead of this one would otherwise hand a cache a
+		// representation that never goes stale.
+		if now := time.Now(); lastModified.After(now) {
+			lastModified = now
+		}
+
 		w.Header().Set("Last-Modified", lastModified.UTC().Format(http.TimeFormat))
 	}
 

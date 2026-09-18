@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -104,6 +105,15 @@ func (h *Handlers) HandleDisablePlugin(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleRemovePlugin(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	force := r.URL.Query().Get("force") == "true"
+
+	// Every other remove reads the cache and answers 404, which is what the
+	// precondition passed the request through to get. This one reaches the
+	// daemon, where a plugin installed since would make it a 204 instead.
+	if subjectAbsent(r.Context()) {
+		writeErrorCode(w, r, "PLG004", fmt.Sprintf("plugin %q not found", name))
+		return
+	}
+
 	slog.Info("removing plugin", "plugin", name, "force", force)
 
 	if err := h.pluginClient.PluginRemove(r.Context(), name, force); err != nil {

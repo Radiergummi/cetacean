@@ -41,13 +41,10 @@ requirements:
       generate a Last-Modified date that is later than the server's time of
       message origination (Date, Section 6.6.1).
     url: https://www.rfc-editor.org/rfc/rfc9110#section-8.8.2.1
-    deferred: >-
-      The value is the timestamp the Docker engine put on the object, written
-      out unclamped. An engine whose clock runs ahead of this server's — two
-      managers drifting apart is enough — produces a Last-Modified in the
-      future, which a cache is entitled to treat as never stale. The remedy
-      the next sentence names is one min() against time.Now at the point the
-      header is written.
+    mutants:
+      - file: internal/api/etag.go
+        replace: "\t\tif now := time.Now(); lastModified.After(now) {"
+        with: "\t\tif now := time.Now(); false && lastModified.After(now) {"
 
   - id: an-etag-is-sent-when-changes-are-detectable
     level: SHOULD
@@ -273,15 +270,10 @@ requirements:
       content, would have been a status code other than a 2xx (Successful) or
       412 (Precondition Failed).
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.2.1
-    deferred: >-
-      A write carrying If-Match against a resource that is gone answers 412,
-      where the same request without the header would have answered 404 — so
-      this sentence says to ignore the precondition and answer 404 too. The
-      412 comes from reading §13.2.2's precedence list alone, where an absent
-      representation makes the condition false. Honouring §13.2.1 means the
-      middleware knowing what the handler would have said, which it cannot
-      without running it first — the fix is to check the resource exists
-      before evaluating the validator, not after.
+    mutants:
+      - file: internal/api/precondition.go
+        replace: "\t\t\tcase errors.Is(err, errNoRepresentation):"
+        with: "\t\t\tcase errors.Is(err, errNoRepresentation) && false:"
 
   - id: range-is-an-optional-feature
     level: MAY

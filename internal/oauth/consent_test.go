@@ -142,7 +142,7 @@ func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
 	s.HandleAuthorize(rec, req)
 
 	// Must NOT redirect to the attacker URL.
-	if rec.Code == http.StatusFound {
+	if rec.Code == http.StatusSeeOther {
 		loc := rec.Header().Get("Location")
 		if strings.Contains(loc, "attacker.example.com") {
 			t.Fatalf("SECURITY: redirected to unregistered URI: %s", loc)
@@ -190,8 +190,8 @@ func TestConsentApproveProducesCode(t *testing.T) {
 	// Step 2: POST the approval, resubmitting the form the page rendered.
 	postRec := submitConsent(t, s, getRec, "approve", "bob", "bob@example.com", nil)
 
-	if postRec.Code != http.StatusFound {
-		t.Fatalf("expected redirect (302), got %d: %s", postRec.Code, postRec.Body.String())
+	if postRec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect (303), got %d: %s", postRec.Code, postRec.Body.String())
 	}
 
 	loc := postRec.Header().Get("Location")

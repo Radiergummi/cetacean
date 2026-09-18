@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it does not recognise
 - **Breaking:** `server.operations_level` defaults to `0`, read-only. A deployment that never set it could perform operational writes, and on `auth.mode=none` could do so unauthenticated — set it to `1` to keep that
 - **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale` and `headers` — no challenge can ask for the credential those modes read
+- Signing in from an address ending in `.atom`, `.csv` or `.json` returns to that resource's page, not the file
 
 ### Removed
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
@@ -74,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Header-based authentication works behind a reverse proxy again; it was answering 401 to every request
 - Asking an endpoint for a format it does not serve now says so, instead of answering with JSON
 - A malformed `filter` is reported as an error again on a request carrying `If-None-Match: *`
+- The OAuth authorization endpoint no longer reflects an origin or answers a preflight, at any spelling of its address; a page on an allowed origin could read the consent form and the token in it
+- The authorization response redirects with `303 See Other` rather than `302 Found`
+- A redirect URI carrying a fragment is refused at registration
+- A write carrying `If-Match` against a resource that no longer exists answers `404`, not `412` — the validator was not what was wrong with it
+- Atom feed identifiers lowercase the host and move the port out of it, so one feed reached two ways is one feed, and two deployments on one host stay two
 - An address matching no route answers `404` with a problem document rather than `200` and the dashboard — on a write, and on a read from a client that said it cannot use a web page
 - A format an `Accept` header rules out with `;q=0` is refused with `406` instead of served anyway
 - `/favicon.ico` and the dashboard's other static files are no longer refused with `406` when a client asks for them as an image
@@ -85,7 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A `PATCH` to a service's resources, healthcheck, update policy, rollback policy, log driver or container config no longer discards an edit made just before it
 - Every identifier a response hands out works under `server.base_path`. Listings, and a task's links to its service and node, left the deployment and answered 404
 - Relabelling a node needs operations level 2 over the API, matching MCP. It was gated with draining and demoting
-- `POST /-/resync` requires authentication. It is still not gated on the operations level, so a read-only deployment keeps its refresh button
+- `POST /-/resync` requires authentication at any spelling of its address — `/-/resync.json` skipped it entirely. It is still not gated on the operations level, so a read-only deployment keeps its refresh button
 - A task no longer sits at `starting` for minutes after it is running, which also left the running count short and anything waiting for a service to settle waiting
 - Recommendations are complete right after a restart, instead of missing every sizing finding for the first five minutes
 - A rolling update no longer truncates whatever was in flight: shutdown waits up to five seconds for in-flight requests

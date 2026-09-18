@@ -136,14 +136,16 @@ requirements:
       the client does not access this endpoint directly; instead, the client
       redirects the user agent to it.
     url: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
-    deferred: >-
-      The CORS middleware wraps the whole mux, and the authorization endpoint
-      is mounted on it, so a GET carrying an Origin listed in
-      server.cors.origins comes back with Access-Control-Allow-Origin. A page
-      on an allow-listed origin can therefore read the consent form, and the
-      CSRF nonce in it, with fetch. Exempting the endpoint means teaching the
-      middleware a path it must not answer for, which the OAuth routes reach
-      the router through a function value rather than by name.
+    mutants:
+      - file: internal/api/cors.go
+        replace: "\t\t\tif r.URL.Path == authorizationEndpointPath {"
+        with: "\t\t\tif false && r.URL.Path == authorizationEndpointPath {"
+      # The exemption is a path match, so where negotiate sits decides whether
+      # it sees the path the mux routes. Behind it, /oauth/authorize.html is
+      # answered with the origin reflected.
+      - file: internal/api/router.go
+        replace: "\t\tnegotiate,\n\t\tsecurityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),\n\t\tcors(cfg.CORS),\n\t\tcrossOriginProtection(cfg.CORS, cfg.PublicURL),\n\t\tauth.Middleware(authProvider, cfg.APITokens),\n"
+        with: "\t\tsecurityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),\n\t\tcors(cfg.CORS),\n\t\tcrossOriginProtection(cfg.CORS, cfg.PublicURL),\n\t\tauth.Middleware(authProvider, cfg.APITokens),\n\t\tnegotiate,\n"
 
   - id: no-open-redirector-at-the-authorization-endpoint
     level: MUST
@@ -398,7 +400,7 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9700#section-4.12
     mutants:
       - file: internal/oauth/server.go
-        replace: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusFound)"
+        replace: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusSeeOther)"
         with: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusTemporaryRedirect)"
 
   - id: credential-redirects-use-303
@@ -408,12 +410,10 @@ requirements:
       such a request, the authorization server SHOULD use HTTP status code 303
       (See Other).
     url: https://www.rfc-editor.org/rfc/rfc9700#section-4.12
-    deferred: >-
-      The authorization response redirect is 302 Found. It satisfies the MUST
-      NOT above — a 302 is not a 307 — and every browser turns the consent
-      POST into a GET on it, which is what 303 would spell out. Changing it is
-      safe but not free: a client matching on the status code would see a
-      value it has never been sent.
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusSeeOther)"
+        with: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusFound)"
 
   - id: refresh-tokens-bound-to-the-resource
     level: MUST

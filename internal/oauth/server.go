@@ -730,8 +730,11 @@ func (s *Server) issueCodeAndRedirect(
 	q.Set("iss", s.cfg.issuerID())
 	redirectURI.RawQuery = q.Encode()
 
+	// 303, not 302: RFC 9700 §4.12 asks for See Other on a redirect that may
+	// carry the user's credentials, and the consent POST does. 307 is the one
+	// it forbids outright — it would replay the form body to the client.
 	//nolint:gosec // G710: code.RedirectURI is exact-matched against the client's registered redirect_uris (HasRedirectURI) immediately above; this is a pre-validated URI, not open redirect.
-	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
+	http.Redirect(w, r, redirectURI.String(), http.StatusSeeOther)
 }
 
 // renderConsentPage completes a partly-built consentData with the fields only
@@ -1131,8 +1134,9 @@ func (s *Server) redirectWithError(
 	// to attribute the failure before acting on it.
 	q.Set("iss", s.cfg.issuerID())
 	u.RawQuery = q.Encode()
+	// See Other for the same reason as the success path above.
 	//nolint:gosec // G710: both callers (handleAuthorizeGET and handleAuthorizePOST) exact-match redirectURIRaw against the client's registered redirect_uris before invoking this; the target is a pre-validated URI, not open redirect.
-	http.Redirect(w, r, u.String(), http.StatusFound)
+	http.Redirect(w, r, u.String(), http.StatusSeeOther)
 }
 
 // ---------------------------------------------------------------------------

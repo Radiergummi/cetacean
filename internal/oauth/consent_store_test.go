@@ -706,8 +706,8 @@ func TestApprovedClientSkipsTheConsentPage(t *testing.T) {
 
 	w := authorizeGET(t, s, clientID, redirectURI)
 
-	if w.Code != http.StatusFound {
-		t.Fatalf("status = %d, want %d (redirect with a code)", w.Code, http.StatusFound)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d (redirect with a code)", w.Code, http.StatusSeeOther)
 	}
 
 	location, err := url.Parse(w.Header().Get("Location"))
@@ -811,9 +811,9 @@ func TestApprovingThroughTheConsentPageIsRemembered(t *testing.T) {
 	}
 
 	approved := approvePOST(t, s, page, nil)
-	if approved.Code != http.StatusFound {
+	if approved.Code != http.StatusSeeOther {
 		t.Fatalf("POST status = %d, want %d: %s",
-			approved.Code, http.StatusFound, approved.Body.String())
+			approved.Code, http.StatusSeeOther, approved.Body.String())
 	}
 	if redirectedCode(t, approved) == "" {
 		t.Fatal("no authorization code in the approval redirect")
@@ -829,7 +829,7 @@ func TestApprovingThroughTheConsentPageIsRemembered(t *testing.T) {
 
 	// And the record it wrote must be the one the skip path reads.
 	again := authorizeGET(t, s, clientID, redirectURI)
-	if again.Code != http.StatusFound {
+	if again.Code != http.StatusSeeOther {
 		t.Fatalf("second GET status = %d, want a redirect with a code", again.Code)
 	}
 	if redirectedCode(t, again) == "" {
@@ -951,9 +951,9 @@ func TestMetadataChangedMidFlowRePrompts(t *testing.T) {
 	// The re-prompt must be usable: a fresh nonce bound to the new
 	// fingerprint, so approving it goes through.
 	confirmed := approvePOST(t, s, stale, nil)
-	if confirmed.Code != http.StatusFound {
+	if confirmed.Code != http.StatusSeeOther {
 		t.Fatalf("re-approval status = %d, want %d: %s",
-			confirmed.Code, http.StatusFound, confirmed.Body.String())
+			confirmed.Code, http.StatusSeeOther, confirmed.Body.String())
 	}
 
 	mu.Lock()

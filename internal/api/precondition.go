@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -43,11 +44,14 @@ func (h *Handlers) precond(rep representationFunc) Constructor {
 			value, err := rep(r)
 			switch {
 			case errors.Is(err, errNoRepresentation):
-				// RFC 9110 §13.2.2: no current representation means the
-				// precondition fails. 412, not 404 — evaluating the condition
-				// comes first.
-				writeErrorCode(w, r, "API013",
-					"the resource has no current representation")
+				// RFC 9110 §13.2.1: a precondition is ignored when the answer
+				// without it would be neither 2xx nor 412, and for a resource
+				// that is gone that answer is 404. Only the handler can say
+				// so, so the request goes through to it unconditioned.
+				next.ServeHTTP(w, r.WithContext(
+					context.WithValue(r.Context(), absentSubjectKey{}, true),
+				))
+
 				return
 			case err != nil:
 				// The condition could not be evaluated at all. Reporting 412
@@ -81,6 +85,19 @@ func (h *Handlers) precond(rep representationFunc) Constructor {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// absentSubjectKey marks a request the precondition let through because there
+// was no representation to evaluate it against. Passing through is sound only
+// while the handler answers 404 too, and one reading the engine live rather
+// than the cache can find the resource back between the two reads.
+type absentSubjectKey struct{}
+
+// subjectAbsent reports whether the precondition found the resource gone.
+func subjectAbsent(ctx context.Context) bool {
+	absent, _ := ctx.Value(absentSubjectKey{}).(bool)
+
+	return absent
 }
 
 // preconditionSubjects names, per resource root, the engine record to evaluate
