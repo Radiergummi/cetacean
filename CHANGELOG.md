@@ -78,7 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The authorization response redirects with `303 See Other` rather than `302 Found`
 - A redirect URI carrying a fragment is refused at registration
 - A write carrying `If-Match` against a resource that no longer exists answers `404`, not `412` — the validator was not what was wrong with it
-- Atom feed identifiers drop the port and lowercase the host, so one feed reached two ways is one feed and not two
+- Atom feed identifiers lowercase the host and move the port out of it, so one feed reached two ways is one feed, and two deployments on one host stay two
 - An address matching no route answers `404` with a problem document rather than `200` and the dashboard — on a write, and on a read from a client that said it cannot use a web page
 - A format an `Accept` header rules out with `;q=0` is refused with `406` instead of served anyway
 - `/favicon.ico` and the dashboard's other static files are no longer refused with `406` when a client asks for them as an image

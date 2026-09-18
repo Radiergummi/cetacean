@@ -20,10 +20,12 @@ requirements:
     deferred: >-
       The authority name is the host the feed was reached on, so a deployment
       reached by a short name — a service name on a Swarm overlay, a bare
-      hostname on a LAN — still mints a tag whose authority is not fully
-      qualified. server.public_url settles it, and nothing else can: the only
-      alternative is refusing to serve a feed at all until it is configured,
-      which would take the feeds away from every development setup.
+      hostname on a LAN, an IP literal — still mints a tag whose authority is
+      not fully qualified, and an IPv6 literal is no domain name at all: its
+      colons are hyphenated so the tagging entity still ends where it should.
+      server.public_url settles it, and nothing else can: the only alternative
+      is refusing to serve a feed at all until it is configured, which would
+      take the feeds away from every development setup.
 
   - id: authority-name-is-lowercase
     level: SHOULD
@@ -32,8 +34,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc4151#section-2.1
     mutants:
       - file: internal/api/feed_handlers.go
-        replace: "\treturn strings.ToLower(host)"
-        with: "\treturn host"
+        replace: "\treturn strings.ToLower(strings.ReplaceAll(host, \":\", \"-\")), port"
+        with: "\treturn strings.ReplaceAll(host, \":\", \"-\"), port"
 
   - id: tags-are-not-percent-encoded
     level: SHOULD
@@ -86,8 +88,8 @@ dismissed:
     The condition on that permission, which this deployment never exercises.
   record-keeping-achieves-uniqueness: >-
     Asks a tagging entity to keep records so two tags cannot collide.
-    Uniqueness here is structural: the specific part is the feed's own path
-    under the deployment root, and two feeds cannot share one.
+    Uniqueness here is structural: the specific part is the port and the path
+    a feed is reached under, and two feeds cannot share both.
   group-decision-making-achieves-uniqueness: >-
     The same instruction for an entity made of several people.
   tag-aware-software-may-warn: >-

@@ -636,25 +636,51 @@ func TestHistoryUpdated(t *testing.T) {
 }
 
 // RFC 4151 §2.1's authorityName is a DNS name or an email address — never a
-// host:port — and is wanted in lowercase, so that two spellings of one name
-// cannot mint two identifiers for one feed.
+// host:port, never an IPv6 literal, whose colons would end the tagging entity
+// before the name — and is wanted in lowercase, so that two spellings of one
+// name cannot mint two identifiers for one feed.
 func TestFeedIDNormalizesTheAuthority(t *testing.T) {
 	spec.Satisfies(t, "http/rfc4151/authority-name-is-lowercase")
 
-	const want = "tag:swarm.example.com,2026:/history"
-
-	for _, host := range []string{
-		"swarm.example.com",
-		"Swarm.Example.COM",
-		"swarm.example.com:9000",
-		"SWARM.EXAMPLE.COM:443",
+	for host, want := range map[string]string{
+		"swarm.example.com":      "swarm.example.com",
+		"Swarm.Example.COM":      "swarm.example.com",
+		"swarm.example.com:9000": "swarm.example.com",
+		"SWARM.EXAMPLE.COM:443":  "swarm.example.com",
+		"[::1]:9000":             "--1",
+		"[2001:DB8::1]":          "2001-db8--1",
 	} {
 		req := httptest.NewRequest("GET", "/history", nil)
 		req.Host = host
 
-		if got := feedID(req); got != want {
-			t.Errorf("Host %q: feedID = %q, want %q", host, got, want)
+		entity, _, ok := strings.Cut(strings.TrimPrefix(feedID(req), "tag:"), ":")
+		authority, _, _ := strings.Cut(entity, ",")
+
+		if !ok || authority != want {
+			t.Errorf(
+				"Host %q: feedID = %q, want the authority %q",
+				host, feedID(req), want,
+			)
 		}
+	}
+}
+
+// The port cannot live in an authorityName, and dropping it would make two
+// deployments on one host one feed — neither of which has a server.public_url
+// to tell them apart. It moves into the specific part instead.
+func TestFeedIDSeparatesTwoDeploymentsOnOneHost(t *testing.T) {
+	first := httptest.NewRequest("GET", "/history", nil)
+	first.Host = "swarm.example.com:9000"
+
+	second := httptest.NewRequest("GET", "/history", nil)
+	second.Host = "swarm.example.com:9001"
+
+	if feedID(first) == feedID(second) {
+		t.Errorf("two deployments on one host mint one feed id: %q", feedID(first))
+	}
+
+	if got, want := feedID(first), "tag:swarm.example.com,2026:9000:/history"; got != want {
+		t.Errorf("feedID = %q, want %q", got, want)
 	}
 }
 
