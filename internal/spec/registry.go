@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -310,8 +311,9 @@ func Unregistered() (map[string]string, error) {
 	return out, nil
 }
 
-// Validate reports the document-level rules: the inventory denominator, and
-// that every dismissal carries a reason.
+// Validate reports the document-level rules: the inventory denominator, that
+// every dismissal carries a reason, and that every pointer one entry makes at
+// another resolves.
 func (r *Registry) Validate() []error {
 	var errs []error
 
@@ -323,11 +325,9 @@ func (r *Registry) Validate() []error {
 		}
 
 		if doc.Inventory == nil {
-			continue
-		}
-
-		accounted := len(doc.Requirements) + len(doc.Dismissed)
-		if accounted != doc.Inventory.Count {
+			errs = append(errs, fmt.Errorf(
+				"%s: no inventory, so nothing holds its requirements to a denominator", doc.Key()))
+		} else if accounted := len(doc.Requirements) + len(doc.Dismissed); accounted != doc.Inventory.Count {
 			errs = append(errs, fmt.Errorf(
 				"%s: %d requirements + %d dismissed = %d, but the inventory declares %d",
 				doc.Key(), len(doc.Requirements), len(doc.Dismissed),
@@ -336,5 +336,78 @@ func (r *Registry) Validate() []error {
 		}
 	}
 
+	return append(errs, r.checkReferences()...)
+}
+
+// refRE finds a pointer one entry makes at another — "registered as
+// oauth/rfc9700/pkce-downgrade-refused". The document half is checked against
+// the registry first, so a URL path or a file name in the same prose cannot
+// be mistaken for one.
+var refRE = regexp.MustCompile(`\b([a-z0-9-]+/[a-z0-9.-]+)/([a-z0-9-]+)\b`)
+
+// checkReferences resolves every such pointer. Most of what a document says
+// about itself lives in the prose of a dismissal or a deferral, and a pointer
+// into another entry is the only part of it a gate can follow at all: without
+// this, renaming a requirement silently orphans the argument for every entry
+// that leant on it.
+func (r *Registry) checkReferences() []error {
+	entries := map[string]map[string]bool{}
+
+	for _, doc := range r.Documents {
+		names := make(map[string]bool, len(doc.Requirements)+len(doc.Dismissed))
+		for i := range doc.Requirements {
+			names[doc.Requirements[i].ID] = true
+		}
+
+		for id := range doc.Dismissed {
+			names[id] = true
+		}
+
+		entries[doc.Key()] = names
+	}
+
+	var errs []error
+
+	for _, doc := range r.Documents {
+		for _, e := range doc.prose() {
+			for _, m := range refRE.FindAllStringSubmatch(e.text, -1) {
+				names, ok := entries[m[1]]
+				if !ok || names[m[2]] {
+					continue
+				}
+
+				errs = append(errs, fmt.Errorf(
+					"%s: %s points at %s, which %s does not have",
+					doc.Key(), e.where, m[0], m[1],
+				))
+			}
+		}
+	}
+
 	return errs
+}
+
+type prose struct{ where, text string }
+
+// prose returns every reason a document states, named by where it was stated.
+func (d *Document) prose() []prose {
+	out := make([]prose, 0, len(d.Dismissed)+len(d.Requirements))
+
+	for id, reason := range d.Dismissed {
+		out = append(out, prose{"dismissal " + id, reason})
+	}
+
+	for i := range d.Requirements {
+		q := &d.Requirements[i]
+
+		if q.Deferred != "" {
+			out = append(out, prose{q.ID + "'s deferral", q.Deferred})
+		}
+
+		if q.Gap != "" {
+			out = append(out, prose{q.ID + "'s gap", q.Gap})
+		}
+	}
+
+	return out
 }

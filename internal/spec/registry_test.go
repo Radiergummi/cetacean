@@ -93,6 +93,7 @@ func TestDismissalNeedsAReason(t *testing.T) {
 		Family: "test", Name: "doc",
 		Requirements: []Requirement{{ID: "a", Level: MUST, Text: "x"}},
 		Dismissed:    map[string]string{"b": "   "},
+		Inventory:    &Inventory{Count: 2},
 	}
 
 	reg := &Registry{byID: map[string]*Requirement{}}
@@ -189,5 +190,62 @@ func TestAnUnknownLaneIsRefused(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "integration") {
 		t.Fatalf("err = %v, want one naming the unknown lane", err)
+	}
+}
+
+// Without an inventory a document has no denominator at all, and the guard
+// above is opt-in rather than a rule.
+func TestADocumentWithoutAnInventoryFailsValidation(t *testing.T) {
+	doc := &Document{
+		Family: "test", Name: "doc",
+		Requirements: []Requirement{{ID: "a", Level: MUST, Text: "x"}},
+	}
+
+	reg := &Registry{byID: map[string]*Requirement{}}
+	if err := reg.add(doc); err != nil {
+		t.Fatal(err)
+	}
+
+	errs := reg.Validate()
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "no inventory") {
+		t.Fatalf("errors = %v, want one about the missing inventory", errs)
+	}
+}
+
+// Most of what a document says about itself is the prose of a dismissal, and a
+// pointer into another entry is the only part of it a gate can follow.
+func TestAPointerAtAnotherEntryMustResolve(t *testing.T) {
+	other := &Document{
+		Family: "test", Name: "other",
+		Inventory:    &Inventory{Count: 2},
+		Requirements: []Requirement{{ID: "kept", Level: MUST, Text: "x"}},
+		Dismissed:    map[string]string{"waved": "not ours"},
+	}
+
+	doc := &Document{
+		Family: "test", Name: "doc",
+		Inventory: &Inventory{Count: 4},
+		Requirements: []Requirement{
+			{ID: "a", Level: MUST, Text: "x", Deferred: "See test/other/kept."},
+			{ID: "b", Level: MUST, Text: "x", Gap: "Same shape as test/other/waved."},
+			{ID: "c", Level: MUST, Text: "x", Deferred: "Read https://example.test/a/b/c."},
+		},
+		Dismissed: map[string]string{"d": "Registered as test/other/renamed."},
+	}
+
+	reg := &Registry{byID: map[string]*Requirement{}}
+	for _, d := range []*Document{other, doc} {
+		if err := reg.add(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	errs := reg.Validate()
+	if len(errs) != 1 {
+		t.Fatalf("errors = %v, want only the one about the renamed entry", errs)
+	}
+
+	if !strings.Contains(errs[0].Error(), "test/other/renamed") {
+		t.Errorf("error does not name the dangling pointer: %v", errs[0])
 	}
 }

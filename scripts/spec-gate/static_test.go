@@ -133,3 +133,19 @@ func TestADeclaredE2ELaneWithATaggedClaimantPasses(t *testing.T) {
 		t.Fatalf("errors = %v, want none", errs)
 	}
 }
+
+// A gap says nobody has written the test yet, so the test arriving is what
+// retires it. Nothing else does: the report would go on counting an exercised
+// requirement as one still waiting to be written.
+func TestAGapAClaimantContradictsFailsTheGate(t *testing.T) {
+	reg := registryWith(t, spec.Requirement{
+		ID: "a", Level: spec.MUST, Text: "x", Gap: "no test yet",
+	})
+
+	claims := []Claim{{ID: "test/doc/a", Func: "TestUnit", File: "u_test.go"}}
+
+	errs := checkStatic(reg, claims)
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "the gap is what is stale") {
+		t.Fatalf("errors = %v, want one about the stale gap", errs)
+	}
+}

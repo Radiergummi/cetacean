@@ -54,8 +54,8 @@ func TestAGapAndADeferralAreCountedRatherThanUncovered(t *testing.T) {
 
 	got := summarise(reg, map[string][]string{}, false)
 
-	if got.Gaps != 1 || got.Deferred != 1 {
-		t.Errorf("gaps = %d, deferred = %d, want 1 and 1", got.Gaps, got.Deferred)
+	if len(got.Gaps) != 1 || got.Deferred != 1 {
+		t.Errorf("gaps = %v, deferred = %d, want one and 1", got.Gaps, got.Deferred)
 	}
 
 	if len(got.Uncovered) != 0 {
