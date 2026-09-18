@@ -18,6 +18,17 @@ requirements:
       - file: internal/oauth/server.go
         replace: "	if !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
         with: "	if false && !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
+      # Deleting the check is the obvious edit and the one a test notices by
+      # accident. These two weaken it instead: the challenge travels in the
+      # clear, so accepting it as its own verifier hands the exchange to
+      # whoever read the authorization request, and a comparison over part of
+      # the value is not the comparison §4.6 asks for.
+      - file: internal/oauth/server.go
+        replace: "\tsum := sha256.Sum256([]byte(verifier))"
+        with: "\tif verifier == challenge {\n\t\treturn true\n\t}\n\tsum := sha256.Sum256([]byte(verifier))"
+      - file: internal/oauth/server.go
+        replace: "\treturn hmac.Equal([]byte(computed), []byte(challenge))"
+        with: "\tif len(computed) < 8 || len(challenge) < 8 {\n\t\treturn false\n\t}\n\treturn hmac.Equal([]byte(computed[:8]), []byte(challenge[:8]))"
 
   - id: verifier-character-set
     level: MUST

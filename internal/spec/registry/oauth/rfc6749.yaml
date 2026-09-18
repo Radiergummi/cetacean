@@ -21,6 +21,11 @@ requirements:
       - file: internal/oauth/server.go
         replace: "	if clientID != codeData.ClientID {"
         with: "	if false && clientID != codeData.ClientID {"
+      # A string comparison, so a case-folded one is a weakening the deleting
+      # mutant above cannot tell from the real check.
+      - file: internal/oauth/server.go
+        replace: "	if clientID != codeData.ClientID {"
+        with: "	if !strings.EqualFold(clientID, codeData.ClientID) {"
 
   - id: code-must-be-valid
     level: MUST
@@ -46,6 +51,9 @@ requirements:
       - file: internal/oauth/server.go
         replace: "	if redirectURI != codeData.RedirectURI {"
         with: "	if false && redirectURI != codeData.RedirectURI {"
+      - file: internal/oauth/server.go
+        replace: "	if redirectURI != codeData.RedirectURI {"
+        with: "	if !strings.EqualFold(redirectURI, codeData.RedirectURI) {"
 
 dismissed:
   require-client-authentication: >-
