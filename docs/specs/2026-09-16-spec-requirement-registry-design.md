@@ -97,6 +97,38 @@ couple of minutes. It gets its own target and a pull-request job, not
 it belongs with the requirement rather than beside the code, because the two
 drift apart otherwise — which is how three of the four bugs survived.
 
+### Weaken the check, do not delete it
+
+The first cut's mutants all had one shape: make the check unreachable, usually
+with `if false &&`. An adversarial pass found what that shape misses. With
+three lines added to `verifySHA256Challenge` —
+
+```go
+if verifier == challenge {
+	return true
+}
+```
+
+— PKCE is defeated outright: the challenge travels in the clear in the
+authorization request, and it is a 43-character string from the unreserved
+alphabet, so whoever reads the request holds a verifier that `validateCodeVerifier`
+accepts. The whole unit suite passed, the static gate reported every requirement
+accounted for, and all 171 mutants were still killed. Truncating the same
+comparison to a prefix survived too, as did comparing the authorization code's
+`client_id` and `redirect_uri` bindings with `strings.EqualFold` — two
+requirements the registry reported as exercised *and* mutant-killed.
+
+A test that notices the check disappearing does not thereby notice the check
+getting weaker, and every one of those four is a weakening. The rule this
+gives: for a comparison the requirement's text is *about* — PKCE, the code's
+two bindings — the catalog carries a mutant that makes it agree in part,
+alongside the one that removes it. The generator will not find these; swapping
+operators does not produce them.
+
+The corollary is a real limit. The evidence a requirement carries is bounded by
+the edits somebody thought to write down, 58 of 241 MUSTs carry no mutant at
+all, and 306 of 321 exercised requirements rest on exactly one test.
+
 ### The discriminating-assertion rule
 
 Cheaper than a mutant and it targets the exact shape of the first and third
@@ -117,9 +149,11 @@ overlay, the build-failure check and the refusal to call a run of nothing a
 kill.
 
 It answers a question the catalog cannot: **a hand-written mutant proves a test
-notices that edit, and nothing more.** The catalog's PKCE mutant is killed while
-truncating the same comparison to eight characters survives, because nobody
-wrote that one down. A generator does not need to have thought of it.
+notices that edit, and nothing more.** The catalog's original PKCE mutant was
+killed while truncating the same comparison to eight characters survived,
+because nobody had written that one down. A generator does not need to have
+thought of it — though it would not have found this one either, which is what
+the weakening rule above is for.
 
 **It is not a gate, and should not become one.** An equivalent mutant — one that
 cannot change behaviour — survives honestly, and no threshold separates it from
