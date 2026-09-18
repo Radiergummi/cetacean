@@ -568,6 +568,17 @@ func TestTheAuthorizationCodeIsBoundToItsClientAndRedirectURI(t *testing.T) {
 	t.Run("another redirect_uri", func(t *testing.T) {
 		assert(t, exchange(t, "test-client", "http://localhost/elsewhere"), "redirect_uri mismatch")
 	})
+
+	// Both values are compared as strings, so a case-folded comparison is as
+	// wrong as no comparison at all — and it is the weakening a mutant that
+	// only deletes the check cannot tell apart from the real one.
+	t.Run("the same client in another case", func(t *testing.T) {
+		assert(t, exchange(t, "TEST-CLIENT", redirect), "client_id mismatch")
+	})
+
+	t.Run("the same redirect_uri in another case", func(t *testing.T) {
+		assert(t, exchange(t, "test-client", "http://localhost/CB"), "redirect_uri mismatch")
+	})
 }
 
 // RFC 8414 §3.1 and RFC 9728 §3.1 have their documents queried with GET. The
@@ -1181,5 +1192,35 @@ func TestARefreshTokenDoesNotWorkForAnotherClient(t *testing.T) {
 
 	if rec.Code == http.StatusOK {
 		t.Fatalf("another client refreshed the grant: %s", rec.Body.String())
+	}
+}
+
+// RFC 7636 §4.6 compares two whole values. Every case below is a comparison
+// that agrees with the verifier somewhere and must still be refused: the
+// transformed verifier equals the challenge nowhere short of everywhere.
+// A challenge travels in the clear in the authorization request, so a
+// comparison that accepts it as its own verifier defeats PKCE outright.
+func TestTheCodeChallengeIsComparedWholeAndNotInPart(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7636/verifier-must-match-challenge")
+
+	const verifier = "correct-verifier-correct-verifier-correct-ver"
+
+	challenge := computeS256Challenge(verifier)
+
+	if !verifySHA256Challenge(verifier, challenge) {
+		t.Fatal("the correct verifier was refused; every case below would pass vacuously")
+	}
+
+	for name, challenge := range map[string]string{
+		"the challenge as its own verifier": verifier,
+		"agreeing on a prefix":              challenge[:8] + strings.Repeat("A", len(challenge)-8),
+		"agreeing but for the last byte":    challenge[:len(challenge)-1] + "_",
+		"agreeing but for the first byte":   "_" + challenge[1:],
+	} {
+		t.Run(name, func(t *testing.T) {
+			if verifySHA256Challenge(verifier, challenge) {
+				t.Errorf("verifier accepted against %q", challenge)
+			}
+		})
 	}
 }
