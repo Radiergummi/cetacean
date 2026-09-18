@@ -305,16 +305,28 @@ edit and re-run the tests that claimed the requirement; fail if they pass.
 suite by default, in seconds; requirements declaring `lane: e2e` are reported
 **not run**, never *uncovered*. A full variant runs the e2e suite too, for the
 release ritual. Both clear `$CETACEAN_SPEC_CLAIMS` before invoking anything and
-pass `-count=1`.
+pass `-count=1`, which is not optional — see the measurement table.
+
+This is the only gate that answers *did the test pass*. A claim is withheld when
+its test fails or skips, so a claimant that skipped for an environmental reason
+leaves its requirement uncovered and the gate red, while `go test` itself stays
+green. The static gate cannot see that and never will.
 
 ### CI
 
 `make check` is not how this reaches CI. CI does not run `make check` — it runs
 `go build`, `go test -race ./...`, the golangci-lint action and
 `golangci-lint fmt --diff` as separate steps, and the only `make` target in any
-workflow is `make sbom`. The static gate and the citation sweep need an explicit
-step in the `test` job, which already has Go and the module cache. The mutant
-job is separate because it is minutes rather than seconds.
+workflow is `make sbom`. The static gate, the citation sweep and the report need
+explicit steps in the `test` job, which already has Go and the module cache. The
+report rides on that job's own `go test` step, which sets
+`$CETACEAN_SPEC_CLAIMS` and gains `-count=1`. The mutant job is separate because
+it is minutes rather than seconds.
+
+Running only the static gate there was the first cut's mistake: it prints a
+sentence that reads as a compliance claim — *"347 requirements across 38
+documents, all accounted for"* — on evidence no stronger than a string literal
+having been typed.
 
 CI still never runs the e2e suite; that decision is unchanged. It is worth
 adding `go vet -tags e2e ./test/e2e/...` on its own merits — e2e compile breaks
@@ -468,7 +480,7 @@ not have to re-derive them.
 | `go/parser` applies no build constraints | True; all 294 tracked test files parse, 35 of them behind `//go:build` |
 | `go list ./test/e2e/` | Errors: "build constraints exclude all Go files" |
 | `O_APPEND` line writes from 16 processes | No torn lines on APFS or overlayfs, to 70 KB |
-| `go test` result caching poisoning the report | Does not occur: opening the claims file for writing makes cmd/go refuse to cache |
+| `go test` result caching poisoning the report | **Occurs.** `CETACEAN_SPEC_CLAIMS` is read through `os.Getenv`, so its value joins the cache key: a repeat run with the same directory and unchanged code replays and records nothing. `-count=1` is what every claims run needs |
 | Importing `testing` outside `_test.go` | No flags registered; ~199 KB binary growth; nothing in the production tree imports `internal/spec` |
 | The claims-file write under the repo's lint config | **Fails** `make check`: G302 needs `0o600`, and G703 fires on a path derived from `os.Getenv`; `.golangci.yml` excludes G304 and G306 but neither of these |
 | `//go:embed registry` | Silently drops `_*` and `.*` entries at every level; an empty directory is a build failure, so the first commit must carry a YAML file |
