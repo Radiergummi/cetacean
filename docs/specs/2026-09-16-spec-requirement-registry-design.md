@@ -108,6 +108,33 @@ requirement whose refusal shares a code with its neighbours carries a
 `discriminator:` naming the string that distinguishes it, and the claiming test
 is expected to assert it.
 
+### Generated mutants
+
+`spec-gate mutants --generate <package>` swaps every comparison and logical
+operator in a package — `<`↔`<=`, `==`↔`!=`, `&&`↔`||` — and runs the package's
+whole suite against each. It reuses the executor above, so it inherits the
+overlay, the build-failure check and the refusal to call a run of nothing a
+kill.
+
+It answers a question the catalog cannot: **a hand-written mutant proves a test
+notices that edit, and nothing more.** The catalog's PKCE mutant is killed while
+truncating the same comparison to eight characters survives, because nobody
+wrote that one down. A generator does not need to have thought of it.
+
+**It is not a gate, and should not become one.** An equivalent mutant — one that
+cannot change behaviour — survives honestly, and no threshold separates it from
+a hole. `verifySHA256Challenge`'s empty-argument guard is redundant with the
+comparison below it, so its survivor is correct. The output is a list to triage;
+a survivor worth keeping becomes a registry mutant, attached to the requirement
+it breaks, where the gate can hold it.
+
+Off-the-shelf tooling was tried first and does not fit this repository.
+`gremlins` copies the module root per worker, and this root carries `node_modules`
+and `.worktrees`; `ooze` symlinks instead, which `//go:embed` refuses to follow,
+so every mutant fails to build and its runner counts a build failure as a kill —
+it reports a perfect score on a package it never compiled. The executor here
+already handles both, which is why generating into it beats adopting either.
+
 ## Mechanism 2: the registry
 
 `internal/spec/registry/<family>/<document>.yaml`, one file per source

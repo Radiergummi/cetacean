@@ -1,4 +1,4 @@
-.PHONY: lint lint-docs typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-genmcp spec-report spec-report-full spec-mutants
+.PHONY: lint lint-docs typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-genmcp spec-report spec-report-full spec-mutants spec-mutants-generate
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
@@ -9,6 +9,7 @@ SPEC_VET     := spec-vet
 
 # Where a run writes what it exercised. Gitignored.
 SPEC_CLAIMS  := .spec-claims
+PKG          ?= ./internal/oauth
 
 ## Lint all code and the published docs
 lint: lint-docs
@@ -200,6 +201,14 @@ spec:
 # Minutes rather than seconds, so it has its own CI job and is not in `check`.
 spec-mutants:
 	go run ./scripts/spec-gate mutants
+
+## Report the operator swaps one package's tests do not notice
+#
+# Discovery, not a gate: an equivalent mutant survives honestly and no
+# threshold tells it from a hole. A survivor worth keeping becomes a registry
+# mutant, attached to the requirement it breaks.
+spec-mutants-generate:
+	go run ./scripts/spec-gate mutants --generate $(PKG)
 
 ## Report what the unit suite exercised
 #
