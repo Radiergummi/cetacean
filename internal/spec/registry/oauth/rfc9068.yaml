@@ -94,6 +94,9 @@ requirements:
       - file: internal/oauth/jwt.go
         replace: "\t\tSubject:   claims.Subject,"
         with: "\t\tSubject:   \"\","
+      - file: internal/oauth/jwt.go
+        replace: "\tif payload.Subject == \"\" || payload.ClientID == \"\" {"
+        with: "\tif payload.ClientID == \"\" {"
 
   - id: claim-client-id-required
     level: MUST
@@ -104,6 +107,9 @@ requirements:
       - file: internal/oauth/jwt.go
         replace: "\t\tClientID:  claims.ClientID,"
         with: "\t\tClientID:  \"\","
+      - file: internal/oauth/jwt.go
+        replace: "\tif payload.Subject == \"\" || payload.ClientID == \"\" {"
+        with: "\tif payload.Subject == \"\" {"
 
   - id: claim-iat-required
     level: MUST

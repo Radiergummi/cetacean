@@ -115,6 +115,9 @@ requirements:
       - file: internal/oauth/dcr.go
         replace: "\tif u.Scheme == \"https\" {\n\t\treturn true\n\t}\n\treturn isLoopbackURI(rawURI)"
         with: "\tif u.Scheme == \"https\" || u.Scheme == \"http\" {\n\t\treturn true\n\t}\n\treturn isLoopbackURI(rawURI)"
+      - file: internal/oauth/dcr.go
+        replace: "\tif ip != nil && ip.IsLoopback() {"
+        with: "\tif ip != nil || ip.IsLoopback() {"
 
   - id: cors-may-be-supported-at-the-other-endpoints
     level: MAY

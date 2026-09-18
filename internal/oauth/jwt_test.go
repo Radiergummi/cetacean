@@ -612,3 +612,61 @@ func TestADuplicateAudienceClaimTakesTheLastValue(t *testing.T) {
 		t.Errorf("the last aud member was not the one honoured: %v", err)
 	}
 }
+
+// forgeAccessToken mints what IssueAccessToken refuses to, so the verifier's
+// own check of the required claims can be reached at all.
+func forgeAccessToken(t *testing.T, iss *TokenIssuer, subject, clientID string) string {
+	t.Helper()
+
+	now := time.Now()
+
+	body, err := json.Marshal(jwtPayload{
+		Issuer:    iss.Issuer,
+		Audience:  audience{testTokenAudience},
+		IssuedAt:  now.Unix(),
+		ExpiresAt: now.Add(time.Hour).Unix(),
+		Subject:   subject,
+		ClientID:  clientID,
+	})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
+	signingInput := iss.header + "." + base64.RawURLEncoding.EncodeToString(body)
+
+	sig, err := signES256(iss.signer, signingInput)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+
+	return signingInput + "." + sig
+}
+
+// Both claims are required, and either one alone is not enough: the minter
+// refuses to leave either out, and the verifier refuses a token that did.
+func TestAForgedTokenMissingEitherRequiredClaimIsRefused(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9068/claim-sub-required",
+		"oauth/rfc9068/claim-client-id-required",
+	)
+
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
+
+	for _, tc := range []struct {
+		name     string
+		subject  string
+		clientID string
+	}{
+		{"sub absent, client_id present", "", "c1"},
+		{"sub present, client_id absent", "user@example.com", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			token := forgeAccessToken(t, issuer, tc.subject, tc.clientID)
+
+			_, err := issuer.VerifyAccessToken(token, testTokenAudience)
+			if !errors.Is(err, ErrIncompleteClaims) {
+				t.Errorf("err = %v, want ErrIncompleteClaims", err)
+			}
+		})
+	}
+}

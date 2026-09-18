@@ -461,6 +461,25 @@ func TestDCRRefusesAPlainHTTPRedirectOffLoopback(t *testing.T) {
 	}
 }
 
+// The exception is the loopback interface, not the presence of an address. A
+// documentation-range literal parses as an IP and is routable, so admitting it
+// would mean the check never read the address it parsed.
+func TestDCRRefusesAPlainHTTPRedirectAtARoutableIP(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7591/redirect-uri-forms-are-limited",
+		"oauth/rfc9700/http-redirect-uris-refused-except-loopback",
+	)
+
+	s := newTestServer(t)
+
+	status, _ := registerClient(t, s, `{
+		"redirect_uris": ["http://203.0.113.5/cb"]
+	}`)
+	if status == http.StatusCreated {
+		t.Error("a cleartext redirect URI at a routable address was registered")
+	}
+}
+
 // RFC 7591 §3 puts registration behind a transport-layer security mechanism.
 // This pins the divergence: the handler registers a client over whatever
 // transport reached it, because TLS is the deployment's to terminate.
