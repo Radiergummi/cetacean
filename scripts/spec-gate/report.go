@@ -21,19 +21,11 @@ type Summary struct {
 	Uncovered []string
 }
 
-// summarise classifies every requirement against what this invocation ran.
-func summarise(reg *spec.Registry, static []Claim, ran map[string][]string, e2e bool) Summary {
-	tagged := map[string]bool{}
-	untagged := map[string]bool{}
-
-	for _, c := range static {
-		if c.Tagged {
-			tagged[c.ID] = true
-		} else {
-			untagged[c.ID] = true
-		}
-	}
-
+// summarise classifies every requirement against what this invocation ran. The
+// lane comes from the registry rather than from where the claim was written:
+// the static gate already holds the two to each other, and reading the
+// declaration keeps the count answerable without parsing a file.
+func summarise(reg *spec.Registry, ran map[string][]string, e2e bool) Summary {
 	out := Summary{}
 
 	for _, q := range reg.All() {
@@ -47,7 +39,7 @@ func summarise(reg *spec.Registry, static []Claim, ran map[string][]string, e2e 
 			out.Gaps++
 		case len(ran[id]) > 0:
 			out.Exercised++
-		case tagged[id] && !untagged[id] && !e2e:
+		case q.Lane == spec.LaneE2E && !e2e:
 			out.NotRun++
 		default:
 			out.Uncovered = append(out.Uncovered, id)
@@ -65,8 +57,7 @@ func runReport(root, claims, suites string) error {
 		return err
 	}
 
-	static, errs := Scan(root)
-	if len(errs) > 0 {
+	if _, errs := Scan(root); len(errs) > 0 {
 		report(errs)
 
 		return fmt.Errorf("%d problem(s) scanning for claims", len(errs))
@@ -82,7 +73,7 @@ func runReport(root, claims, suites string) error {
 		return err
 	}
 
-	summary := summarise(reg, static, ran, strings.Contains(suites, "e2e"))
+	summary := summarise(reg, ran, strings.Contains(suites, "e2e"))
 
 	// Only a document the tree actually cites belongs in the numerator: the
 	// denominator counts citations, and a family named nowhere is in neither.

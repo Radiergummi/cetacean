@@ -12,6 +12,7 @@ inventory:
 requirements:
   - id: header-name-case-insensitive
     level: MUST
+    lane: e2e
     text: >-
       Clients and servers MUST use case-insensitive comparisons for header names.
     url:
@@ -20,6 +21,7 @@ requirements:
 
   - id: server-reject-invalid-headers
     level: MUST
+    lane: e2e
     text: >-
       Servers that process the request body MUST reject requests with mismatched or
       missing standard-header values, returning HTTP 400 Bad Request.
@@ -29,6 +31,7 @@ requirements:
 
   - id: server-reject-error-code
     level: SHOULD
+    lane: e2e
     text: >-
       When rejecting a request due to header validation failure, servers SHOULD include
       a JSON-RPC error response using error code -32020.

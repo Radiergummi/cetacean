@@ -277,6 +277,14 @@ func render(doc *upstreamDoc, raw, reviewed string, seen map[string]bool) ([]byt
 
 		fmt.Fprintf(&b, "  - id: %s\n", strings.TrimPrefix(r.Check, prefix))
 		fmt.Fprintf(&b, "    level: %s\n", lvl)
+
+		// Every requirement this suite declares is driven from test/e2e, which
+		// needs the conformance harness. A gap is driven by nothing yet, so it
+		// gains the declaration when it leaves the table above.
+		if gaps[r.Check] == "" {
+			fmt.Fprintf(&b, "    lane: e2e\n")
+		}
+
 		b.WriteString(folded("    text", r.Text))
 
 		url := r.URL
