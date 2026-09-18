@@ -76,7 +76,16 @@ jobs:
           name: frontend-dist
           path: frontend
       - run: go build .
-      - run: go test -race ./...
+      # -count=1 is what makes the claims usable: the claims directory is read
+      # through the environment, so an unchanged package with the same value
+      # replays a cached result and records nothing.
+      - run: mkdir -p .spec-claims
+      - run: go test -race -count=1 ./...
+        env:
+          CETACEAN_SPEC_CLAIMS: ${{ github.workspace }}/.spec-claims
+      # static asks whether a claim was written; report asks whether the test
+      # that writes it passed. Neither answers for the other.
+      - run: go run ./scripts/spec-gate report --claims .spec-claims --suites unit
       - run: go run ./scripts/spec-gate static
       - run: go run ./scripts/spec-gate sweep
       - run: go build -o spec-vet ./scripts/spec-vet
