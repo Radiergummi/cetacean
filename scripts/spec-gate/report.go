@@ -16,7 +16,7 @@ type Summary struct {
 	Total     int
 	Exercised int
 	NotRun    int
-	Gaps      int
+	Gaps      []string
 	Deferred  int
 	Uncovered []string
 }
@@ -36,7 +36,7 @@ func summarise(reg *spec.Registry, ran map[string][]string, e2e bool) Summary {
 		case q.Deferred != "":
 			out.Deferred++
 		case q.Gap != "":
-			out.Gaps++
+			out.Gaps = append(out.Gaps, id)
 		case len(ran[id]) > 0:
 			out.Exercised++
 		case q.Lane == spec.LaneE2E && !e2e:
@@ -46,6 +46,7 @@ func summarise(reg *spec.Registry, ran map[string][]string, e2e bool) Summary {
 		}
 	}
 
+	slices.Sort(out.Gaps)
 	slices.Sort(out.Uncovered)
 
 	return out
@@ -93,7 +94,14 @@ func runReport(root, claims, suites string) error {
 	fmt.Fprintf(os.Stderr,
 		"  %d exercised by %s, %d not run, %d gaps, %d deferred, %d uncovered\n",
 		summary.Exercised, suites,
-		summary.NotRun, summary.Gaps, summary.Deferred, len(summary.Uncovered))
+		summary.NotRun, len(summary.Gaps), summary.Deferred, len(summary.Uncovered))
+
+	// Named, not counted. A gap is the one state nothing pins, so the only
+	// thing keeping it from accumulating unread is that every run says which
+	// requirements are in it.
+	for _, id := range summary.Gaps {
+		fmt.Fprintln(os.Stderr, "  gap:", id)
+	}
 
 	for _, id := range summary.Uncovered {
 		fmt.Fprintln(os.Stderr, "  uncovered:", id)

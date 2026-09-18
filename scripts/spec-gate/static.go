@@ -25,7 +25,12 @@ func runStatic(root string) error {
 		return fmt.Errorf("%d problem(s)", len(errs))
 	}
 
-	fmt.Fprintf(os.Stderr, "spec: %d requirements across %d documents, all accounted for\n",
+	// What this gate knows is that a literal was typed in a file it can parse,
+	// or that a reason was written down instead. Not that the test compiles,
+	// runs, passes, or asserts anything — spec-gate report answers the first
+	// three and the mutant catalog is the only answer to the fourth.
+	fmt.Fprintf(os.Stderr,
+		"spec: %d requirements across %d documents have a claimant or a recorded reason\n",
 		len(reg.All()), len(reg.Documents))
 
 	return nil
@@ -89,6 +94,15 @@ func checkStatic(reg *spec.Registry, claims []Claim) []error {
 		case q.Gap != "":
 			if strings.TrimSpace(q.Gap) == "" {
 				errs = append(errs, fmt.Errorf("%s: gap with an empty reason", id))
+			}
+
+			// The mirror of the deferred rule, and the only thing that closes
+			// this hatch again: a gap outlives its reason silently, and the
+			// report goes on counting a requirement its test now exercises as
+			// one nothing has been written for.
+			if has {
+				errs = append(errs, fmt.Errorf(
+					"%s: gap, but a test claims it; the gap is what is stale, not the test", id))
 			}
 		case !has:
 			errs = append(errs, fmt.Errorf("%s: no test claims this requirement", id))

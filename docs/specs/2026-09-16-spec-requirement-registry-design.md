@@ -306,11 +306,29 @@ coordination.
 
 **Static.** Fails on a requirement with no claimant and no `deferred`/`gap:`
 reason; an empty reason; a claim naming an unknown identifier; a non-literal
-claim argument; a `deferred` requirement with no claimant; a document whose
-`requirements` + `dismissed` does not match its `inventory.count`; and a cited
-specification that is neither registered nor dismissed; a requirement claimed
-only from behind the `e2e` tag with no `lane:` declaration, and a declaration a
-unit-lane claimant contradicts.
+claim argument; a `deferred` requirement with no claimant; a `gap:` a claimant
+contradicts; a document with no `inventory:` at all, or whose `requirements` +
+`dismissed` does not match its `inventory.count`; a pointer in one entry's prose
+at an identifier another document does not have; and a cited specification that
+is neither registered nor dismissed; a requirement claimed only from behind the
+`e2e` tag with no `lane:` declaration, and a declaration a unit-lane claimant
+contradicts.
+
+The last two of those are late additions, and each answers a hole the first cut
+left. `inventory:` was optional, so the vacuity guard was opt-in and a new
+document could simply carry no denominator. And a `gap:` had nothing that ever
+retired it: the requirement's test could land, claim, and pass, while the report
+went on counting it as one nobody had written. That is the mirror of the
+deferred rule — a deferral needs a claimant, a gap needs the absence of one —
+and it is what makes the third state self-closing rather than a one-line
+silencer.
+
+The pointer rule exists because of where the argument actually lives. A
+dismissal is one line of prose, there are 838 of them against 347 transcribed
+requirements, and most of them say *this is registered as `oauth/rfc9700/…`
+instead*. That pointer is the only part of a dismissal a gate can follow at
+all, and until it was checked, renaming a requirement silently orphaned every
+entry leaning on it.
 
 It **walks the filesystem, scoped to `git ls-files`** — not `go list` or
 `packages.Load`. `go list ./test/e2e/` fails outright with "build constraints
@@ -481,12 +499,24 @@ is certain rather than hypothetical.
 three-line test turns CI green forever. The mutant catalog is what makes a claim
 mean something, and it only runs where a mutant was written.
 
+**`dismissed:` is the biggest unguarded surface, and the `inventory.count` guard
+does not reach it.** The denominator stops a requirement being *deleted*; it
+does not stop one being *reclassified*, because a dismissal counts toward the
+same total. Moving `oauth/rfc7636/verifier-must-match-challenge` from
+`requirements:` to `dismissed:` and deleting its one claim line takes the
+strongest MUST in the registry — and its mutants with it — off the compliance
+surface, with every gate green and the count untouched. For the RFC families the
+count is hand-typed anyway, so decrementing it works as well. There are 838
+dismissals against 347 transcribed requirements; for OAuth 2.1 alone, 72 against
+29. That prose is where the compliance argument actually lives, the pointer rule
+checks the one part of it a gate can follow, and the rest is review.
+
 **`deferred` and `gap:` will accumulate.** `excusedReadRoutes` holds nine
 entries and has already grown its own `"gap: "` sub-convention; the e2e README
 carries a ten-item Deferred list. This adds a third such surface and the
-controls are weak: a required reason, a required claimant for `deferred`, and
-separate counting in the report. Worth revisiting with a cap or a dated review
-if it grows.
+controls are weak: a required reason, a required claimant for `deferred`, the
+absence of one for `gap:`, and each gap named rather than counted in the report.
+Worth revisiting with a cap or a dated review if it grows.
 
 **Nobody owns writing an entry.** Adding a feature that implements RFC 7009 with
 no registry file fires nothing — except the citation sweep, if the code cites the
