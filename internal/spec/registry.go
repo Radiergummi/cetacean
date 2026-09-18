@@ -57,6 +57,13 @@ func (u *URLs) UnmarshalYAML(value *yaml.Node) error {
 	}
 }
 
+// Lane is a suite a requirement's evidence lives in. The empty lane is the
+// unit suite, which every run includes; LaneE2E is the build-tagged suite,
+// which needs a Docker environment and which CI does not run.
+type Lane string
+
+const LaneE2E Lane = "e2e"
+
 // Mutant is an edit that a requirement's claiming tests must refuse.
 type Mutant struct {
 	File    string `yaml:"file"`
@@ -74,6 +81,11 @@ type Requirement struct {
 	// Gap: implemented and transcribed, no test yet. Exactly one may be set.
 	Deferred string `yaml:"deferred"`
 	Gap      string `yaml:"gap"`
+
+	// Lane names the suite that reaches this requirement when the unit one
+	// cannot. It is what the report counts as not run rather than uncovered,
+	// so the static gate holds it to the claimants that exist.
+	Lane Lane `yaml:"lane"`
 
 	Mutants []Mutant `yaml:"mutants"`
 
@@ -254,6 +266,10 @@ func (q *Requirement) validate() error {
 
 	if q.Deferred != "" && q.Gap != "" {
 		return fmt.Errorf("%s: both deferred and gap are set", q.FullID())
+	}
+
+	if q.Lane != "" && q.Lane != LaneE2E {
+		return fmt.Errorf("%s: lane = %q, want e2e or nothing", q.FullID(), q.Lane)
 	}
 
 	return nil

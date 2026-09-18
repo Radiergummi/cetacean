@@ -12,6 +12,7 @@ inventory:
 requirements:
   - id: tools-list-caching-hints
     level: MUST
+    lane: e2e
     text: >-
       Servers MUST include caching hints on results with resultType: "complete" returned
       by tools/list
@@ -21,6 +22,7 @@ requirements:
 
   - id: prompts-list-caching-hints
     level: MUST
+    lane: e2e
     text: >-
       Servers MUST include caching hints on results with resultType: "complete" returned
       by prompts/list
@@ -30,6 +32,7 @@ requirements:
 
   - id: resources-list-caching-hints
     level: MUST
+    lane: e2e
     text: >-
       Servers MUST include caching hints on results with resultType: "complete" returned
       by resources/list
@@ -39,6 +42,7 @@ requirements:
 
   - id: resources-templates-list-caching-hints
     level: MUST
+    lane: e2e
     text: >-
       Servers MUST include caching hints on results with resultType: "complete" returned
       by resources/templates/list
@@ -48,6 +52,7 @@ requirements:
 
   - id: resources-read-caching-hints
     level: MUST
+    lane: e2e
     text: >-
       Servers MUST include caching hints on results with resultType: "complete" returned
       by resources/read
@@ -57,6 +62,7 @@ requirements:
 
   - id: ttl-non-negative
     level: MUST
+    lane: e2e
     text: >-
       Servers MUST provide a ttlMs value that is >= 0
     url:
@@ -65,6 +71,7 @@ requirements:
 
   - id: cache-scope-valid
     level: MUST
+    lane: e2e
     text: >-
       cacheScope indicates the intended scope of the cached response, either "public" or
       "private"

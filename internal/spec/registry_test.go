@@ -180,3 +180,14 @@ func TestTokenCanonicalisesEverySpellingTheTreeUses(t *testing.T) {
 		t.Errorf("document token %q disagrees with the cited spelling", doc.Token())
 	}
 }
+
+// A misspelled lane would be read as the unit one and quietly excuse nothing,
+// so it is refused where every other unreadable field is.
+func TestAnUnknownLaneIsRefused(t *testing.T) {
+	_, err := NewForTest("test", "doc", []Requirement{
+		{ID: "a", Level: MUST, Text: "x", Lane: "integration"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "integration") {
+		t.Fatalf("err = %v, want one naming the unknown lane", err)
+	}
+}

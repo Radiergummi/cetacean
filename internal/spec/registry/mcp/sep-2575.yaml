@@ -12,6 +12,7 @@ inventory:
 requirements:
   - id: server-rejects-undeclared-capability
     level: MUST
+    lane: e2e
     text: >-
       A server MUST NOT rely on capabilities the client has not declared. If processing
       a request requires a capability the client did not include in
@@ -23,6 +24,7 @@ requirements:
 
   - id: missing-capability-http-400
     level: MUST
+    lane: e2e
     text: >-
       On HTTP, the response status MUST be 400 Bad Request [for
       MissingRequiredClientCapabilityError].
@@ -32,6 +34,7 @@ requirements:
 
   - id: server-tags-subscription-id
     level: MUST
+    lane: e2e
     text: >-
       On notifications delivered via a subscriptions/listen stream, the server MUST
       include io.modelcontextprotocol/subscriptionId in _meta so the client can
@@ -42,6 +45,7 @@ requirements:
 
   - id: server-unsupported-version-error
     level: MUST
+    lane: e2e
     text: >-
       If the server does not implement the requested version (whether the version is
       unknown to the server, or is a known version the server has chosen not to
@@ -53,6 +57,7 @@ requirements:
 
   - id: server-implements-discover
     level: MUST
+    lane: e2e
     text: >-
       Servers MUST implement server/discover.
     url:
@@ -74,6 +79,7 @@ requirements:
 
   - id: http-server-header-mismatch-400
     level: MUST
+    lane: e2e
     text: >-
       If the values do not match, the server MUST reject the request with 400 Bad
       Request and a HeaderMismatch JSON-RPC error.
@@ -83,6 +89,7 @@ requirements:
 
   - id: http-server-unsupported-version-400
     level: MUST
+    lane: e2e
     text: >-
       If the server does not implement the requested protocol version, it MUST respond
       with 400 Bad Request and an UnsupportedProtocolVersionError listing its supported
@@ -93,6 +100,7 @@ requirements:
 
   - id: http-server-method-not-found-404
     level: MUST
+    lane: e2e
     text: >-
       If the server does not implement the requested RPC method, it MUST respond with
       404 Not Found and a JSON-RPC error with code -32601 (Method not found).
@@ -102,6 +110,7 @@ requirements:
 
   - id: server-honors-notification-filter
     level: MUST
+    lane: e2e
     text: >-
       The server MUST NOT send notification types the client has not explicitly
       requested.
@@ -111,6 +120,7 @@ requirements:
 
   - id: server-sends-subscription-ack
     level: MUST
+    lane: e2e
     text: >-
       The server MUST send notifications/subscriptions/acknowledged as the first message
       on the stream.
@@ -120,6 +130,7 @@ requirements:
 
   - id: server-declares-prompts-in-discover
     level: MUST
+    lane: e2e
     text: >-
       Servers that support prompts MUST declare the prompts capability in their
       DiscoverResult.

@@ -165,6 +165,19 @@ A requirement is in exactly one of:
   `read_sweep_test.go`'s existing `"gap: "` convention and counted separately in
   the report.
 
+### The lane, declared rather than inferred
+
+A requirement the unit suite cannot reach carries `lane: e2e`. The report counts
+a declared lane as **not run** rather than *uncovered*, and the static gate holds
+the declaration to the claimants that exist: a requirement claimed only from
+behind the build tag must declare it, and one a unit test reaches must not.
+
+Inferring the lane from where the claim was written — which is what the first
+cut did — makes the excuse automatic. Moving a requirement's only evidence into
+the e2e tree then silently converts it from *exercised* to *not run*, and CI,
+which never runs that tree, goes on passing. Declaring it makes that move a
+reviewed diff instead.
+
 Without the third state the format punishes writing a requirement down before
 its test exists, which makes the blind spot the default rather than an edge
 case. `read_sweep_test.go` grew that convention inside its excuse map for
@@ -268,7 +281,9 @@ coordination.
 reason; an empty reason; a claim naming an unknown identifier; a non-literal
 claim argument; a `deferred` requirement with no claimant; a document whose
 `requirements` + `dismissed` does not match its `inventory.count`; and a cited
-specification that is neither registered nor dismissed.
+specification that is neither registered nor dismissed; a requirement claimed
+only from behind the `e2e` tag with no `lane:` declaration, and a declaration a
+unit-lane claimant contradicts.
 
 It **walks the filesystem, scoped to `git ls-files`** — not `go list` or
 `packages.Load`. `go list ./test/e2e/` fails outright with "build constraints
@@ -287,10 +302,10 @@ know the file compiles, the test is reachable, or anything is asserted.
 edit and re-run the tests that claimed the requirement; fail if they pass.
 
 **Runtime.** Aggregates the claims files and reports what a run exercised. Unit
-suite by default, in seconds; requirements whose only claimants live behind the
-`e2e` tag are reported **not run**, never *uncovered*. A full variant runs the
-e2e suite too, for the release ritual. Both clear `$CETACEAN_SPEC_CLAIMS` before
-invoking anything and pass `-count=1`.
+suite by default, in seconds; requirements declaring `lane: e2e` are reported
+**not run**, never *uncovered*. A full variant runs the e2e suite too, for the
+release ritual. Both clear `$CETACEAN_SPEC_CLAIMS` before invoking anything and
+pass `-count=1`.
 
 ### CI
 

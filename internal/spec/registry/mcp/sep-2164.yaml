@@ -12,6 +12,7 @@ inventory:
 requirements:
   - id: no-empty-contents
     level: MUST
+    lane: e2e
     text: >-
       Servers MUST NOT return an empty contents array for a non-existent resource
     url:
@@ -20,6 +21,7 @@ requirements:
 
   - id: error-code
     level: SHOULD
+    lane: e2e
     text: >-
       Servers SHOULD return standard JSON-RPC errors for common failure cases: Resource
       not found: -32602 (Invalid Params)
