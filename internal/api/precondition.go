@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -47,7 +48,9 @@ func (h *Handlers) precond(rep representationFunc) Constructor {
 				// without it would be neither 2xx nor 412, and for a resource
 				// that is gone that answer is 404. Only the handler can say
 				// so, so the request goes through to it unconditioned.
-				next.ServeHTTP(w, r)
+				next.ServeHTTP(w, r.WithContext(
+					context.WithValue(r.Context(), absentSubjectKey{}, true),
+				))
 
 				return
 			case err != nil:
@@ -82,6 +85,19 @@ func (h *Handlers) precond(rep representationFunc) Constructor {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// absentSubjectKey marks a request the precondition let through because there
+// was no representation to evaluate it against. Passing through is sound only
+// while the handler answers 404 too, and one reading the engine live rather
+// than the cache can find the resource back between the two reads.
+type absentSubjectKey struct{}
+
+// subjectAbsent reports whether the precondition found the resource gone.
+func subjectAbsent(ctx context.Context) bool {
+	absent, _ := ctx.Value(absentSubjectKey{}).(bool)
+
+	return absent
 }
 
 // preconditionSubjects names, per resource root, the engine record to evaluate

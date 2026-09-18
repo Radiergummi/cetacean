@@ -517,7 +517,8 @@ func seededWriteClient() *mockWriteClient {
 // Covers the one builder that reads the daemon rather than the cache. A plugin
 // genuinely gone is the resource's own 404 — RFC 9110 §13.2.1 keeps the
 // precondition out of the way of it — but a daemon that could not be reached
-// leaves the condition unevaluable, which is a different answer entirely.
+// leaves the condition unevaluable, which is a different answer entirely. And
+// the 404 the pass-through counts on has to hold even if the plugin comes back.
 func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -528,6 +529,9 @@ func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 		{"missing plugin", cerrdefs.ErrNotFound, cerrdefs.ErrNotFound, http.StatusNotFound},
 		{"daemon unavailable", cerrdefs.ErrUnavailable, nil, http.StatusServiceUnavailable},
 		{"unexpected failure", errors.New("boom"), nil, http.StatusInternalServerError},
+		// The remove would succeed: the plugin was installed between the two
+		// reads. A 204 here is a write nothing compared the validator against.
+		{"installed since the inspect", cerrdefs.ErrNotFound, nil, http.StatusNotFound},
 	}
 
 	for _, tc := range cases {
