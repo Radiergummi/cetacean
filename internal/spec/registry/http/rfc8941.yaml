@@ -1,0 +1,137 @@
+source: RFC 8941
+title: Structured Field Values for HTTP
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc8941
+
+inventory:
+  from: >-
+    RFC 8941 in full, less §1.2's RFC 2119 boilerplate. This deployment parses
+    one structured field and serializes none: RFC 9440's Client-Cert, a bare
+    Item of Byte Sequence type. The statements binding a general parser —
+    Lists, Inner Lists, Dictionaries, Parameters, Strings, Tokens — are
+    dismissed rather than excluded, because a second structured field would
+    bring them back and the denominator is what says so.
+  count: 28
+
+requirements:
+  - id: byte-sequences-hold-16384-octets
+    level: MUST
+    text: >-
+      Parsers MUST support Byte Sequences with at least 16384 octets after
+      decoding.
+    url: https://www.rfc-editor.org/rfc/rfc8941#section-3.3.5
+    mutants:
+      - file: internal/auth/cert.go
+        replace: "\tder, err := base64.StdEncoding.DecodeString(value[1 : len(value)-1])"
+        with: "\tif len(value) > 4096 {\n\t\treturn nil, fmt.Errorf(\"Client-Cert is too long\")\n\t}\n\n\tder, err := base64.StdEncoding.DecodeString(value[1 : len(value)-1])"
+
+  - id: a-failed-parse-ignores-the-field
+    level: MUST
+    text: >-
+      If parsing fails -- including when calling another algorithm -- the
+      entire field value MUST be ignored (i.e., treated as if the field were
+      not present in the section).
+    url: https://www.rfc-editor.org/rfc/rfc8941#section-4.2
+    mutants:
+      - file: internal/auth/cert.go
+        replace: "\t\treturn nil, fmt.Errorf(\"Client-Cert is not valid base64: %w\", err)"
+        with: "\t\treturn []byte(value), nil"
+
+  - id: non-zero-pad-bits-do-not-fail
+    level: SHOULD
+    text: >-
+      Because some implementations of base64 do not allow rejection of encoded
+      data that has non-zero pad bits (see [RFC4648], Section 3.5), parsers
+      SHOULD NOT fail when non-zero pad bits are present, unless they cannot
+      be configured to do so.
+    url: https://www.rfc-editor.org/rfc/rfc8941#section-4.2.7
+
+  - id: missing-padding-does-not-fail
+    level: SHOULD
+    text: >-
+      Because some implementations of base64 do not allow rejection of encoded
+      data that is not properly "=" padded (see [RFC4648], Section 3.2),
+      parsers SHOULD NOT fail when "=" padding is not present, unless they
+      cannot be configured to do so.
+    url: https://www.rfc-editor.org/rfc/rfc8941#section-4.2.7
+    deferred: >-
+      base64.StdEncoding requires the padding, so an unpadded Client-Cert is
+      refused and the request arrives unauthenticated. The escape clause does
+      not apply — RawStdEncoding is exactly the configuration this sentence
+      says to prefer — but taking it means accepting both spellings, which
+      widens what a trusted proxy may send for no gain this deployment can
+      point at: every proxy that sets Client-Cert serializes it per §4.1.8.
+
+  - id: the-alphabet-and-line-feeds-are-enforced
+    level: MUST
+    text: >-
+      This specification does not relax the requirements in [RFC4648],
+      Sections 3.1 and 3.3; therefore, parsers MUST fail on characters outside
+      the base64 alphabet and on line feeds in encoded data.
+    url: https://www.rfc-editor.org/rfc/rfc8941#section-4.2.7
+    deferred: >-
+      Half of it holds: a character outside the alphabet fails. A line feed
+      does not — encoding/base64 strips CR and LF before decoding, by design,
+      and offers no way to ask it not to. Nothing reaches this decoder with a
+      raw newline in it today, because net/http refuses a header value
+      carrying one, so the gap is between the decoder and the specification
+      rather than between the deployment and an attacker. Closing it means
+      rejecting the two bytes before handing the value to the standard
+      library.
+
+dismissed:
+  behaviour-matches-the-algorithms: >-
+    The document's umbrella conformance clause. What it requires of this
+    deployment is the Byte Sequence rules registered above; there is no other
+    algorithm here to be indistinguishable from.
+  implementations-may-vary: >-
+    The permission that softens the clause above.
+  a-new-field-declares-its-type: >-
+    Inside §2's worked example of a specification defining a new structured
+    field. This deployment defines none; it parses one somebody else defined.
+  a-new-field-constrains-its-value: >-
+    The same worked example, constraining the example field's range.
+  an-invalid-parameter-ignores-the-field: >-
+    The same worked example, for a parameter it invents.
+  a-relative-parameter-is-resolved: >-
+    The same worked example again.
+  lists-hold-1024-members: >-
+    Binds a parser of Lists. Client-Cert is a bare Item; no List is parsed
+    here, and RFC 9440's Client-Cert-Chain, which is one, is not consumed.
+  inner-lists-hold-256-members: >-
+    Binds a parser of Inner Lists.
+  parameters-are-reachable-by-index-and-key: >-
+    Binds a parser exposing Parameters. Client-Cert carries none, and one that
+    arrived would be outside the value this decoder reads.
+  a-specification-picks-how-parameters-are-read: >-
+    Binds whoever defines a field with parameters.
+  true-parameters-omit-their-value: >-
+    A serialization rule. This deployment serializes no structured field.
+  parsers-hold-256-parameters: >-
+    Binds a parser exposing Parameters.
+  dictionaries-are-reachable-by-index-and-key: >-
+    Binds a parser of Dictionaries.
+  a-specification-picks-how-dictionary-members-are-read: >-
+    Binds whoever defines a Dictionary-valued field.
+  true-dictionary-members-omit-their-value: >-
+    A serialization rule for a type this deployment does not emit.
+  unknown-dictionary-members-are-ignored: >-
+    Binds a recipient of a Dictionary.
+  dictionaries-hold-1024-pairs: >-
+    Binds a parser of Dictionaries.
+  only-dquote-and-backslash-escape: >-
+    Binds a parser of Strings. The Byte Sequence form has no escapes.
+  strings-hold-1024-characters: >-
+    Binds a parser of Strings.
+  tokens-hold-512-characters: >-
+    Binds a parser of Tokens.
+  serialized-pad-bits-are-zero: >-
+    Binds the serializer. This deployment writes no structured field; the
+    proxy in front of it writes Client-Cert.
+  field-lines-are-combined-before-parsing: >-
+    Requires every line of one field name to be joined before parsing. This
+    deployment refuses the request instead when Client-Cert arrives more than
+    once, which RFC 9440 §3 asks of it and http/rfc9440/client-cert-is-a-singleton
+    pins.
+  parsers-may-fail-on-a-split-value: >-
+    A permission conditional on the combining above.

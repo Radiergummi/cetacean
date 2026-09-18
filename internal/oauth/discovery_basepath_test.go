@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // wantBasePathIssuer is the external base URL a client discovers the AS at when
@@ -22,6 +23,12 @@ const wantBasePathIssuer = "https://cetacean.test/cetacean"
 // client that derives the metadata location from the issuer resolves it
 // instead of hitting a base-path-less 404.
 func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc8414/well-known-segment-precedes-the-path-component",
+		"oauth/rfc8414/issuer-matches-the-retrieval-url",
+		"oauth/rfc9728/well-known-segment-precedes-the-path-component",
+	)
+
 	cfg := ServerConfig{
 		Issuer:   "https://cetacean.test",
 		BasePath: "/cetacean",

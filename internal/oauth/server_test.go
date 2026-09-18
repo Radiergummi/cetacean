@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // newTestServer constructs a Server with in-memory stores, a known signing key,
@@ -21,7 +22,7 @@ func newTestServer(t *testing.T) *Server {
 	cfg := ServerConfig{
 		Issuer:    "https://cetacean.test",
 		BasePath:  "",
-		Resources: []Resource{{Path: "/resource", Realm: "cetacean"}},
+		Resources: []Resource{{Path: "/resource", Realm: "cetacean", Name: "Cetacean Resource"}},
 		OAuth: config.OAuthConfig{
 			AccessTokenTTL:           time.Hour,
 			RefreshTokenTTL:          720 * time.Hour,
@@ -79,6 +80,18 @@ func seedAuthCode(s *Server, data AuthCodeData) string {
 // ---------------------------------------------------------------------------
 
 func TestASMetadata(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9700/as-metadata-published",
+		"oauth/rfc9700/pkce-support-detectable",
+		"oauth/rfc9700/pkce-support-advertised-in-metadata",
+		"oauth/rfc8414/issuer-required",
+		"oauth/rfc8414/authorization-endpoint-required",
+		"oauth/rfc8414/token-endpoint-required",
+		"oauth/rfc8414/response-types-supported-required",
+		"oauth/rfc8414/response-is-200-json",
+		"oauth/rfc8252/client-authentication-not-required",
+	)
+
 	s := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-authorization-server", nil)
 	rec := httptest.NewRecorder()
@@ -147,6 +160,13 @@ func TestASMetadata(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestTokenExchangeWithPKCE(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/oauth-2-1/access-token-required-in-the-response",
+		"oauth/oauth-2-1/token-type-required-in-the-response",
+		"oauth/oauth-2-1/expires-in-recommended",
+		"oauth/oauth-2-1/refresh-token-optional-in-the-response",
+	)
+
 	s := newTestServer(t)
 
 	verifier := "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
@@ -190,6 +210,9 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 	if resp.TokenType != "Bearer" {
 		t.Errorf("token_type = %q", resp.TokenType)
 	}
+	if resp.ExpiresIn <= 0 {
+		t.Errorf("expires_in = %d, want the token's lifetime in seconds", resp.ExpiresIn)
+	}
 
 	// Verify the JWT contains the expected audience.
 	claims, err := s.tokenIssuer.VerifyAccessToken(resp.AccessToken, s.resources.fallback)
@@ -209,6 +232,13 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 // challenge comparison. A short one is refused by validateCodeVerifier first,
 // with the same invalid_grant, and never reaches the comparison at all.
 func TestTokenExchangeWrongVerifier(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7636/verifier-must-match-challenge",
+		"oauth/rfc9700/code-challenge-bound-to-the-code",
+		"oauth/oauth-2-1/error-parameter-required",
+		"oauth/oauth-2-1/error-description-optional",
+	)
+
 	s := newTestServer(t)
 
 	const (
@@ -247,6 +277,9 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 	if errResp.Error != "invalid_grant" {
 		t.Errorf("error = %q, want invalid_grant", errResp.Error)
 	}
+	if errResp.ErrorDescription == "" {
+		t.Error("error_description is absent; the refusal says only that it happened")
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +287,11 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc8707/unknown-resource-refused",
+		"oauth/rfc9700/resource-parameter-may-select-the-server",
+	)
+
 	s := newTestServer(t)
 	s.cfg.OAuth.RequireResourceIndicator = false
 
@@ -430,6 +468,8 @@ func TestTokenExchangeRefreshTheft(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRevocation(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7009/refresh-token-revocation-supported")
+
 	s := newTestServer(t)
 
 	token := s.refreshTokens.Issue(RefreshTokenData{
@@ -474,10 +514,109 @@ func TestRevocationUnknownToken(t *testing.T) {
 	}
 }
 
+// The hint is advisory: this server looks a token up the one way it can, so a
+// client that guesses the type wrong still gets its token revoked.
+func TestRevocationIgnoresAWrongTokenTypeHint(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7009/hint-failure-searches-every-token-type")
+
+	s := newTestServer(t)
+
+	token := s.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "user",
+		ClientID: "test-client",
+		Resource: s.resources.fallback,
+	}, time.Hour)
+
+	form := url.Values{"token": {token}, "token_type_hint": {"access_token"}}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/revoke", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.HandleRevoke(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	if _, valid := s.refreshTokens.Validate(token); valid {
+		t.Error("a wrong token_type_hint left the refresh token usable")
+	}
+}
+
+// Revocation reaches the grant, not the tokens already minted from it: an
+// access token is a self-contained JWT this server never sees again.
+func TestRevocationDoesNotReachAnAccessToken(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7009/access-token-revocation-supported",
+		"oauth/rfc7009/cascade-to-access-tokens",
+	)
+
+	s := newTestServer(t)
+
+	// The server's own issuer, or revocation could not reach the token even in
+	// principle and this proves nothing about what revocation does.
+	access, err := s.tokenIssuer.IssueAccessToken(
+		AccessTokenClaims{Subject: "user", ClientID: "test-client"},
+		s.resources.fallback,
+		time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("issue access token: %v", err)
+	}
+
+	refresh := s.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "user",
+		ClientID: "test-client",
+		Resource: s.resources.fallback,
+	}, time.Hour)
+
+	for _, token := range []string{refresh, access} {
+		form := url.Values{"token": {token}}
+		req := httptest.NewRequest(
+			http.MethodPost, "/oauth/revoke", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		s.HandleRevoke(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rec.Code)
+		}
+	}
+
+	// The grant is gone, so no further token can be refreshed out of it.
+	if _, valid := s.refreshTokens.Validate(refresh); valid {
+		t.Error("the refresh token survived revocation")
+	}
+
+	// The access token is not, and keeps working until it expires.
+	if _, err := s.tokenIssuer.VerifyAccessToken(access, s.resources.fallback); err != nil {
+		t.Errorf("revocation reached an access token after all: %v", err)
+	}
+}
+
+// A request naming no token is answered 200 rather than the invalid_request
+// §2.2.1 provides for, so a client that misspells the parameter is told its
+// token is gone when nothing was looked at.
+func TestRevocationWithoutATokenIsAccepted(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7009/token-parameter-required")
+
+	s := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/revoke", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.HandleRevoke(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want the 200 this server currently answers", rec.Code)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // TestCodeVerifier_RFC7636Length covers M-18: PKCE verifier length and
 // alphabet enforcement against RFC 7636 §4.1.
 func TestCodeVerifier_RFC7636Length(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7636/verifier-character-set")
+
 	cases := []struct {
 		name     string
 		verifier string
@@ -545,6 +684,12 @@ func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestUnauthorizedHeader(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc6750/challenge-uses-the-bearer-scheme",
+		"oauth/rfc6750/challenge-carries-an-auth-param",
+		"oauth/rfc6750/error-attribute-on-a-failed-token",
+	)
+
 	s := newTestServer(t)
 
 	got := s.UnauthorizedHeader(s.resources.fallback, "invalid_token")
@@ -564,6 +709,8 @@ func TestUnauthorizedHeader(t *testing.T) {
 }
 
 func TestHTTPQuotedString(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/a-quoted-pair-only-escapes-what-it-must")
+
 	cases := []struct {
 		in, want string
 	}{
@@ -591,6 +738,8 @@ func TestHTTPQuotedString(t *testing.T) {
 // in the flow, so a vector from the RFC is what says it computes the same
 // challenge a client does rather than merely agreeing with itself.
 func TestS256MatchesTheRFC7636Vector(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7636/verifier-character-set")
+
 	const (
 		verifier  = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
 		challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"

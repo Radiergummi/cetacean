@@ -1,10 +1,15 @@
-.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover
+.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-genmcp spec-report spec-report-full spec-mutants spec-mutants-generate
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
 E2E_BINARY   := cetacean.cover
 E2E_RACE_BIN := cetacean.race
 E2E_COVERDIR := coverdata
+SPEC_VET     := spec-vet
+
+# Where a run writes what it exercised. Gitignored.
+SPEC_CLAIMS  := .spec-claims
+PKG          ?= ./internal/oauth
 
 ## Lint all code
 lint:
@@ -167,8 +172,58 @@ cover:
 	go tool cover -func=cover.out | tail -1
 	@echo "HTML report: go tool cover -html=cover.out"
 
-## Run all checks (lint + type check + format check + test)
-check: lint typecheck fmt-check test
+## Check the requirement registry against the test suite
+#
+# spec-vet holds callers to what the static scan can read, so the two run
+# together: a claim it refuses is one the scan silently does not see.
+spec:
+	go run ./scripts/spec-gate static
+	go run ./scripts/spec-gate sweep
+	@go build -o $(SPEC_VET) ./scripts/spec-vet
+	go vet -vettool=$(PWD)/$(SPEC_VET) ./...
+	go vet -tags e2e -vettool=$(PWD)/$(SPEC_VET) ./test/e2e/...
+
+## Prove each requirement's tests refuse its mutants
+#
+# Minutes rather than seconds, so it has its own CI job and is not in `check`.
+spec-mutants:
+	go run ./scripts/spec-gate mutants
+
+## Report the operator swaps one package's tests do not notice
+#
+# Discovery, not a gate: an equivalent mutant survives honestly and no
+# threshold tells it from a hole. A survivor worth keeping becomes a registry
+# mutant, attached to the requirement it breaks.
+spec-mutants-generate:
+	go run ./scripts/spec-gate mutants --generate $(PKG)
+
+## Report what the unit suite exercised
+#
+# Both report targets clear the claims directory first: a stale <pid>.claims
+# from an earlier run would satisfy a requirement this run never reached.
+spec-report:
+	rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
+	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
+	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit
+
+## Report what the unit and e2e suites exercised together
+spec-report-full: build
+	rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
+	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
+	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) \
+	  go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...
+	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit,e2e
+
+## Regenerate the MCP registry families from upstream
+#
+# Needs network: it fetches the conformance suite's own requirement files at
+# the revision scripts/spec-genmcp pins. Not part of `check`.
+spec-genmcp:
+	go run ./scripts/spec-genmcp
+	git diff --exit-code internal/spec/registry/mcp/
+
+## Run all checks (lint + type check + format check + test + spec)
+check: lint typecheck fmt-check test spec
 
 ## Run the Go benchmark suite, writing results to bench.txt
 #

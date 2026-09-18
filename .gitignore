@@ -55,8 +55,14 @@ docs/task-state-timeline-design.md
 docs/task-state-timeline-plan.md
 
 # Build output
-cetacean
+/cetacean
 coverdata/
+.spec-claims/
+
+# go build ./scripts/<name> drops its binary here.
+/spec-gate
+/spec-genmcp
+/spec-vet
 frontend/dist/
 frontend/dist-widgets/
 website/dist/

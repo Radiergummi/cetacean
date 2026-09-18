@@ -1,0 +1,32 @@
+# Specifications the tree names but this registry says nothing about. A
+# reason here is a decision, not a placeholder: it states why nothing of ours
+# needs a test. Adding code that cites a new specification fails the sweep
+# until it is registered or listed here.
+
+RFC1918: "Private IPv4 ranges; net.IP.IsPrivate() covers them in the CIMD SSRF guard. No behaviour of ours — stdlib does the check."
+RFC2045: "Defines media-type case-insensitivity generally. The concrete requirement we test is RFC7515 section 4.1.9's typ comparison; nothing to register against RFC2045 itself."
+RFC2119: "Defines the MUST/SHOULD/MAY vocabulary our own spec.Level type borrows. It is the registry's own terminology, not a protocol we implement."
+RFC3339: "Timestamp format, used via time.RFC3339. No behaviour of ours to test."
+RFC3986: "URI Generic Syntax. The document carries no RFC 2119 keyword anywhere — it states its rules in ABNF and lowercase prose, so there is no clause to register a level against. §6.2.3's empty-path normalization is implemented for OAuth resource identifiers (internal/oauth/resource.go), pinned by TestTheRootIdentifierIsAcceptedWithATrailingSlash."
+RFC4180: "CSV. Informational, and with no RFC 2119 keyword anywhere — its rules are stated in lowercase prose, so there is no clause to register a level against. renderCSV implements the CRLF line breaks and quote doubling (internal/api/csv.go), pinned by csv_test.go."
+RFC4648: "base64url alphabet, used via encoding/base64. No behaviour of ours to test."
+RFC5280: "X.509 certificate and CRL profile, named where the mTLS mode is documented. Client certificates are parsed by crypto/x509 (internal/auth/cert.go); the profile is the standard library's to enforce, not ours."
+RFC5869: "HKDF key derivation, used via golang.org/x/crypto/hkdf's Extract and Expand. No behaviour of ours to test."
+RFC6265: "Explains why the e2e OIDC harness must use \"localhost\" (cookies are host-only). The browser enforces this, not us."
+RFC6570: "URI Template syntax named in Link-Template values (e.g. \"/services/{id}\"). We emit the literal template text; the client expands it. No expansion logic of ours to test."
+RFC6598: "Shared Address Space (100.64.0.0/10). All sixteen of its RFC 2119 statements bind a Service Provider or a DNS Provider: do not squat globally unique space, translate on every interface, filter these packets at the ingress, keep the range out of zone files and reverse queries off the global DNS. None binds an application that declines to dial the range, which is all this deployment does — one constant beside net.IP.IsPrivate in CIMD's SSRF guard (internal/oauth/cimd.go), covered by address in cimd_test.go."
+RFC6648: "Deprecates the X- header prefix. Named in the changelog for the X-Request-ID to Request-Id rename, which is done. No behaviour of ours to test."
+RFC6901: "JSON Pointer syntax. normalizePath only strips a leading \"/\" for flat-map keys; no escaping (~0/~1) or nested traversal of ours to test."
+RFC7233: "Range requests, obsoleted by RFC 9110 in June 2022. The only citation left in the tree is a coverage table in a design doc that predates this registry. Every rule it named now lives in RFC 9110 §14 and is registered there — the items unit, the 206, the 416 and the Content-Range each carry."
+RFC7235: "Only appears in a vendored AsyncAPI test fixture describing that spec's own schema field. Nothing of ours implements HTTP auth-scheme registration."
+RFC7239: "Forwarded header field. All twenty-four of its RFC 2119 statements bind the proxy that generates the field — the syntax it writes, the obfuscation it defaults to, the privacy it owes — or whoever registers an extension parameter. None binds the origin server reading it, which is what this deployment is. Parsing lives in internal/api/forwarded.go and internal/config, covered by forwarded_test.go; which forwarding family is trusted at all is server.trusted_proxies, a rule of ours rather than this document's."
+RFC7396: "JSON Merge Patch. The document carries no RFC 2119 keyword anywhere — the merge is defined as pseudocode, not as clauses, so there is no level to register against. structMergePatch implements it (internal/api/write_helpers.go), pinned by the TestHandlePatch*_MergePatch suite."
+RFC7638: "JWK Thumbprint. Only §3.3 carries RFC 2119 keywords, and all four bind the JWK serializer — go-jose's Thumbprint, not ours. §3 and §3.1 are the procedure and its worked example, with no normative keyword between them. That the published kid is the thumbprint of the signing key is RFC 7515 §4.1.4's rule, and TestKIDIsTheRFC7638ThumbprintOfTheSigningKey pins it there."
+RFC8037: "EdDSA considered and rejected in favour of ES256 (docs/specs/2026-09-11-mcp-asymmetric-token-signing-design.md). Not implemented, so nothing of ours to test."
+RFC8594: "Deprecation header is planned for the JGF topology endpoints (docs/specs/2026-04-03-jgf-topology-design.md) but not implemented yet. No code of ours to test."
+RFC8615: "Defines the /.well-known/ convention generally. The documents we actually serve there (RFC 8414, RFC 9728) carry the testable requirements."
+RFC8631: "service-desc, service-doc and service-meta link relations. The document carries exactly one RFC 2119 statement, §7's, and it binds the consumer: a service description may be wrong, so be ready for runtime errors. Registering the relation names is IANA's act, not a clause. internal/api/middleware.go emits service-desc, covered by test/e2e/deployment_test.go."
+RFC9421: "Named in a comment as the thing we deliberately do not implement."
+SEP-414: "Trace-context propagation over MCP _meta, exercised informally in internal/mcp/tracing. Out of scope for the four MCP SEPs the registry targets (SEP-2575/2243/2549/2164)."
+SEP-837: "application_type validation for DCR, tested in internal/oauth/dcr_test.go. Out of scope for the four MCP SEPs the registry targets."
+SEP-1303: "Tool input-validation error shape, characterized by internal/mcp/tool_error_test.go. Out of scope for the four MCP SEPs the registry targets."

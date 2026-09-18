@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `oauth.token_operations_level` holds a token-authenticated caller of the web API below the tier the deployment runs at, so a token left on a device can read the cluster without changing it
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 - A stack's page and a service's Traefik labels are each drawn as a graph
+- Each protected resource names itself in its discovery document, so a client's consent screen can show `Cetacean MCP` instead of a URL
 
 ### Changed
 - **Breaking:** the OAuth authorization server is opt-in — set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server
@@ -57,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
 
 ### Fixed
+- An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
 - Both discovery documents are served at the address their RFC has a client derive, as well as under `server.base_path`. Behind a proxy, forward `/.well-known/*` from the host root too
 - An access token whose `aud` is an array, or whose `typ` differs only in letter case, is accepted — both are conformant shapes that were refused

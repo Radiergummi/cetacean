@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // testConsentTTL is long enough that no test crosses it by accident; the tests
@@ -23,6 +25,8 @@ func keyFor(subject, clientID, resource string) ConsentKey {
 }
 
 func TestConsentFingerprintIgnoresRedirectURIOrder(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/multiple-redirect-uris-may-be-registered")
+
 	// CIMD documents are client-controlled and array order carries no meaning,
 	// so re-prompting on a reordering would be noise.
 	a := consentFingerprint(&ClientMetadata{
@@ -739,6 +743,8 @@ func TestChangedMetadataRePrompts(t *testing.T) {
 }
 
 func TestDynamicallyRegisteredClientNeverSkipsTheConsentPage(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8252/previous-approval-needs-a-proven-client")
+
 	s := newTestServer(t)
 
 	const clientID = "dcr-generated-client-id"
@@ -859,6 +865,8 @@ func postRefreshGrant(t *testing.T, s *Server, token string) *httptest.ResponseR
 }
 
 func TestTheftAtTheTokenEndpointClearsConsent(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/refresh-tokens-may-be-revoked-on-a-security-event")
+
 	s, token := consentServer(t)
 
 	// A legitimate refresh, then a replay of the token it consumed. Both go
@@ -1022,6 +1030,8 @@ func TestConsentPageDisclosesRemembering(t *testing.T) {
 }
 
 func TestIssueCodeRefusesAnUnregisteredRedirect(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/no-open-redirector-at-the-authorization-endpoint")
+
 	s := newTestServer(t)
 	meta := &ClientMetadata{RedirectURIs: []string{"https://example.com/cb"}}
 

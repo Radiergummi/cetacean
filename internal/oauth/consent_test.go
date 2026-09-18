@@ -15,6 +15,8 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // registeredClient registers a DCR client in the server's registry and
@@ -57,6 +59,13 @@ func withIdentity(r *http.Request, subject, email string) *http.Request {
 // ---------------------------------------------------------------------------
 
 func TestConsentPageRender(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc8252/no-silent-authorization",
+		"oauth/rfc9700/clickjacking-prevented",
+		"oauth/rfc9700/csp-used-against-framing",
+		"oauth/rfc9700/csp-combined-with-a-legacy-defence",
+	)
+
 	s := newTestServer(t)
 	challenge := computeS256Challenge("verifier")
 	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
@@ -112,6 +121,8 @@ func TestConsentPageRender(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/invalid-redirect-uri-is-not-followed")
+
 	s := newTestServer(t)
 	challenge := computeS256Challenge("verifier")
 	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
@@ -475,5 +486,47 @@ func TestConsentPageNamesTheResourceBeingAuthorized(t *testing.T) {
 	}
 	if rootGrant == subGrant {
 		t.Errorf("both resources ask for the same thing: %s", rootGrant)
+	}
+}
+
+// RFC 7591 §5 requires client metadata to be treated as self-asserted: a rogue
+// client can register any name it likes. The consent page says so, and an
+// approval it wins is never remembered.
+func TestADynamicallyRegisteredClientIsLabelledSelfAsserted(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7591/metadata-is-self-asserted",
+		"oauth/oauth-2-1/privileges-follow-the-client-identification-process",
+	)
+
+	s := newTestServer(t)
+	challenge := computeS256Challenge("verifier")
+	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
+
+	rawURL := authorizeURL(
+		clientID,
+		"http://localhost:9999/cb",
+		challenge,
+		"state123",
+		s.resources.fallback,
+	)
+	req := httptest.NewRequest(http.MethodGet, rawURL, nil)
+	req = withIdentity(req, "alice", "alice@example.com")
+	rec := httptest.NewRecorder()
+
+	s.HandleAuthorize(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "Self-registered") {
+		t.Error("a self-asserted client name is presented without saying so")
+	}
+	if strings.Contains(body, `<span class="badge badge-verified">`) {
+		t.Error("a dynamically registered client is presented as verified")
+	}
+	if strings.Contains(body, "will be remembered") {
+		t.Error("an approval for a self-asserted client is offered as remembered")
 	}
 }

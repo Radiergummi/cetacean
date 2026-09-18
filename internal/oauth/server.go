@@ -85,7 +85,7 @@ func NewServer(cfg ServerConfig) *Server {
 	// what a single unnamed protected resource is. Defaulted here so every reader
 	// downstream can take the set as given.
 	if len(cfg.Resources) == 0 {
-		cfg.Resources = []Resource{{Realm: "cetacean"}}
+		cfg.Resources = []Resource{{Realm: "cetacean", Name: "Cetacean"}}
 	}
 	// cfg is a copy, but its slice header still points at the caller's array:
 	// normalizing in place would rewrite the resources they handed in.

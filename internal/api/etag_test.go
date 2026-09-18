@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -13,9 +15,13 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestETagGeneration(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/an-etag-is-sent-when-changes-are-detectable")
+
 	body := []byte(`{"hello":"world"}`)
 	etag := computeETag(body)
 
@@ -141,6 +147,8 @@ func TestETagConditionalMultiValue(t *testing.T) {
 }
 
 func TestETagConditionalWeak(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/if-none-match-uses-weak-comparison")
+
 	data := map[string]string{"status": "ok"}
 
 	// Get the ETag.
@@ -174,6 +182,8 @@ func TestETagConditionalWildcard(t *testing.T) {
 }
 
 func TestLastModifiedHeader(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/last-modified-is-sent-when-known")
+
 	data := map[string]string{"status": "ok"}
 	ts := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
 
@@ -209,6 +219,11 @@ func TestLastModifiedZero(t *testing.T) {
 }
 
 func TestIfModifiedSince_NotModified(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9110/if-modified-since-is-evaluated",
+		"http/rfc9110/a-false-if-modified-since-answers-304",
+	)
+
 	data := map[string]string{"status": "ok"}
 	ts := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
 
@@ -244,6 +259,11 @@ func TestIfModifiedSince_Modified(t *testing.T) {
 }
 
 func TestIfNoneMatchTakesPrecedenceOverIfModifiedSince(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9110/if-none-match-precedes-if-modified-since",
+		"http/rfc9110/a-false-if-none-match-answers-304",
+	)
+
 	data := map[string]string{"status": "ok"}
 	ts := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
 
@@ -287,6 +307,8 @@ func TestIfNoneMatchMismatchOverridesIfModifiedSince(t *testing.T) {
 }
 
 func TestEtagMatchStrongRejectsWeakValidators(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/if-match-uses-strong-comparison")
+
 	const etag = `"abc123"`
 
 	cases := []struct {
@@ -597,5 +619,133 @@ func TestCodedETagSuffixesAreStrippable(t *testing.T) {
 
 	if got := codedETag(base, EncodingIdentity); got != base {
 		t.Errorf("codedETag(%q, identity) = %q, want it untouched", base, got)
+	}
+}
+
+// RFC 9110 §8.8.2.1 forbids a Last-Modified later than the time the response
+// was generated. The value here is the engine's own timestamp, written out
+// unclamped, so an engine whose clock runs ahead produces one.
+func TestLastModifiedIsWrittenUnclamped(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/last-modified-is-not-in-the-future")
+
+	future := time.Now().Add(24 * time.Hour).UTC().Truncate(time.Second)
+
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	w := httptest.NewRecorder()
+	writeCachedJSONTimed(w, r, map[string]string{"status": "ok"}, future)
+
+	got, err := http.ParseTime(w.Header().Get("Last-Modified"))
+	if err != nil {
+		t.Fatalf("parse Last-Modified: %v", err)
+	}
+	if !got.After(time.Now()) {
+		t.Error("the future timestamp was clamped; the deferral is stale")
+	}
+}
+
+// RFC 9110 §13.1.3 requires an If-Modified-Since that is not a valid HTTP-date
+// to be ignored, which means answering as though it had not been sent.
+func TestAMalformedIfModifiedSinceIsIgnored(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/a-malformed-if-modified-since-is-ignored")
+
+	ts := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
+
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	r.Header.Set("If-Modified-Since", "the day before yesterday")
+	w := httptest.NewRecorder()
+	writeCachedJSONTimed(w, r, map[string]string{"status": "ok"}, ts)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200: a malformed date was evaluated", w.Code)
+	}
+}
+
+// RFC 9110 §13.1.4 wants If-Unmodified-Since evaluated when it arrives without
+// an If-Match. It is not read, so this pins that a write carrying one alone
+// goes through.
+func TestIfUnmodifiedSinceIsNotEvaluated(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/if-unmodified-since-is-evaluated")
+
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	r.Header.Set("If-Unmodified-Since", "Sun, 15 Jun 2020 10:30:00 GMT")
+	w := httptest.NewRecorder()
+	writeCachedJSONTimed(
+		w, r, map[string]string{"status": "ok"},
+		time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC),
+	)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200; the deferral is stale", w.Code)
+	}
+}
+
+// RFC 9110 §12.5.5 asks an origin server to name the fields a response varied
+// on, and §12.5.3 to fall back to an uncoded response when nothing the client
+// accepts is available.
+func TestANegotiatedResponseNamesAndFallsBack(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9110/a-negotiated-response-names-what-it-varied-on",
+		"http/rfc9110/an-unacceptable-coding-falls-back-to-identity",
+	)
+
+	body := bytes.Repeat([]byte("x"), compressionThreshold*2)
+
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	r.Header.Set("Accept-Encoding", "br-unheard-of, snappy")
+	w := httptest.NewRecorder()
+
+	coding := negotiateCoding(w, r, body)
+
+	if coding != EncodingIdentity {
+		t.Errorf("coding = %v, want identity when nothing offered is acceptable", coding)
+	}
+	if !slices.Contains(w.Header().Values("Vary"), "Accept-Encoding") {
+		t.Errorf("Vary = %q, want it to name Accept-Encoding", w.Header().Values("Vary"))
+	}
+	if w.Header().Get("Content-Encoding") != "" {
+		t.Errorf("Content-Encoding = %q, want none", w.Header().Get("Content-Encoding"))
+	}
+}
+
+// RFC 9110 §13.1.3 requires If-Modified-Since to be ignored when the resource
+// has no modification date: with nothing to compare against, the condition
+// cannot be false.
+func TestIfModifiedSinceWithoutAModificationDate(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/if-modified-since-needs-a-modification-date")
+
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	r.Header.Set("If-Modified-Since", time.Now().UTC().Format(http.TimeFormat))
+	w := httptest.NewRecorder()
+
+	writeCachedJSONTimed(w, r, map[string]string{"status": "ok"}, time.Time{})
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200: the condition was evaluated anyway", w.Code)
+	}
+	if w.Header().Get("Last-Modified") != "" {
+		t.Error("a Last-Modified header was sent for a resource with no date")
+	}
+}
+
+// RFC 9110 §13.1.2 requires the condition evaluated before the method — on a
+// pre-rendered body just as on a marshalled one, which is a separate writer.
+func TestIfNoneMatchOnAPreRenderedBody(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/if-none-match-is-evaluated-before-the-method")
+
+	body := []byte("<feed/>")
+	etag := computeETag(body)
+
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	r.Header.Set("If-None-Match", etag)
+	w := httptest.NewRecorder()
+	w.Header().Set("Content-Type", "application/atom+xml")
+
+	writeRawWithETag(w, r, body)
+
+	if w.Code != http.StatusNotModified {
+		t.Errorf("status = %d, want 304", w.Code)
+	}
+	if w.Body.Len() != 0 {
+		t.Errorf("a 304 carried %d bytes of content", w.Body.Len())
 	}
 }

@@ -76,7 +76,36 @@ jobs:
           name: frontend-dist
           path: frontend
       - run: go build .
-      - run: go test -race ./...
+      # -count=1 is what makes the claims usable: the claims directory is read
+      # through the environment, so an unchanged package with the same value
+      # replays a cached result and records nothing.
+      - run: mkdir -p .spec-claims
+      - run: go test -race -count=1 ./...
+        env:
+          CETACEAN_SPEC_CLAIMS: ${{ github.workspace }}/.spec-claims
+      # static asks whether a claim was written; report asks whether the test
+      # that writes it passed. Neither answers for the other.
+      - run: go run ./scripts/spec-gate report --claims .spec-claims --suites unit
+      - run: go run ./scripts/spec-gate static
+      - run: go run ./scripts/spec-gate sweep
+      - run: go build -o spec-vet ./scripts/spec-vet
+      - run: go vet -vettool="$PWD/spec-vet" ./...
+      - run: go vet -tags e2e -vettool="$PWD/spec-vet" ./test/e2e/...
+      # The spec gate parses the e2e tree but cannot know it compiles: its
+      # build tag keeps it out of every other job.
+      - run: go vet -tags e2e ./test/e2e/...
+
+  spec-mutants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go run ./scripts/spec-gate mutants
 
   lint-go:
     needs: build-frontend

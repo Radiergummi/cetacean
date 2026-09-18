@@ -6,12 +6,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // TestOIDCDiscoveryServesASMetadata verifies that the OIDC Discovery 1.0
 // well-known location serves the identical RFC 8414 AS metadata document,
 // per the 2025-11-25 authorization-server discovery enhancement.
 func TestOIDCDiscoveryServesASMetadata(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/discovery-documents-agree")
+
 	s := newTestServer(t)
 	mux := http.NewServeMux()
 	s.RegisterRoutes(mux, "")

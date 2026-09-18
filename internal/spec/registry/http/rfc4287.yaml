@@ -1,0 +1,491 @@
+source: RFC 4287
+title: The Atom Syndication Format
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc4287
+
+inventory:
+  from: >-
+    RFC 4287 §2, §3 and §4 — the document model and every element a feed can
+    carry. §1.3 is the RFC 2119 boilerplate. §5 governs digital signatures and
+    encryption over an Atom document, neither of which this deployment
+    applies, and §6 governs extension elements and mustUnderstand; every
+    element written here is in the Atom namespace. §4.1.1 and §4.1.2 state
+    their element rules as bullet lists, which the extractor reflows into the
+    sentence introducing them; the twenty-nine bullets are counted one by one,
+    as RFC 7009 and RFC 8414 count a two-clause sentence.
+  count: 113
+
+requirements:
+  - id: documents-are-well-formed-xml
+    level: MUST
+    text: >-
+      Atom Documents MUST be well-formed XML.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-2
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tif _, err := io.WriteString(w, xml.Header); err != nil {"
+        with: "\tif _, err := io.WriteString(w, \"<?xml version=\\\"1.0\\\"?\"); err != nil {"
+
+  - id: no-whitespace-in-a-date-or-an-iri
+    level: MUST
+    text: >-
+      Note that there MUST NOT be any white space in a Date construct or in
+      any IRI.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-3
+    mutants:
+      - file: internal/api/feed_handlers.go
+        replace: "\t\t\"tag:%s,2026:%s\","
+        with: "\t\t\"tag:%s, 2026:%s\","
+
+  - id: a-text-construct-may-carry-a-type
+    level: MAY
+    text: >-
+      Text constructs MAY have a "type" attribute.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-3.1.1
+
+  - id: a-person-has-exactly-one-name
+    level: MUST
+    text: >-
+      Person constructs MUST contain exactly one "atom:name" element.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-3.2.1
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tName string `xml:\"name\"`"
+        with: "\tName string `xml:\"-\"`"
+
+  - id: a-feed-has-an-author
+    level: MUST
+    text: >-
+      atom:feed elements MUST contain one or more atom:author elements, unless
+      all of the atom:feed element's child atom:entry elements contain at
+      least one atom:author element.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.1
+    mutants:
+      - file: internal/api/atom_handlers.go
+        replace: "\t\tAuthor:  &atomxml.Author{Name: \"Cetacean\"},"
+        with: "\t\tAuthor:  nil,"
+
+  - id: a-feed-has-exactly-one-id
+    level: MUST
+    text: >-
+      atom:feed elements MUST contain exactly one atom:id element.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.1
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tID      string    `xml:\"id\"`"
+        with: "\tID      string    `xml:\"-\"`"
+
+  - id: a-feed-has-a-self-link
+    level: SHOULD
+    text: >-
+      atom:feed elements SHOULD contain one atom:link element with a rel
+      attribute value of "self". This is the preferred URI for retrieving Atom
+      Feed Documents representing this Atom feed.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.1
+
+  - id: a-feed-has-one-alternate-per-type
+    level: MUST
+    text: >-
+      atom:feed elements MUST NOT contain more than one atom:link element with
+      a rel attribute value of "alternate" that has the same combination of
+      type and hreflang attribute values.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.1
+    mutants:
+      - file: internal/api/atom_handlers.go
+        replace: "\t\t{Rel: \"alternate\", Href: alternateHref, Type: \"text/html\"},"
+        with: "\t\t{Rel: \"alternate\", Href: alternateHref, Type: \"text/html\"},\n\t\t{Rel: \"alternate\", Href: alternateHref, Type: \"text/html\"},"
+
+  - id: a-feed-may-carry-further-links
+    level: MAY
+    text: >-
+      atom:feed elements MAY contain additional atom:link elements beyond
+      those described above.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.1
+
+  - id: a-feed-has-exactly-one-title
+    level: MUST
+    text: >-
+      atom:feed elements MUST contain exactly one atom:title element.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.1
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tTitle   string    `xml:\"title\"`"
+        with: "\tTitle   string    `xml:\"-\"`"
+
+  - id: a-feed-has-exactly-one-updated
+    level: MUST
+    text: >-
+      atom:feed elements MUST contain exactly one atom:updated element.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.1
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tUpdated time.Time `xml:\"updated\"`\n\tLinks   []Link    `xml:\"link\"`"
+        with: "\tUpdated time.Time `xml:\"-\"`\n\tLinks   []Link    `xml:\"link\"`"
+
+  - id: an-entry-may-carry-categories
+    level: MAY
+    text: >-
+      atom:entry elements MAY contain any number of atom:category elements.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.2
+
+  - id: an-entry-has-exactly-one-id
+    level: MUST
+    text: >-
+      atom:entry elements MUST contain exactly one atom:id element.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.2
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tID         string         `xml:\"id\"`"
+        with: "\tID         string         `xml:\"-\"`"
+
+  - id: an-entry-has-exactly-one-title
+    level: MUST
+    text: >-
+      atom:entry elements MUST contain exactly one atom:title element.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.2
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tTitle      string         `xml:\"title\"`"
+        with: "\tTitle      string         `xml:\"-\"`"
+
+  - id: an-entry-has-exactly-one-updated
+    level: MUST
+    text: >-
+      atom:entry elements MUST contain exactly one atom:updated element.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.2
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tUpdated    time.Time      `xml:\"updated\"`"
+        with: "\tUpdated    time.Time      `xml:\"-\"`"
+
+  - id: content-type-may-be-html
+    level: MAY
+    text: >-
+      On the atom:content element, the value of the "type" attribute MAY be
+      one of "text", "html", or "xhtml".
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.3.1
+
+  - id: html-content-has-no-child-elements
+    level: MUST
+    text: >-
+      If the value of "type" is "html", the content of atom:content MUST NOT
+      contain child elements and SHOULD be suitable for handling as HTML.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.3.3
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tValue string `xml:\",chardata\"`"
+        with: "\tValue string `xml:\",innerxml\"`"
+
+  - id: html-markup-is-escaped
+    level: MUST
+    text: >-
+      The HTML markup MUST be escaped; for example, "<br>" as "&lt;br>".
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.3.3
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tType  string `xml:\"type,attr\"`\n\tValue string `xml:\",chardata\"`"
+        with: "\tType  string `xml:\"type,attr\"`\n\tValue string `xml:\",innerxml\"`"
+
+  - id: html-content-suits-a-div
+    level: SHOULD
+    text: >-
+      The HTML markup SHOULD be such that it could validly appear directly
+      within an HTML <DIV> element.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.3.3
+
+  - id: a-category-has-a-term
+    level: MUST
+    text: >-
+      Category elements MUST have a "term" attribute.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.2.2.1
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tTerm string `xml:\"term,attr\"`"
+        with: "\tTerm string `xml:\"name,attr\"`"
+
+  - id: an-id-is-an-iri
+    level: MUST
+    text: >-
+      Its content MUST be an IRI, as defined by [RFC3987].
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.2.6
+    mutants:
+      - file: internal/api/feed_handlers.go
+        replace: "\t\t\"tag:%s,2026:%s\","
+        with: "\t\t\"%s,2026:%s\","
+
+  - id: an-id-does-not-change
+    level: MUST
+    text: >-
+      When an Atom Document is relocated, migrated, syndicated, republished,
+      exported, or imported, the content of its atom:id element MUST NOT
+      change.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.2.6
+    deferred: >-
+      The feed's id is a tag URI whose authority is the host the request
+      arrived on, so the same feed reached through two names has two ids — and
+      a reader that followed the deployment from one name to another sees a
+      different feed rather than the same one moved. Entry ids are stable; the
+      feed's is not. Deriving the authority from server.public_url alone fixes
+      this and the two RFC 4151 deferrals with it.
+
+  - id: an-id-is-unique
+    level: MUST
+    text: >-
+      The content of an atom:id element MUST be created in a way that assures
+      uniqueness.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.2.6
+    mutants:
+      - file: internal/api/feed_handlers.go
+        replace: "\t\t\tID:          fmt.Sprintf(\"urn:cetacean:history:%d\", e.ID),"
+        with: "\t\t\tID:          \"urn:cetacean:history\","
+
+  - id: a-link-has-an-href
+    level: MUST
+    text: >-
+      atom:link elements MUST have an href attribute, whose value MUST be a
+      IRI reference [RFC3987].
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.2.7.1
+    mutants:
+      - file: internal/api/atom/atom.go
+        replace: "\tHref string `xml:\"href,attr\"`"
+        with: "\tHref string `xml:\"url,attr\"`"
+
+  - id: a-link-may-carry-a-rel
+    level: MAY
+    text: >-
+      atom:link elements MAY have a "rel" attribute that indicates the link
+      relation type.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.2.7.2
+
+  - id: a-rel-is-a-non-empty-name
+    level: MUST
+    text: >-
+      The value of "rel" MUST be a string that is non-empty and matches either
+      the "isegment-nz-nc" or the "IRI" production in [RFC3987].
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.2.7.2
+    mutants:
+      - file: internal/api/atom_handlers.go
+        replace: "\t\t{Rel: \"self\", Href: selfHref, Type: \"application/atom+xml\"},"
+        with: "\t\t{Rel: \"\", Href: selfHref, Type: \"application/atom+xml\"},"
+
+  - id: a-link-type-is-a-mime-type
+    level: MUST
+    text: >-
+      Link elements MAY have a type attribute, whose value MUST conform to the
+      syntax of a MIME media type [MIMEREG].
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.2.7.3
+    mutants:
+      - file: internal/api/atom_handlers.go
+        replace: "\t\t{Rel: \"alternate\", Href: alternateHref, Type: \"text/html\"},"
+        with: "\t\t{Rel: \"alternate\", Href: alternateHref, Type: \"html\"},"
+
+  - id: updated-may-change-over-time
+    level: MAY
+    text: >-
+      Publishers MAY change the value of this element over time.
+    url: https://www.rfc-editor.org/rfc/rfc4287#section-4.2.15
+
+dismissed:
+  iris-are-mapped-for-dereferencing-but-not-for-ids: >-
+    Governs when an IRI is mapped to a URI. Every identifier and href written
+    here is already a URI — ASCII throughout — so the mapping is the identity
+    and there is nothing to get wrong.
+  any-element-may-carry-xml-base: >-
+    A permission this deployment declines: every href it writes is absolute,
+    so there is no base to resolve against.
+  any-element-may-carry-xml-lang: >-
+    A permission this deployment declines.
+  processors-may-combine-feed-documents: >-
+    Binds an Atom Processor aggregating feeds.
+  a-type-value-is-text-html-or-xhtml: >-
+    Conditional on a Text construct carrying a type attribute. The titles here
+    carry none.
+  an-absent-type-means-text: >-
+    Binds the processor reading a Text construct with no type. It is the
+    default the titles here rely on, and nothing of ours implements it.
+  mime-types-are-not-text-construct-types: >-
+    Forbids a value on an attribute this deployment does not write.
+  text-typed-constructs-have-no-children: >-
+    Constrains a Text construct whose type is "text". The title is a Go string
+    written as character data, so encoding/xml cannot put a child element in
+    it whatever the type says.
+  processors-may-collapse-text-whitespace: >-
+    Binds the processor displaying a Text construct.
+  html-typed-text-constructs-have-no-children: >-
+    §3.1.1.2's rule for a Text construct with type="html". No title here
+    carries that type; the same rule for atom:content is registered as
+    html-content-has-no-child-elements.
+  html-typed-text-construct-markup-is-escaped: >-
+    §3.1.1.2's escaping rule for a Text construct, registered for atom:content
+    as html-markup-is-escaped.
+  html-typed-text-construct-suits-a-div: >-
+    §3.1.1.2's DIV rule for a Text construct, registered for atom:content as
+    html-content-suits-a-div.
+  processors-may-use-text-construct-markup: >-
+    Binds the processor displaying an HTML Text construct.
+  xhtml-text-constructs-are-a-single-div: >-
+    Constrains a Text construct with type="xhtml". None is written here.
+  the-xhtml-div-is-not-content: >-
+    Binds the processor reading such a construct.
+  processors-may-use-xhtml-text-construct-markup: >-
+    Binds the processor displaying such a construct.
+  a-person-may-have-one-uri: >-
+    A permission this deployment declines: the feed's author is a name and
+    nothing else.
+  a-person-uri-is-an-iri-reference: >-
+    Constrains an element this deployment does not write.
+  a-person-may-have-one-email: >-
+    A permission this deployment declines.
+  a-person-email-is-an-addr-spec: >-
+    Constrains an element this deployment does not write.
+  a-date-is-an-rfc3339-date-time: >-
+    encoding/xml marshals a time.Time as an RFC 3339 date-time and offers no
+    other spelling. The code's only choice is the field's type, and that type
+    has one serialization.
+  a-date-uses-uppercase-t-and-z: >-
+    The same serialization, which writes both.
+  dates-are-as-accurate-as-possible: >-
+    The timestamps come from the history entries themselves, at whatever
+    resolution the event was recorded with. There is no rounding of ours to
+    pin.
+  a-feed-may-carry-categories: >-
+    A permission this deployment declines at feed level; entries carry them,
+    which an-entry-may-carry-categories records.
+  a-feed-may-carry-contributors: >-
+    A permission this deployment declines.
+  a-feed-has-at-most-one-generator: >-
+    Constrains an element this deployment does not write.
+  a-feed-has-at-most-one-icon: >-
+    Constrains an element this deployment does not write.
+  a-feed-has-at-most-one-logo: >-
+    Constrains an element this deployment does not write.
+  a-feed-has-at-most-one-rights: >-
+    Constrains an element this deployment does not write.
+  a-feed-has-at-most-one-subtitle: >-
+    Constrains an element this deployment does not write.
+  entries-sharing-an-id-differ-by-updated: >-
+    Conditional on two entries sharing an atom:id, which an-id-is-unique stops
+    happening.
+  processors-may-display-duplicate-entries: >-
+    Binds the processor that meets such a pair.
+  an-absent-summary-is-not-an-error: >-
+    Binds the processor. No entry here carries a summary, which this sentence
+    exists to permit.
+  an-entry-has-an-author: >-
+    Satisfied through the exception the sentence itself carves out: the feed
+    carries an atom:author, so its entries need none. a-feed-has-an-author is
+    what holds it.
+  an-entry-has-at-most-one-content: >-
+    The entry's content is one struct field, not a slice, so a second element
+    cannot be written.
+  an-entry-may-carry-contributors: >-
+    A permission this deployment declines.
+  an-entry-without-content-needs-an-alternate-link: >-
+    Conditional on an entry with no atom:content. Every entry here has one.
+  an-entry-has-one-alternate-per-type: >-
+    An entry carries at most one alternate link, built from the single URL the
+    entry resolves to, so the combination cannot repeat.
+  an-entry-may-carry-further-links: >-
+    A permission this deployment declines: an entry links to its own resource
+    and nowhere else.
+  an-entry-has-at-most-one-published: >-
+    Constrains an element this deployment does not write.
+  an-entry-has-at-most-one-rights: >-
+    Constrains an element this deployment does not write.
+  an-entry-has-at-most-one-source: >-
+    Constrains an element this deployment does not write; entries are not
+    copied here from another feed.
+  an-entry-needs-a-summary-for-remote-or-base64-content: >-
+    Conditional on atom:content carrying a src attribute or a Base64-encoded
+    media type. The content here is inline HTML.
+  an-entry-has-at-most-one-summary: >-
+    Constrains an element this deployment does not write.
+  other-content-types-are-non-composite-mime-types: >-
+    Conditional on a type outside text, html and xhtml.
+  content-without-a-type-or-src-is-text: >-
+    Binds the processor. Every atom:content written here names its type.
+  content-may-carry-a-src: >-
+    A permission this deployment declines: the content is inline.
+  content-with-a-src-is-empty: >-
+    Conditional on a src attribute this deployment does not write.
+  processors-may-fetch-remote-content: >-
+    Binds the processor meeting a src attribute.
+  content-with-a-src-names-a-mime-type: >-
+    Conditional on a src attribute this deployment does not write.
+  documents-conform-to-the-content-rules: >-
+    The sentence introducing §4.1.3.3's list. The rules that bind an
+    html-typed content element are registered from that list.
+  processors-take-the-first-applicable-content-rule: >-
+    Binds the processor walking the list.
+  text-typed-content-has-no-children: >-
+    Conditional on type="text". The content here is html.
+  processors-may-collapse-content-whitespace: >-
+    Binds the processor displaying text-typed content.
+  processors-may-use-content-markup: >-
+    Binds the processor displaying html-typed content.
+  xhtml-content-is-a-single-div: >-
+    Conditional on type="xhtml".
+  the-xhtml-content-div-is-not-content: >-
+    Binds the processor reading xhtml-typed content.
+  processors-may-use-xhtml-content-markup: >-
+    Binds the processor displaying xhtml-typed content.
+  xml-typed-content-may-have-children: >-
+    Conditional on an XML media type.
+  text-prefixed-content-has-no-children: >-
+    Conditional on a type beginning with "text/".
+  other-typed-content-is-base64: >-
+    Conditional on a type outside the cases above.
+  decoded-content-suits-its-type: >-
+    The same condition.
+  base64-content-may-be-surrounded-by-whitespace: >-
+    The same condition.
+  a-category-may-have-a-scheme: >-
+    A permission this deployment declines: a category here is the resource
+    type the event touched, in no namespace of its own.
+  a-category-may-have-a-label: >-
+    A permission this deployment declines.
+  a-generator-names-its-agent: >-
+    Constrains an element this deployment does not write.
+  a-generator-may-have-a-uri: >-
+    Constrains an element this deployment does not write.
+  a-generator-uri-is-relevant: >-
+    Constrains an element this deployment does not write.
+  a-generator-may-have-a-version: >-
+    Constrains an element this deployment does not write.
+  an-icon-is-square: >-
+    Constrains an element this deployment does not write.
+  processors-do-not-assume-an-id-dereferences: >-
+    Binds the processor reading an atom:id.
+  ids-follow-a-normalization-strategy: >-
+    A strategy for lowercasing a scheme and host and folding percent-encoding.
+    Neither identifier written here has a host or an encoded octet: one is a
+    tag URI, the other a urn, both already in the form the strategy produces.
+  processors-compare-ids-character-by-character: >-
+    Binds the processor comparing two atom:id values.
+  id-comparison-does-not-dereference: >-
+    Binds the processor, in the same sentence's second clause.
+  an-absent-rel-means-alternate: >-
+    Binds the processor. Every link written here names its rel.
+  a-bare-rel-name-is-the-registered-one: >-
+    Binds an implementation resolving a relation name. Every rel written here
+    is a bare registered name, which is what makes the rule apply rather than
+    something to implement.
+  an-enclosure-link-states-its-length: >-
+    Conditional on rel="enclosure", which this deployment does not emit.
+  a-link-may-have-an-hreflang: >-
+    A permission this deployment declines.
+  a-link-may-have-a-title: >-
+    A permission this deployment declines.
+  a-link-may-have-a-length: >-
+    A permission this deployment declines.
+  a-logo-is-twice-as-wide-as-tall: >-
+    Constrains an element this deployment does not write.
+  rights-are-not-machine-readable: >-
+    Constrains an element this deployment does not write.
+  a-copied-entry-may-carry-its-source: >-
+    A permission belonging to an aggregator. Entries here are never copied
+    from another feed.
+  a-copied-entry-preserves-source-metadata: >-
+    The same condition.
+  an-aggregator-includes-the-required-source-metadata: >-
+    Binds an aggregator.

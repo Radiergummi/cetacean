@@ -1,0 +1,139 @@
+source: RFC 9207
+title: OAuth 2.0 Authorization Server Issuer Identification
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc9207
+
+inventory:
+  from: >-
+    RFC 9207 §2, §2.3, §2.4 and §4 in full. §1.1 is the BCP 14 boilerplate.
+    Both halves are in scope: this deployment is an authorization server
+    issuing authorization responses, and an OIDC client reading one from its
+    upstream provider.
+  count: 23
+
+requirements:
+  - id: iss-in-every-authorization-response
+    level: MUST
+    text: >-
+      In authorization responses to the client, including error responses, an
+      authorization server supporting this specification MUST indicate its
+      identity by including the iss parameter in the response.
+    url: https://www.rfc-editor.org/rfc/rfc9207#section-2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tq.Set(\"iss\", s.cfg.issuerID())\n\tredirectURI.RawQuery = q.Encode()"
+        with: "\tredirectURI.RawQuery = q.Encode()"
+      - file: internal/oauth/server.go
+        replace: "\tq.Set(\"iss\", s.cfg.issuerID())\n\tu.RawQuery = q.Encode()"
+        with: "\tu.RawQuery = q.Encode()"
+
+  - id: metadata-issuer-matches-the-iss-parameter
+    level: MUST
+    text: >-
+      The issuer identifier included in the server's metadata value issuer MUST
+      be identical to the iss parameter's value.
+    url: https://www.rfc-editor.org/rfc/rfc9207#section-2.3
+
+  - id: iss-support-advertised-in-metadata
+    level: MUST
+    text: >-
+      The server MUST indicate its support for the iss parameter by setting the
+      metadata parameter authorization_response_iss_parameter_supported,
+      defined in Section 3, to true.
+    url: https://www.rfc-editor.org/rfc/rfc9207#section-2.3
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\tAuthorizationResponseIssParameterSupported: true,"
+        with: "\t\tAuthorizationResponseIssParameterSupported: false,"
+
+  - id: client-extracts-the-iss-parameter
+    level: MUST
+    text: >-
+      Clients that support this specification MUST extract the value of the iss
+      parameter from authorization responses they receive if the parameter is
+      present.
+    url: https://www.rfc-editor.org/rfc/rfc9207#section-2.4
+
+  - id: client-compares-iss-to-the-issuer
+    level: MUST
+    text: >-
+      Clients MUST then decode the value from its
+      "application/x-www-form-urlencoded" form according to Appendix B of
+      [RFC6749] and compare the result to the issuer identifier of the
+      authorization server where the authorization request was sent to.
+    url: https://www.rfc-editor.org/rfc/rfc9207#section-2.4
+
+  - id: client-rejects-a-mismatched-iss
+    level: MUST
+    text: >-
+      If the value does not match the expected issuer identifier, clients MUST
+      reject the authorization response and MUST NOT proceed with the
+      authorization grant.
+    url: https://www.rfc-editor.org/rfc/rfc9207#section-2.4
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\t\tif subtle.ConstantTimeCompare([]byte(iss), []byte(p.issuer)) != 1 {"
+        with: "\t\tif subtle.ConstantTimeCompare([]byte(iss), []byte(p.issuer)) != 1 && false {"
+
+  - id: client-rejects-a-missing-iss-from-a-supporting-server
+    level: MUST
+    text: >-
+      Clients MUST reject authorization responses without the iss parameter
+      from authorization servers that do support the parameter according to the
+      client's configuration.
+    url: https://www.rfc-editor.org/rfc/rfc9207#section-2.4
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\tif iss == \"\" && p.issRequired {"
+        with: "\tif iss == \"\" && p.issRequired && false {"
+
+dismissed:
+  iss-value-is-an-https-url: >-
+    The value is the configured issuer, whose scheme a local deployment on
+    http://localhost sets deliberately. The same deployment decision as
+    oauth/rfc8414/jwks-uri-https-scheme; the no-query-no-fragment half holds by
+    construction.
+  issuer-identifier-provided: >-
+    The umbrella over the two bullets that follow it, each registered here on
+    its own.
+  issuer-identifier-by-other-means: >-
+    A MAY about publishing the identifier outside this specification.
+  comparison-is-simple-string-comparison: >-
+    How the comparison in client-compares-iss-to-the-issuer is performed. Go
+    compares bytes, which is §6.2.1's simple string comparison.
+  error-response-attribution-not-assumed: >-
+    A MUST NOT about an assumption, with no observable behaviour: this client
+    refuses a mismatched iss on an error response exactly as on a success.
+  client-compares-against-metadata-issuer: >-
+    Where the expected value comes from. This client takes it from the
+    provider's discovery document, read once at startup by go-oidc.
+  client-without-metadata-uses-configuration: >-
+    Conditional on not using OAuth metadata. This client always discovers.
+  client-retains-per-server-iss-support: >-
+    Conditional on interacting with several authorization servers. This
+    deployment configures exactly one upstream provider.
+  client-discards-iss-from-a-non-supporting-server: >-
+    A SHOULD about a server that does not advertise support. This client
+    validates the parameter whenever it is present, which is stricter.
+  client-may-require-the-parameter: >-
+    A MAY offering the choice between accepting and refusing a response with no
+    iss. The choice is made by the provider's own metadata, which is
+    client-rejects-a-missing-iss-from-a-supporting-server.
+  iss-matches-the-id-token-iss: >-
+    An OpenID Connect rule for flows returning an ID Token from the
+    authorization endpoint. This client uses the authorization code flow and
+    go-oidc verifies the ID Token's own iss.
+  unrecognised-iss-ignored: >-
+    Binds a client that does not implement this specification.
+  client-validates-precisely-and-keeps-issuers-unique: >-
+    A restatement of §2.4 plus a uniqueness rule over several authorization
+    servers. This deployment configures one.
+  configured-iss-values-are-unique: >-
+    Conditional on manually configuring several authorization servers.
+  iss-verification-may-be-omitted: >-
+    A MAY to skip the check when the identifier arrives by other means. This
+    client does not skip it.
+  multiple-issuer-identifiers-must-agree: >-
+    Conditional on a response carrying more than one issuer identifier. This
+    client reads one parameter and go-oidc checks the ID Token's iss against
+    the same configured issuer.

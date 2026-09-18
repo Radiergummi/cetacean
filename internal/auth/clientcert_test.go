@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // newClientCert builds a self-signed certificate, parsed and DER-encoded, so a
@@ -69,6 +71,10 @@ func spiffeURI(t *testing.T, raw string) []*url.URL {
 // TestCertProvider_HeaderFromTrustedProxy: a forwarded certificate builds
 // identity by the same path a presented one takes, SPIFFE URI SAN included.
 func TestCertProvider_HeaderFromTrustedProxy(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9440/consuming-the-field-is-configurable",
+	)
+
 	_, der := newClientCert(t, "alice", spiffeURI(t, "spiffe://example.org/workload/api"))
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -96,6 +102,10 @@ func TestCertProvider_HeaderFromTrustedProxy(t *testing.T) {
 // TestCertProvider_HeaderFromUntrustedPeerRejected: anyone can send the
 // header, and RFC 9440 §3 allows believing it only from a trusted TTRP.
 func TestCertProvider_HeaderFromUntrustedPeerRejected(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9440/accepted-only-from-a-trusted-proxy",
+	)
+
 	_, der := newClientCert(t, "mallory", nil)
 
 	for name, request := range map[string]func(*http.Request) *http.Request{
@@ -140,6 +150,10 @@ func TestCertProvider_PeerCertificateWinsOverHeader(t *testing.T) {
 // replacing, the client's value arrives first — taking it would let anyone
 // reaching the proxy pick their identity.
 func TestCertProvider_DuplicateHeaderRejected(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9440/client-cert-is-a-singleton",
+	)
+
 	_, mallory := newClientCert(t, "mallory", nil)
 	_, alice := newClientCert(t, "alice", nil)
 
@@ -178,6 +192,87 @@ func TestCertProvider_MalformedHeader(t *testing.T) {
 			}
 			if strings.Contains(err.Error(), "client certificate required") {
 				t.Errorf("error = %q, want it to name the malformed header", err.Error())
+			}
+		})
+	}
+}
+
+// RFC 8941 §3.3.5 puts the floor for a Byte Sequence at 16384 octets after
+// decoding. A DER certificate with a large extension reaches that, and a cap
+// short of it would refuse a legitimate client.
+func TestDecodeClientCertTakes16384Octets(t *testing.T) {
+	spec.Satisfies(t, "http/rfc8941/byte-sequences-hold-16384-octets")
+
+	raw := make([]byte, 16384)
+	for i := range raw {
+		raw[i] = byte(i)
+	}
+
+	got, err := decodeClientCert(":" + base64.StdEncoding.EncodeToString(raw) + ":")
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != len(raw) {
+		t.Errorf("decoded %d octets, want %d", len(got), len(raw))
+	}
+}
+
+// RFC 8941 §4.2.7 asks a parser not to fail on non-zero pad bits, and to fail
+// on the base64 alphabet and on line feeds. Padding and line feeds are where
+// encoding/base64 and the specification part company.
+func TestDecodeClientCertBase64Tolerances(t *testing.T) {
+	t.Run("non-zero pad bits are accepted", func(t *testing.T) {
+		spec.Satisfies(t, "http/rfc8941/non-zero-pad-bits-do-not-fail")
+
+		if _, err := decodeClientCert(":/x==:"); err != nil {
+			t.Errorf("non-zero pad bits refused: %v", err)
+		}
+	})
+
+	t.Run("missing padding is refused", func(t *testing.T) {
+		spec.Satisfies(t, "http/rfc8941/missing-padding-does-not-fail")
+
+		if _, err := decodeClientCert(":aGk:"); err == nil {
+			t.Error("unpadded base64 was accepted; the deferral is stale")
+		}
+	})
+
+	t.Run("a character outside the alphabet is refused", func(t *testing.T) {
+		spec.Satisfies(t, "http/rfc8941/the-alphabet-and-line-feeds-are-enforced")
+
+		if _, err := decodeClientCert(":aGk*:"); err == nil {
+			t.Error("a character outside the base64 alphabet was accepted")
+		}
+	})
+
+	t.Run("a line feed is accepted", func(t *testing.T) {
+		spec.Satisfies(t, "http/rfc8941/the-alphabet-and-line-feeds-are-enforced")
+
+		if _, err := decodeClientCert(":aG\nk=:"); err != nil {
+			t.Errorf("a line feed was refused: %v; the deferral is stale", err)
+		}
+	})
+}
+
+// RFC 8941 §4.2 wants a field whose parse failed treated as absent, not as
+// whatever the failed parse left behind. The decoder is where that has to
+// hold: x509 refuses the bytes downstream either way, which would let a
+// decoder that handed back the raw value pass unnoticed.
+func TestDecodeClientCertYieldsNothingWhenItFails(t *testing.T) {
+	spec.Satisfies(t, "http/rfc8941/a-failed-parse-ignores-the-field")
+
+	for name, value := range map[string]string{
+		"not base64":        ":not base64!:",
+		"no colons":         "aGk=",
+		"no trailing colon": ":aGk=",
+	} {
+		t.Run(name, func(t *testing.T) {
+			der, err := decodeClientCert(value)
+			if err == nil {
+				t.Fatalf("decoded %q as %q", value, der)
+			}
+			if der != nil {
+				t.Errorf("a failed parse returned %d octets, want none", len(der))
 			}
 		})
 	}

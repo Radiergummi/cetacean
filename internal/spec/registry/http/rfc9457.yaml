@@ -1,0 +1,125 @@
+source: RFC 9457
+title: Problem Details for HTTP APIs
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc9457
+
+inventory:
+  from: >-
+    RFC 9457 §3 through §4.2.1 in full. §2 is the BCP 14 boilerplate and §1
+    carries no RFC 2119 keyword. Every error this API answers with is a problem
+    details object, so the generator statements are in scope; the consumer ones
+    bind whatever reads them.
+  count: 19
+
+requirements:
+  - id: status-matches-the-response
+    level: MUST
+    text: >-
+      Generators MUST use the same status code in the actual HTTP response, to
+      assure that generic HTTP software that does not understand this format
+      still behaves correctly.
+    url: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.2
+    mutants:
+      - file: internal/api/problem.go
+        replace: "\tw.WriteHeader(p.Status)"
+        with: "\tw.WriteHeader(http.StatusOK)"
+
+  - id: type-uri-includes-the-full-path
+    level: SHOULD
+    text: >-
+      As a result, it is RECOMMENDED that absolute URIs be used in "type" when
+      possible and that when relative URIs are used, they include the full path
+      (e.g., "/types/123").
+    url: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.1
+
+  - id: instance-uri-includes-the-full-path
+    level: SHOULD
+    text: >-
+      As a result, it is RECOMMENDED that absolute URIs be used in "instance"
+      when possible, and that when relative URIs are used, they include the
+      full path (e.g., "/instances/123").
+    url: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.5
+
+  - id: type-uri-dereferences-to-documentation
+    level: SHOULD
+    text: >-
+      If the type URI is a locator (e.g., those with an "http" or "https"
+      scheme), dereferencing it SHOULD provide human-readable documentation for
+      the problem type (e.g., using HTML [HTML5]).
+    url: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.1
+
+  - id: type-uri-explains-the-resolution
+    level: SHOULD
+    text: >-
+      A problem type URI SHOULD resolve to HTML [HTML5] documentation that
+      explains how to resolve the problem.
+    url: https://www.rfc-editor.org/rfc/rfc9457#section-4
+
+  - id: title-is-stable-per-type
+    level: SHOULD
+    text: >-
+      It SHOULD NOT change from occurrence to occurrence of the problem, except
+      for localization (e.g., using proactive content negotiation; see [HTTP],
+      Section 12.1).
+    url: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.3
+
+  - id: about-blank-title-is-the-status-phrase
+    level: SHOULD
+    text: >-
+      When "about:blank" is used, the title SHOULD be the same as the
+      recommended HTTP status phrase for that code (e.g., "Not Found" for 404,
+      and so on), although it MAY be localized to suit client preferences.
+    url: https://www.rfc-editor.org/rfc/rfc9457#section-4.2.1
+
+  - id: new-problem-types-are-documented
+    level: MUST
+    text: >-
+      New problem type definitions MUST document: 1. a type URI (typically,
+      with the "http" or "https" scheme), 2. a title that appropriately
+      describes it (think short), and 3. the HTTP status code for it to be used
+      with.
+    url: https://www.rfc-editor.org/rfc/rfc9457#section-4
+
+  - id: extension-member-names
+    level: SHOULD
+    text: >-
+      If such additional members are defined, their names SHOULD start with a
+      letter (ALPHA, as per [ABNF], Appendix B.1) and SHOULD comprise
+      characters from ALPHA, DIGIT ([ABNF], Appendix B.1), and "_" (so that it
+      can be serialized in formats other than JSON), and they SHOULD be three
+      characters or longer.
+    url: https://www.rfc-editor.org/rfc/rfc9457#section-4
+    deferred: >-
+      requestId follows the rule; @context cannot. JSON-LD reserves the leading
+      "@" and a keyword spelled any other way is not read as one, so every JSON
+      response this API produces carries it — a problem object that dropped it
+      would be the only one that is not linked data. Pinned so that a third
+      extension member has to justify itself.
+
+dismissed:
+  most-relevant-problem-represented: >-
+    A RECOMMENDED for an API hitting several unrelated problems at once. Every
+    refusal here answers with the one code that stopped it.
+  mistyped-members-ignored: >-
+    Binds whatever consumes a problem details object. This API generates them.
+  consumers-use-type-as-the-identifier: >-
+    Binds the consumer. The generating half is that every typed refusal carries
+    a type URI naming its own code.
+  consumers-do-not-dereference-the-type: >-
+    A SHOULD NOT addressed to the consumer.
+  consumers-do-not-parse-detail: >-
+    A SHOULD NOT addressed to the consumer. The detail line here is written for
+    a person; what a caller should branch on is the code in the type URI.
+  problem-types-may-extend-the-object: >-
+    A MAY this API exercises with one member, requestId, which
+    extension-member-names constrains.
+  consumers-ignore-unknown-extensions: >-
+    Binds the consumer.
+  retry-after-may-be-specified: >-
+    A MAY this API exercises for the SSE and log connection limits, where the
+    header is set alongside the problem rather than by it.
+  additional-members-may-be-specified: >-
+    A MAY, the permission extension-member-names then constrains.
+  iana-prefix-may-be-used: >-
+    A MAY about registering a type in the IANA registry. These types are this
+    deployment's own and resolve under its own /api/errors/ path.
