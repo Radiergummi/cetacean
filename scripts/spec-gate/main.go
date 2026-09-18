@@ -24,7 +24,7 @@ func main() {
 	case "report":
 		err = reportCmd(os.Args[2:])
 	case "mutants":
-		err = runMutants(".")
+		err = mutantsCmd(os.Args[2:])
 	default:
 		err = fmt.Errorf("unknown command %q", os.Args[1])
 	}
@@ -33,6 +33,25 @@ func main() {
 		fmt.Fprintln(os.Stderr, "spec-gate:", err)
 		os.Exit(1)
 	}
+}
+
+// mutantsCmd runs the registry's own mutants by default. --generate swaps the
+// operators of one package instead and reports what its tests do not notice:
+// a different question, answered by the same executor.
+func mutantsCmd(args []string) error {
+	fs := flag.NewFlagSet("mutants", flag.ExitOnError)
+	generate := fs.String("generate", "",
+		"package to generate operator mutants for, e.g. ./internal/oauth")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *generate != "" {
+		return runGenerated(".", *generate)
+	}
+
+	return runMutants(".")
 }
 
 // reportCmd parses the report command's own flags. The claims directory is
