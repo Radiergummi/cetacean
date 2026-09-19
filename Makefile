@@ -1,4 +1,4 @@
-.PHONY: lint lint-docs typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-genmcp spec-report spec-report-full spec-mutants spec-mutants-generate
+.PHONY: lint lint-docs typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-extract spec-extract-check spec-genmcp spec-report spec-report-full spec-transcript spec-mutants spec-mutants-generate
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
@@ -219,6 +219,15 @@ spec-report:
 	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
 	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit
 
+## Print each requirement beside what a test watched the server do
+#
+# The transcript goes to stdout and the summary to stderr, so redirecting the
+# first leaves the gate's own output readable.
+spec-transcript:
+	rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
+	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
+	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit --transcript
+
 ## Report what the unit and e2e suites exercised together
 spec-report-full: build
 	rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
@@ -226,6 +235,18 @@ spec-report-full: build
 	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) \
 	  go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...
 	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit,e2e
+
+## Report the normative statements no registry entry accounts for
+#
+# Needs network: it fetches each document's own text at the revision the
+# registry pins. Not part of `check` — the sentence splitter is approximate, so
+# the output is a list to reconcile. --check holds each document to
+# scripts/spec-extract/baseline.yaml.
+spec-extract:
+	go run ./scripts/spec-extract -v
+
+spec-extract-check:
+	go run ./scripts/spec-extract --check
 
 ## Regenerate the MCP registry families from upstream
 #

@@ -21,12 +21,14 @@ var citationRE = regexp.MustCompile(
 
 // mechanismPrefixes name this mechanism's own files rather than a consumer of
 // a specification: the registry states each token to register or dismiss it,
-// and the gate's tests state tokens as fixtures. Counting either would let a
+// the gate's tests state tokens as fixtures, and spec-extract quotes the
+// documents themselves, citations and all. Counting any of them would let a
 // token self-cite and hide a stale dismissal.
 var mechanismPrefixes = []string{
 	"internal/spec/registry/",
 	"scripts/spec-gate/",
 	"scripts/spec-vet/",
+	"scripts/spec-extract/",
 }
 
 // Citations maps each specification the tree names to the files naming it.

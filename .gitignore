@@ -63,6 +63,7 @@ coverdata/
 /spec-gate
 /spec-genmcp
 /spec-vet
+/spec-extract
 frontend/dist/
 frontend/dist-widgets/
 website/dist/

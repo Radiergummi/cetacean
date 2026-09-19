@@ -103,6 +103,13 @@ func (q *Requirement) FullID() string {
 type Inventory struct {
 	From  string `yaml:"from"`
 	Count int    `yaml:"count"`
+
+	// Sections is From's machine-readable half: the section numbers, subsections
+	// included, that Count is a count of. scripts/spec-extract reads the
+	// document itself over these and reports what no entry here accounts for,
+	// which is the only thing holding Count to the specification rather than to
+	// whoever typed it.
+	Sections []string `yaml:"sections"`
 }
 
 type Document struct {

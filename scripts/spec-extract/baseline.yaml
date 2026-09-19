@@ -1,0 +1,108 @@
+# The normative statements each document carries that no requirement quotes.
+# Most are held by a dismissal, which is one line of prose with nothing to
+# match against; the rest are the finding. Regenerate with spec-extract --write,
+# and shrink this file only by registering or dismissing what it lists.
+oauth/oauth-2-1:
+    - '"client_id": OPTIONAL.'
+    - '"client_id": REQUIRED, if the client is not authenticating with the authorization server as described in Section 3.2.1.'
+    - '"client_id": REQUIRED.'
+    - '"client_secret": REQUIRED.'
+    - '"code_challenge": REQUIRED unless the specific requirements of Section 7.5.1 are met.'
+    - '"code_verifier": REQUIRED, if the code_challenge parameter was included in the authorization request.'
+    - '"error_uri": OPTIONAL.'
+    - '"iss": REQUIRED.'
+    - '"redirect_uri": OPTIONAL if only one redirect URI is registered for this client.'
+    - '"refresh_token": REQUIRED.'
+    - '"response_type": REQUIRED.'
+    - '"scope": OPTIONAL.'
+    - '"scope": RECOMMENDED, if identical to the scope requested by the client; otherwise, REQUIRED.'
+    - '"state": OPTIONAL.'
+    - '* If there was no code_challenge in the authorization request associated with the authorization code in the token request, the authorization server MUST reject the token request.'
+    - An authorization server MUST reject requests without a code_challenge from public clients, and MUST reject such requests from other clients unless there is reasonable assurance that the client mitigates authorization code injection in other ways.
+    - An authorization server that redirects a request potentially containing user credentials MUST avoid forwarding these user credentials accidentally (see Section 7.5.4 for details).
+    - Any clients with credentials MUST take precautions to prevent leakage and abuse of their credentials.
+    - At a minimum, any private-use URI scheme that doesn't contain a period character (.) SHOULD be rejected.
+    - 'Authorization servers MAY revoke refresh tokens automatically in case of a security event, such as:'
+    - Authorization servers MUST ensure the integrity of the refresh token value in this case, for example, using signatures.
+    - Authorization servers MUST reject authorization requests that specify a redirect URI that doesn't exactly match one that was registered, with an exception for loopback redirects, where an exact match is required except for the port URI component, see Section 4.1.1 for details.
+    - Authorization servers MUST require clients to register their complete redirect URI (including the path component).
+    - 'Authorization servers MUST utilize one of these methods to detect refresh token replay by malicious actors for public clients:'
+    - Authorization servers SHOULD consider the level of confidence in a client's identity when deciding whether they allow a client access to more sensitive resources and operations such as the Client Credentials grant type and how often to prompt the user for consent.
+    - Authorization servers SHOULD determine, based on a risk assessment and their own policies, whether to issue refresh tokens to a certain client.
+    - 'Client registration MUST include:'
+    - Clients MUST NOT expose URLs that forward the user's browser to arbitrary URIs obtained from a query parameter ("open redirector"), as described in Section 7.13.
+    - Clients MUST prevent Cross-Site Request Forgery (CSRF) attacks.
+    - Clients MUST prevent injection (replay) of authorization codes into the authorization response by attackers.
+    - Clients MUST use code challenge methods that do not expose the code_verifier in the authorization request.
+    - Clients that have ensured that the authorization server supports the code_challenge parameter MAY rely on the CSRF protection provided by that mechanism.
+    - Confidential clients MUST authenticate with the authorization server as described in Section 2.4 when making requests to the token endpoint.
+    - Confidential clients MUST authenticate with the authorization server as described in Section 3.2.1.
+    - Cross-Origin Resource Sharing [WHATWG.CORS] MUST NOT be supported at the Authorization Endpoint as the client does not access this endpoint directly, instead the client redirects the user agent to it.
+    - Even in this case, using and enforcing code_challenge and code_verifier as described above is still RECOMMENDED.
+    - Extension grant types MAY define additional endpoints as needed.
+    - Extension response types MAY contain a space-delimited (%x20) list of values, where the order of values does not matter (e.g., response type a b is the same as b a).
+    - For confidential clients, the authorization server MAY accept any form of client authentication meeting its security requirements (e.g., client secret, public/private key pair).
+    - For private-use URI scheme-based redirect URIs, authorization servers SHOULD enforce the requirement in Section 8.4.3 that clients use schemes that are reverse domain name based.
+    - If a new refresh token is issued, the refresh token scope MUST be identical to that of the refresh token included by the client in the request.
+    - If a second valid token request is made with the same authorization code as a previously successful token request, the authorization server MUST deny the request and SHOULD revoke (when possible) all access tokens and refresh tokens previously issued based on that authorization code.
+    - If multiple redirect URIs have been registered to a client, the client MUST include a redirect URI with the authorization request using the redirect_uri request parameter (Section 4.1.1).
+    - If omitted, the authorization server SHOULD provide the lifetime via other means or document the default value.
+    - If refresh tokens are issued, those refresh tokens MUST be bound to the scope and resource servers as consented by the resource owner.
+    - If the authorization server decides not to issue refresh tokens, the client MAY obtain new access tokens by starting the OAuth flow over, for example initiating a new authorization code request.
+    - If the authorization server supports clients with client identifiers issued by parties other than the authorization server, the authorization server SHOULD take precautions to avoid clients impersonating resource owners as described in Section 7.4.
+    - If the client attempted to authenticate via the Authorization request header field, the authorization server MUST respond with an HTTP 401 (Unauthorized) status code and include the WWW-Authenticate response header field matching the authentication scheme used by the client.
+    - If the request fails due to a missing, invalid, or mismatching redirect URI, or if the client identifier is missing or invalid, the authorization server MUST NOT redirect the user agent to the invalid redirect URI and SHOULD inform the resource owner of the error, for example by displaying a message to the user in their browser.
+    - If the server does not support the requested code_challenge_method transformation, the authorization endpoint MUST return the authorization error response with error value set to invalid_request.
+    - If third-party scripts are included, the client MUST ensure that its own scripts (used to extract and remove the credentials from the URI) will execute first.
+    - 'In addition to the processing rules in Section 3.2.2, the authorization server MUST:'
+    - In order to prevent mix-up attacks, clients MUST only process redirect responses of the issuer they sent the respective request to and from the same user agent this authorization request was initiated with.
+    - In scenarios where an OAuth client interacts with two or more authorization servers, however, clients MUST prevent mix-up attacks.
+    - It is RECOMMENDED that the output of a suitable random number generator be used to create a 32-octet sequence.
+    - It is RECOMMENDED to use asymmetric (public-key based) methods for client authentication such as mTLS [RFC8705] or using signed JWTs ("Private Key JWT") in accordance with [RFC7521], [RFC7523], and their update [I-D.ietf-oauth-rfc7523bis] (defined in [OpenID.Connect] as the client authentication method private_key_jwt).
+    - MUST NOT be used otherwise.
+    - 'NOTE: The code verifier SHOULD have enough entropy to make it impractical to guess the value.'
+    - Note that the authorization server may prematurely expire an access token and clients MUST NOT expect an access token to be valid for the provided lifetime.
+    - Otherwise, one-time use CSRF tokens carried in the state parameter that are securely bound to the user agent MUST be used for CSRF protection (see Section 7.10).
+    - REQUIRED if multiple redirect URIs are registered for this client.
+    - Refresh tokens SHOULD expire if the client has been inactive for some time, i.e., the refresh token has not been used to obtain new access tokens for some time.
+    - Since the client secret authentication method involves a password, the authorization server MUST protect any endpoint utilizing it against brute force attacks.
+    - The authorization endpoint URL MUST NOT include a fragment component, and MAY include a query string component (Appendix C.1), which MUST be retained when adding additional query parameters.
+    - The authorization server MAY return an HTTP 401 (Unauthorized) status code to indicate which HTTP authentication schemes are supported.
+    - The authorization server MAY support any suitable authentication scheme matching its security requirements.
+    - The authorization server MAY support the HTTP Basic authentication scheme for authenticating clients that were issued a client secret.
+    - The authorization server MUST associate the code_challenge and code_challenge_method values with the issued authorization code so the code challenge can be verified later.
+    - The authorization server MUST authenticate the client.
+    - The authorization server MUST first authenticate the resource owner.
+    - The authorization server MUST ignore unrecognized request parameters sent to the authorization endpoint.
+    - The authorization server MUST ignore unrecognized request parameters sent to the token endpoint.
+    - The authorization server MUST return an access token only once for a given authorization code.
+    - The authorization server MUST support the use of the HTTP GET method Section 9.3.1 of [RFC9110] for the authorization endpoint and MAY support the POST method (Section 9.3.3 of [RFC9110]) as well.
+    - The authorization server MUST verify the binding between the refresh token and client identity whenever the client identity can be authenticated.
+    - The client MAY use the state request parameter to achieve per-request customization if needed rather than varying the redirect URI per request.
+    - The client MUST NOT use more than one authentication method in each request to prevent a conflict of which authentication mechanism is authoritative for the request.
+    - The client MUST ignore unrecognized response parameters.
+    - The client MUST ignore unrecognized value names in the response.
+    - The client identifier is not a secret; it is exposed to the resource owner and MUST NOT be used alone for client authentication.
+    - The code_challenge and code_challenge_method values may be stored in encrypted form in the code itself, but the server MUST NOT include the code_challenge value in a response parameter in a form that entities other than the AS can extract.
+    - The error_description or the response of error_uri SHOULD explain the nature of error, e.g., transform algorithm not supported.
+    - 'The only exception is native apps using a localhost URI: In this case, the authorization server MUST allow variable port numbers as described in Section 8.4.2.'
+    - The parameters can only be transmitted in the request content and MUST NOT be included in the request URI.
+    - The requested scope MUST NOT include any scope not originally granted by the resource owner, and if omitted is treated as equal to the scope originally granted by the resource owner.
+    - The state and scope parameters SHOULD NOT include sensitive client or resource owner information in plain text, as they can be transmitted over insecure channels or stored insecurely.
+    - The token endpoint URL MUST NOT include a fragment component, and MAY include a query string component (Appendix C.1).
+    - 'To support confidential clients in possession of a client secret, the authorization server MUST support the client including the client credentials in the request body content using the following parameters:'
+    - Values for the error parameter MUST NOT include characters outside the set %x20-21 / %x23-5B / %x5D-7E.
+    - Values for the error_description parameter MUST NOT include characters outside the set %x20-21 / %x23-5B / %x5D-7E.
+    - Values for the error_uri parameter MUST conform to the URI-reference syntax and thus MUST NOT include characters outside the set %x21 / %x23-5B / %x5D-7E.
+    - When client authentication is not possible, the authorization server SHOULD issue sender-constrained refresh tokens or use refresh token rotation as described in Section 4.3.1.
+    - When comparing the two URIs the authorization server MUST ensure that the two URIs are equal, see Section 6.2.1 of [RFC3986], Simple String Comparison, for details.
+    - When using JWT-based client authentication, clients and authorization servers MUST follow the updated guidance around aud values in [I-D.ietf-oauth-rfc7523bis].
+    - When using other authentication methods, the authorization server MUST define a mapping between the client identifier (registration record) and authentication scheme.
+oauth/rfc7636:
+    - If the client is capable of using "S256", it MUST use "S256", as "S256" is Mandatory To Implement (MTI) on the server.
+    - It is RECOMMENDED that the output of a suitable random number generator be used to create a 32-octet sequence.
+    - 'NOTE: The code verifier SHOULD have enough entropy to make it impractical to guess the value.'
+    - That is the method that the token endpoint MUST use to verify the "code_verifier".
+    - code_challenge REQUIRED.
+    - code_challenge_method OPTIONAL, defaults to "plain" if not present in the request.
+    - code_verifier REQUIRED.
