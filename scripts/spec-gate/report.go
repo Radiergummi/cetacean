@@ -19,13 +19,18 @@ type Summary struct {
 	Gaps      []string
 	Deferred  int
 	Uncovered []string
+
+	// Observed counts the exercised requirements a test recorded a value
+	// against. Reported separately from Exercised because the two answer
+	// different questions: that a test passed, and what the server did.
+	Observed int
 }
 
 // summarise classifies every requirement against what this invocation ran. The
 // lane comes from the registry rather than from where the claim was written:
 // the static gate already holds the two to each other, and reading the
 // declaration keeps the count answerable without parsing a file.
-func summarise(reg *spec.Registry, ran map[string][]string, e2e bool) Summary {
+func summarise(reg *spec.Registry, ran map[string][]spec.Evidence, e2e bool) Summary {
 	out := Summary{}
 
 	for _, q := range reg.All() {
@@ -39,6 +44,10 @@ func summarise(reg *spec.Registry, ran map[string][]string, e2e bool) Summary {
 			out.Gaps = append(out.Gaps, id)
 		case len(ran[id]) > 0:
 			out.Exercised++
+
+			if observed(ran[id]) {
+				out.Observed++
+			}
 		case q.Lane == spec.LaneE2E && !e2e:
 			out.NotRun++
 		default:
@@ -52,13 +61,13 @@ func summarise(reg *spec.Registry, ran map[string][]string, e2e bool) Summary {
 	return out
 }
 
-func runReport(root, claims, suites string) error {
+func runReport(root, claims, suites string, transcript bool) error {
 	reg, err := spec.Load()
 	if err != nil {
 		return err
 	}
 
-	if _, errs := Scan(root); len(errs) > 0 {
+	if _, _, errs := Scan(root); len(errs) > 0 {
 		report(errs)
 
 		return fmt.Errorf("%d problem(s) scanning for claims", len(errs))
@@ -95,6 +104,9 @@ func runReport(root, claims, suites string) error {
 		"  %d exercised by %s, %d not run, %d gaps, %d deferred, %d uncovered\n",
 		summary.Exercised, suites,
 		summary.NotRun, len(summary.Gaps), summary.Deferred, len(summary.Uncovered))
+	fmt.Fprintf(os.Stderr,
+		"  %d of the %d exercised recorded what the server answered\n",
+		summary.Observed, summary.Exercised)
 
 	// Named, not counted. A gap is the one state nothing pins, so the only
 	// thing keeping it from accumulating unread is that every run says which
@@ -107,6 +119,10 @@ func runReport(root, claims, suites string) error {
 		fmt.Fprintln(os.Stderr, "  uncovered:", id)
 	}
 
+	if transcript {
+		writeTranscript(reg, ran)
+	}
+
 	if len(summary.Uncovered) > 0 {
 		return fmt.Errorf(
 			"%d requirement(s) nothing in this run exercised",
@@ -115,4 +131,48 @@ func runReport(root, claims, suites string) error {
 	}
 
 	return nil
+}
+
+// observed reports whether any claiming test recorded a value, without
+// building the list to find out.
+func observed(evidence []spec.Evidence) bool {
+	for _, e := range evidence {
+		if len(e.Observations) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// observations flattens the values every claiming test recorded.
+func observations(evidence []spec.Evidence) []string {
+	var out []string
+	for _, e := range evidence {
+		out = append(out, e.Observations...)
+	}
+
+	return out
+}
+
+// writeTranscript prints each requirement beside what a test watched the
+// server do about it. This is the only output here that answers the question
+// a reader outside the repository actually has, so it quotes the requirement
+// rather than naming it.
+func writeTranscript(reg *spec.Registry, ran map[string][]spec.Evidence) {
+	for _, q := range reg.All() {
+		id := q.FullID()
+
+		values := observations(ran[id])
+		if len(values) == 0 {
+			continue
+		}
+
+		fmt.Fprintf(os.Stdout, "\n%s [%s]\n  %s\n", id, q.Level, strings.Join(
+			strings.Fields(q.Text), " "))
+
+		for _, v := range slices.Compact(slices.Sorted(slices.Values(values))) {
+			fmt.Fprintf(os.Stdout, "  observed: %s\n", v)
+		}
+	}
 }

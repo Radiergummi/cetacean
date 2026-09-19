@@ -15,9 +15,12 @@ func runStatic(root string) error {
 		return err
 	}
 
-	claims, errs := Scan(root)
+	claims, observations, errs := Scan(root)
 	errs = append(errs, reg.Validate()...)
+	errs = append(errs, unknown(reg, claims)...)
+	errs = append(errs, unknown(reg, observations)...)
 	errs = append(errs, checkStatic(reg, claims)...)
+	errs = append(errs, checkObservations(claims, observations)...)
 
 	if len(errs) > 0 {
 		report(errs)
@@ -51,8 +54,7 @@ func report(errs []error) {
 
 // checkStatic reports every requirement with no claimant and no reason, every
 // reason that is empty, every deferred requirement with nothing pinning it,
-// every claim naming a requirement the registry does not have, and every lane
-// declaration the claimants contradict.
+// and every lane declaration the claimants contradict.
 func checkStatic(reg *spec.Registry, claims []Claim) []error {
 	claimed, tagged, untagged := map[string]bool{}, map[string]bool{}, map[string]bool{}
 
@@ -60,11 +62,6 @@ func checkStatic(reg *spec.Registry, claims []Claim) []error {
 
 	for _, c := range claims {
 		if _, ok := reg.Lookup(c.ID); !ok {
-			errs = append(errs, fmt.Errorf(
-				"%s:%d: claims %q, which the registry does not have",
-				c.File, c.Line, c.ID,
-			))
-
 			continue
 		}
 
@@ -133,4 +130,49 @@ func checkLane(q *spec.Requirement, tagged, untagged bool) error {
 	}
 
 	return nil
+}
+
+// checkObservations reports an observation its own test never claimed. The
+// report silently drops one — it has no claim to hang on — so without this the
+// evidence a test meant to publish would simply not appear.
+func checkObservations(claims, observations []Claim) []error {
+	claimed := make(map[string]bool, len(claims))
+	for _, c := range claims {
+		claimed[site(c)] = true
+	}
+
+	var errs []error
+
+	for _, o := range observations {
+		if claimed[site(o)] {
+			continue
+		}
+
+		errs = append(errs, fmt.Errorf(
+			"%s:%d: observes %q, which %s does not claim; the observation is dropped",
+			o.File, o.Line, o.ID, o.Func,
+		))
+	}
+
+	return errs
+}
+
+// site identifies the one test a record was written in.
+func site(c Claim) string { return c.File + "\t" + c.Func + "\t" + c.ID }
+
+// unknown reports every record naming a requirement the registry does not
+// have. Run over claims and observations alike: a typo is a typo either way.
+func unknown(reg *spec.Registry, records []Claim) []error {
+	var errs []error
+
+	for _, c := range records {
+		if _, ok := reg.Lookup(c.ID); !ok {
+			errs = append(errs, fmt.Errorf(
+				"%s:%d: names %q, which the registry does not have",
+				c.File, c.Line, c.ID,
+			))
+		}
+	}
+
+	return errs
 }

@@ -76,47 +76,43 @@ func gitLsFiles(root string, args ...string) ([]string, error) {
 	return files, nil
 }
 
-func Scan(root string) ([]Claim, []error) {
+// Scan returns what the tree claims and what it observes, separately. An
+// observation establishes nothing on its own, and a consumer handed both in
+// one slice has to remember to filter — which is a rule no type enforces, in
+// three commands that do not run together.
+func Scan(root string) (claims, observations []Claim, errs []error) {
 	files, err := TestFiles(root)
 	if err != nil {
-		return nil, []error{err}
+		return nil, nil, []error{err}
 	}
 
-	var (
-		claims []Claim
-		errs   []error
-	)
-
 	for _, f := range files {
-		c, e := ScanFile(f)
+		c, o, e := ScanFile(f)
 		claims = append(claims, c...)
+		observations = append(observations, o...)
 		errs = append(errs, e...)
 	}
 
-	return claims, errs
+	return claims, observations, errs
 }
 
 // ScanFile extracts the claims one test file makes. go/parser applies no build
 // constraints, which is what lets this reach test/e2e at all; the price is no
 // type information, so how a claim may be written is scripts/spec-vet's to
 // enforce.
-func ScanFile(path string) ([]Claim, []error) {
+func ScanFile(path string) (claims, observations []Claim, errs []error) {
 	fset := token.NewFileSet()
 
 	file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 	if err != nil {
-		return nil, []error{fmt.Errorf("%s: %w", path, err)}
+		return nil, nil, []error{fmt.Errorf("%s: %w", path, err)}
 	}
 
 	if !importsSpec(file) {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	var errs []error
-
 	tagged := needsABuildTag(file)
-
-	var claims []Claim
 
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
@@ -131,7 +127,12 @@ func ScanFile(path string) ([]Claim, []error) {
 			}
 
 			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || sel.Sel.Name != "Satisfies" {
+			if !ok {
+				return true
+			}
+
+			observation := sel.Sel.Name == "Observed"
+			if sel.Sel.Name != "Satisfies" && !observation {
 				return true
 			}
 
@@ -146,7 +147,14 @@ func ScanFile(path string) ([]Claim, []error) {
 				return true
 			}
 
-			for _, arg := range call.Args[1:] {
+			// Satisfies takes every argument after t as an id; Observed takes
+			// one, and a format string after it.
+			ids := call.Args[1:]
+			if observation {
+				ids = ids[:min(1, len(ids))]
+			}
+
+			for _, arg := range ids {
 				lit, ok := arg.(*ast.BasicLit)
 				if !ok || lit.Kind != token.STRING {
 					errs = append(errs, unreadable(path, fset, arg.Pos()))
@@ -161,20 +169,26 @@ func ScanFile(path string) ([]Claim, []error) {
 					continue
 				}
 
-				claims = append(claims, Claim{
+				found := Claim{
 					ID:     id,
 					File:   path,
 					Func:   fn.Name.Name,
 					Line:   fset.Position(lit.Pos()).Line,
 					Tagged: tagged,
-				})
+				}
+
+				if observation {
+					observations = append(observations, found)
+				} else {
+					claims = append(claims, found)
+				}
 			}
 
 			return true
 		})
 	}
 
-	return claims, errs
+	return claims, observations, errs
 }
 
 // unreadable reports a claim this scan could not extract an id from, which

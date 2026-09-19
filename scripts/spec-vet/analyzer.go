@@ -31,11 +31,14 @@ func run(pass *analysis.Pass) (any, error) {
 
 		ast.Inspect(file, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
-			if !ok || !isSatisfies(pass, call) {
+			if !ok {
 				return true
 			}
 
-			checkCall(pass, file, call)
+			switch name := callee(pass, call); name {
+			case "Satisfies", "Observed":
+				checkCall(pass, file, call, name)
+			}
 
 			return true
 		})
@@ -44,22 +47,22 @@ func run(pass *analysis.Pass) (any, error) {
 	return nil, nil
 }
 
-// isSatisfies resolves the callee rather than matching its spelling, which is
-// what the parser-based scan cannot do. Only the qualified form: an
-// unqualified call comes from inside internal/spec, which imports returns
-// false for.
-func isSatisfies(pass *analysis.Pass, call *ast.CallExpr) bool {
+// callee names the internal/spec function this call resolves to, empty for
+// anything else — including internal/spec's own readers, which the gate's
+// commands call from ordinary code. Resolved rather than matched by spelling,
+// which is what the parser-based scan cannot do.
+func callee(pass *analysis.Pass, call *ast.CallExpr) string {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok {
-		return false
+		return ""
 	}
 
 	fn, ok := pass.TypesInfo.Uses[sel.Sel].(*types.Func)
-	if !ok || fn.Name() != "Satisfies" || fn.Pkg() == nil {
-		return false
+	if !ok || fn.Pkg() == nil || fn.Pkg().Path() != specPath {
+		return ""
 	}
 
-	return fn.Pkg().Path() == specPath
+	return fn.Name()
 }
 
 // checkImport holds the no-alias rule, which exists for scripts/spec-gate
@@ -97,20 +100,29 @@ func imports(pkg *types.Package) bool {
 	return false
 }
 
-func checkCall(pass *analysis.Pass, file *ast.File, call *ast.CallExpr) {
+// checkCall holds both entry points to the form the requirement gate can read.
+// They differ in two places only: Observed takes one id and a format string
+// after it, and its record is written after the assertion that produced it, so
+// the ordering rule Satisfies obeys cannot apply to it.
+func checkCall(pass *analysis.Pass, file *ast.File, call *ast.CallExpr, name string) {
 	if !strings.HasSuffix(pass.Fset.Position(call.Pos()).Filename, "_test.go") {
 		pass.Reportf(call.Pos(),
-			"Satisfies is called outside a _test.go file; internal/spec imports testing, "+
-				"and nothing shipped may link it")
+			"%s is called outside a _test.go file; internal/spec imports testing, "+
+				"and nothing shipped may link it", name)
 	}
 
 	if len(call.Args) < 2 {
-		pass.Reportf(call.Pos(), "Satisfies names no requirement")
+		pass.Reportf(call.Pos(), "%s names no requirement", name)
 
 		return
 	}
 
-	for _, arg := range call.Args[1:] {
+	ids := call.Args[1:]
+	if name == "Observed" {
+		ids = ids[:1]
+	}
+
+	for _, arg := range ids {
 		if lit, ok := arg.(*ast.BasicLit); !ok || lit.Kind != token.STRING {
 			pass.Reportf(arg.Pos(),
 				"requirement id is not a string literal; the requirement gate reads these "+
@@ -118,7 +130,9 @@ func checkCall(pass *analysis.Pass, file *ast.File, call *ast.CallExpr) {
 		}
 	}
 
-	checkOrder(pass, file, call)
+	if name == "Satisfies" {
+		checkOrder(pass, file, call)
+	}
 }
 
 // checkOrder holds the ordering rule stated on spec.Satisfies. The enclosing

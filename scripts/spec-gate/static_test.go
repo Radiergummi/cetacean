@@ -88,9 +88,36 @@ func TestAClaimForAnUnknownRequirementFailsTheGate(t *testing.T) {
 		{ID: "test/doc/ghost", Func: "TestB", File: "b_test.go", Line: 12},
 	}
 
-	errs := checkStatic(reg, claims)
+	errs := unknown(reg, claims)
 	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "ghost") {
 		t.Fatalf("errors = %v, want one naming the unknown id", errs)
+	}
+}
+
+// The same rule over observations: a typo there names a requirement nothing
+// will ever attach evidence to, and the report would drop it in silence.
+func TestAnObservationForAnUnknownRequirementFailsTheGate(t *testing.T) {
+	reg := registryWith(t, spec.Requirement{ID: "a", Level: spec.MUST, Text: "x"})
+
+	errs := unknown(reg, []Claim{
+		{ID: "test/doc/ghost", Func: "TestB", File: "b_test.go", Line: 12},
+	})
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "ghost") {
+		t.Fatalf("errors = %v, want one naming the unknown id", errs)
+	}
+}
+
+// checkObservations is the join between the two lists: an observation whose
+// own test filed no claim is evidence the report will never publish.
+func TestAnObservationWithoutAClaimInTheSameTestFailsTheGate(t *testing.T) {
+	claims := []Claim{{ID: "test/doc/a", Func: "TestA", File: "a_test.go"}}
+
+	errs := checkObservations(claims, []Claim{
+		{ID: "test/doc/a", Func: "TestA", File: "a_test.go", Line: 9},
+		{ID: "test/doc/a", Func: "TestB", File: "a_test.go", Line: 20},
+	})
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "TestB") {
+		t.Fatalf("errors = %v, want one naming TestB", errs)
 	}
 }
 

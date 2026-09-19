@@ -78,7 +78,7 @@ func runMutants(root string) error {
 		return err
 	}
 
-	claims, errs := Scan(root)
+	claims, _, errs := Scan(root)
 	if len(errs) > 0 {
 		report(errs)
 

@@ -34,7 +34,7 @@ func TestOne(t *testing.T) {
 }
 `)
 
-	claims, errs := ScanFile(p)
+	claims, _, errs := ScanFile(p)
 	if len(errs) != 0 {
 		t.Fatalf("errors = %v", errs)
 	}
@@ -92,7 +92,7 @@ import (
 		t.Run(tc.name, func(t *testing.T) {
 			src := fmt.Sprintf(preamble, tc.alias) + tc.body + "\n"
 
-			claims, errs := ScanFile(writeTemp(t, "o_test.go", src))
+			claims, _, errs := ScanFile(writeTemp(t, "o_test.go", src))
 			if len(claims) != 0 {
 				t.Fatalf("claims = %+v, want none", claims)
 			}
@@ -146,7 +146,7 @@ func TestFour(t *testing.T) {
 		t.Run(constraint, func(t *testing.T) {
 			source := writeTemp(t, "d_test.go", fmt.Sprintf(body, constraint))
 
-			claims, errs := ScanFile(source)
+			claims, _, errs := ScanFile(source)
 			if len(errs) != 0 {
 				t.Fatalf("errors = %v", errs)
 			}
@@ -155,5 +155,40 @@ func TestFour(t *testing.T) {
 				t.Fatalf("claim = %+v, want one that is not tagged", claims)
 			}
 		})
+	}
+}
+
+// An observation is scanned into its own list. Handed back in the claims
+// slice it would reach the mutant gate, which has no way to tell the two
+// apart and would run a test that establishes nothing as a claimant.
+func TestAnObservationIsNotAClaim(t *testing.T) {
+	src := `//go:build unix
+
+package p
+
+import (
+	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
+)
+
+func TestOne(t *testing.T) {
+	spec.Satisfies(t, "mcp/sep-2575/a")
+	spec.Observed(t, "mcp/sep-2575/a", "status=%d", 200)
+}
+`
+
+	claims, observations, errs := ScanFile(writeTemp(t, "s_test.go", src))
+	if len(errs) != 0 {
+		t.Fatalf("errors = %v", errs)
+	}
+
+	if len(claims) != 1 || claims[0].ID != "mcp/sep-2575/a" {
+		t.Errorf("claims = %+v, want one", claims)
+	}
+
+	// The format string and its arguments are not ids.
+	if len(observations) != 1 || observations[0].ID != "mcp/sep-2575/a" {
+		t.Errorf("observations = %+v, want one", observations)
 	}
 }

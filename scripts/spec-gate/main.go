@@ -62,10 +62,12 @@ func reportCmd(args []string) error {
 	fs := flag.NewFlagSet("report", flag.ExitOnError)
 	claims := fs.String("claims", ".spec-claims", "directory holding the run's .claims files")
 	suites := fs.String("suites", "unit", "comma-separated lanes this run included")
+	transcript := fs.Bool("transcript", false,
+		"print each requirement beside what a test observed the server do")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	return runReport(".", *claims, *suites)
+	return runReport(".", *claims, *suites, *transcript)
 }
