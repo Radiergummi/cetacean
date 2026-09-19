@@ -169,10 +169,16 @@ requirements:
       obtained during discovery) MUST exactly match the value of the "iss"
       claim.
     url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+    # The second mutant is the one "exactly" is about. An issuer identifier is
+    # a URL, and only its scheme and host are case-insensitive; a path that
+    # differs by case names a different authorization server.
     mutants:
       - file: internal/oauth/jwt.go
         replace: "\tif payload.Issuer != t.Issuer {"
         with: "\tif payload.Issuer != t.Issuer && false {"
+      - file: internal/oauth/jwt.go
+        replace: "\tif payload.Issuer != t.Issuer {"
+        with: "\tif !strings.EqualFold(payload.Issuer, t.Issuer) {"
 
   - id: aud-names-this-resource
     level: MUST

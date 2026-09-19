@@ -1,7 +1,7 @@
 source: OAuth 2.1
 title: The OAuth 2.1 Authorization Framework
 revision: draft-ietf-oauth-v2-1-16
-reviewed: 2026-09-17
+reviewed: 2026-09-19
 url:
   - https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/
   - https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.txt
@@ -19,8 +19,12 @@ inventory:
     §9 binds a browser-based client this deployment does not ship, §10 is
     informative and §11 is IANA's. A statement §2-§4 restates from a
     registered document is dismissed with a pointer rather than registered
-    twice, and those pointers are most of what follows.
-  count: 101
+    twice, and those pointers are most of what follows. The first count left
+    §4.1.1, §4.1.2 and §4.1.2.1 out entirely — the authorization request and
+    both shapes of its response — and the 43 statements they carry are the
+    difference between this number and that one.
+  count: 144
+  sections: ["2", "3", "4"]
 
 requirements:
   - id: one-client-id-is-one-client-type
@@ -254,6 +258,168 @@ requirements:
       providing additional information.
     url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2.4
 
+  - id: unknown-response-type-is-an-error
+    level: MUST
+    text: >-
+      If an authorization request is missing the response_type parameter, or if
+      the response type is not understood, the authorization server MUST return
+      an error response as described in Section 4.1.2.1.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.1
+    # Neither mutant removes the check: one admits the response type OAuth 2.1
+    # dropped, the other admits the absent one the sentence names first.
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif responseType != \"code\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"unsupported_response_type\",\n\t\t\t\"response_type must be code\")\n\t\treturn\n\t}"
+        with: "\tif responseType != \"code\" && responseType != \"token\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"unsupported_response_type\",\n\t\t\t\"response_type must be code\")\n\t\treturn\n\t}"
+      - file: internal/oauth/server.go
+        replace: "\tif responseType != \"code\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"unsupported_response_type\",\n\t\t\t\"response_type must be code\")\n\t\treturn\n\t}"
+        with: "\tif responseType != \"code\" && responseType != \"\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"unsupported_response_type\",\n\t\t\t\"response_type must be code\")\n\t\treturn\n\t}"
+
+  - id: challenge-method-required-and-s256
+    level: MUST
+    text: >-
+      "code_challenge_method": REQUIRED, the value S256 or a value defined by a
+      future extension
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif codeChallengeMethod != \"S256\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\",\n\t\t\t\"code_challenge_method must be S256\")\n\t\treturn\n\t}"
+        with: "\tif codeChallengeMethod != \"S256\" && codeChallengeMethod != \"\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\",\n\t\t\t\"code_challenge_method must be S256\")\n\t\treturn\n\t}"
+
+  - id: challenge-and-verifier-parameters-supported
+    level: MUST
+    text: >-
+      Authorization servers MUST support the code_challenge and code_verifier
+      parameters.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\tCodeChallengeMethodsSupported:          []string{\"S256\"},"
+        with: "\t\tCodeChallengeMethodsSupported:          nil,"
+
+  - id: challenge-and-verifier-enforced
+    level: MUST
+    text: >-
+      Clients MUST use code_challenge and code_verifier and authorization
+      servers MUST enforce their use except under the conditions described in
+      Section 7.5.1.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.1
+    # Refusing the empty verifier at either check alone changes nothing — the
+    # other still refuses it — so the mutant has to stand both down at once,
+    # which is what ceasing to enforce their use looks like.
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif err := validateCodeVerifier(codeVerifier); err != nil {\n\t\twriteTokenError(w, http.StatusBadRequest, \"invalid_grant\", err.Error())\n\t\treturn\n\t}\n\tif !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
+        with: "\tif err := validateCodeVerifier(codeVerifier); err != nil && codeVerifier != \"\" {\n\t\twriteTokenError(w, http.StatusBadRequest, \"invalid_grant\", err.Error())\n\t\treturn\n\t}\n\tif codeVerifier != \"\" && !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
+
+  - id: redirect-uri-validated-against-the-registered-set
+    level: MUST
+    text: >-
+      In particular, the authorization server MUST validate the redirect_uri in
+      the request if present, ensuring that it matches one of the registered
+      redirect URIs previously established during client registration
+      (Section 2).
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif !meta.HasRedirectURI(redirectURIRaw) {\n\t\trenderErrorPage(w, http.StatusBadRequest,\n\t\t\t\"redirect_uri is not registered for this client\")\n\t\treturn\n\t}\n\n\t// From here on redirect_uri is verified — errors can redirect."
+        with: "\tif !meta.HasRedirectURI(redirectURIRaw) && redirectURIRaw == \"\" {\n\t\trenderErrorPage(w, http.StatusBadRequest,\n\t\t\t\"redirect_uri is not registered for this client\")\n\t\treturn\n\t}\n\n\t// From here on redirect_uri is verified — errors can redirect."
+
+  - id: code-required-in-the-response
+    level: MUST
+    text: >-
+      "code": REQUIRED. The authorization code is generated by the
+      authorization server and opaque to the client.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tq.Set(\"code\", rawCode)"
+        with: "\tq.Set(\"authorization_code\", rawCode)"
+
+  - id: code-expires-shortly
+    level: MUST
+    text: >-
+      The authorization code MUST expire shortly after it is issued to mitigate
+      the risk of leaks.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "const authCodeTTL = 60 * time.Second"
+        with: "const authCodeTTL = 24 * time.Hour"
+
+  - id: code-lifetime-at-most-ten-minutes
+    level: SHOULD
+    text: >-
+      A maximum authorization code lifetime of 10 minutes is RECOMMENDED.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "const authCodeTTL = 60 * time.Second"
+        with: "const authCodeTTL = 11 * time.Minute"
+
+  - id: state-returned-when-the-request-carried-one
+    level: MUST
+    text: >-
+      "state": REQUIRED if the state parameter was present in the client
+      authorization request. The exact value received from the client.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.2
+    # "The exact value received": returning a value the client can still
+    # recognise but did not send fails the sentence as surely as omitting it.
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif state != \"\" {\n\t\tq.Set(\"state\", state)\n\t}\n\n\t// RFC 9207: name the issuer"
+        with: "\tif false {\n\t\tq.Set(\"state\", state)\n\t}\n\n\t// RFC 9207: name the issuer"
+      - file: internal/oauth/server.go
+        replace: "\tif state != \"\" {\n\t\tq.Set(\"state\", state)\n\t}\n\n\t// RFC 9207: name the issuer"
+        with: "\tif state != \"\" {\n\t\tq.Set(\"state\", strings.ToUpper(state))\n\t}\n\n\t// RFC 9207: name the issuer"
+
+  - id: direct-errors-answer-400
+    level: SHOULD
+    text: >-
+      When returning an error response directly to the user agent, the
+      authorization server SHOULD use the HTTP 400 (Bad Request) status code.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.2.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif !meta.HasRedirectURI(redirectURIRaw) {\n\t\trenderErrorPage(w, http.StatusBadRequest,\n\t\t\t\"redirect_uri is not registered for this client\")\n\t\treturn\n\t}\n\n\t// From here on redirect_uri is verified — errors can redirect."
+        with: "\tif !meta.HasRedirectURI(redirectURIRaw) {\n\t\trenderErrorPage(w, http.StatusForbidden,\n\t\t\t\"redirect_uri is not registered for this client\")\n\t\treturn\n\t}\n\n\t// From here on redirect_uri is verified — errors can redirect."
+
+  - id: client-and-redirect-validated-before-any-error-redirect
+    level: MUST
+    text: >-
+      The authorization server MUST validate the client identifier and redirect
+      URI before redirecting an error response to the client.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.2.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tmeta, verified, errMsg := s.resolveClientMeta(r, clientID)\n\tif errMsg != \"\" {\n\t\trenderErrorPage(w, http.StatusBadRequest, errMsg)\n\t\treturn\n\t}\n\n\tif !meta.HasRedirectURI(redirectURIRaw) {"
+        with: "\tmeta, verified, errMsg := s.resolveClientMeta(r, clientID)\n\tif errMsg != \"\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\", errMsg)\n\t\treturn\n\t}\n\n\tif !meta.HasRedirectURI(redirectURIRaw) {"
+
+  - id: authorization-error-parameter-required
+    level: MUST
+    text: >-
+      "error": REQUIRED. A single ASCII [USASCII] error code from the
+      following.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.2.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tq := u.Query()\n\tq.Set(\"error\", code)"
+        with: "\tq := u.Query()\n\tq.Set(\"err\", code)"
+
+  - id: state-returned-on-an-error-response
+    level: MUST
+    text: >-
+      "state": REQUIRED if a state parameter was present in the client
+      authorization request. The exact value received from the client.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-4.1.2.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif state != \"\" {\n\t\tq.Set(\"state\", state)\n\t}\n\t// RFC 9207 §2 requires iss on error responses too"
+        with: "\tif false {\n\t\tq.Set(\"state\", state)\n\t}\n\t// RFC 9207 §2 requires iss on error responses too"
+      - file: internal/oauth/server.go
+        replace: "\tif state != \"\" {\n\t\tq.Set(\"state\", state)\n\t}\n\t// RFC 9207 §2 requires iss on error responses too"
+        with: "\tif state != \"\" {\n\t\tq.Set(\"state\", strings.ToUpper(state))\n\t}\n\t// RFC 9207 §2 requires iss on error responses too"
+
   - id: client-credentials-grant-not-offered
     level: MUST
     text: >-
@@ -461,6 +627,97 @@ dismissed:
     An optional member this server does not emit.
   error-uri-charset: >-
     Constrains a member this server does not emit.
+  response-type-required: >-
+    The parameter declaration. What this server does about a request that omits
+    it or names another value is registered as unknown-response-type-is-an-error.
+  extension-response-types-may-be-composite: >-
+    A permission over extension response types, whose meaning the extension
+    defines. This server implements none and admits only "code".
+  authorization-request-client-id-required: >-
+    The parameter declaration. A request without it resolves to no client and
+    is refused on the error page before any redirect, which is registered as
+    client-and-redirect-validated-before-any-error-redirect.
+  code-challenge-required-unless-section-7-5-1: >-
+    The parameter declaration, with an exception for clients that mitigate code
+    injection otherwise. No such assurance exists here, so the unconditional
+    refusal stands: oauth/rfc7636/missing-challenge-refused.
+  redirect-uri-required-when-several-are-registered: >-
+    Conditional on how many redirect URIs a client registered. This server
+    requires the parameter on every request either way, as
+    redirect-uri-is-sent-when-several-are-registered records.
+  authorization-request-scope-optional: >-
+    A parameter this deployment defines no scopes for.
+  authorization-request-state-optional: >-
+    A permission to the client. What this server owes a request that carries
+    one is state-returned-when-the-request-carried-one.
+  clients-use-non-exposing-challenge-methods: >-
+    Binds the client choosing a method. S256 is the only one this server
+    admits, which is challenge-method-required-and-s256.
+  authorization-request-verifier-entropy: >-
+    A NOTE addressed to the client generating the verifier, registered against
+    RFC 7636 as oauth/rfc7636/verifier-entropy.
+  authorization-request-verifier-from-a-random-number-generator: >-
+    The same NOTE's RECOMMENDED, on how the client produces the octets.
+  enforcing-pkce-is-recommended-even-under-the-exception: >-
+    Conditional on taking §7.5.1's exception. This server takes it for no
+    client, so what it does is the unconditional enforcement above.
+  state-and-scope-carry-no-sensitive-information: >-
+    Binds what the client puts in the parameters it sends.
+  redirect-uris-compared-as-simple-strings: >-
+    The exact-match rule, registered where it is stated as a rule of its own:
+    oauth/rfc9700/redirect-uri-compared-as-strings and
+    oauth/rfc8252/redirect-uri-registered-and-exact-matched, which carries the
+    mutants for it.
+  authorization-request-loopback-ports-vary: >-
+    The loopback exception to the comparison above, and where this server
+    diverges. Recorded against oauth/rfc9700/loopback-ports-vary and
+    oauth/rfc8252/any-loopback-port-accepted.
+  code-is-bound-to-client-challenge-and-redirect-uri: >-
+    A statement of what the code carries, with no normative keyword. The three
+    bindings are checked at the token endpoint and registered there:
+    oauth/rfc6749/code-bound-to-client, oauth/rfc6749/code-bound-to-redirect-uri
+    and oauth/rfc7636/verifier-must-match-challenge.
+  authorization-response-iss-required: >-
+    Registered as oauth/rfc9207/iss-in-every-authorization-response, whose text
+    is the normative home for the parameter.
+  clients-ignore-unrecognized-response-parameters: >-
+    Binds the client reading the authorization response.
+  challenge-associated-with-the-issued-code: >-
+    Registered as oauth/rfc7636/challenge-associated-with-the-code.
+  challenge-not-in-a-response-parameter: >-
+    Registered as oauth/rfc7636/challenge-not-extractable-from-client-requests.
+  clients-prevent-code-injection: >-
+    Binds the client, and names code_challenge as how it is done — which this
+    server requires of every request regardless.
+  invalid-redirect-uri-is-not-followed-on-error: >-
+    §4.1.2.1 restating §2.3.5, registered above as
+    invalid-redirect-uri-is-not-followed.
+  requests-without-a-challenge-are-rejected: >-
+    The refusal restated for public clients. Every client here is public and
+    the refusal is unconditional: oauth/rfc7636/missing-challenge-refused, and
+    oauth/rfc8252/pkce-missing-is-rejected for the native-app case.
+  unsupported-transformation-is-invalid-request: >-
+    Registered as oauth/rfc7636/unsupported-transformation-refused, which is
+    the same sentence in the document this one adopts it from.
+  authorization-error-is-explained: >-
+    Registered as oauth/rfc7636/unsupported-transformation-error-is-explained.
+  authorization-error-code-charset: >-
+    §4.1.2.1 restating §3.2.4's constraint on the error parameter's bytes,
+    dismissed there as error-code-charset for the same reason: every code this
+    server writes is a literal in the source.
+  authorization-error-description-optional: >-
+    The same optional member §3.2.4 declares, registered as
+    error-description-optional.
+  authorization-error-description-charset: >-
+    §3.2.4's constraint restated, dismissed there as error-description-charset.
+  authorization-error-uri-optional: >-
+    A member this server does not emit, dismissed at §3.2.4 as
+    error-uri-optional.
+  authorization-error-uri-charset: >-
+    Constrains a member this server does not emit.
+  error-response-iss-required: >-
+    The same parameter on the error path, and the same home:
+    oauth/rfc9207/iss-in-every-authorization-response pins both.
   code-grant-type-required: >-
     §4.1.3 restating §3.2.2's grant_type, registered as grant-type-required.
   code-verifier-required-with-a-challenge: >-

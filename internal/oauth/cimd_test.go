@@ -236,6 +236,11 @@ func TestCIMDFetchHasRedirectURI(t *testing.T) {
 	if meta.HasRedirectURI("https://example.com/OTHER") {
 		t.Error("expected HasRedirectURI to return false for unregistered URI")
 	}
+	// A URI path is case-sensitive, so folding case here would hand the code
+	// to a target the client never registered.
+	if meta.HasRedirectURI("https://example.com/CB") {
+		t.Error("expected HasRedirectURI to return false for a case-folded path")
+	}
 	if meta.HasRedirectURI("") {
 		t.Error("expected HasRedirectURI to return false for empty string")
 	}

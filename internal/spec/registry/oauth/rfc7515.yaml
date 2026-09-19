@@ -42,6 +42,13 @@ requirements:
       Header, with the algorithm value accurately representing the algorithm
       used to construct the JWS Signature.
     url: https://www.rfc-editor.org/rfc/rfc7515#section-5.1
+    # Admitting a second name for one verifier is what makes the header stop
+    # representing the signature: every token here is verified as ES256
+    # whatever it says, so the header becomes a value nobody reads.
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif hdr.Alg != \"ES256\" {"
+        with: "\tif hdr.Alg != \"ES256\" && hdr.Alg != \"ES384\" {"
 
   - id: a-signature-must-validate
     level: MUST

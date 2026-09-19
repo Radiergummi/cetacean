@@ -178,6 +178,27 @@ func TestConsentStoreRequiresAnExactMatch(t *testing.T) {
 			subject: testSubject, clientID: testClientID,
 			resource: testResource, fingerprint: "fingerprint-b",
 		},
+		{
+			// A fingerprint the stored one merely starts with. Equal length
+			// differing in one byte, above, is refused by a comparison over
+			// any prefix too, so it is this case that says the whole value
+			// is compared.
+			name:    "a prefix of the fingerprint",
+			subject: testSubject, clientID: testClientID,
+			resource: testResource, fingerprint: testFingerprint[:len(testFingerprint)-2],
+		},
+		{
+			name:    "no fingerprint",
+			subject: testSubject, clientID: testClientID,
+			resource: testResource, fingerprint: "",
+		},
+		{
+			// A fingerprint is base64url, where case carries a bit per
+			// letter, so folding it is not the comparison this makes.
+			name:    "the fingerprint in another case",
+			subject: testSubject, clientID: testClientID,
+			resource: testResource, fingerprint: strings.ToUpper(testFingerprint),
+		},
 	}
 
 	for _, tc := range tests {

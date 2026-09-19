@@ -10,10 +10,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1221,6 +1223,407 @@ func TestTheCodeChallengeIsComparedWholeAndNotInPart(t *testing.T) {
 			if verifySHA256Challenge(verifier, challenge) {
 				t.Errorf("verifier accepted against %q", challenge)
 			}
+		})
+	}
+}
+
+// pkceVerifier is long enough for RFC 7636 §4.1, so a refusal below comes from
+// the parameter the test is about rather than from the verifier's length.
+const pkceVerifier = "verifier-padded-to-the-RFC-7636-minimum-length"
+
+// mixedCaseState is echoed back byte for byte or not at all, so a comparison
+// that folds case reads as a pass against a lower-case value.
+const mixedCaseState = "MixedCase-State_123"
+
+// authorizeWith drives the authorization endpoint under an identity the
+// upstream provider established, which every request past consent needs.
+func authorizeWith(t *testing.T, s *Server, q url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+
+	rec := httptest.NewRecorder()
+	s.HandleAuthorize(rec, withIdentity(
+		httptest.NewRequest(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil),
+		fixtureSubject, fixtureEmail,
+	))
+
+	return rec
+}
+
+// redirectQuery returns the query of the redirect rec carries.
+func redirectQuery(t *testing.T, rec *httptest.ResponseRecorder) url.Values {
+	t.Helper()
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302: %s", rec.Code, rec.Body.String())
+	}
+
+	location, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse Location: %v", err)
+	}
+
+	return location.Query()
+}
+
+// errorRedirect is the same, for a refusal. A code in it is a refusal that did
+// not refuse, so that is checked here rather than at each caller.
+func errorRedirect(t *testing.T, rec *httptest.ResponseRecorder) url.Values {
+	t.Helper()
+
+	got := redirectQuery(t, rec)
+	if got.Get("code") != "" {
+		t.Fatal("a code was issued for a request that had to be refused")
+	}
+
+	return got
+}
+
+// RFC 7636 §4.4.1 and OAuth 2.1 §4.1.1: S256 is the only transformation this
+// server supports, and the parameter naming it is required. "plain" is the one
+// OAuth 2.1 removed; absent is the one RFC 7636 would have defaulted to it.
+func TestAnUnsupportedCodeChallengeMethodIsRefused(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7636/unsupported-transformation-refused",
+		"oauth/rfc7636/unsupported-transformation-error-is-explained",
+		"oauth/oauth-2-1/challenge-method-required-and-s256",
+	)
+
+	s := newTestServer(t)
+
+	const redirectURI = "http://localhost:8617/cb"
+	clientID := registeredClient(t, s, []string{redirectURI})
+
+	for name, method := range map[string]string{
+		"plain":               "plain",
+		"absent":              "",
+		"S256 in lower case":  "s256",
+		"another curve":       "S384",
+		"two methods at once": "S256 plain",
+	} {
+		t.Run(name, func(t *testing.T) {
+			q := authorizeParams(clientID, redirectURI,
+				computeS256Challenge(pkceVerifier), mixedCaseState, s.resources.fallback)
+			q.Set("code_challenge_method", method)
+
+			got := errorRedirect(t, authorizeWith(t, s, q))
+
+			if got.Get("error") != "invalid_request" {
+				t.Errorf("error = %q, want invalid_request", got.Get("error"))
+			}
+			if got.Get("error_description") == "" {
+				t.Error("nothing explained the refusal")
+			}
+
+			spec.Observed(t, "oauth/rfc7636/unsupported-transformation-refused",
+				"code_challenge_method=%q -> error=%s", method, got.Get("error"))
+			spec.Observed(t, "oauth/rfc7636/unsupported-transformation-error-is-explained",
+				"error_description=%q", got.Get("error_description"))
+			spec.Observed(t, "oauth/oauth-2-1/challenge-method-required-and-s256",
+				"code_challenge_method=%q -> error=%s, no code issued",
+				method, got.Get("error"))
+		})
+	}
+}
+
+// RFC 7636 §4.4.1: a request carrying no code_challenge is refused, and the
+// refusal says why.
+func TestTheMissingChallengeRefusalIsExplained(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7636/missing-challenge-refused",
+		"oauth/rfc7636/missing-challenge-error-is-explained",
+	)
+
+	s := newTestServer(t)
+
+	const redirectURI = "http://localhost:8617/cb"
+	clientID := registeredClient(t, s, []string{redirectURI})
+
+	q := authorizeParams(clientID, redirectURI,
+		computeS256Challenge(pkceVerifier), mixedCaseState, s.resources.fallback)
+	q.Del("code_challenge")
+
+	got := errorRedirect(t, authorizeWith(t, s, q))
+
+	if got.Get("error") != "invalid_request" {
+		t.Errorf("error = %q, want invalid_request", got.Get("error"))
+	}
+	if got.Get("error_description") == "" {
+		t.Error("nothing explained the refusal")
+	}
+
+	spec.Observed(t, "oauth/rfc7636/missing-challenge-refused",
+		"no code_challenge -> error=%s, no code issued", got.Get("error"))
+	spec.Observed(t, "oauth/rfc7636/missing-challenge-error-is-explained",
+		"error_description=%q", got.Get("error_description"))
+}
+
+// OAuth 2.1 §4.1.1 defines one response type and requires an error response
+// for a request that omits the parameter or names anything else — the implicit
+// grant's "token" included, which this framework removed.
+func TestAnUnknownResponseTypeIsRefused(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/unknown-response-type-is-an-error")
+
+	s := newTestServer(t)
+
+	const redirectURI = "http://localhost:8617/cb"
+	clientID := registeredClient(t, s, []string{redirectURI})
+
+	for name, responseType := range map[string]string{
+		"the implicit grant": "token",
+		"absent":             "",
+		"code in upper case": "CODE",
+		"a hybrid flow":      "code id_token",
+		"an OpenID response": "id_token",
+	} {
+		t.Run(name, func(t *testing.T) {
+			q := authorizeParams(clientID, redirectURI,
+				computeS256Challenge(pkceVerifier), mixedCaseState, s.resources.fallback)
+			q.Set("response_type", responseType)
+
+			got := errorRedirect(t, authorizeWith(t, s, q))
+
+			if got.Get("error") != "unsupported_response_type" {
+				t.Errorf("error = %q, want unsupported_response_type", got.Get("error"))
+			}
+
+			spec.Observed(t, "oauth/oauth-2-1/unknown-response-type-is-an-error",
+				"response_type=%q -> error=%s, no code issued",
+				responseType, got.Get("error"))
+		})
+	}
+}
+
+// OAuth 2.1 §4.1.2.1: an error redirect carries the error code and the state
+// the request arrived with, byte for byte — a client matches it against what
+// it stored, so a value it can merely recognise is not the value it is owed.
+func TestAnAuthorizationErrorCarriesTheErrorCodeAndTheState(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/oauth-2-1/authorization-error-parameter-required",
+		"oauth/oauth-2-1/state-returned-on-an-error-response",
+	)
+
+	s := newTestServer(t)
+
+	const redirectURI = "http://localhost:8617/cb"
+	clientID := registeredClient(t, s, []string{redirectURI})
+
+	q := authorizeParams(clientID, redirectURI,
+		computeS256Challenge(pkceVerifier), mixedCaseState, s.resources.fallback)
+	q.Set("response_type", "token")
+
+	got := errorRedirect(t, authorizeWith(t, s, q))
+
+	if got.Get("error") == "" {
+		t.Error("no error parameter on the error redirect")
+	}
+	if want := q.Get("state"); got.Get("state") != want {
+		t.Errorf("state = %q, want %q exactly", got.Get("state"), want)
+	}
+
+	spec.Observed(t, "oauth/oauth-2-1/authorization-error-parameter-required",
+		"error=%s", got.Get("error"))
+	spec.Observed(t, "oauth/oauth-2-1/state-returned-on-an-error-response",
+		"sent state=%q, received state=%q", q.Get("state"), got.Get("state"))
+
+	q.Del("state")
+
+	if got := errorRedirect(t, authorizeWith(t, s, q)); got.Has("state") {
+		t.Errorf("state = %q on a request that sent none", got.Get("state"))
+	}
+}
+
+// OAuth 2.1 §4.1.2: the success redirect carries the state it was sent, and
+// nothing when the request carried none.
+func TestTheAuthorizationResponseCarriesTheStateItWasSent(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/state-returned-when-the-request-carried-one")
+
+	const registered = "https://client.example/cb"
+
+	s := newTestServer(t)
+	meta := &ClientMetadata{RedirectURIs: []string{registered}}
+
+	for name, sent := range map[string]string{
+		"a state was sent": mixedCaseState,
+		"none was sent":    "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			s.issueCodeAndRedirect(
+				rec,
+				httptest.NewRequest(http.MethodGet, "/oauth/authorize", nil),
+				meta,
+				AuthCodeData{ClientID: testClientID, RedirectURI: registered},
+				sent,
+			)
+
+			got := redirectQuery(t, rec)
+
+			switch {
+			case sent == "" && got.Has("state"):
+				t.Errorf("state = %q on a request that sent none", got.Get("state"))
+			case sent != "" && got.Get("state") != sent:
+				t.Errorf("state = %q, want %q exactly", got.Get("state"), sent)
+			}
+
+			spec.Observed(t, "oauth/oauth-2-1/state-returned-when-the-request-carried-one",
+				"sent state=%q, received state=%q", sent, got.Get("state"))
+		})
+	}
+}
+
+// RFC 7636 §4.4: the challenge is associated with the code and never travels
+// back to the client. The method needs no slot of its own because a code
+// cannot have been issued under any other one — which is what the S256
+// refusal at the authorization endpoint establishes.
+func TestTheCodeChallengeIsBoundToTheCodeAndNotEchoed(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7636/challenge-associated-with-the-code",
+		"oauth/rfc7636/challenge-not-extractable-from-client-requests",
+	)
+
+	const registered = "https://client.example/cb"
+
+	s := newTestServer(t)
+	meta := &ClientMetadata{RedirectURIs: []string{registered}}
+	challenge := computeS256Challenge(pkceVerifier)
+
+	rec := httptest.NewRecorder()
+	s.issueCodeAndRedirect(
+		rec,
+		httptest.NewRequest(http.MethodGet, "/oauth/authorize", nil),
+		meta,
+		AuthCodeData{
+			ClientID:      testClientID,
+			RedirectURI:   registered,
+			CodeChallenge: challenge,
+		},
+		"",
+	)
+
+	got := redirectQuery(t, rec)
+
+	for _, param := range []string{"code_challenge", "code_challenge_method", "code_verifier"} {
+		if got.Has(param) {
+			t.Errorf("%s was echoed into the authorization response", param)
+		}
+	}
+
+	data, ok := s.authCodes.Redeem(got.Get("code"))
+	if !ok {
+		t.Fatal("the issued code was not redeemable")
+	}
+	if data.CodeChallenge != challenge {
+		t.Errorf("code_challenge = %q, want %q", data.CodeChallenge, challenge)
+	}
+
+	spec.Observed(t, "oauth/rfc7636/challenge-associated-with-the-code",
+		"redeemed code carries code_challenge=%q", data.CodeChallenge)
+	spec.Observed(t, "oauth/rfc7636/challenge-not-extractable-from-client-requests",
+		"authorization response parameters: %v", slices.Sorted(maps.Keys(got)))
+}
+
+// OAuth 2.1 §4.1.2 wants a code that expires shortly after it is issued and
+// recommends ten minutes as the ceiling.
+func TestAnAuthorizationCodeExpiresWellInsideTenMinutes(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/oauth-2-1/code-expires-shortly",
+		"oauth/oauth-2-1/code-lifetime-at-most-ten-minutes",
+	)
+
+	if authCodeTTL <= 0 || authCodeTTL > 10*time.Minute {
+		t.Errorf("authCodeTTL = %v, want a positive lifetime of at most 10 minutes", authCodeTTL)
+	}
+
+	spec.Observed(t, "oauth/oauth-2-1/code-expires-shortly",
+		"authorization code lifetime=%v", authCodeTTL)
+	spec.Observed(t, "oauth/oauth-2-1/code-lifetime-at-most-ten-minutes",
+		"authorization code lifetime=%v, ceiling=%v", authCodeTTL, 10*time.Minute)
+}
+
+// OAuth 2.1 §4.1.1: the server enforces code_verifier, so a token request that
+// omits it is a grant that fails rather than one it completes.
+func TestATokenRequestWithoutACodeVerifierIsRefused(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/challenge-and-verifier-enforced")
+
+	s := newTestServer(t)
+
+	const redirectURI = "http://localhost:8617/cb"
+
+	code := seedAuthCode(s, AuthCodeData{
+		ClientID:      "test-client",
+		RedirectURI:   redirectURI,
+		CodeChallenge: computeS256Challenge(pkceVerifier),
+		Resource:      s.resources.fallback,
+		Subject:       fixtureSubject,
+	})
+
+	form := url.Values{
+		"grant_type":   {"authorization_code"},
+		"code":         {code},
+		"redirect_uri": {redirectURI},
+		"client_id":    {"test-client"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	s.HandleToken(rec, req)
+
+	if rec.Code == http.StatusOK {
+		t.Fatalf("a code was exchanged with no code_verifier: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "invalid_grant") {
+		t.Errorf("body must name invalid_grant: %s", rec.Body.String())
+	}
+
+	spec.Observed(t, "oauth/oauth-2-1/challenge-and-verifier-enforced",
+		"token request without code_verifier -> status=%d body=%s",
+		rec.Code, strings.TrimSpace(rec.Body.String()))
+}
+
+// OAuth 2.1 §4.1.2.1: the client identifier and the redirect URI are both
+// validated before anything is redirected anywhere, and what the user agent
+// gets instead is a 400.
+func TestAnErrorReturnedToTheUserAgentAnswers400(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/oauth-2-1/client-and-redirect-validated-before-any-error-redirect",
+		"oauth/oauth-2-1/direct-errors-answer-400",
+	)
+
+	s := newTestServer(t)
+
+	const redirectURI = "http://localhost:8617/cb"
+	clientID := registeredClient(t, s, []string{redirectURI})
+
+	cases := map[string]func(url.Values){
+		"an unknown client": func(q url.Values) {
+			q.Set("client_id", "cetacean-noclient")
+		},
+		"an unregistered redirect_uri": func(q url.Values) {
+			q.Set("redirect_uri", "https://attacker.example/steal")
+		},
+	}
+
+	for name, invalidate := range cases {
+		t.Run(name, func(t *testing.T) {
+			q := authorizeParams(clientID, redirectURI,
+				computeS256Challenge(pkceVerifier), mixedCaseState, s.resources.fallback)
+			invalidate(q)
+
+			rec := authorizeWith(t, s, q)
+
+			if location := rec.Header().Get("Location"); location != "" {
+				t.Errorf("redirected to %q before validating the request", location)
+			}
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400", rec.Code)
+			}
+
+			spec.Observed(t, "oauth/oauth-2-1/direct-errors-answer-400",
+				"%s -> status=%d", name, rec.Code)
+			spec.Observed(t,
+				"oauth/oauth-2-1/client-and-redirect-validated-before-any-error-redirect",
+				"%s -> status=%d, Location=%q", name, rec.Code, rec.Header().Get("Location"))
 		})
 	}
 }

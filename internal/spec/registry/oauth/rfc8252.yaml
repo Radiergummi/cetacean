@@ -81,10 +81,17 @@ requirements:
       requests that specify a redirect URI that doesn't exactly match the one
       that was registered.
     url: https://www.rfc-editor.org/rfc/rfc8252#section-8.4
+    # "Exactly match" is what the second mutant is about: admitting anything
+    # is the edit a happy-path test notices by accident, while folding case
+    # still refuses every URI the first one accepts and reads as the real
+    # comparison — a client's path component is case-sensitive.
     mutants:
       - file: internal/oauth/cimd.go
         replace: "\treturn slices.Contains(m.RedirectURIs, uri)"
         with: "\treturn uri != \"\" || slices.Contains(m.RedirectURIs, uri)"
+      - file: internal/oauth/cimd.go
+        replace: "\treturn slices.Contains(m.RedirectURIs, uri)"
+        with: "\treturn slices.ContainsFunc(m.RedirectURIs, func(r string) bool {\n\t\treturn strings.EqualFold(r, uri)\n\t})"
 
   - id: client-authentication-not-required
     level: SHOULD

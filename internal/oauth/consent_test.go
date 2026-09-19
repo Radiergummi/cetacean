@@ -34,9 +34,11 @@ func registeredClient(t *testing.T, s *Server, redirectURIs []string) string {
 	return reg.ClientID
 }
 
-// authorizeURL builds a GET /oauth/authorize URL with standard test params.
-func authorizeURL(clientID, redirectURI, challenge, state, resource string) string {
-	u := url.Values{
+// authorizeParams is a request this endpoint accepts, and the one place that
+// says what one looks like. A test changes the single parameter it is about,
+// so a refusal can only come from that parameter.
+func authorizeParams(clientID, redirectURI, challenge, state, resource string) url.Values {
+	return url.Values{
 		"response_type":         {"code"},
 		"client_id":             {clientID},
 		"redirect_uri":          {redirectURI},
@@ -45,7 +47,12 @@ func authorizeURL(clientID, redirectURI, challenge, state, resource string) stri
 		"state":                 {state},
 		"resource":              {resource},
 	}
-	return "/oauth/authorize?" + u.Encode()
+}
+
+// authorizeURL builds a GET /oauth/authorize URL with standard test params.
+func authorizeURL(clientID, redirectURI, challenge, state, resource string) string {
+	return "/oauth/authorize?" +
+		authorizeParams(clientID, redirectURI, challenge, state, resource).Encode()
 }
 
 // withIdentity returns a copy of r with an auth.Identity in its context.
@@ -121,7 +128,10 @@ func TestConsentPageRender(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
-	spec.Satisfies(t, "oauth/oauth-2-1/invalid-redirect-uri-is-not-followed")
+	spec.Satisfies(t,
+		"oauth/oauth-2-1/invalid-redirect-uri-is-not-followed",
+		"oauth/oauth-2-1/redirect-uri-validated-against-the-registered-set",
+	)
 
 	s := newTestServer(t)
 	challenge := computeS256Challenge("verifier")
@@ -166,6 +176,8 @@ func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestConsentApproveProducesCode(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/code-required-in-the-response")
+
 	s := newTestServer(t)
 	challenge := computeS256Challenge("verifier-approve")
 	clientID := registeredClient(t, s, []string{"http://localhost:7777/cb"})

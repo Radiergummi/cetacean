@@ -141,6 +141,20 @@ func TestJWTWrongIssuer(t *testing.T) {
 	if _, err := other.VerifyAccessToken(token, testTokenAudience); err == nil {
 		t.Fatal("expected error for wrong issuer")
 	}
+
+	// Only an issuer identifier's scheme and host are case-insensitive, so a
+	// path differing by case names a different authorization server.
+	cased := *issuer
+	cased.Issuer = testIssuer + "/Tenant"
+	token, _ = cased.IssueAccessToken(
+		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
+		testTokenAudience,
+		time.Hour,
+	)
+	cased.Issuer = testIssuer + "/tenant"
+	if _, err := cased.VerifyAccessToken(token, testTokenAudience); err == nil {
+		t.Fatal("expected error for an issuer differing only in case")
+	}
 }
 
 func TestJWTMalformedToken(t *testing.T) {
@@ -535,6 +549,17 @@ func TestPackedSignatureWithALeadingZeroInRVerifies(t *testing.T) {
 // "none" is the algorithm RFC 9068 §2.1 forbids outright. RS256 it requires
 // among those supported, and this server issues and accepts ES256 alone — so
 // this pins the divergence rather than asserting it away.
+// jwaAlgorithms is RFC 7518 §3.1's "alg" table in full. Naming a subset of it
+// leaves the neighbours of the one algorithm this server accepts untested, and
+// a second accepted name is invisible to a list that does not contain it.
+var jwaAlgorithms = []string{
+	"HS256", "HS384", "HS512",
+	"RS256", "RS384", "RS512",
+	"ES256", "ES384", "ES512",
+	"PS256", "PS384", "PS512",
+	"none",
+}
+
 func TestVerifyRefusesEveryAlgorithmButES256(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc9068/alg-is-not-none",
@@ -542,12 +567,17 @@ func TestVerifyRefusesEveryAlgorithmButES256(t *testing.T) {
 		"oauth/rfc7519/hs256-and-none-implemented",
 		"oauth/rfc7519/unacceptable-algorithms-rejected",
 		"oauth/rfc7515/unacceptable-algorithms-are-invalid",
+		"oauth/rfc7515/alg-accurately-represents-the-signature",
 		"oauth/rfc7518/unsecured-jws-not-accepted-by-default",
 	)
 
 	issuer := mustTokenIssuer(t, testRoot, testIssuer)
 
-	for _, alg := range []string{"none", "HS256", "RS256"} {
+	for _, alg := range jwaAlgorithms {
+		if alg == "ES256" {
+			continue
+		}
+
 		t.Run(alg, func(t *testing.T) {
 			header := base64.RawURLEncoding.EncodeToString(
 				[]byte(`{"alg":"` + alg + `","typ":"at+jwt"}`),

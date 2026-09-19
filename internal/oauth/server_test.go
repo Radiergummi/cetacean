@@ -90,6 +90,7 @@ func TestASMetadata(t *testing.T) {
 		"oauth/rfc8414/response-types-supported-required",
 		"oauth/rfc8414/response-is-200-json",
 		"oauth/rfc8252/client-authentication-not-required",
+		"oauth/oauth-2-1/challenge-and-verifier-parameters-supported",
 	)
 
 	s := newTestServer(t)
@@ -165,6 +166,7 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 		"oauth/oauth-2-1/token-type-required-in-the-response",
 		"oauth/oauth-2-1/expires-in-recommended",
 		"oauth/oauth-2-1/refresh-token-optional-in-the-response",
+		"oauth/rfc7636/a-matching-verifier-continues-processing",
 	)
 
 	s := newTestServer(t)
