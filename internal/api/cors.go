@@ -64,6 +64,13 @@ var allowedHeaders = strings.Join([]string{
 	"Mcp-Session-Id",
 }, ", ")
 
+// authorizationEndpoint is the one path this middleware never answers for. A
+// client reaches it by navigating the user agent, never from script, so an
+// origin reflected here buys nothing and lets a page on an allow-listed origin
+// read the consent form and the CSRF nonce inside it. Spelled out for the
+// reason carriesItsOwnProof gives, and matched exactly for the same reason.
+const authorizationEndpoint = "/oauth/authorize"
+
 func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
 	if !cfg.Enabled() {
 		return func(next http.Handler) http.Handler { return next }
@@ -82,6 +89,14 @@ func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Before the preflight branch below, so an OPTIONS reaches the mux
+			// and is refused there: answering one is the same offer made a
+			// request earlier.
+			if r.URL.Path == authorizationEndpoint {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			origin := r.Header.Get("Origin")
 			if origin == "" {
 				next.ServeHTTP(w, r)

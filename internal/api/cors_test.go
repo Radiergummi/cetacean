@@ -168,22 +168,50 @@ func TestCORSExposesSessionHeader(t *testing.T) {
 // RFC 9700 §2.6 forbids CORS at the authorization endpoint: the client reaches
 // it by redirecting the user agent, never by fetch, so reflecting an origin
 // there only lets a page on it read the consent form and the CSRF nonce in it.
-// This pins the divergence — the middleware wraps the whole mux, OAuth routes
-// included, and knows nothing about which path it is answering for.
-func TestCORSAnswersForTheAuthorizationEndpoint(t *testing.T) {
+func TestCORSIsNotOfferedAtTheAuthorizationEndpoint(t *testing.T) {
 	spec.Satisfies(t, "oauth/rfc9700/no-cors-at-the-authorization-endpoint")
 
-	cfg := &CORSConfig{AllowedOrigins: []string{"https://example.com"}}
-	handler := cors(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	const origin = "https://example.com"
+
+	cfg := &CORSConfig{AllowedOrigins: []string{origin}}
+	handler := cors(cfg)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	r := httptest.NewRequest("GET", "/oauth/authorize?response_type=code", nil)
-	r.Header.Set("Origin", "https://example.com")
+	refused := map[string]*http.Request{
+		"a consent request": httptest.NewRequest(
+			"GET", "/oauth/authorize?response_type=code", nil),
+		"a decision":            httptest.NewRequest("POST", "/oauth/authorize", nil),
+		"the preflight for one": httptest.NewRequest("OPTIONS", "/oauth/authorize", nil),
+	}
+	refused["the preflight for one"].Header.Set("Access-Control-Request-Method", "POST")
+
+	for name, r := range refused {
+		t.Run(name, func(t *testing.T) {
+			r.Header.Set("Origin", origin)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+
+			for _, header := range []string{
+				"Access-Control-Allow-Origin",
+				"Access-Control-Allow-Methods",
+				"Access-Control-Expose-Headers",
+			} {
+				if got := w.Header().Get(header); got != "" {
+					t.Errorf("%s = %q, want nothing at the authorization endpoint", header, got)
+				}
+			}
+		})
+	}
+
+	// The allowlist still works everywhere else, so the assertions above are
+	// about this endpoint rather than about CORS being off.
+	r := httptest.NewRequest("GET", "/api/services", nil)
+	r.Header.Set("Origin", origin)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 
-	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
-		t.Errorf("ACAO = %q, want the origin reflected; the deferral is stale", got)
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != origin {
+		t.Errorf("ACAO = %q on an ordinary endpoint, want %q", got, origin)
 	}
 }
