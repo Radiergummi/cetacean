@@ -1,13 +1,13 @@
 ---
 title: Home
-description: Real-time observability and management dashboard for Docker Swarm Mode clusters.
+description: Real-time observability and management dashboard for Docker Swarm mode clusters.
 category: overview
 tags: [ docker, swarm, dashboard, observability ]
 ---
 
 # Cetacean
 
-Cetacean is a real-time observability and management dashboard for Docker Swarm Mode clusters. It reads your
+Cetacean is a real-time observability and management dashboard for Docker Swarm mode clusters. It reads your
 cluster through the Docker socket and keeps the page current on its own—there is nothing to poll and nothing to
 refresh.
 

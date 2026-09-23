@@ -1,0 +1,16 @@
+extends: substitution
+message: "Use '%s' instead of '%s'."
+level: error
+ignorecase: false
+# Spellings the vocabulary cannot catch: Vale.Terms corrects the case of every
+# accepted term, but not a variant with a space or a hyphen. `vocab: false`, as
+# an accepted term inside the match ("API" in "Open API") would exempt it.
+vocab: false
+action:
+  name: replace
+swap:
+  '\bOpen ID\b': OpenID
+  '\bOpen API\b': OpenAPI
+  '\bWeb ?[Ss]ockets?\b': WebSocket
+  '\bSwarm Mode\b': Swarm mode
+  '\b[Ee]-mail\b': email

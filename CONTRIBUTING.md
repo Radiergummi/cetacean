@@ -1,10 +1,10 @@
 # Contributing to Cetacean
 
-Thanks for your interest in contributing! This guide covers everything you need to get started.
+Thanks for your interest in contributing. This guide covers everything you need to get started.
 
-## Development Setup
+## Development setup
 
-**Prerequisites**: Go 1.26+, Node.js 24+, Docker with Swarm mode
+You need Go 1.26+, Node.js 24+ and Docker with Swarm mode.
 
 ```bash
 git clone https://github.com/radiergummi/cetacean.git
@@ -24,12 +24,12 @@ pnpm --filter frontend dev           # Terminal 2: Vite dev server on :5173
 
 Open `http://localhost:5173`. Vite proxies resource paths to the Go backend, so you get hot-reload with live data.
 
-## Running Checks
+## Running checks
 
 ```bash
 make check       # Full suite: lint + format check + tests
 make test        # Go tests only
-make lint        # golangci-lint + actionlint + zizmor + oxlint
+make lint        # golangci-lint + actionlint + zizmor + oxlint + Vale
 make fmt         # Auto-format Go + frontend code
 make build       # Frontend, MCP widgets, and the binary that embeds them
 ```
@@ -43,7 +43,7 @@ runs in CI — both need Docker and take minutes — so they are not part of `ma
 [`test/e2e/README.md`](test/e2e/README.md) for prerequisites, running a single lane, and pointing the
 Playwright suite (`make test-e2e`) at the environment.
 
-## Submitting Changes
+## Submitting changes
 
 1. Fork the repository and create a branch from `main`
 2. Make your changes — keep diffs focused on one concern
@@ -52,7 +52,7 @@ Playwright suite (`make test-e2e`) at the environment.
 5. Commit with a descriptive message (see below)
 6. Open a pull request against `main`
 
-## Commit Messages
+## Commit messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
@@ -64,11 +64,13 @@ docs: update configuration reference
 test: add integration tests for search endpoint
 ```
 
-## Code Style
+## Code style
 
 - **Go**: `gofmt` + `golangci-lint`. Match existing patterns — stdlib `net/http`, `log/slog`, no frameworks.
 - **Frontend**: `oxlint` + `oxfmt`. React 19 with TypeScript, Tailwind CSS v4, shadcn/ui components.
 - **Workflows**: `actionlint` + `zizmor`. Pin every action by commit SHA with the version in a trailing comment.
+- **Docs**: [Vale](https://vale.sh), configured in `.vale.ini`. `make lint-docs` fetches the pinned styles on first
+  run. Add a project term it rejects to `.vale/styles/config/vocabularies/Cetacean/accept.txt`.
 - Don't refactor code unrelated to your change.
 
 ## Architecture
@@ -80,7 +82,7 @@ See the [README](README.md#architecture) for an overview. Key points:
 - No separate domain models — uses Docker Engine API types directly
 - Frontend uses per-resource SSE for real-time updates
 
-## Reporting Issues
+## Reporting issues
 
 Open an issue on GitHub. Include:
 
@@ -91,4 +93,4 @@ Open an issue on GitHub. Include:
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [GPLv3](LICENSE).
+By contributing, you agree to license your contributions under the [GPLv3](LICENSE).

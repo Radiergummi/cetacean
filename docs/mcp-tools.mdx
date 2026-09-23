@@ -129,7 +129,7 @@ What the cluster is doing now, and what it did recently.
 </McpTool>
 
 <McpTool name="watch" level={0}>
-    <Fragment slot="arguments">`service` (required), `timeout` (60s, capped at 300)</Fragment>
+    <Fragment slot="arguments">`service` (required), `timeout` (60 seconds, capped at 300)</Fragment>
 
     Blocks until a service has settled, then reports whether it did. It exposes the same convergence rule the
     converging mutations use, as a read; the wait cannot be cancelled once started.
@@ -265,7 +265,7 @@ data it was writing to a dropped mount.
 
     > [!CAUTION]
     > A bind mount hands the container the host's filesystem at that path, and binding `/var/run/docker.sock` gives
-    > it control of the whole cluster. `update_service_mounts` will do it if asked; the operations level is not what
+    > it control of the whole cluster. `update_service_mounts` does it if asked; the operations level is not what
     > stops it.
 </McpTool>
 

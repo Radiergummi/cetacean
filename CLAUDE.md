@@ -17,6 +17,7 @@ cluster — every resource browsable, with working cross-references between them
 
 ```bash
 make check        # lint + typecheck + fmt-check + test — the gate
+make lint-docs    # Vale over the published docs, README and CONTRIBUTING
 make build        # frontend + widgets + go build
 make fmt          # gofmt + oxfmt (write)
 make test         # go test ./...

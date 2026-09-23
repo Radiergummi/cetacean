@@ -137,7 +137,7 @@ it runs the view follows the bottom of the output, and scrolling up pauses that 
 - Time range: presets from the last 5 minutes upwards, or a custom since/until pair
 - Filters: by level (parsed from the line, including JSON and `log/slog` numeric levels) and by stream
 - Search: substring or regular expression, with match navigation and highlighting
-- Rendering: JSON payloads pretty-printed, levels colour-barred
+- Rendering: JSON payloads pretty-printed, levels color-barred
 - Download: saves the lines currently loaded as a `.log` file
 
 ## Topology
@@ -145,7 +145,7 @@ it runs the view follows the bottom of the output, and scrolling up pauses that 
 The topology page has two views.
 
 - Logical: one card per service, grouped into its stack, with an edge between any two services sharing an overlay network, listing the shared networks.
-  Hovering a card dims everything it is not connected to, and the legend maps colours to stacks.
+  Hovering a card dims everything it is not connected to, and the legend maps colors to stacks.
 - Physical: one card per cluster node, listing the tasks placed on it.
 
 Both views pan, zoom and let you drag cards, and clicking a service opens its detail page.

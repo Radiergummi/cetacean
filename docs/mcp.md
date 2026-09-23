@@ -1,11 +1,11 @@
 ---
-title: MCP Server
+title: MCP server
 description: Let AI agents read your cluster and make changes through Cetacean, under the same permissions as everyone else.
 category: guide
 tags: [ mcp, ai, agents, oauth, automation ]
 ---
 
-# MCP Server
+# MCP server
 
 Cetacean can expose your cluster to AI agents over the [Model Context Protocol](https://modelcontextprotocol.io/).
 An agent reads the same live state the [dashboard][dashboard] shows and makes the same changes, under the same sign-in

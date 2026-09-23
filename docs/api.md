@@ -548,7 +548,7 @@ The `action` field says what happened:
 | `ref_changed` | A resource this one cross-references changed. |
 | `full_sync` | Sent as a `sync` event when the stream could not be replayed from the client's cursor. Refetch. |
 
-Events arriving within the batch interval ([`server.sse.batch_interval`][server.sse.batch_interval], default 100ms)
+Events arriving within the batch interval ([`server.sse.batch_interval`][server.sse.batch_interval], default 100 ms)
 are sent together as a `batch` event:
 
 ```sse

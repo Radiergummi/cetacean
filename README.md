@@ -71,7 +71,7 @@ See [Getting started](docs/getting-started.md) for the monitoring and authentica
 
 ## Documentation
 
-Full documentation is at [cetacean.mazetti.me](https://cetacean.mazetti.me), and in [`docs/`](docs) in this
+Full documentation is at <https://cetacean.mazetti.me>, and in [`docs/`](docs) in this
 repository:
 
 - [Getting started](docs/getting-started.md)
