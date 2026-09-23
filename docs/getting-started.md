@@ -16,7 +16,7 @@ tags: [ installation, docker, swarm, quickstart ]
 
 ## Run it
 
-Container images are published to `ghcr.io/radiergummi/cetacean`. Pick one of the paths below, run it on a manager
+Container images are published to `ghcr.io/radiergummi/cetacean`. Pick one of the following paths, run it on a manager
 node, and open `http://<manager>:9000`.
 
 ### Single container
@@ -108,20 +108,20 @@ network. Set [`auth.mode`][auth.mode] to `oidc`, `tailscale`, `cert`, or `header
 [`tls.cert`][tls.cert] and [`tls.key`][tls.key].
 
 Independently of who is signed in, [`server.operations_level`][server.operations_level] caps what Cetacean may
-change at all. It is `0`—read-only—until you raise it, so a deployment that writes anything says so on
+change at all. It's `0`—read-only—until you raise it, so a deployment that writes anything says so on
 purpose. Set it to `1` for operational writes (scale, update image, roll back, restart).
 
 ## When something is wrong
 
 | Symptom                                                            | What it means                                                                                                                                                                                                                                                                                                                                                                                         |
 |--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Every list is empty, and [`GET /-/ready`][api.ready] answers `503` | Cetacean cannot read the swarm. Resource endpoints answer `503` with code `ENG001`, and the log carries one `full sync resource failed` line per resource with the Docker error on it. Either the socket is not mounted or not readable, or the node is a worker—only managers serve the swarm API. Check with `docker info --format '{{.Swarm.ControlAvailable}}'`, which prints `true` on a manager |
+| Every list is empty, and [`GET /-/ready`][api.ready] answers `503` | Cetacean can't read the swarm. Resource endpoints answer `503` with code `ENG001`, and the log carries one `full sync resource failed` line per resource with the Docker error on it. Either the socket isn't mounted or not readable, or the node is a worker—only managers serve the swarm API. Check with `docker info --format '{{.Swarm.ControlAvailable}}'`, which prints `true` on a manager |
 | Cetacean exits at startup with `bind: address already in use`      | Something else holds the port. Move it with [`server.listen_addr`][server.listen_addr]                                                                                                                                                                                                                                                                                                                |
-| Action buttons are missing from a detail page                      | Your [operations level][server.operations_level] or your [grants][authorization] do not allow that write. Fetch the resource with `Accept: application/json` and read the `Allow` response header: `GET, HEAD` alone means no write is available to you                                                                                                                                               |
-| Charts are empty and a banner says so                              | Prometheus is unset, unreachable, or an exporter is not reporting. [`GET /metrics/status`][api.metrics] says which; see&nbsp;[Monitoring][monitoring]                                                                                                                                                                                                                                                 |
-| Restarting loses the recent-failure history                        | The data directory is not on a volume—see the note under [Stack deployment](#stack-deployment)                                                                                                                                                                                                                                                                                                        |
+| Action buttons are missing from a detail page                      | Your [operations level][server.operations_level] or your [grants][authorization] don't allow that write. Fetch the resource with `Accept: application/json` and read the `Allow` response header: `GET, HEAD` alone means no write is available to you                                                                                                                                               |
+| Charts are empty and a banner says so                              | Prometheus is unset, unreachable, or an exporter isn't reporting. [`GET /metrics/status`][api.metrics] says which; see&nbsp;[Monitoring][monitoring]                                                                                                                                                                                                                                                 |
+| Restarting loses the recent-failure history                        | The data directory isn't on a volume—see the note under [Stack deployment](#stack-deployment)                                                                                                                                                                                                                                                                                                        |
 
-[`GET /-/health`][api.health] answers `200` whenever the process is up, including while Cetacean cannot reach Docker.
+[`GET /-/health`][api.health] answers `200` whenever the process is up, including while Cetacean can't reach Docker.
 [`/-/ready`][api.ready] is the one that tracks whether it has actually read the cluster.
 
 ## Where to go next

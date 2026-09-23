@@ -76,7 +76,7 @@ what you have chosen so far:
 | Remove …          | Pick a service, node, stack, config, secret, network, or volume |
 
 Destructive actions ask for confirmation before they run. An action your [operations level][operations-level]
-or your [grants][authorization] do not allow is refused with a permission message, not a server error.
+or your [grants][authorization] don't allow is refused with a permission message, not a server error.
 
 ## List pages
 
@@ -86,7 +86,7 @@ or grid is remembered per resource type; narrow screens always use the grid.
 
 Lists load more as you scroll, and stay current as resources come and go.
 
-The API accepts expression filters through `?filter=` that the dashboard's search box does not build. See the
+The API accepts expression filters through `?filter=` that the dashboard's search box doesn't build. See the
 [API guide][filter-fields-by-resource] for the fields available per resource type.
 
 ## Detail pages
@@ -97,14 +97,14 @@ secret to the services mounting it to the nodes their tasks run on.
 
 A stack's page opens with **Topology**: the networks its services attach to and the configs, secrets, and volumes
 they mount, drawn as a graph above the tables listing the same resources. Every node links to the resource it
-stands for, and a service shows its running tasks against the number wanted. A network the stack does not own is
+stands for, and a service shows its running tasks against the number wanted. A network the stack doesn't own is
 drawn dashed; a resource nothing references is dimmed. Hovering or focusing a node dims everything more than one
 edge away and names it in the URL.
 
 Where the operations level and your grants allow it, detail pages carry actions: scale, update image, rollback and
 restart on a service, plus inline editors for environment variables, resource reservations and limits, placement,
 ports, update and rollback policy, and the log driver; availability and labels on a node; force removal on a task.
-Actions hidden by permissions are not rendered.
+Actions hidden by permissions aren't rendered.
 
 ## Charts
 
@@ -145,7 +145,7 @@ it runs the view follows the bottom of the output, and scrolling up pauses that 
 The topology page has two views.
 
 - Logical: one card per service, grouped into its stack, with an edge between any two services sharing an overlay network, listing the shared networks.
-  Hovering a card dims everything it is not connected to, and the legend maps colors to stacks.
+  Hovering a card dims everything it isn't connected to, and the legend maps colors to stacks.
 - Physical: one card per cluster node, listing the tasks placed on it.
 
 Both views pan, zoom and let you drag cards, and clicking a service opens its detail page.

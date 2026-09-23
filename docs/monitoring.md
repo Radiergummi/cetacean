@@ -47,7 +47,7 @@ The stack runs Prometheus on a manager node, with node-exporter and cAdvisor on 
 
 ## What Cetacean needs from the scrape
 
-If you already run Prometheus, set `prometheus.url` and check the scrape against the three requirements below. The
+If you already run Prometheus, set `prometheus.url` and check the scrape against the three requirements that follow. The
 bundled `prometheus.yml` and `compose.monitoring.yaml` already satisfy all three.
 
 ```mermaid
@@ -114,14 +114,13 @@ you are in, count the labeled series:
 count(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name!=""})
 ```
 
-One or zero means the factory did not register. `docker service logs monitoring_cadvisor` names the socket it could
-not reach.
+One or zero means the factory didn't register. `docker service logs monitoring_cadvisor` names the socket it couldn't reach.
 
 ### ③ The cAdvisor scrape job must be named `cadvisor`
 
 Cetacean detects cAdvisor with `up{job="cadvisor"}`. Under any other job name the dashboard treats container metrics
 as unavailable and skips them on the service, task, and node pages. node-exporter is detected by the presence of
-`node_uname_info` and does not depend on its job name.
+`node_uname_info` and doesn't depend on its job name.
 
 ## Status banner
 
@@ -132,10 +131,10 @@ The cluster overview and the metrics console show a banner when something is mis
 | Healthy              | Prometheus answers and both exporters cover every node           | Nothing                                                                         |
 | Not configured       | `prometheus.url` is unset                                        | Deploy instructions. Dismissible                                                |
 | Unreachable          | `prometheus.url` is set but queries fail                         | Warning with the connection error. Not dismissible                              |
-| Partially configured | Prometheus answers, but an exporter covers no nodes or only some | One line per exporter naming what is missing and on how many nodes. Dismissible |
+| Partially configured | Prometheus answers, but an exporter covers no nodes or only some | One line per exporter naming what's missing and on how many nodes. Dismissible |
 
 The [MCP][mcp-tools] `get_metrics` tool reports the same gap rather than charting zeros. When every series comes
-back empty it probes for the exporter and answers "cAdvisor is not reporting per-container metrics for this
+back empty it probes for the exporter and answers "cAdvisor isn't reporting per-container metrics for this
 cluster" or the node-exporter equivalent.
 
 ## Prometheus proxy

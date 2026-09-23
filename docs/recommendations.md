@@ -11,7 +11,7 @@ Cetacean watches your cluster and lists what looks wrong at `/recommendations` i
 with no health check, replicas that keep dying, containers sized far above what they use. Findings
 refresh on their own; you never trigger a scan.
 
-It is on by default. Turn it off with [`server.recommendations`][server.recommendations].
+It's on by default. Turn it off with [`server.recommendations`][server.recommendations].
 
 ## What gets flagged
 
@@ -20,7 +20,7 @@ Each finding names a service, a node or the cluster, and carries a severity of `
 
 | Finding | Meaning |
 |---|---|
-| `no-healthcheck` | The service defines no health check, so Swarm cannot tell a hung container from a working one |
+| `no-healthcheck` | The service defines no health check, so Swarm can't tell a hung container from a working one |
 | `no-restart-policy` | Restart policy is `none`, so a failed task is never replaced |
 | `single-replica` | One replica, so any node problem is an outage |
 | `manager-has-workloads` | A manager node is `active` and running ordinary tasks alongside cluster management |
@@ -30,8 +30,8 @@ Each finding names a service, a node or the cluster, and carries a severity of `
 | `node-memory-pressure` | Node memory above 90% |
 | `over-provisioned` | Reserved far more CPU or memory than it uses |
 | `approaching-limit` | Usage climbing towards its limit |
-| `at-limit` | Usage at its limit, so it is being throttled or is at risk of being killed |
-| `no-limits`, `no-reservations` | No limit or reservation set, so Swarm cannot schedule it well |
+| `at-limit` | Usage at its limit, so it's being throttled or is at risk of being killed |
+| `no-limits`, `no-reservations` | No limit or reservation set, so Swarm can't schedule it well |
 
 ## Act on a finding
 

@@ -16,7 +16,7 @@ hosted copy is the [API explorer][api-explorer].
 
 ## Authentication
 
-Every endpoint below is authenticated by whichever provider [`auth.mode`][auth.mode] selects. A client that has no
+Every endpoint on this page is authenticated by whichever provider [`auth.mode`][auth.mode] selects. A client that has no
 browser session can instead present an access token this deployment issued, as `Authorization: Bearer`—see
 [API access tokens][api-tokens]. A token carries its user's identity, so [grants][authorization] and the `Allow`
 header treat it exactly as they treat that person's session.
@@ -27,7 +27,7 @@ document for the resource you reached, so follow `resource_metadata` rather than
 ## Content negotiation
 
 Every resource URL serves JSON, HTML (the embedded [dashboard][dashboard]), SSE, or a feed format depending on what
-the client asks for. There is no `/api/v1/` prefix; versioning lives in the media type.
+the client asks for. There's no `/api/v1/` prefix; versioning lives in the media type.
 
 ### Resolution order
 
@@ -52,14 +52,14 @@ the client asks for. There is no `/api/v1/` prefix; versioning lives in the medi
 | `text/vnd.graphviz`                | `.dot`      | Graphviz DOT, `/topology` only               |
 | `application/yaml`                 | `.yaml`, `.yml` | [Compose file](#compose-export), on a stack or a service |
 
-All negotiated responses include `Vary: Accept`. Requesting a type an endpoint cannot produce returns
+All negotiated responses include `Vary: Accept`. Requesting a type an endpoint can't produce returns
 `406 Not Acceptable` with code [`API003`](api/errors#API003); asking for SSE on an endpoint without a stream
 returns `406` with [`API001`](api/errors#API001). A graph format asked of a resource endpoint is refused the same
 way—the table says which endpoints serve one.
 
 The refusal is each endpoint's own. A document with a single representation—the
 [OpenSearch description](#browser-search), the [API catalog](#api-catalog), the JSON-LD context—answers a client
-asking for exactly the type it serves, whether or not that type appears above.
+asking for exactly the type it serves, whether or not that type appears in the preceding table.
 
 ```http tab
 GET /services HTTP/1.1
@@ -75,7 +75,7 @@ curl -H "Accept: application/json" http://localhost:9000/services
 JSON, Atom, JSON Feed and CSV responses, and the `/topology` graph formats, are compressed when the request offers a
 coding Cetacean serves and the body exceeds 1 KiB. Two codings are served, `zstd` and `gzip`, negotiated from
 `Accept-Encoding` per [RFC 9110 §12.5.3](https://www.rfc-editor.org/rfc/rfc9110#section-12.5.3)—`q` values and
-`*` included, and `zstd` preferred at equal weight. Smaller bodies are sent uncompressed regardless; there is
+`*` included, and `zstd` preferred at equal weight. Smaller bodies are sent uncompressed regardless; there's
 nothing to gain and a frame header to pay for.
 
 `Vary: Accept-Encoding` is sent on every one of these responses whether or not anything was compressed, since what
@@ -91,7 +91,7 @@ curl -sD- -H 'Accept-Encoding: zstd' -o/dev/null http://localhost:9000/services/
 ```
 
 The suffix distinguishes the two representations for caches, which is what
-[RFC 9110 §8.8.3](https://www.rfc-editor.org/rfc/rfc9110#section-8.8.3) requires. It does **not** stop the validator
+[RFC 9110 §8.8.3](https://www.rfc-editor.org/rfc/rfc9110#section-8.8.3) requires. It **doesn't** stop the validator
 being used as [`If-Match`](#preconditions) on a write: the hash is always taken over the uncompressed body, so a
 validator obtained under compression and one obtained without it agree, and either is accepted verbatim.
 
@@ -164,7 +164,7 @@ pages, so feed readers can find the feed from the page.
 ## Spreadsheets
 
 List endpoints also serve [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180) CSV, for the one consumer the other
-formats do not serve: a person pasting the cluster into a spreadsheet.
+formats don't serve: a person pasting the cluster into a spreadsheet.
 
 ```bash
 curl -o services.csv http://localhost:9000/services.csv
@@ -182,8 +182,8 @@ saves `tasks-worker-1-2026-09-11.csv`.
 - `/nodes/{id}/tasks`, `/services/{id}/tasks`
 - `/history`, `/recommendations`
 
-Detail endpoints serve no CSV: one resource is not a table. `/search` serves none either—its results are of mixed
-type, and one header row cannot describe them.
+Detail endpoints serve no CSV: one resource isn't a table. `/search` serves none either—its results are of mixed
+type, and one header row can't describe them.
 
 ### Columns
 
@@ -208,7 +208,7 @@ Docker object is what the JSON representation is for.
 `search`, `filter`, `sort` and [authorization][authorization] filtering apply exactly as they do to the JSON. Paging
 does not: a CSV request that names no page renders **every** row, where the JSON would return the first 50. An export
 truncated at a default carries nothing inside the file to say it was truncated, and the `Link` header that says so for
-JSON is not something a downloaded file keeps.
+JSON isn't something a downloaded file keeps.
 
 Naming a page still works, and then means what it means everywhere else:
 
@@ -216,7 +216,7 @@ Naming a page still works, and then means what it means everywhere else:
 curl 'http://localhost:9000/tasks.csv?limit=100&offset=200'
 ```
 
-A [`Range` header](#range-header-pagination) is not honored for CSV: that exchange answers `206` with a
+A [`Range` header](#range-header-pagination) isn't honored for CSV: that exchange answers `206` with a
 `Content-Range`, and a download is always a plain `200`. Ask for a page with `limit` and `offset` instead.
 
 ## Compose export
@@ -230,13 +230,13 @@ curl -H 'Accept: application/yaml' http://localhost:9000/services/r8m2x5nk3p7q
 ```
 
 The promise is narrow and the file says so in a header comment: it redeploys to **the same running state on the same
-cluster**. It is not the file that originally created the stack, and it is not portable on its own.
+cluster**. It isn't the file that originally created the stack, and it isn't portable on its own.
 
-### What is external, and why
+### What's external, and why
 
-Secrets are never exported—that rule holds here as everywhere else. Configs are not exported either, even though
+Secrets are never exported—that rule holds here as everywhere else. Configs aren't exported either, even though
 their content is available: inlining it through Compose's `content:` field would have a redeploy create a new config
-rather than reuse the one the running service is already mounting, which would break the promise above. Both are
+rather than reuse the one the running service is already mounting, which would break the preceding promise. Both are
 referenced as `external: true`, so another cluster needs them created first.
 
 Networks and volumes split. One carrying the stack's `com.docker.stack.namespace` label is the stack's own, and is
@@ -249,7 +249,7 @@ Names are shortened by the stack's own prefix, because `docker stack deploy` add
 onto it—an owned `myapp_data` and an adopted `data` stay two volumes. A single-service export shortens nothing and
 declares everything external, because a service creates none of what it references.
 
-Anything the projection could not carry—a custom seccomp profile, a mount option Compose has no field for—is
+Anything the projection couldn't carry—a custom seccomp profile, a mount option Compose has no field for—is
 listed in the header comment rather than dropped silently.
 
 ## Pagination
@@ -408,7 +408,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 | Resource changed between your read and your write | 409 | [`SVC001`](api/errors#SVC001), [`NOD002`](api/errors#NOD002), [`CFG005`](api/errors#CFG005), [`SEC005`](api/errors#SEC005) | Re-read the resource and retry |
 | Endpoint above the configured [operations level][operations-level] | 403 | [`OPS001`](api/errors#OPS001) | Raise the operations level |
 | [ACL][authorization] denies read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
-| Cross-origin write from an origin that is not allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
+| Cross-origin write from an origin that isn't allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
 | Name in the path identifies more than one resource | 409 | [`API015`](api/errors#API015) | Address the resource by ID; the detail lists the candidates |
@@ -464,7 +464,7 @@ curl -X PUT http://localhost:9000/services/abc123/scale \
 |---|---|
 | no `Prefer` | unchanged |
 | `wait=30`, service settles in time | `200` with the settled service, plus `Preference-Applied: wait=30` |
-| `wait=30`, service does not settle | `202` with the last progress line, and no `Preference-Applied` |
+| `wait=30`, service doesn't settle | `202` with the last progress line, and no `Preference-Applied` |
 | `wait=600` | clamped to the 300 second ceiling; `Preference-Applied: wait=300` reports the wait applied |
 | `respond-async` | `202` straight away, plus `Location` and `Preference-Applied: respond-async` |
 | `respond-async, wait=10` | waits up to 10 seconds, then `202` with `Location` |
@@ -477,8 +477,8 @@ would collide on.
 A `202` carries `Location` pointing at the service itself, which is where the rollout can be followed: its
 `UpdateStatus` reports convergence, and the same URL opens a [live stream](#real-time-events) with
 `Accept: text/event-stream`. The body is the service as Docker returned it, plus a `progress` field holding the last
-convergence line observed—`waiting: 2/5 replicas running`. `return=minimal` does not apply on this path: there is a
-progress line to deliver, so the `202` carries a body and does not name `return=minimal` in `Preference-Applied`.
+convergence line observed—`waiting: 2/5 replicas running`. `return=minimal` doesn't apply on this path: there's a
+progress line to deliver, so the `202` carries a body and doesn't name `return=minimal` in `Preference-Applied`.
 Whether that preference is honored therefore depends on how quickly the cluster settles. A client that hangs up
 cancels its own wait.
 
@@ -546,7 +546,7 @@ The `action` field says what happened:
 | `update` | An existing resource changed. The collection's size is unaffected. |
 | `remove` | The resource is gone. |
 | `ref_changed` | A resource this one cross-references changed. |
-| `full_sync` | Sent as a `sync` event when the stream could not be replayed from the client's cursor. Refetch. |
+| `full_sync` | Sent as a `sync` event when the stream couldn't be replayed from the client's cursor. Refetch. |
 
 Events arriving within the batch interval ([`server.sse.batch_interval`][server.sse.batch_interval], default 100 ms)
 are sent together as a `batch` event:
@@ -581,8 +581,8 @@ EventSource clients ignore it.
 ### Reconnection and replay
 
 Each event carries an incrementing `id:`. EventSource clients send `Last-Event-ID` on reconnect and the server replays
-what they missed from the change history. Detail and stack streams cannot be replayed, and a cursor older than the
-history buffer cannot either; both cases send a `sync` event telling the client to refetch.
+what they missed from the change history. Detail and stack streams can't be replayed, and a cursor older than the
+history buffer can't either; both cases send a `sync` event telling the client to refetch.
 
 ### Metrics streams
 
@@ -610,12 +610,12 @@ Append `point` events to the data you already hold to build a rolling window.
 channels, messages, and cursor semantics. Add `.json` or `.yaml`, or negotiate on `Accept`. Browse it in
 [AsyncAPI Studio](https://studio.asyncapi.com/).
 
-Two details the examples above don't show: a `batch` payload is an **array** of envelopes, and a **replayed** event
+Two details the preceding examples don't show: a `batch` payload is an **array** of envelopes, and a **replayed** event
 carries no `resource`.
 
 ## Connection limits
 
-There is no general rate limiting. Concurrent streams are capped, and a request over the cap returns
+There's no general rate limiting. Concurrent streams are capped, and a request over the cap returns
 `429 Too Many Requests` with `Retry-After: 5`.
 
 | Stream                                                 | Limit | Code     |
@@ -627,7 +627,7 @@ There is no general rate limiting. Concurrent streams are capped, and a request 
 ## Endpoints
 
 `GET /api` serves the full OpenAPI spec with request and response schemas, and the
-[API explorer][api-explorer] renders it interactively. The tables below are the shape of the surface.
+[API explorer][api-explorer] renders it interactively. The following tables are the shape of the surface.
 
 ### Reads
 
@@ -652,7 +652,7 @@ There is no general rate limiting. Concurrent streams are capped, and a request 
 `GET /search` takes `q` (required, max 200 characters) and `limit` (per type, default 3; `0` or a value above 1000
 returns up to 1000). `POST /-/resync` forces a full refetch from the Docker socket; unlike the other
 `/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API,
-but it is not gated on the operations level—it re-reads the cluster and never changes it.
+but it isn't gated on the operations level—it re-reads the cluster and never changes it.
 
 `GET /-/health` carries a `watcher` object reporting whether Cetacean is still tracking the cluster:
 `connected` for the Docker event stream, and `lastSyncAt` / `lastSyncAgeSeconds` for the last
@@ -726,9 +726,9 @@ header ([RFC 9110 §13.1.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.1.
 refused with `412 Precondition Failed` (error code `API013`) instead of being applied. The header
 is always optional—omit it and the write proceeds exactly as it did before this existed.
 
-A `412` always means the resource moved. Where the current representation cannot be read at all—`DELETE /plugins/{name}`
+A `412` always means the resource moved. Where the current representation can't be read at all—`DELETE /plugins/{name}`
 inspects the daemon rather than the cache—the write answers `503`
-(`ENG001`) or `500` (`ENG004`) instead, so an unreachable daemon is not reported as a stale `ETag`.
+(`ENG001`) or `500` (`ENG004`) instead, so an unreachable daemon isn't reported as a stale `ETag`.
 
 29 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
 `PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
@@ -811,7 +811,7 @@ document naming every top-level collection, so knowing the origin is enough to f
 the suffix is the only thing naming the representation.
 
 The [API catalog](#api-catalog) is unauthenticated and points here; this document is not. Discovery is public,
-the API behind it is not.
+the API behind it isn't.
 
 ## API catalog
 
@@ -821,7 +821,7 @@ the API behind it is not.
 
 Each `item` names an API; the contexts beside it carry that API's `service-desc`, `service-doc`, `describedby` and
 `status` links. The MCP server appears only when [`mcp.enabled`][mcp.enabled] is set, and its authorization metadata
-only when [`auth.mode`][auth.mode] is not `none`.
+only when [`auth.mode`][auth.mode] isn't `none`.
 
 URIs are absolute—set [`server.public_url`][server.public_url] behind a reverse proxy.
 

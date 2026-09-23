@@ -15,9 +15,9 @@ lint: lint-docs
 	pnpm --filter website exec oxlint
 
 ## Lint the prose of the published docs
-# Only the pages the website publishes, plus the two a contributor reads first:
-# the design specs and the test protocol are working notes.
-DOCS := $(filter-out docs/test_%,$(wildcard docs/*.md docs/*.mdx)) README.md CONTRIBUTING.md
+# The pages the website publishes, the changelog, and the two a contributor reads
+# first. The design specs and the test protocol are working notes.
+DOCS := $(filter-out docs/test_%,$(wildcard docs/*.md docs/*.mdx)) README.md CONTRIBUTING.md CHANGELOG.md
 VALE_FLAGS ?=
 
 lint-docs: .vale/styles/Google

@@ -23,3 +23,9 @@ swap:
   '\bcompose files\b': Compose files
   '\bSwarm Cronjob\b': swarm-cronjob
   '\b(?:operation|ops) level': operations level
+  '\bCLI flag\b': command-line flag
+  '\bCLI flags\b': command-line flags
+  '\bhealthcheck\b': health check
+  '\bhealthchecks\b': health checks
+  '\bHealthcheck\b': Health check
+  '\bdeps\b': dependencies

@@ -16,8 +16,8 @@ Authentication establishes identity only. To control which resources an identity
 
 ## Quick start
 
-Every setting below is available as an environment variable, a [config file][config-file] key, and most also as a
-CLI flag. The examples show the environment of the Cetacean service in your `compose.yaml`; see
+Every setting on this page is available as an environment variable, a [config file][config-file] key, and most also as a
+command-line flag. The examples show the environment of the Cetacean service in your `compose.yaml`; see
 [Configuration][configuration] for the flags and the precedence rules. Secret settings accept a `_FILE` variant
 that reads the value from a file at startup, which is how a Docker secret reaches the process.
 
@@ -63,40 +63,40 @@ environment:
 Every provider fills the same identity record. Read it with `GET /auth/whoami`. `subject` is the unique
 identifier; `groups` feeds [authorization][authorization] audience matching.
 
-| Field         | `none`      | `oidc`                             | `tailscale`             | `cert`                                | `headers`                      |
-| ------------- | ----------- | ---------------------------------- | ----------------------- | ------------------------------------- | ------------------------------ |
-| `subject`     | `anonymous` | `sub` claim                        | numeric user ID         | SPIFFE URI SAN, else CN, else email   | subject header                 |
-| `displayName` | `Anonymous` | `name`, else `preferred_username`  | Tailscale display name  | CN, else the SPIFFE ID path           | name header, else subject      |
-| `email`       |—          | `email` claim                      | Tailscale login name    | first email SAN                       | email header                   |
-| `groups`      |—          | `groups` claim                     | app capability (below)  | Organizational Unit (OU) values       | groups header, comma-separated |
+| Field         | `none`      | `oidc`                            | `tailscale`                                 | `cert`                              | `headers`                      |
+|---------------|-------------|-----------------------------------|---------------------------------------------|-------------------------------------|--------------------------------|
+| `subject`     | `anonymous` | `sub` claim                       | numeric user ID                             | SPIFFE URI SAN, else CN, else email | subject header                 |
+| `displayName` | `Anonymous` | `name`, else `preferred_username` | Tailscale display name                      | CN, else the SPIFFE ID path         | name header, else subject      |
+| `email`       | —           | `email` claim                     | Tailscale login name                        | first email SAN                     | email header                   |
+| `groups`      | —           | `groups` claim                    | [app capability](#groups-from-capabilities) | Organizational Unit (OU) values     | groups header, comma-separated |
 
 ## Exempt paths
 
 These paths skip authentication in every mode:
 
 | Path                                                              | Reason                                                                                            |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+|-------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|
 | `/-/*`, except `/-/resync`                                        | Health, readiness, metrics, SBOM, and licenses. Resync sweeps the Docker API, so it authenticates |
 | `/api`, `/api/*`                                                  | API documentation and the JSON-LD context                                                         |
 | `/assets/*`                                                       | Dashboard static assets                                                                           |
 | `/auth`, `/auth/*`                                                | Login, callback, logout and `whoami`                                                              |
-| `/mcp`                                                            | The [MCP server][mcp] guards itself—see below                                                     |
+| `/mcp`                                                            | The [MCP server][mcp] guards itself, as the following paragraph describes                         |
 | `/.well-known/*`                                                  | OAuth discovery documents, unauthenticated by spec                                                |
 | `/oauth/token`, `/oauth/revoke`, `/oauth/register`, `/oauth/jwks` | The grants carry their own proof in the body, and the key set is public                           |
 
 What guards `/mcp` depends on the configuration: with [`oauth.enabled`][oauth.enabled] the MCP server verifies
 a bearer token it issued; with the authorization server off, the active mode must be listed in
-[`mcp.auth_bypass`][mcp.auth_bypass]—there is no bearer check then, and the upstream provider authenticates
+[`mcp.auth_bypass`][mcp.auth_bypass]—there's no bearer check then, and the upstream provider authenticates
 every request instead. Cetacean refuses to start with neither.
 
-`/oauth/authorize` is not exempt: a user must authenticate before granting a client access. That is also why
-the authorization server cannot run under the `none` mode—there would be no one to ask.
+`/oauth/authorize` isn't exempt: a user must authenticate before granting a client access. That's also why
+the authorization server can't run under the `none` mode—there would be no one to ask.
 
 ## Refused requests
 
 A `401` must name a way to authenticate, in a `WWW-Authenticate` challenge
 ([RFC 9110 §15.5.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2)). Only OIDC has one to give: the
-other modes read a credential HTTP cannot ask for—a certificate in the TLS layer, a header your proxy set,
+other modes read a credential HTTP can't ask for—a certificate in the TLS layer, a header your proxy set,
 the peer's place on your tailnet—so a refusal there is a `403`, and the [error code][api] says which.
 
 | Mode                   | Refusal      | Challenge |
@@ -106,7 +106,7 @@ the peer's place on your tailnet—so a refusal there is a `403`, and the [error
 | `tailscale`, `headers` | `403 AUT006` | —         |
 
 The reason is logged, not returned: which of `no subject header`, `invalid proxy secret`, or
-`not a trusted proxy` applied describes your deployment to a caller that has not authenticated.
+`not a trusted proxy` applied describes your deployment to a caller that hasn't authenticated.
 
 ## None
 
@@ -174,7 +174,7 @@ sequenceDiagram
 
 ### Machine flow
 
-Send an ID token as a bearer token. It is verified against the IdP's JWKS endpoint on every request.
+Send an ID token as a bearer token. It's verified against the IdP's JWKS endpoint on every request.
 
 ```http tab
 GET /services HTTP/1.1
@@ -343,7 +343,7 @@ secrets:
   - server-key.pem
 ```
 
-Clients without a certificate signed by that CA cannot connect. Identity comes from the SPIFFE URI SAN, else the
+Clients without a certificate signed by that CA can't connect. Identity comes from the SPIFFE URI SAN, else the
 Common Name, else the first email SAN—a certificate carrying none of the three is rejected, as is one carrying
 more than one SPIFFE SAN. Groups come from Organizational Unit (OU) fields.
 
@@ -359,7 +359,7 @@ environment:
 ```
 
 The proxy verifies the certificate against its own CA; [`auth.cert.ca`][auth.cert.ca] configures Cetacean's own
-TLS listener and is not consulted here. A certificate presented directly always wins over the header, and
+TLS listener and isn't consulted here. A certificate presented directly always wins over the header, and
 `Client-Cert-Chain` is ignored. One of the two—TLS here, or a trusted proxy—is required for cert mode to start.
 
 > [!WARNING]
@@ -368,7 +368,7 @@ TLS listener and is not consulted here. A certificate presented directly always 
 
 ## API access tokens
 
-Every mode above establishes identity from something the deployment already trusts—a session cookie, an IdP token,
+Every preceding mode establishes identity from something the deployment already trusts—a session cookie, an IdP token,
 a client certificate, a proxy header. A script, a CLI or a native app often has none of those. With
 [`oauth.enabled`][oauth.enabled] set, Cetacean is its own OAuth 2.1 authorization server and issues access tokens
 for the API, on any auth mode, with nothing else to configure.
@@ -403,7 +403,7 @@ The API and `/mcp` are separate protected resources with separate audiences:
 | `/mcp`   | the deployment root + `/mcp` | `/.well-known/oauth-protected-resource/mcp` |
 
 A token for one is refused by the other, even though one path lies under the other. This is deliberate: approving an
-agent for MCP is not approving it to delete your services. A client discovers which resource it is talking to from
+agent for MCP isn't approving it to delete your services. A client discovers which resource it's talking to from
 the `resource_metadata` parameter of the `WWW-Authenticate` header on a 401, and asks for that one by its RFC 8707
 `resource` parameter.
 
@@ -415,7 +415,7 @@ document and the authorize endpoint refuses to mint a token for it.
 There are no personal access tokens and no scopes—both discovery documents say so with an empty
 `scopes_supported`, and a client that asks for a scope anyway has it ignored rather than refused. The refresh token
 *is* the long-lived credential: it rotates single-use, survives restarts under [`storage.data_dir`][storage.data_dir],
-and detects reuse. A token carries its user's access, which the [ACL][authorization] decides—so a token cannot hold
+and detects reuse. A token carries its user's access, which the [ACL][authorization] decides—so a token can't hold
 more than the person who authorized it, and the `Allow` header on every response reports what it may actually do.
 
 > [!NOTE]
@@ -501,11 +501,11 @@ which family it reads: `x-forwarded` (the default) for `X-Forwarded-For`, `X-For
 
 > [!WARNING]
 > Set this to match your proxy. nginx, HAProxy, Traefik and Caddy all write the `x-forwarded` family, and none
-> of them strip an inbound `Forwarded`—it is an unknown request header they pass through untouched. A
+> of them strip an inbound `Forwarded`—it's an unknown request header they pass through untouched. A
 > deployment believing both families would let a client choose the address in its own audit log, and the host
 > in every URL Cetacean publishes.
 
-Stripping the family your proxy does not write costs nothing and is worth doing anyway:
+Stripping the family your proxy doesn't write costs nothing and is worth doing anyway:
 
 ```nginx
 proxy_set_header Forwarded "";
@@ -521,7 +521,7 @@ TLS termination works in any auth mode and is required for `cert` mode. Set [`tl
 
 ## Deployment examples
 
-The fragments above show only the settings each mode needs. These add the secrets, placement, and state volume
+The preceding fragments show only the settings each mode needs. These add the secrets, placement, and state volume
 from [Getting started][getting-started]. None publishes a port: reach Cetacean over the overlay network from a
 reverse proxy, or add a `ports:` mapping as `compose.yaml` does. The tsnet example needs neither, since it serves
 the app on the tailnet node itself.

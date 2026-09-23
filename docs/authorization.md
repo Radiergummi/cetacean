@@ -75,7 +75,7 @@ grant: unreadable items are filtered out of the response, and `total` counts onl
 
 Provide the policy inline through [`acl.policy`][acl.policy], which requires a restart to change,
 or as a file through [`acl.policy_file`][acl.policy_file], which is hot-reloaded when the file
-changes. Neither setting has a CLI flag; set them through the environment or the config file. Inline takes
+changes. Neither setting has a command-line flag; set them through the environment or the config file. Inline takes
 precedence when both are set.
 
 An inline policy is parsed as JSON, TOML or YAML by auto-detection. A policy file is parsed by its extension
@@ -106,7 +106,7 @@ since a provider grant always applies to the identity carrying it. An invalid gr
 check there first when a grant seems to have no effect.
 
 > [!NOTE]
-> OIDC browser sessions do not carry raw token claims, so `acl.oidc_claim` grants apply to bearer-token requests
+> OIDC browser sessions don't carry raw token claims, so `acl.oidc_claim` grants apply to bearer-token requests
 > only. Grant browser users through the policy, matching on `group:` audiences.
 
 ## Interaction with operations level
@@ -147,7 +147,7 @@ Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457
 Read responses carry an `Allow` header naming the write methods available on that resource, which is how the
 dashboard knows which action buttons to show you.
 
-[Prometheus][monitoring] query endpoints (`GET /metrics`, `GET /metrics/labels`) are not per-resource filtered.
+[Prometheus][monitoring] query endpoints (`GET /metrics`, `GET /metrics/labels`) aren't per-resource filtered.
 They require the identity to hold at least one grant.
 
 ## Examples

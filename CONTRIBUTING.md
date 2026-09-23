@@ -39,7 +39,7 @@ All checks must pass before submitting a PR. The CI pipeline runs the same check
 ### End-to-end tests
 
 `make test-stack` and `make e2e-up` run a local Docker Swarm against the real `./cetacean` binary. Neither
-runs in CI—both need Docker and take minutes—so they are not part of `make check`. See
+runs in CI—both need Docker and take minutes—so they aren't part of `make check`. See
 [`test/e2e/README.md`](test/e2e/README.md) for prerequisites, running a single lane, and pointing the
 Playwright suite (`make test-e2e`) at the environment.
 
@@ -49,7 +49,7 @@ Playwright suite (`make test-e2e`) at the environment.
 2. Make your changes—keep diffs focused on one concern
 3. Add or update tests for any changed behavior
 4. Run `make check` and ensure everything passes
-5. Commit with a descriptive message (see below)
+5. Commit with a descriptive message (see [Commit messages](#commit-messages))
 6. Open a pull request against `main`
 
 ## Commit messages
@@ -77,11 +77,16 @@ test: add integration tests for search endpoint
 `make lint-docs` enforces most of this. The rest is on you and the reviewer.
 
 - American English, sentence-case headings, the Oxford comma, and em dashes without spaces (a—b).
+- Contractions: *doesn't*, *isn't*, *can't*, and *it's* or *that's* where they read naturally. The full form
+  stays where it ends a clause ("what it is.") or where the pronoun belongs to the phrase before it.
+- Point within a page with *preceding*, *following*, *earlier*, or *later*, or a link. *Above* and *below*
+  assume a visual layout; keep them for values ("above 90%") and the dashboard's own layout.
 - Name settings by their TOML path (`server.trusted_proxies`), and link them to their entry in the configuration page.
 - **swarm** is your cluster ("deploy to a swarm"); **Swarm** is Docker's orchestrator ("Swarm reschedules the task");
   the feature is **Swarm mode**.
-- Verb or noun: *sign in*, *roll back* and *set up* are verbs; *sign-in*, *rollback* and *setup* are nouns.
-- **Compose file**, **config file**, **environment variable**, **bearer token**, **operations level**, **refetch**.
+- Verb or noun: *sign in*, *roll back*, and *set up* are verbs; *sign-in*, *rollback* and *setup* are nouns.
+- **Compose file**, **config file**, **environment variable**, **command-line flag**, **health check**,
+  **bearer token**, **operations level**, **refetch**.
 - Name third-party tools the way their projects do: Alertmanager, cAdvisor, swarm-cronjob, Traefik.
 
 To teach Vale a new term, add it to `.vale/styles/config/vocabularies/Cetacean/accept.txt`; that also fixes its
