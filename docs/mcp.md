@@ -70,12 +70,12 @@ An agent is never more privileged than the identity that signed in. Two controls
 
 [`mcp.operations_level`][mcp.operations_level] caps what agents may do, independently of the dashboard:
 
-| Level | An agent may                                                           |
-|-------|------------------------------------------------------------------------|
-| `0`   | Read only                                                              |
-| `1`   | Scale, restart, update images, roll back                               |
-| `2`   | Also edit configuration: env vars, resources, placement, ports, labels |
-| `3`   | Also remove services, tasks, configs, secrets, networks and volumes    |
+| Level | An agent may                                                                        |
+|-------|-------------------------------------------------------------------------------------|
+| `0`   | Read only                                                                           |
+| `1`   | Scale, restart, update images, roll back                                            |
+| `2`   | Also edit configuration: environment variables, resources, placement, ports, labels |
+| `3`   | Also remove services, tasks, configs, secrets, networks and volumes                 |
 
 It inherits [`server.operations_level`][server.operations_level] when unset. Setting it lower is how you let your team
 scale services from the dashboard while agents stay read-only.

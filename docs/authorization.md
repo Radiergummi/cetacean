@@ -106,7 +106,7 @@ since a provider grant always applies to the identity carrying it. An invalid gr
 check there first when a grant seems to have no effect.
 
 > [!NOTE]
-> OIDC browser sessions do not carry raw token claims, so `acl.oidc_claim` grants apply to Bearer-token requests
+> OIDC browser sessions do not carry raw token claims, so `acl.oidc_claim` grants apply to bearer-token requests
 > only. Grant browser users through the policy, matching on `group:` audiences.
 
 ## Interaction with operations level

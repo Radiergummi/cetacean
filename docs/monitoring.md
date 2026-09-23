@@ -108,7 +108,7 @@ ever produced. Docker Engine keeps its containerd under `/run/docker/containerd`
 ```
 
 If your Docker uses a system containerd instead of its own, use `/run/containerd` as the source. To check which case
-you are in, count the labelled series:
+you are in, count the labeled series:
 
 ```promql
 count(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name!=""})

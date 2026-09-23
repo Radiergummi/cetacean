@@ -58,7 +58,7 @@ returns `406` with [`API001`](api/errors#API001). A graph format asked of a reso
 way — the table says which endpoints serve one.
 
 The refusal is each endpoint's own. A document with a single representation — the
-[OpenSearch description](#browser-search), the [API catalogue](#api-catalogue), the JSON-LD context — answers a client
+[OpenSearch description](#browser-search), the [API catalog](#api-catalog), the JSON-LD context — answers a client
 asking for exactly the type it serves, whether or not that type appears above.
 
 ```http tab
@@ -216,7 +216,7 @@ Naming a page still works, and then means what it means everywhere else:
 curl 'http://localhost:9000/tasks.csv?limit=100&offset=200'
 ```
 
-A [`Range` header](#range-header-pagination) is not honoured for CSV: that exchange answers `206` with a
+A [`Range` header](#range-header-pagination) is not honored for CSV: that exchange answers `206` with a
 `Content-Range`, and a download is always a plain `200`. Ask for a page with `limit` and `offset` instead.
 
 ## Compose export
@@ -425,7 +425,7 @@ curl -H 'If-None-Match: "3a7f..."' http://localhost:9000/services
 # < HTTP/1.1 304 Not Modified
 ```
 
-Detail endpoints also set `Last-Modified` from the resource's update timestamp and honour `If-Modified-Since`. When
+Detail endpoints also set `Last-Modified` from the resource's update timestamp and honor `If-Modified-Since`. When
 both conditional headers are present, `If-None-Match` wins.
 
 `/api` and `/api/context.jsonld` return `Cache-Control: public, max-age=3600`; `/api/scalar.js` returns `max-age=86400`.
@@ -440,7 +440,7 @@ write.
 `Accept-Patch` lists the patch formats a resource accepts, either `application/json-patch+json, application/merge-patch+json`
 or `application/merge-patch+json` alone. It appears only when the operations level and ACL permit writes.
 
-Write endpoints honour [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: return=minimal`, answering
+Write endpoints honor [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: return=minimal`, answering
 `204 No Content` (or `201 Created` for a create) with `Preference-Applied: return=minimal` instead of the updated
 resource.
 
@@ -470,7 +470,7 @@ curl -X PUT http://localhost:9000/services/abc123/scale \
 | `respond-async, wait=10` | waits up to 10 seconds, then `202` with `Location` |
 | `return=minimal, wait=30` | waits, then `204`; `Preference-Applied` names both preferences |
 
-A `200` from a honoured wait describes the service as it settled, read back after convergence — not the snapshot Docker
+A `200` from an honored wait describes the service as it settled, read back after convergence — not the snapshot Docker
 returned when it accepted the write, whose `UpdateStatus` is still mid-rollout and whose `Version` a follow-up write
 would collide on.
 
@@ -479,7 +479,7 @@ A `202` carries `Location` pointing at the service itself, which is where the ro
 `Accept: text/event-stream`. The body is the service as Docker returned it, plus a `progress` field holding the last
 convergence line observed — `waiting: 2/5 replicas running`. `return=minimal` does not apply on this path: there is a
 progress line to deliver, so the `202` carries a body and does not name `return=minimal` in `Preference-Applied`.
-Whether that preference is honoured therefore depends on how quickly the cluster settles. A client that hangs up
+Whether that preference is honored therefore depends on how quickly the cluster settles. A client that hangs up
 cancels its own wait.
 
 The preferences apply to the six service endpoints that change what the cluster has to schedule: `scale`, `image`,
@@ -650,7 +650,7 @@ There is no general rate limiting. Concurrent streams are capped, and a request 
 | Meta | `/-/health`, `/-/ready`, `/-/metrics`, `/-/licenses`, `/-/licenses/texts/{id}`, `/-/notices`, `/-/sbom.cdx`, `/-/docker-latest-version` |
 
 `GET /search` takes `q` (required, max 200 characters) and `limit` (per type, default 3; `0` or a value above 1000
-returns up to 1000). `POST /-/resync` forces a full re-fetch from the Docker socket; unlike the other
+returns up to 1000). `POST /-/resync` forces a full refetch from the Docker socket; unlike the other
 `/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API,
 but it is not gated on the operations level — it re-reads the cluster and never changes it.
 
@@ -773,7 +773,7 @@ Link: </api>; rel="service-desc"; type="application/json", </api/asyncapi>; rel=
 
 The two `service-desc` links are told apart by `type`: `/api` describes the request/response API, `/api/asyncapi`
 the event streams. `describedby` points at the JSON-LD context document, and `api-catalog` at the
-[API catalogue](#api-catalogue).
+[API catalog](#api-catalog).
 
 ### Browser search
 
@@ -810,10 +810,10 @@ document naming every top-level collection, so knowing the origin is enough to f
 `/index` redirects here permanently, keeping any `.json` or `.html` suffix — `/index.json` lands on `/.json`, since
 the suffix is the only thing naming the representation.
 
-The [API catalogue](#api-catalogue) is unauthenticated and points here; this document is not. Discovery is public,
+The [API catalog](#api-catalog) is unauthenticated and points here; this document is not. Discovery is public,
 the API behind it is not.
 
-## API catalogue
+## API catalog
 
 `GET /.well-known/api-catalog` lists the APIs this deployment publishes, as an
 [RFC 9264](https://www.rfc-editor.org/rfc/rfc9264) linkset served as `application/linkset+json`

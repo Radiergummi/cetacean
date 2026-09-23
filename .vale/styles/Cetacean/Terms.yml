@@ -2,9 +2,9 @@ extends: substitution
 message: "Use '%s' instead of '%s'."
 level: error
 ignorecase: false
-# Spellings the vocabulary cannot catch: Vale.Terms corrects the case of every
-# accepted term, but not a variant with a space or a hyphen. `vocab: false`, as
-# an accepted term inside the match ("API" in "Open API") would exempt it.
+# The house term where the docs had several. Vale.Terms already fixes the case
+# of accepted terms, but not a variant with a space or a hyphen. `vocab: false`,
+# as an accepted term inside a match ("API" in "Open API") would exempt it.
 vocab: false
 action:
   name: replace
@@ -14,3 +14,12 @@ swap:
   '\bWeb ?[Ss]ockets?\b': WebSocket
   '\bSwarm Mode\b': Swarm mode
   '\b[Ee]-mail\b': email
+  '(?<=[a-z,;:] )Bearer(?=[ -]tokens?\b)': bearer
+  '\b[Rr]e-fetch': refetch
+  '\benv var\b': environment variable
+  '\benv vars\b': environment variables
+  '\bconfiguration file\b': config file
+  '\bcompose file\b': Compose file
+  '\bcompose files\b': Compose files
+  '\bSwarm Cronjob\b': swarm-cronjob
+  '\b(?:operation|ops) level': operations level

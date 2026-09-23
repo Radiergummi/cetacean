@@ -10,7 +10,7 @@ import ConfigParam from '@/components/ConfigParam.astro'
 # Configuration
 
 Cetacean reads settings from CLI flags, environment variables, and a TOML config file. When a
-setting appears in more than one place, the precedence order is flag, env var, config file,
+setting appears in more than one place, the precedence order is flag, environment variable, config file,
 built-in default.
 
 Sensitive settings accept a `_FILE` suffix on their environment variable to read the value from a
@@ -110,7 +110,7 @@ know refuses startup and names it.
 </ConfigParam>
 
 <ConfigParam name="config" flag="-config" env="CETACEAN_CONFIG">
-  Path to a TOML configuration file. See [Config file][config-file] for the format.
+  Path to a TOML config file. See [Config file][config-file] for the format.
 </ConfigParam>
 
 ## Authentication and authorization
@@ -282,7 +282,7 @@ consent screen, so one would only sit unused.
 </ConfigParam>
 
 <ConfigParam name="oauth.dcr_enabled" env="CETACEAN_OAUTH_DCR_ENABLED" default="true">
-  Accept RFC 7591 Dynamic Client Registration at `/oauth/register`. Registrations are held in memory and lost on restart. MCP revision 2026-07-28 deprecates DCR in favour of Client ID Metadata Documents, and it stays on for clients that do not support those yet.
+  Accept RFC 7591 Dynamic Client Registration at `/oauth/register`. Registrations are held in memory and lost on restart. MCP revision 2026-07-28 deprecates DCR in favor of Client ID Metadata Documents, and it stays on for clients that do not support those yet.
 </ConfigParam>
 
 <ConfigParam name="oauth.dcr_rate_limit" env="CETACEAN_OAUTH_DCR_RATE_LIMIT" default="10">
@@ -386,7 +386,7 @@ atomic, so a crash mid-write cannot corrupt the file.
 
 Two meta endpoints, exempt from authentication and content negotiation:
 
-| Endpoint        | Behaviour                                       | Use for                             |
+| Endpoint        | Behavior                                        | Use for                             |
 |-----------------|-------------------------------------------------|-------------------------------------|
 | `GET /-/health` | Always 200 if the process is running            | Uptime monitoring, restart policies |
 | `GET /-/ready`  | 200 after the first Docker sync; 503 until then | Load balancers, `depends_on` gating |

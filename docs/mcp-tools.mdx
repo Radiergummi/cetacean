@@ -132,7 +132,7 @@ What the cluster is doing now, and what it did recently.
     <Fragment slot="arguments">`service` (required), `timeout` (60 seconds, capped at 300)</Fragment>
 
     Blocks until a service has settled, then reports whether it did. It exposes the same convergence rule the
-    converging mutations use, as a read; the wait cannot be cancelled once started.
+    converging mutations use, as a read; the wait cannot be canceled once started.
 </McpTool>
 
 ### Service lifecycle
@@ -329,7 +329,7 @@ Where work is allowed to run, and who votes in Raft.
 
     Changes a node's availability or role.
 
-    Draining a manager may destabilise the swarm, so prefer draining workers. Promoting a node adds a Raft voter
+    Draining a manager may destabilize the swarm, so prefer draining workers. Promoting a node adds a Raft voter
     and demoting removes one: never reduce the manager count below the quorum threshold, and on a three-manager
     cluster demote at most one at a time. Node labels stay a tool of their own,
     [`update_node_labels`](#update_node_labels), at level 2, so a deployment that lets an agent relabel a node does
@@ -358,10 +358,10 @@ Templated resources return the same compact digest the `describe` tool builds. T
 | `cetacean://nodes/{id}`         | Node digest, by ID or hostname                                                  |
 | `cetacean://services/{id}`      | Service digest, by ID or name, with cross-references                            |
 | `cetacean://services/{id}/logs` | Service logs merged across replicas, subscribable; not a digest                 |
-| `cetacean://services/{id}/compose` | The service as a one-service compose file; everything it references is external |
+| `cetacean://services/{id}/compose` | The service as a one-service Compose file; everything it references is external |
 | `cetacean://tasks/{id}`         | Task digest; the parent service and node are in `related`, not top-level fields |
 | `cetacean://stacks/{name}`      | Stack digest, rolling up its member resources                                   |
-| `cetacean://stacks/{name}/compose` | The stack as a compose file; secrets and configs are referenced, never exported |
+| `cetacean://stacks/{name}/compose` | The stack as a Compose file; secrets and configs are referenced, never exported |
 | `cetacean://configs/{id}`       | Config digest; the payload's size in bytes, never the payload                   |
 | `cetacean://secrets/{id}`       | Secret digest; the payload is never read, not even its length                   |
 | `cetacean://networks/{id}`      | Network digest, with the attached services                                      |
@@ -413,7 +413,7 @@ between the two windows answers whether the fault is new.
 
 Every numeric field in `details` names its unit, such as `cpuLimitCores` (a float, in cores) and
 `memoryLimitBytes`, or is reported as a duration string like `"10s"` (`healthcheckInterval`, an update
-policy's `delay` and `monitor`). Docker's own types express these as unlabelled NanoCPU or nanosecond
+policy's `delay` and `monitor`). Docker's own types express these as unlabeled NanoCPU or nanosecond
 integers. Environment variables are reported as `envNames`: names only, never values.
 
 ### The `raw: true` option
@@ -461,7 +461,7 @@ so a widget shows exactly what the calling identity's grants allow.
 
 {/* cards */}
 
-| Resource                        | Renders                                                         | Behaviour                                                                                                                           |
+| Resource                        | Renders                                                         | Behavior                                                                                                                            |
 |---------------------------------|-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
 | `ui://cetacean/table`           | A [`find`][mcp.tools.find] result                               | Searchable, sortable table of one resource type, showing how many records it holds when the page is a subset                        |
 | `ui://cetacean/topology`        | A [`get_topology`][mcp.tools.get_topology] result               | Graph to pan, zoom, and drag; switching view re-runs the tool under the same identity and grants                                    |

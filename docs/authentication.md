@@ -150,7 +150,7 @@ flowchart LR
 ### Browser flow
 
 Opening the dashboard unauthenticated sends you to your IdP to sign in, then back to the page you asked for.
-`GET /auth/login` starts the same flow explicitly and honours a relative `?redirect=` path.
+`GET /auth/login` starts the same flow explicitly and honors a relative `?redirect=` path.
 
 ```mermaid
 sequenceDiagram
@@ -174,7 +174,7 @@ sequenceDiagram
 
 ### Machine flow
 
-Send an ID token as a Bearer token. It is verified against the IdP's JWKS endpoint on every request.
+Send an ID token as a bearer token. It is verified against the IdP's JWKS endpoint on every request.
 
 ```http tab
 GET /services HTTP/1.1
@@ -209,7 +209,7 @@ secrets:
 ```
 
 The cookie stores subject, display name, email and groups, but no raw token claims. Grants read from an OIDC claim
-([`acl.oidc_claim`][acl.oidc_claim]) therefore reach Bearer-token requests only; for browser users, match on
+([`acl.oidc_claim`][acl.oidc_claim]) therefore reach bearer-token requests only; for browser users, match on
 `group:` audiences in the policy instead.
 
 ### Logout
@@ -363,7 +363,7 @@ TLS listener and is not consulted here. A certificate presented directly always 
 `Client-Cert-Chain` is ignored. One of the two—TLS here, or a trusted proxy—is required for cert mode to start.
 
 > [!WARNING]
-> The header is honoured **only** from an address in [`server.trusted_proxies`][server.trusted_proxies], so the
+> The header is honored **only** from an address in [`server.trusted_proxies`][server.trusted_proxies], so the
 > proxy must strip any `Client-Cert` its own clients send.
 
 ## API access tokens
@@ -373,7 +373,7 @@ a client certificate, a proxy header. A script, a CLI or a native app often has 
 [`oauth.enabled`][oauth.enabled] set, Cetacean is its own OAuth 2.1 authorization server and issues access tokens
 for the API, on any auth mode, with nothing else to configure.
 
-Send one as a Bearer token:
+Send one as a bearer token:
 
 ```http tab
 GET /services HTTP/1.1
@@ -435,7 +435,7 @@ configuration][trusted-proxy-headers] for the optional name, email and groups he
 > required and restricts which source addresses may set identity headers, accepting individual IPs and CIDRs.
 > Without it Cetacean refuses to start.
 
-For defence in depth, require a shared secret on every proxied request:
+For defense in depth, require a shared secret on every proxied request:
 
 ```yaml
 environment:

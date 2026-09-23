@@ -69,9 +69,23 @@ test: add integration tests for search endpoint
 - **Go**: `gofmt` + `golangci-lint`. Match existing patterns — stdlib `net/http`, `log/slog`, no frameworks.
 - **Frontend**: `oxlint` + `oxfmt`. React 19 with TypeScript, Tailwind CSS v4, shadcn/ui components.
 - **Workflows**: `actionlint` + `zizmor`. Pin every action by commit SHA with the version in a trailing comment.
-- **Docs**: [Vale](https://vale.sh), configured in `.vale.ini`. `make lint-docs` fetches the pinned styles on first
-  run. Add a project term it rejects to `.vale/styles/config/vocabularies/Cetacean/accept.txt`.
+- **Docs**: [Vale](https://vale.sh), configured in `.vale.ini`; see [Writing docs](#writing-docs).
 - Don't refactor code unrelated to your change.
+
+## Writing docs
+
+`make lint-docs` enforces most of this. The rest is on you and the reviewer.
+
+- American English, sentence-case headings, no serial comma, spaced em dashes ( — ).
+- Name settings by their TOML path (`server.trusted_proxies`), and link them to their entry in the configuration page.
+- **swarm** is your cluster ("deploy to a swarm"); **Swarm** is Docker's orchestrator ("Swarm reschedules the task");
+  the feature is **Swarm mode**.
+- Verb or noun: *sign in*, *roll back* and *set up* are verbs; *sign-in*, *rollback* and *setup* are nouns.
+- **Compose file**, **config file**, **environment variable**, **bearer token**, **operations level**, **refetch**.
+- Name third-party tools the way their projects do: Alertmanager, cAdvisor, swarm-cronjob, Traefik.
+
+To teach Vale a new term, add it to `.vale/styles/config/vocabularies/Cetacean/accept.txt`; that also fixes its
+capitalization everywhere. A variant spelled differently goes in `.vale/styles/Cetacean/Terms.yml`.
 
 ## Architecture
 
