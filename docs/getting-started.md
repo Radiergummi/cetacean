@@ -108,7 +108,7 @@ network. Set [`auth.mode`][auth.mode] to `oidc`, `tailscale`, `cert`, or `header
 [`tls.cert`][tls.cert] and [`tls.key`][tls.key].
 
 Independently of who is signed in, [`server.operations_level`][server.operations_level] caps what Cetacean may
-change at all. It is `0` — read-only — until you raise it, so a deployment that writes anything says so on
+change at all. It is `0`—read-only—until you raise it, so a deployment that writes anything says so on
 purpose. Set it to `1` for operational writes (scale, update image, roll back, restart).
 
 ## When something is wrong

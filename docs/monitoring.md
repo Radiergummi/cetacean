@@ -35,7 +35,7 @@ curl -O https://cetacean.mazetti.me/dist/compose.prometheus.yaml
 docker stack deploy -c compose.yaml -c compose.prometheus.yaml cetacean
 ```
 
-Pointing at a Prometheus you already run is the same setting by another route — set
+Pointing at a Prometheus you already run is the same setting by another route—set
 [`prometheus.url`][prometheus.url] through the environment or a [config file][config-file], and make sure
 Cetacean shares a network with it.
 
@@ -127,12 +127,12 @@ as unavailable and skips them on the service, task, and node pages. node-exporte
 
 The cluster overview and the metrics console show a banner when something is missing:
 
-| State                | Shown when                                                    | Banner                                                                                |
-| -------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Healthy              | Prometheus answers and both exporters cover every node        | Nothing                                                                               |
-| Not configured       | `prometheus.url` is unset                                     | Deploy instructions. Dismissible                                                      |
-| Unreachable          | `prometheus.url` is set but queries fail                      | Warning with the connection error. Not dismissible                                    |
-| Partially configured | Prometheus answers, an exporter reports on 0 or some nodes    | One line per exporter naming what is missing and on how many nodes. Dismissible       |
+| State                | Shown when                                                       | Banner                                                                          |
+| -------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Healthy              | Prometheus answers and both exporters cover every node           | Nothing                                                                         |
+| Not configured       | `prometheus.url` is unset                                        | Deploy instructions. Dismissible                                                |
+| Unreachable          | `prometheus.url` is set but queries fail                         | Warning with the connection error. Not dismissible                              |
+| Partially configured | Prometheus answers, but an exporter covers no nodes or only some | One line per exporter naming what is missing and on how many nodes. Dismissible |
 
 The [MCP][mcp-tools] `get_metrics` tool reports the same gap rather than charting zeros. When every series comes
 back empty it probes for the exporter and answers "cAdvisor is not reporting per-container metrics for this

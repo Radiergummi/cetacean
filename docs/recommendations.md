@@ -7,8 +7,8 @@ tags: [recommendations, sizing, health-checks, cluster-topology]
 
 # Recommendations
 
-Cetacean watches your cluster and lists what looks wrong at `/recommendations` in the [dashboard][dashboard] —
-services with no health check, replicas that keep dying, containers sized far above what they use. Findings
+Cetacean watches your cluster and lists what looks wrong at `/recommendations` in the [dashboard][dashboard]—services
+with no health check, replicas that keep dying, containers sized far above what they use. Findings
 refresh on their own; you never trigger a scan.
 
 It is on by default. Turn it off with [`server.recommendations`][server.recommendations].

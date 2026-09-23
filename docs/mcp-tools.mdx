@@ -59,8 +59,8 @@ resources they returned, so a host can offer somewhere to go next.
     <Fragment slot="arguments">`type` (singular, required: `service`, `node`, `task`, `stack`,
         `config`, `secret`, `network`, `volume`), `id` (required), `raw`</Fragment>
 
-    Returns one resource as a `Digest`. `id` takes an ID or a name — a hostname for a node, the rendered
-    `{service}.{slot}` for a task, the plain name for everything else — and a name matching more than one
+    Returns one resource as a `Digest`. `id` takes an ID or a name—a hostname for a node, the rendered
+    `{service}.{slot}` for a task, the plain name for everything else—and a name matching more than one
     resource
     is refused, naming the matching IDs.
 </McpTool>
@@ -90,7 +90,7 @@ What the cluster is doing now, and what it did recently.
 
     Fetches recent log lines from one scope.
 
-    A task reads one replica and is the only way to reach one that has already exited — the form to reach for after
+    A task reads one replica and is the only way to reach one that has already exited—the form to reach for after
     a crash, and the most perishable, since Swarm discards a task's output with the task record, five per replica
     slot by default. A service in a restart loop may hold seconds of history, so read it first. `stack` and
     `cluster` merge server-side and attribute each line to its service, so grepping the cluster with `contains`
@@ -215,7 +215,7 @@ Editing a service's spec. These tools return the section they changed rather tha
 without their values—so raising a CPU limit never hands back the service's credentials.
 
 `update_service_secrets`, `update_service_configs`, and `update_service_mounts` replace their set wholesale:
-pass every entry the service should end up with, because one left out is detached — and a container may lose
+pass every entry the service should end up with, because one left out is detached—and a container may lose
 data it was writing to a dropped mount.
 
 <McpTool name="update_service" level={2}>
@@ -324,7 +324,7 @@ Where work is allowed to run, and who votes in Raft.
 </McpTool>
 
 <McpTool name="update_node" level={3}>
-    <Fragment slot="arguments">`id`, `section` (`availability`, `role`), `value` (`active`, `pause`, `drain` — or
+    <Fragment slot="arguments">`id`, `section` (`availability`, `role`), `value` (`active`, `pause`, `drain`—or
         `worker`, `manager`)</Fragment>
 
     Changes a node's availability or role.

@@ -26,7 +26,7 @@ environment:
 ```
 
 Both flags are needed here. Clients authenticate with a bearer token, and the
-[authorization server][oauth.enabled] that issues it is opt-in on its own — it mints credentials for your
+[authorization server][oauth.enabled] that issues it is opt-in on its own—it mints credentials for your
 cluster, so nothing turns it on implicitly. `/mcp` authenticates itself rather than going through the usual
 middleware, so under any auth mode but `none` it needs either the authorization server or the active mode
 listed in [`mcp.auth_bypass`][mcp.auth_bypass]. Cetacean refuses to start with neither, because the endpoint
@@ -75,7 +75,7 @@ An agent is never more privileged than the identity that signed in. Two controls
 | `0`   | Read only                                                                           |
 | `1`   | Scale, restart, update images, roll back                                            |
 | `2`   | Also edit configuration: environment variables, resources, placement, ports, labels |
-| `3`   | Also remove services, tasks, configs, secrets, networks and volumes                 |
+| `3`   | Also remove services, tasks, configs, secrets, networks, and volumes                |
 
 It inherits [`server.operations_level`][server.operations_level] when unset. Setting it lower is how you let your team
 scale services from the dashboard while agents stay read-only.
@@ -87,7 +87,7 @@ forbidden, so the tool list never reveals what exists.
 ## Wait for changes to take effect
 
 Docker accepts a change the moment you ask for it, which tells you nothing about whether it worked—the image may still
-be pulling, or a placement constraint may be unsatisfiable. Scaling, restarting, image updates and rollbacks can
+be pulling, or a placement constraint may be unsatisfiable. Scaling, restarting, image updates, and rollbacks can
 therefore wait for the cluster to settle before reporting back, so an agent says "done" when the replicas are actually
 running.
 
@@ -153,7 +153,7 @@ through to `/mcp`'s host alongside the endpoint itself:
 Under a [`server.base_path`][server.base_path], forward `/.well-known/*` from the host root as well
 as from under the prefix. RFC 9728 §3.1 has a client build the metadata URL by inserting
 `/.well-known/oauth-protected-resource` **after the host**, so it asks for
-`https://host/.well-known/oauth-protected-resource/prefix/mcp` — a path that never reaches Cetacean
+`https://host/.well-known/oauth-protected-resource/prefix/mcp`—a path that never reaches Cetacean
 if the proxy only forwards `https://host/prefix/*`. Both spellings are served; only the first is the
 one a conformant client derives on its own.
 
@@ -163,7 +163,7 @@ Cetacean is its own OAuth 2.1 authorization server for `/mcp`, implementing the 
 A client discovers it, sends you through your configured auth provider, and exchanges the result for an access token and
 a refresh token. Access tokens are scoped to this deployment, so one cannot be replayed against another Cetacean.
 
-`/mcp` is one of two protected resources — the [web API][api-tokens] is the other — and each has its own metadata
+`/mcp` is one of two protected resources—the [web API][api-tokens] is the other—and each has its own metadata
 document and its own audience. `/mcp`'s document is at `/.well-known/oauth-protected-resource/mcp`; the one at the
 root describes the API. A token for either is refused by the other, even though one path lies under the other:
 approving an agent for MCP is not approving it to delete your services. Clients that read the metadata URL out of the

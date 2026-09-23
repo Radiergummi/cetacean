@@ -34,7 +34,7 @@ know refuses startup and names it.
 </ConfigParam>
 
 <ConfigParam name="server.public_url" flag="-public-url" env="CETACEAN_PUBLIC_URL">
-  Canonical external URL clients reach Cetacean at, for example `https://cetacean.example.com`. Origin only — set the path prefix with [`server.base_path`][server.base_path], which is used for both inbound and outbound paths. Supplies the default for [`oauth.issuer`][oauth.issuer] and [`auth.oidc.redirect_url`][auth.oidc.redirect_url], and makes Atom and JSON Feed links independent of the `X-Forwarded-*` headers a client can set. Set it behind a reverse proxy.
+  Canonical external URL clients reach Cetacean at, for example `https://cetacean.example.com`. Origin only—set the path prefix with [`server.base_path`][server.base_path], which is used for both inbound and outbound paths. Supplies the default for [`oauth.issuer`][oauth.issuer] and [`auth.oidc.redirect_url`][auth.oidc.redirect_url], and makes Atom and JSON Feed links independent of the `X-Forwarded-*` headers a client can set. Set it behind a reverse proxy.
 </ConfigParam>
 
 <ConfigParam name="docker.host" flag="-docker-host" env="CETACEAN_DOCKER_HOST" default="unix:///var/run/docker.sock">
@@ -46,7 +46,7 @@ know refuses startup and names it.
 </ConfigParam>
 
 <ConfigParam name="tracing.endpoint" env="CETACEAN_OTEL_ENDPOINT">
-  Base URL of an OpenTelemetry collector accepting OTLP over HTTP, for example `http://collector:4318`. Only MCP requests and tool calls emit spans, so this needs [`mcp.enabled`][mcp.enabled] to have any effect; set without it, Cetacean warns and exports nothing. With MCP enabled, a malformed endpoint stops startup.
+  Base URL of an OpenTelemetry collector accepting OTLP over HTTP, for example `http://collector:4318`. Only MCP requests and tool calls emit spans, so this needs [`mcp.enabled`][mcp.enabled] to have any effect; set without it, nothing is exported and Cetacean logs a warning. With MCP enabled, a malformed endpoint stops startup.
 </ConfigParam>
 
 <ConfigParam name="logging.level" flag="-log-level" env="CETACEAN_LOG_LEVEL" default="info">
@@ -242,7 +242,7 @@ Today `/mcp` is the only protected resource, and it authenticates itself rather 
 [authentication][authentication] middleware. So under an auth mode other than `none` it needs one of two things,
 and Cetacean refuses to start with neither: this server, or the active mode listed in
 [`mcp.auth_bypass`][mcp.auth_bypass], which has the upstream provider authenticate every request instead. The
-bypass is how an mTLS deployment runs no authorization server at all — those clients cannot drive a browser
+bypass is how an mTLS deployment runs no authorization server at all—those clients cannot drive a browser
 consent screen, so one would only sit unused.
 
 <ConfigParam name="oauth.enabled" env="CETACEAN_OAUTH_ENABLED" default="false">
@@ -270,11 +270,11 @@ consent screen, so one would only sit unused.
 </ConfigParam>
 
 <ConfigParam name="oauth.api_tokens" env="CETACEAN_OAUTH_API_TOKENS" default="false">
-  Offer the web API as a protected resource, so a client can obtain a token for it and authenticate with `Authorization: Bearer` instead of a browser session. The API and `/mcp` are separate resources: a token for one is refused by the other, whichever path it sits under. Turning this off makes the API resource undiscoverable as well as unusable — there is no metadata document for it, and the authorize endpoint refuses to mint one.
+  Offer the web API as a protected resource, so a client can obtain a token for it and authenticate with `Authorization: Bearer` instead of a browser session. The API and `/mcp` are separate resources: a token for one is refused by the other, whichever path it sits under. Turning this off makes the API resource undiscoverable as well as unusable—there is no metadata document for it, and the authorize endpoint refuses to mint one.
 </ConfigParam>
 
 <ConfigParam name="oauth.token_operations_level" env="CETACEAN_OAUTH_TOKEN_OPERATIONS_LEVEL">
-  What a caller holding a token may do on the web API: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset, and narrows it rather than replacing it — a token never reaches past the tier the deployment itself runs at. Set it lower to leave a token on a device that can read the cluster but not change it. `/mcp` is governed by [`mcp.operations_level`][mcp.operations_level] instead: MCP registers its tool list once, so it cannot hold two callers to different tiers.
+  What a caller holding a token may do on the web API: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset, and narrows it rather than replacing it—a token never reaches past the tier the deployment itself runs at. Set it lower to leave a token on a device that can read the cluster but not change it. `/mcp` is governed by [`mcp.operations_level`][mcp.operations_level] instead: MCP registers its tool list once, so it cannot hold two callers to different tiers.
 </ConfigParam>
 
 <ConfigParam name="oauth.require_resource_indicator" env="CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR" default="true">
@@ -310,7 +310,7 @@ default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token
 </ConfigParam>
 
 <ConfigParam name="mcp.operations_level" env="CETACEAN_MCP_OPERATIONS_LEVEL">
-  Which tools MCP clients may call: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset, and narrows it rather than replacing it — a value above the global one grants nothing. Set it lower to allow writes from the dashboard that agents cannot make. This is the ceiling for every MCP client, whatever it authenticated with; [`oauth.token_operations_level`][oauth.token_operations_level] governs the web API.
+  Which tools MCP clients may call: `0` reads only, `1` operational, `2` configuration, `3` impactful. Inherits [`server.operations_level`][server.operations_level] when unset, and narrows it rather than replacing it—a value above the global one grants nothing. Set it lower to allow writes from the dashboard that agents cannot make. This is the ceiling for every MCP client, whatever it authenticated with; [`oauth.token_operations_level`][oauth.token_operations_level] governs the web API.
 </ConfigParam>
 
 <ConfigParam name="mcp.max_concurrent_tasks" env="CETACEAN_MCP_MAX_CONCURRENT_TASKS" default="32">
@@ -326,10 +326,10 @@ default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token
 </ConfigParam>
 
 <ConfigParam name="mcp.auth_bypass" env="CETACEAN_MCP_AUTH_BYPASS">
-  Comma-separated authentication modes that skip the bearer check at `/mcp`, for example `cert`. Use it where the transport already carries a verified identity. Authorization still applies; only the OAuth handshake is skipped. A mode listed here is authenticated by its own provider on every request, so it satisfies `/mcp` on its own and [`oauth.enabled`][oauth.enabled] can stay off. Only `cert`, `headers` and `tailscale` may be listed, and Cetacean refuses to start on anything else: those carry identity in the transport, where `oidc` authenticates from a session cookie — an ambient credential that `/mcp`'s exemption from cross-origin protection assumes is absent.
+  Comma-separated authentication modes that skip the bearer check at `/mcp`, for example `cert`. Use it where the transport already carries a verified identity. Authorization still applies; only the OAuth handshake is skipped. A mode listed here is authenticated by its own provider on every request, so it satisfies `/mcp` on its own and [`oauth.enabled`][oauth.enabled] can stay off. Only `cert`, `headers` and `tailscale` may be listed, and Cetacean refuses to start on anything else: those carry identity in the transport, where `oidc` authenticates from a session cookie—an ambient credential that `/mcp`'s exemption from cross-origin protection assumes is absent.
 </ConfigParam>
 
-See [MCP][mcp] for the tools, resources, prompts and widgets the server exposes.
+See [MCP][mcp] for the tools, resources, prompts, and widgets the server exposes.
 
 ## Recommendation sizing
 

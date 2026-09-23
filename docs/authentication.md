@@ -74,30 +74,30 @@ identifier; `groups` feeds [authorization][authorization] audience matching.
 
 These paths skip authentication in every mode:
 
-| Path                                              | Reason                                                   |
-| ------------------------------------------------- | -------------------------------------------------------- |
-| `/-/*`, except `/-/resync`                        | Health, readiness, metrics, SBOM and licenses. Resync sweeps the Docker API, so it authenticates |
-| `/api`, `/api/*`                                  | API documentation and the JSON-LD context                |
-| `/assets/*`                                       | Dashboard static assets                                  |
-| `/auth`, `/auth/*`                                | Login, callback, logout and `whoami`                     |
-| `/mcp`                                            | The [MCP server][mcp] guards itself — see below          |
-| `/.well-known/*`                                  | OAuth discovery documents, unauthenticated by spec       |
-| `/oauth/token`, `/oauth/revoke`, `/oauth/register`, `/oauth/jwks` | The grants carry their own proof in the body, and the key set is public |
+| Path                                                              | Reason                                                                                            |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `/-/*`, except `/-/resync`                                        | Health, readiness, metrics, SBOM, and licenses. Resync sweeps the Docker API, so it authenticates |
+| `/api`, `/api/*`                                                  | API documentation and the JSON-LD context                                                         |
+| `/assets/*`                                                       | Dashboard static assets                                                                           |
+| `/auth`, `/auth/*`                                                | Login, callback, logout and `whoami`                                                              |
+| `/mcp`                                                            | The [MCP server][mcp] guards itself—see below                                                     |
+| `/.well-known/*`                                                  | OAuth discovery documents, unauthenticated by spec                                                |
+| `/oauth/token`, `/oauth/revoke`, `/oauth/register`, `/oauth/jwks` | The grants carry their own proof in the body, and the key set is public                           |
 
 What guards `/mcp` depends on the configuration: with [`oauth.enabled`][oauth.enabled] the MCP server verifies
 a bearer token it issued; with the authorization server off, the active mode must be listed in
-[`mcp.auth_bypass`][mcp.auth_bypass] — there is no bearer check then, and the upstream provider authenticates
+[`mcp.auth_bypass`][mcp.auth_bypass]—there is no bearer check then, and the upstream provider authenticates
 every request instead. Cetacean refuses to start with neither.
 
 `/oauth/authorize` is not exempt: a user must authenticate before granting a client access. That is also why
-the authorization server cannot run under the `none` mode — there would be no one to ask.
+the authorization server cannot run under the `none` mode—there would be no one to ask.
 
 ## Refused requests
 
 A `401` must name a way to authenticate, in a `WWW-Authenticate` challenge
 ([RFC 9110 §15.5.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2)). Only OIDC has one to give: the
-other modes read a credential HTTP cannot ask for — a certificate in the TLS layer, a header your proxy set,
-the peer's place on your tailnet — so a refusal there is a `403`, and the [error code][api] says which.
+other modes read a credential HTTP cannot ask for—a certificate in the TLS layer, a header your proxy set,
+the peer's place on your tailnet—so a refusal there is a `403`, and the [error code][api] says which.
 
 | Mode                   | Refusal      | Challenge |
 | ---------------------- | ------------ | --------- |
@@ -105,8 +105,8 @@ the peer's place on your tailnet — so a refusal there is a `403`, and the [err
 | `cert`                 | `403 AUT005` | —         |
 | `tailscale`, `headers` | `403 AUT006` | —         |
 
-The reason is logged, not returned: which of "no subject header", "invalid proxy secret" or "not a trusted
-proxy" applied describes your deployment to a caller that has not authenticated.
+The reason is logged, not returned: which of `no subject header`, `invalid proxy secret`, or
+`not a trusted proxy` applied describes your deployment to a caller that has not authenticated.
 
 ## None
 
@@ -251,14 +251,14 @@ authenticated without a login flow. See [Tailscale configuration][tailscale] for
 
 ### Choosing a mode
 
-|                              | Local mode (default)                                                             | tsnet mode                                                                |
-| ---------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| How it works                 | Queries the host's Tailscale daemon to identify peers                            | Embeds a Tailscale node inside the Cetacean process                       |
-| Tailscale installed on host? | Yes, the daemon must be running                                                  | No                                                                        |
-| Network binding              | Listens on [`server.listen_addr`][server.listen_addr]; only Tailscale addresses are authenticated      | Serves the app on port 443 of the tailnet node                            |
-| Docker health checks         | Work normally, the health endpoint is auth-exempt                                | Work normally, `/-/health` and `/-/ready` stay on the regular listener    |
-| Config complexity            | Minimal: `-auth-mode tailscale`                                                  | Needs an auth key, a hostname and a persistent state directory            |
-| Best for                     | Hosts already running Tailscale (bare metal, VMs)                                | Containers, Swarm services, or hosts without Tailscale installed          |
+|                              | Local mode (default)                                                                              | tsnet mode                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| How it works                 | Queries the host's Tailscale daemon to identify peers                                             | Embeds a Tailscale node inside the Cetacean process                    |
+| Tailscale installed on host? | Yes, the daemon must be running                                                                   | No                                                                     |
+| Network binding              | Listens on [`server.listen_addr`][server.listen_addr]; only Tailscale addresses are authenticated | Serves the app on port 443 of the tailnet node                         |
+| Docker health checks         | Work normally, the health endpoint is auth-exempt                                                 | Work normally, `/-/health` and `/-/ready` stay on the regular listener |
+| Config complexity            | Minimal: `-auth-mode tailscale`                                                                   | Needs an auth key, a hostname, and a persistent state directory        |
+| Best for                     | Hosts already running Tailscale (bare metal, VMs)                                                 | Containers, Swarm services, or hosts without Tailscale installed       |
 
 > [!WARNING]
 > In local mode Cetacean still listens on all interfaces by default. Requests from outside the tailnet are
@@ -368,7 +368,7 @@ TLS listener and is not consulted here. A certificate presented directly always 
 
 ## API access tokens
 
-Every mode above establishes identity from something the deployment already trusts — a session cookie, an IdP token,
+Every mode above establishes identity from something the deployment already trusts—a session cookie, an IdP token,
 a client certificate, a proxy header. A script, a CLI or a native app often has none of those. With
 [`oauth.enabled`][oauth.enabled] set, Cetacean is its own OAuth 2.1 authorization server and issues access tokens
 for the API, on any auth mode, with nothing else to configure.
@@ -387,8 +387,8 @@ curl -H "Authorization: Bearer eyJhbGci..." \
      https://cetacean.example.com/services
 ```
 
-A client obtains one the same way an [MCP][mcp] client does — discover, authorize with PKCE, exchange the code —
-and the [MCP flow diagram][mcp] applies unchanged. The difference is the resource it asks for. Getting the token is
+A client obtains one the same way an [MCP][mcp] client does—discover, authorize with PKCE, exchange the code—and
+the [MCP flow diagram][mcp] applies unchanged. The difference is the resource it asks for. Getting the token is
 the client's job; obtaining it takes you through whichever provider is configured, and a consent screen naming the
 client, so the token carries **your** identity and nothing more. [Grants][authorization] apply to it exactly as they
 apply to your browser session.
@@ -412,10 +412,10 @@ document and the authorize endpoint refuses to mint a token for it.
 
 ### What a token is not
 
-There are no personal access tokens and no scopes — both discovery documents say so with an empty
+There are no personal access tokens and no scopes—both discovery documents say so with an empty
 `scopes_supported`, and a client that asks for a scope anyway has it ignored rather than refused. The refresh token
 *is* the long-lived credential: it rotates single-use, survives restarts under [`storage.data_dir`][storage.data_dir],
-and detects reuse. A token carries its user's access, which the [ACL][authorization] decides — so a token cannot hold
+and detects reuse. A token carries its user's access, which the [ACL][authorization] decides—so a token cannot hold
 more than the person who authorized it, and the `Allow` header on every response reports what it may actually do.
 
 > [!NOTE]
@@ -428,7 +428,7 @@ more than the person who authorized it, and the `Allow` header on every response
 Reads identity from HTTP headers set by a reverse proxy (nginx, Traefik, Envoy).
 [`auth.headers.subject`][auth.headers.subject] names the header holding the subject and is required; the value must
 be non-empty, free of control characters, and at most 256 bytes. See [trusted proxy header
-configuration][trusted-proxy-headers] for the optional name, email and groups headers.
+configuration][trusted-proxy-headers] for the optional name, email, and groups headers.
 
 > [!WARNING]
 > This mode trusts the proxy to set headers correctly. [`server.trusted_proxies`][server.trusted_proxies] is
@@ -501,7 +501,7 @@ which family it reads: `x-forwarded` (the default) for `X-Forwarded-For`, `X-For
 
 > [!WARNING]
 > Set this to match your proxy. nginx, HAProxy, Traefik and Caddy all write the `x-forwarded` family, and none
-> of them strip an inbound `Forwarded` — it is an unknown request header they pass through untouched. A
+> of them strip an inbound `Forwarded`—it is an unknown request header they pass through untouched. A
 > deployment believing both families would let a client choose the address in its own audit log, and the host
 > in every URL Cetacean publishes.
 
@@ -521,7 +521,7 @@ TLS termination works in any auth mode and is required for `cert` mode. Set [`tl
 
 ## Deployment examples
 
-The fragments above show only the settings each mode needs. These add the secrets, placement and state volume
+The fragments above show only the settings each mode needs. These add the secrets, placement, and state volume
 from [Getting started][getting-started]. None publishes a port: reach Cetacean over the overlay network from a
 reverse proxy, or add a `ports:` mapping as `compose.yaml` does. The tsnet example needs neither, since it serves
 the app on the tailnet node itself.

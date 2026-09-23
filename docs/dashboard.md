@@ -14,7 +14,7 @@ It also carries a resync button that makes Cetacean re-read the whole cluster fr
 ## Navigation
 
 The nav bar links every resource type: nodes, stacks, services, tasks, configs, secrets, networks, volumes, plus
-the swarm info, topology and metrics pages. On narrow screens they collapse behind a menu button.
+the swarm info, topology, and metrics pages. On narrow screens they collapse behind a menu button.
 
 To the right of the search box sit the shortcut help button, a [recommendations][recommendations] indicator badged
 with the current finding count, the theme toggle (light, dark, system), and, in every
@@ -53,7 +53,7 @@ its chord.
 
 ## Command palette
 
-`⌘ K` (`Ctrl K` on Linux and Windows) opens the palette. Type to search names, images and labels across every
+`⌘ K` (`Ctrl K` on Linux and Windows) opens the palette. Type to search names, images, and labels across every
 resource type. Results are grouped by type in a fixed order, with a state indicator per row, and refresh every two
 seconds while the palette is open so a converging service updates in place. Move with the arrow keys and open with
 `Enter`.
@@ -61,19 +61,19 @@ seconds while the palette is open so a converging service updates in place. Move
 Typing an action name instead runs that action as a guided sequence, one prompt per argument, with a breadcrumb of
 what you have chosen so far:
 
-| Action              | Type                                                    |
-|---------------------|---------------------------------------------------------|
-| Scale Service       | Pick a service, then a replica count                    |
-| Update Image        | Pick a service, then an image reference                 |
-| Rollback Service    | Pick a service                                          |
-| Restart Service     | Pick a service                                          |
-| Drain Node          | Pick a node                                             |
-| Pause Node          | Pick a node                                             |
-| Activate Node       | Pick a node                                             |
-| Promote Node        | Pick a node                                             |
-| Demote Node         | Pick a node                                             |
-| Force Remove Task   | Pick a task                                             |
-| Remove …            | Pick a service, node, stack, config, secret, network or volume |
+| Action            | Type                                                            |
+|-------------------|-----------------------------------------------------------------|
+| Scale Service     | Pick a service, then a replica count                            |
+| Update Image      | Pick a service, then an image reference                         |
+| Rollback Service  | Pick a service                                                  |
+| Restart Service   | Pick a service                                                  |
+| Drain Node        | Pick a node                                                     |
+| Pause Node        | Pick a node                                                     |
+| Activate Node     | Pick a node                                                     |
+| Promote Node      | Pick a node                                                     |
+| Demote Node       | Pick a node                                                     |
+| Force Remove Task | Pick a task                                                     |
+| Remove …          | Pick a service, node, stack, config, secret, network, or volume |
 
 Destructive actions ask for confirmation before they run. An action your [operations level][operations-level]
 or your [grants][authorization] do not allow is refused with a permission message, not a server error.
@@ -95,7 +95,7 @@ A detail page shows the resource, its cross-references (the services using a con
 stack a resource belongs to), and its recent change history. Cross-references are links, so you can walk from a
 secret to the services mounting it to the nodes their tasks run on.
 
-A stack's page opens with **Topology**: the networks its services attach to and the configs, secrets and volumes
+A stack's page opens with **Topology**: the networks its services attach to and the configs, secrets, and volumes
 they mount, drawn as a graph above the tables listing the same resources. Every node links to the resource it
 stands for, and a service shows its running tasks against the number wanted. A network the stack does not own is
 drawn dashed; a resource nothing references is dimmed. Hovering or focusing a node dims everything more than one

@@ -39,14 +39,14 @@ All checks must pass before submitting a PR. The CI pipeline runs the same check
 ### End-to-end tests
 
 `make test-stack` and `make e2e-up` run a local Docker Swarm against the real `./cetacean` binary. Neither
-runs in CI — both need Docker and take minutes — so they are not part of `make check`. See
+runs in CI—both need Docker and take minutes—so they are not part of `make check`. See
 [`test/e2e/README.md`](test/e2e/README.md) for prerequisites, running a single lane, and pointing the
 Playwright suite (`make test-e2e`) at the environment.
 
 ## Submitting changes
 
 1. Fork the repository and create a branch from `main`
-2. Make your changes — keep diffs focused on one concern
+2. Make your changes—keep diffs focused on one concern
 3. Add or update tests for any changed behavior
 4. Run `make check` and ensure everything passes
 5. Commit with a descriptive message (see below)
@@ -66,7 +66,7 @@ test: add integration tests for search endpoint
 
 ## Code style
 
-- **Go**: `gofmt` + `golangci-lint`. Match existing patterns — stdlib `net/http`, `log/slog`, no frameworks.
+- **Go**: `gofmt` + `golangci-lint`. Match existing patterns—stdlib `net/http`, `log/slog`, no frameworks.
 - **Frontend**: `oxlint` + `oxfmt`. React 19 with TypeScript, Tailwind CSS v4, shadcn/ui components.
 - **Workflows**: `actionlint` + `zizmor`. Pin every action by commit SHA with the version in a trailing comment.
 - **Docs**: [Vale](https://vale.sh), configured in `.vale.ini`; see [Writing docs](#writing-docs).
@@ -76,7 +76,7 @@ test: add integration tests for search endpoint
 
 `make lint-docs` enforces most of this. The rest is on you and the reviewer.
 
-- American English, sentence-case headings, no serial comma, spaced em dashes ( — ).
+- American English, sentence-case headings, the Oxford comma, and em dashes without spaces (a—b).
 - Name settings by their TOML path (`server.trusted_proxies`), and link them to their entry in the configuration page.
 - **swarm** is your cluster ("deploy to a swarm"); **Swarm** is Docker's orchestrator ("Swarm reschedules the task");
   the feature is **Swarm mode**.
@@ -93,7 +93,7 @@ See the [README](README.md#architecture) for an overview. Key points:
 
 - All API endpoints are read-only GET requests
 - State lives in an in-memory cache fed by Docker event stream
-- No separate domain models — uses Docker Engine API types directly
+- No separate domain models—uses Docker Engine API types directly
 - Frontend uses per-resource SSE for real-time updates
 
 ## Reporting issues

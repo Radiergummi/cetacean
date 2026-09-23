@@ -18,7 +18,7 @@ Three rules decide how much access an identity has:
 
 ## Grants
 
-A grant is a tuple of resources, audience and permissions. Every grant whose audience matches the identity applies,
+A grant is a tuple of resources, audience, and permissions. Every grant whose audience matches the identity applies,
 and their permissions are unioned. There are no deny rules, so adding a grant can only widen access.
 
 ```yaml
@@ -52,7 +52,7 @@ identifier the resource is keyed by:
 
 Two inheritance rules widen a grant beyond a literal match:
 
-- A `stack:X` grant covers the stack and every service, task, config, secret, network and volume in it.
+- A `stack:X` grant covers the stack and every service, task, config, secret, network, and volume in it.
 - A `service:X` grant covers that service's tasks. A task also inherits the stack of its parent service.
 
 Task patterns match task IDs, which change every time a replica is replaced. Grant the parent service or the stack

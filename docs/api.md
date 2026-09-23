@@ -17,7 +17,7 @@ hosted copy is the [API explorer][api-explorer].
 ## Authentication
 
 Every endpoint below is authenticated by whichever provider [`auth.mode`][auth.mode] selects. A client that has no
-browser session can instead present an access token this deployment issued, as `Authorization: Bearer` — see
+browser session can instead present an access token this deployment issued, as `Authorization: Bearer`—see
 [API access tokens][api-tokens]. A token carries its user's identity, so [grants][authorization] and the `Allow`
 header treat it exactly as they treat that person's session.
 
@@ -41,7 +41,7 @@ the client asks for. There is no `/api/v1/` prefix; versioning lives in the medi
 |------------------------------------|-------------|----------------------------------------------|
 | `application/json`                 | `.json`     | JSON                                         |
 | `application/vnd.cetacean.v1+json` |             | JSON, versioned alias of `application/json`  |
-| `application/ld+json`              |             | JSON — every JSON response is a JSON-LD document |
+| `application/ld+json`              |             | JSON—every JSON response is a JSON-LD document   |
 | `text/html`, `application/xhtml+xml` | `.html`   | The dashboard                                |
 | `text/event-stream`                |             | SSE, on endpoints that support it            |
 | `application/atom+xml`             | `.atom`     | Atom feed                                    |
@@ -55,10 +55,10 @@ the client asks for. There is no `/api/v1/` prefix; versioning lives in the medi
 All negotiated responses include `Vary: Accept`. Requesting a type an endpoint cannot produce returns
 `406 Not Acceptable` with code [`API003`](api/errors#API003); asking for SSE on an endpoint without a stream
 returns `406` with [`API001`](api/errors#API001). A graph format asked of a resource endpoint is refused the same
-way — the table says which endpoints serve one.
+way—the table says which endpoints serve one.
 
-The refusal is each endpoint's own. A document with a single representation — the
-[OpenSearch description](#browser-search), the [API catalog](#api-catalog), the JSON-LD context — answers a client
+The refusal is each endpoint's own. A document with a single representation—the
+[OpenSearch description](#browser-search), the [API catalog](#api-catalog), the JSON-LD context—answers a client
 asking for exactly the type it serves, whether or not that type appears above.
 
 ```http tab
@@ -74,7 +74,7 @@ curl -H "Accept: application/json" http://localhost:9000/services
 
 JSON, Atom, JSON Feed and CSV responses, and the `/topology` graph formats, are compressed when the request offers a
 coding Cetacean serves and the body exceeds 1 KiB. Two codings are served, `zstd` and `gzip`, negotiated from
-`Accept-Encoding` per [RFC 9110 §12.5.3](https://www.rfc-editor.org/rfc/rfc9110#section-12.5.3) — `q` values and
+`Accept-Encoding` per [RFC 9110 §12.5.3](https://www.rfc-editor.org/rfc/rfc9110#section-12.5.3)—`q` values and
 `*` included, and `zstd` preferred at equal weight. Smaller bodies are sent uncompressed regardless; there is
 nothing to gain and a frame header to pay for.
 
@@ -152,7 +152,7 @@ Responses add `Vary: Authorization, Cookie` alongside `Vary: Accept` so caches s
 
 An Atom feed identifies itself with a [tag URI](https://www.rfc-editor.org/rfc/rfc4151) naming the same host its own
 links carry: [`server.public_url`][server.public_url] when set, otherwise the host the request arrived on. A tag URI is
-meant to be permanent, so set `server.public_url` behind a reverse proxy — derived from the request, a feed's identity
+meant to be permanent, so set `server.public_url` behind a reverse proxy—derived from the request, a feed's identity
 changes with the hostname a reader happened to reach the server by.
 
 ### Feed autodiscovery
@@ -173,8 +173,8 @@ curl -H 'Accept: text/csv' 'http://localhost:9000/tasks?filter=state == "failed"
 
 Responses carry `Content-Type: text/csv; charset=utf-8; header=present` and an
 [RFC 6266](https://www.rfc-editor.org/rfc/rfc6266) `Content-Disposition`, so a browser opening `/services.csv` saves
-`services-2026-09-11.csv` rather than rendering it. A task list hanging off a parent names it —
-`/nodes/{id}/tasks.csv` saves `tasks-worker-1-2026-09-11.csv`.
+`services-2026-09-11.csv` rather than rendering it. A task list hanging off a parent names it—`/nodes/{id}/tasks.csv`
+saves `tasks-worker-1-2026-09-11.csv`.
 
 ### Supported endpoints
 
@@ -182,14 +182,14 @@ Responses carry `Content-Type: text/csv; charset=utf-8; header=present` and an
 - `/nodes/{id}/tasks`, `/services/{id}/tasks`
 - `/history`, `/recommendations`
 
-Detail endpoints serve no CSV: one resource is not a table. `/search` serves none either — its results are of mixed
+Detail endpoints serve no CSV: one resource is not a table. `/search` serves none either—its results are of mixed
 type, and one header row cannot describe them.
 
 ### Columns
 
 A resource list renders the compact row the dashboard's own tables and the MCP `find` tool render: the name, the
-state, and the one secondary fact that identifies the type — the image for a service, the role for a node, the node
-for a task, the driver for a network or volume — plus replica counts where a replica count means something. The full
+state, and the one secondary fact that identifies the type—the image for a service, the role for a node, the node
+for a task, the driver for a network or volume—plus replica counts where a replica count means something. The full
 Docker object is what the JSON representation is for.
 
 | Endpoint | Columns |
@@ -234,22 +234,22 @@ cluster**. It is not the file that originally created the stack, and it is not p
 
 ### What is external, and why
 
-Secrets are never exported — that rule holds here as everywhere else. Configs are not exported either, even though
+Secrets are never exported—that rule holds here as everywhere else. Configs are not exported either, even though
 their content is available: inlining it through Compose's `content:` field would have a redeploy create a new config
 rather than reuse the one the running service is already mounting, which would break the promise above. Both are
 referenced as `external: true`, so another cluster needs them created first.
 
 Networks and volumes split. One carrying the stack's `com.docker.stack.namespace` label is the stack's own, and is
-declared with its driver and options. Everything else — a shared `monitoring` overlay the services merely attach to —
-is `external: true` under its full name. Getting this backwards is the single most likely way to produce a file that
+declared with its driver and options. Everything else—a shared `monitoring` overlay the services merely attach to—is
+`external: true` under its full name. Getting this backwards is the single most likely way to produce a file that
 reads correctly and fails to deploy, in both directions.
 
 Names are shortened by the stack's own prefix, because `docker stack deploy` adds it back: the service Swarm calls
 `myapp_api` is `api` in the file. A name another resource already spells in full is left long rather than collapsed
-onto it — an owned `myapp_data` and an adopted `data` stay two volumes. A single-service export shortens nothing and
+onto it—an owned `myapp_data` and an adopted `data` stay two volumes. A single-service export shortens nothing and
 declares everything external, because a service creates none of what it references.
 
-Anything the projection could not carry — a custom seccomp profile, a mount option Compose has no field for — is
+Anything the projection could not carry—a custom seccomp profile, a mount option Compose has no field for—is
 listed in the header comment rather than dropped silently.
 
 ## Pagination
@@ -449,7 +449,7 @@ is added when TLS is enabled.
 
 ## Waiting for a change to take effect
 
-Docker accepts a service change the moment you ask for it, which says nothing about whether it worked — the image may
+Docker accepts a service change the moment you ask for it, which says nothing about whether it worked—the image may
 still be pulling, or a placement constraint may be unsatisfiable. Send `Prefer: wait=<seconds>` to hold the response
 until the cluster has actually settled on the change:
 
@@ -470,20 +470,20 @@ curl -X PUT http://localhost:9000/services/abc123/scale \
 | `respond-async, wait=10` | waits up to 10 seconds, then `202` with `Location` |
 | `return=minimal, wait=30` | waits, then `204`; `Preference-Applied` names both preferences |
 
-A `200` from an honored wait describes the service as it settled, read back after convergence — not the snapshot Docker
+A `200` from an honored wait describes the service as it settled, read back after convergence—not the snapshot Docker
 returned when it accepted the write, whose `UpdateStatus` is still mid-rollout and whose `Version` a follow-up write
 would collide on.
 
 A `202` carries `Location` pointing at the service itself, which is where the rollout can be followed: its
 `UpdateStatus` reports convergence, and the same URL opens a [live stream](#real-time-events) with
 `Accept: text/event-stream`. The body is the service as Docker returned it, plus a `progress` field holding the last
-convergence line observed — `waiting: 2/5 replicas running`. `return=minimal` does not apply on this path: there is a
+convergence line observed—`waiting: 2/5 replicas running`. `return=minimal` does not apply on this path: there is a
 progress line to deliver, so the `202` carries a body and does not name `return=minimal` in `Preference-Applied`.
 Whether that preference is honored therefore depends on how quickly the cluster settles. A client that hangs up
 cancels its own wait.
 
 The preferences apply to the six service endpoints that change what the cluster has to schedule: `scale`, `image`,
-`mode`, `endpoint-mode`, `rollback` and `restart`. Node availability takes no `wait` — draining is a different rule,
+`mode`, `endpoint-mode`, `rollback` and `restart`. Node availability takes no `wait`—draining is a different rule,
 with a different notion of what "settled" means.
 
 ## Real-time events
@@ -607,7 +607,7 @@ Append `point` events to the data you already hold to build a rolling window.
 ### Stream contract
 
 `GET /api/asyncapi` describes all twenty streams as an [AsyncAPI 3.0](https://www.asyncapi.com/) document: their
-channels, messages and cursor semantics. Add `.json` or `.yaml`, or negotiate on `Accept`. Browse it in
+channels, messages, and cursor semantics. Add `.json` or `.yaml`, or negotiate on `Accept`. Browse it in
 [AsyncAPI Studio](https://studio.asyncapi.com/).
 
 Two details the examples above don't show: a `batch` payload is an **array** of envelopes, and a **replayed** event
@@ -652,7 +652,7 @@ There is no general rate limiting. Concurrent streams are capped, and a request 
 `GET /search` takes `q` (required, max 200 characters) and `limit` (per type, default 3; `0` or a value above 1000
 returns up to 1000). `POST /-/resync` forces a full refetch from the Docker socket; unlike the other
 `/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API,
-but it is not gated on the operations level — it re-reads the cluster and never changes it.
+but it is not gated on the operations level—it re-reads the cluster and never changes it.
 
 `GET /-/health` carries a `watcher` object reporting whether Cetacean is still tracking the cluster:
 `connected` for the Docker event stream, and `lastSyncAt` / `lastSyncAgeSeconds` for the last
@@ -724,10 +724,10 @@ Every write endpoint whose exact path also serves a `GET` accepts an optional `I
 header ([RFC 9110 §13.1.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1)). Supply the
 `ETag` a `GET` on that same path returned; if the resource has changed since, the write is
 refused with `412 Precondition Failed` (error code `API013`) instead of being applied. The header
-is always optional — omit it and the write proceeds exactly as it did before this existed.
+is always optional—omit it and the write proceeds exactly as it did before this existed.
 
-A `412` always means the resource moved. Where the current representation cannot be read at all —
-`DELETE /plugins/{name}` inspects the daemon rather than the cache — the write answers `503`
+A `412` always means the resource moved. Where the current representation cannot be read at all—`DELETE /plugins/{name}`
+inspects the daemon rather than the cache—the write answers `503`
 (`ENG001`) or `500` (`ENG004`) instead, so an unreachable daemon is not reported as a stale `ETag`.
 
 29 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
@@ -751,7 +751,7 @@ an `ETag` against: `PUT /services/{id}/scale`, `PUT /services/{id}/image`,
 `PATCH /swarm/dispatcher`, `PATCH /swarm/encryption`, `PATCH /swarm/orchestration`,
 `PATCH /swarm/raft`, `POST /swarm/rotate-token`, `POST /swarm/rotate-unlock-key`,
 `POST /swarm/force-rotate-ca`, `POST /swarm/unlock`, and `POST /auth/logout`. The remaining
-three — `POST /configs`, `POST /secrets`, `POST /plugins` — are deliberately excluded for a
+three—`POST /configs`, `POST /secrets`, `POST /plugins`—are deliberately excluded for a
 different reason: their nearest `GET` is the collection listing, and its `ETag` turns over on any
 member change, which would make "create only if the collection is unchanged" a precondition
 almost nothing could ever satisfy.
@@ -807,7 +807,7 @@ document naming every top-level collection, so knowing the origin is enough to f
 }
 ```
 
-`/index` redirects here permanently, keeping any `.json` or `.html` suffix — `/index.json` lands on `/.json`, since
+`/index` redirects here permanently, keeping any `.json` or `.html` suffix—`/index.json` lands on `/.json`, since
 the suffix is the only thing naming the representation.
 
 The [API catalog](#api-catalog) is unauthenticated and points here; this document is not. Discovery is public,
@@ -823,7 +823,7 @@ Each `item` names an API; the contexts beside it carry that API's `service-desc`
 `status` links. The MCP server appears only when [`mcp.enabled`][mcp.enabled] is set, and its authorization metadata
 only when [`auth.mode`][auth.mode] is not `none`.
 
-URIs are absolute — set [`server.public_url`][server.public_url] behind a reverse proxy.
+URIs are absolute—set [`server.public_url`][server.public_url] behind a reverse proxy.
 
 [api-explorer]: api/explorer
 [api-tokens]: authentication#api-access-tokens

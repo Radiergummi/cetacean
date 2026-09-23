@@ -26,7 +26,7 @@ A tool is detected when the service carries at least one label with its prefix.
 
 A panel shows the tool as enabled unless a `<prefix>enable` label says otherwise.
 
-Traefik's TCP and UDP labels are left to the raw label view; only the HTTP routers, services and middlewares are
+Traefik's TCP and UDP labels are left to the raw label view; only the HTTP routers, services, and middlewares are
 parsed into structure.
 
 The Traefik panel adds a read-only **Graph** view, drawing each entrypoint through the routers listening on it and
