@@ -1,0 +1,36 @@
+extends: substitution
+message: "Use the American spelling '%s' instead of '%s'."
+level: error
+ignorecase: true
+# British forms that have turned up here. Google.Spelling already covers
+# -nise, colour and centre; an -ise catch-all would hit "otherwise" and "promise".
+action:
+  name: replace
+swap:
+  analyse: analyze
+  analysed: analyzed
+  analysing: analyzing
+  behaviour: behavior
+  behaviours: behaviors
+  cancelled: canceled
+  cancelling: canceling
+  catalogue: catalog
+  catalogues: catalogs
+  defence: defense
+  destabilise: destabilize
+  favour: favor
+  favoured: favored
+  honour: honor
+  honours: honors
+  honoured: honored
+  labelled: labeled
+  labelling: labeling
+  unlabelled: unlabeled
+  licence: license
+  modelling: modeling
+  optimise: optimize
+  prioritise: prioritize
+  serialise: serialize
+  serialised: serialized
+  summarise: summarize
+  whilst: while

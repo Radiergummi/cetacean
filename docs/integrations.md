@@ -1,6 +1,6 @@
 ---
 title: Integrations
-description: Structured panels for Traefik, Shepherd, Swarm Cronjob, and Diun on the service detail page.
+description: Structured panels for Traefik, Shepherd, swarm-cronjob, and Diun on the service detail page.
 category: guide
 tags: [ integrations, traefik, shepherd, swarm-cronjob, diun ]
 ---
@@ -21,12 +21,12 @@ A tool is detected when the service carries at least one label with its prefix.
 |-------------------------------------------------------------|------------------|-----------------------------------------------------------------------------------|
 | [Traefik](https://traefik.io/)                              | `traefik.`       | HTTP routers, services, and middlewares parsed from `traefik.http.*`              |
 | [Shepherd](https://github.com/djmaze/shepherd)              | `shepherd.`      | Enable state and `shepherd.auth.config`                                           |
-| [Swarm Cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.` | Schedule, replicas, skip-running, and the two registry options                    |
+| [swarm-cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.` | Schedule, replicas, skip-running, and the two registry options                    |
 | [Diun](https://github.com/crazy-max/diun)                   | `diun.`          | Watch settings, tag include/exclude/sort filters, platform, and `diun.metadata.*` |
 
 A panel shows the tool as enabled unless a `<prefix>enable` label says otherwise.
 
-Traefik's TCP and UDP labels are left to the raw label view; only the HTTP routers, services and middlewares are
+Traefik's TCP and UDP labels are left to the raw label view; only the HTTP routers, services, and middlewares are
 parsed into structure.
 
 The Traefik panel adds a read-only **Graph** view, drawing each entrypoint through the routers listening on it and

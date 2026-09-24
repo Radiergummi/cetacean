@@ -14,7 +14,7 @@ It also carries a resync button that makes Cetacean re-read the whole cluster fr
 ## Navigation
 
 The nav bar links every resource type: nodes, stacks, services, tasks, configs, secrets, networks, volumes, plus
-the swarm info, topology and metrics pages. On narrow screens they collapse behind a menu button.
+the swarm info, topology, and metrics pages. On narrow screens they collapse behind a menu button.
 
 To the right of the search box sit the shortcut help button, a [recommendations][recommendations] indicator badged
 with the current finding count, the theme toggle (light, dark, system), and, in every
@@ -53,7 +53,7 @@ its chord.
 
 ## Command palette
 
-`⌘ K` (`Ctrl K` on Linux and Windows) opens the palette. Type to search names, images and labels across every
+`⌘ K` (`Ctrl K` on Linux and Windows) opens the palette. Type to search names, images, and labels across every
 resource type. Results are grouped by type in a fixed order, with a state indicator per row, and refresh every two
 seconds while the palette is open so a converging service updates in place. Move with the arrow keys and open with
 `Enter`.
@@ -61,22 +61,22 @@ seconds while the palette is open so a converging service updates in place. Move
 Typing an action name instead runs that action as a guided sequence, one prompt per argument, with a breadcrumb of
 what you have chosen so far:
 
-| Action              | Type                                                    |
-|---------------------|---------------------------------------------------------|
-| Scale Service       | Pick a service, then a replica count                    |
-| Update Image        | Pick a service, then an image reference                 |
-| Rollback Service    | Pick a service                                          |
-| Restart Service     | Pick a service                                          |
-| Drain Node          | Pick a node                                             |
-| Pause Node          | Pick a node                                             |
-| Activate Node       | Pick a node                                             |
-| Promote Node        | Pick a node                                             |
-| Demote Node         | Pick a node                                             |
-| Force Remove Task   | Pick a task                                             |
-| Remove …            | Pick a service, node, stack, config, secret, network or volume |
+| Action            | Type                                                            |
+|-------------------|-----------------------------------------------------------------|
+| Scale Service     | Pick a service, then a replica count                            |
+| Update Image      | Pick a service, then an image reference                         |
+| Rollback Service  | Pick a service                                                  |
+| Restart Service   | Pick a service                                                  |
+| Drain Node        | Pick a node                                                     |
+| Pause Node        | Pick a node                                                     |
+| Activate Node     | Pick a node                                                     |
+| Promote Node      | Pick a node                                                     |
+| Demote Node       | Pick a node                                                     |
+| Force Remove Task | Pick a task                                                     |
+| Remove …          | Pick a service, node, stack, config, secret, network, or volume |
 
 Destructive actions ask for confirmation before they run. An action your [operations level][operations-level]
-or your [grants][authorization] do not allow is refused with a permission message, not a server error.
+or your [grants][authorization] don't allow is refused with a permission message, not a server error.
 
 ## List pages
 
@@ -86,7 +86,7 @@ or grid is remembered per resource type; narrow screens always use the grid.
 
 Lists load more as you scroll, and stay current as resources come and go.
 
-The API accepts expression filters through `?filter=` that the dashboard's search box does not build. See the
+The API accepts expression filters through `?filter=` that the dashboard's search box doesn't build. See the
 [API guide][filter-fields-by-resource] for the fields available per resource type.
 
 ## Detail pages
@@ -95,16 +95,16 @@ A detail page shows the resource, its cross-references (the services using a con
 stack a resource belongs to), and its recent change history. Cross-references are links, so you can walk from a
 secret to the services mounting it to the nodes their tasks run on.
 
-A stack's page opens with **Topology**: the networks its services attach to and the configs, secrets and volumes
+A stack's page opens with **Topology**: the networks its services attach to and the configs, secrets, and volumes
 they mount, drawn as a graph above the tables listing the same resources. Every node links to the resource it
-stands for, and a service shows its running tasks against the number wanted. A network the stack does not own is
+stands for, and a service shows its running tasks against the number wanted. A network the stack doesn't own is
 drawn dashed; a resource nothing references is dimmed. Hovering or focusing a node dims everything more than one
 edge away and names it in the URL.
 
 Where the operations level and your grants allow it, detail pages carry actions: scale, update image, rollback and
 restart on a service, plus inline editors for environment variables, resource reservations and limits, placement,
 ports, update and rollback policy, and the log driver; availability and labels on a node; force removal on a task.
-Actions hidden by permissions are not rendered.
+Actions hidden by permissions aren't rendered.
 
 ## Charts
 
@@ -137,7 +137,7 @@ it runs the view follows the bottom of the output, and scrolling up pauses that 
 - Time range: presets from the last 5 minutes upwards, or a custom since/until pair
 - Filters: by level (parsed from the line, including JSON and `log/slog` numeric levels) and by stream
 - Search: substring or regular expression, with match navigation and highlighting
-- Rendering: JSON payloads pretty-printed, levels colour-barred
+- Rendering: JSON payloads pretty-printed, levels color-barred
 - Download: saves the lines currently loaded as a `.log` file
 
 ## Topology
@@ -145,7 +145,7 @@ it runs the view follows the bottom of the output, and scrolling up pauses that 
 The topology page has two views.
 
 - Logical: one card per service, grouped into its stack, with an edge between any two services sharing an overlay network, listing the shared networks.
-  Hovering a card dims everything it is not connected to, and the legend maps colours to stacks.
+  Hovering a card dims everything it isn't connected to, and the legend maps colors to stacks.
 - Physical: one card per cluster node, listing the tasks placed on it.
 
 Both views pan, zoom and let you drag cards, and clicking a service opens its detail page.

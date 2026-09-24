@@ -139,6 +139,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: zizmor --config .github/zizmor.yml .github/workflows/
 
+  lint-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The published build with a pinned digest, as for actionlint. vale-action
+      # wraps the same binary in reviewdog; the template below gets the inline
+      # annotations without it.
+      - env:
+          VERSION: 3.22.0
+          SHA256: 52f5cd0314a1b7384cac6aa102a68193977312f6ba9c9f3ae001b5deec8e3a10
+        run: |
+          curl -fsSL -o vale.tar.gz \
+            "https://github.com/vale-cli/vale/releases/download/v$VERSION/vale_${VERSION}_Linux_64-bit.tar.gz"
+          echo "$SHA256  vale.tar.gz" | sha256sum -c -
+          tar -xzf vale.tar.gz vale
+          sudo install -m 0755 vale /usr/local/bin/vale
+          rm vale vale.tar.gz
+      - run: make lint-docs VALE_FLAGS=--output=.vale/github.tmpl
+
   lint-frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 10
