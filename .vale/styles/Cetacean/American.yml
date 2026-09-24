@@ -33,5 +33,4 @@ swap:
   serialise: serialize
   serialised: serialized
   summarise: summarize
-  utilise: use
   whilst: while

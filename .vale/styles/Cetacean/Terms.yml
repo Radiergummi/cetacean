@@ -14,19 +14,28 @@ swap:
   '\bWeb ?[Ss]ocket\b': WebSocket
   '\bWeb ?[Ss]ockets\b': WebSockets
   '\bSwarm Mode\b': Swarm mode
-  '\b[Ee]-mail\b': email
+  '\be-mail\b': email
+  '\bE-mail\b': Email
   '(?<=[a-z,;:] )Bearer(?=[ -]tokens?\b)': bearer
-  '\b[Rr]e-fetch': refetch
+  '\bre-fetch': refetch
+  '\bRe-fetch': Refetch
   '\benv var\b': environment variable
   '\benv vars\b': environment variables
+  '\bEnv var\b': Environment variable
+  '\bEnv vars\b': Environment variables
   '\bconfiguration file\b': config file
+  '\bConfiguration file\b': Config file
   '\bcompose file\b': Compose file
   '\bcompose files\b': Compose files
   '\bSwarm Cronjob\b': swarm-cronjob
   '\b(?:operation|ops) level': operations level
+  '\b(?:Operation|Ops) level': Operations level
   '\bCLI flag\b': command-line flag
   '\bCLI flags\b': command-line flags
   '\bhealthcheck\b': health check
   '\bhealthchecks\b': health checks
   '\bHealthcheck\b': Health check
   '\bdeps\b': dependencies
+  '\bDeps\b': Dependencies
+  '\butilise\b': use
+  '\bUtilise\b': Use

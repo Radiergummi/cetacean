@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A stack or a service can be exported as a Compose file, from its detail page or by adding `.yaml` to its URL. Secrets and configs are referenced, never exported
 - `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document—the channels, the messages each carries, and which cursor dialect its `id:` uses. Sixteen streams were previously described nowhere
 - Both API descriptions are served as YAML as well as JSON, at `/api/openapi.yaml` and `/api/asyncapi.yaml` or by negotiating on `Accept`
-- Any list can be downloaded as CSV—add `.csv` to the URL or ask for `text/csv`. Search, filters and sorting apply; a download that asks for no page gets every row
+- Any list can be downloaded as CSV—add `.csv` to the URL or ask for `text/csv`. Search, filters, and sorting apply; a download that asks for no page gets every row
 - The dashboard is installable as an app, with icons and a theme color that follows its own background
 - The cluster can be searched from the browser's address bar, via the OpenSearch description at `/opensearch.xml`
 - `/.well-known/api-catalog` (RFC 9727) lists the APIs this process serves; every response links to it
@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
 - **Breaking:** a setting the schema doesn't know refuses startup and is named, rather than being ignored—a config file still carrying `[mcp.oauth]` won't start
 - **Breaking:** `auth.headers.trusted_proxies` is gone—use `server.trusted_proxies`, which headers mode already required
-- **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`, and accepts only `cert`, `headers` and `tailscale`—a listed mode authenticates `/mcp` on its own, so `oauth.enabled` can stay off
+- **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`, and accepts only `cert`, `headers`, and `tailscale`—a listed mode authenticates `/mcp` on its own, so `oauth.enabled` can stay off
 - **Breaking:** `/mcp`'s protected resource metadata moved to `/.well-known/oauth-protected-resource/mcp`, so one document describes one resource. A client following `resource_metadata` from the 401 is unaffected; one that hardcoded the root path isn't
 - **Breaking:** `mcp.operations_level` narrows `server.operations_level` instead of replacing it. Set above the global tier it now grants nothing; set below, it caps as before
 - **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` isn't read—delete it, and every client authorizes once more
@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Access tokens are signed with ES256 rather than HMAC, and the key is derived differently, so the published `kid` changes. Clients refresh once on upgrade; stop every replica before starting the new version
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it doesn't recognize
 - **Breaking:** `server.operations_level` defaults to `0`, read-only. A deployment that never set it could perform operational writes, and on `auth.mode=none` could do so unauthenticated—set it to `1` to keep that
-- **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale` and `headers`—no challenge can ask for the credential those modes read
+- **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale`, and `headers`—no challenge can ask for the credential those modes read
 
 ### Removed
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A 401 names where a token comes from even when the request carried no credential, and no longer calls that `invalid_token`—RFC 6750 reserves that for a token actually sent, so cold discovery works off the challenge
 - An ACL grant written against an email address matches a token as well as a browser session. MCP clients were silently denied everything such a grant allowed
 - Refresh-token theft detection works in the configuration everyone runs: a replayed token revokes the grant family and the remembered approval, where two separate checks refused the request before detection could run
-- Everything that doesn't describe the cluster keeps working while the Docker daemon is unreachable—the dashboard's own icons and manifest, the API catalog, the OpenSearch description, `/profile` and the OAuth endpoints that issue a token
+- Everything that doesn't describe the cluster keeps working while the Docker daemon is unreachable—the dashboard's own icons and manifest, the API catalog, the OpenSearch description, `/profile`, and the OAuth endpoints that issue a token
 - A Docker Engine too old for Cetacean says so at startup instead of coming up and serving empty pages. Cetacean speaks Docker API 1.46, which means Engine 26.1 or newer
 - A recommendation that measured zero no longer reads as one that measured nothing—a service using essentially no CPU reported an empty `current`
 - Header-based authentication works behind a reverse proxy again; it was answering 401 to every request
@@ -80,7 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A transient hiccup in the five-minutely re-sync no longer reports the cluster as unreachable for the next five minutes. The stream ending is what marks a disconnection; a stalled cache still shows as stale
 - A cluster operation run as an MCP task can no longer outlive the process. Detaching it from the request dropped its deadline too, so a wedged Docker call held its goroutine and its connection open forever
 - A write that loses a race answers `409` naming the conflict, instead of a bare `500 Docker Engine Error`
-- A `PATCH` to a service's resources, health check, update policy, rollback policy, log driver or container config no longer discards an edit made just before it
+- A `PATCH` to a service's resources, health check, update policy, rollback policy, log driver, or container config no longer discards an edit made just before it
 - Every identifier a response hands out works under `server.base_path`. Listings and a task's links to its service and node no longer lead outside the deployment to a 404
 - Relabelling a node needs operations level 2 over the API, matching MCP. It was gated with draining and demoting
 - `POST /-/resync` requires authentication. It's still not gated on the operations level, so a read-only deployment keeps its refresh button
@@ -134,20 +134,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Startup no longer stops for every authenticated deployment over an unreachable MCP OAuth issuer—only when MCP sign-in is actually in use
 - Atom and JSON Feed links are built from `server.public_url` when it's set, rather than from request headers
 - `make build` works from a fresh clone; it previously failed because the binary embeds a frontend that had never been built
-- The example config offered `acl_claim`, `acl_capability` and `acl` keys that don't exist, so anyone uncommenting one got no grants and no warning. The working keys are `oidc_claim`, `tailscale_capability` and `headers_acl` under `[acl]`
+- The example config offered `acl_claim`, `acl_capability`, and `acl` keys that don't exist, so anyone uncommenting one got no grants and no warning. The working keys are `oidc_claim`, `tailscale_capability`, and `headers_acl` under `[acl]`
 
 ## [0.13.0] - 2026-09-07
 
 ### Added
 - MCP clients that support interactive apps render results as widgets: a sortable table, a topology graph, a live log tail, a metrics chart, and recommendations grouped by severity
-- AI agents can ask what's using the most CPU, memory or network, cluster-wide or on one node
+- AI agents can ask what's using the most CPU, memory, or network, cluster-wide or on one node
 - AI agents can ask what draining a node would move, where it would go, and which services have nowhere to go
 - AI agents can ask whether the cluster is healthy and be told what's wrong—degraded services and nodes, rollouts in flight, capacity reserved
 - AI agents can ask what changed and when, narrowed to a time range, a resource type, or one resource
 - AI agents can read and search logs across a stack or the whole cluster in one call, each line naming its service
 - AI agents can wait for a service to finish deploying, and are told how far the rollout got if it never settles
-- AI agents can change a service's mounts, secrets, configs, health check and command, and create secrets and configs—completing the rotation sequence. A secret's value is never returned by any tool
-- AI agents can chart CPU, memory or network for a service or node over the last hour, six hours, day, or week. Requires Prometheus
+- AI agents can change a service's mounts, secrets, configs, health check, and command, and create secrets and configs—completing the rotation sequence. A secret's value is never returned by any tool
+- AI agents can chart CPU, memory, or network for a service or node over the last hour, six hours, day, or week. Requires Prometheus
 - AI agents can ask for Cetacean's recommendations directly, optionally only the critical ones
 - AI agents can list a whole resource type, paged, rather than searching one name at a time
 - MCP clients are offered named investigations—diagnose an unhealthy service, explain why one won't schedule, review capacity, roll back, right-size, drain a node—filtered to what the caller could carry out end to end
@@ -187,7 +187,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Node charts show data when Prometheus scrapes the exporters over an overlay network
 - The monitoring stack and Cetacean's stack share the overlay network they're documented to share, and `docker stack deploy -c compose.yaml cetacean` works on a fresh swarm
 - Cetacean no longer recommends shrinking services it has no measurements for; missing figures were read as a measured zero
-- Right-sizing recommendations state current, configured and suggested CPU in the same unit—a suggestion could look like a thousandfold change
+- Right-sizing recommendations state current, configured, and suggested CPU in the same unit—a suggestion could look like a thousandfold change
 - Replica counts are correct for services that restart frequently. Tasks Swarm had replaced were counted as running until the next re-sync, so a crash-looping service could report thirteen replicas against a desired one
 - A service restarting in a loop is reported as failing rather than healthy, and appears in the cluster's list of what's wrong
 - Waiting for a deploy no longer reports failure on a rollout that succeeded, nor success the instant it starts
@@ -237,7 +237,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Turning off `CETACEAN_MCP_CIMD_ENABLED` takes effect; the setting was ignored
 - The example Compose file gives Cetacean a volume for its state, and names the published image rather than a local tag
 - The Tailscale tsnet example sets the state directory it mounts a volume for, so the node no longer re-authenticates on every restart
-- The API documentation no longer describes MCP tools that don't exist, and documented task states, media types and feed formats match what the server accepts
+- The API documentation no longer describes MCP tools that don't exist, and documented task states, media types, and feed formats match what the server accepts
 - The configuration reference documents every setting; the MCP, authorization and sizing settings were absent
 - The documentation site publishes again—one page without the required metadata had been failing every build
 - Corrected several documentation claims: the log viewer doesn't tail until turned on, the logical topology draws one edge per pair of services, Swarm ignores Compose's `depends_on`, and the default operations level permits operational writes rather than everything
@@ -249,11 +249,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Security
 - Updated Go, dashboard and website dependencies to clear every outstanding advisory, including a critical one in the OpenAPI parser (GHSA-r277-6w6q-xmqw)
 - Rejected OIDC bearer tokens no longer reach the server log
-- A `Request-Id` header forwarded by a proxy is only echoed back when it's letters, digits, dashes, underscores and dots; anything else is replaced
+- A `Request-Id` header forwarded by a proxy is only echoed back when it's letters, digits, dashes, underscores, and dots; anything else is replaced
 
 ### Added
 - Embedded Model Context Protocol server, opt-in via `CETACEAN_MCP=true`, exposing cluster state to AI agents at `/mcp`—twelve resources and twenty-three tools across the read, operational, configuration, and impactful tiers
-- OAuth 2.1 authorization server for MCP clients, with Dynamic Client Registration, Client ID Metadata Documents, resource indicators, PKCE-only flows and refresh token theft detection
+- OAuth 2.1 authorization server for MCP clients, with Dynamic Client Registration, Client ID Metadata Documents, resource indicators, PKCE-only flows, and refresh token theft detection
 - `CETACEAN_MCP_ISSUER` sets the canonical OAuth issuer URL when Cetacean runs behind a reverse proxy
 - MCP authorization metadata is also served at the OpenID Connect discovery path, for clients that look there
 - The MCP endpoint rejects a request carrying a disallowed `Origin` with 403, a DNS-rebinding defense. The allowlist is `CETACEAN_CORS_ORIGINS`; non-browser clients send no `Origin` and are unaffected
@@ -263,7 +263,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Open-source licenses page, linked from the footer, listing every bundled Go module and frontend dependency with search and per-ecosystem filtering. The bill of materials is at `/-/sbom.cdx.json`
 
 ### Fixed
-- Resource pages no longer crash on fields the Docker Engine omits—nodes that haven't reported a hostname, platform, resources or address; tmpfs mounts; unset ports and gateways; services with no image
+- Resource pages no longer crash on fields the Docker Engine omits—nodes that haven't reported a hostname, platform, resources, or address; tmpfs mounts; unset ports and gateways; services with no image
 - The service detail page no longer crashes on a task update arriving over the live stream, or when a service's task template is absent
 - Swarm CA and Raft panels no longer show `undefined` for settings Docker omits at their default
 - Plugin type displays as `docker.volumedriver/1.0` rather than `[object Object]`
@@ -280,7 +280,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Stack and volume detail reads over MCP make "denied" and "not found" indistinguishable from outside
 - MCP `search` rejects an empty query instead of returning every cached resource, and no longer advertises a `types` parameter it ignored
 - `update_service_image` rejects an empty image string
-- Destructive MCP tools—restart, rollback, node availability and role—advertise it, so clients can gate them behind a prompt
+- Destructive MCP tools—restart, rollback, node availability, and role—advertise it, so clients can gate them behind a prompt
 - MCP client metadata documents are validated and fetched over a connection pinned to a checked address, so a malicious host can't inject a `javascript:` redirect or reach an internal one
 - MCP PKCE verifiers are compared in constant time and held to the length and alphabet the spec requires
 - MCP refresh-token history, abandoned authorization codes and registration rate-limit buckets are bounded, so a long-running server no longer accumulates them
