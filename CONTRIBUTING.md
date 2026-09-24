@@ -4,7 +4,7 @@ Thanks for your interest in contributing. This guide covers everything you need 
 
 ## Development setup
 
-You need Go 1.26+, Node.js 24+ and Docker with Swarm mode.
+You need Go 1.26+, Node.js 24+, and Docker with Swarm mode.
 
 ```bash
 git clone https://github.com/radiergummi/cetacean.git
@@ -84,7 +84,7 @@ test: add integration tests for search endpoint
 - Name settings by their TOML path (`server.trusted_proxies`), and link them to their entry in the configuration page.
 - **swarm** is your cluster ("deploy to a swarm"); **Swarm** is Docker's orchestrator ("Swarm reschedules the task");
   the feature is **Swarm mode**.
-- Verb or noun: *sign in*, *roll back*, and *set up* are verbs; *sign-in*, *rollback* and *setup* are nouns.
+- Verb or noun: *sign in*, *roll back*, and *set up* are verbs; *sign-in*, *rollback*, and *setup* are nouns.
 - **Compose file**, **config file**, **environment variable**, **command-line flag**, **health check**,
   **bearer token**, **operations level**, **refetch**.
 - Name third-party tools the way their projects do: Alertmanager, cAdvisor, swarm-cronjob, Traefik.

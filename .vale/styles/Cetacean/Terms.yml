@@ -11,7 +11,8 @@ action:
 swap:
   '\bOpen ID\b': OpenID
   '\bOpen API\b': OpenAPI
-  '\bWeb ?[Ss]ockets?\b': WebSocket
+  '\bWeb ?[Ss]ocket\b': WebSocket
+  '\bWeb ?[Ss]ockets\b': WebSockets
   '\bSwarm Mode\b': Swarm mode
   '\b[Ee]-mail\b': email
   '(?<=[a-z,;:] )Bearer(?=[ -]tokens?\b)': bearer

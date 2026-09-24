@@ -31,7 +31,7 @@ New here? Start with [Getting started][getting-started].
 | [Integrations][integrations]         | Traefik, Shepherd, swarm-cronjob, and Diun panels                      |
 | [Recommendations][recommendations]   | Automated sizing, config, operational, and cluster checks              |
 | [API guide][api]                     | REST endpoints, SSE, feeds, write operations, error codes              |
-| [MCP Server][mcp]                    | Enable the MCP server, authorize an agent, prompts, and widgets        |
+| [MCP server][mcp]                    | Enable the MCP server, authorize an agent, prompts, and widgets        |
 | [MCP tools and resources][mcp-tools] | Every MCP tool and resource, with its operations level                 |
 
 [api]: api

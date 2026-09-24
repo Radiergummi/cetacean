@@ -20,10 +20,10 @@ lint: lint-docs
 DOCS := $(filter-out docs/test_%,$(wildcard docs/*.md docs/*.mdx)) README.md CONTRIBUTING.md CHANGELOG.md
 VALE_FLAGS ?=
 
-lint-docs: .vale/styles/Google
+lint-docs: .vale/styles/.synced
 	vale $(VALE_FLAGS) $(DOCS)
 
-.vale/styles/Google: .vale.ini
+.vale/styles/.synced: .vale.ini
 	vale sync
 	touch $@
 

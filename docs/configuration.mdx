@@ -17,7 +17,7 @@ Sensitive settings accept a `_FILE` suffix on their environment variable to read
 file at startup, which is how a Docker secret reaches the process. The `_FILE` variant ranks below
 the direct environment variable.
 
-The `acl.*`, `mcp.*`, `oauth.*` and `sizing.*` settings have no command-line flags. Set them through the environment or
+The `acl.*`, `mcp.*`, `oauth.*`, and `sizing.*` settings have no command-line flags. Set them through the environment or
 the config file.
 
 A setting this page doesn't list isn't ignored: a config file carrying a key the schema doesn't
@@ -326,7 +326,7 @@ default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token
 </ConfigParam>
 
 <ConfigParam name="mcp.auth_bypass" env="CETACEAN_MCP_AUTH_BYPASS">
-  Comma-separated authentication modes that skip the bearer check at `/mcp`, for example `cert`. Use it where the transport already carries a verified identity. Authorization still applies; only the OAuth handshake is skipped. A mode listed here is authenticated by its own provider on every request, so it satisfies `/mcp` on its own and [`oauth.enabled`][oauth.enabled] can stay off. Only `cert`, `headers` and `tailscale` may be listed, and Cetacean refuses to start on anything else: those carry identity in the transport, where `oidc` authenticates from a session cookie—an ambient credential that `/mcp`'s exemption from cross-origin protection assumes is absent.
+  Comma-separated authentication modes that skip the bearer check at `/mcp`, for example `cert`. Use it where the transport already carries a verified identity. Authorization still applies; only the OAuth handshake is skipped. A mode listed here is authenticated by its own provider on every request, so it satisfies `/mcp` on its own and [`oauth.enabled`][oauth.enabled] can stay off. Only `cert`, `headers`, and `tailscale` may be listed, and Cetacean refuses to start on anything else: those carry identity in the transport, where `oidc` authenticates from a session cookie—an ambient credential that `/mcp`'s exemption from cross-origin protection assumes is absent.
 </ConfigParam>
 
 See [MCP][mcp] for the tools, resources, prompts, and widgets the server exposes.
