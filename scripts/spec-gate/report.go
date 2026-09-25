@@ -13,7 +13,6 @@ import (
 // failing category: a gap and a deferral are decisions already recorded, and
 // "not run" is a lane this invocation did not include.
 type Summary struct {
-	Total     int
 	Exercised int
 	NotRun    int
 	Gaps      []string
@@ -35,7 +34,6 @@ func summarise(reg *spec.Registry, ran map[string][]spec.Evidence, e2e bool) Sum
 
 	for _, q := range reg.All() {
 		id := q.FullID()
-		out.Total++
 
 		switch {
 		case q.Deferred != "":
@@ -45,7 +43,7 @@ func summarise(reg *spec.Registry, ran map[string][]spec.Evidence, e2e bool) Sum
 		case len(ran[id]) > 0:
 			out.Exercised++
 
-			if observed(ran[id]) {
+			if len(observations(ran[id])) > 0 {
 				out.Observed++
 			}
 		case q.Lane == spec.LaneE2E && !e2e:
@@ -99,7 +97,7 @@ func runReport(root, claims, suites string, transcript bool) error {
 	// compliance claim no suite here can support.
 	fmt.Fprintf(os.Stderr,
 		"spec: %d requirements across %d documents (%d of %d cited specifications)\n",
-		summary.Total, len(reg.Documents), covered, len(cited))
+		len(reg.All()), len(reg.Documents), covered, len(cited))
 	fmt.Fprintf(os.Stderr,
 		"  %d exercised by %s, %d not run, %d gaps, %d deferred, %d uncovered\n",
 		summary.Exercised, suites,
@@ -131,18 +129,6 @@ func runReport(root, claims, suites string, transcript bool) error {
 	}
 
 	return nil
-}
-
-// observed reports whether any claiming test recorded a value, without
-// building the list to find out.
-func observed(evidence []spec.Evidence) bool {
-	for _, e := range evidence {
-		if len(e.Observations) > 0 {
-			return true
-		}
-	}
-
-	return false
 }
 
 // observations flattens the values every claiming test recorded.

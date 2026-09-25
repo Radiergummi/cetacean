@@ -105,10 +105,8 @@ type Inventory struct {
 	Count int    `yaml:"count"`
 
 	// Sections is From's machine-readable half: the section numbers, subsections
-	// included, that Count is a count of. scripts/spec-extract reads the
-	// document itself over these and reports what no entry here accounts for,
-	// which is the only thing holding Count to the specification rather than to
-	// whoever typed it.
+	// included, that Count is a count of. scripts/spec-extract reads them to hold
+	// Count to the specification rather than to whoever typed it.
 	Sections []string `yaml:"sections"`
 }
 
@@ -184,8 +182,7 @@ func load() (*Registry, error) {
 			return err
 		}
 
-		rel := strings.TrimPrefix(p, "registry/")
-		if rel == "unregistered.yaml" {
+		if p == "registry/unregistered.yaml" {
 			return nil
 		}
 
@@ -276,6 +273,12 @@ func (q *Requirement) validate() error {
 		return fmt.Errorf("%s: both deferred and gap are set", q.FullID())
 	}
 
+	for kind, reason := range map[string]string{"deferred": q.Deferred, "gap": q.Gap} {
+		if reason != "" && strings.TrimSpace(reason) == "" {
+			return fmt.Errorf("%s: %s with an empty reason", q.FullID(), kind)
+		}
+	}
+
 	if q.Lane != "" && q.Lane != LaneE2E {
 		return fmt.Errorf("%s: lane = %q, want e2e or nothing", q.FullID(), q.Lane)
 	}
@@ -284,11 +287,8 @@ func (q *Requirement) validate() error {
 }
 
 // Token canonicalises a specification's name to the one spelling the sweep
-// compares on: "RFC 7636", "rfc7636" and "RFC-7636" all become "RFC7636";
-// "SEP 2575" becomes "SEP-2575". A registered document and a citation of it
-// have to land on the same string, so both sides call this. The dot goes too,
-// so a document named by version — "OAuth 2.1", filed as oauth-2-1.yaml —
-// meets its citations.
+// compares a document and its citations on: "RFC 7636" and "rfc-7636" become
+// "RFC7636", "SEP 2575" becomes "SEP-2575", and "OAuth 2.1" meets oauth-2-1.
 func Token(name string) string {
 	upper := strings.ToUpper(strings.NewReplacer(" ", "", "-", "", ".", "").Replace(name))
 
@@ -352,11 +352,8 @@ func (r *Registry) Validate() []error {
 // be mistaken for one.
 var refRE = regexp.MustCompile(`\b([a-z0-9-]+/[a-z0-9.-]+)/([a-z0-9-]+)\b`)
 
-// checkReferences resolves every such pointer. Most of what a document says
-// about itself lives in the prose of a dismissal or a deferral, and a pointer
-// into another entry is the only part of it a gate can follow at all: without
-// this, renaming a requirement silently orphans the argument for every entry
-// that leant on it.
+// checkReferences resolves every such pointer, so renaming a requirement
+// cannot silently orphan the reasoning of an entry that leant on it.
 func (r *Registry) checkReferences() []error {
 	entries := map[string]map[string]bool{}
 

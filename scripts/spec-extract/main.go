@@ -1,14 +1,6 @@
-// Command spec-extract reads the specifications the registry transcribes and
-// reports the normative statements no entry accounts for. inventory.count is
-// otherwise a number chosen by whoever chose the requirements it counts, so
-// requirements + dismissed = count holds by construction and a clause nobody
-// read is indistinguishable from one that does not apply.
-//
-// It needs the network and is not part of `make check`: the sentence splitter
-// is approximate, so the output is a list to reconcile rather than a verdict.
-// What is committed is scripts/spec-extract/baseline.yaml — the statements
-// themselves, not a count of them, so that registering one while another
-// drifts out of range is a diff rather than a number that did not move.
+// Command spec-extract reports the normative statements in each transcribed
+// specification that no registry entry accounts for. It needs the network and
+// its sentence splitter is approximate, so it is not part of `make check`.
 package main
 
 import (
@@ -44,9 +36,7 @@ func main() {
 }
 
 // baseline holds the statements each document carries that no requirement
-// quotes. Committed as the statements rather than as a count of them: a count
-// says nothing about which ones, so registering one while a second drifts out
-// of quoting range leaves it unchanged and the drift invisible.
+// quotes — the statements rather than a count, so a drift is a diff.
 func baseline() (map[string][]string, error) {
 	body, err := os.ReadFile(baselinePath)
 	if err != nil {

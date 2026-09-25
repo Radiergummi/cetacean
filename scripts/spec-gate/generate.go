@@ -1,7 +1,8 @@
 package main
 
 import (
-	"context"
+	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -110,12 +111,8 @@ func packageSources(dir string) ([]string, error) {
 }
 
 // runGenerated swaps every operator in a package and reports the swaps its own
-// tests do not notice.
-//
-// This is not a gate. An equivalent mutant — one that cannot change behaviour —
-// survives honestly, and no threshold tells it apart from a real hole. The
-// output is a list to triage: a survivor worth keeping becomes a registry
-// mutant, attached to the requirement it breaks.
+// tests do not notice. Not a gate: an equivalent mutant survives honestly, so
+// the output is a list to triage, not a verdict.
 func runGenerated(root, pkg string) error {
 	dir := filepath.Join(root, filepath.Clean(strings.TrimPrefix(pkg, "./")))
 
@@ -124,9 +121,12 @@ func runGenerated(root, pkg string) error {
 		return err
 	}
 
-	sources := map[string][]byte{}
-	planned := map[string][]genMutant{}
-	total := 0
+	type planned struct {
+		src []byte
+		m   genMutant
+	}
+
+	var plan []planned
 
 	for _, path := range files {
 		src, err := os.ReadFile(path) // #nosec G304 -- a path this command was given
@@ -139,33 +139,29 @@ func runGenerated(root, pkg string) error {
 			return err
 		}
 
-		sources[path] = src
-		planned[path] = mutants
-		total += len(mutants)
+		for _, m := range mutants {
+			plan = append(plan, planned{src, m})
+		}
 	}
 
 	fmt.Fprintf(os.Stderr, "spec: %d operator mutants across %d files in %s\n",
-		total, len(files), pkg)
+		len(plan), len(files), pkg)
 
 	var survived, killed, unviable int
 
-	for _, path := range files {
-		src := sources[path]
+	for _, p := range plan {
+		switch outcome, err := tryGenerated(root, p.m.File, applyGenerated(p.src, p.m), pkg); {
+		case err != nil:
+			return err
+		case outcome == unviableMutant:
+			unviable++
+		case outcome == survivedMutant:
+			survived++
 
-		for _, m := range planned[path] {
-			switch outcome, err := tryGenerated(root, path, applyGenerated(src, m), pkg); {
-			case err != nil:
-				return err
-			case outcome == unviableMutant:
-				unviable++
-			case outcome == survivedMutant:
-				survived++
-
-				fmt.Fprintf(os.Stderr, "  survived: %s:%d: %s -> %s\n",
-					m.File, m.Line, m.From, m.To)
-			default:
-				killed++
-			}
+			fmt.Fprintf(os.Stderr, "  survived: %s:%d: %s -> %s\n",
+				p.m.File, p.m.Line, p.m.From, p.m.To)
+		default:
+			killed++
 		}
 	}
 
@@ -188,32 +184,17 @@ const (
 // Unlike a registry mutant there is no claimant to narrow the run to, so every
 // test in the package is the jury.
 func tryGenerated(root, path string, mutated []byte, pkg string) (outcome, error) {
-	dir, err := os.MkdirTemp("", "spec-generated-")
-	if err != nil {
-		return killedMutant, err
-	}
+	out, err := runOverlaid(root, path, string(mutated), pkg)
 
-	defer os.RemoveAll(dir) //nolint:errcheck // scratch directory
-
-	overlay, err := overlayFor(dir, path, string(mutated))
-	if err != nil {
-		return killedMutant, err
-	}
-
-	// #nosec G204 -- the package is this command's own argument and the overlay
-	// is a path in a scratch directory.
-	cmd := exec.CommandContext(
-		context.Background(), "go", "test", "-overlay="+overlay, "-count=1", pkg,
-	)
-	cmd.Dir = root
-
-	out, err := cmd.CombinedOutput()
+	_, failed := errors.AsType[*exec.ExitError](err)
 
 	switch {
-	case strings.Contains(string(out), "[build failed]"):
+	case bytes.Contains(out, []byte(buildFailed)):
 		return unviableMutant, nil
-	case err != nil:
+	case failed:
 		return killedMutant, nil
+	case err != nil:
+		return killedMutant, err
 	default:
 		return survivedMutant, nil
 	}

@@ -2,12 +2,35 @@ package spec
 
 import (
 	"fmt"
+	"go/ast"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 )
+
+// ImportPath is the only path a claim may come from. The gate reads claims
+// without type information, so it may not be aliased and its ids must be literals.
+const ImportPath = "github.com/radiergummi/cetacean/internal/spec"
+
+// ClaimIDs returns the arguments of a call to fn that name requirements:
+// Satisfies takes every one after t, Observed only the first. Anything else
+// names none.
+func ClaimIDs(fn string, args []ast.Expr) []ast.Expr {
+	if len(args) < 2 {
+		return nil
+	}
+
+	switch fn {
+	case "Satisfies":
+		return args[1:]
+	case "Observed":
+		return args[1:2]
+	default:
+		return nil
+	}
+}
 
 // ClaimsEnv names the directory claims are written to. Unset, Satisfies
 // validates and writes nothing, which is every ordinary `go test` run.
@@ -22,42 +45,22 @@ var claimMu sync.Mutex
 func Satisfies(t testing.TB, ids ...string) {
 	t.Helper()
 
-	recordOnPass(t, func(name string) []string {
-		records := make([]string, 0, len(ids))
-		for _, id := range ids {
-			records = append(records, id+"\t"+name)
-		}
-
-		return records
-	}, ids...)
+	recordOnPass(t, "", ids...)
 }
 
-// Observed records what the test saw the server do — the status code, the
-// error code, the header the requirement is about. Call it after the
-// assertion, with the value that was asserted, on the t that claimed the
-// requirement or on one of its subtests. An observation the report cannot join
-// to a claim is dropped: only Satisfies establishes that the test exercising
-// the requirement passed, and only it is a form the static gate can read.
-//
-// This is the only evidence in the registry that names a behaviour rather than
-// a test. A claim says a test ran and passed; a mutant says the test refuses an
-// edit; neither says what the server answered.
+// Observed records what the test saw the server do, on the t that claimed the
+// requirement or one of its subtests. Call it after the assertion, with the
+// value that was asserted; an observation with no matching claim is dropped.
 func Observed(t testing.TB, id, format string, args ...any) {
 	t.Helper()
 
-	observation := sanitise(fmt.Sprintf(format, args...))
-
-	recordOnPass(t, func(name string) []string {
-		return []string{id + "\t" + name + "\t" + observation}
-	}, id)
+	recordOnPass(t, "\t"+sanitise(fmt.Sprintf(format, args...)), id)
 }
 
-// recordOnPass validates the ids and arranges for lines to be written when the
-// test passes. Both entry points share it rather than each holding a copy:
-// withholding the record from a test that failed or skipped is the one
-// invariant the whole claims format rests on, and it may not drift between
-// them.
-func recordOnPass(t testing.TB, lines func(name string) []string, ids ...string) {
+// recordOnPass validates the ids and writes one "id TAB name" line per id, plus
+// suffix, when the test passes. Withholding the record from a test that failed
+// or skipped is the invariant the claims format rests on.
+func recordOnPass(t testing.TB, suffix string, ids ...string) {
 	t.Helper()
 
 	reg, err := Load()
@@ -76,7 +79,12 @@ func recordOnPass(t testing.TB, lines func(name string) []string, ids ...string)
 		return
 	}
 
-	records := lines(sanitise(t.Name()))
+	name := sanitise(t.Name())
+
+	records := make([]string, 0, len(ids))
+	for _, id := range ids {
+		records = append(records, id+"\t"+name+suffix)
+	}
 
 	t.Cleanup(func() {
 		if t.Failed() || t.Skipped() {
@@ -89,11 +97,13 @@ func recordOnPass(t testing.TB, lines func(name string) []string, ids ...string)
 	})
 }
 
+var oneField = strings.NewReplacer("\t", " ", "\n", " ", "\r", " ")
+
 // sanitise keeps a record on one line and in its own field: the claims format
 // is id TAB name TAB observation LF with no escaping, so either character
 // would split it.
 func sanitise(s string) string {
-	return strings.NewReplacer("\t", " ", "\n", " ", "\r", " ").Replace(s)
+	return oneField.Replace(s)
 }
 
 // appendRecord writes one file per process. Separate processes need no
@@ -138,13 +148,8 @@ type Evidence struct {
 }
 
 // ReadClaims collects every record written into dir, mapping a requirement to
-// the tests that recorded it. It is the reader for appendRecord's format, and
-// lives beside it so the two cannot drift.
-//
-// An observation is joined to the claim from the same test. One arriving
-// without a claim is dropped: only Satisfies establishes that the test
-// exercising the requirement passed, and only it is a form the static gate
-// can see.
+// the tests that recorded it. An observation is joined to the claim from the
+// same test; one arriving without a claim is dropped.
 func ReadClaims(dir string) (map[string][]Evidence, error) {
 	files, err := filepath.Glob(filepath.Join(dir, "*.claims"))
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strings"
 
 	"github.com/radiergummi/cetacean/internal/spec"
 )
@@ -53,10 +52,10 @@ func report(errs []error) {
 }
 
 // checkStatic reports every requirement with no claimant and no reason, every
-// reason that is empty, every deferred requirement with nothing pinning it,
-// and every lane declaration the claimants contradict.
+// deferred requirement with nothing pinning it, and every lane declaration the
+// claimants contradict.
 func checkStatic(reg *spec.Registry, claims []Claim) []error {
-	claimed, tagged, untagged := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	tagged, untagged := map[string]bool{}, map[string]bool{}
 
 	var errs []error
 
@@ -64,8 +63,6 @@ func checkStatic(reg *spec.Registry, claims []Claim) []error {
 		if _, ok := reg.Lookup(c.ID); !ok {
 			continue
 		}
-
-		claimed[c.ID] = true
 
 		if c.Tagged {
 			tagged[c.ID] = true
@@ -76,23 +73,15 @@ func checkStatic(reg *spec.Registry, claims []Claim) []error {
 
 	for _, q := range reg.All() {
 		id := q.FullID()
-		has := claimed[id]
+		has := tagged[id] || untagged[id]
 
 		switch {
 		case q.Deferred != "":
-			if strings.TrimSpace(q.Deferred) == "" {
-				errs = append(errs, fmt.Errorf("%s: deferred with an empty reason", id))
-			}
-
 			if !has {
 				errs = append(errs, fmt.Errorf(
 					"%s: deferred, but no test pins the current answer", id))
 			}
 		case q.Gap != "":
-			if strings.TrimSpace(q.Gap) == "" {
-				errs = append(errs, fmt.Errorf("%s: gap with an empty reason", id))
-			}
-
 			// The mirror of the deferred rule, and the only thing that closes
 			// this hatch again: a gap outlives its reason silently, and the
 			// report goes on counting a requirement its test now exercises as
@@ -132,9 +121,8 @@ func checkLane(q *spec.Requirement, tagged, untagged bool) error {
 	return nil
 }
 
-// checkObservations reports an observation its own test never claimed. The
-// report silently drops one — it has no claim to hang on — so without this the
-// evidence a test meant to publish would simply not appear.
+// checkObservations reports an observation its own test never claimed, which
+// the report would otherwise drop without a word.
 func checkObservations(claims, observations []Claim) []error {
 	claimed := make(map[string]bool, len(claims))
 	for _, c := range claims {

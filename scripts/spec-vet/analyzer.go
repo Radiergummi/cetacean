@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
-)
 
-const specPath = "github.com/radiergummi/cetacean/internal/spec"
+	"github.com/radiergummi/cetacean/internal/spec"
+)
 
 // Analyzer enforces how a test claims a requirement. scripts/spec-gate reads
 // the same calls with go/parser and no type information, so two of these rules
@@ -58,7 +58,7 @@ func callee(pass *analysis.Pass, call *ast.CallExpr) string {
 	}
 
 	fn, ok := pass.TypesInfo.Uses[sel.Sel].(*types.Func)
-	if !ok || fn.Pkg() == nil || fn.Pkg().Path() != specPath {
+	if !ok || fn.Pkg() == nil || fn.Pkg().Path() != spec.ImportPath {
 		return ""
 	}
 
@@ -70,7 +70,7 @@ func callee(pass *analysis.Pass, call *ast.CallExpr) string {
 func checkImport(pass *analysis.Pass, file *ast.File) {
 	for _, imp := range file.Imports {
 		path, err := strconv.Unquote(imp.Path.Value)
-		if err != nil || path != specPath {
+		if err != nil || path != spec.ImportPath {
 			continue
 		}
 
@@ -87,12 +87,12 @@ func checkImport(pass *analysis.Pass, file *ast.File) {
 // false for internal/spec itself, whose own tests call Satisfies to exercise
 // it rather than to claim through it.
 func imports(pkg *types.Package) bool {
-	if pkg.Path() == specPath {
+	if pkg.Path() == spec.ImportPath {
 		return false
 	}
 
 	for _, dep := range pkg.Imports() {
-		if dep.Path() == specPath {
+		if dep.Path() == spec.ImportPath {
 			return true
 		}
 	}
@@ -117,12 +117,7 @@ func checkCall(pass *analysis.Pass, file *ast.File, call *ast.CallExpr, name str
 		return
 	}
 
-	ids := call.Args[1:]
-	if name == "Observed" {
-		ids = ids[:1]
-	}
-
-	for _, arg := range ids {
+	for _, arg := range spec.ClaimIDs(name, call.Args) {
 		if lit, ok := arg.(*ast.BasicLit); !ok || lit.Kind != token.STRING {
 			pass.Reportf(arg.Pos(),
 				"requirement id is not a string literal; the requirement gate reads these "+

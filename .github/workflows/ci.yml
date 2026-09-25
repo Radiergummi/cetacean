@@ -86,11 +86,7 @@ jobs:
       # static asks whether a claim was written; report asks whether the test
       # that writes it passed. Neither answers for the other.
       - run: go run ./scripts/spec-gate report --claims .spec-claims --suites unit
-      - run: go run ./scripts/spec-gate static
-      - run: go run ./scripts/spec-gate sweep
-      - run: go build -o spec-vet ./scripts/spec-vet
-      - run: go vet -vettool="$PWD/spec-vet" ./...
-      - run: go vet -tags e2e -vettool="$PWD/spec-vet" ./test/e2e/...
+      - run: make spec
       # The spec gate parses the e2e tree but cannot know it compiles: its
       # build tag keeps it out of every other job.
       - run: go vet -tags e2e ./test/e2e/...
@@ -105,7 +101,15 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - run: go run ./scripts/spec-gate mutants
+          cache: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-mutants-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: go-mutants-${{ runner.os }}-
+      - run: make spec-mutants
 
   lint-go:
     needs: build-frontend

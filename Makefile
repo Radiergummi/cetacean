@@ -210,13 +210,16 @@ spec-mutants:
 spec-mutants-generate:
 	go run ./scripts/spec-gate mutants --generate $(PKG)
 
+# Clears the claims directory first: a stale <pid>.claims from an earlier run
+# would satisfy a requirement this run never reached.
+define SPEC_UNIT_CLAIMS
+rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
+CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
+endef
+
 ## Report what the unit suite exercised
-#
-# Both report targets clear the claims directory first: a stale <pid>.claims
-# from an earlier run would satisfy a requirement this run never reached.
 spec-report:
-	rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
-	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
+	$(SPEC_UNIT_CLAIMS)
 	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit
 
 ## Print each requirement beside what a test watched the server do
@@ -224,14 +227,12 @@ spec-report:
 # The transcript goes to stdout and the summary to stderr, so redirecting the
 # first leaves the gate's own output readable.
 spec-transcript:
-	rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
-	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
+	$(SPEC_UNIT_CLAIMS)
 	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit --transcript
 
 ## Report what the unit and e2e suites exercised together
 spec-report-full: build
-	rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
-	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
+	$(SPEC_UNIT_CLAIMS)
 	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) \
 	  go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...
 	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit,e2e

@@ -60,14 +60,9 @@ func overlap(a, b []string) float64 {
 	return float64(matched) / float64(len(a))
 }
 
-// Reconcile walks the statement/entry matrix once and reports both ways round:
-// the statements no requirement quotes, and the requirements no statement
-// reaches. Two passes would compute the same scores twice — overlap normalises
-// argument order, so the matrix is the same one read along its other axis.
-//
-// A dismissal carries no text, only a line of prose saying why the statement
-// does not bind this server, so a statement only a dismissal accounts for
-// comes back unheld.
+// Reconcile reports both ways round: the statements no requirement quotes, and
+// the requirements no statement reaches. A dismissal carries no text to match,
+// so a statement only a dismissal accounts for comes back unheld.
 func Reconcile(statements []string, doc *spec.Document) (unheld, unquoted []string) {
 	entries := make([][]string, len(doc.Requirements))
 	for i := range doc.Requirements {

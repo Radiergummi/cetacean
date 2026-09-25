@@ -257,7 +257,7 @@ func endsWithAbbreviation(s string) bool {
 // carries no obligation, and RFC 8174 makes that the rule rather than a
 // convention.
 var keyword = regexp.MustCompile(
-	`\b(MUST NOT|MUST|SHALL NOT|SHALL|SHOULD NOT|SHOULD|NOT RECOMMENDED|RECOMMENDED|REQUIRED|OPTIONAL|MAY)\b`,
+	`\b(MUST|SHALL|SHOULD|RECOMMENDED|REQUIRED|OPTIONAL|MAY)\b`,
 )
 
 // Statements returns every normative sentence in the declared sections of the

@@ -1,14 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/radiergummi/cetacean/internal/spec"
 )
@@ -85,7 +89,15 @@ func runMutants(root string) error {
 		return fmt.Errorf("%d problem(s) scanning for claims", len(errs))
 	}
 
-	var ran int
+	var (
+		ran int
+		mu  sync.Mutex
+		wg  sync.WaitGroup
+	)
+
+	// Each mutant has its own scratch overlay, so they share nothing but the
+	// build cache and can run a core apiece.
+	slots := make(chan struct{}, runtime.NumCPU())
 
 	for _, q := range reg.All() {
 		if len(q.Mutants) == 0 {
@@ -106,11 +118,20 @@ func runMutants(root string) error {
 		for _, m := range q.Mutants {
 			ran++
 
-			if err := kill(root, id, m, names, pkgs); err != nil {
-				errs = append(errs, err)
-			}
+			wg.Go(func() {
+				slots <- struct{}{}
+				defer func() { <-slots }()
+
+				if err := kill(root, id, m, names, pkgs); err != nil {
+					mu.Lock()
+					errs = append(errs, err)
+					mu.Unlock()
+				}
+			})
 		}
 	}
+
+	wg.Wait()
 
 	if len(errs) > 0 {
 		report(errs)
@@ -139,49 +160,56 @@ func kill(root, id string, m spec.Mutant, names, pkgs []string) error {
 		return fmt.Errorf("%s: %s: %w", id, m.File, err)
 	}
 
-	dir, err := os.MkdirTemp("", "spec-mutant-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(dir) //nolint:errcheck // scratch directory
-
-	overlay, err := overlayFor(dir, path, mutated)
-	if err != nil {
-		return fmt.Errorf("%s: %w", id, err)
-	}
-
-	// #nosec G204 -- every argument comes from the embedded registry or the
-	// claim scan of this repository's own test files.
-	argv := append([]string{
-		"test",
-		"-overlay=" + overlay,
-		"-count=1",
-		"-run=^(" + strings.Join(names, "|") + ")$",
-	}, pkgs...)
-
-	cmd := exec.CommandContext(context.Background(), "go", argv...)
-	cmd.Dir = root
-
-	out, err := cmd.CombinedOutput()
+	out, err := runOverlaid(root, path, mutated,
+		append([]string{"-run=^(" + strings.Join(names, "|") + ")$"}, pkgs...)...)
 
 	// A mutant that does not compile proves nothing about the tests: go test
 	// exits non-zero either way, so the two have to be told apart here.
-	if strings.Contains(string(out), "[build failed]") {
+	if bytes.Contains(out, []byte(buildFailed)) {
 		return fmt.Errorf("%s: mutant does not compile (%s)\n%s", id, m.File, out)
 	}
 
 	// A claimant that is not a top-level Test matches no -run filter, and a
 	// run of nothing exits 0 exactly as a surviving mutant does.
-	if strings.Contains(string(out), "no tests to run") {
+	if bytes.Contains(out, []byte("no tests to run")) {
 		return fmt.Errorf(
 			"%s: no claimant matched -run; %s must name top-level tests",
 			id, strings.Join(names, ", "),
 		)
 	}
 
-	if err != nil {
+	if _, failed := errors.AsType[*exec.ExitError](err); failed {
 		return nil
 	}
 
+	if err != nil {
+		return fmt.Errorf("%s: %w", id, err)
+	}
+
 	return fmt.Errorf("%s: mutant survived (%s: %s)\n%s", id, m.File, m.Replace, out)
+}
+
+const buildFailed = "[build failed]"
+
+// runOverlaid runs go test with path's contents replaced by mutated, leaving
+// the tree on disk untouched. A non-nil *exec.ExitError means a test failed.
+func runOverlaid(root, path, mutated string, args ...string) ([]byte, error) {
+	dir, err := os.MkdirTemp("", "spec-mutant-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir) //nolint:errcheck // scratch directory
+
+	overlay, err := overlayFor(dir, path, mutated)
+	if err != nil {
+		return nil, err
+	}
+
+	// #nosec G204 -- every argument comes from the embedded registry, the claim
+	// scan of this repository's own test files, or this command's own argument.
+	cmd := exec.CommandContext(context.Background(), "go",
+		append([]string{"test", "-overlay=" + overlay, "-count=1", "-failfast"}, args...)...)
+	cmd.Dir = root
+
+	return cmd.CombinedOutput()
 }

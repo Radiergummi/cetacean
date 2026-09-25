@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // upstreamRev pins the commit the registry quotes. Bumping it is the only way
@@ -212,10 +214,7 @@ func reviewed(path string) string {
 		return today
 	}
 
-	var prev struct {
-		Revision string `yaml:"revision"`
-		Reviewed string `yaml:"reviewed"`
-	}
+	var prev spec.Document
 
 	if err := yaml.Unmarshal(body, &prev); err != nil || prev.Revision != upstreamRev {
 		return today
@@ -354,13 +353,7 @@ func folded(key, text string) string {
 // verify reads the rendered file back and fails unless every text survived the
 // round trip. The registry's whole claim is that these are quotations.
 func verify(out []byte, prefix string, reqs []upstreamReq, dismiss map[string]string) error {
-	var back struct {
-		Requirements []struct {
-			ID   string `yaml:"id"`
-			Text string `yaml:"text"`
-		} `yaml:"requirements"`
-		Dismissed map[string]string `yaml:"dismissed"`
-	}
+	var back spec.Document
 
 	if err := yaml.Unmarshal(out, &back); err != nil {
 		return fmt.Errorf("rendered file does not parse: %w", err)

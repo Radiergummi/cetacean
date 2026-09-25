@@ -193,6 +193,19 @@ func TestAnUnknownLaneIsRefused(t *testing.T) {
 	}
 }
 
+// A reason of nothing but whitespace excuses a requirement while saying nothing.
+func TestAnEmptyReasonIsRefused(t *testing.T) {
+	for _, q := range []Requirement{
+		{ID: "a", Level: MUST, Text: "x", Gap: "   "},
+		{ID: "a", Level: MUST, Text: "x", Deferred: "   "},
+	} {
+		if _, err := NewForTest("test", "doc", []Requirement{q}); err == nil ||
+			!strings.Contains(err.Error(), "empty reason") {
+			t.Errorf("err = %v, want one about the empty reason", err)
+		}
+	}
+}
+
 // Without an inventory a document has no denominator at all, and the guard
 // above is opt-in rather than a rule.
 func TestADocumentWithoutAnInventoryFailsValidation(t *testing.T) {

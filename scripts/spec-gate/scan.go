@@ -13,12 +13,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-)
 
-// specImport is the only import path a claim may come from. It may not be
-// aliased and its ids must be literals, because this scan has no type
-// information — scripts/spec-vet is what holds callers to both.
-const specImport = "github.com/radiergummi/cetacean/internal/spec"
+	"github.com/radiergummi/cetacean/internal/spec"
+)
 
 type Claim struct {
 	ID   string
@@ -54,9 +51,7 @@ func TestFiles(root string) ([]string, error) {
 	return files, nil
 }
 
-// gitLsFiles lists tracked files matching args, relative to root. Tracked, not
-// walked: a walk also finds .worktrees/ copies of this tree, whose claims would
-// mask uncovered requirements here.
+// gitLsFiles lists tracked files matching args, relative to root.
 func gitLsFiles(root string, args ...string) ([]string, error) {
 	argv := append([]string{"-C", root, "ls-files", "-z"}, args...)
 
@@ -76,10 +71,8 @@ func gitLsFiles(root string, args ...string) ([]string, error) {
 	return files, nil
 }
 
-// Scan returns what the tree claims and what it observes, separately. An
-// observation establishes nothing on its own, and a consumer handed both in
-// one slice has to remember to filter — which is a rule no type enforces, in
-// three commands that do not run together.
+// Scan returns what the tree claims and what it observes, separately: an
+// observation establishes nothing on its own.
 func Scan(root string) (claims, observations []Claim, errs []error) {
 	files, err := TestFiles(root)
 	if err != nil {
@@ -103,7 +96,12 @@ func Scan(root string) (claims, observations []Claim, errs []error) {
 func ScanFile(path string) (claims, observations []Claim, errs []error) {
 	fset := token.NewFileSet()
 
-	file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+	// The header alone answers whether a file can hold a claim, and almost none do.
+	file, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly|parser.ParseComments)
+	if err == nil && importsSpec(file) {
+		file, err = parser.ParseFile(fset, path, nil, parser.ParseComments)
+	}
+
 	if err != nil {
 		return nil, nil, []error{fmt.Errorf("%s: %w", path, err)}
 	}
@@ -131,8 +129,8 @@ func ScanFile(path string) (claims, observations []Claim, errs []error) {
 				return true
 			}
 
-			observation := sel.Sel.Name == "Observed"
-			if sel.Sel.Name != "Satisfies" && !observation {
+			ids := spec.ClaimIDs(sel.Sel.Name, call.Args)
+			if len(ids) == 0 {
 				return true
 			}
 
@@ -141,18 +139,7 @@ func ScanFile(path string) (claims, observations []Claim, errs []error) {
 				return true
 			}
 
-			// go/parser applies no type checking, so a call that names no
-			// arguments at all reaches here even though it cannot compile.
-			if len(call.Args) == 0 {
-				return true
-			}
-
-			// Satisfies takes every argument after t as an id; Observed takes
-			// one, and a format string after it.
-			ids := call.Args[1:]
-			if observation {
-				ids = ids[:min(1, len(ids))]
-			}
+			observation := sel.Sel.Name == "Observed"
 
 			for _, arg := range ids {
 				lit, ok := arg.(*ast.BasicLit)
@@ -203,7 +190,7 @@ func unreadable(path string, fset *token.FileSet, pos token.Pos) error {
 // importsSpec reports whether this file can contain a claim at all.
 func importsSpec(file *ast.File) bool {
 	for _, imp := range file.Imports {
-		if p, err := strconv.Unquote(imp.Path.Value); err == nil && p == specImport {
+		if p, err := strconv.Unquote(imp.Path.Value); err == nil && p == spec.ImportPath {
 			return true
 		}
 	}
