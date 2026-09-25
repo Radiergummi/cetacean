@@ -542,3 +542,24 @@ func TestADynamicallyRegisteredClientIsLabelledSelfAsserted(t *testing.T) {
 		t.Error("an approval for a self-asserted client is offered as remembered")
 	}
 }
+
+// hmac.New accepts a nil key, so a server that lost its CSRF key would still
+// sign and verify, forgeably. Asked of the server's own key, not a derived one.
+func TestTheServerRefusesACSRFTokenSignedWithNoKey(t *testing.T) {
+	s := newTestServer(t)
+
+	const nonce, state = "test-nonce", "test-state"
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(
+		url.Values{
+			"state":      {state},
+			"csrf_token": {csrfMAC(nil, nonce, consentBinding{State: state})},
+		}.Encode(),
+	))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: nonce})
+
+	if verifyCSRFToken(req, s.csrfKey()) {
+		t.Error("a CSRF token signed with no key verified against the server's")
+	}
+}

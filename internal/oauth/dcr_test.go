@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -515,5 +516,51 @@ func TestDCRRouteAcceptsAJSONPost(t *testing.T) {
 
 	if rec.Code != http.StatusCreated {
 		t.Errorf("POST /oauth/register = %d, want 201: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// A client picks its source port per connection, so the bucket is the IP's:
+// keyed with the port, every connection would start a fresh one.
+func TestDCRRateLimitIsPerAddressNotPerConnection(t *testing.T) {
+	s := newTestServer(t)
+
+	var last int
+
+	for i := range 11 {
+		r := httptest.NewRequest(http.MethodPost, "/oauth/register", strings.NewReader("{}"))
+		r.RemoteAddr = "192.0.2.7:" + strconv.Itoa(40000+i)
+		w := httptest.NewRecorder()
+		s.HandleRegister(w, r)
+		last = w.Code
+	}
+
+	if last != http.StatusTooManyRequests {
+		t.Errorf("11th registration from one address on its own port = %d, want 429", last)
+	}
+}
+
+func TestClientRegistryEvictsTheOldestOnlyAtCapacity(t *testing.T) {
+	r := newClientRegistry(2, 0)
+	for _, id := range []string{"a", "b"} {
+		r.register(&ClientRegistration{ClientID: id})
+	}
+
+	if r.Get("a") == nil || r.Get("b") == nil {
+		t.Fatal("a registry at capacity evicted before it was exceeded")
+	}
+
+	r.register(&ClientRegistration{ClientID: "c"})
+
+	if r.Get("a") != nil || r.Get("c") == nil {
+		t.Error("the oldest client survived the registration past capacity")
+	}
+
+	unbounded := newClientRegistry(0, 0)
+	for _, id := range []string{"a", "b", "c"} {
+		unbounded.register(&ClientRegistration{ClientID: id})
+	}
+
+	if unbounded.Get("a") == nil {
+		t.Error("a registry with no cap evicted a client")
 	}
 }

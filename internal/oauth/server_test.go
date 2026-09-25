@@ -631,6 +631,7 @@ func TestCodeVerifier_RFC7636Length(t *testing.T) {
 		{"empty", "", false},
 		{"illegal character", strings.Repeat("a", 42) + "!", false},
 		{"all unreserved", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmno-._~0123", true},
+		{"range ends", "AZaz09" + strings.Repeat("a", 37), true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -727,6 +728,8 @@ func TestHTTPQuotedString(t *testing.T) {
 		{"tab\tand space", "\"tab\tand space\""},
 		{"split\r\nheader", `"splitheader"`},
 		{"nul\x00and\x7fdel", `"nulanddel"`},
+		// The ends of VCHAR, and the first byte of obs-text.
+		{"!~\x80", "\"!~\x80\""},
 	}
 	for _, c := range cases {
 		got := httpQuotedString(c.in)
@@ -757,5 +760,13 @@ func TestS256MatchesTheRFC7636Vector(t *testing.T) {
 
 	if !verifySHA256Challenge(verifier, challenge) {
 		t.Error("the RFC's verifier and challenge do not verify against each other")
+	}
+}
+
+// The empty verifier's challenge is computable by anyone, so an empty verifier
+// is refused before any comparison could accept it.
+func TestAnEmptyVerifierNeverMatches(t *testing.T) {
+	if verifySHA256Challenge("", computeS256Challenge("")) {
+		t.Error("an empty verifier matched the challenge computed from it")
 	}
 }

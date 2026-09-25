@@ -1082,3 +1082,12 @@ func TestIssueCodeRefusesAnUnregisteredRedirect(t *testing.T) {
 		t.Error("an authorization code was minted for an unregistered redirect")
 	}
 }
+
+func TestConsentExpiresAtItsTTL(t *testing.T) {
+	s := NewConsentStore(time.Hour)
+	granted := time.Unix(1_700_000_000, 0)
+
+	if !s.expired(granted, granted.Add(time.Hour)) {
+		t.Error("consent exactly one TTL old is still honoured")
+	}
+}
