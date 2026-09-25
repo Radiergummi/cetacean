@@ -563,9 +563,6 @@ func TestPackedSignatureWithALeadingZeroInRVerifies(t *testing.T) {
 	}
 }
 
-// "none" is the algorithm RFC 9068 §2.1 forbids outright. RS256 it requires
-// among those supported, and this server issues and accepts ES256 alone — so
-// this pins the divergence rather than asserting it away.
 // jwaAlgorithms is RFC 7518 §3.1's "alg" table in full. Naming a subset of it
 // leaves the neighbours of the one algorithm this server accepts untested, and
 // a second accepted name is invisible to a list that does not contain it.
@@ -577,6 +574,9 @@ var jwaAlgorithms = []string{
 	"none",
 }
 
+// "none" is the algorithm RFC 9068 §2.1 forbids outright. RS256 it requires
+// among those supported, and this server issues and accepts ES256 alone — so
+// this pins the divergence rather than asserting it away.
 func TestVerifyRefusesEveryAlgorithmButES256(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc9068/alg-is-not-none",

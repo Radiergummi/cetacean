@@ -639,11 +639,9 @@ func newSeededTestRouterWithConfig(
 	)
 }
 
-// RFC 9110 §13.2.1 says to ignore every precondition when the same request
-// without them would not have answered 2xx or 412 — so a write against a
-// resource that is gone should answer 404, conditional or not. This pins the
-// 412 it answers instead, which comes from reading §13.2.2's precedence list
-// on its own.
+// RFC 9110 §13.2.1 ignores preconditions when the request without them would
+// not answer 2xx or 412, so a write to a gone resource should answer 404. This
+// pins the 412 it answers instead, from reading §13.2.2's precedence alone.
 func TestAPreconditionOnAMissingResourceAnswers412(t *testing.T) {
 	spec.Satisfies(t, "http/rfc9110/preconditions-are-ignored-when-the-answer-is-not-2xx")
 

@@ -1175,11 +1175,9 @@ func TestARefreshTokenDoesNotWorkForAnotherClient(t *testing.T) {
 	}
 }
 
-// RFC 7636 §4.6 compares two whole values. Every case below is a comparison
-// that agrees with the verifier somewhere and must still be refused: the
-// transformed verifier equals the challenge nowhere short of everywhere.
-// A challenge travels in the clear in the authorization request, so a
-// comparison that accepts it as its own verifier defeats PKCE outright.
+// RFC 7636 §4.6 compares two whole values: every case below agrees with the
+// verifier somewhere and must still be refused. A challenge travels in the
+// clear, so a comparison accepting it as its own verifier defeats PKCE.
 func TestTheCodeChallengeIsComparedWholeAndNotInPart(t *testing.T) {
 	spec.Satisfies(t, "oauth/rfc7636/verifier-must-match-challenge")
 

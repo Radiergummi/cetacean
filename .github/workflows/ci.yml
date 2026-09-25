@@ -87,8 +87,8 @@ jobs:
       # that writes it passed. Neither answers for the other.
       - run: go run ./scripts/spec-gate report --claims .spec-claims --suites unit
       - run: make spec
-      # The spec gate parses the e2e tree but cannot know it compiles: its
-      # build tag keeps it out of every other job.
+      # make spec vets the e2e tree with spec-vet alone; this is the only
+      # run of the standard analyzers over it, which golangci-lint skips.
       - run: go vet -tags e2e ./test/e2e/...
 
   spec-mutants:

@@ -10,20 +10,17 @@ import (
 	"github.com/radiergummi/cetacean/internal/spec"
 )
 
-// citationRE matches the way specifications are named in comments, prose and
-// links. Case-insensitive because an rfc-editor.org URL spells the number in
-// lower case, and a link is as much a citation as a sentence. Not every
-// specification has a number: OAuth 2.1 is still an Internet-Draft, and the
-// tree names it the only way there is.
+// citationRE matches how specifications are named in comments, prose and links.
+// Case-insensitive because an rfc-editor.org URL spells the number in lower
+// case. OAuth 2.1 has no number yet: it is an Internet-Draft, named by title.
 var citationRE = regexp.MustCompile(
 	`(?i)\b(RFC[ -]?[0-9]{3,4}|SEP[ -]?[0-9]{3,4}|OAuth[ -]?2\.1)\b`,
 )
 
-// mechanismPrefixes name this mechanism's own files rather than a consumer of
-// a specification: the registry states each token to register or dismiss it,
-// the gate's tests state tokens as fixtures, and spec-extract quotes the
-// documents themselves, citations and all. Counting any of them would let a
-// token self-cite and hide a stale dismissal.
+// mechanismPrefixes are this mechanism's own files: the registry states each
+// token to register or dismiss it, the gate's tests use them as fixtures, and
+// spec-extract quotes the documents. Counting them would let a token cite
+// itself and hide a stale dismissal.
 var mechanismPrefixes = []string{
 	"internal/spec/registry/",
 	"scripts/spec-gate/",
