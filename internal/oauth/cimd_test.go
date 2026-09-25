@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // serveMetadata returns an http.HandlerFunc that serves a ClientMetadata JSON
@@ -221,6 +223,8 @@ func TestCIMDFetchCachesResults(t *testing.T) {
 
 // TestCIMDFetchHasRedirectURI verifies the exact-match helper.
 func TestCIMDFetchHasRedirectURI(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8252/redirect-uri-registered-and-exact-matched")
+
 	meta := &ClientMetadata{
 		ClientID:     "https://example.com/client",
 		RedirectURIs: []string{"https://example.com/cb", "https://example.com/cb2"},
@@ -231,6 +235,11 @@ func TestCIMDFetchHasRedirectURI(t *testing.T) {
 	}
 	if meta.HasRedirectURI("https://example.com/OTHER") {
 		t.Error("expected HasRedirectURI to return false for unregistered URI")
+	}
+	// A URI path is case-sensitive, so folding case here would hand the code
+	// to a target the client never registered.
+	if meta.HasRedirectURI("https://example.com/CB") {
+		t.Error("expected HasRedirectURI to return false for a case-folded path")
 	}
 	if meta.HasRedirectURI("") {
 		t.Error("expected HasRedirectURI to return false for empty string")
@@ -349,5 +358,156 @@ func TestCIMDCacheReplacesWithoutEvicting(t *testing.T) {
 	}
 	if meta := f.cacheGet("https://client.example/0"); meta == nil || meta.ClientName != "renamed" {
 		t.Error("the replacement did not land")
+	}
+}
+
+// fetchServed fetches one document from a handler that is given the client_id
+// it is served under, so each case writes only what it varies.
+func fetchServed(
+	t *testing.T,
+	handler func(clientID string, w http.ResponseWriter, r *http.Request),
+) error {
+	t.Helper()
+
+	var serverURL string
+
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler(serverURL+"/client", w, r)
+	}))
+	t.Cleanup(srv.Close)
+	serverURL = srv.URL
+
+	fetcher := &CIMDFetcher{Client: srv.Client(), AllowLoopback: true}
+	_, err := fetcher.Fetch(t.Context(), srv.URL+"/client")
+
+	return err
+}
+
+func validDocument(clientID string) ClientMetadata {
+	return ClientMetadata{
+		ClientID:     clientID,
+		ClientName:   "Test Client",
+		RedirectURIs: []string{"https://example.com/cb"},
+	}
+}
+
+// 169.254.169.254 is the metadata service on every major cloud: link-local,
+// and neither private nor loopback, so only its own check refuses it.
+func TestCIMDRefusesLinkLocalAddresses(t *testing.T) {
+	f := &CIMDFetcher{}
+
+	for _, addr := range []string{"169.254.169.254", "fe80::1"} {
+		if err := f.checkIP(net.ParseIP(addr)); !errors.Is(err, ErrCIMDSSRFBlocked) {
+			t.Errorf("checkIP(%s) = %v, want ErrCIMDSSRFBlocked", addr, err)
+		}
+	}
+}
+
+// Every other test dials an IP literal, but a client_id names a host, and the
+// address it resolves to is what a rebinding attacker controls.
+func TestCIMDDialScreensTheAddressesANameResolvesTo(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	address := net.JoinHostPort("localhost", port)
+
+	blocked := (&CIMDFetcher{}).ssrfTransport(nil).(*http.Transport)
+	if _, err := blocked.DialContext(
+		t.Context(),
+		"tcp",
+		address,
+	); !errors.Is(
+		err,
+		ErrCIMDSSRFBlocked,
+	) {
+		t.Errorf("dialling %s = %v, want ErrCIMDSSRFBlocked", address, err)
+	}
+
+	allowed := (&CIMDFetcher{AllowLoopback: true}).ssrfTransport(nil).(*http.Transport)
+
+	conn, err := allowed.DialContext(t.Context(), "tcp", address)
+	if err != nil {
+		t.Fatalf("dialling %s with loopback allowed: %v", address, err)
+	}
+	_ = conn.Close()
+}
+
+// logo_uri is rendered on the consent page.
+func TestCIMDRequiresAnHTTPSLogo(t *testing.T) {
+	for logo, wantErr := range map[string]bool{
+		"https://example.com/logo.png": false,
+		"http://example.com/logo.png":  true,
+		"javascript:alert(1)":          true,
+	} {
+		err := fetchServed(t, func(id string, w http.ResponseWriter, _ *http.Request) {
+			meta := validDocument(id)
+			meta.LogoURI = logo
+			serveMetadata("", meta)(w, nil)
+		})
+
+		if got := errors.Is(err, ErrCIMDInvalidURL); got != wantErr {
+			t.Errorf("logo_uri %q: err = %v, want refused=%v", logo, err, wantErr)
+		}
+	}
+}
+
+func TestCIMDRefusesAnHTMLDocument(t *testing.T) {
+	err := fetchServed(t, func(id string, w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(validDocument(id))
+	})
+	if err == nil || !strings.Contains(err.Error(), "Content-Type") {
+		t.Fatalf("err = %v, want the Content-Type refused", err)
+	}
+}
+
+func TestCIMDAcceptsADocumentExactlyAtTheSizeCap(t *testing.T) {
+	err := fetchServed(t, func(id string, w http.ResponseWriter, _ *http.Request) {
+		body, _ := json.Marshal(validDocument(id))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(append(body, strings.Repeat(" ", cimdMaxBodyBytes-len(body))...))
+	})
+	if err != nil {
+		t.Fatalf("a document of exactly %d bytes was refused: %v", cimdMaxBodyBytes, err)
+	}
+}
+
+// Counted as net/http counts its own limit: the request that would follow
+// the cimdMaxRedirects-th redirect is refused.
+func TestCIMDRedirectLimit(t *testing.T) {
+	for hops, wantErr := range map[int]bool{cimdMaxRedirects - 1: false, cimdMaxRedirects: true} {
+		err := fetchServed(t, func(id string, w http.ResponseWriter, r *http.Request) {
+			var n int
+			_, _ = fmt.Sscanf(r.URL.Query().Get("n"), "%d", &n)
+
+			if n < hops {
+				http.Redirect(w, r, fmt.Sprintf("/client?n=%d", n+1), http.StatusFound)
+				return
+			}
+
+			serveMetadata("", validDocument(id))(w, r)
+		})
+
+		if (err != nil) != wantErr {
+			t.Errorf("%d redirects: err = %v, want refused=%v", hops, err, wantErr)
+		}
+	}
+}
+
+func TestCIMDCacheEntryLapsesAtItsTTL(t *testing.T) {
+	fetched := time.Unix(1_700_000_000, 0)
+	entry := cachedEntry{meta: &ClientMetadata{}, fetchedAt: fetched}
+
+	if !entry.lapsed(fetched.Add(cimdCacheTTL)) {
+		t.Error("an entry exactly cimdCacheTTL old is still fresh")
+	}
+
+	f := &CIMDFetcher{cache: map[string]cachedEntry{"https://example.com/client": entry}}
+	if f.cacheGet("https://example.com/client") != nil {
+		t.Error("a lapsed entry was served from the cache")
 	}
 }

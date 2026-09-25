@@ -3,6 +3,8 @@ package oauth
 import (
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // --- AuthCodeStore tests ---
@@ -34,6 +36,11 @@ func TestAuthCodeStoreRoundTrip(t *testing.T) {
 }
 
 func TestAuthCodeSingleUse(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc6749/code-must-be-valid",
+		"oauth/rfc9700/code-invalidated-after-first-use",
+	)
+
 	s := NewAuthCodeStore()
 	code := s.Issue(AuthCodeData{Subject: "u"}, 60*time.Second)
 	if _, ok := s.Redeem(code); !ok {
@@ -45,6 +52,8 @@ func TestAuthCodeSingleUse(t *testing.T) {
 }
 
 func TestAuthCodeExpired(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc6749/code-must-be-valid")
+
 	s := NewAuthCodeStore()
 	code := s.Issue(AuthCodeData{Subject: "u"}, -time.Second) // already expired
 	if _, ok := s.Redeem(code); ok {
@@ -53,6 +62,8 @@ func TestAuthCodeExpired(t *testing.T) {
 }
 
 func TestAuthCodeUnknownCode(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc6749/code-must-be-valid")
+
 	s := NewAuthCodeStore()
 	if _, ok := s.Redeem("definitely-not-a-real-code"); ok {
 		t.Fatal("unknown code should not be redeemable")
@@ -83,6 +94,12 @@ func TestRefreshTokenStoreRoundTrip(t *testing.T) {
 }
 
 func TestRefreshTokenRotation(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9700/public-client-refresh-tokens-rotate",
+		"oauth/oauth-2-1/a-new-refresh-token-may-be-issued",
+		"oauth/oauth-2-1/the-old-refresh-token-may-be-revoked",
+	)
+
 	s := NewRefreshTokenStore()
 	old := s.Issue(RefreshTokenData{Subject: "u", ClientID: "c"}, 720*time.Hour)
 
@@ -115,6 +132,8 @@ func TestRefreshTokenRotation(t *testing.T) {
 // per-token TTL but never pushes the grant past its absolute expiry. A token
 // rotated with a long TTL after the family expires must fail to validate.
 func TestRefreshTokenGrantFamilyAbsoluteExpiry(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/unauthenticated-client-exposure-is-limited")
+
 	s := NewRefreshTokenStore()
 
 	original := s.Issue(RefreshTokenData{Subject: "u", ClientID: "c"}, 10*time.Millisecond)
@@ -135,6 +154,8 @@ func TestRefreshTokenGrantFamilyAbsoluteExpiry(t *testing.T) {
 }
 
 func TestRefreshTokenTheftDetection(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/refresh-replay-detected")
+
 	s := NewRefreshTokenStore()
 	original := s.Issue(RefreshTokenData{Subject: "u", ClientID: "c"}, 720*time.Hour)
 
@@ -160,6 +181,8 @@ func TestRefreshTokenTheftDetection(t *testing.T) {
 }
 
 func TestRefreshTokenExpired(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/refresh-tokens-expire-when-idle")
+
 	s := NewRefreshTokenStore()
 	token := s.Issue(RefreshTokenData{Subject: "u"}, -time.Second)
 
@@ -200,6 +223,8 @@ func TestRefreshTokenUnknownToken(t *testing.T) {
 }
 
 func TestRefreshTokenGrantIDDiffers(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/refresh-tokens-are-unguessable")
+
 	s := NewRefreshTokenStore()
 	a := s.Issue(RefreshTokenData{Subject: "u"}, time.Hour)
 	b := s.Issue(RefreshTokenData{Subject: "u"}, time.Hour)

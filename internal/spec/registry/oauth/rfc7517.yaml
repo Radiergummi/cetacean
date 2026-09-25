@@ -1,0 +1,146 @@
+source: RFC 7517
+title: JSON Web Key (JWK)
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc7517
+
+inventory:
+  from: >-
+    RFC 7517 §2, §4 through §4.9, §5, §7 and §9.2 in full. §1.1 is the RFC 2119
+    boilerplate and §8's registration templates bind whoever registers a
+    parameter. This deployment publishes one EC public key as a JWK Set and
+    parses none, so the producing statements are ours and the parsing ones are
+    the library's.
+  count: 48
+
+requirements:
+  - id: key-set-has-a-keys-member
+    level: MUST
+    text: >-
+      The JSON object MUST have a "keys" member, with its value being an array
+      of JWKs.
+    url: https://www.rfc-editor.org/rfc/rfc7517#section-5
+    mutants:
+      - file: internal/oauth/jwks.go
+        replace: "\tdoc := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{"
+        with: "\tdoc := struct {\n\t\tKeys []jose.JSONWebKey `json:\"jwks\"`\n\t}{Keys: []jose.JSONWebKey{{"
+
+  - id: kty-is-present
+    level: MUST
+    text: >-
+      The "kty" (key type) parameter identifies the cryptographic algorithm
+      family used with the key [...] This member MUST be present in a JWK.
+    url: https://www.rfc-editor.org/rfc/rfc7517#section-4.1
+
+  - id: non-public-key-material-is-withheld
+    level: MUST
+    text: >-
+      Access to JWKs containing non-public key material by parties without
+      legitimate access to the non-public information MUST be prevented.
+    url: https://www.rfc-editor.org/rfc/rfc7517#section-7
+    mutants:
+      - file: internal/oauth/jwks.go
+        replace: "\t\tKey:       &s.keys.signer.PublicKey,"
+        with: "\t\tKey:       s.keys.signer,"
+
+dismissed:
+  terminology-restates-the-keys-member: >-
+    §2 stating the JWK Set shape that §5 defines. One member, registered there
+    as key-set-has-a-keys-member.
+  jwk-may-carry-whitespace: >-
+    A MAY about JSON formatting. go-jose emits none.
+  jwk-member-names-are-unique: >-
+    encoding/json emits one member per field, so a duplicate cannot be
+    produced here.
+  jwk-duplicate-members-resolved: >-
+    Binds a JWK parser. This deployment parses no JWK it did not just build.
+  jwk-unknown-members-ignored: >-
+    Binds a JWK parser.
+  use-other-values-allowed: >-
+    A MAY about values beyond "sig" and "enc". This key set says "sig".
+  use-is-optional: >-
+    An OPTIONAL member this deployment emits, so a reader need not infer the
+    key's purpose.
+  key-ops-other-values-allowed: >-
+    A MAY about a member this deployment does not emit.
+  key-ops-has-no-duplicates: >-
+    Constrains an array this deployment does not emit.
+  key-ops-is-optional: >-
+    An OPTIONAL member this deployment does not emit; "use" says the same thing
+    for a signing key.
+  key-ops-avoids-unrelated-operations: >-
+    A SHOULD NOT about combining operations in a member this deployment does
+    not emit.
+  key-ops-permitted-combinations: >-
+    The worked list for the rule above.
+  use-and-key-ops-not-used-together: >-
+    This deployment emits "use" alone, which is the shape the SHOULD NOT asks
+    for.
+  alg-is-optional: >-
+    An OPTIONAL member this deployment emits as "ES256", so a verifier need not
+    guess.
+  kids-are-distinct-within-a-set: >-
+    A SHOULD about telling keys apart. This set holds one key.
+  kid-is-optional: >-
+    An OPTIONAL member this deployment always emits — it is the thumbprint the
+    token's header names.
+  x5u-resource-is-a-pem-chain: >-
+    Constrains the x5u member, which this deployment does not emit. These keys
+    are not certificate-backed.
+  x5u-first-certificate-matches-the-key: >-
+    Constrains an x5u chain this deployment does not publish.
+  x5u-fetch-is-integrity-protected: >-
+    Conditional on fetching an x5u URL, which nothing here does.
+  x5u-is-optional: >-
+    An OPTIONAL member this deployment does not emit.
+  x5u-members-are-consistent-with-the-certificate: >-
+    Conditional on x5u being present.
+  x5u-use-matches-the-certificate: >-
+    The worked example of the consistency rule above.
+  x5u-alg-matches-the-certificate: >-
+    The second worked example of the consistency rule above.
+  x5c-first-certificate-is-the-key: >-
+    Constrains the x5c member, which this deployment does not emit.
+  x5c-chain-may-continue: >-
+    A MAY about an x5c chain this deployment does not publish.
+  x5c-first-certificate-matches-the-key: >-
+    Constrains an x5c chain this deployment does not publish.
+  x5c-is-optional: >-
+    An OPTIONAL member this deployment does not emit.
+  x5c-other-members-may-be-present: >-
+    A MAY conditional on x5c.
+  x5c-members-are-consistent-with-the-certificate: >-
+    Conditional on x5c being present.
+  x5t-certificate-matches-the-key: >-
+    Constrains the x5t member, which this deployment does not emit.
+  x5t-is-optional: >-
+    An OPTIONAL member this deployment does not emit.
+  x5t-other-members-may-be-present: >-
+    A MAY conditional on x5t.
+  x5t-members-are-consistent-with-the-certificate: >-
+    Conditional on x5t being present.
+  x5t-s256-certificate-matches-the-key: >-
+    Constrains the x5t#S256 member, which this deployment does not emit.
+  x5t-s256-is-optional: >-
+    An OPTIONAL member this deployment does not emit.
+  x5t-s256-other-members-may-be-present: >-
+    A MAY conditional on x5t#S256.
+  x5t-s256-members-are-consistent-with-the-certificate: >-
+    Conditional on x5t#S256 being present.
+  key-set-may-carry-whitespace: >-
+    A MAY about JSON formatting of the set.
+  key-set-member-names-are-unique: >-
+    encoding/json emits one member per field.
+  key-set-duplicate-members-resolved: >-
+    Binds a JWK Set parser.
+  key-set-unknown-members-ignored: >-
+    Binds a JWK Set parser.
+  unsupported-keys-ignored: >-
+    A SHOULD binding a reader of somebody else's key set.
+  encrypted-jwk-content-type: >-
+    Conditional on wrapping a JWK in a JWE, which this deployment does not do.
+  encrypted-jwk-set-content-type: >-
+    Conditional on wrapping a JWK Set in a JWE, which this deployment does not
+    do.
+  private-keys-protected-from-disclosure: >-
+    §9.2 restating §7's rule as a security consideration. The behaviour is
+    non-public-key-material-is-withheld.

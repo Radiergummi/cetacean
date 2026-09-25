@@ -18,6 +18,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/recommendations"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestNegotiateCSV(t *testing.T) {
@@ -75,6 +77,10 @@ func TestRenderCSVEscapes(t *testing.T) {
 }
 
 func TestCSVFilename(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc6266/generated-field-is-valid",
+	)
+
 	at := time.Date(2026, 9, 11, 23, 30, 0, 0, time.UTC)
 
 	if got := csvFilename("services", at); got != "services-2026-09-11.csv" {

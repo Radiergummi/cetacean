@@ -1,0 +1,179 @@
+source: RFC 7636
+title: Proof Key for Code Exchange by OAuth Public Clients
+reviewed: 2026-09-19
+url: https://www.rfc-editor.org/rfc/rfc7636
+
+inventory:
+  from: >-
+    Every RFC 2119 statement in §4, the protocol section, counted from the
+    document text. §1 and §2 are the introduction and terminology, §3 is the
+    ABNF, §5 is compatibility prose with no keyword, §6 is IANA's, and §7's
+    server-side rules are registered against RFC 9700, whose text is their
+    normative home. A statement binding the client, and a parameter
+    declaration whose server-side enforcement is registered as the check that
+    performs it, are dismissed rather than registered twice.
+  count: 17
+  sections: ["4"]
+
+requirements:
+  - id: verifier-character-set
+    level: MUST
+    text: >-
+      code_verifier = high-entropy cryptographic random STRING using the
+      unreserved characters [A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~" from
+      Section 2.3 of RFC 3986, with a minimum length of 43 characters and a
+      maximum length of 128 characters.
+    url: https://www.rfc-editor.org/rfc/rfc7636#section-4.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif n := len(v); n < 43 || n > 128 {"
+        with: "\tif n := len(v); n < 0 || n > 1000000 {"
+      - file: internal/oauth/server.go
+        replace: "\t\tdefault:\n\t\t\treturn fmt.Errorf(\"code_verifier contains illegal character at byte %d\", i)"
+        with: "\t\tdefault:"
+
+  - id: challenge-associated-with-the-code
+    level: MUST
+    text: >-
+      When the server issues the authorization code in the authorization
+      response, it MUST associate the "code_challenge" and
+      "code_challenge_method" values with the authorization code so it can be
+      verified later.
+    url: https://www.rfc-editor.org/rfc/rfc7636#section-4.4
+    # Only the challenge is stored. The method needs no slot because a code
+    # cannot exist under any other one — unsupported-transformation-refused is
+    # what makes that true, and the claimant asserts both halves.
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\trawCode := s.authCodes.Issue(code, authCodeTTL)"
+        with: "\tcode.CodeChallenge = \"\"\n\trawCode := s.authCodes.Issue(code, authCodeTTL)"
+
+  - id: challenge-not-extractable-from-client-requests
+    level: MUST
+    text: >-
+      The server MUST NOT include the "code_challenge" value in client requests
+      in a form that other entities can extract.
+    url: https://www.rfc-editor.org/rfc/rfc7636#section-4.4
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tq.Set(\"code\", rawCode)"
+        with: "\tq.Set(\"code\", rawCode)\n\tq.Set(\"code_challenge\", code.CodeChallenge)"
+
+  - id: missing-challenge-refused
+    level: MUST
+    text: >-
+      If the server requires Proof Key for Code Exchange (PKCE) by OAuth public
+      clients and the client does not send the "code_challenge" in the request,
+      the authorization endpoint MUST return the authorization error response
+      with the "error" value set to "invalid_request".
+    url: https://www.rfc-editor.org/rfc/rfc7636#section-4.4.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif codeChallenge == \"\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\",\n\t\t\t\"code_challenge is required\")\n\t\treturn\n\t}"
+        with: "\tif codeChallenge == \"\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_grant\",\n\t\t\t\"code_challenge is required\")\n\t\treturn\n\t}"
+
+  - id: missing-challenge-error-is-explained
+    level: SHOULD
+    text: >-
+      The "error_description" or the response of "error_uri" SHOULD explain the
+      nature of error, e.g., code challenge required.
+    url: https://www.rfc-editor.org/rfc/rfc7636#section-4.4.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif codeChallenge == \"\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\",\n\t\t\t\"code_challenge is required\")\n\t\treturn\n\t}"
+        with: "\tif codeChallenge == \"\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\", \"\")\n\t\treturn\n\t}"
+
+  - id: unsupported-transformation-refused
+    level: MUST
+    text: >-
+      If the server supporting PKCE does not support the requested
+      transformation, the authorization endpoint MUST return the authorization
+      error response with "error" value set to "invalid_request".
+    url: https://www.rfc-editor.org/rfc/rfc7636#section-4.4.1
+    # The POST twin of this guard cannot be reached with an unsupported method:
+    # the CSRF HMAC covers code_challenge_method, so a submission only verifies
+    # against a page this check already agreed to render.
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif codeChallengeMethod != \"S256\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\",\n\t\t\t\"code_challenge_method must be S256\")\n\t\treturn\n\t}"
+        with: "\tif codeChallengeMethod != \"S256\" && codeChallengeMethod != \"plain\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\",\n\t\t\t\"code_challenge_method must be S256\")\n\t\treturn\n\t}"
+      - file: internal/oauth/server.go
+        replace: "\tif codeChallengeMethod != \"S256\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\",\n\t\t\t\"code_challenge_method must be S256\")\n\t\treturn\n\t}"
+        with: "\tif codeChallengeMethod != \"S256\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"unsupported_response_type\",\n\t\t\t\"code_challenge_method must be S256\")\n\t\treturn\n\t}"
+
+  - id: unsupported-transformation-error-is-explained
+    level: SHOULD
+    text: >-
+      The "error_description" or the response of "error_uri" SHOULD explain the
+      nature of error, e.g., transform algorithm not supported.
+    url: https://www.rfc-editor.org/rfc/rfc7636#section-4.4.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif codeChallengeMethod != \"S256\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\",\n\t\t\t\"code_challenge_method must be S256\")\n\t\treturn\n\t}"
+        with: "\tif codeChallengeMethod != \"S256\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\", \"\")\n\t\treturn\n\t}"
+
+  - id: a-matching-verifier-continues-processing
+    level: MUST
+    text: >-
+      If the values are equal, the token endpoint MUST continue processing as
+      normal (as defined by OAuth 2.0 [RFC6749]).
+    url: https://www.rfc-editor.org/rfc/rfc7636#section-4.6
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
+        with: "\tif verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
+
+  - id: verifier-must-match-challenge
+    level: MUST
+    text: >-
+      If the values are not equal, an error response indicating "invalid_grant"
+      MUST be returned.
+    url: https://www.rfc-editor.org/rfc/rfc7636#section-4.6
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "	if !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
+        with: "	if false && !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
+      # Deleting the check is the obvious edit and the one a test notices by
+      # accident. These two weaken it instead: the challenge travels in the
+      # clear, so accepting it as its own verifier hands the exchange to
+      # whoever read the authorization request, and a comparison over part of
+      # the value is not the comparison §4.6 asks for.
+      - file: internal/oauth/server.go
+        replace: "\tsum := sha256.Sum256([]byte(verifier))"
+        with: "\tif verifier == challenge {\n\t\treturn true\n\t}\n\tsum := sha256.Sum256([]byte(verifier))"
+      - file: internal/oauth/server.go
+        replace: "\treturn hmac.Equal([]byte(computed), []byte(challenge))"
+        with: "\tif len(computed) < 8 || len(challenge) < 8 {\n\t\treturn false\n\t}\n\treturn hmac.Equal([]byte(computed[:8]), []byte(challenge[:8]))"
+
+dismissed:
+  verifier-entropy: >-
+    A NOTE addressed to the client generating the verifier. What this server
+    enforces of the construction is the length and the alphabet, registered as
+    verifier-character-set.
+  verifier-from-a-random-number-generator: >-
+    The same NOTE's RECOMMENDED, on how the client should produce the octets.
+  client-uses-s256-when-capable: >-
+    Binds the client choosing a transformation. Its server half — that S256 is
+    Mandatory To Implement — is the only method offered here, and refusing
+    every other one is registered as unsupported-transformation-refused.
+  client-uses-plain-only-when-it-must: >-
+    The permission that lets a client fall back to "plain". OAuth 2.1 §4.1.1
+    removes the transformation and explicitly prohibits it, so there is nothing
+    left to permit.
+  challenge-parameter-required: >-
+    The parameter declaration in the authorization request. What this server
+    does about a request omitting it is registered as missing-challenge-refused.
+  method-defaults-to-plain: >-
+    Declares code_challenge_method OPTIONAL with a "plain" default. OAuth 2.1
+    §4.1.1 makes it REQUIRED with the value S256 and removes "plain" outright;
+    where the two disagree the later profile wins, and it is registered as
+    oauth/oauth-2-1/challenge-method-required-and-s256.
+  verifier-parameter-required: >-
+    The parameter declaration in the token request. A request omitting it
+    presents the empty verifier, which verifier-character-set refuses on length
+    before any comparison runs.
+  bound-method-is-the-one-verified: >-
+    Names the transform the token endpoint must apply. This endpoint has one,
+    and a code cannot have been issued under another — the pairing is held by
+    unsupported-transformation-refused and verifier-must-match-challenge, which
+    is every part of this sentence with a check behind it.

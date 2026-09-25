@@ -17,6 +17,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/spec"
 	"github.com/radiergummi/cetacean/test/e2e/fixtures"
 	"github.com/radiergummi/cetacean/test/e2e/harness"
 	"github.com/radiergummi/cetacean/test/e2e/sut"
@@ -485,6 +486,8 @@ func touchConfig(t *testing.T, env *harness.Env, id, name string) {
 // subscriber below asks only for resource subscriptions; its own
 // resources/updated is the barrier proving the window was a live one.
 func TestMCPNotificationTypesAreOptIn(t *testing.T) {
+	spec.Satisfies(t, "mcp/sep-2575/server-honors-notification-filter")
+
 	env := harness.Up(t)
 	env.SwarmInit(t)
 

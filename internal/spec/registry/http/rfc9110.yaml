@@ -1,0 +1,508 @@
+source: RFC 9110
+title: HTTP Semantics
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc9110
+
+inventory:
+  from: >-
+    RFC 9110 §5.6.4, §8.8, §12, §13 and §14 in full — the quoted-string
+    production, validators, content negotiation, conditional requests and
+    range requests. These are the parts of HTTP this API implements rather
+    than inherits. Everything else is excluded and belongs to net/http: §3 to
+    §7 are message framing, routing and field syntax, §9 the methods, §10 the
+    header fields it parses for us, §11 authentication, §15 the status codes,
+    §16 the registries and §17 security considerations for the stack beneath.
+    This document also obsoletes RFC 7230, RFC 7231 and RFC 7233, so the
+    quoted-string, negotiation and range rules the tree cited under those
+    numbers are registered here.
+  count: 87
+
+requirements:
+  - id: a-quoted-pair-only-escapes-what-it-must
+    level: SHOULD
+    text: >-
+      A sender SHOULD NOT generate a quoted-pair in a quoted-string except
+      where necessary to quote DQUOTE and backslash octets occurring within
+      that string.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-5.6.4
+
+  - id: last-modified-is-sent-when-known
+    level: SHOULD
+    text: >-
+      An origin server SHOULD send Last-Modified for any selected
+      representation for which a last modification date can be reasonably and
+      consistently determined.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-8.8.2.1
+
+  - id: last-modified-is-not-in-the-future
+    level: MUST
+    text: >-
+      An origin server with a clock (as defined in Section 5.6.7) MUST NOT
+      generate a Last-Modified date that is later than the server's time of
+      message origination (Date, Section 6.6.1).
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-8.8.2.1
+    deferred: >-
+      The value is the timestamp the Docker engine put on the object, written
+      out unclamped. An engine whose clock runs ahead of this server's — two
+      managers drifting apart is enough — produces a Last-Modified in the
+      future, which a cache is entitled to treat as never stale. The remedy
+      the next sentence names is one min() against time.Now at the point the
+      header is written.
+
+  - id: an-etag-is-sent-when-changes-are-detectable
+    level: SHOULD
+    text: >-
+      An origin server SHOULD send an ETag for any selected representation for
+      which detection of changes can be reasonably and consistently
+      determined.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-8.8.3.1
+
+  - id: a-q-parameter-is-a-weight-wherever-it-sits
+    level: SHOULD
+    text: >-
+      Recipients SHOULD process any parameter named "q" as weight, regardless
+      of parameter ordering.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-12.5.1
+
+  - id: an-unacceptable-coding-falls-back-to-identity
+    level: SHOULD
+    text: >-
+      If a non-empty Accept-Encoding header field is present in a request and
+      none of the available representations for the response have a content
+      coding that is listed as acceptable, the origin server SHOULD send a
+      response without any content coding unless the identity coding is
+      indicated as unacceptable.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-12.5.3
+
+  - id: a-negotiated-response-names-what-it-varied-on
+    level: SHOULD
+    text: >-
+      An origin server SHOULD generate a Vary header field on a cacheable
+      response when it wishes that response to be selectively reused for
+      subsequent requests.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-12.5.5
+
+  - id: if-match-uses-strong-comparison
+    level: MUST
+    text: >-
+      An origin server MUST use the strong comparison function when comparing
+      entity tags for If-Match (Section 8.8.3.2), since the client intends
+      this precondition to prevent the method from being applied if there have
+      been any changes to the representation data.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1
+    mutants:
+      - file: internal/api/etag.go
+        replace: "\t\tif strings.HasPrefix(candidate, \"W/\") {\n\t\t\tcontinue\n\t\t}"
+        with: "\t\tcandidate = strings.TrimPrefix(candidate, \"W/\")"
+
+  - id: if-match-is-evaluated-before-the-method
+    level: MUST
+    text: >-
+      When an origin server receives a request that selects a representation
+      and that request includes an If-Match header field, the origin server
+      MUST evaluate the If-Match condition per Section 13.2 prior to
+      performing the method.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1
+    mutants:
+      - file: internal/api/precondition.go
+        replace: "\t\t\tifMatch := r.Header.Get(\"If-Match\")\n\t\t\tif ifMatch == \"\" {"
+        with: "\t\t\tifMatch := r.Header.Get(\"If-Match\")\n\t\t\tif true {"
+
+  - id: a-false-if-match-stops-the-method
+    level: MUST
+    text: >-
+      An origin server that evaluates an If-Match condition MUST NOT perform
+      the requested method if the condition evaluates to false.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1
+    mutants:
+      - file: internal/api/precondition.go
+        replace: "\t\t\tif !etagMatchStrong(ifMatch, computeETag(body)) {"
+        with: "\t\t\tif false && !etagMatchStrong(ifMatch, computeETag(body)) {"
+
+  - id: a-failed-precondition-may-answer-412
+    level: MAY
+    text: >-
+      Instead, the origin server MAY indicate that the conditional request
+      failed by responding with a 412 (Precondition Failed) status code.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1
+
+  - id: if-none-match-uses-weak-comparison
+    level: MUST
+    text: >-
+      A recipient MUST use the weak comparison function when comparing entity
+      tags for If-None-Match (Section 8.8.3.2), since weak entity tags can be
+      used for cache validation even if there have been changes to the
+      representation data.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.2
+    mutants:
+      - file: internal/api/etag.go
+        replace: "\t\tcandidate = strings.TrimPrefix(candidate, \"W/\")"
+        with: "\t\tif strings.HasPrefix(candidate, \"W/\") {\n\t\t\tcontinue\n\t\t}"
+
+  - id: if-none-match-is-evaluated-before-the-method
+    level: MUST
+    text: >-
+      When an origin server receives a request that selects a representation
+      and that request includes an If-None-Match header field, the origin
+      server MUST evaluate the If-None-Match condition per Section 13.2 prior
+      to performing the method.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.2
+    mutants:
+      - file: internal/api/etag.go
+        replace: "\tif etagMatch(r.Header.Get(\"If-None-Match\"), etag) {\n\t\tw.WriteHeader(http.StatusNotModified)\n\t\treturn\n\t}\n\n\tw.WriteHeader(http.StatusOK)"
+        with: "\tw.WriteHeader(http.StatusOK)"
+
+  - id: a-false-if-none-match-answers-304
+    level: MUST
+    text: >-
+      An origin server that evaluates an If-None-Match condition MUST NOT
+      perform the requested method if the condition evaluates to false;
+      instead, the origin server MUST respond with either a) the 304 (Not
+      Modified) status code if the request method is GET or HEAD or b) the 412
+      (Precondition Failed) status code for all other request methods.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.2
+    mutants:
+      - file: internal/api/etag.go
+        replace: "\t\tif etagMatch(r.Header.Get(\"If-None-Match\"), etag) {\n\t\t\tw.WriteHeader(http.StatusNotModified)\n\t\t\treturn\n\t\t}\n\t} else if !lastModified.IsZero() {"
+        with: "\t\tif etagMatch(r.Header.Get(\"If-None-Match\"), etag) {\n\t\t\tw.WriteHeader(http.StatusPreconditionFailed)\n\t\t\treturn\n\t\t}\n\t} else if !lastModified.IsZero() {"
+
+  - id: if-none-match-precedes-if-modified-since
+    level: MUST
+    text: >-
+      A recipient MUST ignore If-Modified-Since if the request contains an
+      If-None-Match header field; the condition in If-None-Match is considered
+      to be a more accurate replacement for the condition in
+      If-Modified-Since.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.3
+    mutants:
+      - file: internal/api/etag.go
+        replace: "\tif r.Header.Get(\"If-None-Match\") != \"\" {"
+        with: "\tif false && r.Header.Get(\"If-None-Match\") != \"\" {"
+
+  - id: a-malformed-if-modified-since-is-ignored
+    level: MUST
+    text: >-
+      A recipient MUST ignore the If-Modified-Since header field if the
+      received field value is not a valid HTTP-date, the field value has more
+      than one member, or if the request method is neither GET nor HEAD.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.3
+    mutants:
+      - file: internal/api/etag.go
+        replace: "\t\t\tif t, err := http.ParseTime(ims); err == nil {"
+        with: "\t\t\tif t, err := http.ParseTime(ims); err != nil || true {\n\t\t\t\tif err != nil {\n\t\t\t\t\tt = time.Now()\n\t\t\t\t}"
+
+  - id: if-modified-since-needs-a-modification-date
+    level: MUST
+    text: >-
+      A recipient MUST ignore the If-Modified-Since header field if the
+      resource does not have a modification date available.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.3
+    mutants:
+      - file: internal/api/etag.go
+        replace: "\t} else if !lastModified.IsZero() {"
+        with: "\t} else if true {"
+
+  - id: if-modified-since-is-evaluated
+    level: SHOULD
+    text: >-
+      When an origin server receives a request that selects a representation
+      and that request includes an If-Modified-Since header field without an
+      If-None-Match header field, the origin server SHOULD evaluate the
+      If-Modified-Since condition per Section 13.2 prior to performing the
+      method.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.3
+
+  - id: a-false-if-modified-since-answers-304
+    level: SHOULD
+    text: >-
+      An origin server that evaluates an If-Modified-Since condition SHOULD
+      NOT perform the requested method if the condition evaluates to false;
+      instead, the origin server SHOULD generate a 304 (Not Modified)
+      response.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.3
+
+  - id: if-unmodified-since-is-evaluated
+    level: MUST
+    text: >-
+      When an origin server receives a request that selects a representation
+      and that request includes an If-Unmodified-Since header field without an
+      If-Match header field, the origin server MUST evaluate the
+      If-Unmodified-Since condition per Section 13.2 prior to performing the
+      method.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.4
+    deferred: >-
+      The field is never read, so a write carrying it alone goes through
+      unconditionally. The validator this API offers is the ETag, which
+      If-Match evaluates and which is exact where a second-resolution
+      timestamp is not; supporting the date form as well means deciding what a
+      modification date means for a resource assembled out of several engine
+      records, which the ETag sidesteps by hashing the assembled answer.
+
+  - id: if-range-is-evaluated
+    level: MUST
+    text: >-
+      A server that receives an If-Range header field on a Range request MUST
+      evaluate the condition per Section 13.2 prior to performing the method.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.5
+    deferred: >-
+      Range is supported with the items unit, and If-Range is not read, so a
+      client asking for a page only if its copy is still current gets the page
+      regardless. It matters less here than for byte ranges over a file: an
+      items range is a page of a collection the client re-reads anyway, and
+      the ETag over the page it receives is what tells it the collection moved.
+
+  - id: preconditions-are-evaluated-before-the-action
+    level: MUST
+    text: >-
+      Except when excluded below, a recipient cache or origin server MUST
+      evaluate received request preconditions after it has successfully
+      performed its normal request checks and just before it would process the
+      request content (if any) or perform the action associated with the
+      request method.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.2.1
+    mutants:
+      - file: internal/api/precondition.go
+        replace: "\t\t\tif ifMatch == \"\" {\n\t\t\t\tnext.ServeHTTP(w, r)\n\t\t\t\treturn\n\t\t\t}"
+        with: "\t\t\tnext.ServeHTTP(w, r)\n\t\t\tif ifMatch == \"\" {\n\t\t\t\treturn\n\t\t\t}"
+
+  - id: preconditions-are-ignored-when-the-answer-is-not-2xx
+    level: MUST
+    text: >-
+      A server MUST ignore all received preconditions if its response to the
+      same request without those conditions, prior to processing the request
+      content, would have been a status code other than a 2xx (Successful) or
+      412 (Precondition Failed).
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.2.1
+    deferred: >-
+      A write carrying If-Match against a resource that is gone answers 412,
+      where the same request without the header would have answered 404 — so
+      this sentence says to ignore the precondition and answer 404 too. The
+      412 comes from reading §13.2.2's precedence list alone, where an absent
+      representation makes the condition false. Honouring §13.2.1 means the
+      middleware knowing what the handler would have said, which it cannot
+      without running it first — the fix is to check the resource exists
+      before evaluating the validator, not after.
+
+  - id: range-is-an-optional-feature
+    level: MAY
+    text: >-
+      Range requests are an OPTIONAL feature of HTTP, designed so that
+      recipients not implementing this feature (or not supporting it for the
+      target resource) can respond as if it is a normal GET request without
+      impacting interoperability.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-14
+
+  - id: large-range-numerals-do-not-overflow
+    level: MUST
+    text: >-
+      Since there is no predefined limit to the length of content, recipients
+      MUST anticipate potentially large decimal numerals and prevent parsing
+      errors due to integer conversion overflows.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-14.1.2
+    mutants:
+      - file: internal/api/pagination.go
+        replace: "\tendN, err := strconv.Atoi(strings.TrimSpace(end))\n\tif err != nil {"
+        with: "\tendN, _ := strconv.Atoi(strings.TrimSpace(end))\n\tif err := error(nil); err != nil {"
+
+  - id: an-unknown-range-unit-is-ignored
+    level: MUST
+    text: >-
+      An origin server MUST ignore a Range header field that contains a range
+      unit it does not understand.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-14.2
+    mutants:
+      - file: internal/api/pagination.go
+        replace: "\tspec, ok := strings.CutPrefix(header, \"items \")\n\tif !ok {"
+        with: "\tspec, ok := strings.CutPrefix(header, \"items \")\n\tif spec, ok = strings.TrimPrefix(header, \"bytes \"), true; !ok {"
+
+  - id: an-invalid-ranges-specifier-may-be-refused
+    level: MAY
+    text: >-
+      A server that supports range requests MAY ignore or reject a Range
+      header field that contains an invalid ranges-specifier (Section 14.1.1),
+      a ranges-specifier with more than two overlapping ranges, or a set of
+      many small ranges that are not listed in ascending order.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-14.2
+
+  - id: a-satisfiable-range-answers-206
+    level: SHOULD
+    text: >-
+      If all of the preconditions are true, the server supports the Range
+      header field for the target resource, the received Range field-value
+      contains a valid ranges-specifier with a range-unit supported for that
+      target resource, and that ranges-specifier is satisfiable with respect
+      to the selected representation, the server SHOULD send a 206 (Partial
+      Content) response.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-14.2
+
+  - id: an-unsatisfiable-range-answers-416
+    level: SHOULD
+    text: >-
+      If all of the preconditions are true, the server supports the Range
+      header field for the target resource, the received Range field-value
+      contains a valid ranges-specifier, and either the range-unit is not
+      supported for that target resource or the ranges-specifier is
+      unsatisfiable with respect to the selected representation, the server
+      SHOULD send a 416 (Range Not Satisfiable) response.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-14.2
+
+  - id: content-range-states-the-complete-length
+    level: SHOULD
+    text: >-
+      For byte ranges, a sender SHOULD indicate the complete length of the
+      representation from which the range has been extracted, unless the
+      complete length is unknown or difficult to determine.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-14.4
+
+  - id: a-416-carries-an-unsatisfied-range
+    level: SHOULD
+    text: >-
+      A server generating a 416 (Range Not Satisfiable) response to a
+      byte-range request SHOULD send a Content-Range header field with an
+      unsatisfied-range value.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-14.4
+
+dismissed:
+  a-range-on-an-unsupported-method-is-ignored: >-
+    parsePagination is called from the collection GET handlers and nowhere
+    else, so a Range field on any other method is never looked at. There is no
+    branch that ignores it, because nothing ever reaches one.
+  a-quoted-pair-is-unescaped-by-the-recipient: >-
+    Binds a recipient parsing a quoted-string. This deployment writes one, in
+    the WWW-Authenticate challenge, and parses none.
+  a-comment-escapes-only-what-it-must: >-
+    Constrains a comment, which no field this deployment writes contains.
+  a-weak-validator-changes-with-the-representation: >-
+    Binds an origin server that issues weak entity tags. Every ETag here is a
+    SHA-256 over the exact bytes sent, suffixed by the content coding, so two
+    responses share one only when they are byte-identical.
+  last-modified-is-read-close-to-date: >-
+    Asks for the value to be read near the time the response is generated. It
+    is not read from a clock at all: it is the timestamp the engine already
+    put on the object, carried through.
+  a-future-last-modified-is-replaced: >-
+    The remedy for the sentence before it, which is deferred as
+    last-modified-is-not-in-the-future.
+  a-server-without-a-clock-sends-no-last-modified: >-
+    Conditional on an origin server with no clock.
+  a-weak-etag-is-marked: >-
+    Conditional on an entity tag that is not a strong validator. Every one
+    here is.
+  an-etag-may-travel-in-a-trailer: >-
+    A permission this deployment declines; the ETag is a header field.
+  user-agents-may-state-their-preferences: >-
+    Binds the user agent composing a request.
+  a-qvalue-has-three-decimal-places: >-
+    Binds a sender of a qvalue. This deployment reads them and writes none.
+  senders-put-q-last: >-
+    Binds the sender of an Accept field. The counterpart for a recipient is
+    registered as a-q-parameter-is-a-weight-wherever-it-sits.
+  a-charset-may-carry-a-weight: >-
+    Binds the user agent composing Accept-Charset, which this deployment does
+    not read: every response it negotiates is UTF-8.
+  a-coding-may-carry-a-weight: >-
+    Binds the user agent composing Accept-Encoding. The weights it sends are
+    read, which a-q-parameter-is-a-weight-wherever-it-sits covers.
+  an-unrelated-415-omits-accept-encoding: >-
+    Forbids a response header field this deployment never generates.
+  a-user-agent-without-language-control-sends-none: >-
+    Binds the user agent composing Accept-Language.
+  a-proxy-does-not-vary-on-everything: >-
+    Binds a proxy. This deployment is an origin server and names the fields it
+    varied on.
+  caches-honour-vary: >-
+    States what Vary means to a cache receiving it.
+  an-already-applied-change-may-answer-2xx: >-
+    A permission to treat a failed If-Match as a success when the change looks
+    already applied. This deployment refuses instead, which is the plainer of
+    the two answers and the one a client can act on.
+  a-client-may-send-if-match-on-a-get: >-
+    Binds the client. This API evaluates If-Match on writes, where it gates
+    the method; a GET carrying one is not routed through the middleware.
+  a-cache-may-ignore-if-match: >-
+    Binds a cache or intermediary.
+  clients-send-if-none-match-to-revalidate: >-
+    Binds the client composing a conditional GET.
+  if-modified-since-is-read-on-the-server-clock: >-
+    The comparison is against the timestamp this server holds for the
+    resource, so both sides of it are already the server's.
+  if-unmodified-since-yields-to-if-match: >-
+    Requires If-Unmodified-Since to be ignored when If-Match is present. It is
+    ignored whether or not If-Match is present, which the deferral above
+    records.
+  a-malformed-if-unmodified-since-is-ignored: >-
+    The same field, never read.
+  if-unmodified-since-needs-a-modification-date: >-
+    The same field, never read.
+  if-unmodified-since-is-read-on-the-server-clock: >-
+    The same field, never read.
+  a-false-if-unmodified-since-stops-the-method: >-
+    The consequence of evaluating a field this deployment does not read.
+  a-failed-if-unmodified-since-may-answer-412: >-
+    A permission conditional on evaluating that field.
+  an-already-applied-change-may-answer-2xx-for-if-unmodified-since: >-
+    The same permission, restated for the date form.
+  a-client-may-send-if-unmodified-since-on-a-get: >-
+    Binds the client.
+  a-cache-may-ignore-if-unmodified-since: >-
+    Binds a cache or intermediary.
+  if-range-needs-a-range: >-
+    Binds the client composing the pair.
+  an-if-range-without-a-range-is-ignored: >-
+    Satisfied by never reading the field: a request carrying If-Range and no
+    Range is treated exactly as one carrying neither.
+  an-if-range-on-a-non-range-resource-is-ignored: >-
+    The same, for a resource that does not support Range.
+  if-range-carries-no-weak-validator: >-
+    Binds the client choosing a validator.
+  if-range-carries-a-date-only-as-a-last-resort: >-
+    Binds the client choosing a validator.
+  a-false-if-range-ignores-the-range: >-
+    The consequence of evaluating a field this deployment does not read.
+  a-true-if-range-processes-the-range: >-
+    The other branch of the same evaluation.
+  non-origin-servers-forward-preconditions: >-
+    Binds a server that is neither the origin nor a cache for the resource.
+  preconditions-are-ignored-on-connect-options-and-trace: >-
+    Requires conditionals to be ignored on methods that select no
+    representation. The precondition middleware is mounted on the resource
+    routes, which answer none of those three; OPTIONS is handled before it.
+  preconditions-are-evaluated-in-order: >-
+    Fixes the order of the five preconditions. The two evaluated here never
+    meet: If-Match gates a write and If-None-Match answers a read, so there is
+    no pair to order.
+  a-server-may-ignore-range: >-
+    A permission this deployment declines for its collections, which is what
+    the 206 and 416 answers registered above record.
+  a-proxy-may-discard-an-unknown-range-unit: >-
+    Binds a proxy.
+  clients-do-not-ask-for-many-small-ranges: >-
+    Binds the client composing the request.
+  an-empty-representation-may-ignore-range: >-
+    A permission conditional on a zero-length representation. A collection
+    with no members is still answered as a range of it.
+  clients-list-ranges-in-ascending-order: >-
+    Binds the client composing a multi-range request, which this deployment
+    refuses outright.
+  clients-may-send-a-range-unasked: >-
+    Binds the client.
+  accept-ranges-promises-nothing: >-
+    Binds the client reading Accept-Ranges.
+  a-server-may-advertise-no-ranges: >-
+    A permission to send "Accept-Ranges: none". This deployment supports the
+    items unit and says so.
+  accept-ranges-may-travel-in-a-trailer: >-
+    A permission this deployment declines.
+  an-unknown-content-range-unit-is-not-recombined: >-
+    Binds the client reassembling a partial response.
+  a-proxy-forwards-an-unknown-content-range: >-
+    Binds a proxy.
+  a-content-range-in-a-request-is-ignored: >-
+    Satisfied by never reading the field in a request: no method here defines
+    Content-Range support, and none looks for it.
+  an-invalid-content-range-is-not-recombined: >-
+    Binds the client reassembling a partial response.
+  a-partial-put-is-refused: >-
+    Conditional on receiving Content-Range on a PUT. The field is not read, so
+    such a request is treated as a whole-resource PUT — which is what this API
+    has always meant by PUT, and what its OpenAPI description says.

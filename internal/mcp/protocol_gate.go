@@ -8,8 +8,8 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 )
 
-// ProtocolVersion is the single MCP revision Cetacean implements. Older
-// revisions are refused by requireModernProtocol.
+// ProtocolVersion is the single MCP revision Cetacean implements. Every other
+// revision, older or newer, is refused by requireModernProtocol.
 const ProtocolVersion = mcplib.LATEST_PROTOCOL_VERSION
 
 // maxIDSniffBytes bounds how much of a rejected request body we read to recover
@@ -18,14 +18,14 @@ const ProtocolVersion = mcplib.LATEST_PROTOCOL_VERSION
 // simply carries a null id.
 const maxIDSniffBytes = 64 << 10
 
-// requireModernProtocol rejects any request not on protocol 2026-07-28 or
-// later. mcp-go would negotiate down, but the older eras are session-based
-// while the notification path here is stateless: such a client subscribes
-// successfully and then receives nothing. The header alone decides.
+// requireModernProtocol admits the one revision this server implements and
+// nothing else. The older eras are session-based while the notification path
+// here is stateless; a later one reaches mcp-go, whose own rejection
+// advertises every revision it knows — four this server refuses.
 func (s *Server) requireModernProtocol(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		version := r.Header.Get(mcplib.HeaderProtocolVersion)
-		if mcplib.IsModernProtocol(version) && r.Header.Get(mcplib.HeaderSessionID) == "" {
+		if version == ProtocolVersion && r.Header.Get(mcplib.HeaderSessionID) == "" {
 			next.ServeHTTP(w, r)
 
 			return

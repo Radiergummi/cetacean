@@ -15,6 +15,8 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	josejwt "github.com/go-jose/go-jose/v4/jwt"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // mockIDPServer is a configurable mock OIDC identity provider that serves
@@ -31,7 +33,7 @@ type mockIDPServer struct {
 	issSupported bool
 
 	// endSessionEndpoint controls whether the discovery document advertises
-	// an end_session_endpoint (RFC 9722). Set before calling newProviderWithIDP.
+	// an end_session_endpoint. Set before calling newProviderWithIDP.
 	endSessionEndpoint bool
 
 	// tokenHandler can be overridden per-test to customize the token response.
@@ -256,6 +258,11 @@ func buildCallbackRequest(cookies []*http.Cookie, query url.Values) *http.Reques
 // --- End-to-end callback tests ---
 
 func TestCallback_HappyPath(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/oauth-2-1/artifacts-are-not-left-in-the-redirect-uri",
+		"oauth/oauth-2-1/third-party-scripts-not-on-the-redirect-endpoint",
+	)
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -282,6 +289,15 @@ func TestCallback_HappyPath(t *testing.T) {
 	location := resp.Header.Get("Location")
 	if location != "/dashboard" {
 		t.Errorf("redirect location = %q, want %q", location, "/dashboard")
+	}
+	if strings.Contains(location, "code=") || strings.Contains(location, "state=") {
+		t.Errorf("the callback carried the authorization artifacts onward: %s", location)
+	}
+	// The body is net/http's own one-line redirect notice and nothing else:
+	// no script of ours to run, and none of anybody else's.
+	if body := w.Body.String(); strings.Contains(body, "<script") ||
+		strings.Contains(body, "https://") {
+		t.Errorf("the callback endpoint served third-party content: %s", body)
 	}
 
 	// Should have set a session cookie.
@@ -424,6 +440,8 @@ func TestCallback_SessionTTL_UsesIDTokenExpiry(t *testing.T) {
 }
 
 func TestCallback_RFC9207_IssuerValidation(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9207/client-extracts-the-iss-parameter")
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -448,6 +466,12 @@ func TestCallback_RFC9207_IssuerValidation(t *testing.T) {
 }
 
 func TestCallback_RFC9207_IssuerMismatch(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9700/mismatched-issuer-aborts",
+		"oauth/rfc9207/client-compares-iss-to-the-issuer",
+		"oauth/rfc9207/client-rejects-a-mismatched-iss",
+	)
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -493,6 +517,8 @@ func TestCallback_IdPError(t *testing.T) {
 }
 
 func TestCallback_StateMismatch(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/client-prevents-csrf")
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -516,6 +542,8 @@ func TestCallback_StateMismatch(t *testing.T) {
 }
 
 func TestCallback_MissingStateCookie(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/state-is-one-time-and-bound-to-the-user-agent")
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -594,6 +622,8 @@ func TestCallback_MissingVerifierCookie(t *testing.T) {
 }
 
 func TestCallback_NonceMismatch(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/nonce-validated-in-the-id-token")
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -776,6 +806,8 @@ func TestCallback_MissingCode(t *testing.T) {
 // --- Cookie clearing on error paths ---
 
 func TestCallback_ClearsCookiesOnAllErrors(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/state-invalidated-after-first-use")
+
 	flowCookieNames := []string{
 		"cetacean_auth_state",
 		"cetacean_auth_nonce",
@@ -1003,6 +1035,50 @@ func TestLogout_ClearsSession(t *testing.T) {
 	}
 }
 
+// whoami reads a bearer token on its own path rather than through
+// Authenticate, so each outcome is pinned here separately.
+func TestWhoami_BearerToken(t *testing.T) {
+	idp := newMockIDP(t, "test-client")
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	for name, tc := range map[string]struct {
+		token   string
+		status  int
+		subject string
+	}{
+		"valid":     {idp.issueIDToken(t, "", time.Now().Add(time.Hour)), http.StatusOK, "user-42"},
+		"malformed": {"not-a-valid-jwt", http.StatusUnauthorized, ""},
+		"expired": {
+			idp.issueIDToken(t, "", time.Now().Add(-time.Hour)), http.StatusUnauthorized, "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
+			r.Header.Set("Authorization", "Bearer "+tc.token)
+			w := httptest.NewRecorder()
+
+			p.handleWhoami(w, r)
+
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d", w.Code, tc.status)
+			}
+
+			if tc.subject == "" {
+				return
+			}
+
+			var id Identity
+			if err := json.NewDecoder(w.Body).Decode(&id); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+
+			if id.Subject != tc.subject {
+				t.Errorf("Subject = %q, want %q", id.Subject, tc.subject)
+			}
+		})
+	}
+}
+
 // --- Bearer token tests via Authenticate ---
 
 func TestAuthenticate_ValidBearerToken(t *testing.T) {
@@ -1028,6 +1104,8 @@ func TestAuthenticate_ValidBearerToken(t *testing.T) {
 }
 
 func TestAuthenticate_ExpiredBearerToken(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/failure-answers-invalid-token")
+
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
 
@@ -1088,9 +1166,14 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 	return nil
 }
 
-// --- RFC 9722: RP-initiated logout ---
+// --- OpenID Connect RP-Initiated Logout 1.0 ---
 
-func TestLogout_RFC9722_RedirectsToEndSessionEndpoint(t *testing.T) {
+func TestLogout_RPInitiated_RedirectsToEndSessionEndpoint(t *testing.T) {
+	spec.Satisfies(t,
+		"openid/rp-initiated-logout/id-token-hint-included",
+		"openid/rp-initiated-logout/id-token-hint-accompanies-the-redirect-uri",
+	)
+
 	idp := newMockIDP(t, "test-client")
 	idp.endSessionEndpoint = true
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
@@ -1167,7 +1250,7 @@ func TestLogout_RFC9722_RedirectsToEndSessionEndpoint(t *testing.T) {
 	}
 }
 
-func TestLogout_RFC9722_NoEndSession_LocalLogout(t *testing.T) {
+func TestLogout_RPInitiated_NoEndSession_LocalLogout(t *testing.T) {
 	// IdP does NOT advertise end_session_endpoint.
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
@@ -1185,7 +1268,7 @@ func TestLogout_RFC9722_NoEndSession_LocalLogout(t *testing.T) {
 	}
 }
 
-func TestLogout_RFC9722_NoSession_StillRedirectsToIdP(t *testing.T) {
+func TestLogout_RPInitiated_NoSession_StillRedirectsToIdP(t *testing.T) {
 	// End session endpoint is available but no session cookie.
 	// Should still redirect to IdP (without id_token_hint).
 	idp := newMockIDP(t, "test-client")
@@ -1256,6 +1339,11 @@ func TestCallback_StoresIDTokenHintInSession(t *testing.T) {
 // --- RFC 9207: mandatory iss parameter when IdP advertises support ---
 
 func TestCallback_RFC9207_IssRequired_MissingIss_Rejected(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9207/client-rejects-a-missing-iss-from-a-supporting-server",
+		"oauth/rfc9700/iss-evaluated-per-rfc9207",
+	)
+
 	idp := newMockIDP(t, "test-client")
 	idp.issSupported = true
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
@@ -1313,6 +1401,8 @@ func TestCallback_RFC9207_IssRequired_ValidIss_Accepted(t *testing.T) {
 }
 
 func TestCallback_RFC9207_IssRequired_WrongIss_Rejected(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/received-issuer-compared")
+
 	idp := newMockIDP(t, "test-client")
 	idp.issSupported = true
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
@@ -1399,5 +1489,38 @@ func TestCallback_RFC9207_IssRequired_ClearsCookies(t *testing.T) {
 		if !cleared[name] {
 			t.Errorf("cookie %s not cleared on missing iss error", name)
 		}
+	}
+}
+
+// RFC 9700 §4.5.3.2 wants every token disregarded until the nonce check
+// succeeds — refusing the request is not enough if a session is signed anyway.
+func TestCallback_NonceMismatchIssuesNoSession(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/tokens-disregarded-until-the-nonce-checks")
+
+	idp := newMockIDP(t, "test-client")
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	cookies, state, _, _ := initiateLogin(t, p)
+
+	idToken := idp.issueIDToken(t, "wrong-nonce", time.Now().Add(time.Hour))
+	idp.setTokenHandler(t, idToken, time.Now().Add(time.Hour))
+
+	query := url.Values{"code": {"code"}, "state": {state}}
+	w := httptest.NewRecorder()
+	p.handleCallback(w, buildCallbackRequest(cookies, query))
+
+	// The live header map, not Result(): a refusal that answers and then
+	// carries on sets these after the status was snapshotted, so they never
+	// reach the wire — and reading the wire would call that a pass.
+	for _, cookie := range w.Header().Values("Set-Cookie") {
+		if strings.HasPrefix(cookie, "__Host-cetacean_session=;") {
+			continue
+		}
+		if strings.HasPrefix(cookie, "__Host-cetacean_session=") {
+			t.Error("a session was signed from an ID token whose nonce did not match")
+		}
+	}
+	if location := w.Header().Get("Location"); location != "" {
+		t.Errorf("the callback went on to sign the user in: %s", location)
 	}
 }

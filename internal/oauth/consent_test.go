@@ -15,6 +15,8 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // registeredClient registers a DCR client in the server's registry and
@@ -32,9 +34,11 @@ func registeredClient(t *testing.T, s *Server, redirectURIs []string) string {
 	return reg.ClientID
 }
 
-// authorizeURL builds a GET /oauth/authorize URL with standard test params.
-func authorizeURL(clientID, redirectURI, challenge, state, resource string) string {
-	u := url.Values{
+// authorizeParams is a request this endpoint accepts, and the one place that
+// says what one looks like. A test changes the single parameter it is about,
+// so a refusal can only come from that parameter.
+func authorizeParams(clientID, redirectURI, challenge, state, resource string) url.Values {
+	return url.Values{
 		"response_type":         {"code"},
 		"client_id":             {clientID},
 		"redirect_uri":          {redirectURI},
@@ -43,7 +47,12 @@ func authorizeURL(clientID, redirectURI, challenge, state, resource string) stri
 		"state":                 {state},
 		"resource":              {resource},
 	}
-	return "/oauth/authorize?" + u.Encode()
+}
+
+// authorizeURL builds a GET /oauth/authorize URL with standard test params.
+func authorizeURL(clientID, redirectURI, challenge, state, resource string) string {
+	return "/oauth/authorize?" +
+		authorizeParams(clientID, redirectURI, challenge, state, resource).Encode()
 }
 
 // withIdentity returns a copy of r with an auth.Identity in its context.
@@ -57,6 +66,13 @@ func withIdentity(r *http.Request, subject, email string) *http.Request {
 // ---------------------------------------------------------------------------
 
 func TestConsentPageRender(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc8252/no-silent-authorization",
+		"oauth/rfc9700/clickjacking-prevented",
+		"oauth/rfc9700/csp-used-against-framing",
+		"oauth/rfc9700/csp-combined-with-a-legacy-defence",
+	)
+
 	s := newTestServer(t)
 	challenge := computeS256Challenge("verifier")
 	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
@@ -112,6 +128,11 @@ func TestConsentPageRender(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/oauth-2-1/invalid-redirect-uri-is-not-followed",
+		"oauth/oauth-2-1/redirect-uri-validated-against-the-registered-set",
+	)
+
 	s := newTestServer(t)
 	challenge := computeS256Challenge("verifier")
 	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
@@ -155,6 +176,8 @@ func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestConsentApproveProducesCode(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/code-required-in-the-response")
+
 	s := newTestServer(t)
 	challenge := computeS256Challenge("verifier-approve")
 	clientID := registeredClient(t, s, []string{"http://localhost:7777/cb"})
@@ -475,5 +498,68 @@ func TestConsentPageNamesTheResourceBeingAuthorized(t *testing.T) {
 	}
 	if rootGrant == subGrant {
 		t.Errorf("both resources ask for the same thing: %s", rootGrant)
+	}
+}
+
+// RFC 7591 §5 requires client metadata to be treated as self-asserted: a rogue
+// client can register any name it likes. The consent page says so, and an
+// approval it wins is never remembered.
+func TestADynamicallyRegisteredClientIsLabelledSelfAsserted(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7591/metadata-is-self-asserted",
+		"oauth/oauth-2-1/privileges-follow-the-client-identification-process",
+	)
+
+	s := newTestServer(t)
+	challenge := computeS256Challenge("verifier")
+	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
+
+	rawURL := authorizeURL(
+		clientID,
+		"http://localhost:9999/cb",
+		challenge,
+		"state123",
+		s.resources.fallback,
+	)
+	req := httptest.NewRequest(http.MethodGet, rawURL, nil)
+	req = withIdentity(req, "alice", "alice@example.com")
+	rec := httptest.NewRecorder()
+
+	s.HandleAuthorize(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "Self-registered") {
+		t.Error("a self-asserted client name is presented without saying so")
+	}
+	if strings.Contains(body, `<span class="badge badge-verified">`) {
+		t.Error("a dynamically registered client is presented as verified")
+	}
+	if strings.Contains(body, "will be remembered") {
+		t.Error("an approval for a self-asserted client is offered as remembered")
+	}
+}
+
+// hmac.New accepts a nil key, so a server that lost its CSRF key would still
+// sign and verify, forgeably. Asked of the server's own key, not a derived one.
+func TestTheServerRefusesACSRFTokenSignedWithNoKey(t *testing.T) {
+	s := newTestServer(t)
+
+	const nonce, state = "test-nonce", "test-state"
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(
+		url.Values{
+			"state":      {state},
+			"csrf_token": {csrfMAC(nil, nonce, consentBinding{State: state})},
+		}.Encode(),
+	))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: nonce})
+
+	if verifyCSRFToken(req, s.csrfKey()) {
+		t.Error("a CSRF token signed with no key verified against the server's")
 	}
 }

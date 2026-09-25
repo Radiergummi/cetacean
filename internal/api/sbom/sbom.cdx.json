@@ -1010,18 +1010,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/mark3labs/mcp-go@v1.0.0?type=module",
+      "bom-ref": "pkg:golang/github.com/mark3labs/mcp-go@v1.1.0?type=module",
       "type": "library",
       "name": "github.com/mark3labs/mcp-go",
-      "version": "v1.0.0",
+      "version": "v1.1.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "099a82cd7c148933acb6421d5b53323991ae33e2da28c1094aef99625b8de035"
+          "content": "f6467026b7aae7c40868cfb987e9382576c6d1fd32d23f7e0c9095e6b1819090"
         }
       ],
-      "purl": "pkg:golang/github.com/mark3labs/mcp-go@v1.0.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/mark3labs/mcp-go@v1.1.0?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/mark3labs/mcp-go",
@@ -3119,6 +3119,47 @@
       ]
     },
     {
+      "bom-ref": "frontend@0.0.0|@corvu/utils@0.4.2",
+      "type": "library",
+      "author": "Jasmin Noetzli",
+      "group": "@corvu",
+      "name": "utils",
+      "version": "0.4.2",
+      "description": "Utilities for corvu",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40corvu/utils@0.4.2",
+      "externalReferences": [
+        {
+          "url": "https://corvu.dev",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/corvudev/corvu.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/corvudev/corvu/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@corvu/utils/-/utils-0.4.2.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "3b1da4632c72ecda1774a59d1de0c48d9c42970ccee1228cf29940695c260093f11cca80d2b2cea00b1afa1043c112e972d7fe6519c077fca482eb8989d9da4c"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
       "bom-ref": "frontend@0.0.0|@floating-ui/core@1.8.0",
       "type": "library",
       "author": "atomiks",
@@ -3601,6 +3642,88 @@
             {
               "alg": "SHA-512",
               "content": "4fb8dffb9ce0b191f0349e25bd0eff69ecdbca4d27357fb32555a998703b558b04c7b6bbaabe5183921bb4916a920cdee58dacaeeab545463c43cdfb39dee217"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@kobalte/core@0.13.14",
+      "type": "library",
+      "author": "jer3m01",
+      "group": "@kobalte",
+      "name": "core",
+      "version": "0.13.14",
+      "description": "Unstyled components and primitives for building accessible web apps and design systems with SolidJS.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40kobalte/core@0.13.14",
+      "externalReferences": [
+        {
+          "url": "https://github.com/kobaltedev/kobalte/tree/main/packages/core#readme",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/kobaltedev/kobalte.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/kobaltedev/kobalte/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@kobalte/core/-/core-0.13.14.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "481541d659ef61b62ddb1dededf1b4968e5f18b11b1d0e8f208dcd0cfbdaf2f0f97b6bf9dce9fce195508ae224d1723fe7947819085d7a7ed87a6f91fd747cb9"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@kobalte/utils@0.9.2",
+      "type": "library",
+      "author": "Fabien Marie-Louise",
+      "group": "@kobalte",
+      "name": "utils",
+      "version": "0.9.2",
+      "description": "Common utilities and types for Kobalte.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40kobalte/utils@0.9.2",
+      "externalReferences": [
+        {
+          "url": "https://github.com/kobaltedev/kobalte/tree/main/packages/utils#readme",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/kobaltedev/kobalte.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/kobaltedev/kobalte/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@kobalte/utils/-/utils-0.9.2.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "8d1557afecec547c730d746887e083797cef0ac149eae88786aa8d436e82c3d66c6770fa9ea3d406dd60195b63d993e644bddaf54935bfc0f5689f3f235d83a3"
             }
           ],
           "type": "distribution"
@@ -4209,12 +4332,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/agent-chat@0.12.30",
+      "bom-ref": "frontend@0.0.0|@scalar/agent-chat@0.12.31",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "agent-chat",
-      "version": "0.12.30",
+      "version": "0.12.31",
       "description": "Agent chat components",
       "licenses": [
         {
@@ -4223,7 +4346,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/agent-chat@0.12.30",
+      "purl": "pkg:npm/%40scalar/agent-chat@0.12.31",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4238,11 +4361,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/agent-chat/-/agent-chat-0.12.30.tgz",
+          "url": "https://registry.npmjs.org/@scalar/agent-chat/-/agent-chat-0.12.31.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "d7ed3d09363f7952e0eb281daeb2b23648565e76c77151abaf826ae0762bed7a20ae422c4c2b870817293db61158e149db34694e83c5bb933747b78b13cd74cc"
+              "content": "5ab197160d29096f28df79d3366c10c4c645facd8b87050fa0a8f496e951e7dbb1c0c37b9db93fe52f954f83313a743247c1b643b83f5379620976b3df4f7f44"
             }
           ],
           "type": "distribution"
@@ -4250,12 +4373,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/api-client@3.18.0",
+      "bom-ref": "frontend@0.0.0|@scalar/api-client@3.19.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "api-client",
-      "version": "3.18.0",
+      "version": "3.19.0",
       "description": "the open source API testing client",
       "licenses": [
         {
@@ -4264,7 +4387,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/api-client@3.18.0",
+      "purl": "pkg:npm/%40scalar/api-client@3.19.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4279,11 +4402,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/api-client/-/api-client-3.18.0.tgz",
+          "url": "https://registry.npmjs.org/@scalar/api-client/-/api-client-3.19.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "165b1e0bac567f1d206a7878b3420039e949e6417e689d3b0497e352b8b028374af18e2800591196778a40da13fd2fb89ab3425dd43f4f954f123605971e19c7"
+              "content": "193e47dc7908636f1cbec20f8174cb482a225e2a77b3e375188c31239237cfef6665e6e934a3faec36383f3eda9734492d4d5bc604e028b26dcdb5161099c39f"
             }
           ],
           "type": "distribution"
@@ -4291,12 +4414,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/api-reference@1.68.0",
+      "bom-ref": "frontend@0.0.0|@scalar/api-reference@1.69.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "api-reference",
-      "version": "1.68.0",
+      "version": "1.69.0",
       "description": "Generate beautiful API references from OpenAPI documents",
       "licenses": [
         {
@@ -4305,7 +4428,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/api-reference@1.68.0",
+      "purl": "pkg:npm/%40scalar/api-reference@1.69.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4320,11 +4443,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/api-reference/-/api-reference-1.68.0.tgz",
+          "url": "https://registry.npmjs.org/@scalar/api-reference/-/api-reference-1.69.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "ad8e37c37444c02c69fab0c3c7fd029dc6719a5cc84a71932bdcd9f26a2ad088f6bd11e12d0089d3f057badf69040ba956b39917b328a8a5dc1be8084a04eee6"
+              "content": "37ea6b11fd188d007267d26689086b2684abbf652020f703f553c4e094dfdeb5a47513444a254133827fad48bd84ee891a8ede0dc74430b850dcc776e8b89776"
             }
           ],
           "type": "distribution"
@@ -4332,12 +4455,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/asyncapi-upgrader@0.1.9",
+      "bom-ref": "frontend@0.0.0|@scalar/asyncapi-upgrader@0.1.10",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "asyncapi-upgrader",
-      "version": "0.1.9",
+      "version": "0.1.10",
       "description": "Upgrade AsyncAPI documents to the latest and greatest version",
       "licenses": [
         {
@@ -4346,7 +4469,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/asyncapi-upgrader@0.1.9",
+      "purl": "pkg:npm/%40scalar/asyncapi-upgrader@0.1.10",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4361,11 +4484,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/asyncapi-upgrader/-/asyncapi-upgrader-0.1.9.tgz",
+          "url": "https://registry.npmjs.org/@scalar/asyncapi-upgrader/-/asyncapi-upgrader-0.1.10.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "fa42b8769d49f06bce713536382305c23eb654c3f7634969a6343699d7d8b1cce14d33fdb1a7f5daf911cee1d0f882e42c9257a3df249b9ce3ee911531d3923c"
+              "content": "e38673f0be87db8f328c0fd4112d4074a46e3f2672339aca250431bca8bec43c009d5a35759c745901583015f1db79eba196050f0522318721230fb3cb68de8e"
             }
           ],
           "type": "distribution"
@@ -4373,12 +4496,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/blocks@0.1.16",
+      "bom-ref": "frontend@0.0.0|@scalar/blocks@0.1.17",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "blocks",
-      "version": "0.1.16",
+      "version": "0.1.17",
       "description": "Render blocks for your OpenAPI documentation",
       "licenses": [
         {
@@ -4387,7 +4510,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/blocks@0.1.16",
+      "purl": "pkg:npm/%40scalar/blocks@0.1.17",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4402,11 +4525,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/blocks/-/blocks-0.1.16.tgz",
+          "url": "https://registry.npmjs.org/@scalar/blocks/-/blocks-0.1.17.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "93bd83c708f6061f63849908c9396ba636ba4119ef9d3e426fe2c7fbe046315ef4952bb6d9ccb32419a1b4a3914df4156faef5b3623b58b50153ace2af1921b0"
+              "content": "e65979ada8c4fa7deb2fd73889faf2dba1b9bf0026d26dccf4a6613fac482266476f7d1f08d7d9730ea55b881333c3a0c3e98306995575a1cebc84e3103b19a5"
             }
           ],
           "type": "distribution"
@@ -4414,12 +4537,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/code-highlight@0.4.5",
+      "bom-ref": "frontend@0.0.0|@scalar/code-highlight@0.4.6",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "code-highlight",
-      "version": "0.4.5",
+      "version": "0.4.6",
       "description": "Central methods and themes for code highlighting in Scalar projects",
       "licenses": [
         {
@@ -4428,7 +4551,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/code-highlight@0.4.5",
+      "purl": "pkg:npm/%40scalar/code-highlight@0.4.6",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4443,11 +4566,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/code-highlight/-/code-highlight-0.4.5.tgz",
+          "url": "https://registry.npmjs.org/@scalar/code-highlight/-/code-highlight-0.4.6.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "38266f058c287424757167a63b73173305ee988d7c9053b2f24da7c0ff8873ccc52cad4e6f25c4091a0cf941fe193c3e3b84c9b2b8cd21d2e3b275cf3b532fc8"
+              "content": "d5ea6c9a7a0ed3808df9a85f02b79569ba3829027da3bae8bcbbb2977c59afc2a7f724e81b0d2b5790af80d1ffaa5fbae434bc9d290a586d2af13143337a9888"
             }
           ],
           "type": "distribution"
@@ -4455,12 +4578,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/components@0.29.1",
+      "bom-ref": "frontend@0.0.0|@scalar/components@0.29.2",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "components",
-      "version": "0.29.1",
+      "version": "0.29.2",
       "description": "Scalars component library",
       "licenses": [
         {
@@ -4469,7 +4592,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/components@0.29.1",
+      "purl": "pkg:npm/%40scalar/components@0.29.2",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4484,11 +4607,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/components/-/components-0.29.1.tgz",
+          "url": "https://registry.npmjs.org/@scalar/components/-/components-0.29.2.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "9b1949ff73efd58aaa69748153648b0224d948675a9b7672a185bb0802134a8565aee0c12047d29ba6bc78006933d9964aca0d4219ac70b12ad90482d2ccd43c"
+              "content": "acd3a4adf2098634842c51041550cd3ed48e61f287427c01bef103f89e6a2143fb28ed3f473f71526c9b03ca47a9e3b3c8e17a9e0a3cc0fb3ecb2e3fd04bb019"
             }
           ],
           "type": "distribution"
@@ -4496,12 +4619,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/helpers@0.11.3",
+      "bom-ref": "frontend@0.0.0|@scalar/helpers@0.12.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "helpers",
-      "version": "0.11.3",
+      "version": "0.12.0",
       "description": "A collection of dependency free helpers",
       "licenses": [
         {
@@ -4510,7 +4633,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/helpers@0.11.3",
+      "purl": "pkg:npm/%40scalar/helpers@0.12.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4525,11 +4648,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/helpers/-/helpers-0.11.3.tgz",
+          "url": "https://registry.npmjs.org/@scalar/helpers/-/helpers-0.12.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "e333f3b8d4d739b0d4b594bddf1cc0a0af3775d1c38011a27effef2857ba6c7a849798be20c2d34ed10739a68e64ae1dbac3c45dc5ec5394c149a63f23a322f8"
+              "content": "adc5f4ac52e2596734541aff13e1e46adb9b2f4234673c4049091ddf4df635610c0047cd7764e227d907e3a1f06d200e3a5ebdea0871ca659e823a638efc70cc"
             }
           ],
           "type": "distribution"
@@ -4578,12 +4701,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/json-magic@0.13.4",
+      "bom-ref": "frontend@0.0.0|@scalar/json-magic@0.13.5",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "json-magic",
-      "version": "0.13.4",
+      "version": "0.13.5",
       "description": "A collection of utilities for working with JSON objects, including diffing, conflict resolution, bundling and more.",
       "licenses": [
         {
@@ -4592,7 +4715,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/json-magic@0.13.4",
+      "purl": "pkg:npm/%40scalar/json-magic@0.13.5",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4607,11 +4730,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/json-magic/-/json-magic-0.13.4.tgz",
+          "url": "https://registry.npmjs.org/@scalar/json-magic/-/json-magic-0.13.5.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "a4e65d9739202c1fbfe0e948973313a15fdcaf8becbd6cbf32d6ed26845c3472330e74fcb1f36dbff707f0c476a4d0e0ff6f6c3e94d5d47684e1267c6fd8d439"
+              "content": "c3978435f28091ce026222ef6b79c65214da25fca2decce667713bf841e5cda84e5276c3981f6b016cb3b7c1850976f0c5e4ee47ed66ee53b53f257f40089de0"
             }
           ],
           "type": "distribution"
@@ -4619,12 +4742,53 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/oas-utils@0.19.16",
+      "bom-ref": "frontend@0.0.0|@scalar/localization@0.2.0",
+      "type": "library",
+      "author": "Scalar",
+      "group": "@scalar",
+      "name": "localization",
+      "version": "0.2.0",
+      "description": "Framework-agnostic localization engine for Scalar packages",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40scalar/localization@0.2.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/scalar/scalar",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/scalar/scalar.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/scalar/scalar/issues/new/choose",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@scalar/localization/-/localization-0.2.0.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "eb4a4e12dbe31e8913d8d8dcf6fabb04e4708034532167b12afd74505e97cdce261f949f765b430ae98f38eeb2374335dd50c04753f2cf9e8520a313b6a15155"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@scalar/oas-utils@0.20.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "oas-utils",
-      "version": "0.19.16",
+      "version": "0.20.0",
       "description": "Open API spec and Yaml handling utilities",
       "licenses": [
         {
@@ -4633,7 +4797,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/oas-utils@0.19.16",
+      "purl": "pkg:npm/%40scalar/oas-utils@0.20.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4648,11 +4812,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/oas-utils/-/oas-utils-0.19.16.tgz",
+          "url": "https://registry.npmjs.org/@scalar/oas-utils/-/oas-utils-0.20.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "d2ed3fbddeb69447a4b45f6ee9def2c006306a692b1b5c537f131fe603a44464d5649ee357e27d2e849f52ff8d091de6990a5e1b22926a20ffdff3ec6b83b044"
+              "content": "5caa9e4a9fd571210465ce6055fda6b2c435bcdcf2a903aeffbdff3a969268c269b1b4bc215ea1294e927a3b6d15879a461bab39a51c739b06ca47594d015a85"
             }
           ],
           "type": "distribution"
@@ -4660,12 +4824,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/openapi-types@0.9.5",
+      "bom-ref": "frontend@0.0.0|@scalar/openapi-types@0.9.6",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "openapi-types",
-      "version": "0.9.5",
+      "version": "0.9.6",
       "description": "Modern OpenAPI types",
       "licenses": [
         {
@@ -4674,7 +4838,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/openapi-types@0.9.5",
+      "purl": "pkg:npm/%40scalar/openapi-types@0.9.6",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4689,11 +4853,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/openapi-types/-/openapi-types-0.9.5.tgz",
+          "url": "https://registry.npmjs.org/@scalar/openapi-types/-/openapi-types-0.9.6.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "733af3ff39159b5a0fceba58a37848fe2ca67e2c35b3876026242dc0d8b653bed2a9fdc440e18ab227f854d45ae6cb9631846e3da171e4488533514d115e1686"
+              "content": "8607b476196557bd1dc2a8148ae7260d8e7264babdd41395ffbf25592a9031363aef1f8b1dc4299495190e899f162e687a944ea560ece6268a32beee6ea0c138"
             }
           ],
           "type": "distribution"
@@ -4701,12 +4865,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/openapi-upgrader@0.2.15",
+      "bom-ref": "frontend@0.0.0|@scalar/openapi-upgrader@0.2.16",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "openapi-upgrader",
-      "version": "0.2.15",
+      "version": "0.2.16",
       "description": "Upgrade OpenAPI documents to the latest and greatest version",
       "licenses": [
         {
@@ -4715,7 +4879,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/openapi-upgrader@0.2.15",
+      "purl": "pkg:npm/%40scalar/openapi-upgrader@0.2.16",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4730,11 +4894,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/openapi-upgrader/-/openapi-upgrader-0.2.15.tgz",
+          "url": "https://registry.npmjs.org/@scalar/openapi-upgrader/-/openapi-upgrader-0.2.16.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "caa44e2bd53de8495ab042f85a5ffe3c88d0665aab4175545295e4f4f03ac419eba7c29d12fedab7ca51e60b1992f75d25f615c0b20b3e572dcaa520e2ee1864"
+              "content": "7d4577243fbe7f8da61b0507e91426ee544040a07ae6eabddedff5e519e72b5a40d593e9ef7c8a53b35f21dd97cf1d8265a2b86958a9d93b79a5e68b599f129e"
             }
           ],
           "type": "distribution"
@@ -4742,12 +4906,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/schemas@0.9.0",
+      "bom-ref": "frontend@0.0.0|@scalar/schemas@0.10.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "schemas",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "description": "Schemas for Scalar packages",
       "licenses": [
         {
@@ -4756,7 +4920,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/schemas@0.9.0",
+      "purl": "pkg:npm/%40scalar/schemas@0.10.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4771,11 +4935,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/schemas/-/schemas-0.9.0.tgz",
+          "url": "https://registry.npmjs.org/@scalar/schemas/-/schemas-0.10.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "c98465216cf0fbb1ee217e33eeb93bb60e32d67111c2fbd629ba2564e9bb2ef7924eba6996518aca3b6722a4b9b97b2625d744471baead28035b6db880626515"
+              "content": "8c5a9f77ea2aaa54dfb3ced5f90908ad1f43891bfefe1d71dc6cd219b19ed6aacceada20797c2f546e1abab9fe2d9f848fda1fe78ffa166a08f033ee2ce2b1ec"
             }
           ],
           "type": "distribution"
@@ -4783,12 +4947,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/sidebar@0.11.1",
+      "bom-ref": "frontend@0.0.0|@scalar/sidebar@0.11.2",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "sidebar",
-      "version": "0.11.1",
+      "version": "0.11.2",
       "description": "Scalar sidebar component and sidebar state management",
       "licenses": [
         {
@@ -4797,7 +4961,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/sidebar@0.11.1",
+      "purl": "pkg:npm/%40scalar/sidebar@0.11.2",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4812,11 +4976,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/sidebar/-/sidebar-0.11.1.tgz",
+          "url": "https://registry.npmjs.org/@scalar/sidebar/-/sidebar-0.11.2.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "c57801d166161b85894c52fddd692fa0055d0f51f893e0369f68e0c1afcfad433a44ef134e1fbb04b71e929c2f3cbbd77799ae5b1cd60d3711e35dec6a872987"
+              "content": "28840d2eb942ee37bd24e77ebd26a3aa4f3e532cab60dcb1974700d4e45625a2e24ec504eabe19b6b770124bf34e426a97b60422db7719581b47486ca4e5ffd9"
             }
           ],
           "type": "distribution"
@@ -4824,12 +4988,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/snippetz@0.9.30",
+      "bom-ref": "frontend@0.0.0|@scalar/snippetz@0.9.31",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "snippetz",
-      "version": "0.9.30",
+      "version": "0.9.31",
       "licenses": [
         {
           "license": {
@@ -4837,7 +5001,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/snippetz@0.9.30",
+      "purl": "pkg:npm/%40scalar/snippetz@0.9.31",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4852,11 +5016,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/snippetz/-/snippetz-0.9.30.tgz",
+          "url": "https://registry.npmjs.org/@scalar/snippetz/-/snippetz-0.9.31.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "98396e5521997add46a3c36024af6cf59f3334aa9e3c6ef3367f0f302a61033c173689af332ea3f1646e2c3967f83cf7de320b7e22a552dbf87272e49b307eee"
+              "content": "51086299f2b68b4c0a443accde211075824f68e078fcabfee29ac92ab607bb8277b233266e32ca4cc67ac2fa93ea900026462b7e416d078d407db6f58bc3f550"
             }
           ],
           "type": "distribution"
@@ -4864,12 +5028,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/themes@0.17.4",
+      "bom-ref": "frontend@0.0.0|@scalar/themes@0.18.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "themes",
-      "version": "0.17.4",
+      "version": "0.18.0",
       "description": "the default CSS variables for all Scalar packages",
       "licenses": [
         {
@@ -4878,7 +5042,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/themes@0.17.4",
+      "purl": "pkg:npm/%40scalar/themes@0.18.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4893,11 +5057,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/themes/-/themes-0.17.4.tgz",
+          "url": "https://registry.npmjs.org/@scalar/themes/-/themes-0.18.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "b520ad18b6f49e88a347c1b3807e87fed95b4ae6682eea5eebab5ae88f45cd9c5dbe08f849d3ccfb643b13c935bb03d17eb13936f332a7ad6cd41b00dc34c5b2"
+              "content": "b4edc4d6706e175732f79d10ba901b44fe03ba357336c7aa6f47b5b356ccb27450e7ce2c0e8346fbadc94b280c94162d5fed444e002f2f7348dd2ad30c8ab6df"
             }
           ],
           "type": "distribution"
@@ -4938,12 +5102,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/types@0.19.0",
+      "bom-ref": "frontend@0.0.0|@scalar/types@0.20.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "types",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "description": "Types to work with Scalar packages",
       "licenses": [
         {
@@ -4952,7 +5116,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/types@0.19.0",
+      "purl": "pkg:npm/%40scalar/types@0.20.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4967,11 +5131,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/types/-/types-0.19.0.tgz",
+          "url": "https://registry.npmjs.org/@scalar/types/-/types-0.20.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "10a7a85a05253feb9ea5b33fcc41ca6ec76904dc8e992af0e83754fd60b4a79de0cf9b91cc8eddfc811e7083fd4903149117ac3d1f439967967c541fb46eefaa"
+              "content": "fb4e6c964fd0e8c44ca8442de9e33bec9b7d0e70cf02f7dc73feabee66eb5e122a252a77a003eb8b1a409e9d649c14a515ac608b170afc630ac3d4037c3f9982"
             }
           ],
           "type": "distribution"
@@ -5020,12 +5184,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/use-hooks@0.4.11",
+      "bom-ref": "frontend@0.0.0|@scalar/use-hooks@0.4.12",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "use-hooks",
-      "version": "0.4.11",
+      "version": "0.4.12",
       "description": "Utility hooks for Scalar",
       "licenses": [
         {
@@ -5034,7 +5198,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/use-hooks@0.4.11",
+      "purl": "pkg:npm/%40scalar/use-hooks@0.4.12",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5049,11 +5213,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/use-hooks/-/use-hooks-0.4.11.tgz",
+          "url": "https://registry.npmjs.org/@scalar/use-hooks/-/use-hooks-0.4.12.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "c02527f5658abf869b88564e723069f2721cc99df4b7b40d3e01db718bb931780b80f72563029bfc0f93662ca9eb74ce45624e2bcb29d51ceb346c36093fa6fd"
+              "content": "f14f05dbfcd0c9080030d1cf6412a0526a8cc123d50178b0bc26079fdee0112ac7a637ed58bd3f4f4350b8560602a17487afed4194e92079abe983e69db7bdfc"
             }
           ],
           "type": "distribution"
@@ -5143,12 +5307,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/workspace-store@0.60.0",
+      "bom-ref": "frontend@0.0.0|@scalar/workspace-store@0.61.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "workspace-store",
-      "version": "0.60.0",
+      "version": "0.61.0",
       "description": "Store interface for openapi documents",
       "licenses": [
         {
@@ -5157,7 +5321,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/workspace-store@0.60.0",
+      "purl": "pkg:npm/%40scalar/workspace-store@0.61.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5172,11 +5336,512 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/workspace-store/-/workspace-store-0.60.0.tgz",
+          "url": "https://registry.npmjs.org/@scalar/workspace-store/-/workspace-store-0.61.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "3b7669e8e96aefe2f6629eb177b67db08438546e52c11da81e48864da819052aea12ebee71ee59f77ab73553eec7a8f77080ff81e5b4bc2d2c3c9e4bc4d4e704"
+              "content": "64e3e6ab5a250240f8f4e09161ad2d7c63190460dd5a720eee600c235babed348abfe2aa1ad9463f1c41117b8f240db472323604239ddc31428e28027a83e09b"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/event-listener@2.4.6",
+      "type": "library",
+      "author": "David Di Biase",
+      "group": "@solid-primitives",
+      "name": "event-listener",
+      "version": "2.4.6",
+      "description": "SolidJS Primitives to manage creating event listeners.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/event-listener@2.4.6",
+      "externalReferences": [
+        {
+          "url": "https://primitives.solidjs.community/package/event-listener",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/event-listener/-/event-listener-2.4.6.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "e48d1825c4d56085a8326801491381646733fb29a17b0fe91938367475bbe0152314ab15f0b8b86ce65897460018fe261f0e68e1405df7f0447aca81722df0c7"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/keyed@1.5.3",
+      "type": "library",
+      "author": "Damian Tarnawski @thetarnav",
+      "group": "@solid-primitives",
+      "name": "keyed",
+      "version": "1.5.3",
+      "description": "Control Flow primitives and components that require specifying explicit keys to identify or rerender elements.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/keyed@1.5.3",
+      "externalReferences": [
+        {
+          "url": "https://primitives.solidjs.community/package/keyed",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/keyed/-/keyed-1.5.3.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "ccd69db7260184948e8d7b68824187991c6319dcfd28773cb06195006954001904f01103dad6c8668c64c12ab33b075ef0e714107d1b6f90cb65458832fc8148"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/map@0.4.13",
+      "type": "library",
+      "author": "Damian Tarnawski @thetarnav",
+      "group": "@solid-primitives",
+      "name": "map",
+      "version": "0.4.13",
+      "description": "The Map & WeakMap data structures as a reactive signals.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/map@0.4.13",
+      "externalReferences": [
+        {
+          "url": "https://primitives.solidjs.community/package/map",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/solidjs-community/solid-primitives/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/map/-/map-0.4.13.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "075cf215bb224d0bea3ebf9cb8f0973bbdac46e7331bd4b09dcaa4e4fef83421b0d5513ca9afd1cbd1a57c8d5efd575e4181e36a7f9791b137aced865bfa8a7b"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/media@2.3.6",
+      "type": "library",
+      "author": "David Di Biase",
+      "group": "@solid-primitives",
+      "name": "media",
+      "version": "2.3.6",
+      "description": "Primitives for media query and device features",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/media@2.3.6",
+      "externalReferences": [
+        {
+          "url": "https://primitives.solidjs.community/package/media",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/media/-/media-2.3.6.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "a64e3d80f3aafd4311509fa94d2ace7c1891f312634581d721fd6247f8d29f243f2aba14f995e1919cdabc2ee1bdfa76bc978e4d6e64dbf1cdd2bdd0d5527b3f"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/props@3.2.4",
+      "type": "library",
+      "author": "Damian Tarnawski",
+      "group": "@solid-primitives",
+      "name": "props",
+      "version": "3.2.4",
+      "description": "Library of primitives focused around component props.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/props@3.2.4",
+      "externalReferences": [
+        {
+          "url": "https://primitives.solidjs.community/package/props",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/props/-/props-3.2.4.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "3175ddbe2d93481e9dfb437ab9e03f1cfd63fca87d48473859d17564330bc0f6a0c56ea92071d24bdc5b44ed118ea495a4d3f88f49f10964f5871dc290936134"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/refs@1.1.4",
+      "type": "library",
+      "author": "Damian Tarnawski @thetarnav",
+      "group": "@solid-primitives",
+      "name": "refs",
+      "version": "1.1.4",
+      "description": "Library of primitives, components and directives for SolidJS that help managing references to JSX elements.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/refs@1.1.4",
+      "externalReferences": [
+        {
+          "url": "https://primitives.solidjs.community/package/refs",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/refs/-/refs-1.1.4.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "6cb8f022ce993eef0d427bb0d38b14dd973ca8a4a96dcd2e99453f3b84877faa1639d3b8f9d1d8f2f6f54fb0b86ff4e0d74dfef561abeac104d3e34595b681fc"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/resize-observer@2.2.0",
+      "type": "library",
+      "author": "Moshe Udimar",
+      "group": "@solid-primitives",
+      "name": "resize-observer",
+      "version": "2.2.0",
+      "description": "Reactive primitives for observing resizing of HTML elements.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/resize-observer@2.2.0",
+      "externalReferences": [
+        {
+          "url": "https://primitives.solidjs.community/package/resize-observer",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/resize-observer/-/resize-observer-2.2.0.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "f45baefc45817868fe6ad187449a7bd072a175f6a59a98f0c58f1adf63598b174b3667c2278e407e12d036beae3b31136db88cc788822a54eb27c2990870b65b"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/rootless@1.5.4",
+      "type": "library",
+      "author": "Damian Tarnawski @thetarnav",
+      "group": "@solid-primitives",
+      "name": "rootless",
+      "version": "1.5.4",
+      "description": "A collection of helpers that aim to simplify using reactive primitives outside of reactive roots, and managing disposal of reactive roots.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/rootless@1.5.4",
+      "externalReferences": [
+        {
+          "url": "https://primitives.solidjs.community/package/rootless",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/rootless/-/rootless-1.5.4.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "4ce2196b55547d527ef679027116a3c37538b7dbc138fd47c57d561cd4db5eadf6997c25a93bd49c2e024488a5a2172bc81913f6ed99921503487453686a79e6"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/static-store@0.1.4",
+      "type": "library",
+      "author": "Damian Tarnawski",
+      "group": "@solid-primitives",
+      "name": "static-store",
+      "version": "0.1.4",
+      "description": "Primitives for creating small reactive objects that doesn't change their shape over time - don't need a proxy wrapper.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/static-store@0.1.4",
+      "externalReferences": [
+        {
+          "url": "https://primitives.solidjs.community/package/static-store",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/solidjs-community/solid-primitives/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/static-store/-/static-store-0.1.4.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "2e0b5569506d07b11b992e3e3346fcc58e48abaa5459706c202e1582dac528318377209a0edf3cb079347d4971d449f19bf5d99d9c8b5c90014686b7f518c9a8"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/storage@1.3.11",
+      "type": "library",
+      "author": "Alex Lohr",
+      "group": "@solid-primitives",
+      "name": "storage",
+      "version": "1.3.11",
+      "description": "Primitive that provides reactive wrappers for storage access",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/storage@1.3.11",
+      "externalReferences": [
+        {
+          "url": "https://github.com/solidjs-community/solid-primitives/tree/main/packages/storage",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/storage/-/storage-1.3.11.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "3e94164774da4f11c82456c8f59b2c61333801aebb835bc9220a6ce133e1717cc7aaaa26acf008bde142d851bb4834288bd61089af055418e28042f3889a5f22"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/transition-group@1.1.2",
+      "type": "library",
+      "author": "Damian Tarnawski",
+      "group": "@solid-primitives",
+      "name": "transition-group",
+      "version": "1.1.2",
+      "description": "Reactive primitives for implementing transition effects in SolidJS",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/transition-group@1.1.2",
+      "externalReferences": [
+        {
+          "url": "https://primitives.solidjs.community/package/transition-group",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/solidjs-community/solid-primitives/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/transition-group/-/transition-group-1.1.2.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "8271d2d0e99c7637a81cdf67eca86ef0a36b3a545cf1adb07844c3b76613ea8d73796fd7b540ba0dbdd0f6990c53ff5c08a74498de1bd1aff8d4c2801d187358"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/trigger@1.2.4",
+      "type": "library",
+      "author": "Damian Tarnawski",
+      "group": "@solid-primitives",
+      "name": "trigger",
+      "version": "1.2.4",
+      "description": "A set of primitives based on Solid signals, used to trigger computations.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/trigger@1.2.4",
+      "externalReferences": [
+        {
+          "url": "https://primitives.solidjs.community/package/trigger",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/solidjs-community/solid-primitives/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/trigger/-/trigger-1.2.4.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "26ed1ef99383ee1a4ea7b9e9b498a6bc34991d616f22f17d88158cbeec2ddf4b265fb739c2607c2a673401d0eebf4c0e4e2d3a3d0d49e48acfd5625b1f6c9405"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@solid-primitives/utils@6.4.1",
+      "type": "library",
+      "author": "Damian Tarnawski @thetarnav",
+      "group": "@solid-primitives",
+      "name": "utils",
+      "version": "6.4.1",
+      "description": "A bunch of reactive utility types and functions, for building primitives with Solid.js",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40solid-primitives/utils@6.4.1",
+      "externalReferences": [
+        {
+          "url": "https://github.com/solidjs-community/solid-primitives/tree/main/packages/utils#readme",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/solidjs-community/solid-primitives.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/solidjs-community/solid-primitives/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@solid-primitives/utils/-/utils-6.4.1.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "212481e505f5a8fdb29eb85e229630738a0a479372e2c88db94c9fd6a6678b2f8897ea7f3ed0c1d102b50e795ef27a221e9c110f78293ddb9b382dea23f65a9a"
             }
           ],
           "type": "distribution"
@@ -5262,12 +5927,48 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/query-core@5.102.8",
+      "bom-ref": "frontend@0.0.0|@tanstack/match-sorter-utils@8.19.4",
+      "type": "library",
+      "group": "@tanstack",
+      "name": "match-sorter-utils",
+      "version": "8.19.4",
+      "description": "A fork of match-sorter with separated filtering and sorting phases",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/match-sorter-utils@8.19.4",
+      "externalReferences": [
+        {
+          "url": "https://tanstack.com/table",
+          "type": "website"
+        },
+        {
+          "url": "https://github.com/TanStack/table.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@tanstack/match-sorter-utils/-/match-sorter-utils-8.19.4.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "5a8d622add9bf4e4fb77e60686f10f0f70d7bcfbf67ad4eeb08321314a06edf6e19b17170ad223243132832f756362459701b28ea8813d1a3399eed40fc868aa"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@tanstack/query-core@5.103.1",
       "type": "library",
       "author": "tannerlinsley",
       "group": "@tanstack",
       "name": "query-core",
-      "version": "5.102.8",
+      "version": "5.103.1",
       "description": "The framework agnostic core that powers TanStack Query",
       "licenses": [
         {
@@ -5276,7 +5977,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/query-core@5.102.8",
+      "purl": "pkg:npm/%40tanstack/query-core@5.103.1",
       "externalReferences": [
         {
           "url": "https://tanstack.com/query",
@@ -5287,11 +5988,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.102.8.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.103.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "64d8e4277dc2aaf3cd79cffa9590671ea2dcdc45463d9f7248b8586a153d4dcb9115d9b05dec2e8f47388704967061ea114c1c4ab29e67ea0672f3c1a9771072"
+              "content": "ae6b3c1ea4c6a7acc0d3474cf9c510d9e05c83334979fbaee4200c077ee2ffa322193d73ba53cecad085bb66b4aa32ea551da7d6310d3e3f70a2a15036e0b358"
             }
           ],
           "type": "distribution"
@@ -5299,12 +6000,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/query-devtools@5.102.8",
+      "bom-ref": "frontend@0.0.0|@tanstack/query-devtools@5.103.1",
       "type": "library",
       "author": "tannerlinsley",
       "group": "@tanstack",
       "name": "query-devtools",
-      "version": "5.102.8",
+      "version": "5.103.1",
       "description": "Developer tools to interact with and visualize the TanStack Query cache",
       "licenses": [
         {
@@ -5313,7 +6014,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/query-devtools@5.102.8",
+      "purl": "pkg:npm/%40tanstack/query-devtools@5.103.1",
       "externalReferences": [
         {
           "url": "https://tanstack.com/query",
@@ -5324,11 +6025,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/query-devtools/-/query-devtools-5.102.8.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/query-devtools/-/query-devtools-5.103.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "66078c2ae17977fcce13eb605a6ddc49b0fa65c6ebe88ba056c9db1f351c4a2b26a8b6434943c128ce882d4c44c60c1eeab3c03a8c76c796c0e53f8f48e406d1"
+              "content": "c4c39c9d42d13c48f0c3403fd119f078d99c67985eb0b8d37a4a9ff121f17fe0491fbdbdab3eac52ee53b0e585a3b2787eedce479d0c7ae254b0cdc137bf0a7f"
             }
           ],
           "type": "distribution"
@@ -5336,12 +6037,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/react-query-devtools@5.102.8",
+      "bom-ref": "frontend@0.0.0|@tanstack/react-query-devtools@5.103.1",
       "type": "library",
       "author": "tannerlinsley",
       "group": "@tanstack",
       "name": "react-query-devtools",
-      "version": "5.102.8",
+      "version": "5.103.1",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "licenses": [
         {
@@ -5350,7 +6051,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.102.8",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.103.1",
       "externalReferences": [
         {
           "url": "https://tanstack.com/query",
@@ -5361,11 +6062,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/react-query-devtools/-/react-query-devtools-5.102.8.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/react-query-devtools/-/react-query-devtools-5.103.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "40a6fb038e0164e53b9f1b060388053757e87e3628bdaaf93b44fcdc57f863ed9e46ad3d44616b033ceeb55745ffafde99f49a303a21a7a7bbe7d0630777f113"
+              "content": "97a3b3c0f6c30a7ba29bcc3d31c16cddd0bfadd5d3319048045315ad7ccdba1504cd685e95db9b3aefa72910ed3dffb59cb46ec1abdbdd67be9cd26aff4bd5eb"
             }
           ],
           "type": "distribution"
@@ -5373,12 +6074,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/react-query@5.102.8",
+      "bom-ref": "frontend@0.0.0|@tanstack/react-query@5.103.1",
       "type": "library",
       "author": "tannerlinsley",
       "group": "@tanstack",
       "name": "react-query",
-      "version": "5.102.8",
+      "version": "5.103.1",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "licenses": [
         {
@@ -5387,7 +6088,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.102.8",
+      "purl": "pkg:npm/%40tanstack/react-query@5.103.1",
       "externalReferences": [
         {
           "url": "https://tanstack.com/query",
@@ -5398,11 +6099,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.102.8.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.103.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "4d805e6b83ae5d60fb3216921ead3af5359b15eeeb73058dea4cd3ec917438a8b52ba735813bf62330fa03a13126c08ca33764a8159eb885199aee0a420d0ee4"
+              "content": "ae600f3c0a4d10ad7b55744986d135ae36b9de7db7555e70df40b4b1a0a0261857f84a5d52756a30657fb399e7cd5e375fbe4a4c72b3ba88aec52cc64c12246a"
             }
           ],
           "type": "distribution"
@@ -7558,38 +8259,6 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|convert-hrtime@5.0.0",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "convert-hrtime",
-      "version": "5.0.0",
-      "description": "Convert the result of `process.hrtime.bigint()` to seconds, milliseconds, nanoseconds",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/convert-hrtime@5.0.0",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/convert-hrtime",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/convert-hrtime/-/convert-hrtime-5.0.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "94e11396421e61225671b6dcbe344a1b154c5c947ef3e3906ff9933db03839b3cccad608b146ee384d09cf2eb486301162ccead627748fc2a05610be5866554e"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
       "bom-ref": "frontend@0.0.0|cookie@1.1.1",
       "type": "library",
       "author": "Roman Shtylman",
@@ -7615,6 +8284,46 @@
             {
               "alg": "SHA-512",
               "content": "7a2f00a2cee36b4c1e469173267100f541c9ffb5d09aa8256d1c277f60138dc07d5aaf3be15287f647e38e2acce94854dbf1397c561a77297284595d72a4a275"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|copy-anything@4.1.1",
+      "type": "library",
+      "author": "Luca Ban - Mesqueeb",
+      "name": "copy-anything",
+      "version": "4.1.1",
+      "description": "An optimised way to copy'ing an object. A small and simple integration",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/copy-anything@4.1.1",
+      "externalReferences": [
+        {
+          "url": "https://github.com/mesqueeb/copy-anything#readme",
+          "type": "website"
+        },
+        {
+          "url": "https://github.com/mesqueeb/copy-anything.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/mesqueeb/copy-anything/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/copy-anything/-/copy-anything-4.1.1.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "0284fa22676bf7c7de4a915f985c1314def771c76beee14f7f6edc042818bf2c91ca7d41ccb47132fac7366c173b92c931d751cb845d870d9bd61eef48c2ac13"
             }
           ],
           "type": "distribution"
@@ -8683,38 +9392,6 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|function-timeout@1.0.2",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "function-timeout",
-      "version": "1.0.2",
-      "description": "Make a synchronous function have a timeout",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/function-timeout@1.0.2",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/function-timeout",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/function-timeout/-/function-timeout-1.0.2.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "f77f5e652e2027786d4c7025766cb2bb396b0f9f0fd377c71b8f6fd897c55db57a3a1bd92910bd8f6c80b5d1f0ff3ae9db35c7bafd39ccc232e3417481eeeca4"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
       "bom-ref": "frontend@0.0.0|fuse.js@7.5.0",
       "type": "library",
       "author": "Kiro Risk",
@@ -8751,12 +9428,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|get-own-enumerable-keys@1.0.0",
+      "bom-ref": "frontend@0.0.0|goober@2.1.19",
       "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "get-own-enumerable-keys",
-      "version": "1.0.0",
-      "description": "Like `Object.keys()` but also includes symbols",
+      "author": "Cristian",
+      "name": "goober",
+      "version": "2.1.19",
+      "description": "A less than 1KB css-in-js solution",
       "licenses": [
         {
           "license": {
@@ -8764,18 +9441,18 @@
           }
         }
       ],
-      "purl": "pkg:npm/get-own-enumerable-keys@1.0.0",
+      "purl": "pkg:npm/goober@2.1.19",
       "externalReferences": [
         {
-          "url": "sindresorhus/get-own-enumerable-keys",
+          "url": "https://github.com/cristianbote/goober",
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/get-own-enumerable-keys/-/get-own-enumerable-keys-1.0.0.tgz",
+          "url": "https://registry.npmjs.org/goober/-/goober-2.1.19.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "3cab0ad854ab402cb17061ec1ab2c370ad25c7ed0a7bee9ef0a145a3303dfdf2102e14333da46f24575ccfbf80c60de3507fccabe348e316b9bbf513dad42c90"
+              "content": "53bbde8b332ac722a5339f3e6798f69e02411ffafdb220e6c69bcdc52c343f2945e9642fac0489119af18758627510497368eaa01552c8e6da9f9bbc9bee91c6"
             }
           ],
           "type": "distribution"
@@ -9658,38 +10335,6 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|identifier-regex@1.1.0",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "identifier-regex",
-      "version": "1.1.0",
-      "description": "Regular expression for matching JavaScript identifiers",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/identifier-regex@1.1.0",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/identifier-regex",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/identifier-regex/-/identifier-regex-1.1.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "48b5f81ffbed7189589cbed7aa7b8928753b67ce75ed382c5bd9e642218e80c0a343c57f75e2d8bba6c499b1a85deed630c85cf7e1141b21459de1e36bc29a6c"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
       "bom-ref": "frontend@0.0.0|is-absolute-url@4.0.1",
       "type": "library",
       "author": "Sindre Sorhus",
@@ -9722,70 +10367,6 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|is-identifier@1.1.0",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "is-identifier",
-      "version": "1.1.0",
-      "description": "Check if a string is a valid JavaScript identifier",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/is-identifier@1.1.0",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/is-identifier",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/is-identifier/-/is-identifier-1.1.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "36139db34983c7d949bbed650513b4c5bc05a399e86c0ec60a4ff47b9c63afafba5ee817f7ce7ed0ec865f7e4136b4e43c0b1d2dc20a834d8751024e2bc0fc93"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
-      "bom-ref": "frontend@0.0.0|is-obj@3.0.0",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "is-obj",
-      "version": "3.0.0",
-      "description": "Check if a value is an object",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/is-obj@3.0.0",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/is-obj",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/is-obj/-/is-obj-3.0.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "225b171073a3b4a86937caffb51163da70f24e61ef71f35ebbf9eb448717135ed139e6ad5dc864a237df6b54a976a5b872bfc58fa42411ffc69f8cdfe8a2af11"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
       "bom-ref": "frontend@0.0.0|is-plain-obj@4.1.0",
       "type": "library",
       "author": "Sindre Sorhus",
@@ -9811,38 +10392,6 @@
             {
               "alg": "SHA-512",
               "content": "f8f822faf32e50d909c84c62301b792251683322a7af9ce127852ca73e7c58e841179428219905c8d1c86c102d1f0cd502093946d9dd54db0344deb5fe6983aa"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
-      "bom-ref": "frontend@0.0.0|is-regexp@3.1.0",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "is-regexp",
-      "version": "3.1.0",
-      "description": "Check if a value is a regular expression",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/is-regexp@3.1.0",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/is-regexp",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/is-regexp/-/is-regexp-3.1.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "adb92ee3d7169685396d2308fb36916977501d79ed84fe8367fbcb9df7522b22f8cd4cee5a7a26b4e12265939dfa2a10f9abc5a3fa9abb728f4dcec58f2d6e3c"
             }
           ],
           "type": "distribution"
@@ -10096,11 +10645,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|lucide-react@1.46.0",
+      "bom-ref": "frontend@0.0.0|lucide-react@1.47.0",
       "type": "library",
       "author": "Eric Fennis",
       "name": "lucide-react",
-      "version": "1.46.0",
+      "version": "1.47.0",
       "description": "A Lucide icon library package for React applications.",
       "licenses": [
         {
@@ -10109,7 +10658,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.46.0",
+      "purl": "pkg:npm/lucide-react@1.47.0",
       "externalReferences": [
         {
           "url": "https://lucide.dev",
@@ -10124,11 +10673,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.46.0.tgz",
+          "url": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.47.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "06ff856578193ebc5cfcd0a5d5eec92554052dd882c5883135586aa15ed7d29e88f000c9a3c0f10672b56ae1f47d9cf8026a8e2778e09de2f87f58bc2c941100"
+              "content": "a3c0b6dda5e9350ca9458ef75bb7d6d36132bd62629c431780a7868c5a0aca6d338f743bde10fdec0d48429b3583c0b5e074c6b0ea592f4026fb18df8056406e"
             }
           ],
           "type": "distribution"
@@ -10193,38 +10742,6 @@
             {
               "alg": "SHA-512",
               "content": "bddd85e1853211728670b1e8abe4c4c828f1b9e49e1e7171cb28cda7cd328345d5e2f5219c37abfe5bef96a33f6ab0796d740de4adbfde88a7c82472c7c4f609"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
-      "bom-ref": "frontend@0.0.0|make-asynchronous@1.1.0",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "make-asynchronous",
-      "version": "1.1.0",
-      "description": "Make a synchronous function asynchronous by running it in a worker",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/make-asynchronous@1.1.0",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/make-asynchronous",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/make-asynchronous/-/make-asynchronous-1.1.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "6b217b893fb8e0b5ddc492d3ad37774cb4291430ef3c20715f16effa93144ae1c0e50f33c807f09113fa6871f03551415055adc401eac0d27117cbcc64b01b56"
             }
           ],
           "type": "distribution"
@@ -11873,70 +12390,6 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|p-event@6.0.1",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "p-event",
-      "version": "6.0.1",
-      "description": "Promisify an event by waiting for it to be emitted",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/p-event@6.0.1",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/p-event",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/p-event/-/p-event-6.0.1.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "43a05e924e70a735b9a88c943f881d304ba339b62cb5997a0cc30e49e9f006f5740651392e40f0923b39c876d999d084ab6a38449c78b44d6fc311557f6146d7"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
-      "bom-ref": "frontend@0.0.0|p-timeout@6.1.4",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "p-timeout",
-      "version": "6.1.4",
-      "description": "Timeout a promise after a specified amount of time",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/p-timeout@6.1.4",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/p-timeout",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/p-timeout/-/p-timeout-6.1.4.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "332215dd903f3e6c8137fb9df2f57d5f3c13acdb51e2316b39bca66589d9a8c996d3303c675eef9d3d2b060144fd3968841f98087a973206736f70aca78f6faa"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
       "bom-ref": "frontend@0.0.0|parse-ms@4.0.0",
       "type": "library",
       "author": "Sindre Sorhus",
@@ -12846,6 +13299,46 @@
       ]
     },
     {
+      "bom-ref": "frontend@0.0.0|remove-accents@0.5.0",
+      "type": "library",
+      "author": "Marin Atanasov",
+      "name": "remove-accents",
+      "version": "0.5.0",
+      "description": "Converting the accented characters to their corresponding non-accented ASCII characters.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/remove-accents@0.5.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/tyxla/remove-accents",
+          "type": "website"
+        },
+        {
+          "url": "https://github.com/tyxla/remove-accents",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/tyxla/remove-accents/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/remove-accents/-/remove-accents-0.5.0.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "f20dff3adc757896950f5d9edf551b263d58cddb55bf31fce4757bb7ef4c25893fbb75e690e509e58b3dc10adff4f08f2bcfb19f8ca6cea60289997a4162a7f8"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
       "bom-ref": "frontend@0.0.0|reselect@5.3.0",
       "type": "library",
       "name": "reselect",
@@ -12874,38 +13367,6 @@
             {
               "alg": "SHA-512",
               "content": "5c6a0b791015cd44dc275aa4c4f4210c9c8867977acf3643f674fb00464e69a53d51b59c961c9c1259a13be543e5b15e2eece13c168e576a170bcb86df9652a6"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
-      "bom-ref": "frontend@0.0.0|reserved-identifiers@1.2.0",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "reserved-identifiers",
-      "version": "1.2.0",
-      "description": "Provides a list of reserved identifiers for JavaScript",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/reserved-identifiers@1.2.0",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/reserved-identifiers",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/reserved-identifiers/-/reserved-identifiers-1.2.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "c84eca51f16f68117318fb391f73a9b3545ebdf504b03739233eb9acec16838944f0725262d95eefbbae977fb9ef7e39ee81ef04ab8760397fc6a5242a910477"
             }
           ],
           "type": "distribution"
@@ -12945,6 +13406,86 @@
             {
               "alg": "SHA-512",
               "content": "8eea2b7c2988908c3cb53fa9e415d29ba3c98d017fc9c11898acb3511088b7f45a64884bf8fba56d0f58bb6cf51dd3890dda834e5c40d7ec4a0661d726c73303"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|seroval-plugins@1.5.6",
+      "type": "library",
+      "author": "Alexis Munsayac",
+      "name": "seroval-plugins",
+      "version": "1.5.6",
+      "description": "Stringify JS values",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/seroval-plugins@1.5.6",
+      "externalReferences": [
+        {
+          "url": "https://github.com/lxsmnsyc/seroval/tree/main/packages/plugins",
+          "type": "website"
+        },
+        {
+          "url": "https://github.com/lxsmnsyc/seroval.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/lxsmnsyc/seroval/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/seroval-plugins/-/seroval-plugins-1.5.6.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "1d7b8b017da9bbf501c8fa5a7a8fd368c7ef3088bed50a88a0f25809c02d53c42454dc2047a30f946b8241312b575270ada68c6d8696548057ee6a69cc62c04d"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|seroval@1.5.6",
+      "type": "library",
+      "author": "Alexis Munsayac",
+      "name": "seroval",
+      "version": "1.5.6",
+      "description": "Stringify JS values",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/seroval@1.5.6",
+      "externalReferences": [
+        {
+          "url": "https://github.com/lxsmnsyc/seroval/tree/main/packages/seroval",
+          "type": "website"
+        },
+        {
+          "url": "https://github.com/lxsmnsyc/seroval.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/lxsmnsyc/seroval/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/seroval/-/seroval-1.5.6.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "ad54155a38d2be520dcda40f647e4916ab2a12c216753c58de22590a74cbff98106d7211a28559288eb4b550a43957f37113de8dba313b6b743fcf5d83999068"
             }
           ],
           "type": "distribution"
@@ -13081,6 +13622,158 @@
             {
               "alg": "SHA-512",
               "content": "efef9d161b5cc77df9dee05aabc0c347836ec417ad0730bb6503a19934089c711de9b4ab5dd884cb30af1b4ed9e3851874b4a1594c97b7933fca1cfc7a471bd4"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|solid-js@1.9.15",
+      "type": "library",
+      "author": "Ryan Carniato",
+      "name": "solid-js",
+      "version": "1.9.15",
+      "description": "A declarative JavaScript library for building user interfaces.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/solid-js@1.9.15",
+      "externalReferences": [
+        {
+          "url": "https://solidjs.com",
+          "type": "website"
+        },
+        {
+          "url": "https://github.com/solidjs/solid",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/solid-js/-/solid-js-1.9.15.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "11e898db17e9649a8f2e35eca5510a8c0208e32bfc3721bffcdc59dc8a4e1477543679d3c8bd2e24e792f4b586bc0edc142cf9cbde1c8c5c18966c392ee9dcb2"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|solid-presence@0.2.0",
+      "type": "library",
+      "author": "Jasmin Noetzli",
+      "name": "solid-presence",
+      "version": "0.2.0",
+      "description": "SolidJS utility that manages the presence of an element in the DOM while being aware of pending animations.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/solid-presence@0.2.0",
+      "externalReferences": [
+        {
+          "url": "https://corvu.dev/docs/utilities/presence",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/corvudev/corvu.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/corvudev/corvu/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/solid-presence/-/solid-presence-0.2.0.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "60cf76a3e8efa735f75c6683e2b2d89aafca736655878ec64822c4b9f1c1150408babbd94ecf12a062713bc04918d0f104a75c4bc177758856d520d7a7804d8c"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|solid-prevent-scroll@0.1.11",
+      "type": "library",
+      "author": "Jasmin Noetzli",
+      "name": "solid-prevent-scroll",
+      "version": "0.1.11",
+      "description": "SolidJS utility that prevents scrolling outside of a given DOM element. Works by preventing events that else would lead to scrolling.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/solid-prevent-scroll@0.1.11",
+      "externalReferences": [
+        {
+          "url": "https://corvu.dev/docs/utilities/prevent-scroll",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/corvudev/corvu.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/corvudev/corvu/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/solid-prevent-scroll/-/solid-prevent-scroll-0.1.11.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "d8f0a89950831da40dff9b7ba2012a5187876acae2b5929767c49bfd52e497459e6fca3d6211303a8f0b4ae8c911a86f3256023722add3344978795d38079666"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|solid-transition-group@0.2.3",
+      "type": "library",
+      "author": "Ryan Carniato",
+      "name": "solid-transition-group",
+      "version": "0.2.3",
+      "description": "Components to manage animations for SolidJS",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/solid-transition-group@0.2.3",
+      "externalReferences": [
+        {
+          "url": "https://github.com/solidjs/solid-transition-group#readme",
+          "type": "website"
+        },
+        {
+          "url": "https://github.com/solidjs/solid-transition-group",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/solid-transition-group/-/solid-transition-group-0.2.3.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "881ef673d3792b3f72911a885e5d2542884e6aee2dd1d85e97d923c05bf1f3551925b57068284cb81bb28626662b6e1bf1a2842b4c37b8533de99c7373264676"
             }
           ],
           "type": "distribution"
@@ -13316,38 +14009,6 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|stringify-object@6.0.0",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "stringify-object",
-      "version": "6.0.0",
-      "description": "Stringify an object/array like JSON.stringify just without all the double-quotes",
-      "licenses": [
-        {
-          "license": {
-            "id": "BSD-2-Clause"
-          }
-        }
-      ],
-      "purl": "pkg:npm/stringify-object@6.0.0",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/stringify-object",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/stringify-object/-/stringify-object-6.0.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "e9ff78bc8103eaf98925f87797256c556c426127c8e6e33ed7a9ed103fd0977ed723257a923d264400224de30c73f40b6086a2cc2ddb529ad0f294270c3aca7c"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
       "bom-ref": "frontend@0.0.0|style-mod@4.1.3",
       "type": "library",
       "author": "Marijn Haverbeke",
@@ -13380,12 +14041,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|super-regex@1.1.0",
+      "bom-ref": "frontend@0.0.0|superjson@2.2.6",
       "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "super-regex",
-      "version": "1.1.0",
-      "description": "Make a regular expression time out if it takes too long to execute",
+      "author": "Simon Knott",
+      "name": "superjson",
+      "version": "2.2.6",
       "licenses": [
         {
           "license": {
@@ -13393,18 +14053,18 @@
           }
         }
       ],
-      "purl": "pkg:npm/super-regex@1.1.0",
+      "purl": "pkg:npm/superjson@2.2.6",
       "externalReferences": [
         {
-          "url": "sindresorhus/super-regex",
+          "url": "https://github.com/blitz-js/superjson",
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/super-regex/-/super-regex-1.1.0.tgz",
+          "url": "https://registry.npmjs.org/superjson/-/superjson-2.2.6.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "587930b3665f9597b8d738fa02896fbe6693ad676cfd5bb2798afd88f56ffe841e688a15c4c29abac85f156a4e1834fe1ae06b33fb15a85f0a50261095249375"
+              "content": "1feb9ef19a38bc9995da7463a71f3a3f7e65cf00d3de722d9c8b28720ba682bd211cc43e646ab9beb11183d909068e405869b16438730e8f9654826a901d1c18"
             }
           ],
           "type": "distribution"
@@ -13633,38 +14293,6 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|time-span@5.1.0",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "time-span",
-      "version": "5.1.0",
-      "description": "Simplified high resolution timing",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/time-span@5.1.0",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/time-span",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/time-span/-/time-span-5.1.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "ef9be873ff46e2b0c826578ea388cfbcde3f602e06459ad8f32cb5b94e25c2b0775c441b5af7bccd7a0ee4da38785ac671300c632a18ebba7c8d141db40d476c"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
       "bom-ref": "frontend@0.0.0|trim-lines@3.0.1",
       "type": "library",
       "author": "Titus Wormer",
@@ -13857,36 +14485,6 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|type-fest@4.41.0",
-      "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "type-fest",
-      "version": "4.41.0",
-      "description": "A collection of essential TypeScript types",
-      "licenses": [
-        {
-          "expression": "(MIT OR CC0-1.0)"
-        }
-      ],
-      "purl": "pkg:npm/type-fest@4.41.0",
-      "externalReferences": [
-        {
-          "url": "sindresorhus/type-fest",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/type-fest/-/type-fest-4.41.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "4de4d243a1f9607be9a95c0145c9cb0c20670ce1d662eec8bc66c74fa37c00eca672bf4f2468dcd464ed896653620d0d0a0630be761612454285002bf5b8dfc0"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
       "bom-ref": "frontend@0.0.0|type-fest@5.9.0",
       "type": "library",
       "author": "Sindre Sorhus",
@@ -13989,6 +14587,45 @@
             {
               "alg": "SHA-512",
               "content": "02cb82cdf7c61c9c9b49a46b9abe5e1ebf359b0254de48f0e8cfaea6b5af09788d78df52386c10dc99fc8dbf26dd9ea2cd58249e7d51d054c21003f642b2d8ff"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|undici@8.10.2",
+      "type": "library",
+      "name": "undici",
+      "version": "8.10.2",
+      "description": "An HTTP/1.1 client, written from scratch for Node.js",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/undici@8.10.2",
+      "externalReferences": [
+        {
+          "url": "https://undici.nodejs.org",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/nodejs/undici.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/nodejs/undici/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/undici/-/undici-8.10.2.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "ff2e3f6c7f58354e618bd348ae93aebc65c5731ae3dc232b57efc0629a300184e91e7f205ff5cf163372efae853e8618d2689085d5bdefb24558a18d841770c9"
             }
           ],
           "type": "distribution"
@@ -14636,41 +15273,6 @@
             {
               "alg": "SHA-512",
               "content": "6caaf50e488d6b692b4bbab136d76bb47026cee6061502e2435dd3b28aec753e942d390f2cabaee7e1ac1690e583a2458d44f05f60f284c3c6d9b7bcb8faeab1"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
-      "bom-ref": "frontend@0.0.0|web-worker@1.5.0",
-      "type": "library",
-      "name": "web-worker",
-      "version": "1.5.0",
-      "description": "Consistent Web Workers in browser and Node.",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        }
-      ],
-      "purl": "pkg:npm/web-worker@1.5.0",
-      "externalReferences": [
-        {
-          "url": "https://github.com/developit/web-worker",
-          "type": "website"
-        },
-        {
-          "url": "developit/web-worker",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/web-worker/-/web-worker-1.5.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "462311789ad302203e9818c638d3278d50cfdaede9f51d6f91c1b3ea00c8ace313de81ae6305f659131823d8a9929852b84e5728487275b84d109878358f6697"
             }
           ],
           "type": "distribution"

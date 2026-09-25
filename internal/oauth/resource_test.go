@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // The first configured resource is the default, so the order a deployment lists
@@ -88,6 +89,8 @@ func TestNewServerLeavesTheCallersResourcesAlone(t *testing.T) {
 // presents a token at the resource it was minted for, which passes whether
 // identifiers are compared whole or by prefix.
 func TestATokenDoesNotReachAResourceItWasNotMintedFor(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/tokens-audience-restricted")
+
 	const issuer = "https://cetacean.test"
 
 	root := Resource{Path: "", Realm: "cetacean"}
@@ -138,6 +141,30 @@ func TestATokenDoesNotReachAResourceItWasNotMintedFor(t *testing.T) {
 
 			if _, err := s.Identify(token, c.shown); err == nil {
 				t.Errorf("a token audienced for %s was accepted at %s", c.mintedFor, c.shown)
+			}
+		})
+	}
+}
+
+// RFC 8707 binds a token to one resource, so an identifier that merely extends
+// a configured one is a different resource and must be refused. Matching by
+// prefix here is the audience confusion the parameter exists to prevent.
+func TestAnIdentifierExtendingAConfiguredResourceIsRefused(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8707/single-resource-per-token")
+
+	s := newTestServer(t)
+
+	for _, suffix := range []string{
+		"/not-a-resource",
+		"-suffixed",
+		"/../elsewhere",
+	} {
+		t.Run(suffix, func(t *testing.T) {
+			raw := s.resources.fallback + suffix
+
+			got, err := s.resources.effectiveResource([]string{raw}, false)
+			if err == nil {
+				t.Fatalf("%q was accepted and resolved to %q", raw, got)
 			}
 		})
 	}

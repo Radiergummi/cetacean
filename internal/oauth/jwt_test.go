@@ -12,6 +12,8 @@ import (
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 const testKey = "test-secret-key-32-bytes-long!!!"
@@ -36,6 +38,8 @@ func mustTokenIssuer(t *testing.T, root []byte, issuer string) *TokenIssuer {
 }
 
 func TestJWTSignAndVerify(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/tokens-are-signed")
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	claims := AccessTokenClaims{
 		Subject:  "user@example.com",
@@ -67,6 +71,11 @@ func TestJWTSignAndVerify(t *testing.T) {
 }
 
 func TestJWTExpiredToken(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9068/current-time-before-exp",
+		"oauth/rfc7519/exp-is-in-the-future",
+	)
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, err := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "user@example.com", ClientID: "c1"},
@@ -82,6 +91,12 @@ func TestJWTExpiredToken(t *testing.T) {
 }
 
 func TestJWTWrongSigningKey(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9068/signature-validated-with-declared-alg",
+		"oauth/rfc7515/a-signature-must-validate",
+		"oauth/rfc7515/no-successful-validation-means-invalid",
+	)
+
 	issuer1 := mustTokenIssuer(t, []byte("key-one-32-bytes-long-padding!!!"), testIssuer)
 	issuer2 := mustTokenIssuer(t, []byte("key-two-32-bytes-long-padding!!!"), testIssuer)
 	token, _ := issuer1.IssueAccessToken(
@@ -95,6 +110,12 @@ func TestJWTWrongSigningKey(t *testing.T) {
 }
 
 func TestJWTWrongAudience(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9700/wrong-audience-refused",
+		"oauth/rfc9068/aud-names-this-resource",
+		"oauth/rfc7519/aud-mismatch-is-rejected",
+	)
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, _ := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
@@ -107,6 +128,8 @@ func TestJWTWrongAudience(t *testing.T) {
 }
 
 func TestJWTWrongIssuer(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/iss-exactly-matches")
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	token, _ := issuer.IssueAccessToken(
 		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
@@ -118,9 +141,25 @@ func TestJWTWrongIssuer(t *testing.T) {
 	if _, err := other.VerifyAccessToken(token, testTokenAudience); err == nil {
 		t.Fatal("expected error for wrong issuer")
 	}
+
+	// Only an issuer identifier's scheme and host are case-insensitive, so a
+	// path differing by case names a different authorization server.
+	cased := *issuer
+	cased.Issuer = testIssuer + "/Tenant"
+	token, _ = cased.IssueAccessToken(
+		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
+		testTokenAudience,
+		time.Hour,
+	)
+	cased.Issuer = testIssuer + "/tenant"
+	if _, err := cased.VerifyAccessToken(token, testTokenAudience); err == nil {
+		t.Fatal("expected error for an issuer differing only in case")
+	}
 }
 
 func TestJWTMalformedToken(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7519/failed-validation-rejects-the-jwt")
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	// Each case names the sentinel it must surface, since callers map those to
 	// WWW-Authenticate error codes.
@@ -170,6 +209,8 @@ func TestJWTMissingSigningKey(t *testing.T) {
 }
 
 func TestJWTReusedJTIsAreDistinct(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7519/jti-is-collision-resistant")
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 	claims := AccessTokenClaims{Subject: "u@e", ClientID: "c1"}
 	t1, _ := issuer.IssueAccessToken(claims, testTokenAudience, time.Hour)
@@ -183,12 +224,45 @@ func TestJWTReusedJTIsAreDistinct(t *testing.T) {
 func reheader(t *testing.T, issuer *TokenIssuer, token, header string) string {
 	t.Helper()
 
+	return resign(t, issuer, base64.RawURLEncoding.EncodeToString([]byte(header)),
+		segment(t, token, 1))
+}
+
+// segment returns one base64url part of a compact JWS, still encoded.
+func segment(t *testing.T, token string, i int) string {
+	t.Helper()
+
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		t.Fatalf("token has %d segments, want 3", len(parts))
 	}
 
-	signingInput := base64.RawURLEncoding.EncodeToString([]byte(header)) + "." + parts[1]
+	return parts[i]
+}
+
+// payloadOf decodes a compact JWS's claims.
+func payloadOf(t *testing.T, token string) map[string]any {
+	t.Helper()
+
+	raw, err := base64.RawURLEncoding.DecodeString(segment(t, token, 1))
+	if err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+
+	var claims map[string]any
+	if err := json.Unmarshal(raw, &claims); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+
+	return claims
+}
+
+// resign joins an encoded header and payload and signs them afresh, which is
+// what makes an edited token verifiable rather than merely malformed.
+func resign(t *testing.T, issuer *TokenIssuer, header, payload string) string {
+	t.Helper()
+
+	signingInput := header + "." + payload
 
 	sig, err := signES256(issuer.signer, signingInput)
 	if err != nil {
@@ -203,6 +277,20 @@ func reheader(t *testing.T, issuer *TokenIssuer, token, header string) string {
 var requiredClaims = []string{"iss", "exp", "aud", "sub", "client_id", "iat", "jti"}
 
 func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9700/aud-claim-may-restrict-the-audience",
+		"oauth/rfc9700/sub-is-the-resource-owner",
+		"oauth/rfc9068/typ-is-at-jwt",
+		"oauth/rfc9068/claim-iss-required",
+		"oauth/rfc9068/claim-exp-required",
+		"oauth/rfc9068/claim-aud-required",
+		"oauth/rfc9068/claim-sub-required",
+		"oauth/rfc9068/claim-client-id-required",
+		"oauth/rfc9068/claim-iat-required",
+		"oauth/rfc9068/claim-jti-required",
+		"oauth/rfc6750/tokens-are-audience-restricted",
+	)
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
@@ -255,6 +343,11 @@ func TestJWTCarriesTheRFC9068Profile(t *testing.T) {
 }
 
 func TestJWTRejectsAnyOtherTokenType(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9068/typ-is-at-jwt",
+		"oauth/rfc9068/typ-verified-on-receipt",
+	)
+
 	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
@@ -325,6 +418,11 @@ func TestJWTRefusesToMintWithoutARequiredClaim(t *testing.T) {
 }
 
 func TestTokenIsES256WithAKeyID(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7515/alg-present-and-processed",
+		"oauth/rfc7515/alg-accurately-represents-the-signature",
+	)
+
 	issuer := mustTokenIssuer(t, testRoot, testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
@@ -365,6 +463,11 @@ func TestTokenIsES256WithAKeyID(t *testing.T) {
 }
 
 func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7518/ecdsa-signature-is-64-octets",
+		"oauth/rfc7518/ecdsa-signature-keeps-leading-zeros",
+	)
+
 	issuer := mustTokenIssuer(t, testRoot, testIssuer)
 
 	token, err := issuer.IssueAccessToken(AccessTokenClaims{
@@ -387,6 +490,15 @@ func TestVerifyRefusesASignatureThatIsNotSixtyFourBytes(t *testing.T) {
 	}
 
 	forged := signingInput + "." + base64.RawURLEncoding.EncodeToString(der)
+
+	// A signature shorter than one coordinate is the case the length check is
+	// actually load-bearing for: R and S are sliced out at fixed offsets, so
+	// without it a truncated signature indexes past the end rather than failing.
+	truncated := signingInput + "." + base64.RawURLEncoding.EncodeToString(der[:8])
+
+	if _, err := issuer.VerifyAccessToken(truncated, testTokenAudience); err == nil {
+		t.Error("a truncated signature was accepted")
+	}
 
 	if _, err := issuer.VerifyAccessToken(forged, testTokenAudience); !errors.Is(
 		err,
@@ -451,15 +563,157 @@ func TestPackedSignatureWithALeadingZeroInRVerifies(t *testing.T) {
 	}
 }
 
-func TestVerifyRefusesHS256(t *testing.T) {
-	issuer := mustTokenIssuer(t, testRoot, testIssuer)
+// jwaAlgorithms is RFC 7518 §3.1's "alg" table in full. Naming a subset of it
+// leaves the neighbours of the one algorithm this server accepts untested, and
+// a second accepted name is invisible to a list that does not contain it.
+var jwaAlgorithms = []string{
+	"HS256", "HS384", "HS512",
+	"RS256", "RS384", "RS512",
+	"ES256", "ES384", "ES512",
+	"PS256", "PS384", "PS512",
+	"none",
+}
 
-	header := base64.RawURLEncoding.EncodeToString(
-		[]byte(`{"alg":"HS256","typ":"at+jwt"}`),
+// "none" is the algorithm RFC 9068 §2.1 forbids outright. RS256 it requires
+// among those supported, and this server issues and accepts ES256 alone — so
+// this pins the divergence rather than asserting it away.
+func TestVerifyRefusesEveryAlgorithmButES256(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9068/alg-is-not-none",
+		"oauth/rfc9068/rs256-among-supported-algorithms",
+		"oauth/rfc7519/hs256-and-none-implemented",
+		"oauth/rfc7519/unacceptable-algorithms-rejected",
+		"oauth/rfc7515/unacceptable-algorithms-are-invalid",
+		"oauth/rfc7515/alg-accurately-represents-the-signature",
+		"oauth/rfc7518/unsecured-jws-not-accepted-by-default",
 	)
 
-	_, err := issuer.VerifyAccessToken(header+".e30.c2ln", testTokenAudience)
-	if !errors.Is(err, ErrMalformedToken) {
-		t.Errorf("error = %v, want ErrMalformedToken", err)
+	issuer := mustTokenIssuer(t, testRoot, testIssuer)
+
+	for _, alg := range jwaAlgorithms {
+		if alg == "ES256" {
+			continue
+		}
+
+		t.Run(alg, func(t *testing.T) {
+			header := base64.RawURLEncoding.EncodeToString(
+				[]byte(`{"alg":"` + alg + `","typ":"at+jwt"}`),
+			)
+
+			_, err := issuer.VerifyAccessToken(header+".e30.c2ln", testTokenAudience)
+			if !errors.Is(err, ErrMalformedToken) {
+				t.Errorf("error = %v, want ErrMalformedToken", err)
+			}
+		})
+	}
+}
+
+// RFC 7519 §4 lets a parser take the lexically last of two members with the same
+// name, which encoding/json does. A token carrying the expected audience first
+// and another second must therefore be refused: the alternative — taking the
+// first — would let a second member be appended to any token to widen it.
+func TestADuplicateAudienceClaimTakesTheLastValue(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc7519/duplicate-claim-names-resolved")
+
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
+
+	token, err := issuer.IssueAccessToken(
+		AccessTokenClaims{Subject: "u@e", ClientID: "c1"},
+		testTokenAudience,
+		time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	raw, err := base64.RawURLEncoding.DecodeString(segment(t, token, 1))
+	if err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+
+	// Appended by hand: encoding/json cannot emit two members of one name.
+	const elsewhere = testIssuer + "/elsewhere"
+
+	doubled := strings.Replace(
+		string(raw),
+		`"aud":"`+testTokenAudience+`"`,
+		`"aud":"`+testTokenAudience+`","aud":"`+elsewhere+`"`,
+		1,
+	)
+	if doubled == string(raw) {
+		t.Fatalf("payload does not carry aud in the expected shape: %s", raw)
+	}
+
+	edited := resign(
+		t, issuer,
+		segment(t, token, 0),
+		base64.RawURLEncoding.EncodeToString([]byte(doubled)),
+	)
+
+	if _, err := issuer.VerifyAccessToken(edited, testTokenAudience); err == nil {
+		t.Error("a second aud member widened the token's audience")
+	}
+
+	// And the last value is what was read, rather than the claim being dropped.
+	if _, err := issuer.VerifyAccessToken(edited, elsewhere); err != nil {
+		t.Errorf("the last aud member was not the one honoured: %v", err)
+	}
+}
+
+// forgeAccessToken mints what IssueAccessToken refuses to, so the verifier's
+// own check of the required claims can be reached at all.
+func forgeAccessToken(t *testing.T, iss *TokenIssuer, subject, clientID string) string {
+	t.Helper()
+
+	now := time.Now()
+
+	body, err := json.Marshal(jwtPayload{
+		Issuer:    iss.Issuer,
+		Audience:  audience{testTokenAudience},
+		IssuedAt:  now.Unix(),
+		ExpiresAt: now.Add(time.Hour).Unix(),
+		Subject:   subject,
+		ClientID:  clientID,
+	})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
+	signingInput := iss.header + "." + base64.RawURLEncoding.EncodeToString(body)
+
+	sig, err := signES256(iss.signer, signingInput)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+
+	return signingInput + "." + sig
+}
+
+// Both claims are required, and either one alone is not enough: the minter
+// refuses to leave either out, and the verifier refuses a token that did.
+func TestAForgedTokenMissingEitherRequiredClaimIsRefused(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9068/claim-sub-required",
+		"oauth/rfc9068/claim-client-id-required",
+	)
+
+	issuer := mustTokenIssuer(t, []byte(testKey), testIssuer)
+
+	for _, tc := range []struct {
+		name     string
+		subject  string
+		clientID string
+	}{
+		{"sub absent, client_id present", "", "c1"},
+		{"sub present, client_id absent", "user@example.com", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			token := forgeAccessToken(t, issuer, tc.subject, tc.clientID)
+
+			_, err := issuer.VerifyAccessToken(token, testTokenAudience)
+			if !errors.Is(err, ErrIncompleteClaims) {
+				t.Errorf("err = %v, want ErrIncompleteClaims", err)
+			}
+		})
 	}
 }
