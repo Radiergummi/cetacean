@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -10,8 +11,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 )
 
 // genMutant is one operator swap at a byte offset in a source file. It carries
@@ -147,23 +150,55 @@ func runGenerated(root, pkg string) error {
 	fmt.Fprintf(os.Stderr, "spec: %d operator mutants across %d files in %s\n",
 		len(plan), len(files), pkg)
 
-	var survived, killed, unviable int
+	var (
+		killed, unviable int
+		survivors        []genMutant
+		errs             []error
+		mu               sync.Mutex
+		wg               sync.WaitGroup
+	)
+
+	// The same slots as runMutants: each swap has its own overlay.
+	slots := make(chan struct{}, runtime.NumCPU())
 
 	for _, p := range plan {
-		switch outcome, err := tryGenerated(root, p.m.File, applyGenerated(p.src, p.m), pkg); {
-		case err != nil:
-			return err
-		case outcome == unviableMutant:
-			unviable++
-		case outcome == survivedMutant:
-			survived++
+		wg.Go(func() {
+			slots <- struct{}{}
+			defer func() { <-slots }()
 
-			fmt.Fprintf(os.Stderr, "  survived: %s:%d: %s -> %s\n",
-				p.m.File, p.m.Line, p.m.From, p.m.To)
-		default:
-			killed++
-		}
+			outcome, err := tryGenerated(root, p.m.File, applyGenerated(p.src, p.m), pkg)
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			switch {
+			case err != nil:
+				errs = append(errs, err)
+			case outcome == unviableMutant:
+				unviable++
+			case outcome == survivedMutant:
+				survivors = append(survivors, p.m)
+			default:
+				killed++
+			}
+		})
 	}
+
+	wg.Wait()
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	slices.SortFunc(survivors, func(a, b genMutant) int {
+		return cmp.Or(strings.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line))
+	})
+
+	for _, m := range survivors {
+		fmt.Fprintf(os.Stderr, "  survived: %s:%d: %s -> %s\n", m.File, m.Line, m.From, m.To)
+	}
+
+	survived := len(survivors)
 
 	fmt.Fprintf(os.Stderr,
 		"spec: %d generated mutants in %s — %d killed, %d survived, %d did not compile\n",
