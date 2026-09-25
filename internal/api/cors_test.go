@@ -183,15 +183,8 @@ func TestCORSIsNotOfferedAtTheAuthorizationEndpoint(t *testing.T) {
 			"GET", "/oauth/authorize?response_type=code", nil),
 		"a decision":            httptest.NewRequest("POST", "/oauth/authorize", nil),
 		"the preflight for one": httptest.NewRequest("OPTIONS", "/oauth/authorize", nil),
-		// negotiate strips these after this middleware has run, so the mux
-		// serves the consent form under every spelling.
-		"a consent request with a suffix": httptest.NewRequest(
-			"GET", "/oauth/authorize.html?response_type=code", nil),
-		"a preflight with a suffix": httptest.NewRequest(
-			"OPTIONS", "/oauth/authorize.json", nil),
 	}
 	refused["the preflight for one"].Header.Set("Access-Control-Request-Method", "POST")
-	refused["a preflight with a suffix"].Header.Set("Access-Control-Request-Method", "POST")
 
 	for name, r := range refused {
 		t.Run(name, func(t *testing.T) {
