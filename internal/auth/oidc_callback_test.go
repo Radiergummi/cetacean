@@ -1035,6 +1035,50 @@ func TestLogout_ClearsSession(t *testing.T) {
 	}
 }
 
+// whoami reads a bearer token on its own path rather than through
+// Authenticate, so each outcome is pinned here separately.
+func TestWhoami_BearerToken(t *testing.T) {
+	idp := newMockIDP(t, "test-client")
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	for name, tc := range map[string]struct {
+		token   string
+		status  int
+		subject string
+	}{
+		"valid":     {idp.issueIDToken(t, "", time.Now().Add(time.Hour)), http.StatusOK, "user-42"},
+		"malformed": {"not-a-valid-jwt", http.StatusUnauthorized, ""},
+		"expired": {
+			idp.issueIDToken(t, "", time.Now().Add(-time.Hour)), http.StatusUnauthorized, "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
+			r.Header.Set("Authorization", "Bearer "+tc.token)
+			w := httptest.NewRecorder()
+
+			p.handleWhoami(w, r)
+
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d", w.Code, tc.status)
+			}
+
+			if tc.subject == "" {
+				return
+			}
+
+			var id Identity
+			if err := json.NewDecoder(w.Body).Decode(&id); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+
+			if id.Subject != tc.subject {
+				t.Errorf("Subject = %q, want %q", id.Subject, tc.subject)
+			}
+		})
+	}
+}
+
 // --- Bearer token tests via Authenticate ---
 
 func TestAuthenticate_ValidBearerToken(t *testing.T) {
