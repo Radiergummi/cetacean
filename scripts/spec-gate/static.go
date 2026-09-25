@@ -121,23 +121,19 @@ func checkLane(q *spec.Requirement, tagged, untagged bool) error {
 	return nil
 }
 
-// checkObservations reports an observation its own test never claimed, which
-// the report would otherwise drop without a word.
+// checkObservations reports an observation no claim in its own test reaches,
+// which the report would otherwise drop without a word. At run time a claim
+// reaches its own t and that t's subtests: lexically, the function it is in.
 func checkObservations(claims, observations []Claim) []error {
-	claimed := make(map[string]bool, len(claims))
-	for _, c := range claims {
-		claimed[site(c)] = true
-	}
-
 	var errs []error
 
 	for _, o := range observations {
-		if claimed[site(o)] {
+		if slices.ContainsFunc(claims, func(c Claim) bool { return reaches(c, o) }) {
 			continue
 		}
 
 		errs = append(errs, fmt.Errorf(
-			"%s:%d: observes %q, which %s does not claim; the observation is dropped",
+			"%s:%d: observes %q, which no claim in %s reaches; the observation is dropped",
 			o.File, o.Line, o.ID, o.Func,
 		))
 	}
@@ -145,8 +141,10 @@ func checkObservations(claims, observations []Claim) []error {
 	return errs
 }
 
-// site identifies the one test a record was written in.
-func site(c Claim) string { return c.File + "\t" + c.Func + "\t" + c.ID }
+func reaches(c, o Claim) bool {
+	return c.File == o.File && c.Func == o.Func && c.ID == o.ID &&
+		c.scope[0] <= o.pos && o.pos <= c.scope[1]
+}
 
 // unknown reports every record naming a requirement the registry does not
 // have. Run over claims and observations alike: a typo is a typo either way.

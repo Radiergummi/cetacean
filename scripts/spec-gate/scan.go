@@ -26,6 +26,11 @@ type Claim struct {
 	// Tagged marks a claim behind a build constraint, which CI compiles but
 	// never runs. The report needs it to say "not run" rather than "uncovered".
 	Tagged bool
+
+	// pos is the call, and scope the innermost function it was made in: the
+	// lexical stand-in for the t a record is written on.
+	pos   token.Pos
+	scope [2]token.Pos
 }
 
 // TestFiles lists the repository's tracked test files. A filesystem walk would
@@ -118,6 +123,17 @@ func ScanFile(path string) (claims, observations []Claim, errs []error) {
 			continue
 		}
 
+		var funcs [][2]token.Pos
+
+		ast.Inspect(fn, func(n ast.Node) bool {
+			switch n.(type) {
+			case *ast.FuncDecl, *ast.FuncLit:
+				funcs = append(funcs, [2]token.Pos{n.Pos(), n.End()})
+			}
+
+			return true
+		})
+
 		ast.Inspect(fn, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
 			if !ok {
@@ -162,6 +178,8 @@ func ScanFile(path string) (claims, observations []Claim, errs []error) {
 					Func:   fn.Name.Name,
 					Line:   fset.Position(lit.Pos()).Line,
 					Tagged: tagged,
+					pos:    call.Pos(),
+					scope:  innermost(funcs, call.Pos()),
 				}
 
 				if observation {
@@ -176,6 +194,20 @@ func ScanFile(path string) (claims, observations []Claim, errs []error) {
 	}
 
 	return claims, observations, errs
+}
+
+// innermost returns the tightest of funcs holding pos. ast.Inspect visits in
+// source order, so the last one that holds it is the most deeply nested.
+func innermost(funcs [][2]token.Pos, pos token.Pos) [2]token.Pos {
+	var found [2]token.Pos
+
+	for _, f := range funcs {
+		if f[0] <= pos && pos <= f[1] {
+			found = f
+		}
+	}
+
+	return found
 }
 
 // unreadable reports a claim this scan could not extract an id from, which

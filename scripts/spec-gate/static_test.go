@@ -151,3 +151,43 @@ func TestAGapAClaimantContradictsFailsTheGate(t *testing.T) {
 		t.Fatalf("errors = %v, want one about the stale gap", errs)
 	}
 }
+
+// At run time an observation joins a claim made on its own t or a parent's,
+// so one from a sibling subtest is dropped; lexically, it lies outside the
+// function the claim was made in.
+func TestAnObservationOutsideTheClaimingFunctionFailsTheGate(t *testing.T) {
+	src := `package p
+
+import (
+	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
+)
+
+func TestSiblings(t *testing.T) {
+	t.Run("claims", func(t *testing.T) {
+		spec.Satisfies(t, "test/doc/a")
+	})
+	t.Run("observes", func(t *testing.T) {
+		spec.Observed(t, "test/doc/a", "sibling")
+	})
+}
+
+func TestNested(t *testing.T) {
+	spec.Satisfies(t, "test/doc/a")
+	t.Run("case", func(t *testing.T) {
+		spec.Observed(t, "test/doc/a", "child")
+	})
+}
+`
+
+	claims, observations, errs := ScanFile(writeTemp(t, "s_test.go", src))
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+
+	errs = checkObservations(claims, observations)
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "s_test.go:14") {
+		t.Fatalf("errors = %v, want one for the sibling's observation at line 14", errs)
+	}
+}
