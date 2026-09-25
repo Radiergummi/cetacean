@@ -99,7 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Authorization policy changes are picked up when the file is replaced by a rename, as a deployment, several editors, and a ConfigMap update all do
 - The error reference page at `/api/errors` renders instead of showing "Something went wrong"
 - The API documentation, the playground script, the JSON-LD context and the attribution documents are cacheable
-- `/oauth/authorize` no longer answers cross-origin requests, whatever `server.cors.origins` allows, so a page on an allowed origin cannot read the consent form
+- `/oauth/authorize` no longer answers cross-origin requests, whatever `server.cors.origins` allows, so a page on an allowed origin can't read the consent form
 
 ## [0.14.0] - 2026-09-10
 

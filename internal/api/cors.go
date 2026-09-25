@@ -64,11 +64,10 @@ var allowedHeaders = strings.Join([]string{
 	"Mcp-Session-Id",
 }, ", ")
 
-// authorizationEndpoint is the one path this middleware never answers for. A
-// client reaches it by navigating the user agent, never from script, so an
-// origin reflected here buys nothing and lets a page on an allow-listed origin
-// read the consent form and the CSRF nonce inside it. Spelled out for the
-// reason carriesItsOwnProof gives, and matched exactly for the same reason.
+// authorizationEndpoint is the one path this middleware never answers for: it
+// is reached by navigation, never from script, and a reflected origin would let
+// an allow-listed page read the consent form's CSRF nonce. Spelled out and
+// matched exactly for the reasons carriesItsOwnProof gives.
 const authorizationEndpoint = "/oauth/authorize"
 
 func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
