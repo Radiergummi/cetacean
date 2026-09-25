@@ -89,6 +89,7 @@ func run(check, write, verbose bool, only []string) error {
 
 	var (
 		failures []string
+		unread   []string
 		reported int
 		found    = map[string][]string{}
 	)
@@ -107,6 +108,7 @@ func run(check, write, verbose bool, only []string) error {
 		unheld, err := report(doc, verbose)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  %s: %v\n", key, err)
+			unread = append(unread, key)
 
 			continue
 		}
@@ -126,8 +128,15 @@ func run(check, write, verbose bool, only []string) error {
 		}
 	}
 
-	if reported == 0 {
+	if reported == 0 && len(unread) == 0 {
 		return fmt.Errorf("no document declares inventory.sections")
+	}
+
+	// A document left unread would pass --check unexamined, and --write would
+	// drop its baseline entries as though it had none.
+	if len(unread) > 0 {
+		return fmt.Errorf("%d document(s) could not be read: %s",
+			len(unread), strings.Join(unread, ", "))
 	}
 
 	if write {
