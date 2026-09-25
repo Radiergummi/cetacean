@@ -66,8 +66,8 @@ var allowedHeaders = strings.Join([]string{
 
 // authorizationEndpoint is the one path this middleware never answers for: it
 // is reached by navigation, never from script, and a reflected origin would let
-// an allow-listed page read the consent form's CSRF nonce. Spelled out and
-// matched exactly for the reasons carriesItsOwnProof gives.
+// an allow-listed page read the consent form's CSRF nonce. Spelled out for the
+// reasons carriesItsOwnProof gives, and matched after the suffix negotiate strips.
 const authorizationEndpoint = "/oauth/authorize"
 
 func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
@@ -91,7 +91,7 @@ func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
 			// Before the preflight branch below, so an OPTIONS reaches the mux
 			// and is refused there: answering one is the same offer made a
 			// request earlier.
-			if r.URL.Path == authorizationEndpoint {
+			if path, _, _ := splitExtension(r.URL.Path); path == authorizationEndpoint {
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -246,9 +246,19 @@ func hasMidPathExtension(path string) bool {
 // along with the suffix it removed. Returns ContentTypeUnsupported if no
 // extension matches.
 func resolveExtension(r *http.Request) (ContentType, string) {
-	path := r.URL.Path
+	trimmed, ct, ext := splitExtension(r.URL.Path)
+	if ext != "" {
+		r.URL.Path = trimmed
+	}
+
+	return ct, ext
+}
+
+// splitExtension is resolveExtension without the rewrite: the path the mux
+// will route, and the suffix that comes off it, empty when none does.
+func splitExtension(path string) (string, ContentType, string) {
 	if literalDocuments[path] {
-		return ContentTypeUnsupported, ""
+		return path, ContentTypeUnsupported, ""
 	}
 
 	for _, ext := range extensionTypes {
@@ -256,12 +266,12 @@ func resolveExtension(r *http.Request) (ContentType, string) {
 			if !scopedTo(ext.under, trimmed) {
 				continue
 			}
-			r.URL.Path = trimmed
 
-			return ext.ct, ext.ext
+			return trimmed, ext.ct, ext.ext
 		}
 	}
-	return ContentTypeUnsupported, ""
+
+	return path, ContentTypeUnsupported, ""
 }
 
 // rangesAcceptHTML reports whether the ranges admit text/html at a usable

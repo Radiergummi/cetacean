@@ -139,13 +139,17 @@ requirements:
     # Not supported means neither half: an allow-listed origin reflected on the
     # GET hands a page the consent form and the CSRF nonce in it, and answering
     # the preflight is the same offer made one request earlier.
+    # The raw path misses the suffixes negotiate strips only after this runs.
     mutants:
       - file: internal/api/cors.go
-        replace: "\t\t\tif r.URL.Path == authorizationEndpoint {"
-        with: "\t\t\tif false && r.URL.Path == authorizationEndpoint {"
+        replace: "\t\t\tif path, _, _ := splitExtension(r.URL.Path); path == authorizationEndpoint {"
+        with: "\t\t\tif path, _, _ := splitExtension(r.URL.Path); false && path == authorizationEndpoint {"
       - file: internal/api/cors.go
-        replace: "\t\t\tif r.URL.Path == authorizationEndpoint {"
-        with: "\t\t\tif r.Method != http.MethodOptions &&\n\t\t\t\tr.URL.Path == authorizationEndpoint {"
+        replace: "\t\t\tif path, _, _ := splitExtension(r.URL.Path); path == authorizationEndpoint {"
+        with: "\t\t\tif path, _, _ := splitExtension(r.URL.Path); r.Method != http.MethodOptions &&\n\t\t\t\tpath == authorizationEndpoint {"
+      - file: internal/api/cors.go
+        replace: "\t\t\tif path, _, _ := splitExtension(r.URL.Path); path == authorizationEndpoint {"
+        with: "\t\t\tif r.URL.Path == authorizationEndpoint {"
 
   - id: no-open-redirector-at-the-authorization-endpoint
     level: MUST
