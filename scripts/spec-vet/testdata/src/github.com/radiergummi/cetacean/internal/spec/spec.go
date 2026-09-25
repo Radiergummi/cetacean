@@ -5,3 +5,5 @@ package spec
 import "testing"
 
 func Satisfies(t testing.TB, ids ...string) {}
+
+func Observed(t testing.TB, id, format string, args ...any) {}

@@ -52,3 +52,13 @@ func TestSubtestClaimsAfterWork(t *testing.T) {
 		spec.Satisfies(t, "fixture/not-a-document/not-a-requirement") // want "must be the first statement"
 	})
 }
+
+var cases = []struct{ run func(*testing.T) }{
+	{run: func(t *testing.T) {
+		spec.Satisfies(t, "fixture/not-a-document/not-a-requirement") // want "outside a function declaration"
+	}},
+}
+
+var observed = func(t *testing.T) {
+	spec.Observed(t, "fixture/not-a-document/not-a-requirement", "x") // want "outside a function declaration"
+}

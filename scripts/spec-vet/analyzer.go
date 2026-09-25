@@ -111,6 +111,12 @@ func checkCall(pass *analysis.Pass, file *ast.File, call *ast.CallExpr, name str
 				"and nothing shipped may link it", name)
 	}
 
+	if !inFuncDecl(file, call.Pos()) {
+		pass.Reportf(call.Pos(),
+			"%s is called outside a function declaration; the requirement gate attributes "+
+				"a claim to the test function it sits in, and this one has none", name)
+	}
+
 	if len(call.Args) < 2 {
 		pass.Reportf(call.Pos(), "%s names no requirement", name)
 
@@ -153,6 +159,18 @@ func checkOrder(pass *analysis.Pass, file *ast.File, call *ast.CallExpr) {
 			return
 		}
 	}
+}
+
+// inFuncDecl reports whether pos lies in a top-level function, which is all
+// the requirement gate walks: a literal in a package-level var is out of reach.
+func inFuncDecl(file *ast.File, pos token.Pos) bool {
+	for _, decl := range file.Decls {
+		if _, ok := decl.(*ast.FuncDecl); ok && decl.Pos() <= pos && pos <= decl.End() {
+			return true
+		}
+	}
+
+	return false
 }
 
 // innermostBody returns the body of the tightest function enclosing pos.
