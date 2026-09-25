@@ -96,7 +96,8 @@ func runMutants(root string) error {
 	)
 
 	// Each mutant has its own scratch overlay, so they share nothing but the
-	// build cache and can run a core apiece.
+	// build cache and can run a core apiece; runOverlaid's -p=1 keeps the total
+	// to the load an ordinary go test ./... puts on the tests.
 	slots := make(chan struct{}, runtime.NumCPU())
 
 	for _, q := range reg.All() {
@@ -179,7 +180,12 @@ func kill(root, id string, m spec.Mutant, names, pkgs []string) error {
 	}
 
 	if _, failed := errors.AsType[*exec.ExitError](err); failed {
-		return nil
+		if claimantFailed(out, names) {
+			return nil
+		}
+
+		return fmt.Errorf("%s: go test failed but no claimant did (%s: %s)\n%s",
+			id, m.File, m.Replace, out)
 	}
 
 	if err != nil {
@@ -190,6 +196,27 @@ func kill(root, id string, m spec.Mutant, names, pkgs []string) error {
 }
 
 const buildFailed = "[build failed]"
+
+// claimantFailed reports whether one of the claimants, or a subtest of one,
+// failed. A timeout or a killed process exits non-zero too, and says nothing
+// about whether the tests noticed the mutant.
+func claimantFailed(out []byte, names []string) bool {
+	for line := range bytes.Lines(out) {
+		rest, ok := bytes.CutPrefix(bytes.TrimSpace(line), []byte("--- FAIL: "))
+		if !ok {
+			continue
+		}
+
+		test, _, _ := bytes.Cut(rest, []byte(" "))
+		top, _, _ := bytes.Cut(test, []byte("/"))
+
+		if slices.Contains(names, string(top)) {
+			return true
+		}
+	}
+
+	return false
+}
 
 // runOverlaid runs go test with path's contents replaced by mutated, leaving
 // the tree on disk untouched. A non-nil *exec.ExitError means a test failed.
@@ -207,8 +234,12 @@ func runOverlaid(root, path, mutated string, args ...string) ([]byte, error) {
 
 	// #nosec G204 -- every argument comes from the embedded registry, the claim
 	// scan of this repository's own test files, or this command's own argument.
-	cmd := exec.CommandContext(context.Background(), "go",
-		append([]string{"test", "-overlay=" + overlay, "-count=1", "-failfast"}, args...)...)
+	cmd := exec.CommandContext(
+		context.Background(),
+		"go",
+		append(
+			[]string{"test", "-overlay=" + overlay, "-count=1", "-failfast", "-p=1"},
+			args...)...)
 	cmd.Dir = root
 
 	return cmd.CombinedOutput()

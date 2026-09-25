@@ -103,3 +103,21 @@ func TestClaimantsReportThePackagesTheirTestsLiveIn(t *testing.T) {
 		t.Errorf("pkgs = %v", pkgs)
 	}
 }
+
+// go test exits non-zero for a timeout or a killed process as well, and
+// neither says the claimants noticed the mutant.
+func TestOnlyAClaimantFailingKillsAMutant(t *testing.T) {
+	names := []string{"TestRefusesCORS", "TestOther"}
+
+	for out, want := range map[string]bool{
+		"--- FAIL: TestRefusesCORS (0.00s)\nFAIL\n":                        true,
+		"--- FAIL: TestOther/suffix (0.00s)\nFAIL\n":                       true,
+		"--- FAIL: TestRefusesCORSAgain (0.00s)\nFAIL\n":                   false,
+		"panic: test timed out after 10m0s\nrunning tests:\n\tTestOther\n": false,
+		"signal: killed\n": false,
+	} {
+		if got := claimantFailed([]byte(out), names); got != want {
+			t.Errorf("claimantFailed(%q) = %v, want %v", out, got, want)
+		}
+	}
+}
