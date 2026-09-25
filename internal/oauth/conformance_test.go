@@ -332,16 +332,7 @@ func repayload(
 ) string {
 	t.Helper()
 
-	raw, err := base64.RawURLEncoding.DecodeString(segment(t, token, 1))
-	if err != nil {
-		t.Fatalf("decode payload: %v", err)
-	}
-
-	var claims map[string]any
-	if err := json.Unmarshal(raw, &claims); err != nil {
-		t.Fatalf("unmarshal payload: %v", err)
-	}
-
+	claims := payloadOf(t, token)
 	edit(claims)
 
 	encoded, err := json.Marshal(claims)
@@ -904,20 +895,7 @@ func TestAnAccessTokenIsBoundToNoCaller(t *testing.T) {
 	}
 
 	// cnf is what a sender-constrained token carries the key confirmation in.
-	segments := strings.Split(token, ".")
-	if len(segments) != 3 {
-		t.Fatalf("token has %d segments, want 3", len(segments))
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(segments[1])
-	if err != nil {
-		t.Fatalf("decode payload: %v", err)
-	}
-
-	var body map[string]any
-	if err := json.Unmarshal(payload, &body); err != nil {
-		t.Fatalf("parse payload: %v", err)
-	}
-	if _, ok := body["cnf"]; ok {
+	if _, ok := payloadOf(t, token)["cnf"]; ok {
 		t.Error("the token carries a cnf claim; it is sender-constrained after all")
 	}
 }

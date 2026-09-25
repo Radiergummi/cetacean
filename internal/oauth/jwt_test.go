@@ -240,6 +240,23 @@ func segment(t *testing.T, token string, i int) string {
 	return parts[i]
 }
 
+// payloadOf decodes a compact JWS's claims.
+func payloadOf(t *testing.T, token string) map[string]any {
+	t.Helper()
+
+	raw, err := base64.RawURLEncoding.DecodeString(segment(t, token, 1))
+	if err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+
+	var claims map[string]any
+	if err := json.Unmarshal(raw, &claims); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+
+	return claims
+}
+
 // resign joins an encoded header and payload and signs them afresh, which is
 // what makes an edited token verifiable rather than merely malformed.
 func resign(t *testing.T, issuer *TokenIssuer, header, payload string) string {
