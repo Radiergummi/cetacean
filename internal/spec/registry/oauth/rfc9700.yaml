@@ -151,6 +151,10 @@ requirements:
       - file: internal/api/router.go
         replace: "\t\tnegotiate,\n\t\tcors(cfg.CORS),\n"
         with: "\t\tcors(cfg.CORS),\n\t\tnegotiate,\n"
+      # The mux redirects //oauth/authorize only after cors has matched it.
+      - file: internal/api/router.go
+        replace: "\t\tcleanPaths,\n"
+        with: ""
 
   - id: no-open-redirector-at-the-authorization-endpoint
     level: MUST

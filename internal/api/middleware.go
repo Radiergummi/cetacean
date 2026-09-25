@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -94,6 +95,48 @@ func (w *statusWriter) Flush() {
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+// cleanPaths answers a path the mux would redirect, before any middleware can
+// decide on it: past them, //oauth/authorize reached cors as a path other than
+// the authorization endpoint. It mirrors ServeMux's own redirect exactly.
+func cleanPaths(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		escaped := r.URL.EscapedPath()
+
+		if cleaned := cleanPath(escaped); r.Method != http.MethodConnect && cleaned != escaped {
+			if r.URL.RawQuery != "" {
+				cleaned += "?" + r.URL.RawQuery
+			}
+
+			// #nosec G710 -- path.Clean leaves one leading slash, so this is
+			// always a path on this origin, never a scheme-relative URL.
+			http.Redirect(w, r, cleaned, http.StatusTemporaryRedirect)
+
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// cleanPath is net/http's, which it does not export: the canonical form of p,
+// keeping a trailing slash.
+func cleanPath(p string) string {
+	if p == "" {
+		return "/"
+	}
+
+	if p[0] != '/' {
+		p = "/" + p
+	}
+
+	np := path.Clean(p)
+	if p[len(p)-1] == '/' && np != "/" {
+		np += "/"
+	}
+
+	return np
 }
 
 func discoveryLinks(next http.Handler) http.Handler {
