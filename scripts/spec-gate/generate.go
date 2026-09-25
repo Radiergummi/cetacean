@@ -54,6 +54,12 @@ func generate(filename string, src []byte) ([]genMutant, error) {
 	var out []genMutant
 
 	ast.Inspect(file, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok && isChain(call) {
+			out = append(out, chainSwaps(fset, filename, src, call)...)
+
+			return true
+		}
+
 		expr, ok := n.(*ast.BinaryExpr)
 		if !ok {
 			return true
@@ -77,6 +83,44 @@ func generate(filename string, src []byte) ([]genMutant, error) {
 	})
 
 	return out, nil
+}
+
+// isChain reports a middleware chain, whose order is behaviour: a rule running
+// ahead of the one that canonicalises its input decides on the wrong value.
+func isChain(call *ast.CallExpr) bool {
+	switch fn := call.Fun.(type) {
+	case *ast.Ident:
+		return fn.Name == "NewChain"
+	case *ast.SelectorExpr:
+		return fn.Sel.Name == "NewChain"
+	default:
+		return false
+	}
+}
+
+// chainSwaps exchanges each pair of neighbouring entries, keeping the text
+// between them in place so the file differs by the order and nothing else.
+func chainSwaps(fset *token.FileSet, filename string, src []byte, call *ast.CallExpr) []genMutant {
+	var out []genMutant
+
+	for i := range len(call.Args) - 1 {
+		first, second := call.Args[i], call.Args[i+1]
+		start, mid, end := fset.Position(first.Pos()), fset.Position(first.End()),
+			fset.Position(second.End())
+		next := fset.Position(second.Pos())
+
+		out = append(out, genMutant{
+			File:   filename,
+			Line:   start.Line,
+			Offset: start.Offset,
+			From:   string(src[start.Offset:end.Offset]),
+			To: string(src[next.Offset:end.Offset]) +
+				string(src[mid.Offset:next.Offset]) +
+				string(src[start.Offset:mid.Offset]),
+		})
+	}
+
+	return out
 }
 
 // applyGenerated splices the swap in, leaving every other byte alone so the
@@ -195,7 +239,8 @@ func runGenerated(root, pkg string) error {
 	})
 
 	for _, m := range survivors {
-		fmt.Fprintf(os.Stderr, "  survived: %s:%d: %s -> %s\n", m.File, m.Line, m.From, m.To)
+		fmt.Fprintf(os.Stderr, "  survived: %s:%d: %s -> %s\n",
+			m.File, m.Line, oneLine(m.From), oneLine(m.To))
 	}
 
 	survived := len(survivors)
@@ -205,6 +250,17 @@ func runGenerated(root, pkg string) error {
 		killed+survived+unviable, pkg, killed, survived, unviable)
 
 	return nil
+}
+
+// oneLine keeps a chain swap, which spans lines and comments, to one report line.
+func oneLine(s string) string {
+	const width = 100
+
+	if s = strings.Join(strings.Fields(s), " "); len(s) > width {
+		return s[:width] + "…"
+	}
+
+	return s
 }
 
 type outcome int

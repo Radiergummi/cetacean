@@ -91,3 +91,30 @@ func TestPackageSourcesLeavesTestFilesAlone(t *testing.T) {
 		t.Errorf("sources = %v, want %v", got, want)
 	}
 }
+
+// Both of this branch's holes were a middleware running on the wrong side of
+// another, which no operator swap can express.
+func TestGeneratingSwapsNeighbouringMiddlewares(t *testing.T) {
+	const src = `package p
+
+func chain() { _ = NewChain(a, b(1), c) }
+`
+
+	got, err := generate("p.go", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var mutated []string
+	for _, m := range got {
+		mutated = append(mutated, string(applyGenerated([]byte(src), m)))
+	}
+
+	want := []string{
+		"package p\n\nfunc chain() { _ = NewChain(b(1), a, c) }\n",
+		"package p\n\nfunc chain() { _ = NewChain(a, c, b(1)) }\n",
+	}
+	if !slices.Equal(mutated, want) {
+		t.Errorf("mutated = %q, want %q", mutated, want)
+	}
+}
