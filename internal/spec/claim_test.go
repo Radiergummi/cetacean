@@ -1,6 +1,8 @@
 package spec
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -230,5 +232,34 @@ func TestAnObservationIsKeptToItsOwnField(t *testing.T) {
 	want := []string{"a b c"}
 	if got := claims[knownID]; len(got) != 1 || !slices.Equal(got[0].Observations, want) {
 		t.Errorf("observations = %+v, want %q", got, want)
+	}
+}
+
+// Each test binary writes its own file, and a test name is unique only within
+// one package, so an observation from another file is another package's test.
+func TestAnObservationFromAnotherPackageIsNotJoined(t *testing.T) {
+	dir := t.TempDir()
+
+	for file, body := range map[string]string{
+		"1.claims": knownID + "\tTestMetadata\n",
+		"2.claims": knownID + "\tTestMetadata\n" + knownID + "\tTestMetadata\tstatus=500\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, file), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	claims, err := ReadClaims(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var joined int
+	for _, e := range claims[knownID] {
+		joined += len(e.Observations)
+	}
+
+	if got := claims[knownID]; len(got) != 2 || joined != 1 {
+		t.Errorf("evidence = %+v, want two claims and the observation on one of them", got)
 	}
 }

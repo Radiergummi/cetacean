@@ -149,23 +149,26 @@ type Evidence struct {
 
 // ReadClaims collects every record written into dir, mapping a requirement to
 // the tests that recorded it. An observation is joined to the claim from the
-// same test; one arriving without a claim is dropped.
+// same test; one arriving without a claim is dropped. The join stays within a
+// file: each is one test binary, and a test name is unique only in its package.
 func ReadClaims(dir string) (map[string][]Evidence, error) {
 	files, err := filepath.Glob(filepath.Join(dir, "*.claims"))
 	if err != nil {
 		return nil, err
 	}
 
-	var (
-		claimed  = map[string][]string{}
-		observed = map[string][]record{}
-	)
+	out := map[string][]Evidence{}
 
 	for _, f := range files {
 		body, err := os.ReadFile(f) // #nosec G304 -- the claims directory again
 		if err != nil {
 			return nil, err
 		}
+
+		var (
+			claimed  = map[string][]string{}
+			observed = map[string][]record{}
+		)
 
 		for line := range strings.Lines(string(body)) {
 			id, rest, ok := strings.Cut(strings.TrimRight(line, "\n"), "\t")
@@ -182,16 +185,14 @@ func ReadClaims(dir string) (map[string][]Evidence, error) {
 				observed[id] = append(observed[id], record{name, observation})
 			}
 		}
-	}
 
-	out := make(map[string][]Evidence, len(claimed))
-
-	for id, names := range claimed {
-		for _, name := range names {
-			out[id] = append(out[id], Evidence{
-				Test:         name,
-				Observations: under(observed[id], name),
-			})
+		for id, names := range claimed {
+			for _, name := range names {
+				out[id] = append(out[id], Evidence{
+					Test:         name,
+					Observations: under(observed[id], name),
+				})
+			}
 		}
 	}
 
