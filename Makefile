@@ -193,8 +193,8 @@ spec:
 	go run ./scripts/spec-gate static
 	go run ./scripts/spec-gate sweep
 	@go build -o $(SPEC_VET) ./scripts/spec-vet
-	go vet -vettool=$(PWD)/$(SPEC_VET) ./...
-	go vet -tags e2e -vettool=$(PWD)/$(SPEC_VET) ./test/e2e/...
+	go vet -vettool=$(CURDIR)/$(SPEC_VET) ./...
+	go vet -tags e2e -vettool=$(CURDIR)/$(SPEC_VET) ./test/e2e/...
 
 ## Prove each requirement's tests refuse its mutants
 #
@@ -214,7 +214,7 @@ spec-mutants-generate:
 # would satisfy a requirement this run never reached.
 define SPEC_UNIT_CLAIMS
 rm -rf $(SPEC_CLAIMS) && mkdir -p $(SPEC_CLAIMS)
-CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) go test -count=1 ./...
+CETACEAN_SPEC_CLAIMS=$(CURDIR)/$(SPEC_CLAIMS) go test -count=1 ./...
 endef
 
 ## Report what the unit suite exercised
@@ -233,7 +233,7 @@ spec-transcript:
 ## Report what the unit and e2e suites exercised together
 spec-report-full: build
 	$(SPEC_UNIT_CLAIMS)
-	CETACEAN_SPEC_CLAIMS=$(PWD)/$(SPEC_CLAIMS) \
+	CETACEAN_SPEC_CLAIMS=$(CURDIR)/$(SPEC_CLAIMS) \
 	  go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...
 	go run ./scripts/spec-gate report --claims $(SPEC_CLAIMS) --suites unit,e2e
 
