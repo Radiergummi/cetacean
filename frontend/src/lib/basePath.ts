@@ -42,3 +42,16 @@ export function apiPath(path: string): string {
 
   return cachedBasePath + path;
 }
+
+/**
+ * Removes the base path from an absolute path a response carries, so a server
+ * running under a sub-path yields the same route the SPA uses.
+ * stripBasePath("/cetacean/nodes/n1") → "/nodes/n1".
+ */
+export function stripBasePath(path: string): string {
+  if (cachedBasePath && path.startsWith(cachedBasePath + "/")) {
+    return path.slice(cachedBasePath.length);
+  }
+
+  return path;
+}

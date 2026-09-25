@@ -2,19 +2,22 @@ import { composeQueryKey } from "../components/ComposeSection";
 import { useServiceDetail } from "./useServiceDetail";
 import { api } from "@/api/client";
 import { createTestQueryClient, createWrapper } from "@/test/mocks";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 interface StreamEvent {
   type: string;
   action: string;
   id: string;
+  resource?: unknown | undefined;
 }
 
 let subscriber: ((event: StreamEvent) => void) | undefined;
+const streamPaths: (string | undefined)[] = [];
 
 vi.mock("./useResourceStream", () => ({
-  useResourceStream: (_path: string, listener: (event: never) => void) => {
+  useResourceStream: (path: string | undefined, listener: (event: never) => void) => {
+    streamPaths.push(path);
     subscriber = listener as (event: StreamEvent) => void;
 
     return { connected: true };
@@ -35,7 +38,9 @@ vi.mock("./useMonitoringStatus", () => ({
   isCadvisorReady: () => false,
 }));
 
-vi.mock("./useRecommendations", () => ({ useRecommendations: () => ({ items: [] }) }));
+vi.mock("./useRecommendations", () => ({
+  useRecommendations: () => ({ items: [{ targetId: "svc1" }, { targetId: "web_api" }] }),
+}));
 vi.mock("./useTaskMetrics", () => ({ useTaskMetrics: () => ({}) }));
 
 vi.mock("@/api/client", async (importOriginal) => ({
@@ -60,9 +65,12 @@ const service = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  streamPaths.length = 0;
   vi.mocked(api.service).mockResolvedValue({
-    data: { service },
+    data: { service, changes: [{ path: "Image" }], integrations: [{ kind: "traefik" }] },
     allowedMethods: new Set<string>(),
+    canonicalPath: "/services/svc1",
   } as never);
   vi.mocked(api.serviceTasks).mockResolvedValue([] as never);
   vi.mocked(api.history).mockResolvedValue([] as never);
@@ -104,5 +112,96 @@ describe("useServiceDetail", () => {
     emit({ type: "task", action: "update", id: "task1" });
 
     expect(invalidate).not.toHaveBeenCalledWith(composeKey);
+  });
+
+  it("matches recommendations against the canonical ID", async () => {
+    const { result } = renderHook(() => useServiceDetail("web_api"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(result.current.service).not.toBeNull());
+
+    expect(result.current.serviceRecommendations).toEqual([
+      expect.objectContaining({ targetId: "svc1" }),
+    ]);
+  });
+
+  // The identifier travels in a query parameter no redirect rewrites, so the
+  // server resolves it — but only against a type, which is what must be sent.
+  it("asks history for the route parameter and the type to resolve it against", async () => {
+    renderHook(() => useServiceDetail("web_api"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(api.history).toHaveBeenCalled());
+
+    expect(api.history).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: "web_api", type: "service" }),
+      expect.anything(),
+    );
+  });
+
+  it("subscribes to the SSE path of the canonical ID", async () => {
+    renderHook(() => useServiceDetail("web_api"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(streamPaths.at(-1)).toBe("/services/svc1"));
+  });
+
+  // Both are keyed by the route parameter, so neither has anything to wait
+  // for: tasks are reached by the redirect and history resolves its own name.
+  it("asks for tasks and history without waiting for the first fetch", async () => {
+    let settle = (): void => {};
+    vi.mocked(api.service).mockReturnValue(
+      new Promise((resolve) => {
+        settle = () =>
+          resolve({
+            data: { service },
+            allowedMethods: new Set<string>(),
+            canonicalPath: "/services/svc1",
+          } as never);
+      }) as never,
+    );
+
+    renderHook(() => useServiceDetail("web_api"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    expect(api.serviceTasks).toHaveBeenCalledWith("web_api", expect.anything());
+    expect(api.history).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: "web_api" }),
+      expect.anything(),
+    );
+    expect(streamPaths.at(-1)).toBe("/services/web_api");
+
+    settle();
+
+    await waitFor(() => expect(streamPaths.at(-1)).toBe("/services/svc1"));
+  });
+  // A service event carries the service alone. Writing it into the cache as
+  // the whole detail would drop the spec changes and integrations that came
+  // with the fetch, and nothing on the page would say where they went.
+  it("keeps changes and integrations when an event carries only the service", async () => {
+    const { result } = renderHook(() => useServiceDetail("web_api"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(result.current.service).not.toBeNull());
+    expect(result.current.changes).toHaveLength(1);
+
+    act(() => {
+      subscriber?.({
+        type: "service",
+        action: "update",
+        id: "svc1",
+        resource: { ...service, Spec: { ...service.Spec, Name: "renamed" } },
+      });
+    });
+
+    await waitFor(() => expect(result.current.service?.Spec.Name).toBe("renamed"));
+
+    expect(result.current.changes).toHaveLength(1);
+    expect(result.current.integrations).toHaveLength(1);
   });
 });
