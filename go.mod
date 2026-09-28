@@ -15,7 +15,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/goccy/go-json v0.10.6
 	github.com/klauspost/compress v1.20.0
-	github.com/mark3labs/mcp-go v1.1.0
+	github.com/mark3labs/mcp-go v1.1.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
@@ -26,7 +26,7 @@ require (
 	golang.org/x/mod v0.41.0
 	golang.org/x/oauth2 v0.37.0
 	gopkg.in/yaml.v3 v3.0.1
-	tailscale.com v1.102.4
+	tailscale.com v1.102.5
 )
 
 require (
