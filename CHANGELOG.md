@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `mcp.operations_level` narrows `server.operations_level` instead of replacing it. Set above the global tier it now grants nothing; set below, it caps as before
 - **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` isn't read—delete it, and every client authorizes once more
 - **Breaking:** the `refresh_token` grant at `/oauth/token` requires `client_id`; a request without it is refused with `invalid_request`
+- Clients that registered dynamically stay registered across a restart, instead of having to register again
+- `/oauth/register` rejects oversized client metadata: a client name over 256 bytes, more than 10 redirect URIs, or a redirect URI over 2048 bytes
+- `/oauth/register` accepts only `token_endpoint_auth_method: none`; any other value is refused rather than stored and treated as public
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honored only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address—set `server.public_url` or list the proxy
 - Search, the resource lists and the topology view are faster on clusters with hundreds of services, and a stack's event stream costs less per connected browser
 - The dashboard's first load is about a third of its former size, and hashed assets are cached permanently

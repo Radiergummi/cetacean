@@ -201,9 +201,16 @@ The consent screen labels how the client identified itself. **Verified via publi
 named by a URL Cetacean fetched and checked. **Self-reported identity** means the client named itself; those are never
 remembered, so you approve them every time.
 
-Refresh tokens and approvals are stored in `oauth-tokens.json` under [`storage.data_dir`][storage.data_dir], at mode
-`0600`—anyone who can write that file can pre-approve a client. Nothing else survives a restart, which is why a single
-replica is required: the file is node-local, and an unset signing key would leave each replica signing differently.
+Refresh tokens, approvals, and dynamically registered clients are stored in `oauth-tokens.json` under
+[`storage.data_dir`][storage.data_dir], at mode `0600`—anyone who can write that file can pre-approve a client. Nothing
+else survives a restart, which is why a single replica is required: the file is node-local, and an unset signing key
+would leave each replica signing differently.
+
+Registrations outlive a restart, and `/oauth/register` is open to anyone who can reach it. A flood from rotating
+addresses evicts legitimate clients up to [`oauth.dcr_max_clients`][oauth.dcr_max_clients] and is restored on every
+start, so raising the cap afterwards doesn't recover them: delete `oauth-tokens.json` and let clients register once
+more, or set [`oauth.dcr_enabled`][oauth.dcr_enabled] to `false` if nothing needs dynamic registration. Registrations
+carry no expiry—RFC 7591 gives them none.
 
 [api]: api
 [api-tokens]: authentication#api-access-tokens
@@ -218,6 +225,8 @@ replica is required: the file is node-local, and an unset signing key would leav
 [mcp.task_ttl]: configuration#mcp.task_ttl
 [oauth.access_token_ttl]: configuration#oauth.access_token_ttl
 [oauth.consent_ttl]: configuration#oauth.consent_ttl
+[oauth.dcr_enabled]: configuration#oauth.dcr_enabled
+[oauth.dcr_max_clients]: configuration#oauth.dcr_max_clients
 [oauth.enabled]: configuration#oauth.enabled
 [oauth.signing_key]: configuration#oauth.signing_key
 [server.cors.origins]: configuration#server.cors.origins

@@ -288,7 +288,7 @@ consent screen, so one would only sit unused.
 </ConfigParam>
 
 <ConfigParam name="oauth.dcr_enabled" env="CETACEAN_OAUTH_DCR_ENABLED" default="true">
-  Accept RFC 7591 Dynamic Client Registration at `/oauth/register`. Registrations are held in memory and lost on restart. MCP revision 2026-07-28 deprecates DCR in favor of Client ID Metadata Documents, and it stays on for clients that don't support those yet.
+  Accept RFC 7591 Dynamic Client Registration at `/oauth/register`. Registrations are kept across a restart, beside the refresh tokens in `oauth-tokens.json`. MCP revision 2026-07-28 deprecates DCR in favor of Client ID Metadata Documents, and it stays on for clients that don't support those yet.
 </ConfigParam>
 
 <ConfigParam name="oauth.dcr_rate_limit" env="CETACEAN_OAUTH_DCR_RATE_LIMIT" default="10">
