@@ -13,6 +13,7 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/logs"
 )
 
@@ -189,7 +190,7 @@ func (h *Handlers) serveLogsSSE(
 	for {
 		cur := h.activeLogSSEConns.Load()
 		if cur >= maxLogSSEConns {
-			w.Header().Set("Retry-After", "5")
+			w.Header().Set("Retry-After", sse.RetryAfter())
 			writeErrorCode(w, r, "LOG001", "too many active log streams")
 			return
 		}

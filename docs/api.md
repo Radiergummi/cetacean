@@ -616,7 +616,8 @@ carries no `resource`.
 ## Connection limits
 
 There's no general rate limiting. Concurrent streams are capped, and a request over the cap returns
-`429 Too Many Requests` with `Retry-After: 5`.
+`429 Too Many Requests` with a `Retry-After` of 5 to 14 seconds. The value steps between refusals, so clients
+turned away together aren't told to come back together; none is told less than 5.
 
 | Stream                                                 | Limit | Code     |
 |--------------------------------------------------------|-------|----------|

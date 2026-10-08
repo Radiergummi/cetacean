@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"sync/atomic"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/api/sse"
 )
 
 const maxMetricsStreamClients = 64
@@ -48,7 +50,7 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	for {
 		cur := h.metricsStreamCount.Load()
 		if int(cur) >= maxMetricsStreamClients {
-			w.Header().Set("Retry-After", "5")
+			w.Header().Set("Retry-After", sse.RetryAfter())
 			writeErrorCode(w, r, "MTR005", "too many metrics stream connections")
 			return
 		}
