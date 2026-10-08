@@ -24,20 +24,7 @@ func hasACLLabels(labels map[string]string) bool {
 // ParseACLLabels extracts read and write audience lists from labels.
 // Returns nil, nil if no ACL labels are present.
 func ParseACLLabels(labels map[string]string) (read, write []string) {
-	readVal, hasRead := labels[LabelRead]
-	writeVal, hasWrite := labels[LabelWrite]
-
-	if !hasRead && !hasWrite {
-		return nil, nil
-	}
-
-	if hasRead {
-		read = ParseAudienceList(readVal)
-	}
-	if hasWrite {
-		write = ParseAudienceList(writeVal)
-	}
-	return read, write
+	return ParseAudienceList(labels[LabelRead]), ParseAudienceList(labels[LabelWrite])
 }
 
 // ParseAudienceList splits a comma-separated audience string, trims whitespace,

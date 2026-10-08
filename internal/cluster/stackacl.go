@@ -10,12 +10,9 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// FilterStackDetail drops the members the identity may not read.
-//
-// A stack grant used to imply its members, because membership comes from a
-// label the policy could name. A resource label narrows per resource and
-// breaks that: the stack itself carries no ACL label, so a grant on it would
-// otherwise hand back a service the label deliberately withholds.
+// FilterStackDetail drops the members the identity may not read. A resource
+// label narrows per resource, and the stack itself carries none, so each
+// member is checked on its own rather than covered by the stack's grant.
 func FilterStackDetail(
 	e *acl.Evaluator,
 	id *auth.Identity,

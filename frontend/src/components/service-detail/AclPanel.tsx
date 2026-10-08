@@ -28,30 +28,32 @@ export function AclPanel({
   const { read, write } = integration;
   const [formRead, setFormRead] = useState<string[]>(read ?? []);
   const [formWrite, setFormWrite] = useState<string[]>(write ?? []);
+  const readId = useId();
+  const writeId = useId();
+
+  const fields = [
+    { label: "Read", key: labelKeyRead, id: readId, values: formRead, onChange: setFormRead },
+    { label: "Write", key: labelKeyWrite, id: writeId, values: formWrite, onChange: setFormWrite },
+  ];
 
   function resetForm() {
-    setFormRead(integration.read ?? []);
-    setFormWrite(integration.write ?? []);
+    setFormRead(read ?? []);
+    setFormWrite(write ?? []);
   }
 
   function serializeToLabels(): Record<string, string> {
     const labels: Record<string, string> = {};
-    const readFiltered = formRead.filter((audience) => audience.trim());
-    const writeFiltered = formWrite.filter((audience) => audience.trim());
 
-    if (readFiltered.length > 0) {
-      labels[labelKeyRead] = readFiltered.join(",");
-    }
+    for (const { key, values } of fields) {
+      const audiences = values.filter((audience) => audience.trim());
 
-    if (writeFiltered.length > 0) {
-      labels[labelKeyWrite] = writeFiltered.join(",");
+      if (audiences.length > 0) {
+        labels[key] = audiences.join(",");
+      }
     }
 
     return labels;
   }
-
-  const readId = useId();
-  const writeId = useId();
 
   async function handleSave() {
     await saveIntegrationLabels(rawLabels, serializeToLabels(), serviceId, onSaved);
@@ -59,36 +61,26 @@ export function AclPanel({
 
   const editForm = (
     <div className="space-y-4">
-      <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor={readId}
-          className="text-xs font-medium text-foreground"
+      {fields.map(({ label, id, values, onChange }) => (
+        <div
+          key={id}
+          className="flex flex-col gap-1.5"
         >
-          Read
-        </label>
-        <MultiCombobox
-          id={readId}
-          values={formRead}
-          onChange={setFormRead}
-          options={[]}
-          placeholder="group:ops or user:alice@example.com"
-        />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor={writeId}
-          className="text-xs font-medium text-foreground"
-        >
-          Write
-        </label>
-        <MultiCombobox
-          id={writeId}
-          values={formWrite}
-          onChange={setFormWrite}
-          options={[]}
-          placeholder="group:ops or user:alice@example.com"
-        />
-      </div>
+          <label
+            htmlFor={id}
+            className="text-xs font-medium text-foreground"
+          >
+            {label}
+          </label>
+          <MultiCombobox
+            id={id}
+            values={values}
+            onChange={onChange}
+            options={[]}
+            placeholder="group:ops or user:alice@example.com"
+          />
+        </div>
+      ))}
     </div>
   );
 

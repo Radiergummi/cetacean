@@ -107,9 +107,7 @@ func (c *Cache) LabelsOf(resourceType, name string) map[string]string {
 }
 
 // LabelsByType returns the labels of every resource of a type, keyed by the
-// name an ACL resource expression uses for it. One pass under one read lock,
-// which is what keeps ACL filtering off a per-item scan — see
-// acl.ResourceResolver for why that matters.
+// name an ACL resource expression uses for it, in one pass under one read lock.
 func (c *Cache) LabelsByType(resourceType string) map[string]map[string]string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

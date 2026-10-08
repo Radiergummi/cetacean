@@ -82,8 +82,10 @@ func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) b
 
 	// Label evaluation: check resource labels first when enabled.
 	labelled := false
-	if e.labelsEnabled && e.resolver != nil {
-		allowed, handled, hasLabels := e.checkLabels(id, permission, resource)
+	if resType, resName, ok := splitResource(resource); ok && e.labelsOn() {
+		allowed, handled, hasLabels := decideFromLabels(
+			e.resolveLabels(resType, resName), id, permission, resType, resName,
+		)
 		if handled {
 			return allowed
 		}
@@ -129,16 +131,9 @@ func Filter[T any](
 	if e == nil {
 		return items
 	}
-	p := e.policy.Load()
-	policyAbsent := p == nil
-	if policyAbsent {
-		// The same condition the label path is gated on. Testing only the flag
-		// dropped every item where Can allows every item, on a deployment with
-		// labels on and no resolver set.
-		if !e.labelsEnabled || e.resolver == nil {
-			return items
-		}
-		p = &Policy{}
+	p, policyAbsent, passthrough := e.filterPolicy()
+	if passthrough {
+		return items
 	}
 
 	grants := e.collectGrants(id, p)
@@ -189,13 +184,9 @@ func FilterInPlaceNamed[T any](
 	if e == nil {
 		return items
 	}
-	p := e.policy.Load()
-	policyAbsent := p == nil
-	if policyAbsent {
-		if !e.labelsEnabled || e.resolver == nil {
-			return items
-		}
-		p = &Policy{}
+	p, policyAbsent, passthrough := e.filterPolicy()
+	if passthrough {
+		return items
 	}
 
 	grants := e.collectGrants(id, p)
@@ -226,9 +217,28 @@ func FilterInPlaceNamed[T any](
 	return result
 }
 
-// labelLookup reads a whole type at once and memoises it for the call.
-// Resolving per item costs the resolver a scan each time, which is quadratic
-// over a page — see acl.ResourceResolver.LabelsByType.
+// filterPolicy is the policy both filters evaluate against. passthrough means
+// every item survives: no policy, and no labels to stand in for one.
+func (e *Evaluator) filterPolicy() (p *Policy, policyAbsent, passthrough bool) {
+	p = e.policy.Load()
+	if p != nil {
+		return p, false, false
+	}
+	if !e.labelsOn() {
+		return nil, true, true
+	}
+
+	return &Policy{}, true, false
+}
+
+// labelsOn is the gate on every label path: enabled, and something to read
+// the labels from.
+func (e *Evaluator) labelsOn() bool {
+	return e.labelsEnabled && e.resolver != nil
+}
+
+// labelLookup reads a whole type at once and memoises it for the call; see
+// ResourceResolver.LabelsByType for why not per item.
 func (e *Evaluator) labelLookup() func(resType, resName string) map[string]string {
 	byType := map[string]map[string]map[string]string{}
 
@@ -260,12 +270,12 @@ func (e *Evaluator) labelDecision(
 	labelsFor func(resType, resName string) map[string]string,
 	policyAbsent bool,
 ) (keep, decided bool) {
-	if !e.labelsEnabled || e.resolver == nil {
+	if !e.labelsOn() {
 		return false, false
 	}
 
 	allowed, handled, labelled := decideFromLabels(
-		labelsFor(resType, resName), id, permission, resType+":"+resName,
+		labelsFor(resType, resName), id, permission, resType, resName,
 	)
 	if handled {
 		return allowed, true
@@ -296,10 +306,9 @@ func (e *Evaluator) HasAnyGrant(id *auth.Identity) bool {
 	}
 	grants := e.collectGrants(id, p)
 
-	// A label-only identity holds no policy grant and still has access, so
-	// labels have to be asked. Asking whether they are *enabled* answered yes
-	// for everyone, which handed cluster-wide metrics to identities no label
-	// names — these endpoints have no per-resource filter behind them.
+	// A label-only identity holds no policy grant and still has access, so the
+	// labels have to name it: these endpoints have no per-resource filter
+	// behind them.
 	return len(grants) > 0 || e.hasAnyLabelGrant(id)
 }
 
@@ -312,14 +321,14 @@ var labelledTypes = []string{"service", "config", "secret", "network", "volume",
 // It stops at the first match, so the common case — an identity that does hold
 // a grant — never reaches it, and one that does not usually stops early.
 func (e *Evaluator) hasAnyLabelGrant(id *auth.Identity) bool {
-	if !e.labelsEnabled || e.resolver == nil || id == nil {
+	if !e.labelsOn() || id == nil {
 		return false
 	}
 
 	for _, resType := range labelledTypes {
 		for name, labels := range e.resolver.LabelsByType(resType) {
 			if allowed, handled, _ := decideFromLabels(
-				labels, id, "read", resType+":"+name,
+				labels, id, "read", resType, name,
 			); handled && allowed {
 				return true
 			}
@@ -361,28 +370,16 @@ func (e *Evaluator) PermissionsFor(id *auth.Identity) map[string][]string {
 	return result
 }
 
-// checkLabels evaluates label-based ACL. handled means the label result is
-// authoritative for this resource+identity; otherwise the caller falls through
-// to config grants. labelled reports whether the resource carried ACL labels at
-// all, which decides whether an absent policy still means allow-all for it.
-func (e *Evaluator) checkLabels(
-	id *auth.Identity,
-	permission string,
-	resource string,
-) (allowed, handled, labelled bool) {
-	return decideFromLabels(e.resolveLabels(resource), id, permission, resource)
-}
-
-// decideFromLabels is checkLabels once the labels are in hand. Can resolves one
-// resource; Filter reads a whole type at once and calls this per item, so the
-// rule they apply is the same one.
+// decideFromLabels evaluates label-based ACL. handled means the label result
+// is authoritative; otherwise the caller falls through to config grants.
+// labelled reports whether the resource carried ACL labels at all, which
+// decides whether an absent policy still means allow-all for it.
 func decideFromLabels(
 	labels map[string]string,
 	id *auth.Identity,
-	permission string,
-	resource string,
+	permission, resType, resName string,
 ) (allowed, handled, labelled bool) {
-	if labels == nil || !hasACLLabels(labels) {
+	if !hasACLLabels(labels) {
 		return false, false, false
 	}
 
@@ -392,18 +389,18 @@ func decideFromLabels(
 
 	if matchesWrite || matchesRead {
 		slog.Debug("ACL label grant matched",
-			"resource", resource,
+			"type", resType,
+			"name", resName,
 			"permission", permission,
 			"matchedWrite", matchesWrite,
 			"matchedRead", matchesRead,
 		)
-		effectiveWrite := matchesWrite
-		effectiveRead := matchesRead || matchesWrite // write implies read
 		switch permission {
 		case "write":
-			return effectiveWrite, true, true
+			return matchesWrite, true, true
 		case "read":
-			return effectiveRead, true, true
+			// Either audience matched, and write implies read.
+			return true, true, true
 		default:
 			return false, true, true
 		}
@@ -416,7 +413,8 @@ func decideFromLabels(
 		subject = id.Subject
 	}
 	slog.Debug("ACL labels present but no audience match",
-		"resource", resource,
+		"type", resType,
+		"name", resName,
 		"subject", subject,
 	)
 	return false, false, true
@@ -424,11 +422,7 @@ func decideFromLabels(
 
 // resolveLabels returns the labels for a resource, resolving task→service
 // inheritance.
-func (e *Evaluator) resolveLabels(resource string) map[string]string {
-	resType, resName, ok := splitResource(resource)
-	if !ok {
-		return nil
-	}
+func (e *Evaluator) resolveLabels(resType, resName string) map[string]string {
 	if resType == "task" {
 		if svcName := e.resolver.ServiceOfTask(resName); svcName != "" {
 			return e.resolver.LabelsOf("service", svcName)
@@ -617,29 +611,33 @@ func (e *Evaluator) TypeGrants(id *auth.Identity) TypeAccess {
 }
 
 // labelTypeGrants projects the labels naming this identity onto the types they
-// grant. One walk per type, stopping at the first resource that matches: the
-// answer is type-level, so a second match adds nothing.
+// grant. A type's walk stops once every permission is settled: the answer is
+// type-level, so a further match adds nothing.
 func (e *Evaluator) labelTypeGrants(id *auth.Identity) map[typeKey]bool {
-	if !e.labelsEnabled || e.resolver == nil || id == nil {
+	if !e.labelsOn() || id == nil {
 		return nil
 	}
 
 	granted := map[typeKey]bool{}
 	for _, resType := range labelledTypes {
 		for name, labels := range e.resolver.LabelsByType(resType) {
-			resource := resType + ":" + name
+			settled := true
 			for permission := range validPermissions {
 				if granted[typeKey{permission, resType}] {
 					continue
 				}
+				settled = false
 				if allowed, handled, _ := decideFromLabels(
-					labels, id, permission, resource,
+					labels, id, permission, resType, name,
 				); handled && allowed {
 					granted[typeKey{permission, resType}] = true
 					for _, implied := range impliedTypes[resType] {
 						granted[typeKey{permission, implied}] = true
 					}
 				}
+			}
+			if settled {
+				break
 			}
 		}
 	}
@@ -675,15 +673,8 @@ func audienceMatches(g Grant, id *auth.Identity) bool {
 		// File grants with no audience match everyone.
 		return true
 	}
-	if id == nil {
-		return false
-	}
-	for _, expr := range g.Audience {
-		if matchAudience(expr, id) {
-			return true
-		}
-	}
-	return false
+
+	return matchLabelAudience(g.Audience, id)
 }
 
 func hasPermission(g Grant, permission string) bool {
