@@ -184,37 +184,68 @@ func FilterInPlaceNamed[T any](
 	if e == nil {
 		return items
 	}
-	p, policyAbsent, passthrough := e.filterPolicy()
+	allows, passthrough := e.itemCheck(id, permission)
 	if passthrough {
 		return items
+	}
+
+	result := items[:0]
+	for _, item := range items {
+		if allows(resourceType, nameFunc(item)) {
+			result = append(result, item)
+		}
+	}
+
+	return result
+}
+
+// Allows is the check FilterInPlaceNamed runs per item, for a caller walking
+// resources of several types itself. The policy, the grants and the labels are
+// read once, when it is built, so it answers a whole walk from one state.
+func (e *Evaluator) Allows(
+	id *auth.Identity,
+	permission string,
+) func(resType, resName string) bool {
+	if e == nil {
+		return func(string, string) bool { return true }
+	}
+
+	allows, passthrough := e.itemCheck(id, permission)
+	if passthrough {
+		return func(string, string) bool { return true }
+	}
+
+	return allows
+}
+
+// itemCheck builds the per-item decision; passthrough means every item passes.
+func (e *Evaluator) itemCheck(
+	id *auth.Identity,
+	permission string,
+) (allows func(resType, resName string) bool, passthrough bool) {
+	p, policyAbsent, passthrough := e.filterPolicy()
+	if passthrough {
+		return nil, true
 	}
 
 	grants := e.collectGrants(id, p)
 	labelsFor := e.labelLookup()
 
-	result := items[:0]
-	for _, item := range items {
-		name := nameFunc(item)
-
+	return func(resType, resName string) bool {
 		if keep, decided := e.labelDecision(
-			id, permission, resourceType, name, labelsFor, policyAbsent,
+			id, permission, resType, resName, labelsFor, policyAbsent,
 		); decided {
-			if keep {
-				result = append(result, item)
-			}
-
-			continue
+			return keep
 		}
 
 		for _, g := range grants {
-			if hasPermission(g, permission) && e.grantMatchesParts(g, resourceType, name) {
-				result = append(result, item)
-				break
+			if hasPermission(g, permission) && e.grantMatchesParts(g, resType, resName) {
+				return true
 			}
 		}
-	}
 
-	return result
+		return false
+	}, false
 }
 
 // filterPolicy is the policy both filters evaluate against. passthrough means

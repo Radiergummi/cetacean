@@ -24,10 +24,15 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	handleList(h, w, r, listSpec[cache.Stack]{
 		resourceType: "stack",
 		linkTemplate: "/stacks/{name}",
-		list:         h.cache.ListStacks,
-		aclName:      func(s cache.Stack) string { return s.Name },
-		searchName:   func(s cache.Stack) string { return s.Name },
-		filterEnv:    filter.StackEnv,
+		list: func() []cache.Stack {
+			return cluster.FilterStacks(
+				h.cache.ListStacks(),
+				cluster.WithheldStackMembers(h.acl, auth.IdentityFromContext(r.Context()), h.cache),
+			)
+		},
+		aclName:    func(s cache.Stack) string { return s.Name },
+		searchName: func(s cache.Stack) string { return s.Name },
+		filterEnv:  filter.StackEnv,
 		sortKeys: map[string]func(cache.Stack) string{
 			"name": func(s cache.Stack) string { return s.Name },
 		},
@@ -102,10 +107,11 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 	if !h.requireAnyGrant(w, r) {
 		return
 	}
-	summaries := h.cache.ListStackSummaries()
+	identity := auth.IdentityFromContext(r.Context())
+	summaries := h.cache.ListStackSummaries(cluster.WithheldStackMembers(h.acl, identity, h.cache))
 	summaries = acl.Filter(
 		h.acl,
-		auth.IdentityFromContext(r.Context()),
+		identity,
 		"read",
 		summaries,
 		func(s cache.StackSummary) string {

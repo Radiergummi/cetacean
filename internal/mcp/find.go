@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -144,7 +145,8 @@ func (s *Server) findAcrossTypes(
 
 	limit := req.GetInt("limit", 3)
 
-	results := s.filterSearchResults(ctx, cluster.Search(ctx, s.cache, query, limit))
+	withheld := cluster.WithheldStackMembers(s.acl, auth.IdentityFromContext(ctx), s.cache)
+	results := s.filterSearchResults(ctx, cluster.Search(ctx, s.cache, query, limit, withheld))
 
 	// Sized by the hits actually held, not by results.Total: Total is the
 	// pre-cap count across the whole cluster, so on a broad query it would

@@ -341,7 +341,7 @@ func BenchmarkListStackSummaries(b *testing.B) {
 		c := newPopulatedCache(n)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
-				c.ListStackSummaries()
+				c.ListStackSummaries(nil)
 			}
 		})
 	}

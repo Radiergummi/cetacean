@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"slices"
+
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -30,4 +32,69 @@ func FilterStackDetail(
 		func(v volume.Volume) string { return "volume:" + v.Name })
 
 	return d
+}
+
+// WithheldStackMembers names the stack members the identity may not read, as
+// "type:id" keys (a volume's ID is its name), or nil when it may read them all.
+// It reads the cache item by item rather than under one lock, because the
+// check itself reads labels back through the same cache.
+func WithheldStackMembers(e *acl.Evaluator, id *auth.Identity, c *cache.Cache) map[string]bool {
+	allows := e.Allows(id, "read")
+
+	var withheld map[string]bool
+	withhold := func(resType, resID, name string, found bool) {
+		if found && !allows(resType, name) {
+			if withheld == nil {
+				withheld = map[string]bool{}
+			}
+			withheld[resType+":"+resID] = true
+		}
+	}
+
+	for _, stack := range c.ListStacks() {
+		for _, resID := range stack.Services {
+			s, ok := c.GetService(resID)
+			withhold("service", resID, s.Spec.Name, ok)
+		}
+		for _, resID := range stack.Configs {
+			cfg, ok := c.GetConfig(resID)
+			withhold("config", resID, cfg.Spec.Name, ok)
+		}
+		for _, resID := range stack.Secrets {
+			s, ok := c.GetSecret(resID)
+			withhold("secret", resID, s.Spec.Name, ok)
+		}
+		for _, resID := range stack.Networks {
+			n, ok := c.GetNetwork(resID)
+			withhold("network", resID, n.Name, ok)
+		}
+		for _, name := range stack.Volumes {
+			withhold("volume", name, name, true)
+		}
+	}
+
+	return withheld
+}
+
+// FilterStacks drops the withheld members from each stack's member lists.
+func FilterStacks(stacks []cache.Stack, withheld map[string]bool) []cache.Stack {
+	if len(withheld) == 0 {
+		return stacks
+	}
+
+	keep := func(resType string, ids []string) []string {
+		return slices.DeleteFunc(
+			ids,
+			func(resID string) bool { return withheld[resType+":"+resID] },
+		)
+	}
+	for i := range stacks {
+		stacks[i].Services = keep("service", stacks[i].Services)
+		stacks[i].Configs = keep("config", stacks[i].Configs)
+		stacks[i].Secrets = keep("secret", stacks[i].Secrets)
+		stacks[i].Networks = keep("network", stacks[i].Networks)
+		stacks[i].Volumes = keep("volume", stacks[i].Volumes)
+	}
+
+	return stacks
 }
