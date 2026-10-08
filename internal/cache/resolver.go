@@ -97,11 +97,7 @@ func (c *Cache) LabelsOf(resourceType, name string) map[string]string {
 			}
 		}
 	case "node":
-		for _, n := range c.nodes.items {
-			if n.Description.Hostname == name || n.ID == name {
-				return n.Spec.Labels
-			}
-		}
+		return c.nodeLabels()[name]
 	}
 	return nil
 }
@@ -135,11 +131,40 @@ func (c *Cache) LabelsByType(resourceType string) map[string]map[string]string {
 			labels[v.Name] = v.Labels
 		}
 	case "node":
-		// Addressable by either, matching LabelsOf.
-		for _, n := range c.nodes.items {
-			labels[n.Description.Hostname] = n.Spec.Labels
-			labels[n.ID] = n.Spec.Labels
+		return c.nodeLabels()
+	}
+	return labels
+}
+
+// labelledForNobody stands in for the labels of a hostname two nodes share. It
+// carries acl.LabelRead, spelled out because acl's tests import this package,
+// so an absent policy's allow-all does not apply, and names no audience.
+var labelledForNobody = map[string]string{"cetacean.acl.read": ""}
+
+// nodeLabels maps every name a node answers to onto its labels, resolved the
+// way resolveIn resolves them: an ID is always its own node's, and a hostname
+// is a node's only when no ID spells it and no other node shares it. Callers
+// hold the lock.
+func (c *Cache) nodeLabels() map[string]map[string]string {
+	labels := make(map[string]map[string]string, 2*len(c.nodes.items))
+	for id, n := range c.nodes.items {
+		labels[id] = n.Spec.Labels
+	}
+
+	byHostname := map[string]bool{}
+	for _, n := range c.nodes.items {
+		hostname := n.Description.Hostname
+		if _, isID := c.nodes.items[hostname]; hostname == "" || isID {
+			continue
+		}
+
+		if byHostname[hostname] {
+			labels[hostname] = labelledForNobody
+		} else {
+			byHostname[hostname] = true
+			labels[hostname] = n.Spec.Labels
 		}
 	}
+
 	return labels
 }
