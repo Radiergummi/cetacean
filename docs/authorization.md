@@ -113,7 +113,7 @@ check there first when a grant seems to have no effect.
 
 A third source of grants, off by default: with `acl.labels` enabled, Cetacean reads `cetacean.acl.read` and
 `cetacean.acl.write` labels from the resources themselves, so a team controls access to its own services from its own
-compose file rather than through the central policy.
+Compose file rather than through the central policy.
 
 Labels carry the same `user:pattern` and `group:pattern` audiences as policy grants, comma-separated, and
 `cetacean.acl.write` implies read:
@@ -127,8 +127,8 @@ services:
         cetacean.acl.write: "group:ops"
 ```
 
-They are read on services, configs, secrets, networks, volumes and nodes. A task inherits its parent service's labels.
-Stacks have none of their own — a stack-wide grant belongs in the policy. Within labels the most permissive match
+They are read on services, configs, secrets, networks, volumes, and nodes. A task inherits its parent service's labels.
+Stacks have none of their own—a stack-wide grant belongs in the policy. Within labels the most permissive match
 wins, as it does for grants.
 
 ### Precedence
@@ -137,10 +137,10 @@ Labels and the policy are independent layers. For one identity on one resource:
 
 1. **A label names the identity** → the label alone decides. It can narrow a broader policy grant: a read label
    leaves an identity the policy grants write with read only.
-2. **No label names it, but it holds an explicit policy or provider grant** → that grant applies. A label does not
+2. **No label names it, but it holds an explicit policy or provider grant** → that grant applies. A label doesn't
    revoke a grant made explicitly.
 3. **No label names it and it holds no grant** → denied. Labels remove the implicit access an absent policy would
-   otherwise give, so a labelled resource is reachable only by the audiences named on it even with no policy file.
+   otherwise give, so a labeled resource is reachable only by the audiences named on it even with no policy file.
 4. **The resource carries no labels** → ordinary evaluation, policy grants or the allow-all default. Enabling
    `acl.labels` on a cluster with no policy therefore restricts the resources that carry labels and nothing else.
 
@@ -179,14 +179,14 @@ services:
         cetacean.acl.write: "group:ops"
 ```
 
-A `dev` user now reads `cetacean` but cannot write it — the read label names them, and rule 1 makes it authoritative —
+A `dev` user now reads `cetacean` but can't write it—the read label names them, and rule 1 makes it authoritative—
 while their policy grant still writes every other service. An `ops` user writes it through the label. A CI identity
 holding an explicit `service:cetacean` grant still writes it, since no label names it and rule 2 applies.
 
 ### Who can set them
 
-Anyone who can deploy a stack can label its resources, so with `acl.labels` on, a deployer can widen access to their
-own resources — `cetacean.acl.write: "*"` grants write to everyone. They cannot reach anything else: a label is scoped
+Anyone who can deploy a stack can label its resources, so with `acl.labels` on, whoever deploys can widen access to their
+own resources—`cetacean.acl.write: "*"` grants write to everyone. They can't reach anything else: a label is scoped
 strictly to the resource carrying it. Where that self-service is too much, set the boundaries in a policy file and
 leave labels off.
 
@@ -294,9 +294,9 @@ grants:
 curl -s -H "Accept: application/json" http://localhost:9000/profile | jq .permissions
 ```
 
-The response projects the raw grant patterns, not the resources they resolve to, and cannot reflect label-based
-access control at all — a label's effect depends on which resource is being asked about. To check a specific resource,
-read its detail endpoint and inspect the `Allow` header, which resolves grants, labels and operations level together.
+The response projects the raw grant patterns, not the resources they resolve to, and can't reflect label-based
+access control at all—a label's effect depends on which resource is being asked about. To check a specific resource,
+read its detail endpoint and inspect the `Allow` header, which resolves grants, labels, and operations level together.
 
 The [MCP server][mcp] applies the same grants. Its tools and resources are filtered per caller, and a tool the
 caller can never use is left out of `tools/list`.

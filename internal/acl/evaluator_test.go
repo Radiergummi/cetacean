@@ -1429,7 +1429,7 @@ func TestFilter_ReadsLabelsOncePerType(t *testing.T) {
 		labels["service:"+name] = map[string]string{LabelRead: "group:ops"}
 	}
 
-	resolver := &countingResolver{stubResolver: stubResolver{labels: labels}}
+	resolver := &countingResolver{labels: labels}
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
 	e.SetResolver(resolver)
