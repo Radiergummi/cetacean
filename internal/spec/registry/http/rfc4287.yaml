@@ -222,11 +222,11 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc4287#section-4.2.6
     deferred: >-
       The feed's id is a tag URI whose authority is the host the request
-      arrived on, so the same feed reached through two names has two ids — and
-      a reader that followed the deployment from one name to another sees a
-      different feed rather than the same one moved. Entry ids are stable; the
-      feed's is not. Deriving the authority from server.public_url alone fixes
-      this and the two RFC 4151 deferrals with it.
+      arrived on, so the same feed reached through two names still has two
+      ids. The spellings of one name no longer count as two — the port and the
+      casing are normalized away — but a deployment that has not set
+      server.public_url has no name of its own to mint from. Entry ids do not
+      depend on the host and are stable either way.
 
   - id: an-id-is-unique
     level: MUST

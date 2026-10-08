@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it doesn't recognize
 - **Breaking:** `server.operations_level` defaults to `0`, read-only. A deployment that never set it could perform operational writes, and on `auth.mode=none` could do so unauthenticated—set it to `1` to keep that
 - **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale`, and `headers`—no challenge can ask for the credential those modes read
+- Signing in from an address ending in `.atom`, `.csv`, or `.json` returns to that resource's page, not the file
 
 ### Removed
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
@@ -76,6 +77,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Header-based authentication works behind a reverse proxy again; it was answering 401 to every request
 - Asking an endpoint for a format it doesn't serve now says so, instead of answering with JSON
 - A malformed `filter` is reported as an error again on a request carrying `If-None-Match: *`
+- The authorization response redirects with `303 See Other` rather than `302 Found`
+- A redirect URI carrying a fragment is refused at registration
+- A write carrying `If-Match` against a resource that no longer exists answers `404`, not `412`—the validator wasn't what was wrong with it
+- Atom feed identifiers lowercase the host and move the port out of it, so one feed reached two ways is one feed, and two deployments on one host stay two
 - An address matching no route answers `404` with a problem document rather than `200` and the dashboard—on a write, and on a read from a client that said it can't use a web page
 - A format an `Accept` header rules out with `;q=0` is refused with `406` instead of served anyway
 - `/favicon.ico` and the dashboard's other static files are no longer refused with `406` when a client asks for them as an image

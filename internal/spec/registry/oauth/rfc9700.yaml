@@ -409,7 +409,7 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9700#section-4.12
     mutants:
       - file: internal/oauth/server.go
-        replace: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusFound)"
+        replace: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusSeeOther)"
         with: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusTemporaryRedirect)"
 
   - id: credential-redirects-use-303
@@ -419,12 +419,10 @@ requirements:
       such a request, the authorization server SHOULD use HTTP status code 303
       (See Other).
     url: https://www.rfc-editor.org/rfc/rfc9700#section-4.12
-    deferred: >-
-      The authorization response redirect is 302 Found. It satisfies the MUST
-      NOT above — a 302 is not a 307 — and every browser turns the consent
-      POST into a GET on it, which is what 303 would spell out. Changing it is
-      safe but not free: a client matching on the status code would see a
-      value it has never been sent.
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusSeeOther)"
+        with: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusFound)"
 
   - id: refresh-tokens-bound-to-the-resource
     level: MUST

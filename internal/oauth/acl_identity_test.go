@@ -59,7 +59,7 @@ func mintTokenForIdentity(t *testing.T, s *Server) string {
 	}
 
 	approved := submitConsent(t, s, page, "approve", subject, email, nil)
-	if approved.Code != http.StatusFound {
+	if approved.Code != http.StatusSeeOther {
 		t.Fatalf("POST consent: %d: %s", approved.Code, approved.Body.String())
 	}
 

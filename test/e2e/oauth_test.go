@@ -616,8 +616,8 @@ func authorizationCode(
 	))
 
 	outcome := decide(t, proc, discovery, persona, page, "approve", nil)
-	if outcome.status != http.StatusFound {
-		t.Fatalf("approve: status = %d, want 302; body: %s", outcome.status, outcome.body)
+	if outcome.status != http.StatusSeeOther {
+		t.Fatalf("approve: status = %d, want 303; body: %s", outcome.status, outcome.body)
 	}
 
 	query := outcome.location(t).Query()
@@ -1404,7 +1404,7 @@ func TestMCPOAuthFlow(t *testing.T) {
 			newAuthorizeRequest(discovery, clientID, challenge, "state-second"),
 		))
 
-		if page.outcome.status == http.StatusFound {
+		if page.outcome.status == http.StatusSeeOther {
 			t.Error("the second authorization skipped the consent page for a " +
 				"self-registered client")
 		}
@@ -1998,8 +1998,8 @@ func TestMCPOAuthWithoutDCROrCIMD(t *testing.T) {
 func assertRedirectError(t *testing.T, outcome httpOutcome, wantError string) {
 	t.Helper()
 
-	if outcome.status != http.StatusFound {
-		t.Fatalf("status = %d, want 302; body: %s", outcome.status, outcome.body)
+	if outcome.status != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303; body: %s", outcome.status, outcome.body)
 	}
 
 	query := outcome.location(t).Query()
@@ -2075,5 +2075,61 @@ func TestMCPOAuthPublishesItsVerificationKey(t *testing.T) {
 		if _, present := key["d"]; present {
 			t.Errorf("keys[%d] carries \"d\", the private half of the key", i)
 		}
+	}
+}
+
+// corsOrigin is allow-listed on the SUT below, so a response that carries no
+// Access-Control-Allow-Origin carries none because the endpoint is exempt.
+const corsOrigin = "https://dashboard.example.com"
+
+// TestTheAuthorizationEndpointIsExemptFromCORS drives RFC 9700 §2.6 against a
+// real authorization server under a base path. Both halves are load-bearing:
+// the exemption is a path match, and the path it matches has had the base
+// path and any extension suffix taken off it by the time the check runs.
+func TestTheAuthorizationEndpointIsExemptFromCORS(t *testing.T) {
+	env := harness.Up(t)
+	env.SwarmInit(t)
+
+	const basePath = "/ops/cetacean"
+
+	proc := startOAuth(t, env, t.TempDir(), map[string]string{
+		"CETACEAN_BASE_PATH":    basePath,
+		"CETACEAN_CORS_ORIGINS": corsOrigin,
+		"CETACEAN_OAUTH_ISSUER": oauthIssuer + basePath,
+	})
+
+	withOrigin := func(t *testing.T, path string) httpOutcome {
+		t.Helper()
+
+		req, err := http.NewRequestWithContext(
+			t.Context(), http.MethodGet, proc.BaseURL+path, nil,
+		)
+		if err != nil {
+			t.Fatalf("new request %s: %v", path, err)
+		}
+
+		req.Header.Set("Origin", corsOrigin)
+
+		return send(t, proc, req)
+	}
+
+	// The control: CORS is on, and this is what it looks like when it answers.
+	t.Run("the allow-list is in force", func(t *testing.T) {
+		out := withOrigin(t, basePath+"/.well-known/oauth-authorization-server")
+
+		if got := out.header.Get("Access-Control-Allow-Origin"); got != corsOrigin {
+			t.Fatalf("ACAO = %q on the metadata document, want %q; nothing below "+
+				"would distinguish an exemption from CORS being off", got, corsOrigin)
+		}
+	})
+
+	for _, spelling := range []string{"/oauth/authorize", "/oauth/authorize.html"} {
+		t.Run(spelling, func(t *testing.T) {
+			out := withOrigin(t, basePath+spelling)
+
+			if got := out.header.Get("Access-Control-Allow-Origin"); got != "" {
+				t.Errorf("ACAO = %q, want none at the authorization endpoint", got)
+			}
+		})
 	}
 }

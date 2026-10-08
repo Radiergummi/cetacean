@@ -36,7 +36,7 @@ func runConsent(t *testing.T, s *Server, decision string, overrides url.Values) 
 
 	postRec := submitConsent(t, s, getRec, decision, "bob", "bob@example.com", overrides)
 
-	if postRec.Code != http.StatusFound {
+	if postRec.Code != http.StatusSeeOther {
 		t.Fatalf("expected a redirect, got %d: %s", postRec.Code, postRec.Body.String())
 	}
 
