@@ -16,7 +16,7 @@ func TestDiffServiceSpecs_NilPrevious(t *testing.T) {
 
 func TestDiffServiceSpecs_Identical(t *testing.T) {
 	spec := &swarm.ServiceSpec{
-		Annotations: swarm.Annotations{Name: "svc"},
+		Name: "svc",
 		TaskTemplate: swarm.TaskSpec{
 			ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.24"},
 		},

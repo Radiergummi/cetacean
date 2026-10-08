@@ -125,8 +125,8 @@ func TestRowsForTasksDistinguishesReplicas(t *testing.T) {
 	svc := replicated("api", 2)
 	rows := RowsForTasks(
 		[]EnrichedTask{
-			{Task: swarm.Task{ID: "t1", ServiceID: "svc-api", Slot: 1}},
-			{Task: swarm.Task{ID: "t2", ServiceID: "svc-api", Slot: 2}},
+			{ID: "t1", ServiceID: "svc-api", Slot: 1},
+			{ID: "t2", ServiceID: "svc-api", Slot: 2},
 		},
 		[]swarm.Service{svc},
 	)

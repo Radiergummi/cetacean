@@ -326,10 +326,8 @@ func (s *Server) notify(session mcpserver.ClientSession, method string, params m
 
 	notification := mcplib.JSONRPCNotification{
 		JSONRPC: mcplib.JSONRPC_VERSION,
-		Notification: mcplib.Notification{
-			Method: method,
-			Params: mcplib.NotificationParams{AdditionalFields: params},
-		},
+		Method:  method,
+		Params:  mcplib.NotificationParams{AdditionalFields: params},
 	}
 
 	select {

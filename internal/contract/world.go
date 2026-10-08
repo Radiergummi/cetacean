@@ -351,8 +351,8 @@ func seedCluster(c *cache.Cache) {
 	stackLabels := map[string]string{"com.docker.stack.namespace": SeededStack}
 
 	c.SetNode(swarm.Node{
-		ID:   SeededNodeID,
-		Meta: swarm.Meta{Version: swarm.Version{Index: 3}},
+		ID:      SeededNodeID,
+		Version: swarm.Version{Index: 3},
 		Spec: swarm.NodeSpec{
 			Role:         swarm.NodeRoleManager,
 			Availability: swarm.NodeAvailabilityActive,
@@ -363,8 +363,8 @@ func seedCluster(c *cache.Cache) {
 	})
 
 	c.SetService(swarm.Service{
-		ID:   SeededServiceID,
-		Meta: swarm.Meta{Version: swarm.Version{Index: 11}},
+		ID:      SeededServiceID,
+		Version: swarm.Version{Index: 11},
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: SeededServiceName, Labels: stackLabels},
 			TaskTemplate: swarm.TaskSpec{

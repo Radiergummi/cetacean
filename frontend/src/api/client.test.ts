@@ -20,6 +20,32 @@ function jsonResponse(data: unknown, status = 200) {
 }
 
 describe("api client", () => {
+  // Every detail response names itself, already spelled with the canonical ID,
+  // so a page reached by name learns the ID without knowing where its type
+  // keeps one.
+  it("lifts a detail response's @id into canonicalPath", async () => {
+    mockFetch.mockReturnValue(
+      jsonResponse({
+        "@context": "/api/context.jsonld",
+        "@id": "/nodes/n0d3id",
+        "@type": "Node",
+        node: { ID: "n0d3id" },
+      }),
+    );
+
+    const result = await api.node("worker-2");
+
+    expect(result.canonicalPath).toBe("/nodes/n0d3id");
+  });
+
+  it("reports no canonicalPath for a response carrying no @id", async () => {
+    mockFetch.mockReturnValue(jsonResponse({ node: { ID: "n0d3id" } }));
+
+    const result = await api.node("worker-2");
+
+    expect(result.canonicalPath).toBeUndefined();
+  });
+
   it("treats a 416 range response as the end of the collection", async () => {
     // The server answers 416 when the requested offset is past the end. That
     // is a correct answer to a stale question — the client's idea of the

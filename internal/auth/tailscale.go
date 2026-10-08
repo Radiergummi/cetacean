@@ -13,6 +13,7 @@ import (
 	"tailscale.com/client/local"
 	"tailscale.com/client/tailscale/apitype"
 	"tailscale.com/tailcfg"
+	"tailscale.com/tailcfg/peercap"
 	"tailscale.com/tsnet"
 )
 
@@ -34,7 +35,7 @@ type WhoIsClient interface {
 // in the WhoIs response's CapMap (see Tailscale Application Capabilities).
 type TailscaleProvider struct {
 	client     WhoIsClient
-	capability tailcfg.PeerCapability // app capability key for groups extraction
+	capability peercap.Cap // app capability key for groups extraction
 }
 
 // NewTailscaleTsnetProvider creates a provider using an embedded tsnet node.
@@ -64,7 +65,7 @@ func NewTailscaleTsnetProvider(
 
 	return &TailscaleProvider{
 		client:     lc,
-		capability: tailcfg.PeerCapability(capability),
+		capability: peercap.Cap(capability),
 	}, srv, ln, nil
 }
 
@@ -73,7 +74,7 @@ func NewTailscaleTsnetProvider(
 func NewTailscaleLocalProvider(capability string) *TailscaleProvider {
 	return &TailscaleProvider{
 		client:     &local.Client{},
-		capability: tailcfg.PeerCapability(capability),
+		capability: peercap.Cap(capability),
 	}
 }
 
@@ -133,7 +134,7 @@ type capGrantGroups struct {
 // CapMap and collects their "groups" arrays into a single deduplicated slice.
 // Multiple grant rules may contribute groups (e.g. different ACL rules granting
 // overlapping group sets).
-func extractCapGroups(capMap tailcfg.PeerCapMap, capability tailcfg.PeerCapability) []string {
+func extractCapGroups(capMap tailcfg.PeerCapMap, capability peercap.Cap) []string {
 	values, ok := capMap[capability]
 	if !ok || len(values) == 0 {
 		return nil

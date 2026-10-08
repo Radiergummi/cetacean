@@ -4582,7 +4582,7 @@ paths:
       summary: Resource change history
       description: |
         Returns recent change events from the in-memory ring buffer (10,000 entries).
-        Can be filtered by resource type and/or specific resource ID.
+        Can be filtered by resource type and/or a specific resource.
       parameters:
         - name: type
           in: query
@@ -4592,7 +4592,12 @@ paths:
           example: service
         - name: resourceId
           in: query
-          description: Filter by specific resource ID
+          description: |
+            Filter by a specific resource, named by its ID or its name. A name is
+            resolved against `type` when one is given, and otherwise only when no
+            other type claims it. An identifier matching nothing is used as it
+            stands, so entries for a resource the cluster has since dropped stay
+            reachable by the ID they were recorded under.
           schema:
             type: string
           example: r8m2x5nk3p7q

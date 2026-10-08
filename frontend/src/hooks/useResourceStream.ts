@@ -3,14 +3,14 @@ import { apiPath } from "@/lib/basePath";
 import { openEventStream } from "@/lib/eventStream";
 import { createContext, useContext, useEffect, useState } from "react";
 
-interface SSEEvent {
+export interface SSEEvent {
   type: string;
   action: string;
   id: string;
   resource?: unknown | undefined;
 }
 
-type SSEListener = (event: SSEEvent) => void;
+export type SSEListener = (event: SSEEvent) => void;
 
 export const sseEventTypes = [
   "node",
@@ -28,11 +28,17 @@ export const sseEventTypes = [
  * Opens an EventSource to the given path and dispatches parsed events.
  * Returns connection status for use by the ConnectionStatus component.
  */
-export function useResourceStream(path: string, listener: SSEListener) {
+export function useResourceStream(path: string | undefined, listener: SSEListener) {
   const [connected, setConnected] = useState(true);
   const listenerRef = useLatestRef(listener);
 
   useEffect(() => {
+    // No path means there is nothing to subscribe to yet — a detail page
+    // without a route parameter says so this way.
+    if (!path) {
+      return;
+    }
+
     const handler = (event: MessageEvent) => {
       try {
         listenerRef.current(JSON.parse(event.data) as SSEEvent);

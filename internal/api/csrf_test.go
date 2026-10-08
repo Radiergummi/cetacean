@@ -23,10 +23,8 @@ func newCSRFTestRouter(t testing.TB, origins ...string) http.Handler {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			restartServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
-				return replicatedService(id), nil
-			},
+		restartServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
+			return replicatedService(id), nil
 		},
 	}
 

@@ -262,3 +262,62 @@ func TestGetEventsReportsTruncationOverTheWholeResourceHistory(t *testing.T) {
 		t.Errorf("entries = %d, want the 10 asked for", len(got.Entries))
 	}
 }
+
+// An agent works from the name the user said. `resource` is an argument, not a
+// path, so nothing rewrote it the way the REST canonical redirect does, and a
+// name answered with an empty timeline that said nothing about being wrong.
+func TestGetEventsAcceptsAResourceName(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "shop_web"}},
+	})
+
+	srv := newResourceTestServer(t, c)
+
+	for _, identifier := range []string{"svc1", "shop_web"} {
+		got := eventsCall(t, srv, map[string]any{
+			"types":    []any{"service"},
+			"resource": identifier,
+		})
+
+		if len(got.Entries) != 1 {
+			t.Errorf("resource=%s: entries = %d, want 1", identifier, len(got.Entries))
+		}
+	}
+}
+
+// Without exactly one type there is nothing to scope the lookup by, so only a
+// name no other type claims can be answered.
+func TestGetEventsResolvesANameAcrossTypesOnlyWhenUnique(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "shared"}},
+	})
+	c.SetSecret(swarm.Secret{
+		ID:   "sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "shared"}},
+	})
+	c.SetNode(swarm.Node{ID: "n1", Description: swarm.NodeDescription{Hostname: "worker-01"}})
+
+	srv := newResourceTestServer(t, c)
+
+	if got := eventsCall(t, srv, map[string]any{"resource": "worker-01"}); len(got.Entries) != 1 {
+		t.Errorf("resource=worker-01: entries = %d, want 1", len(got.Entries))
+	}
+
+	// A config and a secret both named "shared" answer different questions.
+	if got := eventsCall(t, srv, map[string]any{"resource": "shared"}); len(got.Entries) != 0 {
+		t.Errorf("resource=shared: entries = %d, want 0", len(got.Entries))
+	}
+
+	// Naming the type is what makes it answerable.
+	got := eventsCall(t, srv, map[string]any{
+		"types":    []any{"secret"},
+		"resource": "shared",
+	})
+	if len(got.Entries) != 1 {
+		t.Errorf("resource=shared type=secret: entries = %d, want 1", len(got.Entries))
+	}
+}

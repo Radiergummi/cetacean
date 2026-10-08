@@ -19,8 +19,8 @@ import (
 // is a credential.
 func serviceWithSecrets() swarm.Service {
 	return swarm.Service{
-		ID:   "svc1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 41}},
+		ID:      "svc1",
+		Version: swarm.Version{Index: 41},
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
 			TaskTemplate: swarm.TaskSpec{
@@ -222,8 +222,8 @@ func TestSpecEditingToolsReportTheEditedSection(t *testing.T) {
 // drain take" is not answerable without the role it took effect on.
 func TestNodeUpdateReportsRoleAndAvailability(t *testing.T) {
 	node := swarm.Node{
-		ID:   "node1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 9}},
+		ID:      "node1",
+		Version: swarm.Version{Index: 9},
 		Spec: swarm.NodeSpec{
 			Role:         swarm.NodeRoleManager,
 			Availability: swarm.NodeAvailabilityDrain,
