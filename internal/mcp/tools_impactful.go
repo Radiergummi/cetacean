@@ -68,6 +68,28 @@ func (s *Server) impactfulTools() []toolDef {
 				}),
 		},
 		{
+			tool: mcplib.NewTool("remove_task",
+				mcplib.WithToolTitle("Remove (reschedule) task"),
+				mcplib.WithOutputSchema[removalResult](),
+				mcplib.WithDescription(
+					"Delete a task by ID. Swarm immediately reschedules a replacement on the parent service's behalf, so this is a forced reschedule rather than a permanent removal. Use this to evict a misbehaving task without scaling the whole service.",
+				),
+				mcplib.WithReadOnlyHintAnnotation(false),
+				mcplib.WithDestructiveHintAnnotation(true),
+				mcplib.WithIdempotentHintAnnotation(false),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithString("id",
+					mcplib.Required(),
+					mcplib.Description("Task ID (long-form Docker ID)."),
+				),
+			),
+			tier: config.OpsImpactful,
+			handler: s.removeHandler("id", s.checkTaskWrite,
+				func(wc DockerWriteClient, ctx context.Context, id string) error {
+					return wc.RemoveTask(ctx, id)
+				}),
+		},
+		{
 			tool: mcplib.NewTool("remove_config",
 				mcplib.WithToolTitle("Remove config"),
 				mcplib.WithOutputSchema[removalResult](),
