@@ -15,6 +15,10 @@ type Resource struct {
 
 	// Realm is the WWW-Authenticate realm a resource server offers for it.
 	Realm string
+
+	// Name is the human-readable name RFC 9728 §2 recommends, shown to the end
+	// user by a client in place of the identifier.
+	Name string
 }
 
 // metadataPath is the RFC 9728 §3.1 location of this resource's document: the

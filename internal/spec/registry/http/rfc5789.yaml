@@ -1,0 +1,87 @@
+source: RFC 5789
+title: PATCH Method for HTTP
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc5789
+
+inventory:
+  from: >-
+    RFC 5789 §2, §2.2, §3, §3.1 and §5 in full. §1's keyword paragraph is the
+    RFC 2119 boilerplate and §2.1 carries none. This deployment answers PATCH
+    on the resources whose labels are editable and advertises what it accepts.
+  count: 16
+
+requirements:
+  - id: patch-is-atomic
+    level: MUST
+    text: >-
+      The server MUST apply the entire set of changes atomically and never
+      provide (e.g., in response to a GET during this operation) a partially
+      modified representation.
+    url: https://www.rfc-editor.org/rfc/rfc5789#section-2
+
+  - id: a-failed-patch-changes-nothing
+    level: MUST
+    text: >-
+      If the entire patch document cannot be successfully applied, then the
+      server MUST NOT apply any of the changes.
+    url: https://www.rfc-editor.org/rfc/rfc5789#section-2
+
+  - id: patch-document-suits-the-resource
+    level: MUST
+    text: >-
+      Servers MUST ensure that a received patch document is appropriate for the
+      type of resource identified by the Request-URI.
+    url: https://www.rfc-editor.org/rfc/rfc5789#section-2
+    mutants:
+      - file: internal/api/write_helpers.go
+        replace: "\tisJSONPatch := strings.HasPrefix(ct, \"application/json-patch+json\")"
+        with: "\tisJSONPatch := strings.HasPrefix(ct, \"application/json\")"
+
+  - id: accept-patch-is-advertised
+    level: SHOULD
+    text: >-
+      Accept-Patch SHOULD appear in the OPTIONS response for any resource that
+      supports the use of the PATCH method.
+    url: https://www.rfc-editor.org/rfc/rfc5789#section-3.1
+    mutants:
+      - file: internal/api/allow.go
+        replace: "\t\t\tw.Header().Set(\"Accept-Patch\", ap)"
+        with: "\t\t\t_ = ap"
+
+dismissed:
+  patch-may-create-a-resource: >-
+    A MAY about PATCH on a URI that names nothing. Every PATCH here addresses a
+    resource that already exists; a missing one is 404.
+  patch-may-affect-other-resources: >-
+    A MAY about side effects. A label change touches the one object it names.
+  clients-use-conditional-requests: >-
+    A SHOULD addressed to the client. The server half is the optional If-Match
+    every write honours.
+  cached-entries-treated-as-stale: >-
+    A SHOULD binding a cache between client and server. Every write answers
+    no-store, so no entry survives to go stale.
+  cached-patch-response-is-not-reused: >-
+    Binds a cache reusing a PATCH response for another method.
+  entity-headers-are-not-applied-to-the-resource: >-
+    Binds a server that stores request entity-headers against the target. This
+    one reads the body and the content type and stores neither.
+  entity-headers-are-not-stored: >-
+    The SHOULD NOT restating the rule above for storage and for PUT-style
+    handling.
+  malformed-patch-is-400: >-
+    A SHOULD about the status for an unparseable patch document. This server
+    answers 415 for a content type it cannot patch with and 400 for a body it
+    cannot parse, both as problem details.
+  error-carries-accept-patch: >-
+    A SHOULD to repeat Accept-Patch on the error. The header is on every GET
+    and OPTIONS of a patchable resource instead, which is where a client looks
+    before it tries.
+  error-body-explains-the-failure: >-
+    A SHOULD met by every refusal here being an RFC 9457 problem details object
+    — see http/rfc9457/new-problem-types-are-documented.
+  allow-may-omit-accept-patch: >-
+    A MAY to advertise PATCH without saying which documents it takes. This
+    server always says.
+  patch-resource-consumption-is-bounded: >-
+    A MUST with no testable shape. The concrete measure is the body cap every
+    write endpoint applies before parsing.

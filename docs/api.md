@@ -32,7 +32,7 @@ the client asks for. There's no `/api/v1/` prefix; versioning lives in the media
 ### Resolution order
 
 1. File extension appended to the path, which wins over everything else
-2. `Accept` header, parsed per RFC 7231 with `q` values and wildcards
+2. `Accept` header, parsed per RFC 9110 with `q` values and wildcards
 3. `application/json` when the client sends `*/*` or no `Accept` header
 
 ### Supported types

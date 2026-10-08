@@ -9,6 +9,8 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/api/linkset"
 	"github.com/radiergummi/cetacean/internal/cache"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // parseAccept is the whole header-to-type path in one call. negotiate drives
@@ -18,6 +20,8 @@ func parseAccept(accept string) ContentType {
 }
 
 func TestNegotiate(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/a-q-parameter-is-a-weight-wherever-it-sits")
+
 	// Helper: runs a request through the negotiate middleware and returns
 	// the resolved ContentType and the path seen by the inner handler.
 	run := func(path string, accept string) (ContentType, string) {

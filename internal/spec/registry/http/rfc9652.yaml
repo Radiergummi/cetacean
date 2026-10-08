@@ -1,0 +1,33 @@
+source: RFC 9652
+title: The Link-Template HTTP Header Field
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc9652
+
+inventory:
+  from: >-
+    RFC 9652 §2 in full — the header field's own definition. §1.1 is the RFC
+    2119 boilerplate, and §3 through §5 carry no keyword. This deployment emits
+    the field and expands no template, so the statements binding a client
+    expanding one are accounted for here but are not ours.
+  count: 4
+
+requirements:
+  - id: link-and-anchor-are-strings
+    level: MUST
+    text: >-
+      The Link-Template header field is a List of Strings [STRUCTURED-FIELDS],
+      each of which is a URI Template [URI-TEMPLATE]. Their values MUST be
+      Strings.
+    url: https://www.rfc-editor.org/rfc/rfc9652#section-2
+
+dismissed:
+  anchor-may-be-a-template: >-
+    A MAY about the anchor parameter, which this deployment does not emit: the
+    template is anchored at the request URL by default.
+  parameter-values-are-strings: >-
+    Constrains the parameters carried alongside the template. This deployment
+    emits one, rel="item", which is an ASCII String.
+  every-template-level-supported: >-
+    Binds an implementation expanding a URI Template. This deployment emits the
+    literal template text and the client expands it — the same reason RFC 6570
+    is dismissed outright.

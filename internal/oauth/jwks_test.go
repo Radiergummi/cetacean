@@ -11,6 +11,8 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 
 	"github.com/radiergummi/cetacean/internal/config"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func newJWKSTestServer(t *testing.T) *Server {
@@ -42,6 +44,16 @@ func fetchJWKS(t *testing.T, s *Server) *httptest.ResponseRecorder {
 }
 
 func TestJWKSDocumentShape(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc7517/key-set-has-a-keys-member",
+		"oauth/rfc7517/kty-is-present",
+		"oauth/rfc7517/non-public-key-material-is-withheld",
+		"oauth/rfc7518/ec-public-key-members-present",
+		"oauth/rfc7518/ec-curve-member-present",
+		"oauth/rfc7518/x-coordinate-is-full-size",
+		"oauth/rfc7518/y-coordinate-is-full-size",
+	)
+
 	rec := fetchJWKS(t, newJWKSTestServer(t))
 
 	if rec.Code != http.StatusOK {

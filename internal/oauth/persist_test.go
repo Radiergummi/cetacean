@@ -485,3 +485,21 @@ func TestStateFromAnotherFormatVersionIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// The file is a trust boundary: a token past its own expiry stays dead across
+// a restart even while its grant is still live.
+func TestRestoreDropsAnExpiredTokenOfALiveGrant(t *testing.T) {
+	s := NewRefreshTokenStore()
+	s.Restore(RefreshTokenSnapshot{Tokens: map[string]RefreshTokenSnapEntry{
+		"hash": {
+			Subject:        "user-1",
+			GrantID:        "grant-1",
+			ExpiresAt:      time.Now().Add(-time.Minute),
+			GrantExpiresAt: time.Now().Add(time.Hour),
+		},
+	}})
+
+	if got := s.Snapshot().Tokens; len(got) != 0 {
+		t.Errorf("tokens = %v, want the expired one dropped", got)
+	}
+}

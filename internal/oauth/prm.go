@@ -14,6 +14,10 @@ type protectedResourceMetadata struct {
 	// says it there: this resource has no scopes, which is worth stating.
 	ScopesSupported []string `json:"scopes_supported"`
 
+	// Omitted when a resource has no name rather than sent empty: §3.2 has a
+	// zero-valued parameter left out.
+	ResourceName string `json:"resource_name,omitempty"`
+
 	ResourceDocumentation string `json:"resource_documentation,omitempty"`
 }
 
@@ -29,6 +33,7 @@ func (s *Server) protectedResourceMetadataHandler(r Resource) http.HandlerFunc {
 		AuthorizationServers:   []string{iss},
 		BearerMethodsSupported: []string{"header"},
 		ScopesSupported:        []string{},
+		ResourceName:           r.Name,
 	}
 	if iss != "" {
 		doc.ResourceDocumentation = iss + "/api"

@@ -1,0 +1,157 @@
+source: RFC 6750
+title: "The OAuth 2.0 Authorization Framework: Bearer Token Usage"
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc6750
+
+inventory:
+  from: >-
+    RFC 6750 §2 through §3.1 in full — how a token is presented and how a
+    refusal is phrased — plus §5.3's two statements binding a token server.
+    §1.1 is the RFC 2119 boilerplate. §5.2 and the rest of §5.3 bind the
+    client's TLS stack, the deployment's transport and where a client keeps a
+    token, none of which is this code.
+  count: 34
+
+requirements:
+  - id: challenge-on-missing-or-invalid-credentials
+    level: MUST
+    text: >-
+      If the protected resource request does not include authentication
+      credentials or does not contain an access token that enables access to
+      the protected resource, the resource server MUST include the HTTP
+      "WWW-Authenticate" response header field.
+    url: https://www.rfc-editor.org/rfc/rfc6750#section-3
+    mutants:
+      - file: internal/auth/middleware.go
+        replace: "\t\tw.Header().Add(\"WWW-Authenticate\", challenge)\n\t\tif !named && status == http.StatusForbidden {"
+        with: "\t\tif !named && status == http.StatusForbidden {"
+
+  - id: challenge-uses-the-bearer-scheme
+    level: MUST
+    text: >-
+      All challenges defined by this specification MUST use the auth-scheme
+      value "Bearer".
+    url: https://www.rfc-editor.org/rfc/rfc6750#section-3
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\t`Bearer realm=%s, resource_metadata=%s`,"
+        with: "\t\t`Basic realm=%s, resource_metadata=%s`,"
+
+  - id: challenge-carries-an-auth-param
+    level: MUST
+    text: >-
+      This scheme MUST be followed by one or more auth-param values.
+    url: https://www.rfc-editor.org/rfc/rfc6750#section-3
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\t`Bearer realm=%s, resource_metadata=%s`,"
+        with: "\t\t`Bearer%.0s%.0s`,"
+
+  - id: error-attribute-on-a-failed-token
+    level: SHOULD
+    text: >-
+      If the protected resource request included an access token and failed
+      authentication, the resource server SHOULD include the "error" attribute
+      to provide the client with the reason why the access request was
+      declined.
+    url: https://www.rfc-editor.org/rfc/rfc6750#section-3
+
+  - id: invalid-token-is-401
+    level: SHOULD
+    text: >-
+      invalid_token: The access token provided is expired, revoked, malformed,
+      or invalid for other reasons. [...] The resource SHOULD respond with the
+      HTTP 401 (Unauthorized) status code.
+    url: https://www.rfc-editor.org/rfc/rfc6750#section-3.1
+
+  - id: no-error-code-without-a-credential
+    level: SHOULD
+    text: >-
+      If the request lacks any authentication information (e.g., the client was
+      unaware that authentication is necessary or attempted using an
+      unsupported authentication method), the resource server SHOULD NOT
+      include an error code or other error information.
+    url: https://www.rfc-editor.org/rfc/rfc6750#section-3.1
+
+  - id: tokens-are-short-lived
+    level: SHOULD
+    text: >-
+      Token servers SHOULD issue short-lived (one hour or less) bearer tokens,
+      particularly when issuing tokens to clients that run within a web browser
+      or other environments where information leakage may occur.
+    url: https://www.rfc-editor.org/rfc/rfc6750#section-5.3
+
+  - id: tokens-are-audience-restricted
+    level: SHOULD
+    text: >-
+      Token servers SHOULD issue bearer tokens that contain an audience
+      restriction, scoping their use to the intended relying party or set of
+      relying parties.
+    url: https://www.rfc-editor.org/rfc/rfc6750#section-5.3
+
+dismissed:
+  one-method-per-request: >-
+    Binds the client. This server reads the Authorization header and nothing
+    else, so a token sent twice over cannot reach it twice over.
+  form-body-preconditions: >-
+    Preconditions on a client using the form-encoded method, which this server
+    does not accept.
+  form-body-is-ascii: >-
+    Constrains an entity-body carrying access_token. This server reads no token
+    from a body.
+  form-body-not-with-get: >-
+    Binds a client choosing the form-encoded method.
+  form-body-parameter-separated: >-
+    Form-encoding syntax for a method this server does not accept.
+  form-body-discouraged: >-
+    A SHOULD NOT addressed to the client. This server does not offer the method
+    at all, which is the stronger answer.
+  form-body-method-optional: >-
+    A MAY this server declines: bearer_methods_supported names "header" alone.
+  query-parameter-separated: >-
+    Query-string syntax for a method this server does not accept.
+  query-method-no-store: >-
+    A SHOULD binding a client that puts a token in a URL.
+  query-method-response-private: >-
+    Conditional on answering a request that carried a token in the query.
+  query-method-discouraged: >-
+    A SHOULD NOT addressed to the client. This server does not offer the method
+    at all.
+  query-method-optional: >-
+    A MAY this server declines, which is what keeps a token out of a URL and
+    out of the logs.
+  other-auth-params-allowed: >-
+    A MAY this server exercises: the challenge carries RFC 9728's
+    resource_metadata. A permission has no failing direction.
+  realm-may-be-included: >-
+    A MAY this server exercises on every challenge.
+  realm-appears-once: >-
+    The challenge is built by one Sprintf from one resource's realm. No path
+    emits a second.
+  scope-attribute-optional: >-
+    An OPTIONAL attribute this server omits: it defines no scopes.
+  scope-appears-once: >-
+    Constrains an attribute this server never emits.
+  error-description-allowed: >-
+    A MAY this server declines. The reason a token was refused belongs in the
+    problem details body, which is read by a human rather than parsed.
+  error-uri-allowed: >-
+    A MAY this server declines; there is no per-error page to point at.
+  error-attributes-appear-once: >-
+    error is emitted once by construction and the other two never.
+  scope-value-charset: >-
+    Constrains an attribute this server never emits.
+  error-value-charset: >-
+    The error codes this server emits are a closed set of lowercase ASCII
+    literals, every one inside the permitted range. No caller supplies one.
+  error-uri-syntax: >-
+    Constrains an attribute this server never emits.
+  invalid-request-is-400: >-
+    This server's challenges carry invalid_token alone. A malformed request to
+    a protected resource is answered by the API's own problem details, not by a
+    Bearer error code.
+  client-may-retry-with-a-new-token: >-
+    A MAY addressed to the client.
+  insufficient-scope-is-403: >-
+    Conditional on scopes, which this server defines none of. A caller refused
+    by the ACL gets 403 with problem details, not a scope to go and ask for.

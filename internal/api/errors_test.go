@@ -3,9 +3,13 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"strings"
 	"testing"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestHandleErrorIndex_JSON(t *testing.T) {
@@ -32,6 +36,11 @@ func TestHandleErrorIndex_JSON(t *testing.T) {
 }
 
 func TestHandleErrorDetail_JSON(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9457/type-uri-dereferences-to-documentation",
+		"http/rfc9457/type-uri-explains-the-resolution",
+	)
+
 	req := httptest.NewRequest("GET", "/api/errors/NOD001", nil)
 	req.SetPathValue("code", "NOD001")
 	req.Header.Set("Accept", "application/json")
@@ -68,6 +77,14 @@ func TestHandleErrorDetail_NotFound(t *testing.T) {
 }
 
 func TestWriteErrorCode_KnownCode(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9457/status-matches-the-response",
+		"http/rfc9457/type-uri-includes-the-full-path",
+		"http/rfc9457/instance-uri-includes-the-full-path",
+		"http/rfc9457/title-is-stable-per-type",
+		"http/rfc9457/extension-member-names",
+	)
+
 	req := httptest.NewRequest("DELETE", "/nodes/node1", nil)
 	w := httptest.NewRecorder()
 
@@ -90,9 +107,45 @@ func TestWriteErrorCode_KnownCode(t *testing.T) {
 	if body["detail"] != "node xyz is not down and can't be removed" {
 		t.Errorf("detail=%v", body["detail"])
 	}
+
+	// The body's status and the response's must agree, or generic HTTP software
+	// that ignores this format behaves differently from one that reads it.
+	if body["status"] != float64(http.StatusConflict) {
+		t.Errorf("body status=%v, want %d", body["status"], http.StatusConflict)
+	}
+
+	// The instance names the request that failed, by full path.
+	if inst, _ := body["instance"].(string); !strings.HasPrefix(inst, "/nodes/node1") {
+		t.Errorf("instance=%v, want the request path", body["instance"])
+	}
+
+	// The title is the registry's, so it does not vary between occurrences.
+	if body["title"] != errorRegistry["NOD001"].Title {
+		t.Errorf("title=%v, want the registered title", body["title"])
+	}
+
+	// Every member outside RFC 9457's own set is an extension, and §4 wants a
+	// name starting with a letter. @context is the one exception this API makes.
+	defined := map[string]bool{
+		"type": true, "title": true, "status": true,
+		"detail": true, "instance": true,
+	}
+	for name := range body {
+		if defined[name] || name == "@context" {
+			continue
+		}
+		if !extensionName.MatchString(name) {
+			t.Errorf("extension member %q does not follow RFC 9457 §4's naming rule", name)
+		}
+	}
 }
 
+// ALPHA followed by ALPHA / DIGIT / "_", three characters or longer.
+var extensionName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{2,}$`)
+
 func TestWriteErrorCode_UnknownCode(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9457/about-blank-title-is-the-status-phrase")
+
 	req := httptest.NewRequest("DELETE", "/test", nil)
 	w := httptest.NewRecorder()
 
@@ -100,6 +153,20 @@ func TestWriteErrorCode_UnknownCode(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("status=%d, want 500", w.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// An untyped problem falls back to about:blank, whose title is the status
+	// phrase — there is no type URI to look a better one up under.
+	if body["type"] != "about:blank" {
+		t.Errorf("type=%v, want about:blank", body["type"])
+	}
+	if body["title"] != http.StatusText(http.StatusInternalServerError) {
+		t.Errorf("title=%v, want the status phrase", body["title"])
 	}
 }
 
@@ -141,6 +208,8 @@ func TestErrorDomainsMatchTheRegistry(t *testing.T) {
 }
 
 func TestErrorDefsAreCompleteAndSorted(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9457/new-problem-types-are-documented")
+
 	defs := ErrorDefs()
 
 	if len(defs) != len(errorRegistry) {

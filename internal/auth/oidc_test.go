@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // newMockOIDCServer creates a test server that serves OIDC discovery and JWKS
@@ -198,6 +200,11 @@ func TestOIDCProvider_Authenticate_ValidSession(t *testing.T) {
 }
 
 func TestOIDCProvider_RegisterRoutes_Login(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9700/state-or-nonce-when-pkce-is-absent",
+		"oauth/rfc9700/implicit-grant-not-used",
+	)
+
 	server := newMockOIDCServer(t)
 	p := newTestOIDCProvider(t, server.URL)
 
@@ -217,6 +224,14 @@ func TestOIDCProvider_RegisterRoutes_Login(t *testing.T) {
 	location := resp.Header.Get("Location")
 	if location == "" {
 		t.Fatal("expected Location header")
+	}
+
+	authURL, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("parse Location: %v", err)
+	}
+	if got := authURL.Query().Get("response_type"); got != "code" {
+		t.Errorf("response_type = %q, want code", got)
 	}
 
 	// Should have set state, nonce, and verifier cookies.
@@ -574,6 +589,8 @@ func TestLogin_RejectsAbsoluteURL(t *testing.T) {
 }
 
 func TestLogin_RejectsProtocolRelativeURL(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/client-exposes-no-open-redirector")
+
 	server := newMockOIDCServer(t)
 	p := newTestOIDCProvider(t, server.URL)
 
@@ -597,6 +614,8 @@ func TestLogin_RejectsProtocolRelativeURL(t *testing.T) {
 }
 
 func TestLogin_RejectsBackslashURL(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/client-exposes-no-open-redirector")
+
 	server := newMockOIDCServer(t)
 	p := newTestOIDCProvider(t, server.URL)
 
@@ -870,5 +889,18 @@ func TestLogout_GETMethod_Rejected(t *testing.T) {
 	// Go 1.22+ mux returns 405 Method Not Allowed for wrong method.
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
+	}
+}
+
+// RFC 9700 §4.3.2 keeps access tokens out of URIs. It cuts both ways: a
+// resource server that accepts one in the query invites the clients that put
+// it there, and the value lands in every log and Referer on the way.
+func TestAnAccessTokenInTheQueryIsNotACredential(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/access-token-not-in-a-query-parameter")
+
+	r := httptest.NewRequest(http.MethodGet, "/nodes?access_token=abc123", nil)
+
+	if got := ExtractBearerToken(r); got != "" {
+		t.Errorf("ExtractBearerToken = %q, want empty: a token in the query was read", got)
 	}
 }

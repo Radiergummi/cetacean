@@ -215,7 +215,7 @@ The cookie stores subject, display name, email and groups, but no raw token clai
 ### Logout
 
 `POST /auth/logout` clears the session cookie. If the IdP advertises an `end_session_endpoint`
-([RFC 9722](https://www.rfc-editor.org/rfc/rfc9722)), the user is also redirected there for sign-out.
+([OpenID Connect RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)), the user is also redirected there for sign-out.
 
 ### IdP setup
 

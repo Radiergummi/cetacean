@@ -1,0 +1,669 @@
+source: RFC 9700
+title: Best Current Practice for OAuth 2.0 Security
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc9700
+
+inventory:
+  from: >-
+    RFC 9700 in full, less §1.2's RFC 2119 boilerplate. Every role this
+    deployment plays is in scope, and there are three: the authorization
+    server and the protected resource in internal/oauth, and the OpenID
+    Connect relying party in internal/auth that signs users in. A statement
+    binding "clients" is therefore ours whenever the relying party is the
+    client it describes, and somebody else's when it is an application calling
+    this server.
+  count: 93
+
+requirements:
+  - id: implicit-grant-not-used
+    level: SHOULD
+    text: >-
+      Clients SHOULD instead use the response type code (i.e., authorization
+      code grant type) as specified in Section 2.1.1 or any other response
+      type that causes the authorization server to issue access tokens in the
+      token response, such as the code id_token response type.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.1.2
+
+  - id: public-client-refresh-tokens-rotate
+    level: MUST
+    text: >-
+      Refresh tokens for public clients MUST be sender-constrained or use
+      refresh token rotation as described in Section 4.14.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.2.2
+    mutants:
+      - file: internal/oauth/store.go
+        replace: "\tgrantID := entry.data.grantID\n\tdelete(s.tokens, oldHash)\n\ts.consumed[oldHash] = grantID"
+        with: "\tgrantID := entry.data.grantID\n\ts.consumed[oldHash+\"-never\"] = grantID"
+
+  - id: tokens-audience-restricted
+    level: SHOULD
+    text: >-
+      In particular, access tokens SHOULD be audience-restricted to a specific
+      resource server or, if that is not feasible, to a small set of resource
+      servers.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.3
+
+  - id: wrong-audience-refused
+    level: MUST
+    text: >-
+      If it was not, the resource server MUST refuse to serve the respective
+      request.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.3
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif !slices.Contains(payload.Audience, aud) {"
+        with: "\tif false && !slices.Contains(payload.Audience, aud) {"
+
+  - id: aud-claim-may-restrict-the-audience
+    level: MAY
+    text: >-
+      The aud claim as defined in [RFC9068] MAY be used to audience-restrict
+      access tokens.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.3
+
+  - id: resource-parameter-may-select-the-server
+    level: MAY
+    text: >-
+      Clients and authorization servers MAY utilize the parameters scope or
+      resource as specified in [RFC6749] and [RFC8707], respectively, to
+      determine the resource server they want to access.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.3
+
+  - id: tokens-restricted-to-resources-and-actions
+    level: SHOULD
+    text: >-
+      Additionally, access tokens SHOULD be restricted to certain resources
+      and actions on resource servers or resources.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.3
+    deferred: >-
+      A token is restricted to one resource and no further. It carries the
+      caller's own access — the operations tier and the per-resource ACL are
+      evaluated against the identity behind the token on every request, not
+      against the token — so there is no narrower slice of the caller's
+      authority a token can hold. A requested scope is ignored rather than
+      refused, and both discovery documents say there are no scopes, which is
+      what a client would otherwise read as a restriction it could ask for.
+
+  - id: password-grant-not-used
+    level: MUST
+    text: >-
+      The resource owner password credentials grant [RFC6749] MUST NOT be
+      used.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.4
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tcase \"refresh_token\":\n\t\ts.handleRefreshTokenGrant(w, r)"
+        with: "\tcase \"refresh_token\", \"password\":\n\t\ts.handleRefreshTokenGrant(w, r)"
+
+  - id: as-metadata-published
+    level: SHOULD
+    text: >-
+      It is therefore RECOMMENDED that authorization servers publish OAuth
+      Authorization Server Metadata according to [RFC8414] and that clients
+      make use of this Authorization Server Metadata (when available) to
+      configure themselves.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
+
+  - id: http-redirect-uris-refused-except-loopback
+    level: MUST
+    text: >-
+      To this end, authorization servers MUST NOT allow redirection URIs that
+      use the http scheme except for native clients that use loopback
+      interface redirection as described in Section 7.3 of [RFC8252].
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\tif u.Scheme == \"https\" {\n\t\treturn true\n\t}\n\treturn isLoopbackURI(rawURI)"
+        with: "\tif u.Scheme == \"https\" || u.Scheme == \"http\" {\n\t\treturn true\n\t}\n\treturn isLoopbackURI(rawURI)"
+      - file: internal/oauth/dcr.go
+        replace: "\tif ip != nil && ip.IsLoopback() {"
+        with: "\tif ip != nil || ip.IsLoopback() {"
+
+  - id: cors-may-be-supported-at-the-other-endpoints
+    level: MAY
+    text: >-
+      To support browser-based clients, endpoints directly accessed by such
+      clients including the Token Endpoint, Authorization Server Metadata
+      Endpoint, jwks_uri Endpoint, and Dynamic Client Registration Endpoint
+      MAY support the use of Cross-Origin Resource Sharing (CORS)
+      [WHATWG.CORS].
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
+
+  - id: no-cors-at-the-authorization-endpoint
+    level: MUST
+    text: >-
+      However, CORS MUST NOT be supported at the authorization endpoint, as
+      the client does not access this endpoint directly; instead, the client
+      redirects the user agent to it.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
+    # Not supported means neither half: an allow-listed origin reflected on the
+    # GET hands a page the consent form and the CSRF nonce in it, and answering
+    # the preflight is the same offer made one request earlier.
+    mutants:
+      - file: internal/api/cors.go
+        replace: "\t\t\tif r.URL.Path == authorizationEndpoint {"
+        with: "\t\t\tif false && r.URL.Path == authorizationEndpoint {"
+      - file: internal/api/cors.go
+        replace: "\t\t\tif r.URL.Path == authorizationEndpoint {"
+        with: "\t\t\tif r.Method != http.MethodOptions &&\n\t\t\t\tr.URL.Path == authorizationEndpoint {"
+      # cors matches the path exactly, so it must run after negotiate strips a
+      # suffix: behind it, /oauth/authorize.html reflects the origin.
+      - file: internal/api/router.go
+        replace: "\t\tnegotiate,\n\t\tcors(cfg.CORS),\n"
+        with: "\t\tcors(cfg.CORS),\n\t\tnegotiate,\n"
+      # The mux redirects //oauth/authorize only after cors has matched it.
+      - file: internal/api/router.go
+        replace: "\t\tcleanPaths,\n"
+        with: ""
+
+  - id: no-open-redirector-at-the-authorization-endpoint
+    level: MUST
+    text: >-
+      Clients and authorization servers MUST NOT expose URLs that forward the
+      user's browser to arbitrary URIs obtained from a query parameter (open
+      redirectors) as described in Section 4.11.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif !meta.HasRedirectURI(code.RedirectURI) {"
+        with: "\tif false && !meta.HasRedirectURI(code.RedirectURI) {"
+
+  - id: client-prevents-csrf
+    level: MUST
+    text: >-
+      Clients MUST prevent Cross-Site Request Forgery (CSRF).
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.1
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\tif subtle.ConstantTimeCompare(\n\t\t[]byte(r.URL.Query().Get(\"state\")),\n\t\t[]byte(stateCookie.Value),\n\t) != 1 {"
+        with: "\tif false && subtle.ConstantTimeCompare(\n\t\t[]byte(r.URL.Query().Get(\"state\")),\n\t\t[]byte(stateCookie.Value),\n\t) != 1 {"
+
+  - id: state-is-one-time-and-bound-to-the-user-agent
+    level: MUST
+    text: >-
+      Otherwise, one-time use CSRF tokens carried in the state parameter that
+      are securely bound to the user agent MUST be used for CSRF protection
+      (see Section 4.7.1).
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-2.1
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\tstateCookie, err := r.Cookie(\"cetacean_auth_state\")\n\tif err != nil {"
+        with: "\tstateCookie, err := r.Cookie(\"cetacean_auth_state\")\n\tif false && err != nil {"
+
+  - id: redirect-uri-compared-as-strings
+    level: MUST
+    text: >-
+      This means the authorization server MUST ensure that the two URIs are
+      equal; see Section 6.2.1 of [RFC3986], Simple String Comparison, for
+      details.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.1.3
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "\treturn slices.Contains(m.RedirectURIs, uri)"
+        with: "\treturn slices.ContainsFunc(m.RedirectURIs, func(r string) bool {\n\t\treturn len(r) > 0 && len(uri) >= len(r) && uri[:len(r)] == r\n\t})"
+
+  - id: loopback-ports-vary
+    level: MUST
+    text: >-
+      In this case, the authorization server MUST allow variable port numbers
+      as described in Section 7.3 of [RFC8252].
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.1.3
+    deferred: >-
+      redirect_uri is matched byte for byte, port included, so a native app
+      handed an ephemeral port by the operating system is refused with the one
+      it registered. The same divergence is recorded against RFC 8252 §7.3,
+      which is where the rule this sentence defers to lives.
+
+  - id: authorization-page-has-no-third-party-resources
+    level: SHOULD
+    text: >-
+      The page rendered as a result of the OAuth authorization response and
+      the authorization endpoint SHOULD NOT include third-party resources or
+      links to external sites.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.2.4
+
+  - id: code-invalidated-after-first-use
+    level: MUST
+    text: >-
+      As described in Section 4.1.2 of [RFC6749], authorization codes MUST be
+      invalidated by the authorization server after their first use at the
+      token endpoint.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.2.4
+    mutants:
+      - file: internal/oauth/store.go
+        replace: "\tentry, exists := s.codes[h]\n\tdelete(s.codes, h)"
+        with: "\tentry, exists := s.codes[h]"
+
+  - id: tokens-revoked-on-code-replay
+    level: SHOULD
+    text: >-
+      Therefore, [RFC6749] further recommends that, when an attempt is made to
+      redeem a code twice, the authorization server SHOULD revoke all tokens
+      issued previously based on that code.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.2.4
+    deferred: >-
+      A redeemed code is deleted, so the second attempt is refused — but
+      nothing links a code to what was issued from it, so the tokens the first
+      redemption produced keep working. Honouring this means carrying the
+      grant family's identifier on the code entry and revoking that family on
+      a replay, which is the one piece of state the code store deliberately
+      does not keep.
+
+  - id: state-invalidated-after-first-use
+    level: SHOULD
+    text: >-
+      The state value SHOULD be invalidated by the client after its first use
+      at the redirection endpoint.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.2.4
+
+  - id: access-token-not-in-a-query-parameter
+    level: MUST
+    text: >-
+      Clients MUST NOT pass access tokens in a URI query parameter in the way
+      described in Section 2.3 of [RFC6750].
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.3.2
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\tauth := r.Header.Get(\"Authorization\")"
+        with: "\tauth := r.Header.Get(\"Authorization\")\n\tif auth == \"\" {\n\t\tauth = \"Bearer \" + r.URL.Query().Get(\"access_token\")\n\t}"
+
+  - id: received-issuer-compared
+    level: MUST
+    text: >-
+      When receiving the authorization response, the client MUST compare the
+      received issuer identifier to the stored issuer identifier.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.4.2.1
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\tiss := r.URL.Query().Get(\"iss\")"
+        with: "\tiss := p.issuer"
+
+  - id: mismatched-issuer-aborts
+    level: MUST
+    text: >-
+      If there is a mismatch, the client MUST abort the interaction.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.4.2.1
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\t\tif subtle.ConstantTimeCompare([]byte(iss), []byte(p.issuer)) != 1 {"
+        with: "\t\tif false && subtle.ConstantTimeCompare([]byte(iss), []byte(p.issuer)) != 1 {"
+
+  - id: iss-evaluated-per-rfc9207
+    level: MUST
+    text: >-
+      In both cases, the iss value MUST be evaluated according to [RFC9207].
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.4.2.1
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\tif iss == \"\" && p.issRequired {"
+        with: "\tif false && iss == \"\" && p.issRequired {"
+
+  - id: nonce-validated-in-the-id-token
+    level: MUST
+    text: >-
+      MUST validate the nonce in the ID Token obtained from the token
+      endpoint, even if another ID Token was obtained from the authorization
+      response (e.g., response_type=code+id_token).
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.5.3.2
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\tif subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(nonceCookie.Value)) != 1 {"
+        with: "\tif false && subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(nonceCookie.Value)) != 1 {"
+
+  - id: tokens-disregarded-until-the-nonce-checks
+    level: MUST
+    text: >-
+      MUST ensure that, unless and until that check succeeds, all tokens (ID
+      Tokens and the access token) are disregarded and not used for any other
+      purpose.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.5.3.2
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\t\tslog.Error(\"oidc nonce mismatch\")\n\t\twriteError(w, r, http.StatusBadRequest, \"AUT003\", \"nonce mismatch\")\n\t\treturn"
+        with: "\t\tslog.Error(\"oidc nonce mismatch\")\n\t\twriteError(w, r, http.StatusBadRequest, \"AUT003\", \"nonce mismatch\")"
+
+  - id: state-or-nonce-when-pkce-is-absent
+    level: MUST
+    text: >-
+      If an authorization server does not support PKCE, state or nonce MUST be
+      used for CSRF protection.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.7.1
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\t\tName:     \"cetacean_auth_state\",\n\t\tValue:    state,"
+        with: "\t\tName:     \"cetacean_state\",\n\t\tValue:    state,"
+
+  - id: pkce-support-detectable
+    level: MUST
+    text: >-
+      The authorization server therefore MUST provide a way to detect their
+      support for PKCE.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.7.1
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\tCodeChallengeMethodsSupported:          []string{\"S256\"},"
+        with: "\t\tCodeChallengeMethodsSupported:          nil,"
+
+  - id: pkce-support-advertised-in-metadata
+    level: SHOULD
+    text: >-
+      Using Authorization Server Metadata according to [RFC8414] is
+      RECOMMENDED, but authorization servers MAY instead provide a
+      deployment-specific way to ensure or determine PKCE support.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.7.1
+
+  - id: code-injection-mitigated
+    level: MUST
+    text: >-
+      Therefore, authorization servers MUST mitigate this attack.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.8.2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif redirectURI != codeData.RedirectURI {"
+        with: "\tif false && redirectURI != codeData.RedirectURI {"
+
+  - id: code-challenge-bound-to-the-code
+    level: MUST
+    text: >-
+      An authorization server that supports PKCE MUST check whether a code
+      challenge is contained in the authorization request and bind this
+      information to the code that is issued; and when a code arrives at the
+      token endpoint, and there was a code_challenge in the authorization
+      request for which this code was issued, there must be a valid
+      code_verifier in the token request.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.8.2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
+        with: "\tif false && !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {"
+
+  - id: pkce-downgrade-refused
+    level: MUST
+    text: >-
+      Beyond this, to prevent PKCE downgrade attacks, the authorization server
+      MUST ensure that if there was no code_challenge in the authorization
+      request, a request to the token endpoint containing a code_verifier is
+      rejected.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.8.2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tif codeChallenge == \"\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\",\n\t\t\t\"code_challenge is required\")\n\t\treturn\n\t}\n\tif codeChallengeMethod != \"S256\" {"
+        with: "\tif false && codeChallenge == \"\" {\n\t\ts.redirectWithError(w, r, redirectURIRaw, state, \"invalid_request\",\n\t\t\t\"code_challenge is required\")\n\t\treturn\n\t}\n\tif codeChallenge != \"\" && codeChallengeMethod != \"S256\" {"
+
+  - id: client-exposes-no-open-redirector
+    level: MUST
+    text: >-
+      Clients MUST NOT expose open redirectors.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.11.1
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\tif len(s) > 1 && (s[1] == '/' || s[1] == '\\\\') {\n\t\treturn false\n\t}"
+        with: "\tif false && len(s) > 1 && (s[1] == '/' || s[1] == '\\\\') {\n\t\treturn false\n\t}"
+
+  - id: no-307-redirect
+    level: MUST
+    text: >-
+      Authorization servers that redirect a request that potentially contains
+      the user's credentials therefore MUST NOT use the HTTP 307 status code
+      for redirection.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.12
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusFound)"
+        with: "\thttp.Redirect(w, r, redirectURI.String(), http.StatusTemporaryRedirect)"
+
+  - id: credential-redirects-use-303
+    level: SHOULD
+    text: >-
+      If an HTTP redirection (and not, for example, JavaScript) is used for
+      such a request, the authorization server SHOULD use HTTP status code 303
+      (See Other).
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.12
+    deferred: >-
+      The authorization response redirect is 302 Found. It satisfies the MUST
+      NOT above — a 302 is not a 307 — and every browser turns the consent
+      POST into a GET on it, which is what 303 would spell out. Changing it is
+      safe but not free: a client matching on the status code would see a
+      value it has never been sent.
+
+  - id: refresh-tokens-bound-to-the-resource
+    level: MUST
+    text: >-
+      If refresh tokens are issued, those refresh tokens MUST be bound to the
+      scope and resource servers as consented by the resource owner.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.14.2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\tif resourceForm != \"\" &&\n\t\t\ts.resources.canonicalSpelling(resourceForm) !=\n\t\t\t\ts.resources.canonicalSpelling(bound.Resource) {"
+        with: "\t\tif false && resourceForm != \"\" &&\n\t\t\ts.resources.canonicalSpelling(resourceForm) !=\n\t\t\t\ts.resources.canonicalSpelling(bound.Resource) {"
+
+  - id: refresh-replay-detected
+    level: MUST
+    text: >-
+      Authorization servers MUST utilize one of these methods to detect
+      refresh token replay by malicious actors for public clients.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.14.2
+    mutants:
+      - file: internal/oauth/store.go
+        replace: "\tif grantID, isConsumed := s.consumed[oldHash]; isConsumed {"
+        with: "\tif grantID, isConsumed := s.consumed[oldHash]; isConsumed && false {"
+
+  - id: refresh-tokens-may-be-revoked-on-a-security-event
+    level: MAY
+    text: >-
+      Authorization servers MAY revoke refresh tokens automatically in case of
+      a security event.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.14.2
+
+  - id: refresh-tokens-expire-when-idle
+    level: SHOULD
+    text: >-
+      Refresh tokens SHOULD expire if the client has been inactive for some
+      time, i.e., the refresh token has not been used to obtain fresh access
+      tokens for some time.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.14.2
+
+  - id: sub-is-the-resource-owner
+    level: SHOULD
+    text: >-
+      In cases of access tokens obtained through grants where a resource owner
+      is involved, such as the authorization code grant, the value of "sub"
+      SHOULD correspond to the subject identifier of the resource owner.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.15
+
+  - id: client-id-not-chosen-by-the-client
+    level: SHOULD
+    text: >-
+      Authorization servers SHOULD NOT allow clients to influence their
+      client_id or any other claim that could cause confusion with a genuine
+      resource owner if a common namespace for client IDs and user identifiers
+      exists, such as in the sub claim example from [RFC9068] shown in
+      Section 4.15 above.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.15.1
+
+  - id: clickjacking-prevented
+    level: MUST
+    text: >-
+      Authorization servers MUST prevent clickjacking attacks.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.16
+    mutants:
+      - file: internal/oauth/consent.go
+        replace: "\tw.Header().Set(\"X-Frame-Options\", \"DENY\")"
+        with: "\tw.Header().Set(\"X-Frame-Options\", \"SAMEORIGIN\")"
+
+  - id: csp-used-against-framing
+    level: SHOULD
+    text: >-
+      In addition to those, authorization servers SHOULD also use Content
+      Security Policy (CSP) level 2 [W3C.CSP-2] or greater.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.16
+
+  - id: csp-combined-with-a-legacy-defence
+    level: SHOULD
+    text: >-
+      Because some user agents do not support [W3C.CSP-2], this technique
+      SHOULD be combined with others, including those described in [RFC6819],
+      unless such legacy user agents are explicitly unsupported by the
+      authorization server.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.16
+
+  - id: tokens-sender-constrained-and-audience-restricted
+    level: SHOULD
+    text: >-
+      Authorization servers therefore SHOULD ensure that access tokens are
+      sender-constrained and audience-restricted as described in the
+      following.
+    url: https://www.rfc-editor.org/rfc/rfc9700#section-4.10
+    deferred: >-
+      Half of it holds: every access token names the one resource it was
+      minted for, and a token presented to another is refused. Nothing binds a
+      token to the client instance that obtained it, so a leaked bearer token
+      works from anywhere. Closing that means mutual TLS (RFC 8705) or DPoP
+      (RFC 9449), neither of which the native clients this server exists for
+      would carry today.
+
+dismissed:
+  implementations-should-be-upgraded: >-
+    An instruction to the ecosystem, in the introduction.
+  redirect-uri-exact-string-matching: >-
+    §2.1 summarising §4.1.3, whose two sentences are registered separately —
+    one as redirect-uri-compared-as-strings, the other deferred as
+    loopback-ports-vary.
+  pkce-may-serve-as-csrf-protection: >-
+    A permission to lean on PKCE instead of state. The relying party carries
+    state on every authorization request and checks it on every callback, so
+    it never needs this.
+  mix-up-defense-required-across-servers: >-
+    Conditional on a client that can interact with more than one authorization
+    server. The relying party is configured with exactly one issuer, discovered
+    once at startup.
+  clients-should-take-a-mix-up-defense: >-
+    The lead-in to the list of defenses, under the same condition.
+  distinct-redirect-uris-may-identify-servers: >-
+    The fallback defense, offered when issuer identification is unavailable.
+    The relying party validates iss instead.
+  credentials-not-forwarded-on-a-redirect: >-
+    §2.1 summarising §4.12, whose status-code rules are registered as
+    no-307-redirect and deferred as credential-redirects-use-303.
+  implicit-grant-should-not-be-used: >-
+    The negative half of §2.1.2's instruction; the positive one is registered
+    as implicit-grant-not-used.
+  access-tokens-should-be-sender-constrained: >-
+    §2.2.1 summarising §4.10, where the divergence is recorded against
+    tokens-sender-constrained-and-audience-restricted.
+  privileges-restricted-to-the-minimum: >-
+    The umbrella §2.3's two concrete sentences implement — audience
+    restriction, registered, and restriction to resources and actions,
+    deferred.
+  scope-or-authorization-details-may-restrict-actions: >-
+    A permission to use scope or RFC 9396 authorization_details. This
+    deployment issues neither.
+  client-authentication-should-be-enforced: >-
+    Conditional on it being feasible to establish a process for issuing client
+    credentials. Registration here is open and unauthenticated by design, so
+    there is no such process: every client is public and a symmetric
+    token_endpoint_auth_method is refused outright.
+  asymmetric-client-authentication-recommended: >-
+    Constrains how client authentication is done. None is performed.
+  client-ids-should-not-be-influenced: >-
+    §2.6 summarising §4.15.1, registered there as
+    client-id-not-chosen-by-the-client.
+  end-to-end-tls-recommended: >-
+    Binds the transport between the client and the resource server, which the
+    deployment terminates — at a reverse proxy in the documented arrangement.
+  authorization-responses-not-sent-in-clear: >-
+    The response travels over the redirection URI, whose scheme the next
+    sentence constrains; that is registered as
+    http-redirect-uris-refused-except-loopback. The loopback exception this
+    document itself carves out is the only cleartext case that survives, and
+    it never leaves the user's machine.
+  in-browser-message-endpoints-verified: >-
+    Conditional on delivering the authorization response by postMessage. This
+    server answers with an HTTP redirect.
+  attacker-model-considered: >-
+    An instruction to the implementer, not a behaviour. What came of taking it
+    seriously is the rest of this file.
+  redirect-hosts-expose-no-open-redirectors: >-
+    Binds the web server hosting a client's redirection URI, and describes how
+    browsers reattach URL fragments.
+  fragments-may-be-pinned-and-code-preferred: >-
+    A server-side trick for stopping fragment reattachment, and a repeat of
+    §2.1.2's preference for the code response type.
+  signed-requests-may-excuse-the-redirect-check: >-
+    A permission conditional on RFC 9101 or RFC 9126, neither of which this
+    server accepts. The redirect URI is checked on every request.
+  clients-must-prevent-mix-up: >-
+    The obligation under the two-or-more-servers condition that does not hold
+    here.
+  clients-store-the-issuer-per-request: >-
+    Requires binding the issuer of each authorization request to the user
+    agent. With one configured issuer the relying party holds it for the
+    provider's lifetime instead, and compares the callback's iss against that.
+  distinct-redirect-uri-per-issuer: >-
+    The distinct-URI defense, which this relying party does not use.
+  distinct-redirect-uri-is-checked: >-
+    Part of the same unused defense.
+  distinct-redirect-uri-mismatch-aborts: >-
+    Part of the same unused defense.
+  distinct-redirect-uris-are-a-last-resort: >-
+    The document's own advice against the defense this relying party does not
+    use.
+  pkce-support-confirmed-before-relying-on-it: >-
+    Binds a client that leans on PKCE for CSRF protection. This one uses
+    state, and sends PKCE besides.
+  application-state-in-state-is-protected: >-
+    Conditional on carrying application state in the state parameter. The
+    relying party carries only an opaque random value; where to return the
+    user afterwards travels in its own cookie.
+  sender-constrained-tokens-prevent-replay: >-
+    §4.9.3 repeating §4.10's recommendation, deferred there.
+  audience-restriction-and-plaintext-handling: >-
+    Two instructions to the resource server. The audience half is registered
+    as wrong-audience-refused. Nothing here stores an access token to keep in
+    plaintext: they are stateless JWTs, verified on each request and written
+    to neither the state file nor the logs.
+  reverse-proxies-sanitize-inbound-headers: >-
+    Binds the reverse proxy. Which forwarding headers are believed at all is
+    server.trusted_proxies, a rule of this deployment rather than of this
+    document.
+  proxy-to-backend-link-is-protected: >-
+    Binds the link between the reverse proxy and this server.
+  refresh-token-issuance-follows-a-risk-assessment: >-
+    An instruction to the deployment, not a behaviour: whether refresh tokens
+    are issued at all is oauth.refresh_token_ttl, and which grant types a
+    client may register for is the DCR allow-list.
+  other-grants-may-replace-refresh-tokens: >-
+    Describes what a client does when refresh tokens are withheld.
+  encoded-grant-ids-need-integrity: >-
+    Conditional on encoding the grant into the refresh token value. The token
+    is an opaque random string; the grant it belongs to is looked up by hash
+    in the store, so there is nothing in the value to forge.
+  sub-identifies-the-client-without-an-owner: >-
+    Conditional on a grant with no resource owner. Only the authorization code
+    and refresh token grants are supported, and both have one.
+  client-and-owner-tokens-are-distinguishable: >-
+    Conditional on a common namespace for client IDs and user identifiers,
+    which §4.15.1's countermeasure avoids: a client_id is minted here and is
+    never a subject.
+  clients-may-allow-framing-by-another-origin: >-
+    A permission belonging to the client's redirection endpoint.
+  framing-origins-should-be-configurable: >-
+    Asks the server to let administrators configure allowed framing origins
+    per client. The consent page permits none, so there is no origin to
+    configure.
+  further-countermeasures-should-be-employed: >-
+    The closing restatement of the paragraph registered as
+    csp-combined-with-a-legacy-defence.
+  postmessage-origins-exact-matched: >-
+    Binds an authorization server that answers by postMessage.
+  postmessages-go-to-trusted-origins: >-
+    Binds an authorization server that answers by postMessage.
+  postmessage-wildcards-refused: >-
+    Binds an authorization server that answers by postMessage.
+  clients-reject-injected-in-browser-messages: >-
+    Binds a client receiving an authorization response by postMessage.
+  clients-exact-match-the-initiator-origin: >-
+    Binds a client receiving an authorization response by postMessage.
+  in-browser-flows-carry-the-same-protections: >-
+    Conditional on using in-browser communication at all, which neither role
+    here does.

@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 type stubVerifier struct {
@@ -89,6 +91,11 @@ func serve(
 // provider — judged there it would be measured against weaker evidence, or
 // answered with a login page a non-browser client cannot use.
 func TestTheVerifiersVerdictDecidesWhoJudgesTheRequest(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc6750/challenge-on-missing-or-invalid-credentials",
+		"oauth/rfc6750/invalid-token-is-401",
+	)
+
 	const resource = "https://cetacean.test"
 
 	fromToken := &Identity{Subject: "alice", Provider: "oauth"}
@@ -228,6 +235,11 @@ func TestWithoutABearerTokenNothingChanges(t *testing.T) {
 // from. That only works if the challenge is there when no credential was sent —
 // which is the case the provider answers, not the verifier.
 func TestAColdCallIsToldWhereATokenComesFrom(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc6750/challenge-on-missing-or-invalid-credentials",
+		"oauth/rfc6750/no-error-code-without-a-credential",
+	)
+
 	const resource = "https://cetacean.test"
 
 	// A provider that refuses with its own scheme, as cert and oidc modes do.

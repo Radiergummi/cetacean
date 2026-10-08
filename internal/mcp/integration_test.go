@@ -349,10 +349,10 @@ func TestMCPIntegration_FindToolFiltersByACL(t *testing.T) {
 	}
 }
 
-// TestMCPIntegration_UnauthorizedHeaderUsesRFC7230Quoting confirms the 401
-// emitted on a missing bearer follows RFC 7230 quoted-string rules (covers
+// TestMCPIntegration_UnauthorizedHeaderUsesRFC9110Quoting confirms the 401
+// emitted on a missing bearer follows RFC 9110 quoted-string rules (covers
 // M-10 at HTTP level).
-func TestMCPIntegration_UnauthorizedHeaderUsesRFC7230Quoting(t *testing.T) {
+func TestMCPIntegration_UnauthorizedHeaderUsesRFC9110Quoting(t *testing.T) {
 	handler, _ := newOAuthIntegrationServer(t, cache.New(nil), nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))

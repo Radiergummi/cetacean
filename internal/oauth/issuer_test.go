@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // runConsent drives the full authorize flow — GET the consent page for its CSRF
@@ -50,6 +52,11 @@ func runConsent(t *testing.T, s *Server, decision string, overrides url.Values) 
 // several authorization servers configured cannot tell which one issued the
 // code it just received, which is what enables a mix-up attack.
 func TestAuthorizeResponseCarriesIssuer(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9207/iss-in-every-authorization-response",
+		"oauth/rfc9207/metadata-issuer-matches-the-iss-parameter",
+	)
+
 	s := newTestServer(t)
 
 	location := runConsent(t, s, "approve", nil)
@@ -71,6 +78,11 @@ func TestAuthorizeResponseCarriesIssuer(t *testing.T) {
 // redirects too, for the same reason: the client must be able to attribute the
 // response before acting on it.
 func TestAuthorizeErrorResponseCarriesIssuer(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9207/iss-in-every-authorization-response",
+		"oauth/rfc9207/metadata-issuer-matches-the-iss-parameter",
+	)
+
 	s := newTestServer(t)
 
 	location := runConsent(t, s, "deny", nil)

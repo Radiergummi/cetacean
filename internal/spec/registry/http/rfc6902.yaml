@@ -1,0 +1,121 @@
+source: RFC 6902
+title: JavaScript Object Notation (JSON) Patch
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc6902
+
+inventory:
+  from: >-
+    RFC 6902 §4 through §5 in full — the operations and how a failure is
+    handled. §2 is the RFC 2119 boilerplate; §3 and §6 through §8 carry no
+    keyword. This deployment applies patches to a flat string map, which is
+    what a config's or a secret's labels are.
+  count: 18
+
+requirements:
+  - id: op-member-present
+    level: MUST
+    text: >-
+      Operation objects MUST have exactly one "op" member, whose value
+      indicates the operation to perform.
+    url: https://www.rfc-editor.org/rfc/rfc6902#section-4
+
+  - id: op-is-one-of-six
+    level: MUST
+    text: >-
+      Its value MUST be one of "add", "remove", "replace", "move", "copy", or
+      "test"; other values are errors.
+    url: https://www.rfc-editor.org/rfc/rfc6902#section-4
+    deferred: >-
+      An unknown op is an error, as it should be, but so are "move" and "copy",
+      which are not. The target is a flat string map, where a JSON Pointer
+      addresses one key and has no children to move a value between; supporting
+      them would mean inventing a meaning the RFC does not give them for this
+      shape. Refused explicitly rather than silently ignored.
+
+  - id: path-member-present
+    level: MUST
+    text: >-
+      Additionally, operation objects MUST have exactly one "path" member.
+    url: https://www.rfc-editor.org/rfc/rfc6902#section-4
+
+  - id: add-carries-a-value
+    level: MUST
+    text: >-
+      The operation object MUST contain a "value" member whose content
+      specifies the value to be added.
+    url: https://www.rfc-editor.org/rfc/rfc6902#section-4.1
+
+  - id: remove-target-exists
+    level: MUST
+    text: >-
+      The target location MUST exist for the operation to be successful.
+    url: https://www.rfc-editor.org/rfc/rfc6902#section-4.2
+
+  - id: replace-carries-a-value
+    level: MUST
+    text: >-
+      The operation object MUST contain a "value" member whose content
+      specifies the replacement value.
+    url: https://www.rfc-editor.org/rfc/rfc6902#section-4.3
+
+  - id: replace-target-exists
+    level: MUST
+    text: >-
+      The target location MUST exist for the operation to be successful.
+    url: https://www.rfc-editor.org/rfc/rfc6902#section-4.3
+    mutants:
+      - file: internal/api/jsonpatch.go
+        replace: "\t\tcase \"replace\":\n\t\t\tif _, ok := result[key]; !ok {"
+        with: "\t\tcase \"replace\":\n\t\t\tif _, ok := result[key]; !ok && false {"
+
+  - id: test-carries-a-value
+    level: MUST
+    text: >-
+      The operation object MUST contain a "value" member that conveys the value
+      to be compared to the target location's value.
+    url: https://www.rfc-editor.org/rfc/rfc6902#section-4.6
+
+  - id: test-compares-equal
+    level: MUST
+    text: >-
+      The target location MUST be equal to the "value" value for the operation
+      to be considered successful.
+    url: https://www.rfc-editor.org/rfc/rfc6902#section-4.6
+    mutants:
+      - file: internal/api/jsonpatch.go
+        replace: "\t\t\tif v != op.Value {"
+        with: "\t\t\tif v != op.Value && false {"
+
+  - id: failure-applies-nothing
+    level: SHOULD
+    text: >-
+      If a normative requirement is violated by a JSON Patch document, or if an
+      operation is not successful, evaluation of the JSON Patch document SHOULD
+      terminate and application of the entire patch document SHALL NOT be
+      deemed successful.
+    url: https://www.rfc-editor.org/rfc/rfc6902#section-5
+    mutants:
+      - file: internal/api/jsonpatch.go
+        replace: "\tresult := make(map[string]string, len(m))\n\tmaps.Copy(result, m)"
+        with: "\tresult := make(map[string]string, len(m))\n\tmaps.Copy(result, m)\n\tresult = m"
+
+dismissed:
+  undefined-members-ignored: >-
+    A member this deployment does not model is dropped by encoding/json before
+    applyJSONPatch sees the operation, which is what "ignored" asks for.
+  add-target-references-a-valid-location: >-
+    The three target shapes an add may name — an object member, an array
+    element, or the root. A flat string map has only the first.
+  add-array-index-within-bounds: >-
+    Constrains an array index. The target is a string map with no arrays in it.
+  move-carries-a-from: >-
+    Constrains the "move" operation, which this deployment refuses — see
+    op-is-one-of-six.
+  move-from-exists: >-
+    Constrains "move", which this deployment refuses.
+  move-from-is-not-a-prefix-of-path: >-
+    Constrains "move" between nested locations, which a flat map does not have.
+  copy-carries-a-from: >-
+    Constrains the "copy" operation, which this deployment refuses.
+  copy-from-exists: >-
+    Constrains "copy", which this deployment refuses.

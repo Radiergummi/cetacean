@@ -9,6 +9,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestSetAllowList(t *testing.T) {
@@ -200,6 +202,10 @@ func TestSetAllow_DifferentResourceTypes(t *testing.T) {
 }
 
 func TestSetAllow_AcceptPatch_ServiceFullWrite(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc5789/accept-patch-is-advertised",
+	)
+
 	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/services/webapp", nil)

@@ -152,6 +152,25 @@ func TestSessionCodecExpired(t *testing.T) {
 	}
 }
 
+// A session's expiry is its first invalid second, not its last valid one.
+func TestSessionCodecExpiresAtItsExpiry(t *testing.T) {
+	codec := NewSessionCodec()
+	issued := time.Unix(1_700_000_000, 0)
+	codec.now = func() time.Time { return issued }
+
+	w := httptest.NewRecorder()
+	codec.Set(w, &Identity{Subject: "user-1", Provider: "oidc"}, time.Hour)
+
+	codec.now = func() time.Time { return issued.Add(time.Hour) }
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(w.Result().Cookies()[0])
+
+	if _, err := codec.Get(req); err == nil {
+		t.Fatal("a session read at its expiry was accepted")
+	}
+}
+
 func TestSessionCodecNotYetExpired(t *testing.T) {
 	codec := NewSessionCodec()
 	id := &Identity{Subject: "user-1", Provider: "oidc"}

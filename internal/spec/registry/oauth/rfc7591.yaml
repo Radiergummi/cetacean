@@ -1,0 +1,414 @@
+source: RFC 7591
+title: OAuth 2.0 Dynamic Client Registration Protocol
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc7591
+
+inventory:
+  from: >-
+    RFC 7591 in full, less §1.1's RFC 2119 boilerplate and the OPTIONAL that
+    appears inside §1.3's protocol-flow figure rather than in a clause. The
+    per-field statements in §2 are dismissed rather than excluded: this
+    endpoint accepts six metadata fields and a registration request may still
+    carry any of the others, so each one is accounted for where it stands.
+  count: 93
+
+requirements:
+  - id: metadata-fields-are-optional
+    level: MAY
+    text: >-
+      The implementation and use of all client metadata fields is OPTIONAL,
+      unless stated otherwise.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-2
+
+  - id: redirect-uris-metadata-supported
+    level: MUST
+    text: >-
+      Authorization servers that support dynamic registration for
+      redirect-based flows MUST implement support for this metadata value.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-2
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\t\tRedirectURIs:            req.RedirectURIs,"
+        with: "\t\tRedirectURIs:            nil,"
+
+  - id: unknown-metadata-is-ignored
+    level: MUST
+    text: >-
+      The authorization server MUST ignore any client metadata sent by the
+      client that it does not understand (for instance, by silently removing
+      unknown metadata from the client's registration record during
+      processing).
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-2
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\tif err := json.NewDecoder(r.Body).Decode(&req); err != nil {"
+        with: "\tdec := json.NewDecoder(r.Body)\n\tdec.DisallowUnknownFields()\n\tif err := dec.Decode(&req); err != nil {"
+
+  - id: inconsistent-registration-is-refused
+    level: SHOULD
+    text: >-
+      As such, a server supporting these fields SHOULD take steps to ensure
+      that a client cannot register itself into an inconsistent state, for
+      example, by returning an "invalid_client_metadata" error response to an
+      inconsistent registration request.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-2.1
+
+  - id: registration-accepts-json-post
+    level: MUST
+    text: >-
+      The client registration endpoint MUST accept HTTP POST messages with
+      request parameters encoded in the entity body using the
+      "application/json" format.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\tmux.HandleFunc(\"POST \"+basePath+\"/oauth/register\", s.HandleRegister)"
+        with: "\t\tmux.HandleFunc(\"PUT \"+basePath+\"/oauth/register\", s.HandleRegister)"
+
+  - id: registration-endpoint-requires-tls
+    level: MUST
+    text: >-
+      The client registration endpoint MUST be protected by a transport-layer
+      security mechanism, as described in Section 5.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3
+    deferred: >-
+      The handler registers a client over whatever transport it was reached
+      on. TLS is a deployment choice — server.tls_cert and server.tls_key
+      decide it in main.go — and refusing a plaintext request here would break
+      the loopback development setup and every deployment that terminates TLS
+      at a reverse proxy, which is the documented arrangement. Enforcing it
+      means knowing whether the hop in front of us was encrypted, which is
+      what the Forwarded proto this deployment does not trust would tell us.
+
+  - id: open-registration-allowed
+    level: SHOULD
+    text: >-
+      To support open registration and facilitate wider interoperability, the
+      client registration endpoint SHOULD allow registration requests with no
+      authorization (which is to say, with no initial access token in the
+      request).
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3
+
+  - id: registration-may-be-rate-limited
+    level: MAY
+    text: >-
+      These requests MAY be rate-limited or otherwise limited to prevent a
+      denial-of-service attack on the client registration endpoint.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3
+
+  - id: defaults-may-be-provisioned
+    level: MAY
+    text: >-
+      The authorization server MAY provision default values for any items
+      omitted in the client metadata.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3.1
+
+  - id: software-statement-may-be-ignored
+    level: MAY
+    text: >-
+      The authorization server MAY ignore the software statement if it does
+      not support this feature.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3.1.1
+
+  - id: response-may-carry-extension-fields
+    level: MAY
+    text: >-
+      The response MAY contain additional fields as specified by extensions to
+      this specification.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3.2.1
+
+  - id: client-id-required
+    level: MUST
+    text: >-
+      REQUIRED. OAuth 2.0 client identifier string.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3.2.1
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\tclientID := \"cetacean-\" + generateOpaqueToken()"
+        with: "\tclientID := \"\""
+
+  - id: client-id-unique-per-client
+    level: SHOULD
+    text: >-
+      It SHOULD NOT be currently valid for any other registered client, though
+      an authorization server MAY issue the same client identifier to multiple
+      instances of a registered client at its discretion.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3.2.1
+
+  - id: client-id-issued-at-optional
+    level: MAY
+    text: >-
+      OPTIONAL. Time at which the client identifier was issued. The time is
+      represented as the number of seconds from 1970-01-01T00:00:00Z as
+      measured in UTC until the date/time of issuance.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3.2.1
+
+  - id: all-registered-metadata-returned
+    level: MUST
+    text: >-
+      Additionally, the authorization server MUST return all registered
+      metadata about this client, including any fields provisioned by the
+      authorization server itself.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3.2.1
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\t\tApplicationType:         applicationType,"
+        with: "\t\tApplicationType:         \"\","
+
+  - id: error-code-required
+    level: MUST
+    text: >-
+      REQUIRED. Single ASCII error code string.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3.2.2
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\t_ = json.NewEncoder(w).Encode(dcrErrorResponse{Error: code, ErrorDescription: desc})"
+        with: "\t_ = json.NewEncoder(w).Encode(dcrErrorResponse{ErrorDescription: desc})"
+
+  - id: error-description-optional
+    level: MAY
+    text: >-
+      OPTIONAL. Human-readable ASCII text description of the error used for
+      debugging.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-3.2.2
+
+  - id: redirect-uris-must-be-registered
+    level: MUST
+    text: >-
+      For clients that use redirect-based grant types such as
+      "authorization_code" and "implicit", authorization servers MUST require
+      clients to register their redirection URI values.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-5
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\tif len(req.RedirectURIs) == 0 {"
+        with: "\tif false && len(req.RedirectURIs) == 0 {"
+
+  - id: redirect-uri-forms-are-limited
+    level: MUST
+    text: >-
+      Additionally, in order to prevent hijacking of the return values of the
+      redirection, registered redirection URI values MUST be one of: a remote
+      web site protected by TLS; a web site hosted on the local machine using
+      an HTTP URI; a non-HTTP application-specific URL that is available only
+      to the client application.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-5
+    mutants:
+      - file: internal/oauth/dcr.go
+        replace: "\tif u.Scheme == \"https\" {\n\t\treturn true\n\t}\n\treturn isLoopbackURI(rawURI)"
+        with: "\tif u.Scheme == \"https\" || u.Scheme == \"http\" {\n\t\treturn true\n\t}\n\treturn isLoopbackURI(rawURI)"
+
+  - id: public-clients-may-register
+    level: MAY
+    text: >-
+      Public clients MAY register with an authorization server using this
+      protocol, if the authorization server's policy allows them.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-5
+
+  - id: metadata-is-self-asserted
+    level: MUST
+    text: >-
+      Unless used as a claim in a software statement, the authorization server
+      MUST treat all client metadata as self-asserted.
+    url: https://www.rfc-editor.org/rfc/rfc7591#section-5
+    mutants:
+      - file: internal/oauth/consent.go
+        replace: "{{if .Verified}}<span class=\"badge badge-verified\">Verified</span>{{else}}<span class=\"badge badge-self\">Self-registered</span>{{end}}"
+        with: "<span class=\"badge badge-verified\">Verified</span>"
+
+dismissed:
+  clients-register-their-redirect-uris: >-
+    RFC 6749's rule restated as a duty of the client. What binds this server
+    is §5's counterpart, registered as redirect-uris-must-be-registered.
+  grant-types-match-the-token-endpoint: >-
+    Constrains the value a client puts in grant_types against what it will
+    later send to the token endpoint. The server's side of that consistency is
+    §2.1's SHOULD, registered as inconsistent-registration-is-refused.
+  other-grant-type-values-may-be-allowed: >-
+    A permission to accept grant types from the OAuth extension process. This
+    server accepts authorization_code and refresh_token and refuses the rest.
+  response-types-match-the-authorization-endpoint: >-
+    The response_types counterpart of the grant_types rule above, and bound
+    the same way.
+  other-response-type-values-may-be-allowed: >-
+    A permission to accept response types from the extension process. This
+    server accepts code and refuses the rest.
+  client-id-may-be-displayed-when-unnamed: >-
+    A permission to fall back to the raw client_id when client_name is
+    omitted. The consent page displays the name it was given and puts nothing
+    in its place; the client_id travels in a hidden form field, unshown.
+  client-name-should-always-be-sent: >-
+    Binds the client composing the request.
+  client-name-may-be-internationalized: >-
+    Permits language-tagged variants of client_name. This endpoint reads the
+    untagged member only; a tagged one is unknown metadata and ignored.
+  client-uri-should-be-displayed-clickable: >-
+    Binds a server that accepts client_uri. This one does not: the field is
+    not in dcrRequest and never reaches the consent page.
+  client-uri-should-always-be-sent: >-
+    Binds the client composing the request.
+  client-uri-points-to-a-valid-web-page: >-
+    Constrains a field this endpoint does not accept.
+  client-uri-may-be-internationalized: >-
+    Permits language-tagged variants of a field this endpoint does not accept.
+  logo-uri-should-be-displayed: >-
+    Binds a server that accepts logo_uri. This one does not, and the consent
+    page renders no client-supplied image — which is most of §5's
+    impersonation surface removed rather than mitigated.
+  logo-uri-points-to-a-valid-image: >-
+    Constrains a field this endpoint does not accept.
+  logo-uri-may-be-internationalized: >-
+    Permits language-tagged variants of a field this endpoint does not accept.
+  default-scopes-may-be-registered: >-
+    A permission to fill in scope when a client omits it. This deployment has
+    no scopes: a grant carries the caller's own access, bounded by the
+    resource it names, and scope is neither read nor issued.
+  contacts-may-be-shared-with-end-users: >-
+    A permission covering a field this endpoint does not accept.
+  tos-uri-should-be-displayed: >-
+    Binds a server that accepts tos_uri. This one does not.
+  tos-uri-points-to-a-valid-web-page: >-
+    Constrains a field this endpoint does not accept.
+  tos-uri-may-be-internationalized: >-
+    Permits language-tagged variants of a field this endpoint does not accept.
+  policy-uri-should-be-displayed: >-
+    Binds a server that accepts policy_uri. This one does not.
+  policy-uri-points-to-a-valid-web-page: >-
+    Constrains a field this endpoint does not accept.
+  policy-uri-may-be-internationalized: >-
+    Permits language-tagged variants of a field this endpoint does not accept.
+  jwks-uri-points-to-a-valid-jwk-set: >-
+    Constrains a field this endpoint does not accept. Client keys would only
+    matter for an authentication method this server refuses outright.
+  jwks-uri-excludes-jwks: >-
+    A mutual exclusion between two fields this endpoint does not accept.
+  jwks-is-a-valid-jwk-set: >-
+    Constrains a field this endpoint does not accept.
+  jwks-excludes-jwks-uri: >-
+    The same mutual exclusion stated under the other field.
+  software-id-is-stable-across-instances: >-
+    Constrains the value a client chooses for a field this endpoint does not
+    accept.
+  software-id-is-stable-across-versions: >-
+    The same stability rule, stated again in the same paragraph.
+  software-version-changes-on-update: >-
+    Constrains the value a client chooses for a field this endpoint does not
+    accept.
+  metadata-values-may-be-rejected-or-defaulted: >-
+    The permission §2.1 turns into an obligation. What this server does with
+    it — refuse an inconsistent request with invalid_client_metadata — is
+    registered as inconsistent-registration-is-refused.
+  software-statement-claims-take-precedence: >-
+    Conditional on trusting a software statement. This server supports none,
+    so no claim of one ever reaches a metadata value.
+  extensions-document-grant-response-correspondence: >-
+    Binds whoever writes an extension to this document.
+  human-readable-metadata-may-be-multilingual: >-
+    Permits the language-tagged form of every human-readable field. The one
+    such field this endpoint accepts, client_name, is read untagged.
+  language-tags-are-spelled-as-registered: >-
+    Binds whoever composes a language-tagged member name.
+  language-tags-are-read-case-insensitively: >-
+    Binds a server that reads language-tagged member names. This one reads
+    none: a tagged client_name is unknown metadata and is ignored.
+  any-localized-name-may-be-displayed: >-
+    A permission to choose among localized names. Only one name is ever held.
+  untagged-values-are-used-as-is: >-
+    Every client_name here is untagged, and the consent page renders it as
+    given — HTML-escaped by the template, which changes no character of the
+    value it displays. The rule is satisfied by having no alternative, not by
+    a decision of ours.
+  untagged-fields-should-accompany-tagged-ones: >-
+    An interoperability recommendation to clients and to servers that accept
+    tagged fields.
+  software-statement-is-signed-with-an-issuer: >-
+    Constrains a software statement this server neither reads nor issues.
+  software-statement-should-use-rs256: >-
+    Constrains the signing of a software statement this server does not read.
+  software-statement-should-carry-software-id: >-
+    Constrains the contents of a software statement this server does not read.
+  software-statement-may-serve-as-a-client-id: >-
+    A permission to skip registration entirely and accept a software statement
+    as the client identifier. This server issues every client_id it honours.
+  registration-endpoint-may-require-an-access-token: >-
+    A permission to gate registration behind an initial access token. This
+    deployment takes the open-registration option instead, registered as
+    open-registration-allowed.
+  metadata-may-arrive-in-a-software-statement: >-
+    Binds the client choosing how to present its metadata.
+  software-statement-values-take-precedence: >-
+    Conditional on supporting software statements, which this server does not:
+    §3.1.1's permission to ignore them is what it takes, registered as
+    software-statement-may-be-ignored.
+  software-statement-member-is-optional: >-
+    Declares the member optional and binds nothing further.
+  client-secret-optional: >-
+    Declares the member optional. Only public clients register here — a
+    symmetric token_endpoint_auth_method is refused — so no secret is minted.
+  client-secret-is-unique: >-
+    Conditional on issuing a client_secret, which this server never does.
+  client-secret-expiry-required-with-a-secret: >-
+    Conditional on issuing a client_secret, which this server never does.
+  requested-values-may-be-replaced: >-
+    §3.2.1 restating §2's permission to substitute values. This server refuses
+    a value it will not honour rather than quietly replacing it.
+  software-statement-returned-unmodified: >-
+    Conditional on a software statement having been used, which cannot happen
+    here.
+  software-statement-values-echoed-at-top-level: >-
+    The same condition: no software statement is read, so none contributes a
+    metadata value to echo.
+  unknown-error-members-are-ignored: >-
+    Binds the client reading the error response.
+  invalid-metadata-may-be-substituted: >-
+    A note attached to the invalid_client_metadata code, restating the
+    permission to substitute values rather than refuse.
+  metadata-names-are-registered-case-distinctly: >-
+    Binds the designated expert reviewing an IANA registration.
+  auth-method-names-are-registered-case-distinctly: >-
+    The same instruction, for the token endpoint authentication method
+    registry.
+  transport-security-is-required-for-registration: >-
+    §5 restating §3's transport requirement. The divergence is recorded once,
+    against registration-endpoint-requires-tls.
+  tls-1-2-is-supported: >-
+    The minimum version is crypto/tls's, not a check of ours: Go's server
+    negotiates TLS 1.2 and 1.3 and refuses anything older by default.
+  clients-verify-the-server-certificate: >-
+    Binds the client's TLS stack.
+  registrations-may-expire: >-
+    A permission to expire registrations after a period of time. This
+    deployment bounds the registry by count instead, evicting the oldest entry
+    when oauth.dcr_max_clients is reached, which is not what this permits.
+  grant-types-may-need-separate-registrations: >-
+    A permission to split a client across registrations per grant type.
+  implicit-and-code-may-be-disallowed-together: >-
+    A permission that presupposes supporting the implicit grant. This server
+    accepts response_type=code only, so the pair cannot arise.
+  implicit-and-code-may-be-refused-as-a-pair: >-
+    The same permission, restated as the paragraph's conclusion.
+  the-whole-request-is-weighed-against-impersonation: >-
+    Names the mitigations its neighbours spell out — the host check over
+    logo_uri, client_uri, tos_uri and policy_uri, and duplicate detection by
+    software_id. This endpoint accepts none of those fields, so there is no
+    wider request to weigh; what is left is validated where it is read.
+  display-uris-should-share-the-redirect-host: >-
+    A check over four fields this endpoint does not accept.
+  users-should-be-protected-from-linked-content: >-
+    Binds a server that renders client-supplied URLs on the authorization
+    page. This one renders none.
+  clients-may-present-both-metadata-forms: >-
+    Binds the client composing the request.
+  signed-statement-beats-the-plain-json-object: >-
+    Conditional on a valid software statement, which this server never reads.
+  the-full-request-decides-whether-to-honour-it: >-
+    Enumerates the software statement and the initial access token alongside
+    the JSON metadata. Neither of the first two is accepted here, so the JSON
+    object is the full request.
+  duplicate-registrations-should-be-suspect: >-
+    Rests on software_id and software_version, which this endpoint does not
+    accept. Nothing here can tell two instances of one client apart, and
+    treating a repeat registration as suspect would break the native apps
+    this server exists for, which re-register on each install.
+  client-secrets-are-not-shared-between-instances: >-
+    Conditional on issuing a client_secret, which this server never does.

@@ -6,9 +6,19 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestProtectedResourceMetadataEndpoint(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/rfc9728/resource-required",
+		"oauth/rfc9728/document-at-well-known-url",
+		"oauth/rfc9728/response-is-200-json",
+		"oauth/rfc9728/resource-matches-the-retrieval-url",
+		"oauth/rfc9728/resource-name-recommended",
+	)
+
 	s := newTestServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource"+
@@ -25,8 +35,10 @@ func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 		t.Errorf("expected application/json Content-Type, got %q", ct)
 	}
 
+	body := rec.Body.Bytes()
+
 	var doc protectedResourceMetadata
-	if err := json.NewDecoder(rec.Body).Decode(&doc); err != nil {
+	if err := json.Unmarshal(body, &doc); err != nil {
 		t.Fatalf("decode PRM: %v", err)
 	}
 
@@ -38,6 +50,10 @@ func TestProtectedResourceMetadataEndpoint(t *testing.T) {
 	}
 	if len(doc.BearerMethodsSupported) == 0 || doc.BearerMethodsSupported[0] != "header" {
 		t.Errorf("bearer_methods_supported = %v, want [header]", doc.BearerMethodsSupported)
+	}
+
+	if doc.ResourceName != "Cetacean Resource" {
+		t.Errorf("resource_name = %q, want the resource's display name", doc.ResourceName)
 	}
 }
 

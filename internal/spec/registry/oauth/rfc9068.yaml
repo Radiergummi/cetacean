@@ -1,0 +1,243 @@
+source: RFC 9068
+title: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc9068
+
+inventory:
+  from: >-
+    RFC 9068 §2.1's four statements about the header, §2.2's seven REQUIRED
+    claims, and §4's thirteen, which this server is subject to as its own
+    resource server.
+  count: 24
+
+requirements:
+  - id: tokens-are-signed
+    level: MUST
+    text: >-
+      JWT access tokens MUST be signed.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-2.1
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\treturn signingInput + \".\" + sig, nil"
+        with: "\t_ = sig\n\n\treturn signingInput + \".\", nil"
+
+  - id: alg-is-not-none
+    level: MUST
+    text: >-
+      JWT access tokens MUST NOT use "none" as the signing algorithm.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-2.1
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif hdr.Alg != \"ES256\" {"
+        with: "\tif hdr.Alg != \"ES256\" && false {"
+
+  - id: rs256-among-supported-algorithms
+    level: MUST
+    text: >-
+      Authorization servers and resource servers conforming to this
+      specification MUST include RS256 (as defined in [RFC7518]) among their
+      supported signature algorithms.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-2.1
+    deferred: >-
+      This server issues and accepts ES256 alone. RS256 would mean accepting
+      RSA signatures on tokens it minted with an EC key, and the asymmetric
+      signing design chose one curve deliberately.
+
+  - id: typ-is-at-jwt
+    level: MUST
+    text: >-
+      JWT access tokens MUST include this media type in the "typ" header
+      parameter to explicitly declare that the JWT represents an access token
+      complying with this profile.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-2.1
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\t\t\t`{\"alg\":\"ES256\",\"kid\":\"` + km.kid + `\",\"typ\":\"` + accessTokenType + `\"}`,"
+        with: "\t\t\t`{\"alg\":\"ES256\",\"kid\":\"` + km.kid + `\",\"typ\":\"JWT\"}`,"
+
+  - id: claim-iss-required
+    level: MUST
+    text: >-
+      iss REQUIRED - as defined in Section 4.1.1 of [RFC7519].
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\t\tIssuer:    t.Issuer,"
+        with: "\t\tIssuer:    \"\","
+
+  - id: claim-exp-required
+    level: MUST
+    text: >-
+      exp REQUIRED - as defined in Section 4.1.4 of [RFC7519].
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\t\tExpiresAt: now.Add(ttl).Unix(),"
+        with: "\t\tExpiresAt: 0,"
+
+  - id: claim-aud-required
+    level: MUST
+    text: >-
+      aud REQUIRED - as defined in Section 4.1.3 of [RFC7519].
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\t\tAudience:  audience{aud},"
+        with: "\t\tAudience:  audience{\"\"},"
+
+  - id: claim-sub-required
+    level: MUST
+    text: >-
+      sub REQUIRED - as defined in Section 4.1.2 of [RFC7519].
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\t\tSubject:   claims.Subject,"
+        with: "\t\tSubject:   \"\","
+      - file: internal/oauth/jwt.go
+        replace: "\tif payload.Subject == \"\" || payload.ClientID == \"\" {"
+        with: "\tif payload.ClientID == \"\" {"
+
+  - id: claim-client-id-required
+    level: MUST
+    text: >-
+      client_id REQUIRED - as defined in Section 4.3 of [RFC8693].
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\t\tClientID:  claims.ClientID,"
+        with: "\t\tClientID:  \"\","
+      - file: internal/oauth/jwt.go
+        replace: "\tif payload.Subject == \"\" || payload.ClientID == \"\" {"
+        with: "\tif payload.Subject == \"\" {"
+
+  - id: claim-iat-required
+    level: MUST
+    text: >-
+      iat REQUIRED - as defined in Section 4.1.6 of [RFC7519]. This claim
+      identifies the time at which the JWT access token was issued.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\t\tIssuedAt:  now.Unix(),"
+        with: "\t\tIssuedAt:  0,"
+
+  - id: claim-jti-required
+    level: MUST
+    text: >-
+      jti REQUIRED - as defined in Section 4.1.7 of [RFC7519].
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\t\tJTIID:     base64.RawURLEncoding.EncodeToString(jtiBytes),"
+        with: "\t\tJTIID:     \"\","
+
+  # § 4, validating
+
+  - id: as-advertises-keys-and-issuer
+    level: SHOULD
+    text: >-
+      Authorization servers SHOULD use OAuth 2.0 Authorization Server Metadata
+      [RFC8414] to advertise to resource servers their signing keys via
+      "jwks_uri" and what "iss" claim value to expect via the "issuer" metadata
+      value.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+
+  - id: discovery-documents-agree
+    level: MUST
+    text: >-
+      If an authorization server supports both OAuth 2.0 Authorization Server
+      Metadata and OpenID Connect discovery, the values provided MUST be
+      consistent across the two publication methods.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+
+  - id: typ-verified-on-receipt
+    level: MUST
+    text: >-
+      The resource server MUST verify that the "typ" header value is "at+jwt"
+      or "application/at+jwt" and reject tokens carrying any other value.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif !strings.EqualFold(hdr.Typ, accessTokenType) &&"
+        with: "\tif false && !strings.EqualFold(hdr.Typ, accessTokenType) &&"
+
+  - id: iss-exactly-matches
+    level: MUST
+    text: >-
+      The issuer identifier for the authorization server (which is typically
+      obtained during discovery) MUST exactly match the value of the "iss"
+      claim.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+    # The second mutant is the one "exactly" is about. An issuer identifier is
+    # a URL, and only its scheme and host are case-insensitive; a path that
+    # differs by case names a different authorization server.
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif payload.Issuer != t.Issuer {"
+        with: "\tif payload.Issuer != t.Issuer && false {"
+      - file: internal/oauth/jwt.go
+        replace: "\tif payload.Issuer != t.Issuer {"
+        with: "\tif !strings.EqualFold(payload.Issuer, t.Issuer) {"
+
+  - id: aud-names-this-resource
+    level: MUST
+    text: >-
+      The resource server MUST validate that the "aud" claim contains a
+      resource indicator value corresponding to an identifier the resource
+      server expects for itself. The JWT access token MUST be rejected if "aud"
+      does not contain a resource indicator of the current resource server as a
+      valid audience.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif !slices.Contains(payload.Audience, aud) {"
+        with: "\tif !slices.Contains(payload.Audience, aud) && false {"
+
+  - id: signature-validated-with-declared-alg
+    level: MUST
+    text: >-
+      The resource server MUST validate the signature of all incoming JWT
+      access tokens according to [RFC7515] using the algorithm specified in the
+      JWT "alg" Header Parameter. The resource server MUST reject any JWT in
+      which the value of "alg" is "none". The resource server MUST use the keys
+      provided by the authorization server.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif !verifyES256(&t.signer.PublicKey, parts[0]+\".\"+parts[1], parts[2]) {"
+        with: "\tif false && !verifyES256(&t.signer.PublicKey, parts[0]+\".\"+parts[1], parts[2]) {"
+
+  - id: current-time-before-exp
+    level: MUST
+    text: >-
+      The current time MUST be before the time represented by the "exp" claim.
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif time.Unix(payload.ExpiresAt, 0).Before(time.Now()) {"
+        with: "\tif time.Unix(payload.ExpiresAt, 0).Before(time.Now()) && false {"
+
+  - id: failure-answers-invalid-token
+    level: MUST
+    text: >-
+      In case of any failure in the validation checks listed above, the
+      authorization server response MUST include the error code
+      "invalid_token".
+    url: https://www.rfc-editor.org/rfc/rfc9068#section-4
+
+dismissed:
+  asymmetric-signing-recommended: >-
+    RECOMMENDED, not normative, and met anyway: this server signs with ES256.
+  different-keys-for-id-tokens: >-
+    A MAY about signing ID tokens with a separate key. This server issues no ID
+    tokens.
+  resource-server-validates-in-this-manner: >-
+    The umbrella over the five bullets that follow it; each is registered here
+    on its own.
+  encrypted-token-rejected: >-
+    Conditional on encryption negotiated at registration time, which this
+    server neither offers nor accepts.
+  authorization-claims-inform-the-decision: >-
+    A SHOULD the specification itself puts beyond its scope. What the ACL does
+    with a token's claims is internal/auth's, not this profile's.

@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // testConsentTTL is long enough that no test crosses it by accident; the tests
@@ -23,6 +25,8 @@ func keyFor(subject, clientID, resource string) ConsentKey {
 }
 
 func TestConsentFingerprintIgnoresRedirectURIOrder(t *testing.T) {
+	spec.Satisfies(t, "oauth/oauth-2-1/multiple-redirect-uris-may-be-registered")
+
 	// CIMD documents are client-controlled and array order carries no meaning,
 	// so re-prompting on a reordering would be noise.
 	a := consentFingerprint(&ClientMetadata{
@@ -173,6 +177,27 @@ func TestConsentStoreRequiresAnExactMatch(t *testing.T) {
 			name:    "changed metadata",
 			subject: testSubject, clientID: testClientID,
 			resource: testResource, fingerprint: "fingerprint-b",
+		},
+		{
+			// A fingerprint the stored one merely starts with. Equal length
+			// differing in one byte, above, is refused by a comparison over
+			// any prefix too, so it is this case that says the whole value
+			// is compared.
+			name:    "a prefix of the fingerprint",
+			subject: testSubject, clientID: testClientID,
+			resource: testResource, fingerprint: testFingerprint[:len(testFingerprint)-2],
+		},
+		{
+			name:    "no fingerprint",
+			subject: testSubject, clientID: testClientID,
+			resource: testResource, fingerprint: "",
+		},
+		{
+			// A fingerprint is base64url, where case carries a bit per
+			// letter, so folding it is not the comparison this makes.
+			name:    "the fingerprint in another case",
+			subject: testSubject, clientID: testClientID,
+			resource: testResource, fingerprint: strings.ToUpper(testFingerprint),
 		},
 	}
 
@@ -739,6 +764,8 @@ func TestChangedMetadataRePrompts(t *testing.T) {
 }
 
 func TestDynamicallyRegisteredClientNeverSkipsTheConsentPage(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc8252/previous-approval-needs-a-proven-client")
+
 	s := newTestServer(t)
 
 	const clientID = "dcr-generated-client-id"
@@ -859,6 +886,8 @@ func postRefreshGrant(t *testing.T, s *Server, token string) *httptest.ResponseR
 }
 
 func TestTheftAtTheTokenEndpointClearsConsent(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/refresh-tokens-may-be-revoked-on-a-security-event")
+
 	s, token := consentServer(t)
 
 	// A legitimate refresh, then a replay of the token it consumed. Both go
@@ -1022,6 +1051,8 @@ func TestConsentPageDisclosesRemembering(t *testing.T) {
 }
 
 func TestIssueCodeRefusesAnUnregisteredRedirect(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9700/no-open-redirector-at-the-authorization-endpoint")
+
 	s := newTestServer(t)
 	meta := &ClientMetadata{RedirectURIs: []string{"https://example.com/cb"}}
 
@@ -1049,5 +1080,14 @@ func TestIssueCodeRefusesAnUnregisteredRedirect(t *testing.T) {
 	}
 	if strings.Contains(w.Body.String(), "code=") {
 		t.Error("an authorization code was minted for an unregistered redirect")
+	}
+}
+
+func TestConsentExpiresAtItsTTL(t *testing.T) {
+	s := NewConsentStore(time.Hour)
+	granted := time.Unix(1_700_000_000, 0)
+
+	if !s.expired(granted, granted.Add(time.Hour)) {
+		t.Error("consent exactly one TTL old is still honoured")
 	}
 }

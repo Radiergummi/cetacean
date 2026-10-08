@@ -1,0 +1,239 @@
+source: RFC 9264
+title: Linkset — Media Types and a Link Relation Type for Link Sets
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc9264
+
+inventory:
+  from: >-
+    RFC 9264 in full, less §2's RFC 2119 boilerplate. This deployment
+    serializes one link set — RFC 9727's API catalog, in the JSON format of
+    §4.2 — and parses none. §4.1's application/linkset field format and §5's
+    profile parameter are accounted for here rather than excluded, because
+    both are things the same handler could start emitting.
+  count: 39
+
+requirements:
+  - id: title-star-is-preferred
+    level: SHOULD
+    text: >-
+      In order to support use cases where link set documents are reused
+      outside the context of an HTTP interaction, it is RECOMMENDED to make
+      them self-contained by using the "title*" attribute instead of the
+      "title" attribute because "title*" allows expressing the title language
+      as part of its value by means of a language tag.
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4
+    deferred: >-
+      The catalog uses "title". Its values are fixed English labels for this
+      deployment's own endpoints — "OpenAPI description", "Health" — and there
+      is nothing to derive a language tag from but the constant "en", which
+      the reader could assume anyway. Moving to "title*" means the RFC 8187
+      object form of §4.2.4.2 for every target, and a reader that understands
+      only "title" would then see none.
+
+  - id: linkset-is-the-sole-member
+    level: MUST
+    text: >-
+      A set of links is represented in JSON as an object that MUST contain
+      "linkset" as its sole member.
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.1
+    mutants:
+      - file: internal/api/linkset/linkset.go
+        replace: "\tContexts []Context `json:\"linkset\"`"
+        with: "\tContexts []Context `json:\"links\"`"
+
+  - id: contexts-are-wrapped-even-when-single
+    level: MUST
+    text: >-
+      Even if there is only one link context object, it MUST be wrapped in an
+      array.
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.1
+    mutants:
+      - file: internal/api/linkset/linkset.go
+        replace: "// Context is one anchor and every link hanging off it."
+        with: "func (d Document) MarshalJSON() ([]byte, error) {\n\tif len(d.Contexts) == 1 {\n\t\treturn json.Marshal(map[string]any{\"linkset\": d.Contexts[0]})\n\t}\n\n\treturn json.Marshal(map[string]any{\"linkset\": d.Contexts})\n}\n\n// Context is one anchor and every link hanging off it."
+
+  - id: an-anchor-may-be-present
+    level: MAY
+    text: >-
+      Each link context object MAY contain an "anchor" member with a value
+      that represents the link context.
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.2
+
+  - id: an-anchor-is-not-a-relative-reference
+    level: MUST
+    text: >-
+      If present, this value MUST be a URI reference and SHOULD NOT be a
+      relative reference as defined in Section 4.1 of [RFC3986].
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.2
+    mutants:
+      - file: internal/api/apicatalog.go
+        replace: "\t\t\t\tAnchor: link(apiCatalogPath),"
+        with: "\t\t\t\tAnchor: apiCatalogPath,"
+
+  - id: a-relation-is-a-member-of-its-context
+    level: MUST
+    text: >-
+      For each distinct relation type that the link context has with link
+      targets, a link context object MUST contain an additional member.
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.2
+    mutants:
+      - file: internal/api/linkset/linkset.go
+        replace: "\t\tout[relation] = targets"
+        with: "\t\tout[\"link\"] = targets\n\t\t_ = relation"
+
+  - id: one-object-per-target
+    level: MUST
+    text: >-
+      The value of this member is an array in which a distinct JSON object --
+      the "link target object" (see Section 4.2.3) -- MUST be used for each
+      link target for which the relationship with the link context (value of
+      the encompassing "anchor" member) applies.
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.2
+    mutants:
+      - file: internal/api/linkset/linkset.go
+        replace: "\t\tout[relation] = targets"
+        with: "\t\tout[relation] = targets[:1]"
+
+  - id: targets-are-wrapped-even-when-single
+    level: MUST
+    text: >-
+      Even if there is only one link target object, it MUST be wrapped in an
+      array.
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.2
+    mutants:
+      - file: internal/api/linkset/linkset.go
+        replace: "\t\tout[relation] = targets\n\t}"
+        with: "\t\tif len(targets) == 1 {\n\t\t\tout[relation] = targets[0]\n\n\t\t\tcontinue\n\t\t}\n\n\t\tout[relation] = targets\n\t}"
+
+  - id: a-target-carries-an-href
+    level: MUST
+    text: >-
+      Each link target object MUST contain an "href" member with a value that
+      represents the link target.
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.3
+    mutants:
+      - file: internal/api/linkset/linkset.go
+        replace: "\tHref  string `json:\"href\"`"
+        with: "\tHref  string `json:\"target\"`"
+
+  - id: an-href-is-not-a-relative-reference
+    level: MUST
+    text: >-
+      This value MUST be a URI reference and SHOULD NOT be a relative
+      reference as defined in Section 4.1 of [RFC3986].
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.3
+    mutants:
+      - file: internal/api/apicatalog.go
+        replace: "\t\trestAPI := link(\"/\")"
+        with: "\t\trestAPI := \"/\""
+
+  - id: a-self-target-carries-an-empty-href
+    level: MUST
+    text: >-
+      Cases where the "href" member is present but no value is provided for it
+      (i.e., the resource providing the set of links is the target of the link
+      in the link target object) MUST be handled by providing an "href" member
+      with an empty string as its value.
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.3
+    mutants:
+      - file: internal/api/linkset/linkset.go
+        replace: "\tHref  string `json:\"href\"`"
+        with: "\tHref  string `json:\"href,omitempty\"`"
+
+  - id: title-is-a-json-string
+    level: MUST
+    text: >-
+      The "title" target attribute, defined as optional and not repeatable by
+      [RFC8288], MUST be represented by a "title" member in the link target
+      object, and its value MUST be a JSON string.
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.4.1
+    mutants:
+      - file: internal/api/linkset/linkset.go
+        replace: "\tTitle string `json:\"title,omitempty\"`"
+        with: "\tTitle string `json:\"label,omitempty\"`"
+
+  - id: type-is-a-string
+    level: MUST
+    text: >-
+      The "type" target attribute, defined as optional and not repeatable by
+      [RFC8288], MUST be represented by a "type" member in the link target
+      object, and its value MUST be a string that follows the same model as
+      the syntax discussed in [RFC8288].
+    url: https://www.rfc-editor.org/rfc/rfc9264#section-4.2.4.1
+    mutants:
+      - file: internal/api/linkset/linkset.go
+        replace: "\tType  string `json:\"type,omitempty\"`"
+        with: "\tType  string `json:\"media-type,omitempty\"`"
+
+dismissed:
+  documents-are-self-contained: >-
+    The sentence introducing §4's guidelines. The one that bears on this
+    deployment is the title* recommendation above.
+  newlines-leave-a-link-header-value: >-
+    Binds the conversion from an application/linkset document into a Link
+    header field value. This deployment serializes the JSON format and never
+    the field one.
+  json-is-encoded-as-utf-8: >-
+    encoding/json writes UTF-8 and offers no alternative, and the strings it
+    writes are Go source literals and request-derived URLs, both already
+    UTF-8. There is no encoder choice here to make wrongly.
+  json-ld-support-is-optional: >-
+    A permission to serialize the link set as JSON-LD. The catalog does not;
+    the JSON-LD this deployment serves is its own @context document, which is
+    a different resource.
+  web-linking-attributes-are-members: >-
+    The sentence introducing how RFC 8288's target attributes map into JSON.
+    The two this deployment emits are registered as title-is-a-json-string and
+    type-is-a-string.
+  hreflang-is-an-array-of-strings: >-
+    Constrains an attribute the catalog does not emit: every target it names
+    is served in one language by one deployment.
+  media-is-a-string: >-
+    Constrains an attribute the catalog does not emit.
+  internationalized-attributes-are-serialized-as-objects: >-
+    The sentence introducing the RFC 8187 object form. No attribute here takes
+    it; that is what title-star-is-preferred defers.
+  internationalized-attributes-transcode-correctly: >-
+    Binds an implementation converting between the field format and the JSON
+    format. This deployment produces one and reads neither.
+  extension-attributes-are-serialized-as-follows: >-
+    The sentence introducing the extension-attribute rules. The catalog emits
+    no extension attribute.
+  extension-values-are-arrays: >-
+    Constrains an extension attribute the catalog does not emit.
+  plain-extension-values-are-strings: >-
+    Constrains an extension attribute the catalog does not emit.
+  starred-extension-values-are-objects: >-
+    Constrains an extension attribute the catalog does not emit.
+  starred-extension-objects-follow-rfc8187: >-
+    Constrains an extension attribute the catalog does not emit.
+  other-extension-forms-are-discouraged: >-
+    Advice to whoever extends the JSON format. The catalog adds no member this
+    document does not define.
+  extensions-do-not-change-defined-semantics: >-
+    The floor under that advice, conditional on an extension there is none of.
+  the-profile-parameter-may-be-used: >-
+    A permission to qualify the media type with a profile. The catalog's
+    Content-Type is the bare application/linkset+json, which RFC 9727 §4.2 is
+    what constrains.
+  a-profile-value-is-a-list-of-uris: >-
+    Constrains the parameter above, which is not sent.
+  profile-uris-may-be-registered: >-
+    An IANA registration this deployment does not make.
+  a-linkset-link-may-be-in-the-header-or-body: >-
+    A permission to advertise a link set with the "linkset" relation. This
+    deployment advertises its catalog with RFC 9727's api-catalog relation
+    instead, which is the relation that document registers for exactly this.
+  a-resource-may-provide-several-linkset-links: >-
+    The same permission, for more than one link set.
+  user-agents-process-each-link-independently: >-
+    Binds the user agent reading a link set.
+  user-agents-resolve-relative-references: >-
+    Binds the user agent, for references this deployment does not emit — every
+    anchor and href it writes is absolute.
+  the-profile-attribute-may-qualify-a-linkset-link: >-
+    A permission belonging to a "linkset" link this deployment does not emit.
+  a-profile-attribute-value-is-a-list-of-uris: >-
+    Constrains that attribute.
+  linkset-profile-uris-may-be-registered: >-
+    An IANA registration this deployment does not make.

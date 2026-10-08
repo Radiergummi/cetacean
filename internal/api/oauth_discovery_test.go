@@ -14,6 +14,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/oauth"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // oauthTestRoot is the signing root every OAuth fixture in this package shares,
@@ -55,6 +57,8 @@ func withOAuthRoutes(basePath string) routerOption {
 // A route the mux never matches is answered by the SPA with 200 text/html, so
 // anything weaker than a content-type assertion passes against an HTML page.
 func TestAdvertisedJWKSURIServesAKeySet(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/as-advertises-keys-and-issuer")
+
 	for _, basePath := range []string{"", "/cetacean"} {
 		t.Run("basePath="+basePath, func(t *testing.T) {
 			router := newTestRouterWithConfig(

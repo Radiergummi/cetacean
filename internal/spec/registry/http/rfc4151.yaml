@@ -1,0 +1,104 @@
+source: RFC 4151
+title: The 'tag' URI Scheme
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc4151
+
+inventory:
+  from: >-
+    RFC 4151 in full, less §1.1's RFC 2119 boilerplate. The document is short
+    and every part of it bears on the one thing this deployment does with the
+    scheme: mint a permanent identifier for each Atom feed.
+  count: 17
+
+requirements:
+  - id: authority-name-is-fully-qualified
+    level: MUST
+    text: >-
+      To avoid ambiguity, the domain name in "authorityName" (whether an email
+      address or a simple domain name) MUST be fully qualified.
+    url: https://www.rfc-editor.org/rfc/rfc4151#section-2.1
+    deferred: >-
+      The authority name is the host the feed was reached on, and a deployment
+      reached by a short name — a service name on a Swarm overlay, a bare
+      hostname on a LAN — mints a tag whose authority is not fully qualified.
+      Only server.public_url makes it permanent, which the feed's own comment
+      already says; requiring it would make feeds unavailable to a deployment
+      that has not set it.
+
+  - id: authority-name-is-lowercase
+    level: SHOULD
+    text: >-
+      It is RECOMMENDED that the domain name should be in lowercase form.
+    url: https://www.rfc-editor.org/rfc/rfc4151#section-2.1
+    deferred: >-
+      The host is carried through with whatever case it arrived in, so two
+      spellings of one name mint two identifiers for one feed. The same fix
+      serves both this and the qualification above: derive the authority from
+      server.public_url alone and normalize it once.
+
+  - id: tags-are-not-percent-encoded
+    level: SHOULD
+    text: >-
+      In the interests of tractability to humans, tags SHOULD NOT be minted
+      with percent-encoded parts.
+    url: https://www.rfc-editor.org/rfc/rfc4151#section-2.1
+
+  - id: the-date-may-be-past-or-present
+    level: MAY
+    text: >-
+      The date MAY be a past or present date on which the authority name was
+      assigned at 00:00 UTC.
+    url: https://www.rfc-editor.org/rfc/rfc4151#section-2.2
+
+  - id: the-day-and-month-may-be-omitted
+    level: MAY
+    text: >-
+      A day value of "01" MAY be omitted; a month value of "01" MAY be omitted
+      unless it is followed by a day value other than "01".
+    url: https://www.rfc-editor.org/rfc/rfc4151#section-2.2
+
+  - id: no-tag-under-a-future-date
+    level: MUST
+    text: >-
+      An entity MUST NOT mint tags under an authority name that was assigned
+      to a different entity at 00:00 UTC on the given date, and it MUST NOT
+      mint tags under a future date.
+    url: https://www.rfc-editor.org/rfc/rfc4151#section-2.2
+    mutants:
+      - file: internal/api/feed_handlers.go
+        replace: "\t\t\"tag:%s,2026:%s\","
+        with: "\t\t\"tag:%s,2099:%s\","
+
+dismissed:
+  non-conforming-tags-are-not-rejected: >-
+    Binds software that processes tags. This deployment mints them and reads
+    none: a tag never arrives in a request.
+  the-date-is-ascertained-accurately: >-
+    Binds a tagging entity reading a clock. The year here is a constant in the
+    source, fixed when the namespace was minted; whether the host was the
+    operator's on that date is theirs to know, not something this code can
+    check.
+  the-date-is-reckoned-from-utc: >-
+    The same constant. There is no clock to read and so no timezone to read it
+    in.
+  a-reacquired-name-may-cover-its-gap: >-
+    A permission about minting under a name reacquired after a lapse.
+  a-reacquired-name-needs-evidence: >-
+    The condition on that permission, which this deployment never exercises.
+  record-keeping-achieves-uniqueness: >-
+    Asks a tagging entity to keep records so two tags cannot collide.
+    Uniqueness here is structural: the specific part is the feed's own path
+    under the deployment root, and two feeds cannot share one.
+  group-decision-making-achieves-uniqueness: >-
+    The same instruction for an entity made of several people.
+  tag-aware-software-may-warn: >-
+    A permission belonging to software that reads tags.
+  syntax-errors-are-not-grounds-for-rejection: >-
+    §3 restating §2.1's instruction to tag-processing software.
+  assigning-authorities-are-reputable: >-
+    Binds whoever registers the domain name. That is the operator's, chosen
+    before this deployment ever runs.
+  clock-skew-is-avoided-by-a-settled-name: >-
+    Asks for an authority name assigned continuously around the chosen date.
+    Nothing here can verify an assignment; what it can do is keep the date
+    constant, which is what no-tag-under-a-future-date pins.
