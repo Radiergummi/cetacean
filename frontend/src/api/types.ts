@@ -364,18 +364,11 @@ export interface DiunIntegration {
   metadata?: Record<string, string> | undefined;
 }
 
-export interface AclIntegration {
-  name: "cetacean-acl";
-  read?: string[];
-  write?: string[];
-}
-
 export type Integration =
   | TraefikIntegration
   | ShepherdIntegration
   | CronjobIntegration
-  | DiunIntegration
-  | AclIntegration;
+  | DiunIntegration;
 
 export interface ServiceDetail {
   service: Service;

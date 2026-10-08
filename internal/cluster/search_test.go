@@ -26,7 +26,7 @@ func TestSearchByName(t *testing.T) {
 	c.SetNode(node)
 
 	// Search by service name.
-	svcResults := cluster.Search(context.Background(), c, "web-frontend", 10, nil)
+	svcResults := cluster.Search(context.Background(), c, "web-frontend", 10)
 	services, ok := svcResults.Hits["services"]
 	if !ok {
 		t.Fatal("expected services in results")
@@ -45,7 +45,7 @@ func TestSearchByName(t *testing.T) {
 	}
 
 	// Search by node hostname.
-	nodeResultsMap := cluster.Search(context.Background(), c, "worker-node-1", 10, nil)
+	nodeResultsMap := cluster.Search(context.Background(), c, "worker-node-1", 10)
 	nodeResults, ok := nodeResultsMap.Hits["nodes"]
 	if !ok {
 		t.Fatal("expected nodes in results")
@@ -67,7 +67,7 @@ func TestSearchByLabel(t *testing.T) {
 	svc.Spec.Labels = map[string]string{"team": "platform-eng"}
 	c.SetService(svc)
 
-	results := cluster.Search(context.Background(), c, "platform-eng", 10, nil)
+	results := cluster.Search(context.Background(), c, "platform-eng", 10)
 
 	services, ok := results.Hits["services"]
 	if !ok {
@@ -92,7 +92,7 @@ func TestSearchIncludesServiceState(t *testing.T) {
 	c.SetService(svc)
 
 	// No tasks running → expect "failed"
-	results := cluster.Search(context.Background(), c, "stateful-service", 10, nil)
+	results := cluster.Search(context.Background(), c, "stateful-service", 10)
 
 	services, ok := results.Hits["services"]
 	if !ok {
@@ -118,7 +118,7 @@ func TestSearchRedactsSecrets(t *testing.T) {
 	sec.Spec.Data = []byte("do-not-expose")
 	c.SetSecret(sec)
 
-	results := cluster.Search(context.Background(), c, "my-secret-token", 10, nil)
+	results := cluster.Search(context.Background(), c, "my-secret-token", 10)
 
 	secrets, ok := results.Hits["secrets"]
 	if !ok {
@@ -149,7 +149,7 @@ func TestSearchLimit(t *testing.T) {
 		c.SetService(svc)
 	}
 
-	results := cluster.Search(context.Background(), c, "limit-service", 2, nil)
+	results := cluster.Search(context.Background(), c, "limit-service", 2)
 
 	services, ok := results.Hits["services"]
 	if !ok {

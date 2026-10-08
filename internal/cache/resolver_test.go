@@ -6,8 +6,6 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
-
-	"github.com/radiergummi/cetacean/internal/acl"
 )
 
 func TestStackOf(t *testing.T) {
@@ -136,62 +134,5 @@ func TestServiceOfTask_ServiceNotInCache(t *testing.T) {
 
 	if got := c.ServiceOfTask("task2"); got != "" {
 		t.Fatalf("expected empty when service is missing, got %q", got)
-	}
-}
-
-// A node is named by its hostname, and hostnames need not be unique. Two nodes
-// sharing one are a single ACL name with no single set of labels, so the name
-// reads as labelled for nobody rather than as whichever node the map yields.
-func TestNodeLabelsUnderAnAmbiguousHostnameGrantNobody(t *testing.T) {
-	c := New(nil)
-	for id, audience := range map[string]string{"n1": "group:ops", "n2": "*"} {
-		c.SetNode(swarm.Node{
-			ID:          id,
-			Description: swarm.NodeDescription{Hostname: "worker"},
-			Spec: swarm.NodeSpec{
-				Annotations: swarm.Annotations{Labels: map[string]string{acl.LabelRead: audience}},
-			},
-		})
-	}
-
-	for name, labels := range map[string]map[string]string{
-		"LabelsOf":     c.LabelsOf("node", "worker"),
-		"LabelsByType": c.LabelsByType("node")["worker"],
-	} {
-		read, ok := labels[acl.LabelRead]
-		if !ok || read != "" {
-			t.Errorf("%s: labels = %v, want a read label naming nobody", name, labels)
-		}
-	}
-
-	if got := c.LabelsOf("node", "n2")[acl.LabelRead]; got != "*" {
-		t.Errorf("by ID, n2 reads %q, want its own label", got)
-	}
-}
-
-// An ID always names its own node, even where another node's hostname spells it.
-func TestANodeIDIsNotShadowedByAHostname(t *testing.T) {
-	c := New(nil)
-	c.SetNode(swarm.Node{
-		ID: "n1",
-		Spec: swarm.NodeSpec{
-			Annotations: swarm.Annotations{Labels: map[string]string{acl.LabelRead: "group:ops"}},
-		},
-	})
-	c.SetNode(swarm.Node{
-		ID:          "n2",
-		Description: swarm.NodeDescription{Hostname: "n1"},
-		Spec: swarm.NodeSpec{
-			Annotations: swarm.Annotations{Labels: map[string]string{acl.LabelRead: "*"}},
-		},
-	})
-
-	for range 20 {
-		if got := c.LabelsByType("node")["n1"][acl.LabelRead]; got != "group:ops" {
-			t.Fatalf("LabelsByType names n1 with %q, want n1's own label", got)
-		}
-	}
-	if got := c.LabelsOf("node", "n1")[acl.LabelRead]; got != "group:ops" {
-		t.Errorf("LabelsOf names n1 with %q, want n1's own label", got)
 	}
 }

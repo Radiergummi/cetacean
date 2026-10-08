@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -25,15 +24,10 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	handleList(h, w, r, listSpec[cache.Stack]{
 		resourceType: "stack",
 		linkTemplate: "/stacks/{name}",
-		list: func() []cache.Stack {
-			return cluster.FilterStacks(
-				h.cache.ListStacks(),
-				cluster.WithheldStackMembers(h.acl, auth.IdentityFromContext(r.Context()), h.cache),
-			)
-		},
-		aclName:    func(s cache.Stack) string { return s.Name },
-		searchName: func(s cache.Stack) string { return s.Name },
-		filterEnv:  filter.StackEnv,
+		list:         h.cache.ListStacks,
+		aclName:      func(s cache.Stack) string { return s.Name },
+		searchName:   func(s cache.Stack) string { return s.Name },
+		filterEnv:    filter.StackEnv,
 		sortKeys: map[string]func(cache.Stack) string{
 			"name": func(s cache.Stack) string { return s.Name },
 		},
@@ -102,21 +96,16 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	writeRenderedJSON(w, r, http.StatusOK, doc)
 }
 
-const (
-	stackNamespaceLabel = "container_label_com_docker_stack_namespace"
-	swarmServiceLabel   = "container_label_com_docker_swarm_service_name"
-)
+const stackNamespaceLabel = "container_label_com_docker_stack_namespace"
 
 func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 	if !h.requireAnyGrant(w, r) {
 		return
 	}
-	identity := auth.IdentityFromContext(r.Context())
-	withheld := cluster.WithheldStackMembers(h.acl, identity, h.cache)
-	summaries := h.cache.ListStackSummaries(withheld)
+	summaries := h.cache.ListStackSummaries()
 	summaries = acl.Filter(
 		h.acl,
-		identity,
+		auth.IdentityFromContext(r.Context()),
 		"read",
 		summaries,
 		func(s cache.StackSummary) string {
@@ -128,30 +117,20 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		// Grouped by service as well as stack, so a withheld member's
-		// containers can be left out of its stack's total.
-		withheldServices := make(map[string]bool)
-		for key := range withheld {
-			if id, ok := strings.CutPrefix(key, "service:"); ok {
-				if s, ok := h.cache.GetService(id); ok {
-					withheldServices[s.Spec.Name] = true
-				}
-			}
-		}
-
-		const by = `sum by (` + stackNamespaceLabel + `, ` + swarmServiceLabel + `)`
 		var memByStack, cpuByStack map[string]float64
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
 			memByStack = h.queryStackMetric(ctx,
-				by+`(container_memory_usage_bytes)`, withheldServices)
+				`sum by (`+stackNamespaceLabel+`)(container_memory_usage_bytes)`)
 		}()
 		go func() {
 			defer wg.Done()
-			cpuByStack = h.queryStackMetric(ctx,
-				by+`(rate(container_cpu_usage_seconds_total[5m])) * 100`, withheldServices)
+			cpuByStack = h.queryStackMetric(
+				ctx,
+				`sum by (`+stackNamespaceLabel+`)(rate(container_cpu_usage_seconds_total[5m])) * 100`,
+			)
 		}()
 		wg.Wait()
 
@@ -182,13 +161,7 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
-// queryStackMetric sums a per-service query into its stacks, skipping the
-// services named in withheld.
-func (h *Handlers) queryStackMetric(
-	ctx context.Context,
-	query string,
-	withheld map[string]bool,
-) map[string]float64 {
+func (h *Handlers) queryStackMetric(ctx context.Context, query string) map[string]float64 {
 	results, err := h.promClient.InstantQuery(ctx, query)
 	if err != nil {
 		slog.Warn("prometheus stack metric query failed", "error", err)
@@ -196,9 +169,8 @@ func (h *Handlers) queryStackMetric(
 	}
 	out := make(map[string]float64, len(results))
 	for _, r := range results {
-		if name := r.Labels[stackNamespaceLabel]; name != "" &&
-			!withheld[r.Labels[swarmServiceLabel]] {
-			out[name] += r.Value
+		if name := r.Labels[stackNamespaceLabel]; name != "" {
+			out[name] = r.Value
 		}
 	}
 	return out

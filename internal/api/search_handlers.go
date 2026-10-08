@@ -73,11 +73,9 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	raw := cluster.Search(r.Context(), h.cache, q, limit)
+
 	identity := auth.IdentityFromContext(r.Context())
-	raw := cluster.Search(
-		r.Context(), h.cache, q, limit,
-		cluster.WithheldStackMembers(h.acl, identity, h.cache),
-	)
 	results := make(map[string][]searchResult, len(raw.Hits))
 	counts := make(map[string]int, len(raw.Counts))
 	total := 0

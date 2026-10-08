@@ -8,7 +8,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/compose"
 )
 
@@ -32,10 +31,6 @@ func (h *Handlers) HandleStackCompose(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "STK001", "stack not found")
 		return
 	}
-
-	// The document projects the stack's members, so it is built from the ones
-	// this caller may read — the same filter the JSON detail applies.
-	detail = cluster.FilterStackDetail(h.acl, auth.IdentityFromContext(r.Context()), detail)
 
 	file, warnings := compose.FromStack(detail, h.readableNetworks(r))
 	h.writeCompose(w, r, file, warnings)

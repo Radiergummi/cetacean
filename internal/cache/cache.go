@@ -131,10 +131,6 @@ type Cache struct {
 	// advance for one — see notify. A validator derived from that number would
 	// report a wholly replaced cache as unchanged.
 	generation atomic.Uint64
-
-	// labelGeneration is generation narrowed to the types an ACL label can sit
-	// on, and a resync. Tasks and stacks carry none of their own.
-	labelGeneration atomic.Uint64
 }
 
 // Generation returns a counter that advances on every change to the cache's
@@ -143,10 +139,6 @@ type Cache struct {
 // already be stale by the time a caller uses it — the same window a response
 // has between being rendered and being written.
 func (c *Cache) Generation() uint64 { return c.generation.Load() }
-
-// LabelGeneration is Generation for the resources ACL labels are read from, so
-// that what is derived from labels alone outlives the task churn it ignores.
-func (c *Cache) LabelGeneration() uint64 { return c.labelGeneration.Load() }
 
 func New(onChange OnChangeFunc) *Cache {
 	c := &Cache{
@@ -282,9 +274,6 @@ func (c *Cache) notify(e Event) {
 	// but don't record them in history where they drown out real changes.
 	// Every event means the contents changed, a resync included.
 	c.generation.Add(1)
-	if e.Type != EventTask && e.Type != EventStack {
-		c.labelGeneration.Add(1)
-	}
 
 	if e.Type != EventSync {
 		e.HistoryID = c.history.Append(HistoryEntry{
@@ -767,38 +756,25 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 	return detail, true
 }
 
-// ListStackSummaries summarises every stack, leaving out the members withheld
-// names as "type:id" (a volume's ID is its name); nil leaves out nothing.
-func (c *Cache) ListStackSummaries(withheld map[string]bool) []StackSummary {
+func (c *Cache) ListStackSummaries() []StackSummary {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-
-	count := func(resType string, ids []string) int {
-		n := 0
-		for _, id := range ids {
-			if !withheld[resType+":"+id] {
-				n++
-			}
-		}
-
-		return n
-	}
 
 	out := make([]StackSummary, 0, len(c.stacks))
 	for _, stack := range c.stacks {
 		s := StackSummary{
 			Name:         stack.Name,
-			ServiceCount: count("service", stack.Services),
-			ConfigCount:  count("config", stack.Configs),
-			SecretCount:  count("secret", stack.Secrets),
-			NetworkCount: count("network", stack.Networks),
-			VolumeCount:  count("volume", stack.Volumes),
+			ServiceCount: len(stack.Services),
+			ConfigCount:  len(stack.Configs),
+			SecretCount:  len(stack.Secrets),
+			NetworkCount: len(stack.Networks),
+			VolumeCount:  len(stack.Volumes),
 			TasksByState: make(map[string]int),
 		}
 
 		for _, svcID := range stack.Services {
 			svc, ok := c.services[svcID]
-			if !ok || withheld["service:"+svcID] {
+			if !ok {
 				continue
 			}
 
