@@ -3,6 +3,7 @@ package acl
 import (
 	"log/slog"
 	"slices"
+	"sync"
 	"sync/atomic"
 
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -21,7 +22,17 @@ type Evaluator struct {
 	// from disk, so what an identity may see changes with no cache mutation
 	// behind it, and anything keyed on the grants has to notice.
 	policyGeneration atomic.Uint64
+
+	// labelGrants memoises labelTypeGrants for one label generation, keyed by
+	// fingerprint, which with labels on covers the identity and the policy.
+	labelGrantsMu  sync.Mutex
+	labelGrantsGen uint64
+	labelGrants    map[uint64]map[typeKey]bool
 }
+
+// maxMemoisedIdentities bounds labelGrants between label changes; past it the
+// memo starts over rather than growing with every identity seen.
+const maxMemoisedIdentities = 1024
 
 // PolicyGeneration returns a counter that advances whenever the policy is
 // replaced.
@@ -352,21 +363,9 @@ var labelledTypes = []string{"service", "config", "secret", "network", "volume",
 // It stops at the first match, so the common case — an identity that does hold
 // a grant — never reaches it, and one that does not usually stops early.
 func (e *Evaluator) hasAnyLabelGrant(id *auth.Identity) bool {
-	if !e.labelsOn() || id == nil {
-		return false
-	}
-
-	for _, resType := range labelledTypes {
-		for name, labels := range e.resolver.LabelsByType(resType) {
-			if allowed, handled, _ := decideFromLabels(
-				labels, id, "read", resType, name,
-			); handled && allowed {
-				return true
-			}
-		}
-	}
-
-	return false
+	// Any permission a label grants includes read, so a non-empty projection
+	// is a read grant somewhere.
+	return len(e.labelTypeGrants(id)) > 0
 }
 
 // PermissionsFor returns a map of resource patterns to permission lists
@@ -644,11 +643,42 @@ func (e *Evaluator) TypeGrants(id *auth.Identity) TypeAccess {
 // labelTypeGrants projects the labels naming this identity onto the types they
 // grant. A type's walk stops once every permission is settled: the answer is
 // type-level, so a further match adds nothing.
+//
+// The result is memoised and shared, so callers must not modify it.
 func (e *Evaluator) labelTypeGrants(id *auth.Identity) map[typeKey]bool {
 	if !e.labelsOn() || id == nil {
 		return nil
 	}
 
+	generation := e.resolver.LabelGeneration()
+	key := e.Fingerprint(id)
+
+	e.labelGrantsMu.Lock()
+	if e.labelGrants == nil || e.labelGrantsGen != generation ||
+		len(e.labelGrants) >= maxMemoisedIdentities {
+		e.labelGrants = map[uint64]map[typeKey]bool{}
+		e.labelGrantsGen = generation
+	}
+	granted, ok := e.labelGrants[key]
+	e.labelGrantsMu.Unlock()
+
+	if ok {
+		return granted
+	}
+
+	granted = e.projectLabels(id)
+
+	e.labelGrantsMu.Lock()
+	if e.labelGrantsGen == generation {
+		e.labelGrants[key] = granted
+	}
+	e.labelGrantsMu.Unlock()
+
+	return granted
+}
+
+// projectLabels walks every labelled resource for labelTypeGrants.
+func (e *Evaluator) projectLabels(id *auth.Identity) map[typeKey]bool {
 	granted := map[typeKey]bool{}
 	for _, resType := range labelledTypes {
 		for name, labels := range e.resolver.LabelsByType(resType) {
