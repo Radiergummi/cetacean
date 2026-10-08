@@ -148,7 +148,9 @@ func TestNodeLabelsUnderAnAmbiguousHostnameGrantNobody(t *testing.T) {
 		c.SetNode(swarm.Node{
 			ID:          id,
 			Description: swarm.NodeDescription{Hostname: "worker"},
-			Spec:        swarm.NodeSpec{Annotations: swarm.Annotations{Labels: map[string]string{acl.LabelRead: audience}}},
+			Spec: swarm.NodeSpec{
+				Annotations: swarm.Annotations{Labels: map[string]string{acl.LabelRead: audience}},
+			},
 		})
 	}
 
@@ -171,13 +173,17 @@ func TestNodeLabelsUnderAnAmbiguousHostnameGrantNobody(t *testing.T) {
 func TestANodeIDIsNotShadowedByAHostname(t *testing.T) {
 	c := New(nil)
 	c.SetNode(swarm.Node{
-		ID:   "n1",
-		Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: map[string]string{acl.LabelRead: "group:ops"}}},
+		ID: "n1",
+		Spec: swarm.NodeSpec{
+			Annotations: swarm.Annotations{Labels: map[string]string{acl.LabelRead: "group:ops"}},
+		},
 	})
 	c.SetNode(swarm.Node{
 		ID:          "n2",
 		Description: swarm.NodeDescription{Hostname: "n1"},
-		Spec:        swarm.NodeSpec{Annotations: swarm.Annotations{Labels: map[string]string{acl.LabelRead: "*"}}},
+		Spec: swarm.NodeSpec{
+			Annotations: swarm.Annotations{Labels: map[string]string{acl.LabelRead: "*"}},
+		},
 	})
 
 	for range 20 {
