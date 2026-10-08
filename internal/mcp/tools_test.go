@@ -517,26 +517,31 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 // thing whichever transport an operator reaches for. update_node is here
 // without a REST counterpart because it is why update_node_labels is separate.
 var restTierParity = map[string]config.OperationsLevel{
+	"scale_service":          config.OpsOperational,
+	"update_service_image":   config.OpsOperational,
+	"rollback_service":       config.OpsOperational,
+	"restart_service":        config.OpsOperational,
 	"create_secret":          config.OpsConfiguration,
 	"create_config":          config.OpsConfiguration,
+	"update_service":         config.OpsConfiguration,
 	"update_service_secrets": config.OpsConfiguration,
 	"update_service_configs": config.OpsConfiguration,
 	"update_service_mounts":  config.OpsConfiguration,
 	"update_node_labels":     config.OpsConfiguration,
 	"update_node":            config.OpsImpactful,
+	"remove_service":         config.OpsImpactful,
+	"remove_task":            config.OpsImpactful,
+	"remove_config":          config.OpsImpactful,
+	"remove_secret":          config.OpsImpactful,
+	"remove_network":         config.OpsImpactful,
+	"remove_volume":          config.OpsImpactful,
 }
 
 // restTierMismatches records a tool whose tier is known to differ from REST's
 // for the same operation. Listed rather than left out of restTierParity so the
 // debt stays visible: the mismatch is asserted to still exist, so whichever way
 // it is resolved the entry fails as stale and closing the gap is a deletion.
-var restTierMismatches = map[string]config.OperationsLevel{
-	// remove_task is OpsOperational while DELETE /tasks/{id} is OpsImpactful:
-	// at level 1 an agent force-reschedules any task while the dashboard
-	// answers OPS001 for the same edit. MCP is the permissive side here,
-	// which is the direction that matters more. See #224.
-	"remove_task": config.OpsImpactful,
-}
+var restTierMismatches = map[string]config.OperationsLevel{}
 
 // Fails when a tool drifts from the tier its REST equivalent is gated at. The
 // REST side is pinned in internal/api, which deliberately does not import this
@@ -572,6 +577,12 @@ func TestToolTiersMatchTheRESTRoutes(t *testing.T) {
 
 		want, checked := restTierParity[def.tool.Name]
 		if !checked {
+			// Every write tool has a REST equivalent, so one without a row is
+			// a tier nothing compares.
+			if def.tier > config.OpsReadOnly {
+				t.Errorf("%s is a write tool with no restTierParity row", def.tool.Name)
+			}
+
 			continue
 		}
 
@@ -750,7 +761,7 @@ func TestToolRemoveTask(t *testing.T) {
 			return nil
 		},
 	}
-	srv := newToolTestServer(t, c, wc, config.OpsOperational)
+	srv := newToolTestServer(t, c, wc, config.OpsImpactful)
 	td, _ := srv.findTool("remove_task")
 
 	out, err := td.handler(context.Background(), newCallToolRequest("remove_task", map[string]any{
@@ -1145,7 +1156,7 @@ func TestToolRemoveTask_ACLKeyDelegatesToService(t *testing.T) {
 
 	e := aclEvaluatorWithGrants("write", "service:web")
 	wc := &fakeWriteClient{removeTaskFn: func(context.Context, string) error { return nil }}
-	srv := newToolTestServer(t, c, wc, config.OpsOperational,
+	srv := newToolTestServer(t, c, wc, config.OpsImpactful,
 		func(o *Options) { o.ACL = e })
 	td, _ := srv.findTool("remove_task")
 

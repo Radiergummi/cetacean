@@ -1,8 +1,6 @@
 package mcp
 
 import (
-	"context"
-
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/config"
@@ -106,28 +104,6 @@ func (s *Server) operationalTools() []toolDef {
 			),
 			tier:    config.OpsOperational,
 			handler: s.toolRestartService,
-		},
-		{
-			tool: mcplib.NewTool("remove_task",
-				mcplib.WithToolTitle("Remove (reschedule) task"),
-				mcplib.WithOutputSchema[removalResult](),
-				mcplib.WithDescription(
-					"Delete a task by ID. Swarm immediately reschedules a replacement on the parent service's behalf, so this is a forced reschedule rather than a permanent removal. Use this to evict a misbehaving task without scaling the whole service.",
-				),
-				mcplib.WithReadOnlyHintAnnotation(false),
-				mcplib.WithDestructiveHintAnnotation(true),
-				mcplib.WithIdempotentHintAnnotation(false),
-				mcplib.WithOpenWorldHintAnnotation(false),
-				mcplib.WithString("id",
-					mcplib.Required(),
-					mcplib.Description("Task ID (long-form Docker ID)."),
-				),
-			),
-			tier: config.OpsOperational,
-			handler: s.removeHandler("id", s.checkTaskWrite,
-				func(wc DockerWriteClient, ctx context.Context, id string) error {
-					return wc.RemoveTask(ctx, id)
-				}),
 		},
 	}
 }
