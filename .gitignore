@@ -82,3 +82,8 @@ test/e2e/certs/
 test/e2e/.sut.pid
 cetacean.cover
 cetacean.race
+
+# Vale packages, fetched by `vale sync` at the versions .vale.ini pins.
+/.vale/styles/*
+!/.vale/styles/Cetacean/
+!/.vale/styles/config/

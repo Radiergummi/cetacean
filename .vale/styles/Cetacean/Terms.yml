@@ -1,0 +1,41 @@
+extends: substitution
+message: "Use '%s' instead of '%s'."
+level: error
+ignorecase: false
+# The house term where the docs had several. Vale.Terms already fixes the case
+# of accepted terms, but not a variant with a space or a hyphen. `vocab: false`,
+# as an accepted term inside a match ("API" in "Open API") would exempt it.
+vocab: false
+action:
+  name: replace
+swap:
+  '\bOpen ID\b': OpenID
+  '\bOpen API\b': OpenAPI
+  '\bWeb ?[Ss]ocket\b': WebSocket
+  '\bWeb ?[Ss]ockets\b': WebSockets
+  '\bSwarm Mode\b': Swarm mode
+  '\be-mail\b': email
+  '\bE-mail\b': Email
+  '(?<=[a-z,;:] )Bearer(?=[ -]tokens?\b)': bearer
+  '\bre-fetch': refetch
+  '\bRe-fetch': Refetch
+  '\benv var\b': environment variable
+  '\benv vars\b': environment variables
+  '\bEnv var\b': Environment variable
+  '\bEnv vars\b': Environment variables
+  '\bconfiguration file\b': config file
+  '\bConfiguration file\b': Config file
+  '\bcompose file\b': Compose file
+  '\bcompose files\b': Compose files
+  '\bSwarm Cronjob\b': swarm-cronjob
+  '\b(?:operation|ops) level': operations level
+  '\b(?:Operation|Ops) level': Operations level
+  '\bCLI flag\b': command-line flag
+  '\bCLI flags\b': command-line flags
+  '\bhealthcheck\b': health check
+  '\bhealthchecks\b': health checks
+  '\bHealthcheck\b': Health check
+  '\bdeps\b': dependencies
+  '\bDeps\b': Dependencies
+  '\butilise\b': use
+  '\bUtilise\b': Use

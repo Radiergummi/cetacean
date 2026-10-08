@@ -1,0 +1,14 @@
+extends: existence
+message: "'%s' assumes a visual layout; use 'preceding', 'following', 'earlier', or 'later', or link the section."
+link: 'https://developers.google.com/style/accessibility#ui-elements-and-interaction'
+level: error
+ignorecase: false
+nonword: true
+# Only a reference to another place in the page. "Above 90%", "below the quorum"
+# and a dashboard's own layout ("appears above the list") stay.
+tokens:
+  - '\b(?:[Ss]ee|[Aa]s) (?:above|below)\b'
+  - '\((?:see )?(?:above|below)\)'
+  - '\b(?:shown|described|listed|mentioned|explained) (?:above|below)\b'
+  - '\b(?:appears?|continues) (?:above|below)(?=[.,;:])'
+  - '\b(?:examples?|fragments?|snippets?|tables?|sections?|steps?|paths?|settings?|requirements?|endpoints?|modes?|promise|commands?|diagrams?) (?:above|below)\b(?! (?:the|a|an|it|its|this|that|\d)\b)'

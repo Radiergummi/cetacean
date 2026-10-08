@@ -1,4 +1,4 @@
-.PHONY: lint typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover
+.PHONY: lint lint-docs typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
@@ -6,13 +6,26 @@ E2E_BINARY   := cetacean.cover
 E2E_RACE_BIN := cetacean.race
 E2E_COVERDIR := coverdata
 
-## Lint all code
-lint:
+## Lint all code and the published docs
+lint: lint-docs
 	golangci-lint run ./...
 	actionlint
 	zizmor --config .github/zizmor.yml .github/workflows/
 	pnpm --filter frontend exec oxlint
 	pnpm --filter website exec oxlint
+
+## Lint the prose of the published docs
+# The pages the website publishes, the changelog, and the two a contributor reads
+# first. The design specs and the test protocol are working notes.
+DOCS := $(filter-out docs/test_%,$(wildcard docs/*.md docs/*.mdx)) README.md CONTRIBUTING.md CHANGELOG.md
+VALE_FLAGS ?=
+
+lint-docs: .vale/styles/.synced
+	vale $(VALE_FLAGS) $(DOCS)
+
+.vale/styles/.synced: .vale.ini
+	vale sync
+	touch $@
 
 ## Type-check the frontend and the website
 # The website's error reference is generated from Go source, and `astro check`

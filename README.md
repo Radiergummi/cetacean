@@ -71,7 +71,7 @@ See [Getting started](docs/getting-started.md) for the monitoring and authentica
 
 ## Documentation
 
-Full documentation is at [cetacean.mazetti.me](https://cetacean.mazetti.me), and in [`docs/`](docs) in this
+Full documentation is at <https://cetacean.mazetti.me>, and in [`docs/`](docs) in this
 repository:
 
 - [Getting started](docs/getting-started.md)
@@ -84,8 +84,8 @@ repository:
 
 ## Build from source
 
-Requires Go 1.26+ and Node.js 24+. `make build` installs the frontend dependencies, builds the dashboard and the
-MCP widgets, and compiles the binary, which embeds both:
+Requires Go 1.26+ and Node.js 24+. `make build` installs the frontend dependencies, builds the dashboard
+and the MCP widgets, and compiles the binary, which embeds both:
 
 ```bash
 make build
