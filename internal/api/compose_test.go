@@ -74,6 +74,54 @@ func TestStackComposeRendersYAML(t *testing.T) {
 	}
 }
 
+// The export projects the stack's members, so a label that hides a service from
+// the JSON detail has to hide it here too — otherwise the compose file is a way
+// around the label.
+func TestStackComposeDropsMembersALabelWithholds(t *testing.T) {
+	c := composeCache(t)
+	c.SetService(swarm.Service{
+		ID: "svc2",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{
+				Name: "web_private",
+				Labels: map[string]string{
+					"com.docker.stack.namespace": "web",
+					acl.LabelRead:                "group:platform",
+				},
+			},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.27"},
+			},
+		},
+	})
+
+	evaluator := acl.NewEvaluator()
+	evaluator.SetLabelsEnabled(true)
+	evaluator.SetResolver(c)
+
+	router := newTestRouterWithCache(t, c, withACL(evaluator))
+
+	req := httptest.NewRequest(http.MethodGet, "/stacks/web.yaml", nil)
+	req = req.WithContext(auth.ContextWithIdentity(
+		req.Context(),
+		&auth.Identity{Subject: "alice", Groups: []string{"devs"}},
+	))
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200\n%s", rec.Code, rec.Body)
+	}
+
+	body := rec.Body.String()
+	if strings.Contains(body, "private") {
+		t.Errorf("the export names a service the label withholds:\n%s", body)
+	}
+	if !strings.Contains(body, "\n  api:") {
+		t.Errorf("the unlabelled service was dropped too:\n%s", body)
+	}
+}
+
 // Accept must reach the same projection the suffix does, or the two ways of
 // asking for a representation disagree.
 func TestStackComposeAnswersAcceptAsWellAsTheSuffix(t *testing.T) {

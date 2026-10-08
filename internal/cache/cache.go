@@ -756,25 +756,38 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 	return detail, true
 }
 
-func (c *Cache) ListStackSummaries() []StackSummary {
+// ListStackSummaries summarises every stack, leaving out the members withheld
+// names as "type:id" (a volume's ID is its name); nil leaves out nothing.
+func (c *Cache) ListStackSummaries(withheld map[string]bool) []StackSummary {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
+	count := func(resType string, ids []string) int {
+		n := 0
+		for _, id := range ids {
+			if !withheld[resType+":"+id] {
+				n++
+			}
+		}
+
+		return n
+	}
 
 	out := make([]StackSummary, 0, len(c.stacks))
 	for _, stack := range c.stacks {
 		s := StackSummary{
 			Name:         stack.Name,
-			ServiceCount: len(stack.Services),
-			ConfigCount:  len(stack.Configs),
-			SecretCount:  len(stack.Secrets),
-			NetworkCount: len(stack.Networks),
-			VolumeCount:  len(stack.Volumes),
+			ServiceCount: count("service", stack.Services),
+			ConfigCount:  count("config", stack.Configs),
+			SecretCount:  count("secret", stack.Secrets),
+			NetworkCount: count("network", stack.Networks),
+			VolumeCount:  count("volume", stack.Volumes),
 			TasksByState: make(map[string]int),
 		}
 
 		for _, svcID := range stack.Services {
 			svc, ok := c.services[svcID]
-			if !ok {
+			if !ok || withheld["service:"+svcID] {
 				continue
 			}
 

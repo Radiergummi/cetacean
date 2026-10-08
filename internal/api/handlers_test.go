@@ -15,6 +15,8 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
@@ -2431,5 +2433,71 @@ func TestHandleGetService_NoIntegrationsField(t *testing.T) {
 	}
 	if _, ok := body["integrations"]; ok {
 		t.Error("expected no integrations field when none detected")
+	}
+}
+
+// Usage comes from Prometheus summed per stack, which knows nothing of ACLs:
+// a member withheld from the caller must not count towards its stack's usage
+// any more than towards its service count.
+func TestHandleStackSummaryLeavesWithheldMembersOutOfUsage(t *testing.T) {
+	c := cache.New(nil)
+	for id, labels := range map[string]map[string]string{
+		"svc-web":   {acl.LabelRead: "group:devs,group:ops"},
+		"svc-admin": {acl.LabelRead: "group:ops"},
+	} {
+		labels["com.docker.stack.namespace"] = "app"
+		c.SetService(swarm.Service{
+			ID: id,
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{
+				Name:   "app_" + strings.TrimPrefix(id, "svc-"),
+				Labels: labels,
+			}},
+		})
+	}
+
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		web, admin := "10", "90"
+		if strings.Contains(r.URL.Query().Get("query"), "memory") {
+			web, admin = "100", "900"
+		}
+		series := func(service, value string) string {
+			return `{"metric":{"` + stackNamespaceLabel + `":"app","` + swarmServiceLabel +
+				`":"` + service + `"},"value":[1234567890,"` + value + `"]}`
+		}
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[` +
+			series("app_web", web) + `,` + series("app_admin", admin) + `]}}`))
+	}))
+	defer prom.Close()
+
+	e := acl.NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetResolver(c)
+	h := newTestHandlers(t, withCache(c), withACL(e), withPromClient(promapi.NewClient(prom.URL)))
+
+	for _, tc := range []struct {
+		group       string
+		memory, cpu float64
+	}{
+		{"devs", 100, 10},
+		{"ops", 1000, 100},
+	} {
+		t.Run(tc.group, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/stacks/summary", nil)
+			req = req.WithContext(auth.ContextWithIdentity(
+				req.Context(), &auth.Identity{Subject: "u", Groups: []string{tc.group}},
+			))
+			w := httptest.NewRecorder()
+			h.HandleStackSummary(w, req)
+
+			var resp CollectionResponse[cache.StackSummary]
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil || len(resp.Items) != 1 {
+				t.Fatalf("status %d, items %d, err %v", w.Code, len(resp.Items), err)
+			}
+			got := resp.Items[0]
+			if float64(got.MemoryUsageBytes) != tc.memory || got.CPUUsagePercent != tc.cpu {
+				t.Errorf("memory = %d, cpu = %v; want %v and %v",
+					got.MemoryUsageBytes, got.CPUUsagePercent, tc.memory, tc.cpu)
+			}
+		})
 	}
 }
