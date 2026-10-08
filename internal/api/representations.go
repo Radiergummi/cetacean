@@ -13,7 +13,6 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/integrations"
 )
@@ -441,10 +440,6 @@ func (h *Handlers) stackRepresentation(r *http.Request) (any, error) {
 	if !ok {
 		return nil, errNoRepresentation
 	}
-
-	// The memo this feeds is keyed on the identity's grant fingerprint, which
-	// has to separate any two identities this filter answers differently.
-	detail = cluster.FilterStackDetail(h.acl, auth.IdentityFromContext(r.Context()), detail)
 
 	return NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", StackResponse{
 		Stack: detail,

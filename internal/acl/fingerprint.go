@@ -21,10 +21,8 @@ var fingerprintSeed = maphash.MakeSeed()
 // without any cache mutation — a grant removed from the file has to invalidate
 // what the identity it covered was already holding.
 //
-// A nil Evaluator, or an absent policy with labels off, filters nothing, which
-// is one shared answer rather than a per-identity one, and fingerprints
-// accordingly. Labels decide on who the identity is rather than on its grants,
-// so with labels on its audience fields are folded in as well.
+// A nil Evaluator or absent policy filters nothing, which is one shared answer
+// rather than a per-identity one, and fingerprints accordingly.
 //
 // The grants are walked here rather than through collectGrants: this runs on
 // every conditional request, and summing as it goes costs nothing, where
@@ -34,12 +32,8 @@ func (e *Evaluator) Fingerprint(id *auth.Identity) uint64 {
 		return 0
 	}
 	p := e.policy.Load()
-	labels := e.labelsOn()
 	if p == nil {
-		if !labels {
-			return 0
-		}
-		p = &Policy{}
+		return 0
 	}
 
 	// Grant order depends on policy file order and on what the provider
@@ -57,29 +51,7 @@ func (e *Evaluator) Fingerprint(id *auth.Identity) uint64 {
 		}
 	}
 
-	if labels && id != nil {
-		sum = mixHash(sum, audienceHash(id))
-	}
-
 	return mixHash(sum, e.PolicyGeneration())
-}
-
-// audienceHash reduces the fields a label audience matches on. Groups are
-// summed, so their order does not matter; each field is mixed in apart so a
-// value cannot move between them unnoticed.
-func audienceHash(id *auth.Identity) uint64 {
-	var groups uint64
-	for _, g := range id.Groups {
-		groups += maphash.String(fingerprintSeed, g)
-	}
-
-	return mixHash(
-		mixHash(
-			maphash.String(fingerprintSeed, id.Subject),
-			maphash.String(fingerprintSeed, id.Email),
-		),
-		groups,
-	)
 }
 
 // grantHash reduces one grant to a value independent of the order of its

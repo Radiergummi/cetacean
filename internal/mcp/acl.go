@@ -141,16 +141,12 @@ func (s *Server) filterRawTasks(ctx context.Context, items []swarm.Task) []swarm
 	)
 }
 
-// filterStacks drops the stacks the caller may not read, and from those it
-// may, the members it may not.
 func (s *Server) filterStacks(ctx context.Context, items []cache.Stack) []cache.Stack {
-	identity := auth.IdentityFromContext(ctx)
-
 	return acl.Filter(
 		s.acl,
-		identity,
+		auth.IdentityFromContext(ctx),
 		"read",
-		cluster.FilterStacks(items, cluster.WithheldStackMembers(s.acl, identity, s.cache)),
+		items,
 		func(st cache.Stack) string {
 			return "stack:" + st.Name
 		},

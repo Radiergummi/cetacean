@@ -62,7 +62,6 @@ export const integrationLabelPrefix = {
   shepherd: "shepherd.",
   "swarm-cronjob": "swarm.cronjob.",
   diun: "diun.",
-  "cetacean-acl": "cetacean.acl.",
 } as const;
 
 export type IntegrationName = keyof typeof integrationLabelPrefix;

@@ -227,34 +227,3 @@ func BenchmarkFingerprint(b *testing.B) {
 		_ = e.Fingerprint(id)
 	}
 }
-
-// Labels decide on subject, email and groups, not on the grants the policy
-// hands out, so two identities with the same grants can still see different
-// rows once labels are on, and must not share a fingerprint.
-func TestFingerprintSeparatesIdentitiesLabelsAnswerDifferently(t *testing.T) {
-	labelled := &stubResolver{labels: map[string]map[string]string{
-		"service:admin": {LabelRead: "group:ops"},
-	}}
-
-	for name, policy := range map[string]*Policy{
-		"with no policy": nil,
-		"with one grant": {Grants: []Grant{readGrant("service:web")}},
-	} {
-		t.Run(name, func(t *testing.T) {
-			e := NewEvaluator()
-			e.SetLabelsEnabled(true)
-			e.SetResolver(labelled)
-			e.SetPolicy(policy)
-
-			ops := &auth.Identity{Subject: "o", Groups: []string{"ops"}}
-			dev := &auth.Identity{Subject: "d", Groups: []string{"devs"}}
-
-			if e.Can(ops, "read", "service:admin") == e.Can(dev, "read", "service:admin") {
-				t.Fatal("the labels answer both identities alike; the case proves nothing")
-			}
-			if e.Fingerprint(ops) == e.Fingerprint(dev) {
-				t.Error("two identities the labels answer differently share a fingerprint")
-			}
-		})
-	}
-}

@@ -21,9 +21,5 @@ func Detect(labels map[string]string) []any {
 		integrations = append(integrations, d)
 	}
 
-	if a := detectACL(labels); a != nil {
-		integrations = append(integrations, a)
-	}
-
 	return integrations
 }

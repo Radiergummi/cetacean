@@ -44,15 +44,8 @@ type SearchResults struct {
 // Each per-type slice in Hits is capped at limit (0 means up to 1000), while
 // Counts always reports the pre-cap total so callers can show "X matches" even
 // when displaying a small subset. Secret data is never returned; RedactSecret
-// is applied where applicable. A stack's service count leaves out the members
-// withheld names; see WithheldStackMembers.
-func Search(
-	ctx context.Context,
-	c *cache.Cache,
-	query string,
-	limit int,
-	withheld map[string]bool,
-) SearchResults {
+// is applied where applicable.
+func Search(ctx context.Context, c *cache.Cache, query string, limit int) SearchResults {
 	if limit == 0 || limit > 1000 {
 		limit = 1000
 	}
@@ -134,7 +127,7 @@ func Search(
 	// Stacks
 	go func() {
 		defer wg.Done()
-		stacks := FilterStacks(c.ListStacks(), withheld)
+		stacks := c.ListStacks()
 		var matches []SearchResult
 		count := 0
 		for _, s := range stacks {

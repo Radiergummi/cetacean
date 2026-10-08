@@ -134,9 +134,10 @@ func (s *Server) digestOf(
 		), nil
 
 	case cache.StackDetail:
-		// The members arrive already filtered to what the caller may read, so
-		// the digest, health included, describes only those: a withheld
-		// member's state is no more the caller's to see than its record.
+		// The member records come through as the stack resource resolved them:
+		// an ACL stack grant reaches its member types by definition
+		// (acl.impliedTypes), and dropping members here would report a stack
+		// as healthy because the service that is failing was filtered out.
 		var tasks []swarm.Task
 		for _, svc := range resource.Services {
 			tasks = append(tasks, s.cache.ListTasksByService(svc.ID)...)

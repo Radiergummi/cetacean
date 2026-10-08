@@ -935,7 +935,7 @@ func TestCache_ListStackSummaries(t *testing.T) {
 		},
 	)
 
-	summaries := c.ListStackSummaries(nil)
+	summaries := c.ListStackSummaries()
 	if len(summaries) != 1 {
 		t.Fatalf("expected 1 stack summary, got %d", len(summaries))
 	}

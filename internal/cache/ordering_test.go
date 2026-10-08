@@ -59,7 +59,7 @@ func TestListsAreStableAcrossCalls(t *testing.T) {
 		},
 		"stacks": func() []string { return ids(c.ListStacks(), func(s Stack) string { return s.Name }) },
 		"stackSummaries": func() []string {
-			return ids(c.ListStackSummaries(nil), func(s StackSummary) string { return s.Name })
+			return ids(c.ListStackSummaries(), func(s StackSummary) string { return s.Name })
 		},
 		"tasksByService": func() []string {
 			return ids(c.ListTasksByService("svc00"), func(t swarm.Task) string { return t.ID })
@@ -98,7 +98,7 @@ func TestStackSummariesSortedByName(t *testing.T) {
 		c.SetService(stackedService(fmt.Sprintf("svc%d", i), name+"_web", name))
 	}
 
-	names := ids(c.ListStackSummaries(nil), func(s StackSummary) string { return s.Name })
+	names := ids(c.ListStackSummaries(), func(s StackSummary) string { return s.Name })
 	want := []string{"alpha", "mike", "zulu"}
 
 	for i := range want {
