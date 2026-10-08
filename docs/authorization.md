@@ -128,6 +128,7 @@ services:
 ```
 
 They are read on services, configs, secrets, networks, volumes, and nodes. A task inherits its parent service's labels.
+A node is named by its hostname, so where two nodes share one, neither node's labels grant anything under that name.
 Stacks have none of their own—a stack-wide grant belongs in the policy. A stack's views list and count only the
 members the identity may read. Within labels the most permissive match wins, as it does for grants.
 

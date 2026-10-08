@@ -28,6 +28,10 @@ type ResourceResolver interface {
 	// one name at a time costs a scan and a read lock per item — quadratic over
 	// a list, on every list request, SSE refetch and MCP find.
 	LabelsByType(resourceType string) map[string]map[string]string
+
+	// LabelGeneration advances whenever any label LabelsByType could return
+	// may have changed. Equal values mean the labels are as they were.
+	LabelGeneration() uint64
 }
 
 // extractGrantsFromRaw parses a raw slice of grant-like maps into Grant

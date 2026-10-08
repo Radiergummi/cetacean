@@ -88,3 +88,31 @@ func TestGenerationStableWithoutMutation(t *testing.T) {
 		t.Errorf("reads advanced the generation: %d -> %d", got, c.Generation())
 	}
 }
+
+// The label generation advances only for the types an ACL label can sit on, so
+// a memo keyed on it survives the task churn that dominates a busy cluster.
+func TestLabelGenerationIgnoresTasks(t *testing.T) {
+	c := New(nil)
+
+	before := c.LabelGeneration()
+	c.SetTask(swarm.Task{ID: "t1"})
+	if c.LabelGeneration() != before {
+		t.Error("a task change advanced the label generation")
+	}
+
+	for name, mutate := range map[string]func(){
+		"SetService": func() { c.SetService(swarm.Service{ID: "s1"}) },
+		"SetNode":    func() { c.SetNode(swarm.Node{ID: "n1"}) },
+		"SetConfig":  func() { c.SetConfig(swarm.Config{ID: "c1"}) },
+		"SetSecret":  func() { c.SetSecret(swarm.Secret{ID: "x1"}) },
+		"SetNetwork": func() { c.SetNetwork(network.Summary{ID: "w1"}) },
+		"SetVolume":  func() { c.SetVolume(volume.Volume{Name: "v1"}) },
+		"ReplaceAll": func() { c.ReplaceAll(FullSyncData{HasServices: true}) },
+	} {
+		before := c.LabelGeneration()
+		mutate()
+		if c.LabelGeneration() == before {
+			t.Errorf("%s did not advance the label generation", name)
+		}
+	}
+}

@@ -1,6 +1,9 @@
 package acl
 
 import (
+	"bytes"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -99,5 +102,43 @@ func TestMatchLabelAudience(t *testing.T) {
 				t.Errorf("matchLabelAudience(%v) = %v, want %v", tt.audiences, got, tt.want)
 			}
 		})
+	}
+}
+
+// A label audience is held to the rule a policy audience is: an empty pattern
+// or a glob that does not compile is an error, not a pattern matching nobody.
+func TestALabelAudienceIsValidatedLikeAPolicyAudience(t *testing.T) {
+	for expression, valid := range map[string]bool{
+		"*":             true,
+		"group:ops":     true,
+		"user:a*@x.com": true,
+		"group:":        false,
+		"group:[":       false,
+		"team:ops":      false,
+		"ops":           false,
+	} {
+		if err := validateAudience(expression); (err == nil) != valid {
+			t.Errorf("validateAudience(%q) = %v, want valid=%v", expression, err, valid)
+		}
+	}
+}
+
+// ParseAudienceList runs on every decision a label takes part in, so a bad
+// expression is reported once rather than on every request that reads it.
+func TestAnInvalidLabelAudienceIsReportedOnce(t *testing.T) {
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	const expression = "group:[once-only"
+	for range 3 {
+		if got := ParseAudienceList(expression); len(got) != 1 {
+			t.Fatalf("ParseAudienceList dropped the entry: %v", got)
+		}
+	}
+
+	if n := strings.Count(logs.String(), "invalid audience expression"); n != 1 {
+		t.Errorf("warned %d times, want once:\n%s", n, logs.String())
 	}
 }
