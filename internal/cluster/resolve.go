@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -40,4 +41,104 @@ func ResolveTask(c *cache.Cache, identifier string) (swarm.Task, bool, error) {
 	}
 
 	return swarm.Task{}, false, nil
+}
+
+// ResolveIdentifier returns the canonical ID the history ring keys a resource
+// of this type by, given either that ID or a name. An empty type searches
+// every type and answers only when exactly one matches, so a name shared
+// across types resolves to nothing rather than to whichever was tried first.
+// An unknown type, or an identifier nothing matches, comes back as it went in:
+// the ring holds IDs the cache has since forgotten, and those must still match.
+func ResolveIdentifier(c *cache.Cache, resourceType, identifier string) (string, error) {
+	if identifier == "" {
+		return identifier, nil
+	}
+
+	if resourceType == "" {
+		return resolveAcrossTypes(c, identifier)
+	}
+
+	resolve, ok := identifierResolvers[resourceType]
+	if !ok {
+		return identifier, nil
+	}
+
+	id, found, err := resolve(c, identifier)
+	if err != nil || !found {
+		return identifier, err
+	}
+
+	return id, nil
+}
+
+// identifierResolvers maps a history event type to the lookup that turns one
+// of its identifiers into the ID the ring stores. Volumes and stacks are
+// absent because both are keyed by name already, so their identifier is
+// canonical as it stands.
+var identifierResolvers = map[string]func(*cache.Cache, string) (string, bool, error){
+	string(cache.EventService): func(c *cache.Cache, id string) (string, bool, error) {
+		svc, found, err := c.ResolveService(id)
+
+		return svc.ID, found, err
+	},
+	string(cache.EventNode): func(c *cache.Cache, id string) (string, bool, error) {
+		node, found, err := c.ResolveNode(id)
+
+		return node.ID, found, err
+	},
+	string(cache.EventConfig): func(c *cache.Cache, id string) (string, bool, error) {
+		cfg, found, err := c.ResolveConfig(id)
+
+		return cfg.ID, found, err
+	},
+	string(cache.EventSecret): func(c *cache.Cache, id string) (string, bool, error) {
+		sec, found, err := c.ResolveSecret(id)
+
+		return sec.ID, found, err
+	},
+	string(cache.EventNetwork): func(c *cache.Cache, id string) (string, bool, error) {
+		net, found, err := c.ResolveNetwork(id)
+
+		return net.ID, found, err
+	},
+	string(cache.EventTask): func(c *cache.Cache, id string) (string, bool, error) {
+		task, found, err := ResolveTask(c, id)
+
+		return task.ID, found, err
+	},
+}
+
+// resolveAcrossTypes answers only an identifier that is unambiguous over every
+// type. An *cache.AmbiguousNameError within one type is the same answer as a
+// name matching two types: the caller has not said enough to be served, and
+// without a type there is no ACL prefix to report the candidates under.
+func resolveAcrossTypes(c *cache.Cache, identifier string) (string, error) {
+	var resolved string
+
+	for _, resolve := range identifierResolvers {
+		id, found, err := resolve(c, identifier)
+		if _, ambiguous := errors.AsType[*cache.AmbiguousNameError](err); ambiguous {
+			return identifier, nil
+		}
+
+		if err != nil {
+			return identifier, err
+		}
+
+		if !found {
+			continue
+		}
+
+		if resolved != "" && resolved != id {
+			return identifier, nil
+		}
+
+		resolved = id
+	}
+
+	if resolved == "" {
+		return identifier, nil
+	}
+
+	return resolved, nil
 }

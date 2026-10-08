@@ -41,7 +41,7 @@ import type {
   Volume,
   VolumeDetail,
 } from "./types";
-import { apiPath } from "@/lib/basePath";
+import { apiPath, stripBasePath } from "@/lib/basePath";
 import { z } from "zod";
 
 const headers = { Accept: "application/json" };
@@ -73,6 +73,13 @@ export class ApiError extends Error {
 export interface FetchResult<T> {
   data: T;
   allowedMethods: Set<string>;
+
+  /**
+   * The resource's canonical path, read from the response's JSON-LD `@id`.
+   * Absent where the response carries none, which the demo handlers and the
+   * endpoints outside the resource model both do.
+   */
+  canonicalPath?: string | undefined;
 }
 
 function parseAllowHeader(response: Response): Set<string> {
@@ -246,7 +253,22 @@ async function fetchJSON<T>(
 
   checkShape(path, responseSchema, data);
 
-  return { data, allowedMethods };
+  return { data, allowedMethods, canonicalPath: canonicalPathOf(data) };
+}
+
+/**
+ * A detail response names itself in `@id`, already spelled with the canonical
+ * ID — so a page reached by name learns the ID without knowing where its type
+ * keeps one.
+ */
+function canonicalPathOf(data: unknown): string | undefined {
+  if (typeof data !== "object" || data === null) {
+    return undefined;
+  }
+
+  const id = (data as Record<string, unknown>)["@id"];
+
+  return typeof id === "string" ? stripBasePath(id) : undefined;
 }
 
 async function fetchJGF<T>(
@@ -573,7 +595,7 @@ export const api = {
       `/plugins/${encodeURIComponent(name)}`,
       signal,
       schema.pluginDetailSchema,
-    ).then(({ data, allowedMethods }) => ({ data: data.plugin, allowedMethods })),
+    ).then(({ data, ...rest }) => ({ data: data.plugin, ...rest })),
   pluginPrivileges: (remote: string) =>
     mutationFetch<{ privileges: PluginPrivilege[] }>(
       "/plugins/privileges",
@@ -608,10 +630,7 @@ export const api = {
     fetchRange<Node>("/nodes", params, signal, schema.nodeSchema),
   node: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ node: Node }>(`/nodes/${id}`, signal, schema.nodeDetailSchema).then(
-      ({ data, allowedMethods }) => ({
-        data: data.node,
-        allowedMethods,
-      }),
+      ({ data, ...rest }) => ({ data: data.node, ...rest }),
     ),
   services: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<ServiceListItem>("/services", params, signal, schema.serviceListSchema),
@@ -640,10 +659,7 @@ export const api = {
       `/stacks/${name}`,
       signal,
       schema.stackDetailResponseSchema,
-    ).then(({ data, allowedMethods }) => ({
-      data: data.stack,
-      allowedMethods,
-    })),
+    ).then(({ data, ...rest }) => ({ data: data.stack, ...rest })),
   stackCompose: (name: string, signal?: AbortSignal) =>
     fetchText(`/stacks/${encodeURIComponent(name)}`, signal, "application/yaml"),
   configs: (params?: ListParams, signal?: AbortSignal) =>
@@ -664,10 +680,7 @@ export const api = {
     fetchJSON<VolumeDetail>(`/volumes/${name}`, signal, schema.volumeDetailSchema),
   task: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ task: Task }>(`/tasks/${id}`, signal, schema.taskDetailSchema).then(
-      ({ data, allowedMethods }) => ({
-        data: data.task,
-        allowedMethods,
-      }),
+      ({ data, ...rest }) => ({ data: data.task, ...rest }),
     ),
   taskLogs: (id: string, options?: LogOptions) =>
     fetchJSON<LogResponse>(

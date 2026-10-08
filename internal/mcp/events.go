@@ -61,14 +61,29 @@ func (s *Server) toolGetEvents(
 	}
 
 	history := s.cache.History()
+	types := requestedTypes(req)
+
+	// `resource` is an argument rather than a path, so nothing rewrites a name
+	// the way the REST canonical redirect does — and an agent works from the
+	// name the user said. One requested type scopes the lookup; several leave
+	// it to answer only what is unambiguous across all of them.
+	resourceType := ""
+	if len(types) == 1 {
+		resourceType = string(types[0])
+	}
+
+	resource, err := cluster.ResolveIdentifier(s.cache, resourceType, req.GetString("resource", ""))
+	if err != nil {
+		return "", err
+	}
 
 	// Every filter but the ACL one is pushed into the walk, so the ring copies
 	// what matched rather than everything it holds. The limit stays the whole
 	// ring on purpose: the ACL filter runs after the read and `total` has to
 	// count what the caller may read, so bounding the copy would skew it.
 	entries := history.List(cache.HistoryQuery{
-		ResourceID: req.GetString("resource", ""),
-		Types:      requestedTypes(req),
+		ResourceID: resource,
+		Types:      types,
 		Limit:      history.Size(),
 		After:      since,
 		Before:     until,

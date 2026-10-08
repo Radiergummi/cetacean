@@ -55,7 +55,7 @@ function jsonResponse<T extends JsonBodyType>(data: T, status = 200) {
   });
 }
 
-function detailEnvelope(id: string, type: string, extra: Record<string, unknown>) {
+function detailEnvelope<T extends object>(id: string, type: string, extra: T) {
   return { "@context": "/api/context.jsonld", "@id": id, "@type": type, ...extra };
 }
 
@@ -792,7 +792,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<{ node: Node }>({ node });
+      return jsonResponse(detailEnvelope(`/nodes/${node.ID}`, "Node", { node }));
     }),
 
     http.get("*/nodes", ({ request }) => {
@@ -1028,7 +1028,13 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<ServiceDetail>({ service, changes: [], integrations: [] });
+      return jsonResponse(
+        detailEnvelope(`/services/${service.ID}`, "Service", {
+          service,
+          changes: [],
+          integrations: [],
+        } satisfies ServiceDetail),
+      );
     }),
 
     http.get("*/services", ({ request }) => {
@@ -1051,7 +1057,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<{ task: Task }>({ task });
+      return jsonResponse(detailEnvelope(`/tasks/${task.ID}`, "Task", { task }));
     }),
 
     http.get("*/tasks", ({ request }) => {
@@ -1078,26 +1084,28 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<{ stack: StackDetail }>({
-        stack: {
-          name: stackName,
-          services: stack.services
-            .map((id) => dataset.servicesByID.get(id))
-            .filter(Boolean) as Service[],
-          configs: stack.configs
-            .map((id) => dataset.configsByID.get(id))
-            .filter(Boolean) as Config[],
-          secrets: stack.secrets
-            .map((id) => dataset.secretsByID.get(id))
-            .filter(Boolean) as Secret[],
-          networks: stack.networks
-            .map((id) => dataset.networksByID.get(id))
-            .filter(Boolean) as Network[],
-          volumes: stack.volumes
-            .map((name) => dataset.volumesByName.get(name))
-            .filter(Boolean) as Volume[],
-        },
-      });
+      return jsonResponse(
+        detailEnvelope(`/stacks/${stackName}`, "Stack", {
+          stack: {
+            name: stackName,
+            services: stack.services
+              .map((id) => dataset.servicesByID.get(id))
+              .filter(Boolean) as Service[],
+            configs: stack.configs
+              .map((id) => dataset.configsByID.get(id))
+              .filter(Boolean) as Config[],
+            secrets: stack.secrets
+              .map((id) => dataset.secretsByID.get(id))
+              .filter(Boolean) as Secret[],
+            networks: stack.networks
+              .map((id) => dataset.networksByID.get(id))
+              .filter(Boolean) as Network[],
+            volumes: stack.volumes
+              .map((name) => dataset.volumesByName.get(name))
+              .filter(Boolean) as Volume[],
+          },
+        } satisfies { stack: StackDetail }),
+      );
     }),
 
     http.get("*/stacks", ({ request }) => {
@@ -1121,16 +1129,18 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<ConfigDetail>({
-        config,
-        services: findServicesUsing(
-          dataset,
-          (service) =>
-            service.Spec.TaskTemplate!.ContainerSpec?.Configs?.some(
-              ({ ConfigID }) => ConfigID === config.ID,
-            ) ?? false,
-        ),
-      });
+      return jsonResponse(
+        detailEnvelope(`/configs/${config.ID}`, "Config", {
+          config,
+          services: findServicesUsing(
+            dataset,
+            (service) =>
+              service.Spec.TaskTemplate!.ContainerSpec?.Configs?.some(
+                ({ ConfigID }) => ConfigID === config.ID,
+              ) ?? false,
+          ),
+        } satisfies ConfigDetail),
+      );
     }),
 
     http.get("*/configs", ({ request }) => {
@@ -1147,16 +1157,18 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<SecretDetail>({
-        secret,
-        services: findServicesUsing(
-          dataset,
-          (service) =>
-            service.Spec.TaskTemplate!.ContainerSpec?.Secrets?.some(
-              ({ SecretID }) => SecretID === secret.ID,
-            ) ?? false,
-        ),
-      });
+      return jsonResponse(
+        detailEnvelope(`/secrets/${secret.ID}`, "Secret", {
+          secret,
+          services: findServicesUsing(
+            dataset,
+            (service) =>
+              service.Spec.TaskTemplate!.ContainerSpec?.Secrets?.some(
+                ({ SecretID }) => SecretID === secret.ID,
+              ) ?? false,
+          ),
+        } satisfies SecretDetail),
+      );
     }),
 
     http.get("*/secrets", ({ request }) => {
@@ -1173,15 +1185,17 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<NetworkDetail>({
-        network,
-        services: findServicesUsing(
-          dataset,
-          (service) =>
-            service.Spec.TaskTemplate!.Networks?.some(({ Target }) => Target === network.Id) ??
-            false,
-        ),
-      });
+      return jsonResponse(
+        detailEnvelope(`/networks/${network.Id}`, "Network", {
+          network,
+          services: findServicesUsing(
+            dataset,
+            (service) =>
+              service.Spec.TaskTemplate!.Networks?.some(({ Target }) => Target === network.Id) ??
+              false,
+          ),
+        } satisfies NetworkDetail),
+      );
     }),
 
     http.get("*/networks", ({ request }) => {
@@ -1198,16 +1212,18 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<VolumeDetail>({
-        volume,
-        services: findServicesUsing(
-          dataset,
-          (service) =>
-            service.Spec.TaskTemplate!.ContainerSpec?.Mounts?.some(
-              ({ Source }) => Source === volume.Name,
-            ) ?? false,
-        ),
-      });
+      return jsonResponse(
+        detailEnvelope(`/volumes/${volume.Name}`, "Volume", {
+          volume,
+          services: findServicesUsing(
+            dataset,
+            (service) =>
+              service.Spec.TaskTemplate!.ContainerSpec?.Mounts?.some(
+                ({ Source }) => Source === volume.Name,
+              ) ?? false,
+          ),
+        } satisfies VolumeDetail),
+      );
     }),
 
     http.get("*/volumes", ({ request }) => {

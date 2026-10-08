@@ -101,7 +101,8 @@ What the cluster is doing now, and what it did recently.
 <McpTool name="get_events" level={0}>
     <Fragment slot="arguments">`since`, `until`, `types`, `resource`, `limit`</Fragment>
 
-    The change timeline, newest first.
+    The change timeline, newest first. `resource` takes a name as readily as an ID, resolved against `types` when
+    exactly one is given and otherwise only where no other type claims the name.
 </McpTool>
 
 <McpTool name="get_metrics" level={0}>
