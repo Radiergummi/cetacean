@@ -1096,10 +1096,8 @@ func TestServiceScaleACL_AllowedByResourceName(t *testing.T) {
 	}})
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			scaleServiceFn: func(_ context.Context, id string, r uint64) (swarm.Service, error) {
-				return swarm.Service{ID: id}, nil
-			},
+		scaleServiceFn: func(_ context.Context, id string, r uint64) (swarm.Service, error) {
+			return swarm.Service{ID: id}, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
@@ -1146,10 +1144,8 @@ func TestTaskRemoveACL_ResolvesToParentService(t *testing.T) {
 	}})
 
 	wc := &mockWriteClient{
-		mockResourceRemover: mockResourceRemover{
-			removeTaskFn: func(_ context.Context, id string) error {
-				return nil
-			},
+		removeTaskFn: func(_ context.Context, id string) error {
+			return nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))

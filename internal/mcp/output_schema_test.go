@@ -137,8 +137,8 @@ func TestEveryToolResultConformsToItsOutputSchema(t *testing.T) {
 	c := seededDescribeCache()
 
 	svc := swarm.Service{
-		ID:   "svc1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 7}},
+		ID:      "svc1",
+		Version: swarm.Version{Index: 7},
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
 			TaskTemplate: swarm.TaskSpec{

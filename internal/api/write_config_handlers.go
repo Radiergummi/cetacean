@@ -28,8 +28,8 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 		typeName:     "Config",
 		create: func(ctx context.Context, name string, data []byte) (string, error) {
 			return h.configWriter.CreateConfig(ctx, swarm.ConfigSpec{
-				Annotations: swarm.Annotations{Name: name},
-				Data:        data,
+				Name: name,
+				Data: data,
 			})
 		},
 		buildFallback: func(id string, name string) any {

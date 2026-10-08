@@ -632,8 +632,8 @@ func TestToolScaleService(t *testing.T) {
 	stale := uint64(2)
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 10}},
+		ID:      "svc1",
+		Version: swarm.Version{Index: 10},
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
 			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &stale}},
@@ -648,8 +648,8 @@ func TestToolScaleService(t *testing.T) {
 			// InspectService, so the handler receives the post-mutation
 			// service. The stub models that.
 			return swarm.Service{
-				ID:   "svc1",
-				Meta: swarm.Meta{Version: swarm.Version{Index: 11}},
+				ID:      "svc1",
+				Version: swarm.Version{Index: 11},
 				Spec: swarm.ServiceSpec{
 					Annotations: swarm.Annotations{Name: "web"},
 					Mode: swarm.ServiceMode{

@@ -27,27 +27,25 @@ func TestPreconditionOnServiceEnv(t *testing.T) {
 	// rather than merely "not 412" — a check a handler-side panic would pass
 	// just as well.
 	stubEnvWriteClient := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceEnvFn: func(
-				_ context.Context,
-				id string,
-				env map[string]string,
-			) (swarm.Service, error) {
-				envSlice := make([]string, 0, len(env))
-				for k, v := range env {
-					envSlice = append(envSlice, k+"="+v)
-				}
-				return swarm.Service{
-					ID:   id,
-					Meta: swarm.Meta{Version: swarm.Version{Index: 8}},
-					Spec: swarm.ServiceSpec{
-						Annotations: swarm.Annotations{Name: "web"},
-						TaskTemplate: swarm.TaskSpec{
-							ContainerSpec: &swarm.ContainerSpec{Env: envSlice},
-						},
+		updateServiceEnvFn: func(
+			_ context.Context,
+			id string,
+			env map[string]string,
+		) (swarm.Service, error) {
+			envSlice := make([]string, 0, len(env))
+			for k, v := range env {
+				envSlice = append(envSlice, k+"="+v)
+			}
+			return swarm.Service{
+				ID:      id,
+				Version: swarm.Version{Index: 8},
+				Spec: swarm.ServiceSpec{
+					Annotations: swarm.Annotations{Name: "web"},
+					TaskTemplate: swarm.TaskSpec{
+						ContainerSpec: &swarm.ContainerSpec{Env: envSlice},
 					},
-				}, nil
-			},
+				},
+			}, nil
 		},
 	}
 
@@ -55,8 +53,8 @@ func TestPreconditionOnServiceEnv(t *testing.T) {
 		t.Helper()
 		c := cache.New(nil)
 		c.SetService(swarm.Service{
-			ID:   "svc1",
-			Meta: swarm.Meta{Version: swarm.Version{Index: 7}},
+			ID:      "svc1",
+			Version: swarm.Version{Index: 7},
 			Spec: swarm.ServiceSpec{
 				Annotations: swarm.Annotations{Name: "web"},
 				TaskTemplate: swarm.TaskSpec{
@@ -366,8 +364,8 @@ func seededService() swarm.Service {
 	stopGrace := 10 * time.Second
 
 	return swarm.Service{
-		ID:   "svc1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 7}},
+		ID:      "svc1",
+		Version: swarm.Version{Index: 7},
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{
 				Name: "web",
@@ -426,82 +424,68 @@ func seededService() swarm.Service {
 func seededWriteClient() *mockWriteClient {
 	updated := func(id string) (swarm.Service, error) {
 		return swarm.Service{
-			ID:   id,
-			Meta: swarm.Meta{Version: swarm.Version{Index: 8}},
-			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+			ID:      id,
+			Version: swarm.Version{Index: 8},
+			Spec:    swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 		}, nil
 	}
 	node := func(id string) (swarm.Node, error) {
-		return swarm.Node{ID: id, Meta: swarm.Meta{Version: swarm.Version{Index: 8}}}, nil
+		return swarm.Node{ID: id, Version: swarm.Version{Index: 8}}, nil
 	}
 
 	return &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			removeServiceFn: func(context.Context, string) error { return nil },
-			updateServiceEndpointModeFn: func(_ context.Context, id string, _ swarm.ResolutionMode) (swarm.Service, error) {
-				return updated(id)
-			},
+		removeServiceFn: func(context.Context, string) error { return nil },
+		updateServiceEndpointModeFn: func(_ context.Context, id string, _ swarm.ResolutionMode) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceSpecFn: func(_ context.Context, id string, _ swarm.ServiceSpec) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceEnvFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceHealthcheckFn: func(_ context.Context, id string, _ *container.HealthConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServicePlacementFn: func(_ context.Context, id string, _ *swarm.Placement) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServicePortsFn: func(_ context.Context, id string, _ []swarm.PortConfig) (swarm.Service, error) {
-				return updated(id)
-			},
+		updateServiceSpecFn: func(_ context.Context, id string, _ swarm.ServiceSpec) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockServiceAttachmentWriter: mockServiceAttachmentWriter{
-			updateServiceConfigsFn: func(_ context.Context, id string, _ []*swarm.ConfigReference) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceSecretsFn: func(_ context.Context, id string, _ []*swarm.SecretReference) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceNetworksFn: func(_ context.Context, id string, _ []swarm.NetworkAttachmentConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceMountsFn: func(_ context.Context, id string, _ []mount.Mount) (swarm.Service, error) {
-				return updated(id)
-			},
+		updateServiceEnvFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockNodeWriter: mockNodeWriter{
-			updateNodeLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Node, error) {
-				return node(id)
-			},
-			updateNodeRoleFn: func(_ context.Context, id string, _ swarm.NodeRole) (swarm.Node, error) {
-				return node(id)
-			},
-			removeNodeFn: func(context.Context, string, bool) error { return nil },
+		updateServiceLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockConfigWriter: mockConfigWriter{
-			removeConfigFn: func(context.Context, string) error { return nil },
-			updateConfigLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Config, error) {
-				return swarm.Config{ID: id}, nil
-			},
+		updateServiceHealthcheckFn: func(_ context.Context, id string, _ *container.HealthConfig) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockSecretWriter: mockSecretWriter{
-			removeSecretFn: func(context.Context, string) error { return nil },
-			updateSecretLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Secret, error) {
-				return swarm.Secret{ID: id}, nil
-			},
+		updateServicePlacementFn: func(_ context.Context, id string, _ *swarm.Placement) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockResourceRemover: mockResourceRemover{
-			removeTaskFn:    func(context.Context, string) error { return nil },
-			removeNetworkFn: func(context.Context, string) error { return nil },
-			removeVolumeFn:  func(context.Context, string, bool) error { return nil },
+		updateServicePortsFn: func(_ context.Context, id string, _ []swarm.PortConfig) (swarm.Service, error) {
+			return updated(id)
 		},
+		updateServiceConfigsFn: func(_ context.Context, id string, _ []*swarm.ConfigReference) (swarm.Service, error) {
+			return updated(id)
+		},
+		updateServiceSecretsFn: func(_ context.Context, id string, _ []*swarm.SecretReference) (swarm.Service, error) {
+			return updated(id)
+		},
+		updateServiceNetworksFn: func(_ context.Context, id string, _ []swarm.NetworkAttachmentConfig) (swarm.Service, error) {
+			return updated(id)
+		},
+		updateServiceMountsFn: func(_ context.Context, id string, _ []mount.Mount) (swarm.Service, error) {
+			return updated(id)
+		},
+		updateNodeLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Node, error) {
+			return node(id)
+		},
+		updateNodeRoleFn: func(_ context.Context, id string, _ swarm.NodeRole) (swarm.Node, error) {
+			return node(id)
+		},
+		removeNodeFn:   func(context.Context, string, bool) error { return nil },
+		removeConfigFn: func(context.Context, string) error { return nil },
+		updateConfigLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Config, error) {
+			return swarm.Config{ID: id}, nil
+		},
+		removeSecretFn: func(context.Context, string) error { return nil },
+		updateSecretLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Secret, error) {
+			return swarm.Secret{ID: id}, nil
+		},
+		removeTaskFn:    func(context.Context, string) error { return nil },
+		removeNetworkFn: func(context.Context, string) error { return nil },
+		removeVolumeFn:  func(context.Context, string, bool) error { return nil },
 	}
 }
 
@@ -566,8 +550,8 @@ func newSeededTestRouterWithConfig(
 	c := cache.New(nil)
 	c.SetService(seededService())
 	c.SetNode(swarm.Node{
-		ID:   "node1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 3}},
+		ID:      "node1",
+		Version: swarm.Version{Index: 3},
 		Spec: swarm.NodeSpec{
 			Role:         swarm.NodeRoleManager,
 			Availability: swarm.NodeAvailabilityActive,

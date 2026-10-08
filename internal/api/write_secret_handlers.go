@@ -29,8 +29,8 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 		typeName:     "Secret",
 		create: func(ctx context.Context, name string, data []byte) (string, error) {
 			return h.secretWriter.CreateSecret(ctx, swarm.SecretSpec{
-				Annotations: swarm.Annotations{Name: name},
-				Data:        data,
+				Name: name,
+				Data: data,
 			})
 		},
 		buildFallback: func(id string, name string) any {

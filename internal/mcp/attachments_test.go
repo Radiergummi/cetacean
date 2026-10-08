@@ -20,8 +20,8 @@ func attachmentTestCache(t *testing.T) *cache.Cache {
 
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 41}},
+		ID:      "svc1",
+		Version: swarm.Version{Index: 41},
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
 			TaskTemplate: swarm.TaskSpec{
