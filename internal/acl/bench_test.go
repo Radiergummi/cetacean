@@ -5,10 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/docker/docker/api/types/swarm"
-
 	"github.com/radiergummi/cetacean/internal/auth"
-	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // --- Can() benchmarks ---
@@ -249,75 +246,4 @@ func BenchmarkHasACLLabels(b *testing.B) {
 			hasACLLabels(labels)
 		}
 	})
-}
-
-// --- Against the real cache ---
-
-// realLabelledCluster is a cache of n services, every other one readable by
-// group:ops alone, behind an evaluator with labels on and no policy.
-func realLabelledCluster(b *testing.B, n int) (*cache.Cache, *Evaluator) {
-	b.Helper()
-
-	c := cache.New(nil)
-	for i := range n {
-		labels := map[string]string{}
-		if i%2 == 0 {
-			labels[LabelRead] = "group:ops"
-		}
-		c.SetService(swarm.Service{
-			ID: fmt.Sprintf("id-%d", i),
-			Spec: swarm.ServiceSpec{
-				Annotations: swarm.Annotations{Name: fmt.Sprintf("svc-%d", i), Labels: labels},
-			},
-		})
-	}
-
-	e := NewEvaluator()
-	e.SetLabelsEnabled(true)
-	e.SetResolver(c)
-
-	return c, e
-}
-
-var unnamed = &auth.Identity{Subject: "dev", Groups: []string{"devs"}}
-
-func BenchmarkCan_RealCache(b *testing.B) {
-	_, e := realLabelledCluster(b, 1000)
-
-	b.ResetTimer()
-	for i := range b.N {
-		e.Can(unnamed, "read", fmt.Sprintf("service:svc-%d", i%1000))
-	}
-}
-
-func BenchmarkTypeGrants_RealCache(b *testing.B) {
-	_, e := realLabelledCluster(b, 1000)
-
-	b.ResetTimer()
-	for range b.N {
-		e.TypeGrants(unnamed)
-	}
-}
-
-func BenchmarkHasAnyGrant_RealCache(b *testing.B) {
-	_, e := realLabelledCluster(b, 1000)
-
-	b.ResetTimer()
-	for range b.N {
-		e.HasAnyGrant(unnamed)
-	}
-}
-
-func BenchmarkTypeGrants_RealCacheWithPolicy(b *testing.B) {
-	_, e := realLabelledCluster(b, 1000)
-	e.SetPolicy(&Policy{Grants: []Grant{{
-		Resources:   []string{"config:*"},
-		Audience:    []string{"group:devs"},
-		Permissions: []string{"read"},
-	}}})
-
-	b.ResetTimer()
-	for range b.N {
-		e.TypeGrants(unnamed)
-	}
 }

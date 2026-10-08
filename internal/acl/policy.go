@@ -49,28 +49,6 @@ var validPermissions = map[string]bool{
 	"write": true,
 }
 
-// validateAudience checks one audience expression, from a grant or a label.
-func validateAudience(a string) error {
-	if a == "*" {
-		return nil
-	}
-
-	parts := strings.SplitN(a, ":", 2)
-	if len(parts) != 2 || parts[1] == "" {
-		return fmt.Errorf("invalid audience expression %q (expected kind:pattern)", a)
-	}
-
-	if !validAudienceKinds[parts[0]] {
-		return fmt.Errorf("unknown audience kind %q", parts[0])
-	}
-
-	if _, err := path.Match(parts[1], ""); err != nil {
-		return fmt.Errorf("invalid glob pattern in audience %q: %w", a, err)
-	}
-
-	return nil
-}
-
 // validateGrant checks a single grant for structural errors.
 func validateGrant(g Grant) error {
 	if len(g.Resources) == 0 {
@@ -97,8 +75,21 @@ func validateGrant(g Grant) error {
 	}
 
 	for _, a := range g.Audience {
-		if err := validateAudience(a); err != nil {
-			return err
+		if a == "*" {
+			continue
+		}
+
+		parts := strings.SplitN(a, ":", 2)
+		if len(parts) != 2 || parts[1] == "" {
+			return fmt.Errorf("invalid audience expression %q (expected kind:pattern)", a)
+		}
+
+		if !validAudienceKinds[parts[0]] {
+			return fmt.Errorf("unknown audience kind %q", parts[0])
+		}
+
+		if _, err := path.Match(parts[1], ""); err != nil {
+			return fmt.Errorf("invalid glob pattern in audience %q: %w", a, err)
 		}
 	}
 

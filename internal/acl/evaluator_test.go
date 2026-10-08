@@ -10,13 +10,10 @@ import (
 
 // stubResolver implements ResourceResolver for testing.
 type stubResolver struct {
-	stacks     map[string]string            // "type:id" -> stack name
-	services   map[string]string            // taskID -> service name
-	labels     map[string]map[string]string // "type:name" -> labels
-	generation uint64
+	stacks   map[string]string            // "type:id" -> stack name
+	services map[string]string            // taskID -> service name
+	labels   map[string]map[string]string // "type:name" -> labels
 }
-
-func (r *stubResolver) LabelGeneration() uint64 { return r.generation }
 
 func (r *stubResolver) StackOf(resourceType, resourceID string) string {
 	return r.stacks[resourceType+":"+resourceID]
@@ -1452,41 +1449,5 @@ func TestFilter_ReadsLabelsOncePerType(t *testing.T) {
 			"per-name label reads = %d, want 0: that is the quadratic path",
 			resolver.singleReads,
 		)
-	}
-}
-
-// The label projection depends on the identity, the policy and the labels, and
-// none of those change with a task. It is computed once per label generation
-// and identity, and recomputed, correctly, once the labels move.
-func TestLabelTypeGrantsAreReusedUntilTheLabelsChange(t *testing.T) {
-	resolver := &countingResolver{labels: map[string]map[string]string{
-		"service:web": {LabelRead: "group:devs"},
-	}}
-	e := NewEvaluator()
-	e.SetLabelsEnabled(true)
-	e.SetResolver(resolver)
-	e.SetPolicy(&Policy{})
-
-	dev := &auth.Identity{Subject: "d", Groups: []string{"devs"}}
-
-	if !e.TypeGrants(dev).Can("read", "service") || !e.HasAnyGrant(dev) {
-		t.Fatal("a label naming dev granted nothing")
-	}
-	reads := resolver.bulkReads
-
-	e.TypeGrants(dev)
-	e.HasAnyGrant(dev)
-	if resolver.bulkReads != reads {
-		t.Errorf(
-			"the projection was recomputed %d times with nothing changed",
-			resolver.bulkReads-reads,
-		)
-	}
-
-	resolver.labels["service:web"] = map[string]string{LabelRead: "group:ops"}
-	resolver.generation++
-
-	if e.TypeGrants(dev).Can("read", "service") || e.HasAnyGrant(dev) {
-		t.Error("a label that no longer names dev still grants after the labels changed")
 	}
 }
