@@ -241,7 +241,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-github.com/coder/websocket v1.8.14
+github.com/coder/websocket v1.8.15
 https://github.com/coder/websocket
 License: 0BSD
 
@@ -879,7 +879,7 @@ This product includes software developed at CoreOS, Inc.
 
 ------------------------------------------------------------------------------
 
-github.com/creachadair/msync v0.8.1
+github.com/creachadair/msync v0.10.1
 https://github.com/creachadair/msync
 License: BSD-3-Clause
 
@@ -1562,7 +1562,7 @@ See also https://www.apache.org/dev/crypto.html and/or seek legal counsel.
 
 ------------------------------------------------------------------------------
 
-github.com/docker/go-connections v0.6.0
+github.com/docker/go-connections v0.7.0
 https://github.com/docker/go-connections
 License: Apache-2.0
 
@@ -2049,7 +2049,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-github.com/fxamacker/cbor/v2 v2.9.0
+github.com/fxamacker/cbor/v2 v2.9.3
 https://github.com/fxamacker/cbor
 License: MIT
 
@@ -2077,13 +2077,13 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-github.com/gaissmai/bart v0.26.1
+github.com/gaissmai/bart v0.29.0
 https://github.com/gaissmai/bart
 License: MIT
 
 MIT License
 
-Copyright (c) 2024 Karl Gaissmaier
+Copyright (c) 2026 Karl Gaissmaier
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -2316,7 +2316,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433
+github.com/go-json-experiment/json v0.0.0-20260820222146-c27c302e5fc3
 https://github.com/go-json-experiment/json
 License: BSD-3-Clause
 
@@ -2769,7 +2769,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-github.com/goccy/go-json v0.10.6
+github.com/goccy/go-json v0.11.2
 https://github.com/goccy/go-json
 License: MIT
 
@@ -3406,7 +3406,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-github.com/jsimonetti/rtnetlink v1.4.1
+github.com/jsimonetti/rtnetlink v1.4.2
 https://github.com/jsimonetti/rtnetlink
 License: MIT
 
@@ -3424,7 +3424,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ------------------------------------------------------------------------------
 
-github.com/klauspost/compress v1.20.0
+github.com/klauspost/compress v1.20.1
 https://github.com/klauspost/compress
 License: Apache-2.0
 
@@ -3736,7 +3736,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ------------------------------------------------------------------------------
 
-github.com/mark3labs/mcp-go v1.1.0
+github.com/mark3labs/mcp-go v1.1.1
 https://github.com/mark3labs/mcp-go
 License: MIT
 
@@ -3765,13 +3765,13 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42
+github.com/mdlayher/netlink v1.11.2
 https://github.com/mdlayher/netlink
 License: MIT
 
 # MIT License
 
-Copyright (C) 2016-2022 Matt Layher
+Copyright (C) 2016-2026 Matt Layher
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -3782,7 +3782,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ------------------------------------------------------------------------------
 
-github.com/mdlayher/socket v0.5.0
+github.com/mdlayher/socket v0.7.0
 https://github.com/mdlayher/socket
 License: MIT
 
@@ -4907,7 +4907,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-github.com/pires/go-proxyproto v0.8.1
+github.com/pires/go-proxyproto v0.15.0
 https://github.com/pires/go-proxyproto
 License: Apache-2.0
 
@@ -5596,7 +5596,7 @@ SoundCloud Ltd. (http://soundcloud.com/).
 
 ------------------------------------------------------------------------------
 
-github.com/prometheus/common v0.70.1
+github.com/prometheus/common v0.71.0
 https://github.com/prometheus/common
 License: Apache-2.0
 
@@ -6034,7 +6034,7 @@ SoundCloud Ltd. (http://soundcloud.com/).
 
 ------------------------------------------------------------------------------
 
-github.com/safchain/ethtool v0.3.0
+github.com/safchain/ethtool v0.7.0
 https://github.com/safchain/ethtool
 License: Apache-2.0
 
@@ -6226,7 +6226,7 @@ License: Apache-2.0
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright {yyyy} {name of copyright owner}
+   Copyright (c) 2015 The Ethtool Authors
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -6426,7 +6426,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-github.com/spf13/cast v1.7.1
+github.com/spf13/cast v1.10.0
 https://github.com/spf13/cast
 License: MIT
 
@@ -6454,7 +6454,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd
+github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f
 https://github.com/tailscale/hujson
 License: BSD-3-Clause
 
@@ -6526,7 +6526,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-github.com/tailscale/web-client-prebuilt v0.0.0-20250124233751-d4cd19a26976
+github.com/tailscale/web-client-prebuilt v0.0.0-20260917222731-e0ed2d0d0fea
 https://github.com/tailscale/web-client-prebuilt
 License: BSD-3-Clause
 
@@ -6562,7 +6562,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-github.com/tailscale/wireguard-go v0.0.0-20260715223240-2e01ba5b00f0
+github.com/tailscale/wireguard-go v0.0.0-20260928213032-417aef361226
 https://github.com/tailscale/wireguard-go
 License: MIT
 
@@ -8934,7 +8934,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
+go4.org/netipx v0.0.0-20260823151212-3075585bcbeb
 License: BSD-3-Clause
 
 Copyright (c) 2020 The Inet.af AUTHORS. All rights reserved.
@@ -8968,7 +8968,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/crypto v0.55.0
+golang.org/x/crypto v0.57.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9002,7 +9002,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
+golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9036,7 +9036,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/net v0.58.0
+golang.org/x/net v0.59.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9104,7 +9104,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/sync v0.22.0
+golang.org/x/sync v0.23.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9138,7 +9138,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/sys v0.47.0
+golang.org/x/sys v0.48.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9172,7 +9172,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/term v0.45.0
+golang.org/x/term v0.46.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9206,7 +9206,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/text v0.41.0
+golang.org/x/text v0.42.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9240,7 +9240,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/time v0.15.0
+golang.org/x/time v0.16.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -10027,7 +10027,7 @@ limitations under the License.
 
 ------------------------------------------------------------------------------
 
-gvisor.dev/gvisor v0.0.0-20260224225140-573d5e7127a8
+gvisor.dev/gvisor v0.0.0-20260915211658-a6f909f08a72
 License: Apache-2.0
 
 
@@ -10287,7 +10287,7 @@ Some files carry the "BSD" license, noted at the top of each file:
 
 ------------------------------------------------------------------------------
 
-tailscale.com v1.102.4
+tailscale.com v1.104.0
 License: BSD-3-Clause
 
 BSD 3-Clause License
