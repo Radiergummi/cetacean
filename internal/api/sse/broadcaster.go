@@ -163,7 +163,7 @@ func (b *Broadcaster) ServeSSE(
 	}
 	if len(b.clients) >= MaxClients {
 		b.mu.Unlock()
-		w.Header().Set("Retry-After", "5")
+		w.Header().Set("Retry-After", RetryAfter())
 		b.writeError(w, r, "SSE001", "too many SSE connections")
 		return
 	}

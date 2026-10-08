@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
 
@@ -46,9 +48,7 @@ func TestMetricsStream_ConnectionLimit(t *testing.T) {
 	if w.Code != http.StatusTooManyRequests {
 		t.Errorf("expected 429, got %d", w.Code)
 	}
-	if w.Header().Get("Retry-After") != "5" {
-		t.Error("expected Retry-After: 5 header")
-	}
+	assertRetryAfter(t, w.Header().Get("Retry-After"))
 }
 
 func TestMetricsStream_StreamsEvents(t *testing.T) {
@@ -177,5 +177,32 @@ func TestMetricsStream_ErrorEvent(t *testing.T) {
 	}
 	if strings.Contains(body, "\nid: ") {
 		t.Error("metrics frames carry no id; this stream writes none")
+	}
+}
+
+// The log tail refuses past its cap with the same spread Retry-After the other
+// capped streams send.
+func TestLogStreamConnectionLimit(t *testing.T) {
+	h := &Handlers{}
+	h.activeLogSSEConns.Store(maxLogSSEConns)
+
+	w := httptest.NewRecorder()
+	h.serveLogsSSE(w, httptest.NewRequest("GET", "/services/x/logs", nil), nil, "", "")
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want 429", w.Code)
+	}
+	assertRetryAfter(t, w.Header().Get("Retry-After"))
+}
+
+// assertRetryAfter fails unless value is one sse.RetryAfter could have produced.
+func assertRetryAfter(t *testing.T, value string) {
+	t.Helper()
+
+	seconds, err := strconv.Atoi(value)
+	if err != nil || seconds < sse.RetryAfterFloor ||
+		seconds >= sse.RetryAfterFloor+sse.RetryAfterWindow {
+		t.Errorf("Retry-After = %q, want delta-seconds in [%d, %d)",
+			value, sse.RetryAfterFloor, sse.RetryAfterFloor+sse.RetryAfterWindow)
 	}
 }

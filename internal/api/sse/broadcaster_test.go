@@ -317,9 +317,7 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 	// Retry-After is the broadcaster's own contribution — it sets the header
 	// before delegating to the writer — and is documented behaviour, so it is
 	// asserted rather than assumed.
-	if got := w.Header().Get("Retry-After"); got != "5" {
-		t.Errorf("Retry-After = %q, want %q", got, "5")
-	}
+	assertRetryAfter(t, w.Header().Get("Retry-After"))
 
 	if recorded.code != "SSE001" {
 		t.Errorf("error code = %q, want SSE001", recorded.code)
