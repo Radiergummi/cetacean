@@ -51,8 +51,8 @@ func seedService(t *testing.T, c *cache.Cache, id string, desired, running int) 
 func TestAwaitServiceRefusesToJudgeAStaleCache(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 5}},
+		ID:      "svc1",
+		Version: swarm.Version{Index: 5},
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
 			Mode: swarm.ServiceMode{
@@ -76,8 +76,8 @@ func TestAwaitServiceReturnsOnceTheVersionCatchesUp(t *testing.T) {
 	replicas := uint64(2)
 	set := func(version uint64) {
 		c.SetService(swarm.Service{
-			ID:   "svc1",
-			Meta: swarm.Meta{Version: swarm.Version{Index: version}},
+			ID:      "svc1",
+			Version: swarm.Version{Index: version},
 			Spec: swarm.ServiceSpec{
 				Annotations: swarm.Annotations{Name: "web"},
 				Mode: swarm.ServiceMode{

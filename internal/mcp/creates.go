@@ -102,8 +102,8 @@ var (
 			data []byte,
 		) (string, error) {
 			return wc.CreateSecret(ctx, swarm.SecretSpec{
-				Annotations: swarm.Annotations{Name: name, Labels: labels},
-				Data:        data,
+				Name: name, Labels: labels,
+				Data: data,
 			})
 		},
 		seed: func(c *cache.Cache, id, name string, labels map[string]string) {
@@ -124,8 +124,8 @@ var (
 			data []byte,
 		) (string, error) {
 			return wc.CreateConfig(ctx, swarm.ConfigSpec{
-				Annotations: swarm.Annotations{Name: name, Labels: labels},
-				Data:        data,
+				Name: name, Labels: labels,
+				Data: data,
 			})
 		},
 		seed: func(c *cache.Cache, id, name string, labels map[string]string) {

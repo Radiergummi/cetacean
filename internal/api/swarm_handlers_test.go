@@ -82,30 +82,26 @@ func validSwarm() swarm.Swarm {
 	retention := int64(5)
 	keepOld := uint64(1)
 	return swarm.Swarm{
-		ClusterInfo: swarm.ClusterInfo{
-			Meta: swarm.Meta{
-				Version: swarm.Version{Index: 42},
+		Version: swarm.Version{Index: 42},
+		Spec: swarm.Spec{
+			Orchestration: swarm.OrchestrationConfig{
+				TaskHistoryRetentionLimit: &retention,
 			},
-			Spec: swarm.Spec{
-				Orchestration: swarm.OrchestrationConfig{
-					TaskHistoryRetentionLimit: &retention,
-				},
-				Raft: swarm.RaftConfig{
-					SnapshotInterval:           10000,
-					KeepOldSnapshots:           &keepOld,
-					LogEntriesForSlowFollowers: 500,
-					ElectionTick:               10,
-					HeartbeatTick:              1,
-				},
-				Dispatcher: swarm.DispatcherConfig{
-					HeartbeatPeriod: 5 * time.Second,
-				},
-				CAConfig: swarm.CAConfig{
-					NodeCertExpiry: 90 * 24 * time.Hour,
-				},
-				EncryptionConfig: swarm.EncryptionConfig{
-					AutoLockManagers: false,
-				},
+			Raft: swarm.RaftConfig{
+				SnapshotInterval:           10000,
+				KeepOldSnapshots:           &keepOld,
+				LogEntriesForSlowFollowers: 500,
+				ElectionTick:               10,
+				HeartbeatTick:              1,
+			},
+			Dispatcher: swarm.DispatcherConfig{
+				HeartbeatPeriod: 5 * time.Second,
+			},
+			CAConfig: swarm.CAConfig{
+				NodeCertExpiry: 90 * 24 * time.Hour,
+			},
+			EncryptionConfig: swarm.EncryptionConfig{
+				AutoLockManagers: false,
 			},
 		},
 	}

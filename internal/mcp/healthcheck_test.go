@@ -19,8 +19,8 @@ import (
 // of eight services on a real cluster and which nothing could previously fix.
 func healthcheckTestService() swarm.Service {
 	return swarm.Service{
-		ID:   "svc1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 41}},
+		ID:      "svc1",
+		Version: swarm.Version{Index: 41},
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
 			TaskTemplate: swarm.TaskSpec{
