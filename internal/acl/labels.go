@@ -3,6 +3,7 @@ package acl
 import (
 	"log/slog"
 	"strings"
+	"sync"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 )
@@ -27,6 +28,10 @@ func ParseACLLabels(labels map[string]string) (read, write []string) {
 	return ParseAudienceList(labels[LabelRead]), ParseAudienceList(labels[LabelWrite])
 }
 
+// warnedAudiences holds the invalid expressions already reported. Parsing runs
+// on every decision a label takes part in, so each is reported once.
+var warnedAudiences sync.Map
+
 // ParseAudienceList splits a comma-separated audience string, trims whitespace,
 // and drops empty entries. Invalid expressions are included but logged as warnings.
 func ParseAudienceList(value string) []string {
@@ -40,10 +45,9 @@ func ParseAudienceList(value string) []string {
 
 		// Warn on invalid audience expressions but include them — matchAudience
 		// will reject them at evaluation time.
-		if p != "*" {
-			kind, _, ok := strings.Cut(p, ":")
-			if !ok || (kind != "user" && kind != "group") {
-				slog.Warn("invalid audience expression in ACL label", "expression", p)
+		if err := validateAudience(p); err != nil {
+			if _, warned := warnedAudiences.LoadOrStore(p, struct{}{}); !warned {
+				slog.Warn("invalid audience expression in ACL label", "expression", p, "error", err)
 			}
 		}
 
