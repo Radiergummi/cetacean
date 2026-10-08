@@ -1238,8 +1238,8 @@ func authorizeWith(t *testing.T, s *Server, q url.Values) *httptest.ResponseReco
 func redirectQuery(t *testing.T, rec *httptest.ResponseRecorder) url.Values {
 	t.Helper()
 
-	if rec.Code != http.StatusFound {
-		t.Fatalf("status = %d, want 302: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303: %s", rec.Code, rec.Body.String())
 	}
 
 	location, err := url.Parse(rec.Header().Get("Location"))
