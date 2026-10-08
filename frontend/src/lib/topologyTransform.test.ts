@@ -377,21 +377,6 @@ describe("rollout status on a service card", () => {
     expect(rollout("s3")).toBeUndefined();
     expect(rollout("s2")).toEqual({ label: "Updating", state: "updating" });
   });
-
-  it("leaves the card height unpadded for a settled rollout", () => {
-    const graph = makeNetworkGraph({
-      nodes: {
-        "urn:cetacean:service:s1": serviceNode("done", { updateStatus: "completed" }),
-        "urn:cetacean:service:s2": serviceNode("live", { updateStatus: "updating" }),
-      },
-    });
-
-    const { nodes } = networkGraphToReactFlow(graph);
-    const height = (id: string) =>
-      nodes.find(({ id: nodeId }) => nodeId === `urn:cetacean:service:${id}`)?.data._elkHeight;
-
-    expect(height("s2")).toBe((height("s1") as number) + 20);
-  });
 });
 
 describe("running replica counts", () => {

@@ -4,20 +4,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
 
 const configFileName = "cetacean.toml"
 
-// DiscoverConfigFile searches standard locations for a config file and
-// returns the path to the first one found. Returns "" if none exists.
-//
-// Search order:
-//  1. ./cetacean.toml (working directory)
-//  2. $XDG_CONFIG_HOME/cetacean/cetacean.toml (or ~/.config/cetacean/cetacean.toml)
-//  3. $HOME/.cetacean.toml
-//  4. /etc/cetacean/cetacean.toml
+// DiscoverConfigFile returns the first config file it finds, or "" if none
+// exists: ./cetacean.toml, then $XDG_CONFIG_HOME/cetacean/cetacean.toml (or
+// ~/.config/cetacean/cetacean.toml), then $HOME/.cetacean.toml, then
+// /etc/cetacean/cetacean.toml.
 func DiscoverConfigFile() string {
 	candidates := []string{
 		configFileName,
@@ -58,6 +56,7 @@ type fileConfig struct {
 	Sizing  *fileSizing  `toml:"sizing"`
 	ACL     *fileACL     `toml:"acl"`
 	MCP     *fileMCP     `toml:"mcp"`
+	OAuth   *fileOAuth   `toml:"oauth"`
 	Tracing *fileTracing `toml:"tracing"`
 }
 
@@ -69,31 +68,38 @@ type fileTracing struct {
 }
 
 type fileMCP struct {
-	Enabled         *bool   `toml:"enabled"`
-	OperationsLevel *int    `toml:"operations_level"`
-	Issuer          *string `toml:"issuer"`
-	SigningKey      *string `toml:"signing_key"`
-	AccessTokenTTL  *string `toml:"access_token_ttl"`
-	RefreshTokenTTL *string `toml:"refresh_token_ttl"`
-	ConsentTTL      *string `toml:"consent_ttl"`
+	Enabled         *bool `toml:"enabled"`
+	OperationsLevel *int  `toml:"operations_level"`
 
 	// MaxConcurrentTasks caps in-flight task-augmented tool calls.
 	MaxConcurrentTasks *int `toml:"max_concurrent_tasks"`
 
 	// TaskTTL and MaxTaskTTL bound how long a task's result is retained when
 	// the client does not say, and however long it does say.
-	TaskTTL    *string       `toml:"task_ttl"`
-	MaxTaskTTL *string       `toml:"max_task_ttl"`
-	OAuth      *fileMCPOAuth `toml:"oauth"`
+	TaskTTL    *string `toml:"task_ttl"`
+	MaxTaskTTL *string `toml:"max_task_ttl"`
+
+	// AuthBypass is MCP's, not the authorization server's: it names the
+	// upstream auth modes accepted at /mcp without a bearer token.
+	AuthBypass []string `toml:"auth_bypass"`
 }
 
-type fileMCPOAuth struct {
-	RequireResourceIndicator *bool    `toml:"require_resource_indicator"`
-	DCREnabled               *bool    `toml:"dcr_enabled"`
-	DCRRateLimit             *int     `toml:"dcr_rate_limit"`
-	DCRMaxClients            *int     `toml:"dcr_max_clients"`
-	CIMDEnabled              *bool    `toml:"cimd_enabled"`
-	AuthBypass               []string `toml:"auth_bypass"`
+// fileOAuth mirrors the [oauth] section. The server is opt-in, so a deployment
+// that never sets Enabled issues no tokens at all.
+type fileOAuth struct {
+	Enabled                  *bool   `toml:"enabled"`
+	Issuer                   *string `toml:"issuer"`
+	SigningKey               *string `toml:"signing_key"`
+	AccessTokenTTL           *string `toml:"access_token_ttl"`
+	RefreshTokenTTL          *string `toml:"refresh_token_ttl"`
+	ConsentTTL               *string `toml:"consent_ttl"`
+	APITokens                *bool   `toml:"api_tokens"`
+	TokenOperationsLevel     *int    `toml:"token_operations_level"`
+	RequireResourceIndicator *bool   `toml:"require_resource_indicator"`
+	DCREnabled               *bool   `toml:"dcr_enabled"`
+	DCRRateLimit             *int    `toml:"dcr_rate_limit"`
+	DCRMaxClients            *int    `toml:"dcr_max_clients"`
+	CIMDEnabled              *bool   `toml:"cimd_enabled"`
 }
 
 type fileSizing struct {
@@ -109,16 +115,17 @@ type fileSizingThresholds struct {
 }
 
 type fileServer struct {
-	ListenAddr      *string   `toml:"listen_addr"`
-	Pprof           *bool     `toml:"pprof"`
-	SelfMetrics     *bool     `toml:"self_metrics"`
-	Recommendations *bool     `toml:"recommendations"`
-	SSE             *fileSSE  `toml:"sse"`
-	CORS            *fileCORS `toml:"cors"`
-	OperationsLevel *int      `toml:"operations_level"`
-	BasePath        *string   `toml:"base_path"`
-	PublicURL       *string   `toml:"public_url"`
-	TrustedProxies  *string   `toml:"trusted_proxies"`
+	ListenAddr       *string   `toml:"listen_addr"`
+	Pprof            *bool     `toml:"pprof"`
+	SelfMetrics      *bool     `toml:"self_metrics"`
+	Recommendations  *bool     `toml:"recommendations"`
+	SSE              *fileSSE  `toml:"sse"`
+	CORS             *fileCORS `toml:"cors"`
+	OperationsLevel  *int      `toml:"operations_level"`
+	BasePath         *string   `toml:"base_path"`
+	PublicURL        *string   `toml:"public_url"`
+	TrustedProxies   *string   `toml:"trusted_proxies"`
+	ForwardedHeaders *string   `toml:"forwarded_headers"`
 }
 
 type fileCORS struct {
@@ -182,13 +189,12 @@ type fileAuthCert struct {
 }
 
 type fileAuthHeaders struct {
-	Subject        *string `toml:"subject"`
-	Name           *string `toml:"name"`
-	Email          *string `toml:"email"`
-	Groups         *string `toml:"groups"`
-	SecretHeader   *string `toml:"secret_header"`
-	SecretValue    *string `toml:"secret_value"`
-	TrustedProxies *string `toml:"trusted_proxies"`
+	Subject      *string `toml:"subject"`
+	Name         *string `toml:"name"`
+	Email        *string `toml:"email"`
+	Groups       *string `toml:"groups"`
+	SecretHeader *string `toml:"secret_header"`
+	SecretValue  *string `toml:"secret_value"`
 }
 
 type fileACL struct {
@@ -197,10 +203,16 @@ type fileACL struct {
 	TailscaleCapability *string `toml:"tailscale_capability"`
 	OIDCClaim           *string `toml:"oidc_claim"`
 	HeadersACL          *string `toml:"headers_acl"`
+	Labels              *bool   `toml:"labels"`
 }
 
 // LoadFile reads and parses the TOML config file at path.
 // Returns nil config (not an error) if path is empty.
+//
+// A key the schema does not know is an error, not a silent no-op: half of these
+// settings exist to *remove* capability, so a typo or a setting that moved
+// between releases would otherwise hand the operator the permissive default
+// while their file says the opposite.
 func LoadFile(path string) (*fileConfig, error) {
 	if path == "" {
 		return nil, nil
@@ -212,8 +224,45 @@ func LoadFile(path string) (*fileConfig, error) {
 	}
 
 	var fc fileConfig
-	if err := toml.Unmarshal(data, &fc); err != nil {
+	meta, err := toml.Decode(string(data), &fc)
+	if err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
+
+	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
+		keys := make([]string, 0, len(undecoded))
+		for _, key := range undecoded {
+			keys = append(keys, key.String())
+		}
+		slices.Sort(keys)
+
+		return nil, unknownKeyError(path, keys)
+	}
+
 	return &fc, nil
+}
+
+// unknownKeyError reports the keys a file carries that nothing decodes. Keys
+// arrive sorted.
+func unknownKeyError(path string, keys []string) error {
+	named := make([]string, 0, len(keys))
+
+	for _, key := range keys {
+		// Undecoded() reports a table as well as the keys inside it, and the
+		// table says nothing the key it contains has not already said.
+		if slices.ContainsFunc(keys, func(other string) bool {
+			return strings.HasPrefix(other, key+".")
+		}) {
+			continue
+		}
+
+		named = append(named, key)
+	}
+
+	return fmt.Errorf(
+		"%s carries settings this release does not read: %s. Check them against "+
+			"docs/configuration.mdx",
+		path,
+		strings.Join(named, ", "),
+	)
 }

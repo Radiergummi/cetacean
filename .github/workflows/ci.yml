@@ -3,8 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every pull request, not only those based on main. A stacked pull request is
+  # based on the branch below it, and filtering by base leaves every branch in a
+  # stack untested until it reaches the front of the queue.
   pull_request:
-    branches: [main]
   # For the chore/sbom-sync branch: a pull request opened with GITHUB_TOKEN
   # raises no pull_request event, so its required checks would never run.
   # workflow_dispatch is the documented exception, and scripts/open-sbom-pr.sh
@@ -14,20 +16,26 @@ on:
 permissions:
   contents: read
 
+# A superseded run has nothing left to report, but without this it runs to
+# completion anyway. Pull requests only: every commit on main owes a SBOM sync
+# and a Pages deploy, and cancelling one leaves that commit unserved. This
+# overrides sbom-sync's own group, which is safe — see the note there.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build-frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm ci
-      - run: cd frontend && npm run build
-      - run: cd frontend && npm run build:widgets
-      - run: cd frontend && mkdir -p ../website/public/demo && npm run build:demo
+          persist-credentials: false
+      - uses: ./.github/actions/node
+      - run: pnpm --filter frontend build
+      - run: pnpm --filter frontend build:widgets
+      - run: mkdir -p website/public/demo && pnpm --filter frontend build:demo
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: frontend-dist
@@ -43,23 +51,74 @@ jobs:
   test:
     needs: build-frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # Cached below instead. setup-go keys every job on the same
+          # go.sum hash, so the four Go jobs race for one entry and the
+          # winner keeps it: this job then restores a blob built without
+          # -race and recompiles the stdlib and every dependency.
+          cache: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-test-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: go-test-${{ runner.os }}-
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: frontend-dist
           path: frontend
       - run: go build .
-      - run: go test -race ./...
+      # -count=1 is what makes the claims usable: the claims directory is read
+      # through the environment, so an unchanged package with the same value
+      # replays a cached result and records nothing.
+      - run: mkdir -p .spec-claims
+      - run: go test -race -count=1 ./...
+        env:
+          CETACEAN_SPEC_CLAIMS: ${{ github.workspace }}/.spec-claims
+      # static asks whether a claim was written; report asks whether the test
+      # that writes it passed. Neither answers for the other.
+      - run: go run ./scripts/spec-gate report --claims .spec-claims --suites unit
+      - run: make spec
+      # make spec vets the e2e tree with spec-vet alone; this is the only
+      # run of the standard analyzers over it, which golangci-lint skips.
+      - run: go vet -tags e2e ./test/e2e/...
+
+  spec-mutants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-mutants-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: go-mutants-${{ runner.os }}-
+      - run: make spec-mutants
 
   lint-go:
     needs: build-frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -73,36 +132,88 @@ jobs:
           # when a new release ships stricter rules (e.g. 2.12.0 added
           # govet/inline, modernize/slicesbackward, broader gosec/G124).
           # Bump in lockstep with the local Homebrew formula.
-          version: v2.12.2
+          version: v2.13.2
       # `golangci-lint run` does not evaluate the `formatters:` section of
       # .golangci.yml (gofmt/goimports/golines) — only `golangci-lint fmt`
       # does. Without this step misformatted Go passes CI and is caught only
       # by a local `make fmt-check`.
       - run: golangci-lint fmt --diff ./... 2>&1 | diff /dev/null -
 
-  lint-frontend:
+  lint-workflows:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm ci
-      - run: cd frontend && npx oxlint
-      - run: cd frontend && npx oxfmt --check .
-      - run: cd frontend && npm run check
+          persist-credentials: false
+      # actionlint ships no action, and building it from source costs a Go
+      # toolchain and a module download to produce a binary that runs in a
+      # second. Take the published build and pin its digest, which is a
+      # tighter claim than a tag on an action would be.
+      - env:
+          VERSION: 1.7.12
+          SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          curl -fsSL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v$VERSION/actionlint_${VERSION}_linux_amd64.tar.gz"
+          echo "$SHA256  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz actionlint
+          sudo install -m 0755 actionlint /usr/local/bin/actionlint
+          rm actionlint actionlint.tar.gz
+      - run: actionlint -color
+      # zizmor's own action is composite and installs it the same way, so
+      # there is nothing to win by spending an allowlist entry on it.
+      - run: pipx install zizmor==1.30.1
+      # Online, so that an action going known-bad fails a run rather than
+      # waiting to be noticed. zizmor's own version is pinned, which keeps
+      # rule drift out; what drifts here is the advisory data, and that is
+      # the point of running it.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: zizmor --config .github/zizmor.yml .github/workflows/
+
+  lint-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The published build with a pinned digest, as for actionlint. vale-action
+      # wraps the same binary in reviewdog; the template below gets the inline
+      # annotations without it.
+      - env:
+          VERSION: 3.22.0
+          SHA256: 52f5cd0314a1b7384cac6aa102a68193977312f6ba9c9f3ae001b5deec8e3a10
+        run: |
+          curl -fsSL -o vale.tar.gz \
+            "https://github.com/vale-cli/vale/releases/download/v$VERSION/vale_${VERSION}_Linux_64-bit.tar.gz"
+          echo "$SHA256  vale.tar.gz" | sha256sum -c -
+          tar -xzf vale.tar.gz vale
+          sudo install -m 0755 vale /usr/local/bin/vale
+          rm vale vale.tar.gz
+      - run: make lint-docs VALE_FLAGS=--output=.vale/github.tmpl
+
+  lint-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/node
+      - run: pnpm --filter frontend exec oxlint
+      - run: pnpm --filter frontend exec oxfmt --check .
+      - run: pnpm --filter frontend check
 
   lint-website:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: website/package-lock.json
+          persist-credentials: false
+      - uses: ./.github/actions/node
 
       # `astro check` type-checks `src/lib/errors.ts`, which imports the error
       # reference generated from internal/api; see website/package.json's
@@ -111,27 +222,25 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - run: cd website && npm ci
-      - run: cd website && npx oxlint
-      - run: cd website && npx oxfmt --check .
-      - run: cd website && npm run sync-assets
-      - run: cd website && npm run check
+      - run: pnpm --filter website exec oxlint
+      - run: pnpm --filter website exec oxfmt --check .
+      - run: pnpm --filter website sync-assets
+      - run: pnpm --filter website check
 
   test-frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm ci
-      - run: cd frontend && npm test -- --run
+          persist-credentials: false
+      - uses: ./.github/actions/node
+      - run: pnpm --filter frontend test --run
 
   sbom-sync:
     needs: build-frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Keeps the committed SBOM current instead of asking the author to.
     #
     # On a pull request from this repository the regenerated artifacts are
@@ -158,24 +267,23 @@ jobs:
       # default rather than adding to it.
       actions: write
     # One sync per branch: two concurrent runs would race the same commit.
+    # The workflow-level group above still cancels this job on a new pull
+    # request push, which is safe: createCommitOnBranch either landed or it
+    # did not, and the superseding run syncs again from the newer head.
     concurrency:
       group: sbom-sync-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           # A pull_request checkout is a detached merge commit by default, which
           # has no branch to commit onto. Check out the head itself.
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm ci
+      - uses: ./.github/actions/node
       # cyclonedx-gomod compiles the package, so main.go's //go:embed
       # frontend/dist/* needs the built frontend. Reuse the build-frontend
       # artifact rather than rebuilding it here.

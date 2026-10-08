@@ -23,10 +23,8 @@ func newCSRFTestRouter(t testing.TB, origins ...string) http.Handler {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			restartServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
-				return replicatedService(id), nil
-			},
+		restartServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
+			return replicatedService(id), nil
 		},
 	}
 
@@ -188,11 +186,10 @@ func TestCrossSiteRefusalIsProblemDetails(t *testing.T) {
 	}
 }
 
-// TestPublicURLIsTrusted covers the fallback path a pre-2023 browser takes:
-// no Sec-Fetch-Site, so the stdlib compares Origin against r.Host. Behind a
-// proxy that rewrites Host, the dashboard's own writes reach us with the
-// public origin and an internal Host, and only server.public_url can tell
-// those apart from a stranger's.
+// Covers the fallback a pre-2023 browser takes: no Sec-Fetch-Site, so the stdlib
+// compares Origin against r.Host. Behind a proxy that rewrites Host, the
+// dashboard's own writes arrive with the public origin and an internal Host, and
+// only server.public_url tells those from a stranger's.
 func TestPublicURLIsTrusted(t *testing.T) {
 	handler := crossOriginProtection(nil, "https://cetacean.example")(
 		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

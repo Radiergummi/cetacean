@@ -1,0 +1,114 @@
+source: RFC 7009
+title: OAuth 2.0 Token Revocation
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc7009
+
+inventory:
+  from: >-
+    RFC 7009 §2, §2.1, §2.3 and §5 in full, counting §2's opening sentence as
+    the two independent clauses it carries. §1.1 is the RFC 2119 boilerplate.
+    §2.2 and §2.2.1 describe the response without an RFC 2119 keyword, so they
+    declare no requirement to register.
+  count: 22
+
+requirements:
+  - id: refresh-token-revocation-supported
+    level: MUST
+    text: >-
+      Implementations MUST support the revocation of refresh tokens.
+    url: https://www.rfc-editor.org/rfc/rfc7009#section-2
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\tif data, revoked := s.refreshTokens.RevokeGrant(token); revoked {"
+        with: "\t\tif data, revoked := s.refreshTokens.Validate(token); revoked {"
+
+  - id: access-token-revocation-supported
+    level: SHOULD
+    text: >-
+      Implementations [...] SHOULD support the revocation of access tokens (see
+      Implementation Note).
+    url: https://www.rfc-editor.org/rfc/rfc7009#section-2
+    deferred: >-
+      Access tokens are self-contained JWTs this server never sees again after
+      issuing, so nothing can withdraw one before its exp. Revoking the grant
+      stops the next refresh and drops the approval; a token already handed out
+      keeps working for the rest of its TTL, which is what makes
+      oauth/rfc6750/tokens-are-short-lived load-bearing rather than tidy.
+
+  - id: token-parameter-required
+    level: MUST
+    text: >-
+      token   REQUIRED.  The token that the client wants to get revoked.
+    url: https://www.rfc-editor.org/rfc/rfc7009#section-2.1
+    deferred: >-
+      A revocation request carrying no token is answered 200 rather than the
+      invalid_request §2.2.1 provides for. Nothing is revoked either way and no
+      credential is disclosed, but a client that misspells the parameter is
+      told its token is gone when it is not.
+
+  - id: hint-failure-searches-every-token-type
+    level: MUST
+    text: >-
+      If the server is unable to locate the token using the given hint, it MUST
+      extend its search across all of its supported token types.
+    url: https://www.rfc-editor.org/rfc/rfc7009#section-2.1
+
+  - id: cascade-to-access-tokens
+    level: SHOULD
+    text: >-
+      If the particular token is a refresh token and the authorization server
+      supports the revocation of access tokens, then the authorization server
+      SHOULD also invalidate all access tokens based on the same authorization
+      grant (see Implementation Note).
+    url: https://www.rfc-editor.org/rfc/rfc7009#section-2.1
+    deferred: >-
+      Conditional on revoking access tokens at all, which this server cannot —
+      see access-token-revocation-supported. Recorded rather than dismissed
+      because the condition is ours to change, not the specification's.
+
+dismissed:
+  endpoint-url-conforms-to-rfc6749: >-
+    The endpoint URL is the configured issuer plus /oauth/revoke: absolute, and
+    with no query or fragment by construction.
+  client-verifies-https: >-
+    Binds the client reading the advertised endpoint.
+  endpoint-url-is-https: >-
+    The scheme follows the configured issuer, which a local deployment on
+    http://localhost sets deliberately. The same deployment decision as
+    oauth/rfc8414/jwks-uri-https-scheme.
+  server-uses-tls: >-
+    TLS is the deployment's, terminated by whatever fronts this process.
+  additional-transport-security-allowed: >-
+    A MAY about transport mechanisms beyond TLS.
+  http-mirror-not-published: >-
+    Conditional on also serving the endpoint over plain HTTP, which this server
+    does not do: it serves one endpoint at one scheme.
+  token-type-hint-optional: >-
+    An OPTIONAL request parameter. What happens when it is sent is
+    hint-failure-searches-every-token-type.
+  client-may-send-the-hint: >-
+    A MAY addressed to the client.
+  server-may-ignore-the-hint: >-
+    A MAY this server exercises: it looks the token up the one way it can, so
+    the hint changes nothing.
+  other-hint-values-may-be-defined: >-
+    A MAY about registering further token_type_hint values.
+  access-token-may-revoke-its-refresh-token: >-
+    A MAY conditional on recognising an access token at this endpoint, which
+    this server does not.
+  cors-may-be-supported: >-
+    A MAY for browser-based clients. Revocation here is called server-to-server
+    by a token holder, and the endpoint is not in server.cors.origins.
+  jsonp-may-be-offered: >-
+    A MAY for legacy user-agents, offering a GET that executes a callback. Not
+    implemented, and not something to add.
+  callback-parameter-optional: >-
+    An OPTIONAL parameter of the JSONP form this server does not offer.
+  token-endpoint-countermeasures-applied: >-
+    "Appropriate countermeasures" with no testable shape. The concrete ones —
+    the body cap and the DCR rate limit — are this server's own rules.
+  denial-of-service-prevented: >-
+    A MUST with no testable shape. The body cap on the endpoint is the concrete
+    measure.
+  client-authenticates-the-endpoint: >-
+    Binds the client, which authenticates this server by TLS.

@@ -1,4 +1,4 @@
-import { api, headAllowedMethods } from "@/api/client";
+import { api } from "@/api/client";
 import type { Service, Task } from "@/api/types";
 import InfoCard from "@/components/InfoCard";
 import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
@@ -8,9 +8,8 @@ import { NumberField } from "@/components/ui/number-field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { cn } from "@/lib/utils";
-import { Copy, Globe, Pencil } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Pencil } from "lucide-react";
+import { useState } from "react";
 
 function ReplicaDoughnut({ running, desired }: { running: number; desired: number }) {
   const size = 50;
@@ -90,28 +89,17 @@ export function ReplicaCard({
   allowedMethods: Set<string>;
 }) {
   const canScale = allowedMethods.has("PUT");
-  const [canChangeMode, setCanChangeMode] = useState(false);
-
-  useEffect(() => {
-    headAllowedMethods(`/services/${service.ID}/mode`)
-      .then((methods) => {
-        setCanChangeMode(methods.has("PUT"));
-      })
-      .catch(() => {});
-  }, [service.ID]);
 
   const currentMode: Mode = service.Spec.Mode.Replicated ? "replicated" : "global";
   const currentReplicas = service.Spec.Mode.Replicated?.Replicas ?? 0;
 
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>(currentMode);
   const [replicas, setReplicas] = useState<number | undefined>(currentReplicas);
   const [validationError, setValidationError] = useState<string | null>(null);
   const action = useAsyncAction({ toast: true });
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
-      setMode(currentMode);
       setReplicas(currentReplicas || 1);
     }
 
@@ -120,9 +108,7 @@ export function ReplicaCard({
   }
 
   async function submit() {
-    const modeChanged = mode !== currentMode;
-
-    if (mode === "replicated" && (replicas === undefined || replicas < 0)) {
+    if (replicas === undefined || replicas < 0) {
       setValidationError("Enter a valid replica count");
 
       return;
@@ -130,11 +116,7 @@ export function ReplicaCard({
 
     setValidationError(null);
     await action.execute(async () => {
-      if (modeChanged) {
-        await api.updateServiceMode(service.ID, mode, mode === "replicated" ? replicas : undefined);
-      } else if (mode === "replicated") {
-        await api.scaleService(service.ID, replicas!);
-      }
+      await api.scaleService(service.ID, replicas);
 
       setOpen(false);
     }, "Failed to update service");
@@ -147,114 +129,36 @@ export function ReplicaCard({
     : currentReplicas;
   const healthy = running >= desired;
 
-  const editPopover = canScale ? (
-    <Popover
-      open={open}
-      onOpenChange={handleOpenChange}
-      modal
-    >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <PopoverTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                >
-                  <Pencil className="size-3.5" />
-                </Button>
-              }
-            />
-          }
-        />
-        <TooltipContent>Edit service mode</TooltipContent>
-      </Tooltip>
-      <PopoverContent
-        className="w-72"
-        align="end"
+  // A global service has no replica count, and Swarm allows no mode change in
+  // either direction, so there is nothing here to edit.
+  const editPopover =
+    canScale && !isGlobal ? (
+      <Popover
+        open={open}
+        onOpenChange={handleOpenChange}
+        modal
       >
-        {canChangeMode && (
-          <div className="mb-3 flex flex-col gap-2">
-            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Mode{" "}
-              <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#replicas" />
-            </span>
-            <button
-              type="button"
-              onClick={() => setMode("global")}
-              disabled={action.loading}
-              className={cn(
-                "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
-                mode === "global"
-                  ? "border-primary bg-primary/5 ring-1 ring-primary"
-                  : "border-border hover:border-muted-foreground/40",
-                action.loading && "pointer-events-none opacity-50",
-              )}
-            >
-              <Globe className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-
-              <div className="flex-1">
-                <div className="text-sm font-medium">Global</div>
-                <div className="text-xs text-muted-foreground">
-                  One task will run on every node in the swarm.
-                </div>
-              </div>
-
-              <div
-                className={cn(
-                  "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
-                  mode === "global" ? "border-primary bg-primary" : "border-muted-foreground/40",
-                )}
-              >
-                {mode === "global" && (
-                  <div className="flex size-full items-center justify-center">
-                    <div className="size-1.5 rounded-full bg-primary-foreground" />
-                  </div>
-                )}
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMode("replicated")}
-              disabled={action.loading}
-              className={cn(
-                "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
-                mode === "replicated"
-                  ? "border-primary bg-primary/5 ring-1 ring-primary"
-                  : "border-border hover:border-muted-foreground/40",
-                action.loading && "pointer-events-none opacity-50",
-              )}
-            >
-              <Copy className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-
-              <div className="flex-1">
-                <div className="text-sm font-medium">Replicated</div>
-                <div className="text-xs text-muted-foreground">
-                  Run a specified number of tasks across the swarm.
-                </div>
-              </div>
-
-              <div
-                className={cn(
-                  "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
-                  mode === "replicated"
-                    ? "border-primary bg-primary"
-                    : "border-muted-foreground/40",
-                )}
-              >
-                {mode === "replicated" && (
-                  <div className="flex size-full items-center justify-center">
-                    <div className="size-1.5 rounded-full bg-primary-foreground" />
-                  </div>
-                )}
-              </div>
-            </button>
-          </div>
-        )}
-
-        {mode === "replicated" && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                  >
+                    <Pencil className="size-3.5" />
+                  </Button>
+                }
+              />
+            }
+          />
+          <TooltipContent>Edit replicas</TooltipContent>
+        </Tooltip>
+        <PopoverContent
+          className="w-72"
+          align="end"
+        >
           <NumberField
             label={
               <span className="flex items-center gap-1">
@@ -267,35 +171,34 @@ export function ReplicaCard({
             min={0}
             step={1}
           />
-        )}
 
-        {validationError && <p className="mb-2 text-xs text-status-danger">{validationError}</p>}
+          {validationError && <p className="mb-2 text-xs text-status-danger">{validationError}</p>}
 
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            className="flex-1"
-            onClick={() => {
-              void submit();
-            }}
-            disabled={action.loading}
-          >
-            {action.loading && <Spinner className="size-3" />}
-            Apply
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1"
-            onClick={() => handleOpenChange(false)}
-            disabled={action.loading}
-          >
-            Cancel
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  ) : null;
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="flex-1"
+              onClick={() => {
+                void submit();
+              }}
+              disabled={action.loading}
+            >
+              {action.loading && <Spinner className="size-3" />}
+              Apply
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => handleOpenChange(false)}
+              disabled={action.loading}
+            >
+              Cancel
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+    ) : null;
 
   if (isGlobal) {
     return (

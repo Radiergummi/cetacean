@@ -51,8 +51,8 @@ func seedService(t *testing.T, c *cache.Cache, id string, desired, running int) 
 func TestAwaitServiceRefusesToJudgeAStaleCache(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 5}},
+		ID:      "svc1",
+		Version: swarm.Version{Index: 5},
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
 			Mode: swarm.ServiceMode{
@@ -76,8 +76,8 @@ func TestAwaitServiceReturnsOnceTheVersionCatchesUp(t *testing.T) {
 	replicas := uint64(2)
 	set := func(version uint64) {
 		c.SetService(swarm.Service{
-			ID:   "svc1",
-			Meta: swarm.Meta{Version: swarm.Version{Index: version}},
+			ID:      "svc1",
+			Version: swarm.Version{Index: version},
 			Spec: swarm.ServiceSpec{
 				Annotations: swarm.Annotations{Name: "web"},
 				Mode: swarm.ServiceMode{
@@ -241,9 +241,8 @@ func TestServiceConvergedHandlesUnknownService(t *testing.T) {
 
 // A scale-down must not report success while the replicas it removed are still
 // running. The cache is filled asynchronously, so mid-write a 5-to-2 scale looks
-// like two desired against five running, or five against five, depending on
-// which half has landed; the wait refuses to judge anything older than the
-// version the write produced.
+// like two desired against five running, or five against five — so the wait
+// refuses to judge anything older than the version the write produced.
 func TestServiceConvergedWaitsForTheWriteToReachTheCache(t *testing.T) {
 	c := cache.New(nil)
 	seedService(t, c, "svc-1", 5 /* desired */, 5 /* running */)

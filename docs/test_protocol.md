@@ -184,6 +184,10 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 - [ ] **Shepherd panel**: appears if shepherd labels exist
 - [ ] **Cronjob panel**: appears if swarm-cronjob labels exist
 - [ ] **Diun panel**: appears if diun labels exist
+- [ ] **ACL panel**: appears if `cetacean.acl.*` labels exist; shows read/write audience lists
+- [ ] **ACL panel editing**: click Edit → add/remove audience entries → Save; labels update on the service
+- [ ] **ACL panel raw view**: toggle to raw view → shows `cetacean.acl.read` and `cetacean.acl.write` key-value pairs
+- [ ] **ACL panel without feature enabled**: panel renders labels even when `CETACEAN_ACL_LABELS=false` (labels are valid Docker labels regardless)
 
 ### Log Viewer
 - [ ] See [Log Viewer](#log-viewer) section below
@@ -239,6 +243,7 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 - [ ] Networks section: Name (link) and Driver columns
 - [ ] Volumes section: list of links to volume detail pages
 - [ ] All sections are collapsible
+- [ ] Compose file section: collapsed by default and fetches nothing until expanded; YAML is highlighted; copy puts the document on the clipboard; download saves `<stack>.yaml`
 - [ ] SSE: scale a service in the stack—task counts update (debounced)
 
 ---
@@ -472,6 +477,29 @@ Shared by Cluster Overview, Node List, Service List, Node Detail, Service Detail
 
 ---
 
+## Label-Based ACL
+
+Prerequisites: an auth provider other than `none` (e.g. OIDC or headers), and `CETACEAN_ACL_LABELS=true`.
+
+### Label Grants
+- [ ] Deploy a service with `cetacean.acl.read: "group:ops"` — only users in `ops` can see the service in list/detail
+- [ ] Deploy a service with `cetacean.acl.write: "group:ops"` — `ops` users get write (and read); others denied
+- [ ] Deploy a service with both `cetacean.acl.read: "group:*"` and `cetacean.acl.write: "group:ops"` — everyone can read, only `ops` can write
+- [ ] Write implies read: a service with only `cetacean.acl.write: "group:ops"` grants `ops` both read and write
+
+### Precedence
+- [ ] **Labels win over config**: config policy grants `write` on `service:*` to `group:dev`; label on a service grants only `read` to `group:dev` — dev can read but not write that service; dev can still write unlabeled services
+- [ ] **Config fills gaps**: label on a service grants `read` to `group:ops`; a `user:bot` has an explicit config grant for write — bot can write the labeled service (not in label audience, falls through to config)
+- [ ] **Labels suppress allow-all**: no config policy file; label on a service grants `read` to `group:ops` — users not in `ops` are denied access to that service; unlabeled services remain accessible to everyone
+
+### Task Inheritance
+- [ ] Tasks inherit label grants from their parent service — if a service has `cetacean.acl.read: "group:ops"`, tasks of that service are also restricted to `ops`
+
+### Feature Disabled
+- [ ] With `CETACEAN_ACL_LABELS=false` (default): labels on services have no effect on access control; all users see all resources per normal policy rules
+
+---
+
 ## Auth and Profile
 
 - [ ] **No auth mode**: UserBadge hidden; `/profile` redirects to `/`
@@ -503,3 +531,23 @@ Verify across multiple pages that SSE events cause live UI updates:
 - [ ] **Topology**: add/remove service → layout recomputes after debounce
 - [ ] **Stack detail**: scale a service in the stack → task counts update (debounced)
 - [ ] **Reconnection**: kill and restart the backend → SSE reconnects; UI recovers
+
+---
+
+## Compose Export
+
+What the unit tests cannot reach: the projection is checked against fixtures and parsed with compose-go, but nothing
+proves the emitted file redeploys the cluster it came from. That needs a real swarm.
+
+- [ ] Export a stack that attaches to a network it does not own (a shared `monitoring` overlay): the owned network is
+      declared with its driver, the shared one is `external: true` under its full name, and the file names no network ID
+- [ ] `docker stack deploy -c exported.yaml <same-name>` on the same cluster succeeds and reports no changes it did not
+      need to make
+- [ ] Diff the re-derived service specs against the originals: image digests, replicas, resources, mounts, ports,
+      healthchecks and placement match
+- [ ] Re-export after the redeploy and diff against the first export—the two documents are identical
+- [ ] A stack with a service that has no ContainerSpec (a plugin or network-attachment task) omits it and says so in the
+      header comment rather than emitting an empty stanza
+- [ ] Deploy the exported file under a *different* project name: external references still resolve, owned resources are
+      created under the new prefix
+- [ ] An identity whose grants exclude a stack gets no document from `/stacks/<name>.yaml`

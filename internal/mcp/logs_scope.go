@@ -31,14 +31,10 @@ const (
 	scopedConcurrency = 4
 )
 
-// filterLogContains narrows lines to those holding sub, case-insensitively.
-// An empty sub keeps everything.
-//
-// The match is cluster.ContainsFoldNoAlloc rather than a lowered copy of every
-// message: a cluster-wide grep widens the tail tenfold and fans out over 25
-// services, so lowering each message allocates a copy of the whole read.
-// cluster.ContainsFold is deliberately not used — it adds segment-prefix
-// matching, which is what a *name* search means, not what a log grep does.
+// filterLogContains narrows lines to those holding sub, case-insensitively; an
+// empty sub keeps everything. ContainsFoldNoAlloc rather than a lowered copy,
+// since a cluster-wide grep would copy the whole read. Not ContainsFold, whose
+// segment-prefix matching is what a *name* search means, not a log grep.
 func filterLogContains(lines []logs.LogLine, sub string) []logs.LogLine {
 	if sub == "" {
 		return lines
@@ -56,17 +52,10 @@ func filterLogContains(lines []logs.LogLine, sub string) []logs.LogLine {
 	return kept
 }
 
-// readScopedLogs merges the output of every service in a scope.
-//
-// "Anything cluster-wide in the last five minutes", "every error in the last
-// hour", "grep the cluster" are enumerate-then-fan-out when the caller does
-// them: one list call, then one log call per service, each round-trip paid for
-// in the model's context. The join costs the server almost nothing and the
-// caller one call.
-//
-// A service that cannot be read is reported in Errors rather than failing the
-// whole read: a cluster-wide grep that dies on the first unreachable service
-// is worse than no tool at all.
+// readScopedLogs merges the output of every service in a scope, so a
+// cluster-wide question costs one call rather than a list plus one log call
+// per service. A service that cannot be read is reported in Errors rather than
+// failing the whole read.
 func (s *Server) readScopedLogs(
 	ctx context.Context,
 	scope string,
@@ -132,9 +121,8 @@ func (s *Server) readScopedLogs(
 
 			// A per-service ceiling shortens the merged window too, and
 			// finishLogRead below builds a fresh response that would drop the
-			// note. Name the services rather than just counting them: on a
-			// wide read it is usually one noisy service that cut the window
-			// short for everything, and knowing which one is the fix.
+			// note. Named rather than counted: it is usually one noisy service
+			// that cut the window short for everything.
 			if resp.Truncated {
 				shortened = append(shortened, svc.Spec.Name)
 			}
@@ -198,11 +186,10 @@ func (s *Server) readScopedLogs(
 		))
 	}
 
-	// The merge is cut to `tail` as well, and that cut shortens the window on
-	// its own: sixty services returning fifty lines each, kept to the newest
-	// hundred, covers seconds of whatever was asked for even though no single
-	// service ran out of budget. Disclosed on the same terms as the ceiling,
-	// because to the caller it is the same missing time.
+	// The merge is cut to `tail` too, and that cut shortens the window on its
+	// own: sixty services of fifty lines kept to the newest hundred covers
+	// seconds, though no single service ran out of budget. To the caller it is
+	// the same missing time, so it is disclosed on the same terms.
 	if mergeCut {
 		resp.Truncated = true
 		notes = append(notes, fmt.Sprintf(
@@ -219,11 +206,9 @@ func (s *Server) readScopedLogs(
 }
 
 // servicesInScope resolves a scope to the services it covers, already filtered
-// to what the caller may read — so a cluster-wide grep cannot become a way to
-// read output from a service the caller has no grant for.
-//
-// inScope is how many services the scope actually held, before the fan-out cap
-// cut it down. The caller needs both numbers to say what it did not read.
+// to what the caller may read, so a cluster-wide grep cannot read output from
+// a service they have no grant for. inScope is how many the scope held before
+// the fan-out cap; the caller needs both numbers to say what it skipped.
 func (s *Server) servicesInScope(
 	ctx context.Context,
 	scope string,
@@ -275,13 +260,10 @@ func (s *Server) servicesInScope(
 // plain timestamp as `since`, and the two have to be told apart.
 const scopedCursorPrefix = "cs1:"
 
-// nextScopedCursor records where each service in scope was left.
-//
-// The positions come from the lines actually returned, never from what was
-// fetched: the merged tail cut can drop a service's lines entirely, and a
-// position past a line the caller never saw loses it for good. A service that
-// returned nothing keeps the position it arrived with, and a service no longer
-// in scope is forgotten rather than carried forever.
+// nextScopedCursor records where each service in scope was left. The positions
+// come from the lines actually returned, never from what was fetched: the
+// merged cut can drop a service's lines, and a position past an unseen line
+// loses it for good. A service that returned nothing keeps its position.
 func nextScopedCursor(
 	services []swarm.Service,
 	resumed map[string]string,

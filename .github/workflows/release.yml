@@ -4,10 +4,14 @@ on:
   push:
     tags: ["v*"]
 
-# Granted per job rather than here: sbom-gate and build run `npm ci` and the
+# Granted per job rather than here: sbom-gate and build run `pnpm install` and the
 # frontend build, so a compromised transitive dependency would otherwise read a
 # token that can push to main, move tags and publish images.
 permissions: {}
+
+# Nothing here restores a cache, either. These jobs sign and attest what they
+# produce, and a tag run resolves its caches against the default branch — so a
+# cache is one input to an attested artifact that the tag itself never built.
 
 jobs:
   # The committed SBOM is embedded in the binary, and main is allowed to carry
@@ -16,28 +20,23 @@ jobs:
   # window, so check before anything is built.
   sbom-gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+          cache: false
+      - uses: ./.github/actions/node
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm ci
+          cache: "false"
       # cyclonedx-gomod compiles the package, so main.go's //go:embed needs the
       # built frontend present.
-      - run: cd frontend && npm run build && npm run build:widgets
-      # The build mutates node_modules enough that npm stops reporting
-      # `integrity` for the installed tree, and cyclonedx-npm reads that tree —
-      # so generating the SBOM straight after a build silently drops every
-      # npm SHA-512 hash and this gate then fails against the committed file.
-      # dist/ and dist-widgets/ survive npm ci, so reinstalling is enough.
-      - run: cd frontend && npm ci
+      - run: pnpm --filter frontend build && pnpm --filter frontend build:widgets
       - run: make sbom
       - name: Verify the tagged SBOM matches the tagged dependencies
         run: |
@@ -60,20 +59,21 @@ jobs:
           - os: darwin
             arch: arm64
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm ci
+          persist-credentials: false
+      - uses: ./.github/actions/node
+        with:
+          cache: "false"
       # Both bundles: main.go embeds frontend/dist and frontend/dist-widgets,
       # so go build cannot resolve its //go:embed without the widget build.
-      - run: cd frontend && npm run build && npm run build:widgets
+      - run: pnpm --filter frontend build && pnpm --filter frontend build:widgets
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false
       - name: Build binary
         env:
           GOOS: ${{ matrix.os }}
@@ -95,6 +95,7 @@ jobs:
   docker:
     needs: [build]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
@@ -103,6 +104,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           sparse-checkout: release.Dockerfile
           sparse-checkout-cone-mode: false
 
@@ -118,8 +120,8 @@ jobs:
           cp cetacean-linux-arm64 binaries/linux/arm64/cetacean
           chmod +x binaries/linux/amd64/cetacean binaries/linux/arm64/cetacean
 
-      - uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
-      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -152,7 +154,7 @@ jobs:
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
       - id: push
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: release.Dockerfile
@@ -173,6 +175,7 @@ jobs:
   release:
     needs: [build]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
       attestations: write
@@ -180,6 +183,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           sparse-checkout: CHANGELOG.md
           sparse-checkout-cone-mode: false
 

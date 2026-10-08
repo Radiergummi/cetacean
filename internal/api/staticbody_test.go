@@ -9,11 +9,10 @@ import (
 	"testing"
 )
 
-// TestStaticBodyCompressesEachCodingOnce is the reason the type exists. The
-// Scalar bundle is 3.7 MB on a route that skips authentication, so
-// re-compressing per request turns a 100-byte GET into ~68ms of CPU that
-// anyone can ask for. Counting passes rather than timing them keeps the test
-// honest on a loaded machine.
+// The reason the type exists: the Scalar bundle is megabytes on a route that
+// skips authentication, so re-compressing per request turns a tiny GET into CPU
+// anyone can ask for. Counting passes rather than timing them keeps this honest
+// on a loaded machine.
 func TestStaticBodyCompressesEachCodingOnce(t *testing.T) {
 	data := []byte(strings.Repeat("compress me, but only once. ", 200))
 
@@ -52,16 +51,10 @@ func TestStaticBodyCompressesEachCodingOnce(t *testing.T) {
 	}
 }
 
-// TestStaticBodyServesEachCodingUnderItsOwnLabel decodes every coding's
-// response with the decoder its Content-Encoding named. encoded is an array
-// indexed by the negotiated coding, so a wrong index serves one coding's frame
-// under another's label — headers, status and pass count all stay correct
-// while every gzip client receives a body gzip.NewReader rejects outright.
-//
-// It is separate from TestStaticBodyCompressesEachCodingOnce, which has to
-// re-memoize encoded to count passes and therefore replaces the very wiring
-// this asserts. Verified by having newStaticBody compress every coding as the
-// last one: that test passes, this one fails.
+// Decodes every coding's response with the decoder its Content-Encoding named.
+// encoded is an array indexed by the negotiated coding, so a wrong index serves
+// one frame under another's label while headers, status and pass count stay
+// correct. Separate from the pass-counting test, which replaces that wiring.
 func TestStaticBodyServesEachCodingUnderItsOwnLabel(t *testing.T) {
 	data := []byte(strings.Repeat("label me correctly. ", 200))
 	body := newStaticBody(data)
@@ -104,17 +97,10 @@ func TestStaticBodyServesIdentityUncompressed(t *testing.T) {
 	}
 }
 
-// TestStaticBodyRevalidatesWithoutCompressing pins that a 304 costs nothing:
-// writeRawNegotiated returns before calling encode at all.
-//
-// Both requests negotiate gzip, and the counter is a plain closure rather than
-// a sync.OnceValue. Both details are load-bearing, and the first version of
-// this test had neither, which left it unable to fail: under identity
-// encoded[EncodingIdentity] is nil and serve never consults a compressor at
-// all, so a stub that fails on call is unreachable whatever the code does; and
-// memoizing would collapse a second call into the first, which is the very
-// thing being counted. Verified by moving encode(coding) above the etagMatch
-// check — the whole package passed before, this fails now.
+// Pins that a 304 costs nothing: writeRawNegotiated returns before calling
+// encode at all. Both requests negotiate gzip and the counter is a plain
+// closure — under identity the compressor is never consulted, and memoizing
+// would collapse the second call into the first, which is what is counted.
 func TestStaticBodyRevalidatesWithoutCompressing(t *testing.T) {
 	data := []byte(strings.Repeat("revalidate me. ", 200))
 	body := newStaticBody(data)

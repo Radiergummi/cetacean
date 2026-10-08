@@ -1,0 +1,170 @@
+source: RFC 7515
+title: JSON Web Signature (JWS)
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc7515
+
+inventory:
+  from: >-
+    RFC 7515 §4.1 and §5 in full — the header parameters a JWS carries and the
+    steps for signing and validating one. §1.1 is the RFC 2119 boilerplate.
+    Appendix A.3's ES256 example carries no keyword and is a worked example,
+    not a clause. §10 is excluded: its statements bind key entropy, key
+    management and the transport, none of which this package decides.
+  count: 41
+
+requirements:
+  - id: alg-present-and-processed
+    level: MUST
+    text: >-
+      This Header Parameter MUST be present and MUST be understood and
+      processed by implementations.
+    url: https://www.rfc-editor.org/rfc/rfc7515#section-4.1.1
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\t\t\t`{\"alg\":\"ES256\",\"kid\":\"` + km.kid + `\",\"typ\":\"` + accessTokenType + `\"}`,"
+        with: "\t\t\t`{\"kid\":\"` + km.kid + `\",\"typ\":\"` + accessTokenType + `\"}`,"
+
+  - id: typ-read-as-a-full-media-type
+    level: MUST
+    text: >-
+      A recipient using the media type value MUST treat it as if "application/"
+      were prepended to any "typ" value not containing a '/'.
+    url: https://www.rfc-editor.org/rfc/rfc7515#section-4.1.9
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\t\t!strings.EqualFold(hdr.Typ, accessTokenTypeFull) {"
+        with: "\t\t!strings.EqualFold(hdr.Typ, accessTokenType) {"
+
+  - id: alg-accurately-represents-the-signature
+    level: MUST
+    text: >-
+      The "alg" (algorithm) Header Parameter MUST be present in the JOSE
+      Header, with the algorithm value accurately representing the algorithm
+      used to construct the JWS Signature.
+    url: https://www.rfc-editor.org/rfc/rfc7515#section-5.1
+    # Admitting a second name for one verifier is what makes the header stop
+    # representing the signature: every token here is verified as ES256
+    # whatever it says, so the header becomes a value nobody reads.
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif hdr.Alg != \"ES256\" {"
+        with: "\tif hdr.Alg != \"ES256\" && hdr.Alg != \"ES384\" {"
+
+  - id: a-signature-must-validate
+    level: MUST
+    text: >-
+      However, in all cases, at least one JWS Signature value MUST successfully
+      validate, or the JWS MUST be considered invalid.
+    url: https://www.rfc-editor.org/rfc/rfc7515#section-5.2
+
+  - id: signature-validated-against-the-signing-input
+    level: MUST
+    text: >-
+      Validate the JWS Signature against the JWS Signing Input
+      ASCII(BASE64URL(UTF8(JWS Protected Header)) || '.' || BASE64URL(JWS
+      Payload)) in the manner defined for the algorithm being used, which MUST
+      be accurately represented by the value of the "alg" (algorithm) Header
+      Parameter, which MUST be present.
+    url: https://www.rfc-editor.org/rfc/rfc7515#section-5.2
+
+  - id: no-successful-validation-means-invalid
+    level: MUST
+    text: >-
+      If none of the validations in step 9 succeeded, then the JWS MUST be
+      considered invalid.
+    url: https://www.rfc-editor.org/rfc/rfc7515#section-5.2
+
+  - id: unacceptable-algorithms-are-invalid
+    level: SHOULD
+    text: >-
+      Even if a JWS can be successfully validated, unless the algorithm(s) used
+      in the JWS are acceptable to the application, it SHOULD consider the JWS
+      to be invalid.
+    url: https://www.rfc-editor.org/rfc/rfc7515#section-5.2
+
+dismissed:
+  jku-keys-are-a-jwk-set: >-
+    Constrains the jku header parameter, which this server neither emits nor
+    honours: the verifying key is the one it derived, never one a token names.
+  jku-fetch-is-integrity-protected: >-
+    Conditional on fetching a jku URL. Nothing here follows a key URL out of a
+    token — that is the substitution this design exists to prevent.
+  jku-server-identity-validated: >-
+    The second half of the jku fetch, equally unreachable.
+  jku-is-optional: >-
+    An OPTIONAL header parameter this server never emits.
+  jwk-is-optional: >-
+    An OPTIONAL header parameter this server never emits. A key carried by the
+    token it signs proves nothing.
+  kid-is-case-sensitive: >-
+    A type constraint on kid. The value is base64url of a SHA-256 hash, matched
+    for exact equality.
+  kid-is-optional: >-
+    An OPTIONAL header parameter this server always emits, so the JWK Set can
+    be indexed by it.
+  x5u-resource-is-a-pem-chain: >-
+    Constrains the x5u header parameter, which this server never emits or
+    honours. These tokens are not certificate-backed.
+  x5u-signing-certificate-is-first: >-
+    Ordering within an x5u chain this server never reads.
+  x5u-chain-may-continue: >-
+    A MAY about an x5u chain this server never reads.
+  x5u-fetch-is-integrity-protected: >-
+    Conditional on fetching an x5u URL, which this server never does.
+  x5u-is-optional: >-
+    An OPTIONAL header parameter this server never emits.
+  x5c-signing-certificate-is-first: >-
+    Ordering within an x5c chain this server never reads.
+  x5c-chain-may-continue: >-
+    A MAY about an x5c chain this server never reads.
+  x5c-chain-is-validated: >-
+    Conditional on a recipient using x5c. This server ignores it and verifies
+    against its own key.
+  x5c-is-optional: >-
+    An OPTIONAL header parameter this server never emits.
+  x5t-is-optional: >-
+    An OPTIONAL header parameter this server never emits.
+  x5t-s256-is-optional: >-
+    An OPTIONAL header parameter this server never emits.
+  typ-is-optional: >-
+    An OPTIONAL header parameter RFC 9068 §2.1 makes mandatory — see
+    oauth/rfc9068/typ-is-at-jwt.
+  typ-prefix-omitted-by-producers: >-
+    A RECOMMENDED this server follows: it emits "at+jwt", the short spelling,
+    and accepts the long one.
+  typ-short-form-example: >-
+    The worked example illustrating typ-read-as-a-full-media-type.
+  cty-is-optional: >-
+    An OPTIONAL header parameter this server never emits; the payload is always
+    a claims set.
+  cty-prefix-omitted-by-producers: >-
+    A RECOMMENDED about a header parameter this server never emits.
+  cty-read-as-a-full-media-type: >-
+    The cty twin of typ-read-as-a-full-media-type, for a parameter this server
+    never reads.
+  cty-short-form-example: >-
+    The worked example for the cty rule.
+  crit-names-extensions-to-process: >-
+    Constrains the crit header parameter, which this server never emits.
+  crit-excludes-defined-and-duplicate-names: >-
+    Producer rules for a crit list this server never builds.
+  crit-is-not-empty: >-
+    A producer rule for a crit list this server never builds.
+  crit-recipients-may-refuse: >-
+    A MAY for a recipient reading crit.
+  crit-is-integrity-protected: >-
+    Conditional on using crit. This server's header is the protected header in
+    full, so the condition would hold anyway.
+  crit-is-optional: >-
+    An OPTIONAL header parameter this server never emits.
+  crit-is-understood-and-processed: >-
+    A JWS carrying crit names an extension this server does not implement, and
+    is refused by the typ and alg checks before crit could matter.
+  header-parameter-names-are-unique: >-
+    A restriction that bites on the JSON serialization, which has several
+    header objects to disagree across. These tokens are compact serialization:
+    one protected header, one object.
+  string-comparison-rules: >-
+    Go compares strings bytewise over UTF-8, which is §5.3's rule. The one
+    exception is typ, whose definition calls out media-type comparison — that
+    is typ-read-as-a-full-media-type.

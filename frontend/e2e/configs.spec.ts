@@ -1,4 +1,4 @@
-import { test, expect, navigateToFirst } from "./fixtures";
+import { test, expect, apiJson, detailId, hasHistory, navigateToFirst, clickRow } from "./fixtures";
 
 test.describe("Config List (/configs)", () => {
   test("renders heading", async ({ page }) => {
@@ -12,7 +12,7 @@ test.describe("Config List (/configs)", () => {
 
     await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
 
-    await page.locator("table tbody tr").first().click();
+    await clickRow(page.locator("table tbody tr").first());
     await expect(page).toHaveURL(/\/configs\/.+/);
   });
 });
@@ -34,16 +34,21 @@ test.describe("Config Detail (/configs/:id)", () => {
     });
   });
 
-  test("data section with Copy button renders when data is present", async ({ page }) => {
+  test("data section with Copy button renders when data is present", async ({
+    page,
+    request,
+    baseURL,
+  }) => {
     // Wait for page to finish loading
     await expect(page.getByText("ID", { exact: true })).toBeVisible({ timeout: 10_000 });
 
-    const dataButton = page.getByRole("button", { name: /^Data$/i });
-    const count = await dataButton.count();
-    test.skip(count === 0, "Config has no data section");
+    const detail = await apiJson(request, baseURL, `/configs/${detailId(page)}`);
+    const config = (detail.config ?? {}) as Record<string, unknown>;
+    const spec = (config.Spec ?? {}) as Record<string, unknown>;
+    test.skip(!spec.Data, "Config carries no data");
 
-    await expect(dataButton).toBeVisible();
-    await expect(page.getByRole("button", { name: /Copy/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Data$/i })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /Copy/i })).toBeVisible({ timeout: 10_000 });
   });
 
   test("used by services section renders", async ({ page }) => {
@@ -52,13 +57,17 @@ test.describe("Config Detail (/configs/:id)", () => {
     });
   });
 
-  test("activity section renders when history exists", async ({ page }) => {
+  test("activity section renders when history exists", async ({ page, request, baseURL }) => {
+    // ActivitySection returns null for an empty feed, fetched after mount —
+    // so absence right now means "not loaded yet" as readily as "no history".
     await expect(page.getByText("ID", { exact: true })).toBeVisible({ timeout: 10_000 });
 
-    const activityButton = page.getByRole("button", { name: /Recent Activity/i });
-    const count = await activityButton.count();
-    test.skip(count === 0, "No activity history present for this config");
-    await expect(activityButton).toBeVisible();
+    const present = await hasHistory(request, baseURL, detailId(page));
+    test.skip(!present, "No activity history recorded for this config");
+
+    await expect(page.getByRole("button", { name: /Recent Activity/i })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test("remove button is present", async ({ page }) => {

@@ -142,6 +142,11 @@ func writeDockerError(
 	writeErrorCode(w, r, "ENG004", "failed to update "+resource)
 }
 
+// sequenceConflict is Swarmkit's optimistic-concurrency refusal. Matched on
+// its message because Swarmkit raises it with gRPC code Unknown, which Docker
+// renders as a bare 500 with no class to test for.
+const sequenceConflict = "update out of sequence"
+
 // writeResourceError handles Docker API errors for resource mutations,
 // mapping version conflicts to the given conflictCode.
 func writeResourceError(
@@ -150,7 +155,9 @@ func writeResourceError(
 	err error,
 	resource, id, conflictCode string,
 ) {
-	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
+	if cerrdefs.IsConflict(err) ||
+		cerrdefs.IsFailedPrecondition(err) ||
+		strings.Contains(err.Error(), sequenceConflict) {
 		writeErrorCode(w, r, conflictCode, err.Error())
 		return
 	}
@@ -175,13 +182,10 @@ func writeMutation[T any](
 	writeMutationResponse(w, r, resp(updated))
 }
 
-// writeServiceMutation calls a service writer function and writes the standard
-// service detail response, honouring the RFC 7240 wait and respond-async
-// preferences on the way.
-//
-// It spells out what writeMutation does rather than calling it: the preference
-// handling sits between the write and the response, and a wait that runs out
-// answers 202 instead.
+// writeServiceMutation calls a service writer and writes the standard detail
+// response, honouring the RFC 7240 wait and respond-async preferences. It
+// spells out what writeMutation does because the preference handling sits
+// between the write and the response, and an expired wait answers 202.
 func (h *Handlers) writeServiceMutation(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -204,14 +208,10 @@ func (h *Handlers) writeServiceMutation(
 	))
 }
 
-// awaitPreferred applies the RFC 7240 wait and respond-async preferences to a
-// service mutation Docker has already accepted. It returns the service the
-// caller should render, and reports whether it wrote the response itself.
-//
-// The version to converge to comes from the service the write returned, not
-// from the asynchronously filled cache, where reading it back is a race. The
-// request context is passed through as given, so a client that hangs up cancels
-// its own wait rather than leaving a five-minute goroutine behind.
+// awaitPreferred applies the RFC 7240 wait and respond-async preferences to an
+// accepted mutation, returning the service to render and whether it answered
+// itself. The version to converge to comes from the write, not the
+// asynchronously filled cache; the request context passes through.
 func (h *Handlers) awaitPreferred(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -293,54 +293,88 @@ func writeNodeMutation(
 	}, fn)
 }
 
-// applyStructMergePatch reads a merge-patch body, applies it to current (any
-// JSON-marshalable struct), and unmarshals the result into target. Returns
-// false and writes an error response on failure.
-func applyStructMergePatch(
+// specPatchError is a refusal raised inside a service-spec mutator, carrying
+// the code to answer with. The mutator runs inside the writer (see
+// structMergePatch), so the handler sees only an error and has to be able to
+// tell one of these from a Docker failure.
+type specPatchError struct {
+	code    string
+	message string
+}
+
+func (e *specPatchError) Error() string { return e.message }
+
+// errNoContainerSpec is what a mutator reaching for a service's container spec
+// raises when there is none, matching the code the writers answered with when
+// they made that check themselves.
+var errNoContainerSpec = &specPatchError{"ENG003", "service has no container spec"}
+
+// structMergePatch reads a merge-patch body and returns a function merging it
+// into a current value, unmarshalling into target; false means the request was
+// unusable and the error is written. Parsing and applying are separate so the
+// merge runs inside the writer, against the spec the engine currently holds.
+func structMergePatch(
 	w http.ResponseWriter,
 	r *http.Request,
-	current any,
-	target any,
 	errCode string,
 	errMsg string,
-) bool {
+) (func(current, target any) error, bool) {
 	if !requireMergePatch(w, r) {
-		return false
-	}
-	base, err := json.Marshal(current)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal current state")
-		return false
-	}
-	var baseMap map[string]any
-	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeErrorCode(w, r, "API009", "failed to unmarshal current state")
-		return false
+		return nil, false
 	}
 
 	patchBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeErrorCode(w, r, "API007", "failed to read request body")
-		return false
+		return nil, false
 	}
+
 	var patchMap map[string]any
 	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
 		writeErrorCode(w, r, "API008", "invalid JSON")
-		return false
+		return nil, false
 	}
 
-	mergePatch(baseMap, patchMap)
+	return func(current, target any) error {
+		base, err := json.Marshal(current)
+		if err != nil {
+			return &specPatchError{"API009", "failed to marshal current state"}
+		}
 
-	merged, err := json.Marshal(baseMap)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal merged state")
-		return false
+		var baseMap map[string]any
+		if err := json.Unmarshal(base, &baseMap); err != nil {
+			return &specPatchError{"API009", "failed to unmarshal current state"}
+		}
+
+		mergePatch(baseMap, patchMap)
+
+		merged, err := json.Marshal(baseMap)
+		if err != nil {
+			return &specPatchError{"API009", "failed to marshal merged state"}
+		}
+
+		if err := json.Unmarshal(merged, target); err != nil {
+			return &specPatchError{errCode, errMsg}
+		}
+
+		return nil
+	}, true
+}
+
+// writeServiceSpecPatch answers a service merge patch: a specPatchError is the
+// request's own fault, anything else is the engine's.
+func writeServiceSpecPatch(
+	w http.ResponseWriter,
+	r *http.Request,
+	id string,
+	err error,
+) {
+	if spe, ok := errors.AsType[*specPatchError](err); ok {
+		writeErrorCode(w, r, spe.code, spe.message)
+		return
 	}
-	if err := json.Unmarshal(merged, target); err != nil {
-		writeErrorCode(w, r, errCode, errMsg)
-		return false
-	}
-	return true
+
+	writeResourceError(w, r, err, "service", id, "SVC001")
 }
 
 // requireMergePatch validates Content-Type is application/merge-patch+json.
@@ -353,17 +387,10 @@ func requireMergePatch(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// parsePatchMutator validates Content-Type, reads the request body, and
-// returns a MapMutator that applies the parsed JSON Patch (RFC 6902) or JSON
-// Merge Patch (RFC 7396) to whatever fresh current-state map the writer hands
-// it. The mutator is invoked inside the Docker writer against a live inspect
-// — pre-merging against the in-memory cache would race third-party writers
-// and silently drop their concurrent changes.
-//
-// Content-type and body-read failures are written to w and ok=false is
-// returned. Patch *application* failures (test-failed, unknown op, replace
-// of a missing key) bubble up from the mutator so the caller can decide the
-// HTTP status — see writePatchError.
+// parsePatchMutator validates Content-Type, reads the body and returns a
+// MapMutator applying the JSON Patch or Merge Patch to whatever map the writer
+// hands it, against a live inspect — pre-merging against the cache would drop
+// concurrent changes. Request failures are written to w; patch failures bubble up.
 func parsePatchMutator(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -430,8 +457,7 @@ func isPatchApplyError(err error) bool {
 	if err == nil {
 		return false
 	}
-	var tfe *testFailedError
-	if errors.As(err, &tfe) {
+	if _, ok := errors.AsType[*testFailedError](err); ok {
 		return true
 	}
 	return errors.Is(err, errPatchApply)
@@ -439,17 +465,11 @@ func isPatchApplyError(err error) bool {
 
 // writePatchError maps JSON Patch application errors to error codes.
 func writePatchError(w http.ResponseWriter, r *http.Request, err error) {
-	var tfe *testFailedError
-	if errors.As(err, &tfe) {
+	if _, ok := errors.AsType[*testFailedError](err); ok {
 		writeErrorCode(w, r, "API010", err.Error())
 		return
 	}
 	writeErrorCode(w, r, "API011", err.Error())
-}
-
-type updateModeRequest struct {
-	Mode     string  `json:"mode"`
-	Replicas *uint64 `json:"replicas,omitempty"`
 }
 
 type updateImageRequest struct {

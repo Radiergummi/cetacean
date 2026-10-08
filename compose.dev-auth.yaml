@@ -271,7 +271,7 @@ services:
       CETACEAN_AUTH_HEADERS_GROUPS: X-Auth-Groups
       CETACEAN_AUTH_HEADERS_SECRET_HEADER: X-Proxy-Secret
       CETACEAN_AUTH_HEADERS_SECRET_VALUE: dev-secret
-      CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES: 0.0.0.0/0
+      CETACEAN_TRUSTED_PROXIES: 0.0.0.0/0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -334,7 +334,7 @@ services:
       CETACEAN_AUTH_HEADERS_GROUPS: X-Auth-Groups
       CETACEAN_AUTH_HEADERS_SECRET_HEADER: X-Proxy-Secret
       CETACEAN_AUTH_HEADERS_SECRET_VALUE: acl-secret
-      CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES: 0.0.0.0/0
+      CETACEAN_TRUSTED_PROXIES: 0.0.0.0/0
       CETACEAN_ACL_POLICY_FILE: /etc/cetacean/acl-policy.yaml
       CETACEAN_OPERATIONS_LEVEL: "2"
     volumes:
@@ -371,7 +371,7 @@ services:
       CETACEAN_AUTH_HEADERS_GROUPS: X-Auth-Groups
       CETACEAN_AUTH_HEADERS_SECRET_HEADER: X-Proxy-Secret
       CETACEAN_AUTH_HEADERS_SECRET_VALUE: provider-secret
-      CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES: 0.0.0.0/0
+      CETACEAN_TRUSTED_PROXIES: 0.0.0.0/0
       CETACEAN_AUTH_HEADERS_ACL: X-ACL
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

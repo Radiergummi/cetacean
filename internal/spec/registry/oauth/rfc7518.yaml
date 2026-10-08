@@ -1,0 +1,94 @@
+source: RFC 7518
+title: JSON Web Algorithms (JWA)
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc7518
+
+inventory:
+  from: >-
+    RFC 7518 §3 in full — every signature algorithm and the "none" rules — and
+    §6.2, the Elliptic Curve key parameters this deployment publishes. §4, §5
+    and §7 define key management and content encryption for JWE, which this
+    deployment neither produces nor accepts; §6.1, §6.3 and §6.4 define RSA and
+    symmetric key parameters it never emits.
+  count: 18
+
+requirements:
+  - id: ecdsa-signature-keeps-leading-zeros
+    level: MUST
+    text: >-
+      The octet sequence representations MUST NOT be shortened to omit any
+      leading zero octets contained in the values.
+    url: https://www.rfc-editor.org/rfc/rfc7518#section-3.4
+
+  - id: ecdsa-signature-is-64-octets
+    level: MUST
+    text: >-
+      The JWS Signature value MUST be a 64-octet sequence.
+    url: https://www.rfc-editor.org/rfc/rfc7518#section-3.4
+    mutants:
+      - file: internal/oauth/jwt.go
+        replace: "\tif err != nil || len(raw) != es256SigBytes {"
+        with: "\tif err != nil {"
+
+  - id: unsecured-jws-not-accepted-by-default
+    level: MUST
+    text: >-
+      Implementations MUST NOT accept Unsecured JWSs by default.
+    url: https://www.rfc-editor.org/rfc/rfc7518#section-3.6
+
+  - id: ec-public-key-members-present
+    level: MUST
+    text: >-
+      The following members MUST be present for all Elliptic Curve public keys:
+      "kty", "x", "y".
+    url: https://www.rfc-editor.org/rfc/rfc7518#section-6.2.1
+
+  - id: ec-curve-member-present
+    level: MUST
+    text: >-
+      The following member MUST also be present for Elliptic Curve public keys
+      for the three curves defined in the following section: "crv".
+    url: https://www.rfc-editor.org/rfc/rfc7518#section-6.2.1
+
+  - id: x-coordinate-is-full-size
+    level: MUST
+    text: >-
+      The length of this octet string MUST be the full size of a coordinate for
+      the curve specified in the "crv" parameter.
+    url: https://www.rfc-editor.org/rfc/rfc7518#section-6.2.1.2
+
+  - id: y-coordinate-is-full-size
+    level: MUST
+    text: >-
+      The length of this octet string MUST be the full size of a coordinate for
+      the curve specified in the "crv" parameter.
+    url: https://www.rfc-editor.org/rfc/rfc7518#section-6.2.1.3
+
+dismissed:
+  hmac-key-is-at-least-the-hash-size: >-
+    Constrains an HMAC key. This deployment signs with ES256 and refuses HS256
+    — see oauth/rfc7519/hs256-and-none-implemented.
+  hmac-comparison-is-constant-time: >-
+    Conditional on computing an HMAC, which nothing here does.
+  rsa-pkcs1-key-is-2048-bits: >-
+    Constrains an RSA key. RS256 is refused.
+  rsa-pss-key-is-2048-bits: >-
+    Constrains an RSA-PSS key. PS256 is refused.
+  unsecured-jws-may-be-created: >-
+    A MAY for producing a JWS with no integrity protection. Every token this
+    deployment mints is signed — see oauth/rfc9068/tokens-are-signed.
+  unsecured-jws-signature-is-empty: >-
+    The format of an Unsecured JWS this deployment never produces.
+  unsecured-jws-empty-signature-verified: >-
+    Conditional on accepting an Unsecured JWS, which this deployment refuses
+    before reaching a signature at all.
+  unsecured-jws-accepted-only-per-object: >-
+    Conditional on supporting Unsecured JWSs. This deployment supports none.
+  unsecured-jws-acceptance-is-not-global: >-
+    The downgrade-mitigation rule for an implementation that accepts Unsecured
+    JWSs somewhere. This one accepts them nowhere.
+  ec-private-key-member-present: >-
+    Constrains the representation of an EC private key. The key set publishes
+    public keys only — see oauth/rfc7517/non-public-key-material-is-withheld.
+  ec-private-key-length: >-
+    Constrains the "d" parameter, which this deployment never emits.

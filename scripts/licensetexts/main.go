@@ -23,7 +23,7 @@ func main() {
 	)
 	nodeModules := flag.String(
 		"node-modules",
-		"frontend/node_modules",
+		"node_modules/.pnpm",
 		"path to the npm package store",
 	)
 	flag.Parse()

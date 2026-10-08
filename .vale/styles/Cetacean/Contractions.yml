@@ -1,0 +1,25 @@
+extends: substitution
+message: "Use '%s' instead of '%s'."
+link: 'https://developers.google.com/style/contractions'
+level: error
+ignorecase: true
+# The negatives from Google.Contractions, except where the pair ends a clause.
+# "it is" and "that is" stay with the writer: in "a request without it is
+# refused" the pronoun belongs to the previous phrase and cannot contract.
+action:
+  name: replace
+swap:
+  'are not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "aren't"
+  'cannot(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "can't"
+  'could not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "couldn't"
+  'did not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "didn't"
+  'do not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "don't"
+  'does not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "doesn't"
+  'has not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "hasn't"
+  'have not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "haven't"
+  'is not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "isn't"
+  'should not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "shouldn't"
+  'was not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "wasn't"
+  'were not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "weren't"
+  'will not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "won't"
+  'would not(?![ \t]*(?:[.,;:!?)\]]|\n[ \t]*\n|\z))': "wouldn't"

@@ -55,15 +55,24 @@ func writeListCSV[T any](
 	))
 }
 
-// csvPage narrows a list to the page the request named. A request that named
-// none gets everything: a file truncated at the default fifty carries nothing
-// inside it to say so.
+// csvPage narrows a list to the page the request named. Only a limit
+// truncates; an offset names where to start and applies on its own. A Range
+// request takes neither: CSV answers 200 with no Content-Range, and a partial
+// body under that status would be a lie.
 func csvPage[T any](items []T, p PageParams) []T {
-	if !p.Explicit {
+	if p.RangeReq {
 		return items
 	}
 
-	return pageOf(items, p)
+	if p.Explicit {
+		return pageOf(items, p)
+	}
+
+	if p.Offset >= len(items) {
+		return nil
+	}
+
+	return items[p.Offset:]
 }
 
 // csvRowsInOrder builds rows one item at a time, keeping the order the

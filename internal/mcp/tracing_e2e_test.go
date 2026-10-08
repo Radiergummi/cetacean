@@ -54,10 +54,9 @@ func findSpan(t *testing.T, exporter *tracetest.InMemoryExporter, name string) t
 	return tracetest.SpanStub{}
 }
 
-// TestRequestJoinsTraceFromMeta is the SEP-414 acceptance test, and it runs
-// through the real transport for a reason: the propagator is installed on the
-// server, invoked by mcp-go's request handler off the raw JSON-RPC body, and
-// only reachable by sending an actual request. A test that called the
+// The SEP-414 acceptance test, running through the real transport: the
+// propagator is installed on the server, invoked by mcp-go off the raw JSON-RPC
+// body, and only reachable by sending an actual request. A test calling the
 // propagator directly would pass against a server that never installed it.
 func TestRequestJoinsTraceFromMeta(t *testing.T) {
 	srv, exporter := tracedTestServer(t)
@@ -114,12 +113,10 @@ func TestUntracedRequestStartsItsOwnTrace(t *testing.T) {
 	}
 }
 
-// TestToolCallAnnotatesParentSpan is the production-path counterpart to the
-// unit test on ContextWithSpan. mcp-go's tool middleware hangs mcp.tool.name on
-// the *enclosing* span, which it retrieves with tracing.SpanFromContext — a
-// lookup that only succeeds because our tracer publishes the span there. If it
-// did not, this attribute would go to a noop and vanish, with every other
-// tracing assertion still passing.
+// The production-path counterpart to the unit test on ContextWithSpan. mcp-go's
+// tool middleware hangs mcp.tool.name on the *enclosing* span, retrieved with
+// tracing.SpanFromContext — a lookup that succeeds only because our tracer
+// publishes the span there. Otherwise the attribute goes to a noop and vanishes.
 func TestToolCallAnnotatesParentSpan(t *testing.T) {
 	srv, exporter := tracedTestServer(t)
 

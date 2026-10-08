@@ -341,11 +341,10 @@ func onePoint() []prom.Series {
 	return []prom.Series{{Points: []prom.Point{{Timestamp: 1, Value: 1}}}}
 }
 
-// TestGetMetricsReportsAMissingExporter — an empty series is ambiguous between
-// "this resource is idle" and "nothing is collecting", and the tool promises
-// to report the second rather than return empty. right_size_service tells the
-// model to stop on that signal, so an empty series would read as measured zero
-// usage and invite shrinking a service to nothing.
+// An empty series is ambiguous between "this resource is idle" and "nothing is
+// collecting", and the tool promises to report the second rather than return
+// empty. right_size_service tells the model to stop on that signal, so an empty
+// series would read as measured zero usage.
 func TestGetMetricsReportsAMissingExporter(t *testing.T) {
 	cases := []struct {
 		name   string

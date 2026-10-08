@@ -1,0 +1,363 @@
+package oauth
+
+import (
+	"fmt"
+	"log/slog"
+	"maps"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+
+	json "github.com/goccy/go-json"
+)
+
+// oauthStateVersion is the on-disk format version. Bump it whenever the shape
+// below changes incompatibly; readState accepts this version and no other.
+// Refusing an older file costs every client one re-authorization, and costs this
+// package no compatibility branch that outlives the release it bridged.
+//
+// An additive key needs no bump: an older build reads it as absent, where a
+// bump would make a rollback discard the whole file.
+const oauthStateVersion = 2
+
+// RefreshTokenSnapshot is the serializable state of a RefreshTokenStore, kept
+// separate so the file format is not hostage to a field rename inside the
+// store. What lands on disk is not a credential: tokens are keyed by their
+// SHA-256 hash, so the file holds who a hash belongs to and nothing more.
+type RefreshTokenSnapshot struct {
+	Tokens   map[string]RefreshTokenSnapEntry `json:"tokens"`
+	Consumed map[string]string                `json:"consumed"`
+	Grants   map[string][]string              `json:"grants"`
+}
+
+// oauthState is the file itself: everything the OAuth server keeps across a
+// restart, under one version and one timestamp. The store snapshots are
+// embedded so the wire format stays flat.
+type oauthState struct {
+	Version              int       `json:"version"`
+	Timestamp            time.Time `json:"timestamp"`
+	RefreshTokenSnapshot           // tokens, consumed, grants
+
+	// Consent is a slice rather than a map: it is readable in the file, and it
+	// avoids inventing an encoding for a composite key built from three
+	// free-form strings.
+	Consent []ConsentRecord `json:"consent,omitempty"`
+
+	// Clients are the RFC 7591 registrations in eviction order, oldest first —
+	// see ClientRegistry.Snapshot. The live type is safe on disk here, unlike
+	// the token snapshot above, because every tag is an RFC 7591 field name and
+	// cannot move without breaking the wire format first.
+	Clients []ClientRegistration `json:"clients,omitempty"`
+}
+
+// RefreshTokenSnapEntry is one live token: the claims bound to it plus both
+// expiries, the per-token one and the grant family's absolute one.
+type RefreshTokenSnapEntry struct {
+	Subject string `json:"subject"`
+
+	// Absent in a file an older build wrote. Such a grant refreshes into a
+	// token without them until the client re-authorizes, which is a thinner
+	// identity than the ACL wants but never a wider one.
+	Email          string    `json:"email,omitempty"`
+	DisplayName    string    `json:"name,omitempty"`
+	Groups         []string  `json:"groups,omitempty"`
+	ClientID       string    `json:"clientId"`
+	Resource       string    `json:"resource"`
+	GrantID        string    `json:"grantId"`
+	ExpiresAt      time.Time `json:"expiresAt"`
+	GrantExpiresAt time.Time `json:"grantExpiresAt"`
+}
+
+// Snapshot returns a serializable copy of the store's current state.
+func (s *RefreshTokenStore) Snapshot() RefreshTokenSnapshot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tokens := make(map[string]RefreshTokenSnapEntry, len(s.tokens))
+	for hash, entry := range s.tokens {
+		tokens[hash] = RefreshTokenSnapEntry{
+			Subject:        entry.data.Subject,
+			Email:          entry.data.Email,
+			DisplayName:    entry.data.DisplayName,
+			Groups:         append([]string(nil), entry.data.Groups...),
+			ClientID:       entry.data.ClientID,
+			Resource:       entry.data.Resource,
+			GrantID:        entry.data.grantID,
+			ExpiresAt:      entry.expiresAt,
+			GrantExpiresAt: entry.grantExpiresAt,
+		}
+	}
+
+	consumed := make(map[string]string, len(s.consumed))
+	maps.Copy(consumed, s.consumed)
+
+	grants := make(map[string][]string, len(s.grants))
+	for grantID, hashes := range s.grants {
+		grants[grantID] = append([]string(nil), hashes...)
+	}
+
+	return RefreshTokenSnapshot{
+		Tokens:   tokens,
+		Consumed: consumed,
+		Grants:   grants,
+	}
+}
+
+// Restore replaces the store's state from a snapshot, dropping grant families
+// whose live token has expired. A family holds exactly one live token, so one
+// with none can never rotate again, and carrying its consumed hashes forward
+// would only grow the file.
+func (s *RefreshTokenStore) Restore(snap RefreshTokenSnapshot) {
+	now := time.Now()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.tokens = make(map[string]refreshTokenEntry, len(snap.Tokens))
+	live := make(map[string]bool, len(snap.Tokens))
+
+	for hash, entry := range snap.Tokens {
+		// Rotate caps a token's expiry at its family's, so in memory the
+		// second check is implied by the first. The file is a trust boundary
+		// that invariant does not cross: it can be stale, hand-edited or from
+		// an older build.
+		if now.After(entry.ExpiresAt) || now.After(entry.GrantExpiresAt) {
+			continue
+		}
+
+		s.tokens[hash] = refreshTokenEntry{
+			data: RefreshTokenData{
+				Subject:     entry.Subject,
+				Email:       entry.Email,
+				DisplayName: entry.DisplayName,
+				Groups:      append([]string(nil), entry.Groups...),
+				ClientID:    entry.ClientID,
+				Resource:    entry.Resource,
+				grantID:     entry.GrantID,
+			},
+			expiresAt:      entry.ExpiresAt,
+			grantExpiresAt: entry.GrantExpiresAt,
+		}
+		live[entry.GrantID] = true
+	}
+
+	s.consumed = make(map[string]string, len(snap.Consumed))
+	for hash, grantID := range snap.Consumed {
+		if live[grantID] {
+			s.consumed[hash] = grantID
+		}
+	}
+
+	s.grants = make(map[string][]string, len(snap.Grants))
+	for grantID, hashes := range snap.Grants {
+		if live[grantID] {
+			s.grants[grantID] = append([]string(nil), hashes...)
+		}
+	}
+}
+
+// writeState serializes the OAuth state to path using a temporary file and an
+// atomic rename, so a crash mid-write leaves the previous file intact.
+func writeState(path string, state oauthState) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("marshal oauth state: %w", err)
+	}
+
+	// A unique name rather than a fixed path + ".tmp": the mutex serializes
+	// writers in this process, but two processes on one data directory would
+	// interleave their bytes into the same file and publish something that
+	// fails to parse. A lost update is survivable; unparseable bytes are not.
+	tmpPath, err := writeTempSynced(path, data)
+	if err != nil {
+		return fmt.Errorf("write oauth state tmp: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath) //nolint:errcheck
+		return fmt.Errorf("rename oauth state: %w", err)
+	}
+
+	// The rename is only durable once the directory entry reaches the disk.
+	// Without this a power loss can leave the old file — or no file — even
+	// though every write above succeeded, which is exactly the case this
+	// store exists to survive.
+	if err := syncDir(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("sync oauth state dir: %w", err)
+	}
+
+	return nil
+}
+
+// writeTempSynced writes data to a uniquely named sibling of path and flushes
+// it to disk, so a nil error means "this survives a crash". The caller owns
+// the returned path and renames it. The name matches tempFileSuffix, so
+// sweepTempFiles can recognise an orphan.
+func writeTempSynced(path string, data []byte) (string, error) {
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+tempFileSuffix)
+	if err != nil {
+		return "", err
+	}
+
+	tmpPath := f.Name()
+
+	if _, err := f.Write(data); err != nil {
+		f.Close()          //nolint:errcheck // the write error is the one worth reporting
+		os.Remove(tmpPath) //nolint:errcheck
+		return "", err
+	}
+
+	if err := f.Sync(); err != nil {
+		f.Close()          //nolint:errcheck // the sync error is the one worth reporting
+		os.Remove(tmpPath) //nolint:errcheck
+		return "", err
+	}
+
+	if err := f.Close(); err != nil {
+		os.Remove(tmpPath) //nolint:errcheck
+		return "", err
+	}
+
+	return tmpPath, nil
+}
+
+// syncDir flushes a directory's own entries, which is what makes a rename
+// durable rather than merely visible to the running kernel.
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close() //nolint:errcheck // read-only handle
+
+	return d.Sync()
+}
+
+// readState reads a file written by writeState.
+func readState(path string) (oauthState, error) {
+	data, err := os.ReadFile(path) //nolint:gosec // path is operator-configured
+	if err != nil {
+		return oauthState{}, fmt.Errorf("read oauth state: %w", err)
+	}
+
+	var state oauthState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return oauthState{}, fmt.Errorf("unmarshal oauth state: %w", err)
+	}
+
+	if state.Version != oauthStateVersion {
+		return oauthState{}, fmt.Errorf(
+			"unsupported oauth state version: got %d, want %d",
+			state.Version,
+			oauthStateVersion,
+		)
+	}
+
+	return state, nil
+}
+
+// tempFileSuffix is appended to the state file's name to form the pattern
+// os.CreateTemp expands. It is shared by the writer and the sweeper so the
+// names one creates are exactly the ones the other reclaims.
+const tempFileSuffix = ".*.tmp"
+
+// changeNotifier is the write-through hook the stores share. Both hold state
+// that belongs to one file, and neither knows what owns it, so both report a
+// mutation the same way.
+type changeNotifier struct {
+	// onChange is called after every mutation that changed state, always with
+	// the store's mutex released. Nil when the store is memory-only.
+	onChange func()
+}
+
+// SetOnChange installs the callback fired after every mutation. Call it during
+// setup, before the store serves any request: it is not guarded by a mutex,
+// because a hook swapped mid-flight would race the mutations it records.
+func (n *changeNotifier) SetOnChange(fn func()) {
+	n.onChange = fn
+}
+
+// writeThrough notifies the owner of the durable state that it changed. It
+// must be called with the store's mutex released, since the owner takes a
+// snapshot, which acquires it.
+func (n *changeNotifier) writeThrough() {
+	if n.onChange == nil {
+		return
+	}
+
+	n.onChange()
+}
+
+// sweepTempFiles removes temp files orphaned by an unclean kill mid-write,
+// each of which holds a full copy of the state. Called once at startup, where
+// no writer is racing it: a temp file a live writer owns cannot exist yet.
+func sweepTempFiles(path string) {
+	orphans, err := filepath.Glob(path + tempFileSuffix)
+	if err != nil {
+		return // the pattern is a constant, so this cannot fire
+	}
+
+	for _, orphan := range orphans {
+		if err := os.Remove(orphan); err != nil {
+			slog.Warn("could not remove orphaned OAuth state temp file",
+				"error", err,
+				"path", orphan,
+			)
+		}
+	}
+}
+
+// stateFile owns the OAuth server's durable state on disk. The stores cannot
+// each hold their own writer: they share one file, so each would serialize the
+// whole of it from its own view and drop the other's.
+type stateFile struct {
+	// Held across the whole of write, so the snapshot and the rename that
+	// publishes it stay one step: two stores snapshotting at different moments
+	// and renaming in either order would drop a token still live in memory.
+	// No store's mutex is held while its hook runs, so this cannot deadlock.
+	mu sync.Mutex
+
+	path    string
+	tokens  *RefreshTokenStore
+	consent *ConsentStore
+
+	// clients is nil when DCR is disabled.
+	clients *ClientRegistry
+
+	// carriedClients is what the file held at startup, written back verbatim
+	// while there is no registry to snapshot, so turning DCR off for a window
+	// does not let a token rotation erase the registrations.
+	carriedClients []ClientRegistration
+}
+
+// write serializes every store's current state. A failed write is logged and
+// swallowed: the state is already live in memory, so refusing to serve would
+// turn a durability problem into an outage, and the cost is a
+// re-authorization after the next restart.
+func (f *stateFile) write() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	registrations := f.carriedClients
+	if f.clients != nil {
+		registrations = f.clients.Snapshot()
+	}
+
+	state := oauthState{
+		Version:              oauthStateVersion,
+		Timestamp:            time.Now(),
+		RefreshTokenSnapshot: f.tokens.Snapshot(),
+		Consent:              f.consent.Snapshot(),
+		Clients:              registrations,
+	}
+
+	if err := writeState(f.path, state); err != nil {
+		slog.Warn(
+			"OAuth state write failed; tokens, approvals and client "+
+				"registrations will not survive a restart",
+			"error", err,
+			"path", f.path,
+		)
+	}
+}

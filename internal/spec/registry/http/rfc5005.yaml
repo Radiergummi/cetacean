@@ -1,0 +1,61 @@
+source: RFC 5005
+title: Feed Paging and Archiving
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc5005
+
+inventory:
+  from: >-
+    RFC 5005 in full, less §1.1's RFC 2119 boilerplate. This deployment
+    publishes paged feeds (§3) and no archives: the history it serves is a
+    ring buffer, so an entry that has aged out is gone rather than moved to an
+    archive document. §4's statements are accounted for here rather than
+    excluded, because publishing archives is a change to the same handler.
+  count: 13
+
+requirements:
+  - id: a-paged-feed-carries-a-paging-relation
+    level: MUST
+    text: >-
+      Paged feed documents MUST have at least one of these link relations
+      present, and should contain as many as practical and applicable.
+    url: https://www.rfc-editor.org/rfc/rfc5005#section-3
+    mutants:
+      - file: internal/api/atom_handlers.go
+        replace: "\t\tlinks = append(links, atomxml.Link{\n\t\t\tRel:  \"next\",\n\t\t\tHref: nextHref,\n\t\t\tType: \"application/atom+xml\",\n\t\t})"
+        with: "\t\t_ = nextHref"
+
+  - id: duplicate-removal-is-unambiguous
+    level: SHOULD
+    text: >-
+      Publishers SHOULD construct their feed documents in such a way as to
+      make duplicate removal unambiguous (see Section 4.2).
+    url: https://www.rfc-editor.org/rfc/rfc5005#section-4.1
+
+dismissed:
+  an-absent-entry-is-not-part-of-the-feed: >-
+    Binds a client deciding what a complete feed contains.
+  clients-do-not-treat-a-paged-feed-as-complete: >-
+    Binds the client reading a paged feed.
+  an-archive-document-does-not-change: >-
+    Constrains an archive document. None is published: the history is a ring
+    buffer, and an entry that ages out of it is gone rather than moved.
+  an-archive-uri-does-not-change: >-
+    The same constraint on the URI of a document that does not exist here.
+  prev-archive-is-present: >-
+    Required of a subscription or archive document unless there are no
+    preceding archives available. There never are, so the exception the
+    sentence itself carves out is what applies.
+  next-archive-is-present: >-
+    Constrains an archive document.
+  an-archive-names-its-subscription-document: >-
+    Asks an archive document for a "current" relation. The relation is emitted
+    here, but from a paged feed whose cursor has aged out of the ring buffer,
+    which is §2's use of it rather than §4's.
+  an-archive-declares-itself: >-
+    Asks for an fh:archive element in an archive document's head.
+  duplicates-resolve-to-the-newest-entry: >-
+    Binds the client reconciling two feed documents.
+  the-newest-document-wins-a-duplicate: >-
+    The same reconciliation rule, for the client.
+  clients-warn-about-an-incomplete-feed: >-
+    Binds the client that cannot reconstruct the logical feed.

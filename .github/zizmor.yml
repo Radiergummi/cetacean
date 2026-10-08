@@ -1,0 +1,6 @@
+rules:
+  # zizmor prefers GitHub's newer $/… form for an action in this repository.
+  # actionlint 1.7.12 rejects it as malformed, and both gate CI; ./… is the
+  # form both accept, and the audit is about spelling rather than risk.
+  self-repository:
+    disable: true

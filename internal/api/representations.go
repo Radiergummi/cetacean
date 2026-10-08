@@ -13,6 +13,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/integrations"
 )
@@ -24,13 +25,9 @@ import (
 var errNoRepresentation = errors.New("api: no current representation")
 
 // representationFunc builds the value a GET at this URI would serialize, so a
-// precondition can be compared against the exact ETag that GET emits.
-//
-// It returns errNoRepresentation when the resource does not exist, and must
-// never write to the response: the precondition middleware answers that with
-// 412 and the GET handler with 404. That is why a paired handler looks its
-// resource up twice — once for its ACL check, which writes its own 403/404,
-// and once here.
+// precondition compares against the exact ETag that GET emits. It returns
+// errNoRepresentation when the resource is absent and must never write to the
+// response, which is why a paired handler looks its resource up twice.
 type representationFunc func(*http.Request) (any, error)
 
 // writeServiceRepresentation is the tail every service sub-resource GET shares:
@@ -425,9 +422,15 @@ func (h *Handlers) taskRepresentation(r *http.Request) (any, error) {
 	et := cluster.EnrichTask(h.cache, task)
 
 	return NewDetailResponse(r.Context(), "/tasks/"+id, "Task", TaskResponse{
-		Task:    et,
-		Service: TaskServiceRef{AtID: "/services/" + et.ServiceID, Name: et.ServiceName},
-		Node:    TaskNodeRef{AtID: "/nodes/" + et.NodeID, Hostname: et.NodeHostname},
+		Task: et,
+		Service: TaskServiceRef{
+			AtID: absPath(r.Context(), "/services/"+et.ServiceID),
+			Name: et.ServiceName,
+		},
+		Node: TaskNodeRef{
+			AtID:     absPath(r.Context(), "/nodes/"+et.NodeID),
+			Hostname: et.NodeHostname,
+		},
 	}), nil
 }
 
@@ -438,6 +441,10 @@ func (h *Handlers) stackRepresentation(r *http.Request) (any, error) {
 	if !ok {
 		return nil, errNoRepresentation
 	}
+
+	// The memo this feeds is keyed on the identity's grant fingerprint, which
+	// has to separate any two identities this filter answers differently.
+	detail = cluster.FilterStackDetail(h.acl, auth.IdentityFromContext(r.Context()), detail)
 
 	return NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", StackResponse{
 		Stack: detail,

@@ -15,7 +15,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
-	"github.com/radiergummi/cetacean/internal/mcp/oauth"
+	"github.com/radiergummi/cetacean/internal/oauth"
 )
 
 // jsonrpcEnvelope captures the subset of a JSON-RPC response we assert on.
@@ -48,10 +48,9 @@ func readSSEResponse(t *testing.T, body io.Reader) []byte {
 }
 
 // mcpJSONRPCResult captures the subset of the *http.Response the integration
-// tests actually look at. Returning a value type instead of *http.Response
-// keeps the response body lifecycle inside the helper (which always drains
-// and closes it) and stops golangci-lint's bodyclose from flagging every
-// caller.
+// tests look at. Returning a value type keeps the body lifecycle inside the
+// helper, which always drains and closes it, and stops bodyclose flagging
+// every caller.
 type mcpJSONRPCResult struct {
 	StatusCode int
 	Header     http.Header
@@ -105,6 +104,7 @@ func TestMCPEndToEnd(t *testing.T) {
 	srv, err := New(c, Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
+		AuthMode:       "none",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -212,8 +212,8 @@ func TestMCPEndToEnd(t *testing.T) {
 }
 
 // newOAuthIntegrationServer wires an MCP server with OAuth + ACL identical to
-// production. Returns the handler, a TokenIssuer for minting bearer tokens, and
-// the OAuth server (kept for cleanup / future assertions).
+// production. The returned TokenIssuer shares the server's root key, so tokens
+// it mints verify — which is what makes these tests end-to-end.
 func newOAuthIntegrationServer(
 	t *testing.T,
 	c *cache.Cache,
@@ -225,18 +225,13 @@ func newOAuthIntegrationServer(
 	cfg.Enabled = true
 	key := []byte("integration-test-signing-key-32B!")
 
-	oauthSrv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://cetacean.example.com",
-		BasePath:    "",
-		MCPResource: "https://cetacean.example.com/mcp",
-		MCP:         cfg,
-		SigningKey:  key,
-	})
+	oauthSrv := oauthServerFor(key)
 
 	srv, err := New(c, Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
 		OAuth:          oauthSrv,
+		Resource:       testResource,
 		ACL:            e,
 	})
 	if err != nil {
@@ -244,11 +239,7 @@ func newOAuthIntegrationServer(
 	}
 	t.Cleanup(srv.Close)
 
-	issuer, err := oauth.NewTokenIssuer(
-		key,
-		"https://cetacean.example.com",
-		"https://cetacean.example.com/mcp",
-	)
+	issuer, err := oauth.NewTokenIssuer(key, testIssuer)
 	if err != nil {
 		t.Fatalf("NewTokenIssuer: %v", err)
 	}
@@ -280,6 +271,7 @@ func TestMCPIntegration_ResourcesReadHonoursACL(t *testing.T) {
 
 	token, err := issuer.IssueAccessToken(
 		oauth.AccessTokenClaims{Subject: "agent@example.com", ClientID: "agent-client"},
+		testResource,
 		5*time.Minute,
 	)
 	if err != nil {
@@ -335,6 +327,7 @@ func TestMCPIntegration_FindToolFiltersByACL(t *testing.T) {
 
 	token, err := issuer.IssueAccessToken(
 		oauth.AccessTokenClaims{Subject: "agent@example.com", ClientID: "agent-client"},
+		testResource,
 		5*time.Minute,
 	)
 	if err != nil {
@@ -356,10 +349,10 @@ func TestMCPIntegration_FindToolFiltersByACL(t *testing.T) {
 	}
 }
 
-// TestMCPIntegration_UnauthorizedHeaderUsesRFC7230Quoting confirms the 401
-// emitted on a missing bearer follows RFC 7230 quoted-string rules (covers
+// TestMCPIntegration_UnauthorizedHeaderUsesRFC9110Quoting confirms the 401
+// emitted on a missing bearer follows RFC 9110 quoted-string rules (covers
 // M-10 at HTTP level).
-func TestMCPIntegration_UnauthorizedHeaderUsesRFC7230Quoting(t *testing.T) {
+func TestMCPIntegration_UnauthorizedHeaderUsesRFC9110Quoting(t *testing.T) {
 	handler, _ := newOAuthIntegrationServer(t, cache.New(nil), nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
@@ -376,11 +369,22 @@ func TestMCPIntegration_UnauthorizedHeaderUsesRFC7230Quoting(t *testing.T) {
 	// Go-syntax escapes for legal characters. The PRM URL has no special
 	// characters, so the rendered form must contain the URL verbatim
 	// between double quotes.
-	want := `resource_metadata="https://cetacean.example.com/.well-known/oauth-protected-resource"`
+	//
+	// The URL is this transport's own document, not the one at the root: a
+	// client sent to the root would discover the API resource and come back
+	// with a token this endpoint refuses.
+	want := `resource_metadata="https://cetacean.example.com` +
+		`/.well-known/oauth-protected-resource` + MountPath + `"`
 	if !strings.Contains(www, want) {
 		t.Errorf("WWW-Authenticate = %q, want substring %q", www, want)
 	}
 	if strings.Contains(www, `\"`) {
 		t.Errorf("WWW-Authenticate contains Go-style escaped quotes: %q", www)
+	}
+
+	// RFC 6750 §3.1: this request carried no credential, so the challenge reports
+	// no error — there is nothing wrong with a token that was never sent.
+	if strings.Contains(www, "error=") {
+		t.Errorf("WWW-Authenticate names an error for a missing credential: %q", www)
 	}
 }

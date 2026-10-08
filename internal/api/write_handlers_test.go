@@ -21,6 +21,8 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 type mockServiceLifecycleWriter struct {
@@ -29,34 +31,30 @@ type mockServiceLifecycleWriter struct {
 	rollbackServiceFn           func(ctx context.Context, id string) (swarm.Service, error)
 	restartServiceFn            func(ctx context.Context, id string) (swarm.Service, error)
 	removeServiceFn             func(ctx context.Context, id string) error
-	updateServiceModeFn         func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
 	updateServiceEndpointModeFn func(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error)
 }
 
 type mockServiceSpecWriter struct {
-	// simulatedEnv / simulatedLabels stand in for the "fresh inspect" that
-	// the real writer would do against Docker. The mutator passed into
-	// UpdateServiceEnv / UpdateServiceLabels is applied to these so the
-	// resolved map handed to the Fn callback reflects M-42's contract.
-	simulatedEnv                  map[string]string
-	simulatedLabels               map[string]string
-	updateServiceEnvFn            func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
-	updateServiceLabelsFn         func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
-	updateServiceResourcesFn      func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
-	updateServiceHealthcheckFn    func(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error)
-	updateServicePlacementFn      func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error)
-	updateServicePortsFn          func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error)
-	updateServiceUpdatePolicyFn   func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
-	updateServiceRollbackPolicyFn func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
-	updateServiceLogDriverFn      func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error)
+	// These stand in for the fresh inspect the real writer would do against
+	// Docker. The mutator passed into the update methods is applied to them, so
+	// what the callback receives reflects the contract: the merge ran against
+	// the live spec, not the cache.
+	simulatedEnv               map[string]string
+	simulatedLabels            map[string]string
+	simulatedSpec              *swarm.ServiceSpec
+	updateServiceSpecFn        func(ctx context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error)
+	updateServiceEnvFn         func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
+	updateServiceLabelsFn      func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
+	updateServiceHealthcheckFn func(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error)
+	updateServicePlacementFn   func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error)
+	updateServicePortsFn       func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error)
 }
 
 type mockServiceAttachmentWriter struct {
-	updateServiceContainerConfigFn func(ctx context.Context, id string, apply func(spec *swarm.ContainerSpec)) (swarm.Service, error)
-	updateServiceConfigsFn         func(ctx context.Context, id string, configs []*swarm.ConfigReference) (swarm.Service, error)
-	updateServiceSecretsFn         func(ctx context.Context, id string, secrets []*swarm.SecretReference) (swarm.Service, error)
-	updateServiceNetworksFn        func(ctx context.Context, id string, networks []swarm.NetworkAttachmentConfig) (swarm.Service, error)
-	updateServiceMountsFn          func(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
+	updateServiceConfigsFn  func(ctx context.Context, id string, configs []*swarm.ConfigReference) (swarm.Service, error)
+	updateServiceSecretsFn  func(ctx context.Context, id string, secrets []*swarm.SecretReference) (swarm.Service, error)
+	updateServiceNetworksFn func(ctx context.Context, id string, networks []swarm.NetworkAttachmentConfig) (swarm.Service, error)
+	updateServiceMountsFn   func(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
 }
 
 type mockNodeWriter struct {
@@ -318,14 +316,26 @@ func (m *mockServiceSpecWriter) UpdateServiceLabels(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockServiceSpecWriter) UpdateServiceResources(
+func (m *mockServiceSpecWriter) UpdateServiceSpec(
 	ctx context.Context,
 	id string,
-	resources *swarm.ResourceRequirements,
+	mutate func(spec *swarm.ServiceSpec) error,
 ) (swarm.Service, error) {
-	if m.updateServiceResourcesFn != nil {
-		return m.updateServiceResourcesFn(ctx, id, resources)
+	spec := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{},
+	}}
+	if m.simulatedSpec != nil {
+		spec = *m.simulatedSpec
 	}
+
+	if err := mutate(&spec); err != nil {
+		return swarm.Service{}, err
+	}
+
+	if m.updateServiceSpecFn != nil {
+		return m.updateServiceSpecFn(ctx, id, spec)
+	}
+
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
@@ -336,17 +346,6 @@ func (m *mockServiceLifecycleWriter) UpdateServiceEndpointMode(
 ) (swarm.Service, error) {
 	if m.updateServiceEndpointModeFn != nil {
 		return m.updateServiceEndpointModeFn(ctx, id, mode)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceLifecycleWriter) UpdateServiceMode(
-	ctx context.Context,
-	id string,
-	mode swarm.ServiceMode,
-) (swarm.Service, error) {
-	if m.updateServiceModeFn != nil {
-		return m.updateServiceModeFn(ctx, id, mode)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
@@ -380,50 +379,6 @@ func (m *mockServiceSpecWriter) UpdateServicePorts(
 ) (swarm.Service, error) {
 	if m.updateServicePortsFn != nil {
 		return m.updateServicePortsFn(ctx, id, ports)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServiceUpdatePolicy(
-	ctx context.Context,
-	id string,
-	policy *swarm.UpdateConfig,
-) (swarm.Service, error) {
-	if m.updateServiceUpdatePolicyFn != nil {
-		return m.updateServiceUpdatePolicyFn(ctx, id, policy)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServiceRollbackPolicy(
-	ctx context.Context,
-	id string,
-	policy *swarm.UpdateConfig,
-) (swarm.Service, error) {
-	if m.updateServiceRollbackPolicyFn != nil {
-		return m.updateServiceRollbackPolicyFn(ctx, id, policy)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServiceLogDriver(
-	ctx context.Context,
-	id string,
-	driver *swarm.Driver,
-) (swarm.Service, error) {
-	if m.updateServiceLogDriverFn != nil {
-		return m.updateServiceLogDriverFn(ctx, id, driver)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceAttachmentWriter) UpdateServiceContainerConfig(
-	ctx context.Context,
-	id string,
-	apply func(spec *swarm.ContainerSpec),
-) (swarm.Service, error) {
-	if m.updateServiceContainerConfigFn != nil {
-		return m.updateServiceContainerConfigFn(ctx, id, apply)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
@@ -496,12 +451,10 @@ func TestHandleScaleService_OK(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			scaleServiceFn: func(_ context.Context, id string, replicas uint64) (swarm.Service, error) {
-				svc := replicatedService(id)
-				svc.Spec.Mode.Replicated.Replicas = &replicas
-				return svc, nil
-			},
+		scaleServiceFn: func(_ context.Context, id string, replicas uint64) (swarm.Service, error) {
+			svc := replicatedService(id)
+			svc.Spec.Mode.Replicated.Replicas = &replicas
+			return svc, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -575,10 +528,8 @@ func TestHandleScaleService_Conflict(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			scaleServiceFn: func(_ context.Context, _ string, _ uint64) (swarm.Service, error) {
-				return swarm.Service{}, errdefs.Conflict(fmt.Errorf("update out of sequence"))
-			},
+		scaleServiceFn: func(_ context.Context, _ string, _ uint64) (swarm.Service, error) {
+			return swarm.Service{}, errdefs.Conflict(fmt.Errorf("update out of sequence"))
 		},
 	}
 
@@ -609,129 +560,15 @@ func TestHandleScaleService_InvalidBody(t *testing.T) {
 	}
 }
 
-func TestHandleUpdateServiceMode_ToGlobal(t *testing.T) {
-	c := cache.New(nil)
-	c.SetService(replicatedService("svc1"))
-
-	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			updateServiceModeFn: func(_ context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
-				return swarm.Service{
-					ID:   id,
-					Spec: swarm.ServiceSpec{Mode: mode},
-				}, nil
-			},
-		},
-	}
-	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
-
-	body := `{"mode":"global"}`
-	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
-	req.SetPathValue("id", "svc1")
-	w := httptest.NewRecorder()
-	h.HandleUpdateServiceMode(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestHandleUpdateServiceMode_ToReplicated(t *testing.T) {
-	c := cache.New(nil)
-	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}}},
-	})
-
-	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			updateServiceModeFn: func(_ context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
-				return swarm.Service{
-					ID:   id,
-					Spec: swarm.ServiceSpec{Mode: mode},
-				}, nil
-			},
-		},
-	}
-	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
-
-	body := `{"mode":"replicated","replicas":3}`
-	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
-	req.SetPathValue("id", "svc1")
-	w := httptest.NewRecorder()
-	h.HandleUpdateServiceMode(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestHandleUpdateServiceMode_ReplicatedWithoutCount(t *testing.T) {
-	c := cache.New(nil)
-	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}}},
-	})
-
-	wc := &mockWriteClient{}
-	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
-
-	body := `{"mode":"replicated"}`
-	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
-	req.SetPathValue("id", "svc1")
-	w := httptest.NewRecorder()
-	h.HandleUpdateServiceMode(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("status=%d, want 400", w.Code)
-	}
-}
-
-func TestHandleUpdateServiceMode_InvalidMode(t *testing.T) {
-	c := cache.New(nil)
-	c.SetService(replicatedService("svc1"))
-
-	wc := &mockWriteClient{}
-	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
-
-	body := `{"mode":"invalid"}`
-	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
-	req.SetPathValue("id", "svc1")
-	w := httptest.NewRecorder()
-	h.HandleUpdateServiceMode(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("status=%d, want 400", w.Code)
-	}
-}
-
-func TestHandleUpdateServiceMode_NotFound(t *testing.T) {
-	c := cache.New(nil)
-	wc := &mockWriteClient{}
-	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
-
-	body := `{"mode":"global"}`
-	req := httptest.NewRequest("PUT", "/services/missing/mode", strings.NewReader(body))
-	req.SetPathValue("id", "missing")
-	w := httptest.NewRecorder()
-	h.HandleUpdateServiceMode(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("status=%d, want 404", w.Code)
-	}
-}
-
 func TestHandleUpdateServiceEndpointMode_OK(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			updateServiceEndpointModeFn: func(_ context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error) {
-				svc := replicatedService(id)
-				svc.Spec.EndpointSpec = &swarm.EndpointSpec{Mode: mode}
-				return svc, nil
-			},
+		updateServiceEndpointModeFn: func(_ context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error) {
+			svc := replicatedService(id)
+			svc.Spec.EndpointSpec = &swarm.EndpointSpec{Mode: mode}
+			return svc, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -770,12 +607,10 @@ func TestHandleUpdateServiceImage_OK(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			updateServiceImageFn: func(_ context.Context, id string, image string) (swarm.Service, error) {
-				svc := replicatedService(id)
-				svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{Image: image}
-				return svc, nil
-			},
+		updateServiceImageFn: func(_ context.Context, id string, image string) (swarm.Service, error) {
+			svc := replicatedService(id)
+			svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{Image: image}
+			return svc, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -843,10 +678,8 @@ func TestHandleRollbackService_OK(t *testing.T) {
 	c.SetService(serviceWithPreviousSpec("svc1"))
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			rollbackServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
-				return replicatedService(id), nil
-			},
+		rollbackServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
+			return replicatedService(id), nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -904,10 +737,8 @@ func TestHandleRestartService_OK(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			restartServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
-				return replicatedService(id), nil
-			},
+		restartServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
+			return replicatedService(id), nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -949,10 +780,8 @@ func TestHandleUpdateNodeAvailability_OK(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1"})
 
 	wc := &mockWriteClient{
-		mockNodeWriter: mockNodeWriter{
-			updateNodeAvailabilityFn: func(_ context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error) {
-				return swarm.Node{ID: id, Spec: swarm.NodeSpec{Availability: availability}}, nil
-			},
+		updateNodeAvailabilityFn: func(_ context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error) {
+			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Availability: availability}}, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1013,10 +842,8 @@ func TestHandleRemoveTask_OK(t *testing.T) {
 	c.SetTask(swarm.Task{ID: "task1"})
 
 	wc := &mockWriteClient{
-		mockResourceRemover: mockResourceRemover{
-			removeTaskFn: func(_ context.Context, id string) error {
-				return nil
-			},
+		removeTaskFn: func(_ context.Context, id string) error {
+			return nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1051,10 +878,8 @@ func TestHandleRemoveTask_NoContainer(t *testing.T) {
 	c.SetTask(swarm.Task{ID: "task1"})
 
 	wc := &mockWriteClient{
-		mockResourceRemover: mockResourceRemover{
-			removeTaskFn: func(_ context.Context, id string) error {
-				return errdefs.NotFound(fmt.Errorf("task has no running container"))
-			},
+		removeTaskFn: func(_ context.Context, id string) error {
+			return errdefs.NotFound(fmt.Errorf("task has no running container"))
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1074,10 +899,8 @@ func TestHandleRemoveService_OK(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			removeServiceFn: func(_ context.Context, id string) error {
-				return nil
-			},
+		removeServiceFn: func(_ context.Context, id string) error {
+			return nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1112,10 +935,8 @@ func TestHandleRemoveService_DockerError(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			removeServiceFn: func(_ context.Context, id string) error {
-				return fmt.Errorf("engine error")
-			},
+		removeServiceFn: func(_ context.Context, id string) error {
+			return fmt.Errorf("engine error")
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1173,14 +994,12 @@ func TestHandlePatchServiceEnv_Add(t *testing.T) {
 	c.SetService(serviceWithEnv("svc1", []string{"FOO=bar"}))
 
 	wc := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceEnvFn: func(_ context.Context, id string, env map[string]string) (swarm.Service, error) {
-				envSlice := make([]string, 0, len(env))
-				for k, v := range env {
-					envSlice = append(envSlice, k+"="+v)
-				}
-				return serviceWithEnv(id, envSlice), nil
-			},
+		updateServiceEnvFn: func(_ context.Context, id string, env map[string]string) (swarm.Service, error) {
+			envSlice := make([]string, 0, len(env))
+			for k, v := range env {
+				envSlice = append(envSlice, k+"="+v)
+			}
+			return serviceWithEnv(id, envSlice), nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1264,14 +1083,12 @@ func TestHandlePatchServiceEnv_MergePatch(t *testing.T) {
 	c.SetService(serviceWithEnv("svc1", []string{"FOO=bar", "OLD=remove"}))
 
 	wc := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceEnvFn: func(_ context.Context, id string, env map[string]string) (swarm.Service, error) {
-				envSlice := make([]string, 0, len(env))
-				for k, v := range env {
-					envSlice = append(envSlice, k+"="+v)
-				}
-				return serviceWithEnv(id, envSlice), nil
-			},
+		updateServiceEnvFn: func(_ context.Context, id string, env map[string]string) (swarm.Service, error) {
+			envSlice := make([]string, 0, len(env))
+			for k, v := range env {
+				envSlice = append(envSlice, k+"="+v)
+			}
+			return serviceWithEnv(id, envSlice), nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1345,13 +1162,11 @@ func TestHandlePatchNodeLabels_Add(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockNodeWriter: mockNodeWriter{
-			updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
-				return swarm.Node{
-					ID:   id,
-					Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}},
-				}, nil
-			},
+		updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
+			return swarm.Node{
+				ID:   id,
+				Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}},
+			}, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1382,6 +1197,10 @@ func TestHandlePatchNodeLabels_Add(t *testing.T) {
 }
 
 func TestHandlePatchNodeLabels_WrongContentType(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc5789/patch-document-suits-the-resource",
+	)
+
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "node1"})
 	h := newTestHandlers(t, withCache(c), withWriteClient(&mockWriteClient{}))
@@ -1409,13 +1228,11 @@ func TestHandlePatchNodeLabels_MergePatch(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockNodeWriter: mockNodeWriter{
-			updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
-				return swarm.Node{
-					ID:   id,
-					Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}},
-				}, nil
-			},
+		updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
+			return swarm.Node{
+				ID:   id,
+				Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}},
+			}, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1471,13 +1288,22 @@ func TestHandlePatchServiceResources_Merge(t *testing.T) {
 	svc.Spec.TaskTemplate.Resources = &swarm.ResourceRequirements{}
 	c.SetService(svc)
 
+	// The reservation exists only on the writer's spec, never in the cache:
+	// a merge that preserves it proves the base came from the live inspect
+	// rather than from the cached copy (M-42).
+	live := replicatedService("svc1").Spec
+	live.TaskTemplate.Resources = &swarm.ResourceRequirements{
+		Reservations: &swarm.Resources{MemoryBytes: 64 << 20},
+	}
+
+	var captured *swarm.ResourceRequirements
 	wc := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceResourcesFn: func(_ context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error) {
-				s := replicatedService(id)
-				s.Spec.TaskTemplate.Resources = resources
-				return s, nil
-			},
+		simulatedSpec: &live,
+		updateServiceSpecFn: func(_ context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+			captured = spec.TaskTemplate.Resources
+			s := replicatedService(id)
+			s.Spec.TaskTemplate.Resources = spec.TaskTemplate.Resources
+			return s, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1504,6 +1330,21 @@ func TestHandlePatchServiceResources_Merge(t *testing.T) {
 	}
 	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
 		t.Errorf("expected @context ending in /api/context.jsonld, got %v", resp["@context"])
+	}
+
+	if captured == nil {
+		t.Fatal("the writer was never handed a merged resource requirement")
+	}
+
+	if captured.Limits == nil || captured.Limits.NanoCPUs != 500000000 {
+		t.Errorf("Limits=%+v, want the patched NanoCPUs", captured.Limits)
+	}
+
+	if captured.Reservations == nil || captured.Reservations.MemoryBytes != 64<<20 {
+		t.Errorf(
+			"Reservations=%+v, want the live spec's reservation preserved by the merge",
+			captured.Reservations,
+		)
 	}
 }
 
@@ -1589,10 +1430,8 @@ func TestHandlePutServiceHealthcheck(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
-				return serviceWithHealthcheck(id, hc), nil
-			},
+		updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
+			return serviceWithHealthcheck(id, hc), nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1623,11 +1462,9 @@ func TestHandlePutServiceHealthcheck_Disable(t *testing.T) {
 
 	var captured *container.HealthConfig
 	wc := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
-				captured = hc
-				return serviceWithHealthcheck(id, hc), nil
-			},
+		updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
+			captured = hc
+			return serviceWithHealthcheck(id, hc), nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1660,13 +1497,20 @@ func TestHandlePatchServiceHealthcheck_Merge(t *testing.T) {
 		Retries:  3,
 	}))
 
+	// The live spec, not the cached one, is what the merge must run against.
+	live := serviceWithHealthcheck("svc1", &container.HealthConfig{
+		Test:     []string{"CMD", "curl", "-f", "http://localhost/"},
+		Interval: 10 * time.Second,
+		Timeout:  3 * time.Second,
+		Retries:  7,
+	}).Spec
+
 	var captured *container.HealthConfig
 	wc := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
-				captured = hc
-				return serviceWithHealthcheck(id, hc), nil
-			},
+		simulatedSpec: &live,
+		updateServiceSpecFn: func(_ context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+			captured = spec.TaskTemplate.ContainerSpec.Healthcheck
+			return serviceWithHealthcheck(id, captured), nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1788,10 +1632,8 @@ func TestHandlePutServicePlacement(t *testing.T) {
 		},
 	}
 	mock := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServicePlacementFn: func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error) {
-				return updated, nil
-			},
+		updateServicePlacementFn: func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error) {
+			return updated, nil
 		},
 	}
 
@@ -1904,10 +1746,8 @@ func TestHandlePatchServicePorts(t *testing.T) {
 		},
 	}
 	mock := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServicePortsFn: func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error) {
-				return updated, nil
-			},
+		updateServicePortsFn: func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error) {
+			return updated, nil
 		},
 	}
 
@@ -1986,10 +1826,8 @@ func TestHandlePatchServiceUpdatePolicy(t *testing.T) {
 	c.SetService(swarm.Service{ID: "svc1"})
 
 	mock := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceUpdatePolicyFn: func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
-				return swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{UpdateConfig: policy}}, nil
-			},
+		updateServiceSpecFn: func(ctx context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+			return swarm.Service{ID: "svc1", Spec: spec}, nil
 		},
 	}
 
@@ -2090,13 +1928,8 @@ func TestHandlePatchServiceRollbackPolicy(t *testing.T) {
 	c.SetService(swarm.Service{ID: "svc1"})
 
 	mock := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceRollbackPolicyFn: func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
-				return swarm.Service{
-					ID:   "svc1",
-					Spec: swarm.ServiceSpec{RollbackConfig: policy},
-				}, nil
-			},
+		updateServiceSpecFn: func(ctx context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+			return swarm.Service{ID: "svc1", Spec: spec}, nil
 		},
 	}
 
@@ -2175,13 +2008,8 @@ func TestHandlePatchServiceLogDriver(t *testing.T) {
 	})
 
 	mock := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceLogDriverFn: func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error) {
-				return swarm.Service{
-					ID:   "svc1",
-					Spec: swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{LogDriver: driver}},
-				}, nil
-			},
+		updateServiceSpecFn: func(ctx context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+			return swarm.Service{ID: "svc1", Spec: spec}, nil
 		},
 	}
 
@@ -2226,10 +2054,8 @@ func TestHandleUpdateNodeRole_OK(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1", Spec: swarm.NodeSpec{Role: swarm.NodeRoleWorker}})
 
 	wc := &mockWriteClient{
-		mockNodeWriter: mockNodeWriter{
-			updateNodeRoleFn: func(_ context.Context, id string, role swarm.NodeRole) (swarm.Node, error) {
-				return swarm.Node{ID: id, Spec: swarm.NodeSpec{Role: role}}, nil
-			},
+		updateNodeRoleFn: func(_ context.Context, id string, role swarm.NodeRole) (swarm.Node, error) {
+			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Role: role}}, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -2290,10 +2116,8 @@ func TestHandleUpdateNodeRole_Conflict(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1"})
 
 	wc := &mockWriteClient{
-		mockNodeWriter: mockNodeWriter{
-			updateNodeRoleFn: func(_ context.Context, _ string, _ swarm.NodeRole) (swarm.Node, error) {
-				return swarm.Node{}, errdefs.Conflict(fmt.Errorf("conflict"))
-			},
+		updateNodeRoleFn: func(_ context.Context, _ string, _ swarm.NodeRole) (swarm.Node, error) {
+			return swarm.Node{}, errdefs.Conflict(fmt.Errorf("conflict"))
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -2314,10 +2138,8 @@ func TestHandleRemoveNode_OK(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1"})
 
 	wc := &mockWriteClient{
-		mockNodeWriter: mockNodeWriter{
-			removeNodeFn: func(_ context.Context, _ string, _ bool) error {
-				return nil
-			},
+		removeNodeFn: func(_ context.Context, _ string, _ bool) error {
+			return nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -2352,10 +2174,8 @@ func TestHandleRemoveNode_DockerError(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1"})
 
 	wc := &mockWriteClient{
-		mockNodeWriter: mockNodeWriter{
-			removeNodeFn: func(_ context.Context, _ string, _ bool) error {
-				return fmt.Errorf("node is not down")
-			},
+		removeNodeFn: func(_ context.Context, _ string, _ bool) error {
+			return fmt.Errorf("node is not down")
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -2376,11 +2196,9 @@ func TestHandleRemoveNode_Force(t *testing.T) {
 
 	var gotForce bool
 	wc := &mockWriteClient{
-		mockNodeWriter: mockNodeWriter{
-			removeNodeFn: func(_ context.Context, _ string, force bool) error {
-				gotForce = force
-				return nil
-			},
+		removeNodeFn: func(_ context.Context, _ string, force bool) error {
+			gotForce = force
+			return nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -2404,11 +2222,9 @@ func TestHandleRemoveVolume_Force(t *testing.T) {
 
 	var gotForce bool
 	wc := &mockWriteClient{
-		mockResourceRemover: mockResourceRemover{
-			removeVolumeFn: func(_ context.Context, _ string, force bool) error {
-				gotForce = force
-				return nil
-			},
+		removeVolumeFn: func(_ context.Context, _ string, force bool) error {
+			gotForce = force
+			return nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -2520,18 +2336,10 @@ func TestHandleRemoveStack_OK(t *testing.T) {
 	seedStack(c, "myapp")
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			removeServiceFn: func(_ context.Context, _ string) error { return nil },
-		},
-		mockResourceRemover: mockResourceRemover{
-			removeNetworkFn: func(_ context.Context, _ string) error { return nil },
-		},
-		mockConfigWriter: mockConfigWriter{
-			removeConfigFn: func(_ context.Context, _ string) error { return nil },
-		},
-		mockSecretWriter: mockSecretWriter{
-			removeSecretFn: func(_ context.Context, _ string) error { return nil },
-		},
+		removeServiceFn: func(_ context.Context, _ string) error { return nil },
+		removeNetworkFn: func(_ context.Context, _ string) error { return nil },
+		removeConfigFn:  func(_ context.Context, _ string) error { return nil },
+		removeSecretFn:  func(_ context.Context, _ string) error { return nil },
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
 
@@ -2578,20 +2386,12 @@ func TestHandleRemoveStack_PartialFailure(t *testing.T) {
 	seedStack(c, "myapp")
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			removeServiceFn: func(_ context.Context, _ string) error { return nil },
+		removeServiceFn: func(_ context.Context, _ string) error { return nil },
+		removeNetworkFn: func(_ context.Context, _ string) error {
+			return fmt.Errorf("network is in use")
 		},
-		mockResourceRemover: mockResourceRemover{
-			removeNetworkFn: func(_ context.Context, _ string) error {
-				return fmt.Errorf("network is in use")
-			},
-		},
-		mockConfigWriter: mockConfigWriter{
-			removeConfigFn: func(_ context.Context, _ string) error { return nil },
-		},
-		mockSecretWriter: mockSecretWriter{
-			removeSecretFn: func(_ context.Context, _ string) error { return nil },
-		},
+		removeConfigFn: func(_ context.Context, _ string) error { return nil },
+		removeSecretFn: func(_ context.Context, _ string) error { return nil },
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
 
@@ -2621,25 +2421,17 @@ func TestHandleRemoveStack_AlreadyGone(t *testing.T) {
 	seedStack(c, "myapp")
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			removeServiceFn: func(_ context.Context, _ string) error {
-				return errdefs.NotFound(fmt.Errorf("not found"))
-			},
+		removeServiceFn: func(_ context.Context, _ string) error {
+			return errdefs.NotFound(fmt.Errorf("not found"))
 		},
-		mockResourceRemover: mockResourceRemover{
-			removeNetworkFn: func(_ context.Context, _ string) error {
-				return errdefs.NotFound(fmt.Errorf("not found"))
-			},
+		removeNetworkFn: func(_ context.Context, _ string) error {
+			return errdefs.NotFound(fmt.Errorf("not found"))
 		},
-		mockConfigWriter: mockConfigWriter{
-			removeConfigFn: func(_ context.Context, _ string) error {
-				return errdefs.NotFound(fmt.Errorf("not found"))
-			},
+		removeConfigFn: func(_ context.Context, _ string) error {
+			return errdefs.NotFound(fmt.Errorf("not found"))
 		},
-		mockSecretWriter: mockSecretWriter{
-			removeSecretFn: func(_ context.Context, _ string) error {
-				return errdefs.NotFound(fmt.Errorf("not found"))
-			},
+		removeSecretFn: func(_ context.Context, _ string) error {
+			return errdefs.NotFound(fmt.Errorf("not found"))
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -2747,18 +2539,21 @@ func TestHandlePatchServiceContainerConfig_PartialPatch(t *testing.T) {
 		},
 	})
 
-	wc := &mockWriteClient{
-		mockServiceAttachmentWriter: mockServiceAttachmentWriter{
-			updateServiceContainerConfigFn: func(_ context.Context, id string, apply func(*swarm.ContainerSpec)) (swarm.Service, error) {
-				cs := &swarm.ContainerSpec{}
-				apply(cs)
-				return swarm.Service{
-					ID: id,
-					Spec: swarm.ServiceSpec{
-						TaskTemplate: swarm.TaskSpec{ContainerSpec: cs},
-					},
-				}, nil
+	// The user exists only on the writer's spec, so a merge that keeps it
+	// proves the base was the live inspect and not the cached copy (M-42).
+	live := swarm.ServiceSpec{
+		TaskTemplate: swarm.TaskSpec{
+			ContainerSpec: &swarm.ContainerSpec{
+				Hostname: "old-host",
+				User:     "app",
 			},
+		},
+	}
+
+	wc := &mockWriteClient{
+		simulatedSpec: &live,
+		updateServiceSpecFn: func(_ context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+			return swarm.Service{ID: id, Spec: spec}, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -2787,6 +2582,9 @@ func TestHandlePatchServiceContainerConfig_PartialPatch(t *testing.T) {
 	}
 	if cc["tty"] != true {
 		t.Errorf("tty=%v, want true", cc["tty"])
+	}
+	if cc["user"] != "app" {
+		t.Errorf("user=%v, want the live spec's app preserved by the merge", cc["user"])
 	}
 	if resp["@type"] != "ServiceContainerConfig" {
 		t.Errorf("@type=%v, want ServiceContainerConfig", resp["@type"])
@@ -2946,10 +2744,8 @@ func TestHandlePatchServiceConfigs_OK(t *testing.T) {
 		},
 	}
 	mock := &mockWriteClient{
-		mockServiceAttachmentWriter: mockServiceAttachmentWriter{
-			updateServiceConfigsFn: func(_ context.Context, _ string, _ []*swarm.ConfigReference) (swarm.Service, error) {
-				return updated, nil
-			},
+		updateServiceConfigsFn: func(_ context.Context, _ string, _ []*swarm.ConfigReference) (swarm.Service, error) {
+			return updated, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(mock))
@@ -3090,10 +2886,8 @@ func TestHandlePatchServiceSecrets_OK(t *testing.T) {
 		},
 	}
 	mock := &mockWriteClient{
-		mockServiceAttachmentWriter: mockServiceAttachmentWriter{
-			updateServiceSecretsFn: func(_ context.Context, _ string, _ []*swarm.SecretReference) (swarm.Service, error) {
-				return updated, nil
-			},
+		updateServiceSecretsFn: func(_ context.Context, _ string, _ []*swarm.SecretReference) (swarm.Service, error) {
+			return updated, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(mock))
@@ -3219,10 +3013,8 @@ func TestHandlePatchServiceNetworks_OK(t *testing.T) {
 		},
 	}
 	mock := &mockWriteClient{
-		mockServiceAttachmentWriter: mockServiceAttachmentWriter{
-			updateServiceNetworksFn: func(_ context.Context, _ string, _ []swarm.NetworkAttachmentConfig) (swarm.Service, error) {
-				return updated, nil
-			},
+		updateServiceNetworksFn: func(_ context.Context, _ string, _ []swarm.NetworkAttachmentConfig) (swarm.Service, error) {
+			return updated, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(mock))
@@ -3339,17 +3131,15 @@ func TestHandlePatchServiceMounts_OK(t *testing.T) {
 	c.SetService(swarm.Service{ID: "svc1"})
 
 	wc := &mockWriteClient{
-		mockServiceAttachmentWriter: mockServiceAttachmentWriter{
-			updateServiceMountsFn: func(_ context.Context, _ string, mounts []mount.Mount) (swarm.Service, error) {
-				return swarm.Service{
-					ID: "svc1",
-					Spec: swarm.ServiceSpec{
-						TaskTemplate: swarm.TaskSpec{
-							ContainerSpec: &swarm.ContainerSpec{Mounts: mounts},
-						},
+		updateServiceMountsFn: func(_ context.Context, _ string, mounts []mount.Mount) (swarm.Service, error) {
+			return swarm.Service{
+				ID: "svc1",
+				Spec: swarm.ServiceSpec{
+					TaskTemplate: swarm.TaskSpec{
+						ContainerSpec: &swarm.ContainerSpec{Mounts: mounts},
 					},
-				}, nil
-			},
+				},
+			}, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -3407,10 +3197,8 @@ func TestHandleRemoveConfig_OK(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockConfigWriter: mockConfigWriter{
-			removeConfigFn: func(_ context.Context, id string) error {
-				return nil
-			},
+		removeConfigFn: func(_ context.Context, id string) error {
+			return nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -3448,10 +3236,8 @@ func TestHandleRemoveConfig_DockerError(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockConfigWriter: mockConfigWriter{
-			removeConfigFn: func(_ context.Context, id string) error {
-				return fmt.Errorf("engine error")
-			},
+		removeConfigFn: func(_ context.Context, id string) error {
+			return fmt.Errorf("engine error")
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -3474,10 +3260,8 @@ func TestHandleRemoveSecret_OK(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockSecretWriter: mockSecretWriter{
-			removeSecretFn: func(_ context.Context, id string) error {
-				return nil
-			},
+		removeSecretFn: func(_ context.Context, id string) error {
+			return nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -3515,10 +3299,8 @@ func TestHandleRemoveSecret_DockerError(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockSecretWriter: mockSecretWriter{
-			removeSecretFn: func(_ context.Context, id string) error {
-				return fmt.Errorf("engine error")
-			},
+		removeSecretFn: func(_ context.Context, id string) error {
+			return fmt.Errorf("engine error")
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -3538,10 +3320,8 @@ func TestHandleRemoveNetwork_OK(t *testing.T) {
 	c.SetNetwork(network.Summary{ID: "net1", Name: "my-network"})
 
 	wc := &mockWriteClient{
-		mockResourceRemover: mockResourceRemover{
-			removeNetworkFn: func(_ context.Context, id string) error {
-				return nil
-			},
+		removeNetworkFn: func(_ context.Context, id string) error {
+			return nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -3576,10 +3356,8 @@ func TestHandleRemoveNetwork_DockerError(t *testing.T) {
 	c.SetNetwork(network.Summary{ID: "net1", Name: "my-network"})
 
 	wc := &mockWriteClient{
-		mockResourceRemover: mockResourceRemover{
-			removeNetworkFn: func(_ context.Context, id string) error {
-				return fmt.Errorf("engine error")
-			},
+		removeNetworkFn: func(_ context.Context, id string) error {
+			return fmt.Errorf("engine error")
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -3599,10 +3377,8 @@ func TestHandleRemoveVolume_OK(t *testing.T) {
 	c.SetVolume(volume.Volume{Name: "my-vol"})
 
 	wc := &mockWriteClient{
-		mockResourceRemover: mockResourceRemover{
-			removeVolumeFn: func(_ context.Context, name string, _ bool) error {
-				return nil
-			},
+		removeVolumeFn: func(_ context.Context, name string, _ bool) error {
+			return nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -3637,10 +3413,8 @@ func TestHandleRemoveVolume_DockerError(t *testing.T) {
 	c.SetVolume(volume.Volume{Name: "my-vol"})
 
 	wc := &mockWriteClient{
-		mockResourceRemover: mockResourceRemover{
-			removeVolumeFn: func(_ context.Context, name string, _ bool) error {
-				return fmt.Errorf("engine error")
-			},
+		removeVolumeFn: func(_ context.Context, name string, _ bool) error {
+			return fmt.Errorf("engine error")
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -3658,10 +3432,8 @@ func TestHandleRemoveVolume_DockerError(t *testing.T) {
 func TestHandleCreateConfig_OK(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
-		mockConfigWriter: mockConfigWriter{
-			createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
-				return "new-cfg-id", nil
-			},
+		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+			return "new-cfg-id", nil
 		},
 	}
 	h := newTestHandlers(
@@ -3726,10 +3498,8 @@ func TestHandleCreateConfig_InvalidBase64(t *testing.T) {
 
 func TestHandleCreateConfig_NameConflict(t *testing.T) {
 	wc := &mockWriteClient{
-		mockConfigWriter: mockConfigWriter{
-			createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
-				return "", errdefs.Conflict(fmt.Errorf("config already exists"))
-			},
+		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+			return "", errdefs.Conflict(fmt.Errorf("config already exists"))
 		},
 	}
 	h := newTestHandlers(t, withWriteClient(wc), withOpsLevel(config.OpsConfiguration))
@@ -3763,10 +3533,8 @@ func TestHandleCreateConfig_InvalidJSON(t *testing.T) {
 func TestHandleCreateSecret_OK(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
-		mockSecretWriter: mockSecretWriter{
-			createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
-				return "new-sec-id", nil
-			},
+		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+			return "new-sec-id", nil
 		},
 	}
 	h := newTestHandlers(
@@ -3813,10 +3581,8 @@ func TestHandleCreateSecret_MissingName(t *testing.T) {
 
 func TestHandleCreateSecret_NameConflict(t *testing.T) {
 	wc := &mockWriteClient{
-		mockSecretWriter: mockSecretWriter{
-			createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
-				return "", errdefs.Conflict(fmt.Errorf("secret already exists"))
-			},
+		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+			return "", errdefs.Conflict(fmt.Errorf("secret already exists"))
 		},
 	}
 	h := newTestHandlers(t, withWriteClient(wc), withOpsLevel(config.OpsConfiguration))
@@ -3867,10 +3633,8 @@ func TestHandleCreateSecret_InvalidJSON(t *testing.T) {
 func TestHandleCreateSecret_ClearsData(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
-		mockSecretWriter: mockSecretWriter{
-			createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
-				return "new-sec-id", nil
-			},
+		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+			return "new-sec-id", nil
 		},
 	}
 	h := newTestHandlers(
@@ -3924,10 +3688,8 @@ func TestHandleCreateConfig_WhitespaceOnlyName(t *testing.T) {
 func TestHandleCreateConfig_CacheMiss(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
-		mockConfigWriter: mockConfigWriter{
-			createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
-				return "new-cfg-id", nil
-			},
+		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+			return "new-cfg-id", nil
 		},
 	}
 	h := newTestHandlers(
@@ -3960,10 +3722,8 @@ func TestHandleCreateConfig_CacheMiss(t *testing.T) {
 func TestHandleCreateSecret_CacheMiss(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
-		mockSecretWriter: mockSecretWriter{
-			createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
-				return "new-sec-id", nil
-			},
+		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+			return "new-sec-id", nil
 		},
 	}
 	h := newTestHandlers(
@@ -3988,10 +3748,8 @@ func TestHandleCreateSecret_CacheMiss(t *testing.T) {
 
 func TestHandleCreateConfig_DockerError(t *testing.T) {
 	wc := &mockWriteClient{
-		mockConfigWriter: mockConfigWriter{
-			createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
-				return "", fmt.Errorf("engine error")
-			},
+		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+			return "", fmt.Errorf("engine error")
 		},
 	}
 	h := newTestHandlers(t, withWriteClient(wc), withOpsLevel(config.OpsConfiguration))
@@ -4008,10 +3766,8 @@ func TestHandleCreateConfig_DockerError(t *testing.T) {
 
 func TestHandleCreateSecret_DockerError(t *testing.T) {
 	wc := &mockWriteClient{
-		mockSecretWriter: mockSecretWriter{
-			createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
-				return "", fmt.Errorf("engine error")
-			},
+		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+			return "", fmt.Errorf("engine error")
 		},
 	}
 	h := newTestHandlers(t, withWriteClient(wc), withOpsLevel(config.OpsConfiguration))
@@ -4098,13 +3854,11 @@ func TestHandlePatchConfigLabels_JSONPatch(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockConfigWriter: mockConfigWriter{
-			updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
-				return swarm.Config{
-					ID:   id,
-					Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Labels: labels}},
-				}, nil
-			},
+		updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
+			return swarm.Config{
+				ID:   id,
+				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Labels: labels}},
+			}, nil
 		},
 	}
 	h := newTestHandlers(
@@ -4152,13 +3906,11 @@ func TestHandlePatchConfigLabels_MergePatch(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockConfigWriter: mockConfigWriter{
-			updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
-				return swarm.Config{
-					ID:   id,
-					Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Labels: labels}},
-				}, nil
-			},
+		updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
+			return swarm.Config{
+				ID:   id,
+				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Labels: labels}},
+			}, nil
 		},
 	}
 	h := newTestHandlers(
@@ -4209,10 +3961,8 @@ func TestHandlePatchConfigLabels_VersionConflict(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockConfigWriter: mockConfigWriter{
-			updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
-				return swarm.Config{}, errdefs.Conflict(fmt.Errorf("version conflict"))
-			},
+		updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
+			return swarm.Config{}, errdefs.Conflict(fmt.Errorf("version conflict"))
 		},
 	}
 	h := newTestHandlers(
@@ -4282,13 +4032,11 @@ func TestHandlePatchSecretLabels_JSONPatch(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockSecretWriter: mockSecretWriter{
-			updateSecretLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Secret, error) {
-				return swarm.Secret{
-					ID:   id,
-					Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Labels: labels}},
-				}, nil
-			},
+		updateSecretLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Secret, error) {
+			return swarm.Secret{
+				ID:   id,
+				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Labels: labels}},
+			}, nil
 		},
 	}
 	h := newTestHandlers(
@@ -4331,10 +4079,8 @@ func TestHandlePatchSecretLabels_VersionConflict(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockSecretWriter: mockSecretWriter{
-			updateSecretLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Secret, error) {
-				return swarm.Secret{}, errdefs.Conflict(fmt.Errorf("version conflict"))
-			},
+		updateSecretLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Secret, error) {
+			return swarm.Secret{}, errdefs.Conflict(fmt.Errorf("version conflict"))
 		},
 	}
 	h := newTestHandlers(
@@ -4361,12 +4107,10 @@ func TestPreferMinimal_ScaleService(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			scaleServiceFn: func(_ context.Context, id string, replicas uint64) (swarm.Service, error) {
-				svc := replicatedService(id)
-				svc.Spec.Mode.Replicated.Replicas = &replicas
-				return svc, nil
-			},
+		scaleServiceFn: func(_ context.Context, id string, replicas uint64) (swarm.Service, error) {
+			svc := replicatedService(id)
+			svc.Spec.Mode.Replicated.Replicas = &replicas
+			return svc, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -4403,19 +4147,17 @@ func TestPreferMinimal_PatchServiceEnv(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceEnvFn: func(_ context.Context, _ string, env map[string]string) (swarm.Service, error) {
-				return swarm.Service{
-					ID: "svc1",
-					Spec: swarm.ServiceSpec{
-						TaskTemplate: swarm.TaskSpec{
-							ContainerSpec: &swarm.ContainerSpec{
-								Env: []string{"FOO=bar", "BAZ=qux"},
-							},
+		updateServiceEnvFn: func(_ context.Context, _ string, env map[string]string) (swarm.Service, error) {
+			return swarm.Service{
+				ID: "svc1",
+				Spec: swarm.ServiceSpec{
+					TaskTemplate: swarm.TaskSpec{
+						ContainerSpec: &swarm.ContainerSpec{
+							Env: []string{"FOO=bar", "BAZ=qux"},
 						},
 					},
-				}, nil
-			},
+				},
+			}, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -4439,10 +4181,8 @@ func TestPreferMinimal_PatchServiceEnv(t *testing.T) {
 func TestPreferMinimal_CreateConfig(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
-		mockConfigWriter: mockConfigWriter{
-			createConfigFn: func(_ context.Context, _ swarm.ConfigSpec) (string, error) {
-				return "cfg-new", nil
-			},
+		createConfigFn: func(_ context.Context, _ swarm.ConfigSpec) (string, error) {
+			return "cfg-new", nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -4477,15 +4217,13 @@ func TestPreferMinimal_PatchNodeLabels(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		mockNodeWriter: mockNodeWriter{
-			updateNodeLabelsFn: func(_ context.Context, _ string, labels map[string]string) (swarm.Node, error) {
-				return swarm.Node{
-					ID: "node1",
-					Spec: swarm.NodeSpec{
-						Annotations: swarm.Annotations{Labels: labels},
-					},
-				}, nil
-			},
+		updateNodeLabelsFn: func(_ context.Context, _ string, labels map[string]string) (swarm.Node, error) {
+			return swarm.Node{
+				ID: "node1",
+				Spec: swarm.NodeSpec{
+					Annotations: swarm.Annotations{Labels: labels},
+				},
+			}, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -4698,8 +4436,8 @@ func preferTestService() swarm.Service {
 	replicas := uint64(2)
 
 	return swarm.Service{
-		ID:   "svc1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 5}},
+		ID:      "svc1",
+		Version: swarm.Version{Index: 5},
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
 			Mode: swarm.ServiceMode{
@@ -4731,15 +4469,13 @@ func newPreferTestRouter(t testing.TB, converged bool) http.Handler {
 	}
 
 	wc := &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			scaleServiceFn: func(context.Context, string, uint64) (swarm.Service, error) {
-				return preferTestService(), nil
-			},
-			updateServiceModeFn: func(
-				context.Context, string, swarm.ServiceMode,
-			) (swarm.Service, error) {
-				return preferTestService(), nil
-			},
+		scaleServiceFn: func(context.Context, string, uint64) (swarm.Service, error) {
+			return preferTestService(), nil
+		},
+		updateServiceEndpointModeFn: func(
+			context.Context, string, swarm.ResolutionMode,
+		) (swarm.Service, error) {
+			return preferTestService(), nil
 		},
 	}
 
@@ -4905,10 +4641,8 @@ func TestPreferWaitOnScale(t *testing.T) {
 		accepted.UpdateStatus = &swarm.UpdateStatus{State: swarm.UpdateStateUpdating}
 
 		wc := &mockWriteClient{
-			mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-				scaleServiceFn: func(context.Context, string, uint64) (swarm.Service, error) {
-					return accepted, nil
-				},
+			scaleServiceFn: func(context.Context, string, uint64) (swarm.Service, error) {
+				return accepted, nil
 			},
 		}
 
@@ -4945,27 +4679,27 @@ func TestPreferWaitOnScale(t *testing.T) {
 }
 
 // TestPreferWaitWithIfMatch pins the one seam where preconditions and
-// preferences meet: PUT /services/{id}/mode and /endpoint-mode carry both. The
+// preferences meet: PUT /services/{id}/endpoint-mode carries both. The
 // precondition runs first, so a matching If-Match should change nothing.
 func TestPreferWaitWithIfMatch(t *testing.T) {
 	router := newPreferTestRouter(t, true)
 
-	read := httptest.NewRequest("GET", "/services/svc1/mode", nil)
+	read := httptest.NewRequest("GET", "/services/svc1/endpoint-mode", nil)
 	read.Header.Set("Accept", "application/json")
 	readRec := httptest.NewRecorder()
 	router.ServeHTTP(readRec, read)
 
 	if readRec.Code != http.StatusOK {
-		t.Fatalf("reading the mode: status = %d, want 200", readRec.Code)
+		t.Fatalf("reading the endpoint mode: status = %d, want 200", readRec.Code)
 	}
 
 	etag := readRec.Header().Get("ETag")
 	if etag == "" {
-		t.Fatal("reading the mode: no ETag to precondition on")
+		t.Fatal("reading the endpoint mode: no ETag to precondition on")
 	}
 
 	write := httptest.NewRequest(
-		"PUT", "/services/svc1/mode", strings.NewReader(`{"mode":"replicated","replicas":2}`),
+		"PUT", "/services/svc1/endpoint-mode", strings.NewReader(`{"mode":"dnsrr"}`),
 	)
 	write.Header.Set("Accept", "application/json")
 	write.Header.Set("Content-Type", "application/json")

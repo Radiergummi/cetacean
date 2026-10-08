@@ -14,11 +14,9 @@ import (
 )
 
 // A cetacean:// read addresses a resource by the identifier a caller has in
-// hand, and after find and describe that identifier is a name far more often
-// than an ID — every prompt tells an agent to resolve the name first, and
-// completions offer names because a dropdown of hex IDs is unusable. Six of
-// the eight types are keyed by ID in the cache, so a name reached none of
-// them until lookupResource learned to fall back.
+// hand, which after find and describe is a name far more often than an ID —
+// every prompt says to resolve the name first, and completions offer names. Six
+// of the eight types are keyed by ID, so a name reaches none without a fallback.
 func TestLookupResolvesNamesAsWellAsIDs(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{
@@ -238,5 +236,36 @@ func TestServiceLogACLCheckAcceptsAName(t *testing.T) {
 
 	if err := srv.checkServiceRead(ctx, "nope"); err == nil {
 		t.Error("checkServiceRead resolved a service that does not exist")
+	}
+}
+
+// describe, get_logs and remove_task all address a task through this, so a
+// slot resolving to a replaced replica pointed every one of them at history.
+func TestLookupResolvesASlotToItsLiveTask(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+	c.SetTask(swarm.Task{
+		ID: "aaa-dead", ServiceID: "svc1", Slot: 1,
+		DesiredState: swarm.TaskStateShutdown,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateFailed},
+	})
+	c.SetTask(swarm.Task{
+		ID: "zzz-live", ServiceID: "svc1", Slot: 1,
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+
+	srv := newResourceTestServer(t, c)
+
+	body, err := srv.readResource(context.Background(), "cetacean://tasks/web.1")
+	if err != nil {
+		t.Fatalf("readResource: %v", err)
+	}
+
+	if !strings.Contains(body, "zzz-live") || strings.Contains(body, "aaa-dead") {
+		t.Errorf("got %s, want it to name zzz-live and not aaa-dead", body)
 	}
 }

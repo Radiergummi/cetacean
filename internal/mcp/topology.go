@@ -9,17 +9,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// toolGetTopology projects the cluster as a graph for the topology widget.
-//
-// The graph builders live in internal/cluster because a topology is a fact
-// about the cluster, not about a transport — the REST handlers in internal/api
-// read the same cache through the same rules, and a second implementation here
-// is exactly how the two would drift.
-//
-// Every slice handed to a builder is ACL-filtered first: the builders drop any
-// task whose node or service is missing from what they were given, so filtering
-// the inputs is what keeps an unreadable resource out of the graph entirely
-// rather than leaking it as a dangling edge.
+// toolGetTopology projects the cluster as a graph for the topology widget. The
+// builders live in internal/cluster because a topology is a fact about the
+// cluster, not a transport. Every slice is ACL-filtered first: a builder drops
+// a task whose node or service is missing, so nothing leaks as a dangling edge.
 func (s *Server) toolGetTopology(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -55,12 +48,9 @@ func (s *Server) toolGetTopology(
 }
 
 // drainImpact answers the drain-impact view, which unlike the other two is
-// about one node and so needs it named.
-//
-// The node is resolved against the cache and read-checked before anything else
-// happens, for the same reason get_metrics resolves its target first: the
-// answer names the services running on it, so a caller must be permitted to
-// read the node itself, not merely to see the graph.
+// about one node and so needs it named. The node is resolved and read-checked
+// before anything else: the answer names the services running on it, so the
+// caller must be permitted to read the node itself.
 func (s *Server) drainImpact(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -88,9 +78,7 @@ func (s *Server) drainImpact(
 	// The cluster's tasks rather than the target node's: DrainImpactGraph
 	// measures a service's per-node replica cap against what each *candidate*
 	// already runs, and the node's own index reports every candidate empty.
-	// Filtering by ACL costs nothing here — a task inherits its parent
-	// service's grant, so the count stays exact for every service the graph
-	// can name.
+	// A task inherits its service's grant, so ACL filtering keeps it exact.
 	graph := cluster.DrainImpactGraph(
 		node,
 		visible,
@@ -98,11 +86,10 @@ func (s *Server) drainImpact(
 		s.filterServices(ctx, s.cache.ListServices()),
 	)
 
-	// The candidates are the nodes the caller may read, so a service the
-	// assessment calls stranded may in fact be placeable on one it cannot
-	// see. The view exists to keep a drain from stranding work, and a
-	// confident wrong answer is the failure it must not produce — so where the
-	// node list was narrowed, the answer says what it was narrowed to.
+	// The candidates are the nodes the caller may read, so a service called
+	// stranded may in fact be placeable on one it cannot see. The view exists
+	// to keep a drain from stranding work, so where the node list was
+	// narrowed, the answer says so.
 	if hidden := len(all) - len(visible); hidden > 0 {
 		graph.Note = fmt.Sprintf(
 			"assessed against the %d node(s) you can read; %d more are hidden by "+

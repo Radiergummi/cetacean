@@ -1,0 +1,86 @@
+source: RFC 9440
+title: Client-Cert HTTP Header Field
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc9440
+
+inventory:
+  from: >-
+    RFC 9440 §2.2, §2.3, §2.4, §3.3 and §4 in full. §1.1 is the BCP 14
+    boilerplate and §2.1 defines the Byte Sequence encoding without a keyword.
+    This deployment is a backend server behind a TLS-terminating reverse proxy;
+    the statements binding the proxy are accounted for but are not ours.
+  count: 19
+
+requirements:
+  - id: client-cert-is-a-singleton
+    level: MUST
+    text: >-
+      It is a singleton header field value as defined in Section 5.5 of [HTTP],
+      which MUST NOT have a list of values or occur multiple times in a
+      request.
+    url: https://www.rfc-editor.org/rfc/rfc9440#section-2.2
+    mutants:
+      - file: internal/auth/cert.go
+        replace: "\tif len(headers) > 1 {"
+        with: "\tif len(headers) > 1 && false {"
+
+  - id: accepted-only-from-a-trusted-proxy
+    level: MUST
+    text: >-
+      In order to prevent field injection, backend servers MUST only accept the
+      Client-Cert and Client-Cert-Chain header fields from a trusted TTRP (or
+      other proxy in a trusted path).
+    url: https://www.rfc-editor.org/rfc/rfc9440#section-4
+    mutants:
+      - file: internal/auth/cert.go
+        replace: "\tif !FromTrustedProxy(r.Context()) {"
+        with: "\tif !FromTrustedProxy(r.Context()) && false {"
+
+  - id: consuming-the-field-is-configurable
+    level: SHOULD
+    text: >-
+      Producing and consuming the Client-Cert and Client-Cert-Chain header
+      fields SHOULD be configurable options, respectively, in a TTRP and
+      backend server (or in an individual application).
+    url: https://www.rfc-editor.org/rfc/rfc9440#section-4
+
+dismissed:
+  client-cert-is-request-only: >-
+    A MUST NOT about emitting the field on a response. This deployment reads it
+    and never writes it.
+  chain-may-be-forwarded: >-
+    A MAY addressed to the proxy. Client-Cert-Chain is not read here: the
+    end-entity certificate is what the ACL resolves an identity from.
+  chain-items-are-byte-sequences: >-
+    Constrains a Client-Cert-Chain this deployment does not read.
+  chain-requires-client-cert: >-
+    Constrains a Client-Cert-Chain this deployment does not read.
+  chain-root-may-be-omitted: >-
+    A MAY about the trust anchor in a chain this deployment does not read.
+  chain-is-request-only: >-
+    A MUST NOT about emitting Client-Cert-Chain on a response.
+  chain-may-repeat: >-
+    A MAY permitting the chain field to be a list, unlike Client-Cert.
+  proxy-sanitizes-the-incoming-request: >-
+    Binds the TTRP stripping a client's own header before forwarding. The
+    backend half is accepted-only-from-a-trusted-proxy, which is what makes
+    this deployment safe even against a proxy that forgets.
+  proxy-may-reject-a-forged-field: >-
+    A MAY addressed to the TTRP.
+  proxy-sanitizes-without-client-auth: >-
+    Binds the TTRP on connections where no client certificate was negotiated.
+  response-selected-by-client-cert-is-not-shared: >-
+    Conditional on caching a response chosen by the field. Every authenticated
+    response here is no-store.
+  proxy-prevents-caching-on-vary: >-
+    Binds the TTRP reading Vary on the way back.
+  intermediaries-do-not-add-the-field: >-
+    Binds forward proxies and other intermediaries.
+  clients-do-not-send-the-field: >-
+    Binds the client. A client that sends one anyway is refused by
+    accepted-only-from-a-trusted-proxy.
+  resumption-values-stay-consistent: >-
+    A SHOULD binding the TTRP across a resumed TLS session.
+  proxy-sanitizes-before-forwarding: >-
+    §4 restating §2.4's sanitisation rule as a security consideration, and
+    equally the proxy's.

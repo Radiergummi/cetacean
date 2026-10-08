@@ -53,11 +53,9 @@ func absURL(r *http.Request, path string) string {
 }
 
 // origin resolves the scheme and authority every outbound URI is built on:
-// server.public_url when configured, the request's own origin otherwise.
-// One resolution, so a document naming both a URL and a host names one host.
-//
-// server.public_url is validated as scheme and host with nothing after them
-// (config.ValidatePublicURL), so splitting it loses nothing.
+// server.public_url when configured, the request's own origin otherwise. One
+// resolution, so a document naming both a URL and a host names one host.
+// public_url is validated as scheme and host alone, so splitting loses nothing.
 func origin(r *http.Request) (scheme, host string) {
 	if base := PublicURLFromContext(r.Context()); base != "" {
 		if u, err := url.Parse(base); err == nil && u.Host != "" {
@@ -85,14 +83,9 @@ func originHostOf(r *http.Request) string {
 }
 
 // requestOrigin resolves the origin a client reached this request on, when
-// server.public_url is unset.
-//
-// A proxy's headers are believed only when auth.FromTrustedProxy vouches for
-// the peer, and the values are validated even then: forwarding a client's own
-// Host into X-Forwarded-Host is a common proxy configuration.
-//
-// r.Host is the remaining fallback and is also the client's. Only
-// server.public_url gives links that do not depend on the caller.
+// server.public_url is unset. A proxy's headers are believed only when
+// auth.FromTrustedProxy vouches for the peer, and validated even then. r.Host
+// is the fallback and is also the client's: only public_url is caller-independent.
 func requestOrigin(r *http.Request) (scheme, host string) {
 	scheme = "http"
 	if r.TLS != nil {
@@ -105,7 +98,7 @@ func requestOrigin(r *http.Request) (scheme, host string) {
 		return scheme, host
 	}
 
-	// RFC 7239 standardizes the pair below it, so Forwarded wins.
+	// realIP left one family standing, so this selects it, not prefers it.
 	forwardedProto, forwardedHost := forwardedOrigin(r.Header.Values("Forwarded"))
 
 	if forwardedProto == "" {
@@ -154,15 +147,33 @@ func publicURLMiddleware(publicURL string, next http.Handler) http.Handler {
 	})
 }
 
+// derivedWellKnownPrefix covers the documents a client builds a URL for by
+// inserting the well-known segment after the authority, so they are addressed
+// from the host root however this deployment is mounted. Only the OAuth family
+// does that: openid-configuration appends to the issuer, and the catalog is ours.
+const derivedWellKnownPrefix = "/.well-known/oauth-"
+
 // basePathMiddleware strips the base path prefix from incoming requests,
 // stores the base path in context, and redirects trailing slashes.
 // If basePath is "", it is a no-op.
-func basePathMiddleware(basePath string, next http.Handler) http.Handler {
+func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handler) http.Handler {
 	if basePath == "" {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
+
+		// RFC 9728 §3.1 and RFC 8414 §3 build their URL by inserting the well-known
+		// segment after the host, so a client derives a path the prefix check would
+		// refuse. Only the documents registered there: the SPA fallback answers
+		// whatever is left unrouted, which would put the dashboard at the host root.
+		if strings.HasPrefix(path, derivedWellKnownPrefix) && routes.serves(r) {
+			ctx := context.WithValue(r.Context(), basePathKey, basePath)
+			next.ServeHTTP(w, r.WithContext(ctx))
+
+			return
+		}
+
 		if !strings.HasPrefix(path, basePath+"/") && path != basePath {
 			http.NotFound(w, r)
 			return

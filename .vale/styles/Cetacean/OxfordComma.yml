@@ -1,0 +1,11 @@
+extends: existence
+message: "Use the Oxford comma in '%s'."
+link: 'https://developers.google.com/style/commas'
+scope: sentence
+level: error
+nonword: true
+# Google.OxfordComma (MIT, errata-ai/Google v0.7.0), plus prepositions and
+# participles that open a trailing phrase rather than a list item (", with A and
+# B"), and a subject pronoun that opens a clause (", it reads A and B").
+tokens:
+  - ',\s(?!(?:which|who|whom|whose|that|where|when|while|because|since|although|though|if|unless|so|but|and|or|however|therefore|thus|specifically|especially|namely|then|take|see|note|consider|make|use|either|neither|whether|plus|with|without|like|by|on|in|under|for|from|to|at|via|accepting|adding|naming|tagged)\b)(?!(?i:i|you|we|they|he|she|it)\s)(?:(?!\b(?:is|are|was|were|has|have|had|be|been|being|will|would|can|could|should|may|might|must|do|does|did)\b)\w+ ){0,4}\w+ (?:and|or) (?:(?!\b(?:is|are|was|were|has|have|had|be|been|being|will|would|can|could|should|may|might|must|do|does|did)\b)\w+ ){0,4}\w+(?:[.?!]|$)'

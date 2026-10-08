@@ -6,12 +6,10 @@ import (
 	"testing"
 )
 
-// The dashboard carries its own dictionary of friendly titles and suggestions,
-// keyed by the codes this registry emits (frontend/src/lib/errors.ts). It is a
-// curated subset — a code with no entry there falls back to the generic
-// message, which is fine — but an entry keyed on a code the backend can no
-// longer emit is dead text nobody will notice, since the fallback looks the
-// same. Renaming or dropping a code here has to fail there.
+// The dashboard carries its own dictionary of friendly titles, keyed by the
+// codes this registry emits. It is a curated subset, so a code with no entry
+// falls back to the generic message — but an entry keyed on a code the backend
+// cannot emit is dead text the identical fallback hides.
 func TestFrontendErrorDictionaryOnlyNamesCodesWeEmit(t *testing.T) {
 	const path = "../../frontend/src/lib/errors.ts"
 

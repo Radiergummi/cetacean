@@ -14,12 +14,9 @@ import (
 // than being silently dropped.
 const maxCompletionValues = 100
 
-// CompleteResourceArgument offers the names that fill a templated
-// cetacean:// URI, implementing mcp-go's ResourceCompletionProvider.
-//
-// A client rendering cetacean://services/{id} otherwise has nothing to put in
-// the blank: the user pastes an ID, or the agent spends a find call to
-// discover one.
+// CompleteResourceArgument offers the names that fill a templated cetacean://
+// URI, implementing mcp-go's ResourceCompletionProvider. Without it a client
+// rendering cetacean://services/{id} has nothing to put in the blank.
 func (s *Server) CompleteResourceArgument(
 	ctx context.Context,
 	uri string,
@@ -43,10 +40,9 @@ func (s *Server) CompletePromptArgument(
 	_ mcplib.CompleteContext,
 ) (*mcplib.Completion, error) {
 	// A prompt names its arguments after the resource type they take, so the
-	// singular→plural map describe already derives answers this too — a hand
-	// written pair here would leave a prompt gaining a `stack` or `network`
-	// argument silently completing to nothing. An argument naming no resource
-	// type completes to nothing, which is what an unknown key yields.
+	// map describe already derives answers this too; a second table here would
+	// leave a prompt gaining a `stack` argument completing to nothing. An
+	// argument naming no resource type yields nothing, as an unknown key does.
 	return s.completeResourceNames(
 		ctx,
 		describableResourceTypes[argument.Name],
@@ -55,14 +51,9 @@ func (s *Server) CompletePromptArgument(
 }
 
 // completeResourceNames is the one body behind both providers: enumerate the
-// type the caller may read, keep the names matching what they have typed, and
-// bound the result.
-//
-// The listing goes through lookupResource, the same audited path find and the
-// resource reads use, so ACL filtering and secret redaction happen here for
-// free. Reading the cache directly would make completion a way to enumerate
-// resources the caller cannot otherwise see — a disclosure bug rather than a
-// convenience.
+// type, keep the names matching what was typed, bound the result. The listing
+// goes through lookupResource, so ACL filtering and secret redaction apply for
+// free — reading the cache directly would make completion an enumeration bug.
 func (s *Server) completeResourceNames(
 	ctx context.Context,
 	resourceType string,
@@ -74,12 +65,10 @@ func (s *Server) completeResourceNames(
 		return &mcplib.Completion{Values: []string{}}, nil
 	}
 
-	// Neither of the next two can be reached by a caller: the type was just
-	// checked against the same map that decides what enumerates, and a caller
-	// whose grants hide the whole type gets an empty slice rather than an
-	// error. So both are propagated — swallowing them would hide the one thing
-	// that could actually produce them, a resource type wired into one of
-	// these maps and not the other.
+	// Neither of the next two is reachable by a caller: the type was just
+	// checked against the map that decides what enumerates, and hidden grants
+	// yield an empty slice. Both are propagated anyway, since the one thing
+	// that produces them is a type wired into one map and not the other.
 	listed, err := s.lookupResource(ctx, "cetacean://"+resourceType)
 	if err != nil {
 		return nil, err

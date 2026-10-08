@@ -7,10 +7,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// configurationTools returns the tier 2 tools: edits to a service's or
-// node's specification, and the creation of the configs and secrets a
-// specification can point at.
-//
+// configurationTools returns the tier 2 tools: edits to a service's or node's
+// specification, and the creation of the configs and secrets one can point at.
 // See toolCatalog for the conventions every entry here follows.
 func (s *Server) configurationTools() []toolDef {
 	return []toolDef{
@@ -23,12 +21,10 @@ func (s *Server) configurationTools() []toolDef {
 				),
 				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
-				// Destructive because two of the sections are: replacing the
-				// ports drops the connections to a port it removes, and
-				// replacing the placement can evict running tasks. One
-				// annotation covers every section, so it has to describe the
-				// worst of them — a host deciding whether to confirm must not
-				// be told a port remap is safe because a label edit is.
+				// Destructive because two sections are: replacing the ports
+				// drops connections and replacing the placement evicts tasks.
+				// One annotation covers every section, so it describes the
+				// worst — a host must not be told a port remap is safe.
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),

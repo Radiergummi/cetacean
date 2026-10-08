@@ -32,14 +32,10 @@ const (
 	maxRankTop = 10
 )
 
-// rankSpec is one (ranked-member, metric) pair: the label that names each
-// member, the unit, and the PromQL to rank by.
-//
-// The queries are separate from metricCatalog's rather than derived from them
-// because the shape differs at the aggregation: charting one resource sums
-// everything selected into a single line, while ranking groups by the label
-// that distinguishes members and takes the top N. Deriving one from the other
-// would mean rewriting an aggregation by string surgery.
+// rankSpec is one (ranked-member, metric) pair: the label naming each member,
+// the unit, and the PromQL to rank by. Separate from metricCatalog's queries
+// rather than derived: charting sums everything selected into one line where
+// ranking groups by the distinguishing label and takes the top N.
 type rankSpec struct {
 	label string
 	unit  string
@@ -101,14 +97,10 @@ var rankCatalog = map[string]map[string]rankSpec{
 	},
 }
 
-// rankScope decides what a ranking ranks across, and returns the PromQL
-// selector restricting it — always with a leading comma, or empty.
-//
-// A caller's grants have to reach the query rather than the result. Ranking
-// the whole cluster and filtering afterwards would hand a restricted caller an
-// empty answer whenever the true top N happen to all be invisible to them,
-// which is both wrong and impossible for them to distinguish from an idle
-// cluster.
+// rankScope decides what a ranking ranks across, returning the PromQL selector
+// restricting it — with a leading comma, or empty. The caller's grants have to
+// reach the query, not the result: filtering afterwards hands a restricted
+// caller an empty answer whenever the true top N are all invisible to them.
 func (s *Server) rankScope(ctx context.Context, by string) (string, error) {
 	if s.acl == nil {
 		return "", nil
@@ -119,12 +111,10 @@ func (s *Server) rankScope(ctx context.Context, by string) (string, error) {
 		all := s.cache.ListServices()
 		services := s.filterServices(ctx, all)
 
-		// An evaluator exists on every deployment with authentication enabled,
-		// policy or not, and with no policy it grants everything — so keying
-		// off its presence alone joined every service name in the cluster into
-		// the selector to restrict nothing. Whether the caller's grants
-		// actually hide anything is the question, and the filtered listing
-		// answers it exactly.
+		// An evaluator exists wherever authentication does, policy or not, and
+		// with no policy it grants everything — so its presence alone would
+		// join every service name in the cluster into a selector that
+		// restricts nothing. The filtered listing answers the real question.
 		if len(services) == len(all) {
 			return "", nil
 		}
@@ -194,12 +184,9 @@ func (s *Server) nodeNamesByHost() map[string]string {
 }
 
 // nameRankedSeries turns a Prometheus label into the name the cluster uses.
-//
-// For services the label is Docker's own service name and already is that. For
-// nodes it is `instance` — host:port, which is neither Docker's nor
-// Cetacean's — so it is resolved back through namesByHost. An instance no node
-// claims keeps its raw label rather than being dropped: dropping it would
-// silently shorten a ranking, which is the one thing a ranking must not do.
+// For services it already is one; for nodes it is `instance` — host:port,
+// known to neither Docker nor Cetacean — resolved through namesByHost. An
+// unclaimed instance keeps its raw label: dropping it would shorten a ranking.
 func nameRankedSeries(by, label string, namesByHost map[string]string) string {
 	if by != rankByNode || label == "" {
 		return label
@@ -217,15 +204,10 @@ func nameRankedSeries(by, label string, namesByHost map[string]string) string {
 	return label
 }
 
-// rankMetrics answers the ranking form of get_metrics.
-//
-// Two questions reach it. `target: "cluster"` ranks the cluster's own members
-// — services by default, nodes when `by` says so. `target: "node"` with an id
-// ranks the services running on that one node, which is the "why is this host
-// hot?" question and the only one that needs a scope resolved from the cache.
-//
-// The result is a metricsResult like any other, one series per ranked member,
-// so nothing downstream — schema, widget, or reader — learns a second shape.
+// rankMetrics answers the ranking form of get_metrics: `target: "cluster"`
+// ranks the cluster's members, `target: "node"` the services on one host,
+// which is the only form needing a scope resolved from the cache. The result
+// is an ordinary metricsResult, so nothing downstream learns a second shape.
 func (s *Server) rankMetrics(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -362,22 +344,18 @@ func (s *Server) rankTarget(
 			return "", "", "", "", err
 		}
 
-		// The scope is the node's own `instance`, which every exporter scraped
-		// on that host carries. cAdvisor's containers are reachable no other
-		// standard way: node_hostname is a relabel Cetacean's shipped
-		// prometheus.yml defines, so a cluster with its own config would not
-		// have it.
+		// The node's own `instance`, which every exporter scraped on that host
+		// carries. cAdvisor's containers are reachable no other standard way:
+		// node_hostname is a relabel only Cetacean's shipped config defines.
 		name, scope, err = s.nodeMetricSelector(ctx, id)
 		if err != nil {
 			return "", "", "", "", err
 		}
 
-		// The instance narrows the query to that host, but this branch ranks
-		// *services* — so the caller's service grants have to reach the query
-		// as well, exactly as the cluster branch arranges. Without them, a
-		// caller holding a node grant is told the name and load of every
-		// service running on it, which is the disclosure rankScope exists to
-		// prevent.
+		// The instance narrows to that host, but this branch ranks *services*,
+		// so the caller's service grants have to reach the query too.
+		// Otherwise a node grant alone discloses the name and load of every
+		// service running there.
 		services, err := s.rankScope(ctx, rankByService)
 		if err != nil {
 			return "", "", "", "", err

@@ -3,9 +3,11 @@ package docker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -77,10 +79,41 @@ type Watcher struct {
 	// has just exited. See scheduleSettle.
 	settleDelay time.Duration
 
+	// syncInterval is how often the event loop re-reads the whole cluster.
+	syncInterval time.Duration
+
 	// settles tracks the re-reads still outstanding, so a test can wait for
 	// them instead of sleeping and production can be sure they are not
 	// silently dropped.
 	settles sync.WaitGroup
+
+	// refreshes carries a one-resource re-read to the event loop, which applies
+	// every other write. See Refresh.
+	refreshes chan refreshRequest
+
+	// loopRunning reports whether the event loop is reading refreshes.
+	loopRunning atomic.Bool
+
+	// Whether the watcher is still tracking the cluster. See Liveness.
+	connected atomic.Bool
+	lastSync  atomic.Int64 // UnixNano; zero until the first sync
+}
+
+// setConnected records reachability for both /-/health and /-/metrics.
+func (w *Watcher) setConnected(connected bool) {
+	w.connected.Store(connected)
+	metrics.SetWatcherConnected(connected)
+}
+
+// Liveness reports whether the event stream is established, and when a full
+// sync last reached the engine (zero before the first). Safe from any
+// goroutine.
+func (w *Watcher) Liveness() (connected bool, lastSync time.Time) {
+	if nanos := w.lastSync.Load(); nanos != 0 {
+		lastSync = time.Unix(0, nanos)
+	}
+
+	return w.connected.Load(), lastSync
 }
 
 func NewWatcher(client DockerClient, store Store, snapshotPath string) *Watcher {
@@ -90,6 +123,8 @@ func NewWatcher(client DockerClient, store Store, snapshotPath string) *Watcher 
 		ready:        make(chan struct{}),
 		snapshotPath: snapshotPath,
 		settleDelay:  defaultSettleDelay,
+		syncInterval: defaultSyncInterval,
+		refreshes:    make(chan refreshRequest),
 	}
 }
 
@@ -145,18 +180,44 @@ func (w *Watcher) writeSnapshot() {
 	}
 }
 
+// fullSync re-reads the cluster where no stream is yet proven — at startup and
+// on reconnect — so its outcome speaks for whether the engine is reachable at
+// all. The periodic tick inside watchEvents runs beside a live stream and does
+// not.
 func (w *Watcher) fullSync(ctx context.Context) error {
+	return w.sync(ctx, true)
+}
+
+// sync re-fetches the cluster and replaces the cache with the result.
+// tracksConnection says whether this sync speaks for the event stream's health:
+// a watcher-driven one does, a manual resync does not — it runs beside a
+// healthy stream, and a transient failure there is not the engine going away.
+func (w *Watcher) sync(ctx context.Context, tracksConnection bool) error {
 	start := time.Now()
 	slog.Info("starting full sync")
 
 	data, err := w.client.FullSync(ctx)
 	if err != nil {
 		slog.Error("full sync failed", "error", err)
+		metrics.RecordSyncFailure()
+
+		if tracksConnection {
+			w.setConnected(false)
+		}
+
 		return err
 	}
 
+	done := time.Now()
+
 	w.store.ReplaceAll(data)
-	metrics.ObserveSyncDuration(time.Since(start).Seconds())
+	metrics.ObserveSyncDuration(done.Sub(start).Seconds())
+	metrics.RecordSyncSuccess(done)
+	w.lastSync.Store(done.UnixNano())
+
+	if tracksConnection {
+		w.setConnected(true)
+	}
 
 	snap := w.store.Snapshot()
 	slog.Info(
@@ -178,7 +239,7 @@ func (w *Watcher) fullSync(ctx context.Context) error {
 // Exposed for manual recovery from drift via the admin API; the watcher's
 // regular event-stream path remains independent of this call.
 func (w *Watcher) Resync(ctx context.Context) error {
-	if err := w.fullSync(ctx); err != nil {
+	if err := w.sync(ctx, false); err != nil {
 		return err
 	}
 	w.writeSnapshot()
@@ -190,19 +251,15 @@ const (
 	workerCount    = 4
 
 	// defaultSettleDelay is how long Swarm is given to reconcile a task record
-	// after the container behind it exits. Long enough that the second read
-	// sees the terminal state, short enough that the count is only briefly
-	// wrong — the alternative was waiting out the five-minute re-sync.
+	// after its container starts or exits.
 	defaultSettleDelay = 750 * time.Millisecond
 
-	// settleAttempts bounds how many times a task is re-read while it stays
-	// unsettled. One read is right almost always and wrong exactly when it
-	// matters: a loaded manager that has not reconciled within the first
-	// delay leaves the overcount standing until the five-minute re-sync, and
-	// nothing re-arms it. In practice a following container event usually
-	// schedules another attempt, but "usually" is what this fix was meant to
-	// stop relying on. Three attempts with the delay doubling covers about
-	// five seconds of reconcile lag.
+	// defaultSyncInterval is how often the event loop re-reads the whole
+	// cluster, catching anything the stream never announced.
+	defaultSyncInterval = 5 * time.Minute
+
+	// settleAttempts bounds how many times a task is re-read while its record
+	// still lags, each wait twice the last. Three covers about five seconds.
 	settleAttempts = 3
 )
 
@@ -217,10 +274,13 @@ type coalesced struct {
 	action string
 }
 
-// actionSettle marks a task update triggered by its container ending, which
-// needs a second read once Swarm has caught up. It is internal to the watcher
-// and never reaches applyRemove, which only ever tests for "remove".
-const actionSettle = "settle"
+// actionSettle marks a task update triggered by its container ending,
+// actionStarted one by its container starting. Both need a second read once
+// Swarm has caught up, in opposite directions -- see taskCaughtUp.
+const (
+	actionSettle  = "settle"
+	actionStarted = "started"
+)
 
 // isContainerDeath reports whether a container event means the container has
 // stopped for good. Docker emits "die" for every exit; "kill" and "stop" are
@@ -239,6 +299,13 @@ func isContainerDeath(action events.Action) bool {
 func (w *Watcher) watchEvents(ctx context.Context) {
 	msgCh, errCh := w.client.Events(ctx)
 
+	w.loopRunning.Store(true)
+	defer w.loopRunning.Store(false)
+
+	// Only the disconnection: Events returns its channels before the request
+	// behind them is made, so fullSync's success is what proves reachability.
+	defer w.setConnected(false)
+
 	pending := make(map[eventKey]coalesced)
 	var timer *time.Timer
 	var timerC <-chan time.Time // nil until first event arms it
@@ -246,7 +313,7 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 	// Periodic re-sync runs inside the select loop so it is serialized
 	// with event processing — this prevents a concurrent ReplaceAll from
 	// re-inserting resources that were just deleted by an incremental event.
-	syncTicker := time.NewTicker(5 * time.Minute)
+	syncTicker := time.NewTicker(w.syncInterval)
 	defer syncTicker.Stop()
 
 	for {
@@ -297,6 +364,8 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 				pending = make(map[eventKey]coalesced)
 				w.processBatch(ctx, batch)
 			}
+		case req := <-w.refreshes:
+			req.done <- w.refreshNow(ctx, req.kind, req.id)
 		case <-syncTicker.C:
 			// Flush pending events before the full sync so we don't lose them.
 			if timer != nil {
@@ -309,7 +378,12 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 				w.processBatch(ctx, batch)
 			}
 			slog.Info("periodic full re-sync")
-			if err := w.fullSync(ctx); err == nil {
+
+			// Not a connection check: this runs beside a live stream, so a
+			// failure here is not a disconnection — the stream ending is.
+			// lastSync still stops advancing, which is what reports a cache
+			// that has gone stale.
+			if err := w.sync(ctx, false); err == nil {
 				w.writeSnapshot()
 			}
 		}
@@ -326,12 +400,15 @@ func (w *Watcher) eventKeyFromMsg(msg events.Message) (eventKey, string) {
 			return eventKey{}, ""
 		}
 
-		// Treat container events as task updates. A container ending is called
-		// out separately: it is the last event the task will ever produce, and
-		// Swarm has not yet reconciled the task record when it arrives — see
-		// scheduleSettle.
+		// Treat container events as task updates. The two that bracket a
+		// container's life are called out separately, because Swarm has not
+		// reconciled the task record when either arrives — see scheduleSettle.
 		if isContainerDeath(msg.Action) {
 			return eventKey{resourceType: "task", id: taskID}, actionSettle
+		}
+
+		if msg.Action == "start" {
+			return eventKey{resourceType: "task", id: taskID}, actionStarted
 		}
 
 		return eventKey{resourceType: "task", id: taskID}, "update"
@@ -392,36 +469,18 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	// already have read the settled record, and checking once here costs one
 	// map lookup instead of a goroutine per event.
 	for key, ev := range batch {
-		if ev.action == actionSettle {
-			w.scheduleSettle(ctx, key)
+		if ev.action == actionSettle || ev.action == actionStarted {
+			w.scheduleSettle(ctx, key, ev.action)
 		}
 	}
 }
 
-// scheduleSettle re-reads a task shortly after the container behind it exited.
-//
-// A container dying is the last event a failed task ever produces, and Swarm
-// reconciles the task record a moment after the container it wraps. Inspecting
-// on the event itself therefore reads the task as still running, desired
-// running, and since nothing further arrives the cache keeps that reading
-// until the five-minutely full re-sync corrects it. Everything derived from it
-// overcounts in the meantime: a service crash-looping every eight seconds
-// reported four running replicas against a desired one, `find` and the
-// placement view repeated the figure, and the convergence wait behind every
-// deploy could not settle because the count it waited on never fell.
-//
-// A short series of delayed reads closes it, each waiting twice as long as the
-// one before and the series stopping the moment the record settles — so the
-// common case costs exactly one read, and a daemon slow to reconcile still
-// gets corrected in seconds rather than at the next full re-sync. It is
-// skipped entirely when the first inspect already saw a terminal state: a task
-// that lost its container long enough ago, or a daemon that reconciled before
-// we asked.
-//
-// A task the daemon has since forgotten is not a failure of this: the inspect
-// 404s, and inspectAndApply drops the record, which settles it just as well.
-func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey) {
-	if task, ok := w.store.GetTask(key.id); !ok || taskSettled(task) {
+// scheduleSettle re-reads a task shortly after its container started or exited.
+// Docker emits no task events, and Swarm reconciles the record after the
+// container it wraps, so the inspect on the event reads one that has not caught
+// up in either direction. Each read waits twice as long as the last.
+func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action string) {
+	if task, ok := w.store.GetTask(key.id); !ok || taskCaughtUp(task, action) {
 		return
 	}
 
@@ -438,7 +497,7 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey) {
 			w.inspectAndApply(ctx, key)
 
 			task, ok := w.store.GetTask(key.id)
-			if !ok || taskSettled(task) {
+			if !ok || taskCaughtUp(task, action) {
 				return
 			}
 
@@ -454,11 +513,16 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey) {
 	})
 }
 
-// taskSettled reports whether Swarm has finished with a task, so there is
-// nothing a second read could learn. DesiredState is the orchestrator's own
-// answer and moves first; Status follows.
-func taskSettled(task swarm.Task) bool {
-	return !cache.TaskIsLive(task) || cache.IsTerminalState(task.Status.State)
+// taskCaughtUp reports whether Swarm's record has caught up with the container
+// event that prompted the re-read. DesiredState moves first, Status follows.
+// The two directions rest at opposite states, which is why one predicate
+// cannot serve both.
+func taskCaughtUp(task swarm.Task, action string) bool {
+	if !cache.TaskIsLive(task) || cache.IsTerminalState(task.Status.State) {
+		return true
+	}
+
+	return action == actionStarted && task.Status.State == swarm.TaskStateRunning
 }
 
 func (w *Watcher) applyRemove(key eventKey) {
@@ -495,27 +559,18 @@ func (w *Watcher) handleEvent(ctx context.Context, msg events.Message) {
 
 	w.inspectAndApply(ctx, key)
 
-	if action == actionSettle {
-		w.scheduleSettle(ctx, key)
+	if action == actionSettle || action == actionStarted {
+		w.scheduleSettle(ctx, key, action)
 	}
 }
 
 func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
 	resource, err := w.inspectWithRetry(ctx, key)
 	if err != nil {
-		// A not-found that outlived every retry is the daemon's answer rather
-		// than a race, so the resource is gone and the cached record with it.
-		// Swarm garbage-collects a task's record once it falls out of the
-		// history window and emits no removal event when it does, so this is
-		// the only signal that it went: holding the record left a task Docker
-		// had forgotten in every listing, still carrying the status it was
-		// last inspected with, until the five-minutely re-sync swept it. On a
-		// service restarting in a loop that is dozens of phantom replicas.
-		//
-		// This is decided here rather than inside inspectWithRetry because the
-		// retries are what tell the two cases apart: during a stack deploy a
-		// 404 means "not registered yet", and giving up on the first one would
-		// drop resources that were about to exist.
+		// A not-found that outlived every retry is the daemon's answer, not a
+		// race: Swarm garbage-collects a task's record without emitting a
+		// removal event, so this is the only signal it went. The retries are
+		// what tell it from "not registered yet" during a stack deploy.
 		if cerrdefs.IsNotFound(err) {
 			slog.Debug(
 				"resource no longer exists; dropping cached record",
@@ -540,6 +595,12 @@ func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
 
 		return
 	}
+
+	w.apply(resource)
+}
+
+// apply writes an inspected resource into the store under its own type.
+func (w *Watcher) apply(resource any) {
 	switch v := resource.(type) {
 	case swarm.Node:
 		w.store.SetNode(v)
@@ -558,11 +619,87 @@ func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
 	}
 }
 
+// refreshHandoffTimeout bounds how long Refresh waits for the event loop to
+// take its request. Long enough that a loop busy with a burst of events still
+// gets there, short enough that a caller learns the engine is unreachable
+// rather than waiting out a reconnect.
+var refreshHandoffTimeout = 2 * time.Second
+
+// errRefreshUnavailable reports that no event loop took the refresh. It wraps
+// the containerd sentinel so the API answers ENG001, as it does for every
+// other way the engine turns out to be unreachable.
+var errRefreshUnavailable = fmt.Errorf(
+	"the Docker event loop is not accepting refreshes: %w", cerrdefs.ErrUnavailable,
+)
+
+// refreshRequest asks the event loop to re-read one resource on its behalf.
+type refreshRequest struct {
+	kind string
+	id   string
+	done chan error
+}
+
+// Refresh re-reads one resource from the engine into the cache, for a caller
+// that cannot wait for the event stream. The work runs on the event loop,
+// which applies every other write: applying from the caller's goroutine lets a
+// remove arriving mid-inspect be undone, resurrecting the resource.
+func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
+	// Nothing to serialize against with no loop running, and waiting for one
+	// would stall the write this refresh precedes.
+	if !w.loopRunning.Load() {
+		return w.refreshNow(ctx, kind, id)
+	}
+
+	done := make(chan error, 1)
+
+	// The loop can stop between that check and this send, and during an outage
+	// it is gone for a whole reconnect interval. A request context carries no
+	// deadline of its own, so an unbounded send would hold the write this
+	// refresh precedes until the client gave up. Unavailable is what the
+	// engine being out of reach already answers with.
+	handoff := time.NewTimer(refreshHandoffTimeout)
+	defer handoff.Stop()
+
+	select {
+	case w.refreshes <- refreshRequest{kind: kind, id: id, done: done}:
+	case <-handoff.C:
+		return errRefreshUnavailable
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// refreshNow is Refresh's work, on whichever goroutine may apply it. An
+// inspect failure is returned rather than logged: the caller asked because it
+// cannot tolerate a stale answer.
+func (w *Watcher) refreshNow(ctx context.Context, kind, id string) error {
+	resource, err := w.client.Inspect(ctx, events.Type(kind), id)
+	if err != nil {
+		if cerrdefs.IsNotFound(err) {
+			w.applyRemove(eventKey{resourceType: events.Type(kind), id: id})
+
+			return nil
+		}
+
+		return err
+	}
+
+	w.apply(resource)
+
+	return nil
+}
+
 // inspectWithRetry retries transient inspect failures with capped exponential
-// backoff. Rapid stack deploys often race: an event arrives for a resource the
-// daemon hasn't fully registered yet (404), or a network glitch surfaces. The
-// previous one-shot inspect would silently drop the event and leave the cache
-// stale until the periodic 5-minute re-sync.
+// backoff. Rapid stack deploys race: an event arrives for a resource the daemon
+// has not registered yet. A one-shot inspect drops the event and leaves the
+// cache stale until the periodic re-sync.
 func (w *Watcher) inspectWithRetry(ctx context.Context, key eventKey) (any, error) {
 	const maxAttempts = 4
 	backoff := 100 * time.Millisecond

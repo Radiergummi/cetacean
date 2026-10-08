@@ -615,25 +615,24 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
             aria-label="Search results"
             className="flex flex-col gap-3"
           >
-            {actionMatch &&
-              !activeAction && (
-                // Focus stays in the combobox input, which owns the arrow keys
-                // and Enter; an option in this pattern is pointed at, never
-                // focused, so it carries no key handler of its own.
-                // oxlint-disable-next-line jsx-a11y/click-events-have-key-events
-                <li
-                  id={optionId(0)}
-                  role="option"
-                  aria-selected={highlightIndex === 0}
-                  data-active={highlightIndex === 0 || undefined}
-                  className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground"
-                  onClick={() => activateAction(actionMatch.action)}
-                  onMouseEnter={() => setHighlightIndex(0)}
-                >
-                  <Zap className="size-4 shrink-0 text-amber-500" />
-                  <span>{actionMatch.action.label}</span>
-                </li>
-              )}
+            {actionMatch && !activeAction && (
+              // Focus stays in the combobox input, which owns the arrow keys
+              // and Enter; an option in this pattern is pointed at, never
+              // focused, so it carries no key handler of its own.
+              // oxlint-disable-next-line jsx-a11y/click-events-have-key-events
+              <li
+                id={optionId(0)}
+                role="option"
+                aria-selected={highlightIndex === 0}
+                data-active={highlightIndex === 0 || undefined}
+                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground"
+                onClick={() => activateAction(actionMatch.action)}
+                onMouseEnter={() => setHighlightIndex(0)}
+              >
+                <Zap className="size-4 shrink-0 text-amber-500" />
+                <span>{actionMatch.action.label}</span>
+              </li>
+            )}
 
             {showSearchResults &&
               groups.map(({ items, type }) => (

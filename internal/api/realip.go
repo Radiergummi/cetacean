@@ -8,18 +8,21 @@ import (
 	"strings"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// realIP returns middleware that records the request's peer and — when that
-// peer is a trusted proxy — rewrites r.RemoteAddr to the client address the
-// proxy reported.
-//
-// The verdict is recorded on the original peer address, before the rewrite,
-// and recorded always, so downstream code can tell "untrusted" from "nobody
-// decided". Readers use auth.FromTrustedProxy, never RemoteAddr.
-func realIP(trusted []netip.Prefix) func(http.Handler) http.Handler {
+// realIP records the request's peer and, when that peer is a trusted proxy,
+// rewrites r.RemoteAddr to the client address the proxy reported. The verdict
+// is recorded on the original peer, and always, so downstream can tell
+// "untrusted" from "nobody decided" — read it with auth.FromTrustedProxy.
+func realIP(
+	trusted []netip.Prefix,
+	headers config.ForwardedHeaders,
+) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			dropUnwrittenForwarding(r.Header, headers)
+
 			peer, peerPort := peerOf(r, trusted)
 			r = r.WithContext(auth.ContextWithPeer(r.Context(), peer))
 
@@ -32,6 +35,20 @@ func realIP(trusted []netip.Prefix) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// dropUnwrittenForwarding removes the family config.ForwardedHeaders does not
+// name, before anything downstream can read it.
+func dropUnwrittenForwarding(h http.Header, headers config.ForwardedHeaders) {
+	if headers == config.RFC7239Headers {
+		h.Del("X-Forwarded-For")
+		h.Del("X-Forwarded-Proto")
+		h.Del("X-Forwarded-Host")
+
+		return
+	}
+
+	h.Del("Forwarded")
 }
 
 // peerOf resolves the address the connection arrived from, the verdict on
@@ -53,16 +70,12 @@ func peerOf(r *http.Request, trusted []netip.Prefix) (auth.Peer, string) {
 }
 
 // resolveClientIP returns the rightmost node in the forwarding chain that is
-// not a trusted proxy, joined with the peer's port. The caller has already
-// established that the peer itself is trusted.
-//
-// Forwarded (RFC 7239) is preferred over X-Forwarded-For and walked the same
-// way, both ordering nodes first proxy first. One naming no address makes no
-// statement about the client, so the fallback turns on the absence of an
-// address rather than of the header.
+// not a trusted proxy, joined with the peer's port. Both families order first
+// proxy first, and realIP left only one, so the second read is the x-forwarded
+// path rather than a preference.
 func resolveClientIP(r *http.Request, peerPort string, trusted []netip.Prefix) (string, bool) {
 	nodes := forwardedNodes(r.Header.Values("Forwarded"))
-	if !namesAnyAddr(nodes) {
+	if len(nodes) == 0 {
 		nodes = forwardedForNodes(r.Header.Values("X-Forwarded-For"))
 	}
 
@@ -79,14 +92,6 @@ func resolveClientIP(r *http.Request, peerPort string, trusted []netip.Prefix) (
 	}
 
 	return "", false
-}
-
-// namesAnyAddr reports whether any of the nodes names an address at all.
-func namesAnyAddr(nodes []string) bool {
-	return slices.ContainsFunc(nodes, func(node string) bool {
-		_, ok := nodeAddr(node)
-		return ok
-	})
 }
 
 // forwardedForNodes splits X-Forwarded-For's comma-separated list into node

@@ -1,15 +1,21 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-alpine AS frontend
+FROM node:26-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS frontend
+WORKDIR /app
+# The workspace resolves from the root, so the manifests that describe it have
+# to arrive before the install and ahead of the sources that invalidate it.
+COPY --link package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY --link frontend/package.json frontend/
+RUN npm install -g "pnpm@$(node -p 'require("./package.json").packageManager.split("@")[1]')"
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --filter frontend...
+COPY --link frontend/ frontend/
 WORKDIR /app/frontend
-COPY --link frontend/package*.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci
-COPY --link frontend/ ./
-RUN npm run build
+RUN pnpm build
 # MCP Apps widget bundles; main.go embeds frontend/dist-widgets.
-RUN npm run build:widgets
+RUN pnpm build:widgets
 
-FROM golang:1.26-alpine AS backend
+FROM golang:1.27-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS backend
 ARG VERSION=dev
 ARG COMMIT=unknown
 WORKDIR /app

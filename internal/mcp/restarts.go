@@ -14,16 +14,10 @@ const (
 	restartWindowLong  = 7 * 24 * time.Hour
 )
 
-// serviceRestarts reads the cache's restart tracker for one service.
-//
-// The tracker records every task transition into failed, rejected or orphaned
-// and already survives restarts through the snapshot, so this costs two map
-// reads and is the cheapest signal on the surface — which matters, because a
-// digest is rebuilt on every cache event for a subscribed resource.
-//
-// It never returns nil: the cache always has a tracker, so a zero here means
-// "measured, none", which is a real answer. The nil case belongs to callers
-// that have no tracker at all.
+// serviceRestarts reads the cache's restart tracker for one service — two map
+// reads, which matters because a digest is rebuilt on every cache event for a
+// subscribed resource. It never returns nil: the cache always has a tracker, so
+// a zero means "measured, none". Nil belongs to a caller with no tracker.
 func (s *Server) serviceRestarts(serviceID string) *cluster.ServiceRestarts {
 	return &cluster.ServiceRestarts{
 		LastHour:      s.cache.RestartCount(serviceID, restartWindowShort),

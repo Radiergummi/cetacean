@@ -10,17 +10,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// TestClusterResourceReportsCPUInOneNamedUnit pins the fix for the unit defect
-// the live evaluation found: cache.ClusterSnapshot reports TotalCPU in whole
-// cores and ReservedCPU in nanoCPUs, under two adjacent field names that carry
-// no unit at all. The dashboard compensates by dividing one of them by 1e9
-// before use (frontend/src/components/metrics/CapacitySection.tsx), but an MCP
-// caller has no such secret to keep, and dividing reserved by total as spelled
-// yields a number nine orders of magnitude wrong.
-//
-// The projection therefore names the unit in every numeric field, and puts both
-// CPU figures in the same one, so "how much of the cluster is reserved?" is a
-// division a reader can trust.
+// cache.ClusterSnapshot reports TotalCPU in whole cores and ReservedCPU in
+// nanoCPUs, under adjacent field names carrying no unit at all. The dashboard
+// compensates by dividing one by 1e9, but an MCP caller has no such secret, so
+// the projection names the unit in every field and shares one for CPU.
 func TestClusterResourceReportsCPUInOneNamedUnit(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{

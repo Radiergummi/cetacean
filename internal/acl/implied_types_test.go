@@ -11,15 +11,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// TestImpliedStackTypesMatchTheResolver closes the half TestTypeGrantsAgreesWithCan
-// cannot see. That test drives a hand-written stubResolver, so adding a case to
-// cache.StackOf's switch — the authority on what a stack contains — leaves
-// impliedTypes stale and both tests still green, reshipping for the new type
-// exactly the bug this projection exists to fix.
-//
-// This one drives the real Cache. Every type that can hold a stack namespace
-// label gets a resource carrying one, so a type reported as not reaching a
-// stack is a type StackOf declines to place, not one missing from the fixture.
+// Closes the half TestTypeGrantsAgreesWithCan cannot see: that test drives a
+// hand-written stubResolver, so adding a case to cache.StackOf's switch leaves
+// impliedTypes stale and both green. This drives the real Cache, giving every
+// type that can hold a stack namespace label a resource carrying one.
 func TestImpliedStackTypesMatchTheResolver(t *testing.T) {
 	const (
 		memberName = "member"

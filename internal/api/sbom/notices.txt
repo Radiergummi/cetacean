@@ -241,7 +241,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-github.com/coder/websocket v1.8.14
+github.com/coder/websocket v1.8.15
 https://github.com/coder/websocket
 License: 0BSD
 
@@ -879,7 +879,7 @@ This product includes software developed at CoreOS, Inc.
 
 ------------------------------------------------------------------------------
 
-github.com/creachadair/msync v0.8.1
+github.com/creachadair/msync v0.10.1
 https://github.com/creachadair/msync
 License: BSD-3-Clause
 
@@ -1562,7 +1562,7 @@ See also https://www.apache.org/dev/crypto.html and/or seek legal counsel.
 
 ------------------------------------------------------------------------------
 
-github.com/docker/go-connections v0.6.0
+github.com/docker/go-connections v0.7.0
 https://github.com/docker/go-connections
 License: Apache-2.0
 
@@ -2049,7 +2049,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-github.com/fxamacker/cbor/v2 v2.9.0
+github.com/fxamacker/cbor/v2 v2.9.3
 https://github.com/fxamacker/cbor
 License: MIT
 
@@ -2077,13 +2077,13 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-github.com/gaissmai/bart v0.26.1
+github.com/gaissmai/bart v0.29.0
 https://github.com/gaissmai/bart
 License: MIT
 
 MIT License
 
-Copyright (c) 2024 Karl Gaissmaier
+Copyright (c) 2026 Karl Gaissmaier
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -2316,7 +2316,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433
+github.com/go-json-experiment/json v0.0.0-20260820222146-c27c302e5fc3
 https://github.com/go-json-experiment/json
 License: BSD-3-Clause
 
@@ -2769,7 +2769,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-github.com/goccy/go-json v0.10.6
+github.com/goccy/go-json v0.11.2
 https://github.com/goccy/go-json
 License: MIT
 
@@ -3406,7 +3406,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-github.com/jsimonetti/rtnetlink v1.4.1
+github.com/jsimonetti/rtnetlink v1.4.2
 https://github.com/jsimonetti/rtnetlink
 License: MIT
 
@@ -3424,7 +3424,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ------------------------------------------------------------------------------
 
-github.com/klauspost/compress v1.20.0
+github.com/klauspost/compress v1.20.1
 https://github.com/klauspost/compress
 License: Apache-2.0
 
@@ -3736,7 +3736,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ------------------------------------------------------------------------------
 
-github.com/mark3labs/mcp-go v1.0.0
+github.com/mark3labs/mcp-go v1.1.1
 https://github.com/mark3labs/mcp-go
 License: MIT
 
@@ -3765,13 +3765,13 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42
+github.com/mdlayher/netlink v1.11.2
 https://github.com/mdlayher/netlink
 License: MIT
 
 # MIT License
 
-Copyright (C) 2016-2022 Matt Layher
+Copyright (C) 2016-2026 Matt Layher
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -3782,7 +3782,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ------------------------------------------------------------------------------
 
-github.com/mdlayher/socket v0.5.0
+github.com/mdlayher/socket v0.7.0
 https://github.com/mdlayher/socket
 License: MIT
 
@@ -4907,7 +4907,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-github.com/pires/go-proxyproto v0.8.1
+github.com/pires/go-proxyproto v0.15.0
 https://github.com/pires/go-proxyproto
 License: Apache-2.0
 
@@ -5596,7 +5596,7 @@ SoundCloud Ltd. (http://soundcloud.com/).
 
 ------------------------------------------------------------------------------
 
-github.com/prometheus/common v0.70.1
+github.com/prometheus/common v0.71.0
 https://github.com/prometheus/common
 License: Apache-2.0
 
@@ -6034,7 +6034,7 @@ SoundCloud Ltd. (http://soundcloud.com/).
 
 ------------------------------------------------------------------------------
 
-github.com/safchain/ethtool v0.3.0
+github.com/safchain/ethtool v0.7.0
 https://github.com/safchain/ethtool
 License: Apache-2.0
 
@@ -6226,7 +6226,7 @@ License: Apache-2.0
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright {yyyy} {name of copyright owner}
+   Copyright (c) 2015 The Ethtool Authors
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -6426,7 +6426,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-github.com/spf13/cast v1.7.1
+github.com/spf13/cast v1.10.0
 https://github.com/spf13/cast
 License: MIT
 
@@ -6454,7 +6454,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd
+github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f
 https://github.com/tailscale/hujson
 License: BSD-3-Clause
 
@@ -6526,7 +6526,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-github.com/tailscale/web-client-prebuilt v0.0.0-20250124233751-d4cd19a26976
+github.com/tailscale/web-client-prebuilt v0.0.0-20260917222731-e0ed2d0d0fea
 https://github.com/tailscale/web-client-prebuilt
 License: BSD-3-Clause
 
@@ -6562,7 +6562,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-github.com/tailscale/wireguard-go v0.0.0-20260715223240-2e01ba5b00f0
+github.com/tailscale/wireguard-go v0.0.0-20260928213032-417aef361226
 https://github.com/tailscale/wireguard-go
 License: MIT
 
@@ -8934,7 +8934,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
+go4.org/netipx v0.0.0-20260823151212-3075585bcbeb
 License: BSD-3-Clause
 
 Copyright (c) 2020 The Inet.af AUTHORS. All rights reserved.
@@ -8968,7 +8968,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/crypto v0.55.0
+golang.org/x/crypto v0.57.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9002,7 +9002,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
+golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9036,7 +9036,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/net v0.58.0
+golang.org/x/net v0.59.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9104,7 +9104,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/sync v0.22.0
+golang.org/x/sync v0.23.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9138,7 +9138,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/sys v0.47.0
+golang.org/x/sys v0.48.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9172,7 +9172,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/term v0.45.0
+golang.org/x/term v0.46.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9206,7 +9206,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/text v0.41.0
+golang.org/x/text v0.42.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9240,7 +9240,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/time v0.15.0
+golang.org/x/time v0.16.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -10027,7 +10027,7 @@ limitations under the License.
 
 ------------------------------------------------------------------------------
 
-gvisor.dev/gvisor v0.0.0-20260224225140-573d5e7127a8
+gvisor.dev/gvisor v0.0.0-20260915211658-a6f909f08a72
 License: Apache-2.0
 
 
@@ -10287,7 +10287,7 @@ Some files carry the "BSD" license, noted at the top of each file:
 
 ------------------------------------------------------------------------------
 
-tailscale.com v1.102.4
+tailscale.com v1.104.0
 License: BSD-3-Clause
 
 BSD 3-Clause License
@@ -10433,7 +10433,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @babel/helper-validator-identifier 7.29.7
-https://github.com/babel/babel#readme
+https://github.com/babel/babel.git
 License: MIT
 
 MIT License
@@ -10579,7 +10579,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 @base-ui/utils 0.4.0
-https://github.com/mui/base-ui#readme
+git+https://github.com/mui/base-ui.git
 License: MIT
 
 MIT License
@@ -10636,7 +10636,7 @@ THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@codemirror/commands 6.11.0
+@codemirror/commands 6.11.1
 git+https://code.haverbeke.berlin/codemirror/commands.git
 License: MIT
 
@@ -10666,7 +10666,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @codemirror/lang-css 6.3.1
-https://github.com/codemirror/lang-css#readme
+https://github.com/codemirror/lang-css.git
 License: MIT
 
 MIT License
@@ -10724,7 +10724,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @codemirror/lang-javascript 6.2.5
-https://github.com/codemirror/lang-javascript#readme
+git+https://github.com/codemirror/lang-javascript.git
 License: MIT
 
 MIT License
@@ -10753,7 +10753,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @codemirror/lang-json 6.0.2
-https://github.com/codemirror/lang-json#readme
+https://github.com/codemirror/lang-json.git
 License: MIT
 
 MIT License
@@ -10782,7 +10782,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @codemirror/lang-xml 6.1.0
-https://github.com/codemirror/lang-xml#readme
+https://github.com/codemirror/lang-xml.git
 License: MIT
 
 MIT License
@@ -10811,7 +10811,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @codemirror/lang-yaml 6.1.3
-https://github.com/codemirror/lang-yaml#readme
+git+https://github.com/codemirror/lang-yaml.git
 License: MIT
 
 MIT License
@@ -10897,7 +10897,7 @@ THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@codemirror/state 6.7.4
+@codemirror/state 6.7.5
 git+https://code.haverbeke.berlin/codemirror/state.git
 License: MIT
 
@@ -10926,7 +10926,7 @@ THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@codemirror/view 6.43.11
+@codemirror/view 6.43.12
 git+https://code.haverbeke.berlin/codemirror/view.git
 License: MIT
 
@@ -10951,6 +10951,35 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
+@corvu/utils 0.4.2
+https://corvu.dev
+License: MIT
+
+MIT License
+
+Copyright (c) 2023-2024 Jasmin Noetzli
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 
 ------------------------------------------------------------------------------
@@ -11095,6 +11124,35 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
+@floating-ui/vue 1.1.11
+https://floating-ui.com/docs/vue
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Floating UI contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
 @floating-ui/vue 1.1.9
 https://floating-ui.com/docs/vue
 License: MIT
@@ -11226,7 +11284,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 ------------------------------------------------------------------------------
 
 @headlessui/tailwindcss 0.2.2
-https://github.com/tailwindlabs/headlessui#readme
+git+https://github.com/tailwindlabs/headlessui.git
 License: MIT
 
 MIT License
@@ -11254,7 +11312,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 @headlessui/vue 1.7.23
-https://github.com/tailwindlabs/headlessui#readme
+git+https://github.com/tailwindlabs/headlessui.git
 License: MIT
 
 MIT License
@@ -11282,7 +11340,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 @internationalized/date 3.12.4
-https://github.com/adobe/react-spectrum/tree/main#readme
+https://github.com/adobe/react-spectrum/tree/main/packages/@internationalized/date
 License: Apache-2.0
 
                                  Apache License
@@ -11491,7 +11549,7 @@ License: Apache-2.0
 ------------------------------------------------------------------------------
 
 @internationalized/number 3.6.8
-https://github.com/adobe/react-spectrum#readme
+https://github.com/adobe/react-spectrum
 License: Apache-2.0
 
                                  Apache License
@@ -11726,6 +11784,299 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
+@kobalte/core 0.13.14
+https://github.com/kobaltedev/kobalte/tree/main/packages/core#readme
+License: MIT
+
+MIT License
+
+Copyright (c) 2024 jer3m01 <jer3m01@jer3m01.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+NOTICE:
+
+kobalte
+=================
+The following is a list of sources from which code was used/modified in this codebase.
+
+-------------------------------------------------------------------------------
+This codebase contains a modified portion of code from Adobe which can be obtained at:
+  * SOURCE:
+    * https://www.npmjs.com/package/@adobe/react-spectrum
+  * LICENSE:
+    * https://unpkg.com/@adobe/react-spectrum@3.17.0/LICENSE
+
+  * SOURCE:
+    * https://www.npmjs.com/package/react-aria
+  * LICENSE:
+    * https://unpkg.com/react-aria@3.15.0/LICENSE
+
+  * SOURCE:
+    * https://www.npmjs.com/package/react-stately
+  * LICENSE:
+    * https://unpkg.com/react-stately@3.13.0/LICENSE
+
+  * SOURCE:
+    * https://www.npmjs.com/package/@adobe/react-spectrum-ui
+  * LICENSE:
+    * https://unpkg.com/@adobe/react-spectrum-ui@1.0.1/LICENSE
+
+  * SOURCE:
+    * https://www.npmjs.com/package/@adobe/react-spectrum-workflow
+  * LICENSE:
+    * https://unpkg.com/@adobe/react-spectrum-workflow@1.0.1/LICENSE
+
+  * SOURCE:
+    * https://www.npmjs.com/package/@adobe/react-spectrum-workflow-color
+  * LICENSE:
+    * https://unpkg.com/@adobe/react-spectrum-workflow-color@1.0.1/LICENSE
+
+-------------------------------------------------------------------------------
+This codebase contains a portion of code from react which can be obtained at:
+  * SOURCE:
+    * https://github.com/facebook/react/tree/cc7c1aece46a6b69b41958d731e0fd27c94bfc6c/packages/react-interactions
+
+  * LICENSE:
+    MIT License
+
+    Copyright (c) Facebook, Inc. and its affiliates.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+-------------------------------------------------------------------------------
+This codebase contains a modified portion of code from Modernizr which can be obtained at:
+  * SOURCE:
+    * https://github.com/Modernizr/Modernizr/blob/7efb9d0edd66815fb115fdce95fabaf019ce8db5/feature-detects/css/flexgap.js
+
+  * LICENSE:
+    * https://github.com/Modernizr/Modernizr/blob/master/LICENSE
+
+-------------------------------------------------------------------------------
+This codebase contains a modified portion of code from react-window which can be obtained at:
+  * SOURCE:
+    * https://github.com/bvaughn/react-window/blob/master/src/createGridComponent.js
+
+  * LICENSE:
+    The MIT License (MIT)
+
+    Copyright (c) 2018 Brian Vaughn
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+-------------------------------------------------------------------------------
+This codebase contains a modified portion of code from focus-options-polyfill which can be obtained at:
+  * SOURCE:
+    * https://github.com/calvellido/focus-options-polyfill
+
+  * LICENSE:
+    MIT License
+
+    Copyright (c) 2018 Juan Valencia
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+-------------------------------------------------------------------------------
+This codebase contains ResizeObserver.d.ts type declaration file which can be obtained at:
+  * SOURCE:
+    * https://gist.github.com/strothj/708afcf4f01dd04de8f49c92e88093c3
+
+  * LICENSE:
+    Copyright 2020 Jason Strothmann
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+------------------------------------------------------------------------------
+
+This codebase contains a portion of code that vuejs adapted from jest-dom which can be obtained at:
+  * SOURCE:
+    * https://github.com/vuejs/vue-test-utils-next/blob/master/src/utils/isElementVisible.ts
+  * LICENSE:
+    * https://github.com/vuejs/vue-test-utils-next/blob/master/LICENSE
+
+  * SOURCE:
+    * https://github.com/testing-library/jest-dom/blob/main/src/to-be-visible.js
+  * LICENSE:
+    * https://github.com/testing-library/jest-dom/blob/main/LICENSE
+
+------------------------------------------------------------------------------
+This codebase contains a modified portion of code from ICU which can be obtained at:
+  * SOURCE:
+    * https://github.com/unicode-org/icu
+
+  * LICENSE:
+    COPYRIGHT AND PERMISSION NOTICE (ICU 58 and later)
+
+    Copyright © 1991-2020 Unicode, Inc. All rights reserved.
+    Distributed under the Terms of Use in https://www.unicode.org/copyright.html.
+
+    Permission is hereby granted, free of charge, to any person obtaining
+    a copy of the Unicode data files and any associated documentation
+    (the "Data Files") or Unicode software and any associated documentation
+    (the "Software") to deal in the Data Files or Software
+    without restriction, including without limitation the rights to use,
+    copy, modify, merge, publish, distribute, and/or sell copies of
+    the Data Files or Software, and to permit persons to whom the Data Files
+    or Software are furnished to do so, provided that either
+    (a) this copyright and permission notice appear with all copies
+    of the Data Files or Software, or
+    (b) this copyright and permission notice appear in associated
+    Documentation.
+
+    THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF
+    ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+    WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+    NONINFRINGEMENT OF THIRD PARTY RIGHTS.
+    IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS
+    NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL
+    DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
+    DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+    TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+    PERFORMANCE OF THE DATA FILES OR SOFTWARE.
+
+    Except as contained in this notice, the name of a copyright holder
+    shall not be used in advertising or otherwise to promote the sale,
+    use or other dealings in these Data Files or Software without prior
+    written authorization of the copyright holder.
+
+-------------------------------------------------------------------------------
+This codebase contains a modified portion of code from the TC39 Temporal proposal which can be obtained at:
+  * SOURCE:
+    * https://github.com/tc39/proposal-temporal
+
+  * LICENSE:
+    Copyright (c) 2017, 2018, 2019, 2020
+        Ecma International. All rights reserved.
+
+    All Software contained in this document ("Software") is protected by copyright
+    and is being made available under the "BSD License", included below.
+
+    This Software may be subject to third party rights (rights from parties other
+    than Ecma International), including patent rights, and no licenses under such
+    third party rights are granted under this license even if the third party
+    concerned is a member of Ecma International.
+
+    SEE THE ECMA CODE OF CONDUCT IN PATENT MATTERS AVAILABLE AT
+    https://ecma-international.org/memento/codeofconduct.htm
+    FOR INFORMATION REGARDING THE LICENSING OF PATENT CLAIMS THAT ARE REQUIRED TO
+    IMPLEMENT ECMA INTERNATIONAL STANDARDS.
+
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice, this
+      list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimer in the documentation
+      and/or other materials provided with the distribution.
+
+    3. Neither the name of the authors nor Ecma International may be used to
+    endorse or promote products derived from this software without specific prior
+    written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE ECMA INTERNATIONAL "AS IS" AND
+    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL ECMA INTERNATIONAL BE LIABLE
+    FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+    DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+    OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+    OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+    SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------
+
+@kobalte/utils 0.9.2
+https://github.com/kobaltedev/kobalte/tree/main/packages/utils#readme
+License: MIT
+
+MIT License
+
+Copyright (c) 2022 Fabien Marie-Louise
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
 @kurkle/color 0.3.4
 https://github.com/kurkle/color#readme
 License: MIT
@@ -11744,7 +12095,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------------------------------------------------------
 
 @lezer/common 1.5.2
-https://github.com/lezer-parser/common#readme
+https://github.com/lezer-parser/common.git
 License: MIT
 
 MIT License
@@ -11802,7 +12153,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @lezer/highlight 1.2.3
-https://github.com/lezer-parser/highlight#readme
+https://github.com/lezer-parser/highlight.git
 License: MIT
 
 MIT License
@@ -11831,7 +12182,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @lezer/html 1.3.13
-https://github.com/lezer-parser/html#readme
+https://github.com/lezer-parser/html.git
 License: MIT
 
 MIT License
@@ -11860,7 +12211,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @lezer/javascript 1.5.4
-https://github.com/lezer-parser/javascript#readme
+https://github.com/lezer-parser/javascript.git
 License: MIT
 
 MIT License
@@ -11889,7 +12240,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @lezer/json 1.0.3
-https://github.com/lezer-parser/json#readme
+https://github.com/lezer-parser/json.git
 License: MIT
 
 MIT License
@@ -11946,7 +12297,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @lezer/xml 1.0.6
-https://github.com/lezer-parser/xml#readme
+https://github.com/lezer-parser/xml.git
 License: MIT
 
 MIT License
@@ -11975,7 +12326,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 @lezer/yaml 1.0.4
-https://github.com/lezer-parser/yaml#readme
+https://github.com/lezer-parser/yaml.git
 License: MIT
 
 MIT License
@@ -12479,7 +12830,7 @@ the full license text.
 
 ------------------------------------------------------------------------------
 
-@modelcontextprotocol/ext-apps 2.0.0
+@modelcontextprotocol/ext-apps 2.0.3
 https://github.com/modelcontextprotocol/ext-apps
 License: MIT
 
@@ -12913,7 +13264,7 @@ License: Apache-2.0
 ------------------------------------------------------------------------------
 
 @phosphor-icons/core 2.1.1
-https://github.com/phosphor-icons/phosphor-core#readme
+https://github.com/phosphor-icons/phosphor-core.git
 License: MIT
 
 MIT License
@@ -12942,7 +13293,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 @replit/codemirror-css-color-picker 6.3.0
-https://github.com/replit/Codemirror-CSS-color-picker#readme
+https://github.com/replit/Codemirror-CSS-color-picker
 License: MIT
 
 No license text is published for this package.
@@ -12956,7 +13307,7 @@ would assert a copyright holder and year the authors never stated.
 
 ------------------------------------------------------------------------------
 
-@scalar/agent-chat 0.12.30
+@scalar/agent-chat 0.12.40
 https://github.com/scalar/scalar
 License: MIT
 
@@ -12985,7 +13336,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/api-client 3.18.0
+@scalar/api-client 3.21.4
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13014,7 +13365,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/api-reference 1.68.0
+@scalar/api-reference 1.72.4
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13043,7 +13394,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/asyncapi-upgrader 0.1.9
+@scalar/asyncapi-upgrader 0.1.14
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13072,7 +13423,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/blocks 0.1.16
+@scalar/blocks 0.4.3
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13101,7 +13452,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/code-highlight 0.4.5
+@scalar/code-highlight 0.4.8
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13130,7 +13481,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/components 0.29.1
+@scalar/components 0.30.6
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13159,7 +13510,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/helpers 0.11.3
+@scalar/helpers 0.16.0
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13217,7 +13568,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/json-magic 0.13.4
+@scalar/json-magic 0.15.4
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13246,7 +13597,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/oas-utils 0.19.16
+@scalar/localization 0.2.4
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13275,7 +13626,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/openapi-types 0.9.5
+@scalar/oas-utils 0.20.9
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13304,7 +13655,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/openapi-upgrader 0.2.15
+@scalar/openapi-to-markdown 1.5.1
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13333,7 +13684,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/schemas 0.9.0
+@scalar/openapi-types 0.9.7
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13362,7 +13713,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/sidebar 0.11.1
+@scalar/openapi-upgrader 0.4.1
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13391,7 +13742,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/snippetz 0.9.30
+@scalar/schemas 0.12.3
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13420,7 +13771,65 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/themes 0.17.4
+@scalar/sidebar 0.11.11
+https://github.com/scalar/scalar
+License: MIT
+
+MIT License
+
+Copyright (c) 2023-present Scalar
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
+@scalar/snippetz 0.10.5
+https://github.com/scalar/scalar
+License: MIT
+
+MIT License
+
+Copyright (c) 2023-present Scalar
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
+@scalar/themes 0.18.1
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13450,7 +13859,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 @scalar/typebox 0.1.3
-https://github.com/sinclairzx81/typebox#readme
+https://github.com/sinclairzx81/typebox
 License: MIT
 
 TypeBox
@@ -13481,7 +13890,7 @@ THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/types 0.19.0
+@scalar/types 0.22.4
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13539,7 +13948,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/use-hooks 0.4.11
+@scalar/use-hooks 0.4.17
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13597,7 +14006,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/validation 0.6.3
+@scalar/validation 0.6.6
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13626,13 +14035,378 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/workspace-store 0.60.0
+@scalar/workspace-store 0.68.0
 https://github.com/scalar/scalar
 License: MIT
 
 MIT License
 
 Copyright (c) 2023-present Scalar
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
+@solid-primitives/event-listener 2.4.6
+https://primitives.solidjs.community/package/event-listener
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/keyed 1.5.3
+https://primitives.solidjs.community/package/keyed
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/map 0.4.13
+https://primitives.solidjs.community/package/map
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/media 2.3.6
+https://primitives.solidjs.community/package/media
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/props 3.2.4
+https://primitives.solidjs.community/package/props
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/refs 1.1.4
+https://primitives.solidjs.community/package/refs
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/resize-observer 2.2.0
+https://primitives.solidjs.community/package/resize-observer
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/rootless 1.5.4
+https://primitives.solidjs.community/package/rootless
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/static-store 0.1.4
+https://primitives.solidjs.community/package/static-store
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/storage 1.3.11
+https://github.com/solidjs-community/solid-primitives/tree/main/packages/storage
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Core Team
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/transition-group 1.1.2
+https://primitives.solidjs.community/package/transition-group
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/trigger 1.2.4
+https://primitives.solidjs.community/package/trigger
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+@solid-primitives/utils 6.4.1
+https://github.com/solidjs-community/solid-primitives/tree/main/packages/utils#readme
+License: MIT
+
+MIT License
+
+Copyright (c) 2021 Solid Primitives Working Group
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -13891,7 +14665,36 @@ limitations under the License.
 
 ------------------------------------------------------------------------------
 
-@tanstack/query-core 5.102.8
+@tanstack/match-sorter-utils 9.1.2
+https://tanstack.com/table
+License: MIT
+
+MIT License
+
+Copyright (c) 2016 Tanner Linsley
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
+@tanstack/query-core 5.104.0
 https://tanstack.com/query
 License: MIT
 
@@ -13920,7 +14723,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/query-devtools 5.102.8
+@tanstack/query-devtools 5.104.0
 https://tanstack.com/query
 License: MIT
 
@@ -13949,7 +14752,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/react-query 5.102.8
+@tanstack/react-query 5.104.0
 https://tanstack.com/query
 License: MIT
 
@@ -13978,7 +14781,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/react-query-devtools 5.102.8
+@tanstack/react-query-devtools 5.104.0
 https://tanstack.com/query
 License: MIT
 
@@ -14007,7 +14810,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/react-virtual 3.14.11
+@tanstack/react-virtual 3.14.13
 https://tanstack.com/virtual
 License: MIT
 
@@ -14036,7 +14839,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/virtual-core 3.17.9
+@tanstack/virtual-core 3.17.11
 https://tanstack.com/virtual
 License: MIT
 
@@ -14065,7 +14868,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/vue-virtual 3.13.37
+@tanstack/vue-virtual 3.13.39
 https://tanstack.com/virtual
 License: MIT
 
@@ -14181,7 +14984,7 @@ License: MIT
 
 ------------------------------------------------------------------------------
 
-@types/d3-selection 3.0.11
+@types/d3-selection 3.0.12
 https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3-selection
 License: MIT
 
@@ -15845,7 +16648,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@xyflow/react 12.11.6
+@xyflow/react 12.12.0
 https://reactflow.dev
 License: MIT
 
@@ -15874,8 +16677,8 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@xyflow/system 0.0.82
-https://github.com/xyflow/xyflow#readme
+@xyflow/system 0.0.83
+https://github.com/xyflow/xyflow.git
 License: MIT
 
 MIT License
@@ -15953,7 +16756,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 bail 2.0.2
-https://github.com/wooorm/bail#readme
+wooorm/bail
 License: MIT
 
 (The MIT License)
@@ -15983,7 +16786,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 ccount 2.0.1
-https://github.com/wooorm/ccount#readme
+wooorm/ccount
 License: MIT
 
 (The MIT License)
@@ -16013,7 +16816,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 chalk 5.6.2
-https://github.com/chalk/chalk#readme
+chalk/chalk
 License: MIT
 
 MIT License
@@ -16030,7 +16833,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------------------------------------------------------
 
 character-entities 2.0.2
-https://github.com/wooorm/character-entities#readme
+wooorm/character-entities
 License: MIT
 
 (The MIT License)
@@ -16060,7 +16863,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 character-entities-html4 2.1.0
-https://github.com/wooorm/character-entities-html4#readme
+wooorm/character-entities-html4
 License: MIT
 
 (The MIT License)
@@ -16090,7 +16893,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 character-entities-legacy 3.0.0
-https://github.com/wooorm/character-entities-legacy#readme
+wooorm/character-entities-legacy
 License: MIT
 
 (The MIT License)
@@ -16352,7 +17155,7 @@ License: Apache-2.0
 ------------------------------------------------------------------------------
 
 classcat 5.0.5
-https://github.com/jorgebucaran/classcat#readme
+jorgebucaran/classcat
 License: MIT
 
 Copyright © Jorge Bucaran <<https://jorgebucaran.com>>
@@ -16367,7 +17170,7 @@ THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------------------------------------------------------
 
 clsx 2.1.1
-https://github.com/lukeed/clsx#readme
+lukeed/clsx
 License: MIT
 
 MIT License
@@ -16384,7 +17187,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------------------------------------------------------
 
 comma-separated-tokens 2.0.3
-https://github.com/wooorm/comma-separated-tokens#readme
+wooorm/comma-separated-tokens
 License: MIT
 
 (The MIT License)
@@ -16413,25 +17216,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-convert-hrtime 5.0.0
-https://github.com/sindresorhus/convert-hrtime#readme
-License: MIT
-
-MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-------------------------------------------------------------------------------
-
 cookie 1.1.1
-https://github.com/jshttp/cookie#readme
+jshttp/cookie
 License: MIT
 
 (The MIT License)
@@ -16458,6 +17244,35 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+
+
+------------------------------------------------------------------------------
+
+copy-anything 4.1.1
+https://github.com/mesqueeb/copy-anything#readme
+License: MIT
+
+MIT License
+
+Copyright (c) 2018 Luca Ban - Mesqueeb
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 
 ------------------------------------------------------------------------------
@@ -16489,8 +17304,8 @@ THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-cron-parser 5.10.0
-https://github.com/harrisiirak/cron-parser#readme
+cron-parser 5.10.1
+https://github.com/harrisiirak/cron-parser.git
 License: MIT
 
 The MIT License (MIT)
@@ -16548,7 +17363,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 csstype 3.2.3
-https://github.com/frenic/csstype#readme
+https://github.com/frenic/csstype
 License: MIT
 
 Copyright (c) 2017-2018 Fredrik Nicol
@@ -16977,7 +17792,7 @@ THIS SOFTWARE.
 ------------------------------------------------------------------------------
 
 debug 4.4.3
-https://github.com/debug-js/debug#readme
+git://github.com/debug-js/debug.git
 License: MIT
 
 (The MIT License)
@@ -17005,7 +17820,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 decode-named-character-reference 1.3.0
-https://github.com/wooorm/decode-named-character-reference#readme
+wooorm/decode-named-character-reference
 License: MIT
 
 (The MIT License)
@@ -17035,7 +17850,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 defu 6.1.7
-https://github.com/unjs/defu#readme
+unjs/defu
 License: MIT
 
 MIT License
@@ -17064,7 +17879,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 dequal 2.0.3
-https://github.com/lukeed/dequal#readme
+lukeed/dequal
 License: MIT
 
 The MIT License (MIT)
@@ -17093,7 +17908,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 devlop 1.1.0
-https://github.com/wooorm/devlop#readme
+wooorm/devlop
 License: MIT
 
 (The MIT License)
@@ -17123,7 +17938,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 elkjs 0.12.0
-https://github.com/kieler/elkjs#readme
+https://github.com/kieler/elkjs.git
 License: EPL-2.0 OR GPL-3.0-or-later
 
 # Eclipse Public License - v 2.0
@@ -17394,7 +18209,7 @@ in the Eclipse Public License, v. 2.0 are satisfied: GNU General Public License 
 ------------------------------------------------------------------------------
 
 entities 6.0.1
-https://github.com/fb55/entities#readme
+git://github.com/fb55/entities.git
 License: BSD-2-Clause
 
 Copyright (c) Felix Böhm
@@ -17413,7 +18228,7 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------
 
 entities 7.0.1
-https://github.com/fb55/entities#readme
+https://github.com/fb55/entities.git
 License: BSD-2-Clause
 
 Copyright (c) Felix Böhm
@@ -17432,7 +18247,7 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------
 
 escape-string-regexp 5.0.0
-https://github.com/sindresorhus/escape-string-regexp#readme
+sindresorhus/escape-string-regexp
 License: MIT
 
 MIT License
@@ -17449,7 +18264,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------------------------------------------------------
 
 estree-walker 2.0.2
-https://github.com/Rich-Harris/estree-walker#readme
+https://github.com/Rich-Harris/estree-walker
 License: MIT
 
 Copyright (c) 2015-20 [these people](https://github.com/Rich-Harris/estree-walker/graphs/contributors)
@@ -17492,7 +18307,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-eventsource-parser 3.1.0
+eventsource-parser 3.1.1
 https://github.com/rexxars/eventsource-parser#readme
 License: MIT
 
@@ -17522,7 +18337,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 extend 3.0.2
-https://github.com/justmoon/node-extend#readme
+https://github.com/justmoon/node-extend.git
 License: MIT
 
 The MIT License (MIT)
@@ -17629,23 +18444,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-
-------------------------------------------------------------------------------
-
-function-timeout 1.0.2
-https://github.com/sindresorhus/function-timeout#readme
-License: MIT
-
-MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ------------------------------------------------------------------------------
@@ -17859,19 +18657,31 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-get-own-enumerable-keys 1.0.0
-https://github.com/sindresorhus/get-own-enumerable-keys#readme
+goober 2.1.19
+https://github.com/cristianbote/goober
 License: MIT
 
 MIT License
 
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
+Copyright (c) 2019 Cristian Bote
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 
 ------------------------------------------------------------------------------
@@ -17932,7 +18742,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-embedded 3.0.0
-https://github.com/syntax-tree/hast-util-embedded#readme
+syntax-tree/hast-util-embedded
 License: MIT
 
 (The MIT License)
@@ -17962,7 +18772,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-format 1.1.0
-https://github.com/syntax-tree/hast-util-format#readme
+syntax-tree/hast-util-format
 License: MIT
 
 (The MIT License)
@@ -17992,7 +18802,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-from-html 2.0.3
-https://github.com/syntax-tree/hast-util-from-html#readme
+syntax-tree/hast-util-from-html
 License: MIT
 
 (The MIT License)
@@ -18022,7 +18832,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-from-parse5 8.0.3
-https://github.com/syntax-tree/hast-util-from-parse5#readme
+syntax-tree/hast-util-from-parse5
 License: MIT
 
 (The MIT License)
@@ -18052,7 +18862,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-has-property 3.0.0
-https://github.com/syntax-tree/hast-util-has-property#readme
+syntax-tree/hast-util-has-property
 License: MIT
 
 (The MIT License)
@@ -18082,7 +18892,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-is-body-ok-link 3.0.1
-https://github.com/rehypejs/rehype-minify/tree/main#readme
+https://github.com/rehypejs/rehype-minify/tree/main/packages/hast-util-is-body-ok-link
 License: MIT
 
 (The MIT License)
@@ -18111,7 +18921,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-is-element 3.0.0
-https://github.com/syntax-tree/hast-util-is-element#readme
+syntax-tree/hast-util-is-element
 License: MIT
 
 (The MIT License)
@@ -18141,7 +18951,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-minify-whitespace 1.0.1
-https://github.com/rehypejs/rehype-minify/tree/main#readme
+https://github.com/rehypejs/rehype-minify/tree/main/packages/hast-util-minify-whitespace
 License: MIT
 
 (The MIT License)
@@ -18170,7 +18980,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-parse-selector 4.0.0
-https://github.com/syntax-tree/hast-util-parse-selector#readme
+syntax-tree/hast-util-parse-selector
 License: MIT
 
 (The MIT License)
@@ -18200,7 +19010,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-phrasing 3.0.1
-https://github.com/syntax-tree/hast-util-phrasing#readme
+syntax-tree/hast-util-phrasing
 License: MIT
 
 (The MIT License)
@@ -18230,7 +19040,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-raw 9.1.0
-https://github.com/syntax-tree/hast-util-raw#readme
+syntax-tree/hast-util-raw
 License: MIT
 
 (The MIT License)
@@ -18260,7 +19070,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-sanitize 5.0.2
-https://github.com/syntax-tree/hast-util-sanitize#readme
+syntax-tree/hast-util-sanitize
 License: MIT
 
 (The MIT License)
@@ -18290,7 +19100,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-to-html 9.0.5
-https://github.com/syntax-tree/hast-util-to-html#readme
+syntax-tree/hast-util-to-html
 License: MIT
 
 (The MIT License)
@@ -18319,8 +19129,39 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
+hast-util-to-mdast 10.1.2
+syntax-tree/hast-util-to-mdast
+License: MIT
+
+(The MIT License)
+
+Copyright (c) Titus Wormer <tituswormer@gmail.com>
+Copyright (c) Seth Vincent <sethvincent@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+'Software'), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
 hast-util-to-parse5 8.0.1
-https://github.com/syntax-tree/hast-util-to-parse5#readme
+syntax-tree/hast-util-to-parse5
 License: MIT
 
 (The MIT License)
@@ -18350,7 +19191,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-to-text 4.0.2
-https://github.com/syntax-tree/hast-util-to-text#readme
+syntax-tree/hast-util-to-text
 License: MIT
 
 (The MIT License)
@@ -18380,7 +19221,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hast-util-whitespace 3.0.0
-https://github.com/syntax-tree/hast-util-whitespace#readme
+syntax-tree/hast-util-whitespace
 License: MIT
 
 (The MIT License)
@@ -18410,7 +19251,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 hastscript 9.0.1
-https://github.com/syntax-tree/hastscript#readme
+syntax-tree/hastscript
 License: MIT
 
 (The MIT License)
@@ -18514,7 +19355,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------
 
 hookable 6.1.1
-https://github.com/unjs/hookable#readme
+unjs/hookable
 License: MIT
 
 The MIT License (MIT)
@@ -18543,7 +19384,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 html-void-elements 3.0.0
-https://github.com/wooorm/html-void-elements#readme
+wooorm/html-void-elements
 License: MIT
 
 (The MIT License)
@@ -18573,7 +19414,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 html-whitespace-sensitive-tag-names 3.0.1
-https://github.com/rehypejs/rehype-minify/tree/main#readme
+https://github.com/rehypejs/rehype-minify/tree/main/packages/html-whitespace-sensitive-tag-names
 License: MIT
 
 (The MIT License)
@@ -18601,59 +19442,8 @@ THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-identifier-regex 1.1.0
-https://github.com/sindresorhus/identifier-regex#readme
-License: MIT
-
-MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-------------------------------------------------------------------------------
-
 is-absolute-url 4.0.1
-https://github.com/sindresorhus/is-absolute-url#readme
-License: MIT
-
-MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-------------------------------------------------------------------------------
-
-is-identifier 1.1.0
-https://github.com/sindresorhus/is-identifier#readme
-License: MIT
-
-MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-------------------------------------------------------------------------------
-
-is-obj 3.0.0
-https://github.com/sindresorhus/is-obj#readme
+sindresorhus/is-absolute-url
 License: MIT
 
 MIT License
@@ -18670,24 +19460,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------------------------------------------------------
 
 is-plain-obj 4.1.0
-https://github.com/sindresorhus/is-plain-obj#readme
-License: MIT
-
-MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-------------------------------------------------------------------------------
-
-is-regexp 3.1.0
-https://github.com/sindresorhus/is-regexp#readme
+sindresorhus/is-plain-obj
 License: MIT
 
 MIT License
@@ -18726,7 +19499,7 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-jose 6.2.3
+jose 6.2.12
 https://github.com/panva/jose
 License: MIT
 
@@ -18756,7 +19529,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 js-base64 3.9.3
-https://github.com/dankogai/js-base64#readme
+git+https://github.com/dankogai/js-base64.git
 License: BSD-3-Clause
 
 Copyright (c) 2014, Dan Kogai
@@ -18791,7 +19564,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------
 
 json-schema 0.4.0
-https://github.com/kriszyp/json-schema#readme
+http://github.com/kriszyp/json-schema
 License: (AFL-2.1 OR BSD-3-Clause)
 
 Dojo is available under *either* the terms of the BSD 3-Clause "New" License *or* the
@@ -18994,7 +19767,7 @@ permission of its copyright owner.
 ------------------------------------------------------------------------------
 
 jsonc-parser 3.3.1
-https://github.com/microsoft/node-jsonc-parser#readme
+https://github.com/microsoft/node-jsonc-parser
 License: MIT
 
 The MIT License (MIT)
@@ -19023,7 +19796,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 longest-streak 3.1.0
-https://github.com/wooorm/longest-streak#readme
+wooorm/longest-streak
 License: MIT
 
 (The MIT License)
@@ -19053,7 +19826,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 lowlight 3.3.0
-https://github.com/wooorm/lowlight#readme
+wooorm/lowlight
 License: MIT
 
 (The MIT License)
@@ -19082,7 +19855,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-lucide-react 1.44.0
+lucide-react 1.49.0
 https://lucide.dev
 License: ISC
 
@@ -19134,7 +19907,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 luxon 3.7.2
-https://github.com/moment/luxon#readme
+https://github.com/moment/luxon
 License: MIT
 
 Copyright 2019 JS Foundation and other contributors
@@ -19149,7 +19922,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------------------------------------------------------
 
 magic-string 0.30.21
-https://github.com/Rich-Harris/magic-string#readme
+git+https://github.com/Rich-Harris/magic-string.git
 License: MIT
 
 Copyright 2018 Rich Harris
@@ -19163,25 +19936,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ------------------------------------------------------------------------------
 
-make-asynchronous 1.1.0
-https://github.com/sindresorhus/make-asynchronous#readme
-License: MIT
-
-MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-------------------------------------------------------------------------------
-
 markdown-table 3.0.4
-https://github.com/wooorm/markdown-table#readme
+wooorm/markdown-table
 License: MIT
 
 (The MIT License)
@@ -19211,7 +19967,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-find-and-replace 3.0.2
-https://github.com/syntax-tree/mdast-util-find-and-replace#readme
+syntax-tree/mdast-util-find-and-replace
 License: MIT
 
 (The MIT License)
@@ -19241,7 +19997,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-from-markdown 2.0.3
-https://github.com/syntax-tree/mdast-util-from-markdown#readme
+syntax-tree/mdast-util-from-markdown
 License: MIT
 
 (The MIT License)
@@ -19271,7 +20027,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-gfm 3.1.0
-https://github.com/syntax-tree/mdast-util-gfm#readme
+syntax-tree/mdast-util-gfm
 License: MIT
 
 (The MIT License)
@@ -19301,7 +20057,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-gfm-autolink-literal 2.0.1
-https://github.com/syntax-tree/mdast-util-gfm-autolink-literal#readme
+syntax-tree/mdast-util-gfm-autolink-literal
 License: MIT
 
 (The MIT License)
@@ -19331,7 +20087,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-gfm-footnote 2.1.0
-https://github.com/syntax-tree/mdast-util-gfm-footnote#readme
+syntax-tree/mdast-util-gfm-footnote
 License: MIT
 
 (The MIT License)
@@ -19361,7 +20117,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-gfm-strikethrough 2.0.0
-https://github.com/syntax-tree/mdast-util-gfm-strikethrough#readme
+syntax-tree/mdast-util-gfm-strikethrough
 License: MIT
 
 (The MIT License)
@@ -19391,7 +20147,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-gfm-table 2.0.0
-https://github.com/syntax-tree/mdast-util-gfm-table#readme
+syntax-tree/mdast-util-gfm-table
 License: MIT
 
 (The MIT License)
@@ -19421,7 +20177,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-gfm-task-list-item 2.0.0
-https://github.com/syntax-tree/mdast-util-gfm-task-list-item#readme
+syntax-tree/mdast-util-gfm-task-list-item
 License: MIT
 
 (The MIT License)
@@ -19451,7 +20207,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-phrasing 4.1.0
-https://github.com/syntax-tree/mdast-util-phrasing#readme
+syntax-tree/mdast-util-phrasing
 License: MIT
 
 (The MIT License)
@@ -19482,7 +20238,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-to-hast 13.2.1
-https://github.com/syntax-tree/mdast-util-to-hast#readme
+syntax-tree/mdast-util-to-hast
 License: MIT
 
 (The MIT License)
@@ -19512,7 +20268,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-to-markdown 2.1.2
-https://github.com/syntax-tree/mdast-util-to-markdown#readme
+syntax-tree/mdast-util-to-markdown
 License: MIT
 
 (The MIT License)
@@ -19542,7 +20298,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 mdast-util-to-string 4.0.0
-https://github.com/syntax-tree/mdast-util-to-string#readme
+syntax-tree/mdast-util-to-string
 License: MIT
 
 (The MIT License)
@@ -19601,7 +20357,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark 4.0.2
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark
 License: MIT
 
 (The MIT License)
@@ -19631,7 +20387,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-core-commonmark 2.0.3
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-core-commonmark
 License: MIT
 
 (The MIT License)
@@ -19661,7 +20417,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-extension-gfm 3.0.0
-https://github.com/micromark/micromark-extension-gfm#readme
+micromark/micromark-extension-gfm
 License: MIT
 
 (The MIT License)
@@ -19691,7 +20447,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-extension-gfm-autolink-literal 2.1.0
-https://github.com/micromark/micromark-extension-gfm-autolink-literal#readme
+micromark/micromark-extension-gfm-autolink-literal
 License: MIT
 
 (The MIT License)
@@ -19721,7 +20477,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-extension-gfm-footnote 2.1.0
-https://github.com/micromark/micromark-extension-gfm-footnote#readme
+micromark/micromark-extension-gfm-footnote
 License: MIT
 
 (The MIT License)
@@ -19751,7 +20507,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-extension-gfm-strikethrough 2.1.0
-https://github.com/micromark/micromark-extension-gfm-strikethrough#readme
+micromark/micromark-extension-gfm-strikethrough
 License: MIT
 
 (The MIT License)
@@ -19780,8 +20536,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-micromark-extension-gfm-table 2.1.1
-https://github.com/micromark/micromark-extension-gfm-table#readme
+micromark-extension-gfm-table 2.1.2
+micromark/micromark-extension-gfm-table
 License: MIT
 
 (The MIT License)
@@ -19811,7 +20567,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-extension-gfm-tagfilter 2.0.0
-https://github.com/micromark/micromark-extension-gfm-tagfilter#readme
+micromark/micromark-extension-gfm-tagfilter
 License: MIT
 
 (The MIT License)
@@ -19841,7 +20597,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-extension-gfm-task-list-item 2.1.0
-https://github.com/micromark/micromark-extension-gfm-task-list-item#readme
+micromark/micromark-extension-gfm-task-list-item
 License: MIT
 
 (The MIT License)
@@ -19871,7 +20627,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-factory-destination 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-factory-destination
 License: MIT
 
 (The MIT License)
@@ -19901,7 +20657,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-factory-label 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-factory-label
 License: MIT
 
 (The MIT License)
@@ -19931,7 +20687,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-factory-space 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-factory-space
 License: MIT
 
 (The MIT License)
@@ -19961,7 +20717,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-factory-title 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-factory-title
 License: MIT
 
 (The MIT License)
@@ -19991,7 +20747,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-factory-whitespace 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-factory-whitespace
 License: MIT
 
 (The MIT License)
@@ -20021,7 +20777,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-character 2.1.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-character
 License: MIT
 
 (The MIT License)
@@ -20051,7 +20807,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-chunked 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-chunked
 License: MIT
 
 (The MIT License)
@@ -20081,7 +20837,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-classify-character 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-classify-character
 License: MIT
 
 (The MIT License)
@@ -20111,7 +20867,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-combine-extensions 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-combine-extensions
 License: MIT
 
 (The MIT License)
@@ -20141,7 +20897,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-decode-numeric-character-reference 2.0.2
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-decode-numeric-character-reference
 License: MIT
 
 (The MIT License)
@@ -20171,7 +20927,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-decode-string 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-decode-string
 License: MIT
 
 (The MIT License)
@@ -20201,7 +20957,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-encode 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-encode
 License: MIT
 
 (The MIT License)
@@ -20231,7 +20987,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-html-tag-name 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-html-tag-name
 License: MIT
 
 (The MIT License)
@@ -20261,7 +21017,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-normalize-identifier 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-normalize-identifier
 License: MIT
 
 (The MIT License)
@@ -20291,7 +21047,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-resolve-all 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-resolve-all
 License: MIT
 
 (The MIT License)
@@ -20321,7 +21077,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-sanitize-uri 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-sanitize-uri
 License: MIT
 
 (The MIT License)
@@ -20351,7 +21107,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-subtokenize 2.1.0
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-subtokenize
 License: MIT
 
 (The MIT License)
@@ -20381,7 +21137,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-symbol 2.0.1
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-symbol
 License: MIT
 
 (The MIT License)
@@ -20411,7 +21167,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 micromark-util-types 2.0.2
-https://github.com/micromark/micromark/tree/main#readme
+https://github.com/micromark/micromark/tree/main/packages/micromark-util-types
 License: MIT
 
 (The MIT License)
@@ -20441,7 +21197,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 ms 2.1.3
-https://github.com/vercel/ms#readme
+vercel/ms
 License: MIT
 
 The MIT License (MIT)
@@ -20469,8 +21225,8 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-nanoid 3.3.18
-https://github.com/ai/nanoid#readme
+nanoid 3.3.19
+ai/nanoid
 License: MIT
 
 The MIT License (MIT)
@@ -20498,7 +21254,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 nanoid 5.1.16
-https://github.com/ai/nanoid#readme
+ai/nanoid
 License: MIT
 
 The MIT License (MIT)
@@ -20526,7 +21282,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 neverpanic 0.0.8
-https://github.com/bgrcs/neverpanic#readme
+https://github.com/bgrcs/neverpanic
 License: MIT
 
 MIT License
@@ -20553,42 +21309,8 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-p-event 6.0.1
-https://github.com/sindresorhus/p-event#readme
-License: MIT
-
-MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-------------------------------------------------------------------------------
-
-p-timeout 6.1.4
-https://github.com/sindresorhus/p-timeout#readme
-License: MIT
-
-MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-------------------------------------------------------------------------------
-
 parse-ms 4.0.0
-https://github.com/sindresorhus/parse-ms#readme
+sindresorhus/parse-ms
 License: MIT
 
 MIT License
@@ -20632,7 +21354,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 path-key 3.1.1
-https://github.com/sindresorhus/path-key#readme
+sindresorhus/path-key
 License: MIT
 
 MIT License
@@ -20649,7 +21371,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------------------------------------------------------
 
 pathe 2.0.3
-https://github.com/unjs/pathe#readme
+unjs/pathe
 License: MIT
 
 MIT License
@@ -20727,7 +21449,7 @@ DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 picocolors 1.1.1
-https://github.com/alexeyraspopov/picocolors#readme
+alexeyraspopov/picocolors
 License: ISC
 
 ISC License
@@ -20778,7 +21500,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-postcss 8.5.26
+postcss 8.5.28
 https://postcss.org/
 License: MIT
 
@@ -20806,8 +21528,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-pretty-ms 9.3.0
-https://github.com/sindresorhus/pretty-ms#readme
+pretty-ms 9.3.1
+sindresorhus/pretty-ms
 License: MIT
 
 MIT License
@@ -20824,7 +21546,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------------------------------------------------------
 
 property-information 7.2.0
-https://github.com/wooorm/property-information#readme
+wooorm/property-information
 License: MIT
 
 (The MIT License)
@@ -20983,8 +21705,8 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-react-router 7.18.3
-https://github.com/remix-run/react-router#readme
+react-router 7.18.4
+https://github.com/remix-run/react-router
 License: MIT
 
 MIT License
@@ -21014,8 +21736,8 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-react-router-dom 7.18.3
-https://github.com/remix-run/react-router#readme
+react-router-dom 7.18.4
+https://github.com/remix-run/react-router
 License: MIT
 
 MIT License
@@ -21046,7 +21768,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 rehype-external-links 3.0.0
-https://github.com/rehypejs/rehype-external-links#readme
+rehypejs/rehype-external-links
 License: MIT
 
 (The MIT License)
@@ -21076,7 +21798,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 rehype-format 5.0.1
-https://github.com/rehypejs/rehype-format#readme
+rehypejs/rehype-format
 License: MIT
 
 (The MIT License)
@@ -21101,6 +21823,35 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
+rehype-minify-whitespace 6.0.2
+https://github.com/rehypejs/rehype-minify/tree/main/packages/rehype-minify-whitespace
+License: MIT
+
+(The MIT License)
+
+Copyright (c) Titus Wormer
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 
 
 ------------------------------------------------------------------------------
@@ -21135,7 +21886,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 rehype-raw 7.0.0
-https://github.com/rehypejs/rehype-raw#readme
+rehypejs/rehype-raw
 License: MIT
 
 (The MIT License)
@@ -21164,8 +21915,38 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
+rehype-remark 10.0.1
+rehypejs/rehype-remark
+License: MIT
+
+(The MIT License)
+
+Copyright (c) Titus Wormer <tituswormer@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+'Software'), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
 rehype-sanitize 6.0.0
-https://github.com/rehypejs/rehype-sanitize#readme
+rehypejs/rehype-sanitize
 License: MIT
 
 (The MIT License)
@@ -21224,7 +22005,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 remark-gfm 4.0.1
-https://github.com/remarkjs/remark-gfm#readme
+remarkjs/remark-gfm
 License: MIT
 
 (The MIT License)
@@ -21283,7 +22064,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 remark-rehype 11.1.2
-https://github.com/remarkjs/remark-rehype#readme
+remarkjs/remark-rehype
 License: MIT
 
 (The MIT License)
@@ -21341,8 +22122,38 @@ THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
+remove-accents 0.5.0
+https://github.com/tyxla/remove-accents
+License: MIT
+
+The MIT License (MIT)
+
+Copyright (c) 2015 Marin Atanasov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+
+------------------------------------------------------------------------------
+
 reselect 5.3.0
-https://github.com/reduxjs/reselect#readme
+https://github.com/reduxjs/reselect.git
 License: MIT
 
 The MIT License (MIT)
@@ -21366,23 +22177,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-
-------------------------------------------------------------------------------
-
-reserved-identifiers 1.2.0
-https://github.com/sindresorhus/reserved-identifiers#readme
-License: MIT
-
-MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ------------------------------------------------------------------------------
@@ -21413,6 +22207,34 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+
+------------------------------------------------------------------------------
+
+seroval 1.5.6
+https://github.com/lxsmnsyc/seroval/tree/main/packages/seroval
+License: MIT
+
+MIT License Copyright (c) 2025 Alexis Munsayac <alexis.munsayac@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice (including the next paragraph) shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+------------------------------------------------------------------------------
+
+seroval-plugins 1.5.6
+https://github.com/lxsmnsyc/seroval/tree/main/packages/plugins
+License: MIT
+
+MIT License Copyright (c) 2025 Alexis Munsayac <alexis.munsayac@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice (including the next paragraph) shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
@@ -21475,7 +22297,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 shebang-command 2.0.0
-https://github.com/kevva/shebang-command#readme
+kevva/shebang-command
 License: MIT
 
 MIT License
@@ -21492,7 +22314,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------------------------------------------------------
 
 shebang-regex 3.0.0
-https://github.com/sindresorhus/shebang-regex#readme
+sindresorhus/shebang-regex
 License: MIT
 
 MIT License
@@ -21504,6 +22326,122 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
+solid-js 1.9.15
+https://solidjs.com
+License: MIT
+
+MIT License
+
+Copyright (c) 2016-2025 Ryan Carniato
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
+solid-presence 0.2.0
+https://corvu.dev/docs/utilities/presence
+License: MIT
+
+MIT License
+
+Copyright (c) 2023-2025 Jasmin Noetzli
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
+solid-prevent-scroll 0.1.11
+https://corvu.dev/docs/utilities/prevent-scroll
+License: MIT
+
+MIT License
+
+Copyright (c) 2023-2025 Jasmin Noetzli
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
+solid-transition-group 0.2.3
+https://github.com/solidjs/solid-transition-group#readme
+License: MIT
+
+MIT License
+
+Copyright (c) 2020-2021 Ryan Carniato
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 
 ------------------------------------------------------------------------------
@@ -21574,7 +22512,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------
 
 space-separated-tokens 2.0.2
-https://github.com/wooorm/space-separated-tokens#readme
+wooorm/space-separated-tokens
 License: MIT
 
 (The MIT License)
@@ -21656,7 +22594,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 stringify-entities 4.0.4
-https://github.com/wooorm/stringify-entities#readme
+wooorm/stringify-entities
 License: MIT
 
 (The MIT License)
@@ -21685,26 +22623,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-stringify-object 6.0.0
-https://github.com/sindresorhus/stringify-object#readme
-License: BSD-2-Clause
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-Copyright (c) Yeoman team (https://github.com/yeoman)
-
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-------------------------------------------------------------------------------
-
 style-mod 4.1.3
-https://github.com/marijnh/style-mod#readme
+git+https://github.com/marijnh/style-mod.git
 License: MIT
 
 Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
@@ -21730,25 +22650,37 @@ THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-super-regex 1.1.0
-https://github.com/sindresorhus/super-regex#readme
+superjson 2.2.6
+https://github.com/blitz-js/superjson
 License: MIT
 
 MIT License
 
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
+Copyright (c) 2020 Simon Knott and superjson contributors
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 
 ------------------------------------------------------------------------------
 
 swrv 1.2.0
-https://github.com/Kong/swrv#readme
+https://github.com/Kong/swrv.git
 License: Apache-2.0
 
                                  Apache License
@@ -21987,7 +22919,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 tagged-tag 1.0.0
-https://github.com/sindresorhus/tagged-tag#readme
+sindresorhus/tagged-tag
 License: MIT
 
 MIT License
@@ -22032,7 +22964,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-tailwind-merge 3.6.0
+tailwind-merge 3.7.0
 https://github.com/dcastil/tailwind-merge
 License: MIT
 
@@ -22090,25 +23022,38 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-time-span 5.1.0
-https://github.com/sindresorhus/time-span#readme
+trim-lines 3.0.1
+wooorm/trim-lines
 License: MIT
 
-MIT License
+(The MIT License)
 
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
+Copyright (c) 2015 Titus Wormer <mailto:tituswormer@gmail.com>
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+'Software'), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ------------------------------------------------------------------------------
 
-trim-lines 3.0.1
-https://github.com/wooorm/trim-lines#readme
+trim-trailing-lines 2.1.0
+wooorm/trim-trailing-lines
 License: MIT
 
 (The MIT License)
@@ -22138,7 +23083,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 trough 2.2.0
-https://github.com/wooorm/trough#readme
+wooorm/trough
 License: MIT
 
 (The MIT License)
@@ -22240,153 +23185,8 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-type-fest 4.41.0
-https://github.com/sindresorhus/type-fest#readme
-License: (MIT OR CC0-1.0)
-
-license-cc0
------------
-
-Creative Commons Legal Code
-
-CC0 1.0 Universal
-
-    CREATIVE COMMONS CORPORATION IS NOT A LAW FIRM AND DOES NOT PROVIDE
-    LEGAL SERVICES. DISTRIBUTION OF THIS DOCUMENT DOES NOT CREATE AN
-    ATTORNEY-CLIENT RELATIONSHIP. CREATIVE COMMONS PROVIDES THIS
-    INFORMATION ON AN "AS-IS" BASIS. CREATIVE COMMONS MAKES NO WARRANTIES
-    REGARDING THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS
-    PROVIDED HEREUNDER, AND DISCLAIMS LIABILITY FOR DAMAGES RESULTING FROM
-    THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS PROVIDED
-    HEREUNDER.
-
-Statement of Purpose
-
-The laws of most jurisdictions throughout the world automatically confer
-exclusive Copyright and Related Rights (defined below) upon the creator
-and subsequent owner(s) (each and all, an "owner") of an original work of
-authorship and/or a database (each, a "Work").
-
-Certain owners wish to permanently relinquish those rights to a Work for
-the purpose of contributing to a commons of creative, cultural and
-scientific works ("Commons") that the public can reliably and without fear
-of later claims of infringement build upon, modify, incorporate in other
-works, reuse and redistribute as freely as possible in any form whatsoever
-and for any purposes, including without limitation commercial purposes.
-These owners may contribute to the Commons to promote the ideal of a free
-culture and the further production of creative, cultural and scientific
-works, or to gain reputation or greater distribution for their Work in
-part through the use and efforts of others.
-
-For these and/or other purposes and motivations, and without any
-expectation of additional consideration or compensation, the person
-associating CC0 with a Work (the "Affirmer"), to the extent that he or she
-is an owner of Copyright and Related Rights in the Work, voluntarily
-elects to apply CC0 to the Work and publicly distribute the Work under its
-terms, with knowledge of his or her Copyright and Related Rights in the
-Work and the meaning and intended legal effect of CC0 on those rights.
-
-1. Copyright and Related Rights. A Work made available under CC0 may be
-protected by copyright and related or neighboring rights ("Copyright and
-Related Rights"). Copyright and Related Rights include, but are not
-limited to, the following:
-
-  i. the right to reproduce, adapt, distribute, perform, display,
-     communicate, and translate a Work;
- ii. moral rights retained by the original author(s) and/or performer(s);
-iii. publicity and privacy rights pertaining to a person's image or
-     likeness depicted in a Work;
- iv. rights protecting against unfair competition in regards to a Work,
-     subject to the limitations in paragraph 4(a), below;
-  v. rights protecting the extraction, dissemination, use and reuse of data
-     in a Work;
- vi. database rights (such as those arising under Directive 96/9/EC of the
-     European Parliament and of the Council of 11 March 1996 on the legal
-     protection of databases, and under any national implementation
-     thereof, including any amended or successor version of such
-     directive); and
-vii. other similar, equivalent or corresponding rights throughout the
-     world based on applicable law or treaty, and any national
-     implementations thereof.
-
-2. Waiver. To the greatest extent permitted by, but not in contravention
-of, applicable law, Affirmer hereby overtly, fully, permanently,
-irrevocably and unconditionally waives, abandons, and surrenders all of
-Affirmer's Copyright and Related Rights and associated claims and causes
-of action, whether now known or unknown (including existing as well as
-future claims and causes of action), in the Work (i) in all territories
-worldwide, (ii) for the maximum duration provided by applicable law or
-treaty (including future time extensions), (iii) in any current or future
-medium and for any number of copies, and (iv) for any purpose whatsoever,
-including without limitation commercial, advertising or promotional
-purposes (the "Waiver"). Affirmer makes the Waiver for the benefit of each
-member of the public at large and to the detriment of Affirmer's heirs and
-successors, fully intending that such Waiver shall not be subject to
-revocation, rescission, cancellation, termination, or any other legal or
-equitable action to disrupt the quiet enjoyment of the Work by the public
-as contemplated by Affirmer's express Statement of Purpose.
-
-3. Public License Fallback. Should any part of the Waiver for any reason
-be judged legally invalid or ineffective under applicable law, then the
-Waiver shall be preserved to the maximum extent permitted taking into
-account Affirmer's express Statement of Purpose. In addition, to the
-extent the Waiver is so judged Affirmer hereby grants to each affected
-person a royalty-free, non transferable, non sublicensable, non exclusive,
-irrevocable and unconditional license to exercise Affirmer's Copyright and
-Related Rights in the Work (i) in all territories worldwide, (ii) for the
-maximum duration provided by applicable law or treaty (including future
-time extensions), (iii) in any current or future medium and for any number
-of copies, and (iv) for any purpose whatsoever, including without
-limitation commercial, advertising or promotional purposes (the
-"License"). The License shall be deemed effective as of the date CC0 was
-applied by Affirmer to the Work. Should any part of the License for any
-reason be judged legally invalid or ineffective under applicable law, such
-partial invalidity or ineffectiveness shall not invalidate the remainder
-of the License, and in such case Affirmer hereby affirms that he or she
-will not (i) exercise any of his or her remaining Copyright and Related
-Rights in the Work or (ii) assert any associated claims and causes of
-action with respect to the Work, in either case contrary to Affirmer's
-express Statement of Purpose.
-
-4. Limitations and Disclaimers.
-
- a. No trademark or patent rights held by Affirmer are waived, abandoned,
-    surrendered, licensed or otherwise affected by this document.
- b. Affirmer offers the Work as-is and makes no representations or
-    warranties of any kind concerning the Work, express, implied,
-    statutory or otherwise, including without limitation warranties of
-    title, merchantability, fitness for a particular purpose, non
-    infringement, or the absence of latent or other defects, accuracy, or
-    the present or absence of errors, whether or not discoverable, all to
-    the greatest extent permissible under applicable law.
- c. Affirmer disclaims responsibility for clearing rights of other persons
-    that may apply to the Work or any use thereof, including without
-    limitation any person's Copyright and Related Rights in the Work.
-    Further, Affirmer disclaims responsibility for obtaining any necessary
-    consents, permissions or other rights required for any use of the
-    Work.
- d. Affirmer understands and acknowledges that Creative Commons is not a
-    party to this document and has no duty or obligation with respect to
-    this CC0 or use of the Work.
-
-license-mit
------------
-
-MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-------------------------------------------------------------------------------
-
 type-fest 5.9.0
-https://github.com/sindresorhus/type-fest#readme
+sindresorhus/type-fest
 License: (MIT OR CC0-1.0)
 
 license-cc0
@@ -23033,6 +23833,35 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
+undici 8.10.2
+https://undici.nodejs.org
+License: MIT
+
+MIT License
+
+Copyright (c) Matteo Collina and Undici contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+------------------------------------------------------------------------------
+
 undici-types 7.18.2
 https://undici.nodejs.org
 License: MIT
@@ -23121,7 +23950,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 unist-util-find-after 5.0.0
-https://github.com/syntax-tree/unist-util-find-after#readme
+syntax-tree/unist-util-find-after
 License: MIT
 
 (The MIT License)
@@ -23151,7 +23980,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 unist-util-is 6.0.1
-https://github.com/syntax-tree/unist-util-is#readme
+syntax-tree/unist-util-is
 License: MIT
 
 (The MIT license)
@@ -23181,7 +24010,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 unist-util-position 5.0.0
-https://github.com/syntax-tree/unist-util-position#readme
+syntax-tree/unist-util-position
 License: MIT
 
 (The MIT License)
@@ -23211,7 +24040,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 unist-util-stringify-position 4.0.0
-https://github.com/syntax-tree/unist-util-stringify-position#readme
+syntax-tree/unist-util-stringify-position
 License: MIT
 
 (The MIT License)
@@ -23241,7 +24070,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 unist-util-visit 5.1.0
-https://github.com/syntax-tree/unist-util-visit#readme
+syntax-tree/unist-util-visit
 License: MIT
 
 (The MIT License)
@@ -23271,7 +24100,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 unist-util-visit-parents 6.0.2
-https://github.com/syntax-tree/unist-util-visit-parents#readme
+syntax-tree/unist-util-visit-parents
 License: MIT
 
 (The MIT License)
@@ -23300,8 +24129,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-use-sync-external-store 1.6.0
-https://github.com/facebook/react#readme
+use-sync-external-store 1.7.0
+https://github.com/react/react.git
 License: MIT
 
 MIT License
@@ -23330,7 +24159,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 vfile 6.0.3
-https://github.com/vfile/vfile#readme
+vfile/vfile
 License: MIT
 
 (The MIT License)
@@ -23359,7 +24188,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 vfile-location 5.0.3
-https://github.com/vfile/vfile-location#readme
+vfile/vfile-location
 License: MIT
 
 (The MIT License)
@@ -23389,7 +24218,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 vfile-message 4.0.3
-https://github.com/vfile/vfile-message#readme
+vfile/vfile-message
 License: MIT
 
 (The MIT License)
@@ -23448,7 +24277,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 vue-component-type-helpers 3.3.11
-https://github.com/vuejs/language-tools#readme
+https://github.com/vuejs/language-tools.git
 License: MIT
 
 MIT License
@@ -23477,7 +24306,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 vue-demi 0.14.10
-https://github.com/antfu/vue-demi#readme
+https://github.com/antfu/vue-demi.git
 License: MIT
 
 MIT License
@@ -23562,7 +24391,7 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 web-namespaces 2.0.1
-https://github.com/wooorm/web-namespaces#readme
+wooorm/web-namespaces
 License: MIT
 
 (The MIT License)
@@ -23591,216 +24420,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-web-worker 1.5.0
-https://github.com/developit/web-worker
-License: Apache-2.0
-
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
-
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
-
-   1. Definitions.
-
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
-
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
-
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
-
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
-
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
-
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
-
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
-
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
-
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
-
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
-
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
-
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
-
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
-
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
-
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
-
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
-
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
-
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
-
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
-
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
-
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
-
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
-
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
-
-   END OF TERMS AND CONDITIONS
-
-   APPENDIX: How to apply the Apache License to your work.
-
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
-
-   Copyright [yyyy] [name of copyright owner]
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
-------------------------------------------------------------------------------
-
 which 2.0.2
-https://github.com/isaacs/node-which#readme
+git://github.com/isaacs/node-which.git
 License: ISC
 
 The ISC License
@@ -23822,7 +24443,7 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-yaml 2.9.0
+yaml 2.9.1
 https://eemeli.org/yaml/
 License: ISC
 
@@ -23843,7 +24464,7 @@ THIS SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-zod 4.6.2
+zod 4.6.5
 https://zod.dev
 License: MIT
 
@@ -23902,7 +24523,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 
 zwitch 2.0.4
-https://github.com/wooorm/zwitch#readme
+wooorm/zwitch
 License: MIT
 
 (The MIT License)

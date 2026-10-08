@@ -1,10 +1,18 @@
-import { test, expect, navigateToFirst } from "./fixtures";
+import {
+  test,
+  expect,
+  allowedMethods,
+  detailId,
+  hasHistory,
+  navigateToFirst,
+  clickRow,
+} from "./fixtures";
 
 test.describe("Service List (/services)", () => {
   test("renders table with expected columns", async ({ page }) => {
     await page.goto("/services");
 
-    const table = page.getByRole("table");
+    const table = page.getByRole("grid");
     await expect(table).toBeVisible({ timeout: 10_000 });
 
     const header = page.getByRole("row").first();
@@ -30,7 +38,7 @@ test.describe("Service List (/services)", () => {
     await searchInput.fill(firstName);
 
     // Row with that name should remain visible
-    await expect(page.getByRole("cell", { name: firstName }).first()).toBeVisible({
+    await expect(page.getByRole("gridcell", { name: firstName }).first()).toBeVisible({
       timeout: 5_000,
     });
 
@@ -53,7 +61,7 @@ test.describe("Service List (/services)", () => {
 
     // Switch back to table view
     await page.getByRole("button", { name: "Table view" }).click();
-    await expect(page.getByRole("table")).toBeVisible();
+    await expect(page.getByRole("grid")).toBeVisible();
   });
 
   test("row click navigates to service detail", async ({ page }) => {
@@ -61,7 +69,7 @@ test.describe("Service List (/services)", () => {
 
     await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
 
-    await page.locator("table tbody tr").first().click();
+    await clickRow(page.locator("table tbody tr").first());
     await expect(page).toHaveURL(/\/services\/.+/);
   });
 });
@@ -76,16 +84,19 @@ test.describe("Service Detail (/services/:id)", () => {
     await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test("action buttons present when write operations are enabled", async ({ page }) => {
-    // ServiceActions renders only when the ops level is >= 1 (operational).
-    await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 10_000 });
+  test("action buttons present when write operations are enabled", async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    // ServiceActions gates on allowedMethods.has("POST"), parsed from the
+    // Allow header — so the server answers whether these buttons belong here,
+    // rather than the DOM being asked before it has been filled in.
+    const methods = await allowedMethods(request, baseURL, `/services/${detailId(page)}`);
+    test.skip(!methods.has("POST"), "Service writes are not offered at this operations level");
 
-    const rollback = page.getByRole("button", { name: /Rollback/i });
-    const count = await rollback.count();
-    test.skip(count === 0, "Write operations not enabled — action buttons not rendered");
-
-    await expect(rollback).toBeVisible();
-    await expect(page.getByRole("button", { name: /Restart/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Rollback/i })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /Restart/i })).toBeVisible({ timeout: 10_000 });
   });
 
   test("tasks section renders with state filter", async ({ page }) => {
@@ -111,7 +122,11 @@ test.describe("Service Detail (/services/:id)", () => {
     // KeyValueEditor with title "Labels"
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
 
-    await expect(page.getByRole("button", { name: /^Labels$/i })).toBeVisible({
+    // Matched on the disclosure state, not the name alone: a service with a
+    // detected integration (the fixtures carry Traefik labels) renders an
+    // IntegrationSection per integration, each with a "Labels" view toggle, so
+    // the name resolves to those as well as to the section itself.
+    await expect(page.getByRole("button", { name: /^Labels$/i, expanded: true })).toBeVisible({
       timeout: 10_000,
     });
   });
@@ -139,13 +154,20 @@ test.describe("Service Detail (/services/:id)", () => {
     await expect(page.getByRole("button", { name: /^Logs$/i })).toBeVisible({ timeout: 10_000 });
   });
 
-  test("recent activity section renders when history entries are present", async ({ page }) => {
-    // Wait for the page to fully load (Tasks section always renders)
+  test("recent activity section renders when history entries are present", async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    // ActivitySection returns null for an empty feed, fetched after mount —
+    // so absence right now means "not loaded yet" as readily as "no history".
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
 
-    const activityButton = page.getByRole("button", { name: /Recent Activity/i });
-    const count = await activityButton.count();
-    test.skip(count === 0, "No activity history present for this service");
-    await expect(activityButton).toBeVisible();
+    const present = await hasHistory(request, baseURL, detailId(page));
+    test.skip(!present, "No activity history recorded for this service");
+
+    await expect(page.getByRole("button", { name: /Recent Activity/i })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });

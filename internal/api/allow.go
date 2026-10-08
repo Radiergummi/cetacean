@@ -25,16 +25,14 @@ type methodSpec struct {
 }
 
 // resourceWriteMethods maps resource types to their write methods and the
-// minimum operations tier required. For methods that appear at multiple tiers
-// (e.g. service PUT at tier1 for scale/image and tier3 for mode/endpoint-mode),
-// the lowest tier is used so the method appears in Allow whenever any of its
-// uses are enabled.
+// minimum operations tier each needs. A method appearing at several tiers takes
+// the lowest, so it shows in Allow whenever any of its uses is enabled.
 var resourceWriteMethods = map[string][]methodSpec{
 	"service": {
 		{
 			"PUT",
 			config.OpsOperational,
-		}, // scale, image (tier1); mode, endpoint-mode are tier3 but PUT is available if tier1 is enabled
+		}, // scale, image (tier1); endpoint-mode is tier3 but PUT is available if tier1 is enabled
 		{"POST", config.OpsOperational},    // rollback, restart
 		{"PATCH", config.OpsConfiguration}, // env, labels, resources, etc.
 		{"DELETE", config.OpsImpactful},    // remove
@@ -127,7 +125,7 @@ func (h *Handlers) setAllow(
 
 	hasPatch := false
 	for _, spec := range resourceWriteMethods[resourceType] {
-		if h.operationsLevel >= spec.tier && canWrite {
+		if h.levelFor(r) >= spec.tier && canWrite {
 			methods = append(methods, spec.method)
 			if spec.method == "PATCH" {
 				hasPatch = true
@@ -155,7 +153,7 @@ func (h *Handlers) setAllowSubResource(
 	resourceExpr string,
 ) {
 	methods := []string{"GET", "HEAD"}
-	if h.operationsLevel >= tier {
+	if h.levelFor(r) >= tier {
 		id := auth.IdentityFromContext(r.Context())
 		if h.acl.Can(id, "write", resourceExpr) {
 			methods = append(methods, method)
@@ -177,7 +175,7 @@ var listCreateMethods = map[string]config.OperationsLevel{
 func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resourceType string) {
 	methods := []string{"GET", "HEAD"}
 
-	if tier, ok := listCreateMethods[resourceType]; ok && h.operationsLevel >= tier {
+	if tier, ok := listCreateMethods[resourceType]; ok && h.levelFor(r) >= tier {
 		id := auth.IdentityFromContext(r.Context())
 		if h.acl.Can(id, "write", resourceType+":*") {
 			methods = append(methods, "POST")

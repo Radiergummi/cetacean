@@ -7,10 +7,16 @@ import (
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
+// xForwarded is realIP in the default mode.
+func xForwarded(trusted []netip.Prefix) func(http.Handler) http.Handler {
+	return realIP(trusted, config.XForwardedHeaders)
+}
+
 func TestRealIP_NoTrustedProxies(t *testing.T) {
-	handler := realIP(nil)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	handler := xForwarded(nil)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		if r.RemoteAddr != "203.0.113.1:12345" {
 			t.Errorf("RemoteAddr changed unexpectedly: %s", r.RemoteAddr)
 		}
@@ -24,7 +30,7 @@ func TestRealIP_NoTrustedProxies(t *testing.T) {
 
 func TestRealIP_UntrustedPeer(t *testing.T) {
 	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
-	handler := realIP(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	handler := xForwarded(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		if r.RemoteAddr != "203.0.113.1:12345" {
 			t.Errorf("RemoteAddr changed for untrusted peer: %s", r.RemoteAddr)
 		}
@@ -38,7 +44,7 @@ func TestRealIP_UntrustedPeer(t *testing.T) {
 
 func TestRealIP_TrustedPeer(t *testing.T) {
 	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
-	handler := realIP(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	handler := xForwarded(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		if r.RemoteAddr != "198.51.100.1:54321" {
 			t.Errorf("expected real client IP, got %s", r.RemoteAddr)
 		}
@@ -55,7 +61,7 @@ func TestRealIP_MultiHopChain(t *testing.T) {
 		netip.MustParsePrefix("10.0.0.0/8"),
 		netip.MustParsePrefix("172.16.0.0/12"),
 	}
-	handler := realIP(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	handler := xForwarded(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		if r.RemoteAddr != "203.0.113.50:9999" {
 			t.Errorf("expected rightmost non-trusted IP, got %s", r.RemoteAddr)
 		}
@@ -70,7 +76,7 @@ func TestRealIP_MultiHopChain(t *testing.T) {
 
 func TestRealIP_NoXFF(t *testing.T) {
 	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
-	handler := realIP(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	handler := xForwarded(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		if r.RemoteAddr != "10.0.0.1:12345" {
 			t.Errorf("RemoteAddr changed without XFF: %s", r.RemoteAddr)
 		}
@@ -83,7 +89,7 @@ func TestRealIP_NoXFF(t *testing.T) {
 
 func TestRealIP_AllTrustedInXFF(t *testing.T) {
 	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
-	handler := realIP(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	handler := xForwarded(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		if r.RemoteAddr != "10.0.0.1:12345" {
 			t.Errorf("RemoteAddr changed when all XFF entries are trusted: %s", r.RemoteAddr)
 		}
@@ -97,7 +103,7 @@ func TestRealIP_AllTrustedInXFF(t *testing.T) {
 
 func TestRealIP_PreservesPort(t *testing.T) {
 	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
-	handler := realIP(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	handler := xForwarded(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		if r.RemoteAddr != "203.0.113.1:8080" {
 			t.Errorf("expected port preserved from peer, got %s", r.RemoteAddr)
 		}
@@ -111,7 +117,7 @@ func TestRealIP_PreservesPort(t *testing.T) {
 
 func TestRealIP_IPv6(t *testing.T) {
 	trusted := []netip.Prefix{netip.MustParsePrefix("fd00::/8")}
-	handler := realIP(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	handler := xForwarded(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		if r.RemoteAddr != "[2001:db8::1]:443" {
 			t.Errorf("expected IPv6 client, got %s", r.RemoteAddr)
 		}
@@ -129,7 +135,7 @@ func TestRealIP_IPv6(t *testing.T) {
 func TestRealIP_RecordsVerdictOnOriginalPeer(t *testing.T) {
 	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
 	called := false
-	handler := realIP(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	handler := xForwarded(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		called = true
 
 		peer, ok := auth.PeerFromContext(r.Context())
@@ -196,7 +202,7 @@ func TestRealIP_RecordsUntrustedVerdict(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
 			r.RemoteAddr = tt.remoteAddr
 			r.Header.Set("X-Forwarded-For", "198.51.100.1")
-			realIP(tt.trusted)(inner).ServeHTTP(httptest.NewRecorder(), r)
+			xForwarded(tt.trusted)(inner).ServeHTTP(httptest.NewRecorder(), r)
 
 			if !called {
 				t.Fatal("the wrapped handler never ran, so nothing was asserted")
@@ -205,10 +211,10 @@ func TestRealIP_RecordsUntrustedVerdict(t *testing.T) {
 	}
 }
 
-// TestRealIP_ClientResolution covers what RemoteAddr is rewritten to across
-// both forwarding headers. The peer is always the trusted proxy 10.0.0.1:9999,
-// so the port stays 9999; an empty want means RemoteAddr is left as it
-// arrived.
+// TestRealIP_ClientResolution covers what RemoteAddr is rewritten to under
+// each forwarding header family. The peer is always the trusted proxy
+// 10.0.0.1:9999, so the port stays 9999; an empty want means RemoteAddr is
+// left as it arrived.
 func TestRealIP_ClientResolution(t *testing.T) {
 	trusted := []netip.Prefix{
 		netip.MustParsePrefix("10.0.0.0/8"),
@@ -217,23 +223,52 @@ func TestRealIP_ClientResolution(t *testing.T) {
 
 	tests := []struct {
 		name      string
+		headers   config.ForwardedHeaders
 		forwarded []string
 		xff       string
 		want      string
 	}{
 		{
+			name:    "X-Forwarded-For names the client",
+			headers: config.XForwardedHeaders,
+			xff:     "203.0.113.50",
+			want:    "203.0.113.50:9999",
+		},
+		{
+			name:      "a client-supplied Forwarded cannot outrank the proxy's chain",
+			headers:   config.XForwardedHeaders,
+			forwarded: []string{"for=203.0.113.50"},
+			xff:       "198.51.100.7",
+			want:      "198.51.100.7:9999",
+		},
+		{
+			name:      "a client-supplied Forwarded alone leaves the peer alone",
+			headers:   config.XForwardedHeaders,
+			forwarded: []string{"for=203.0.113.50"},
+			want:      "",
+		},
+		{
 			name:      "Forwarded names the client",
+			headers:   config.RFC7239Headers,
 			forwarded: []string{"for=203.0.113.50"},
 			want:      "203.0.113.50:9999",
 		},
 		{
-			name:      "Forwarded is preferred over X-Forwarded-For",
+			name:      "a client-supplied X-Forwarded-For cannot outrank the proxy's chain",
+			headers:   config.RFC7239Headers,
 			forwarded: []string{"for=203.0.113.50"},
 			xff:       "198.51.100.7",
 			want:      "203.0.113.50:9999",
 		},
 		{
-			name: "Forwarded chain walks right to left past trusted hops",
+			name:    "a client-supplied X-Forwarded-For alone leaves the peer alone",
+			headers: config.RFC7239Headers,
+			xff:     "198.51.100.7",
+			want:    "",
+		},
+		{
+			name:    "Forwarded chain walks right to left past trusted hops",
+			headers: config.RFC7239Headers,
 			forwarded: []string{
 				`for=203.0.113.50;proto=https, for="172.16.0.5:4711", for=10.0.0.2`,
 			},
@@ -241,39 +276,46 @@ func TestRealIP_ClientResolution(t *testing.T) {
 		},
 		{
 			name:      "quoted IPv6 with port",
+			headers:   config.RFC7239Headers,
 			forwarded: []string{`for="[2001:db8::1]:8080", for=10.0.0.2`},
 			want:      "[2001:db8::1]:9999",
 		},
 		{
 			name:      "an anonymised hop is read past",
+			headers:   config.RFC7239Headers,
 			forwarded: []string{"for=203.0.113.50, for=unknown, for=_hidden"},
 			want:      "203.0.113.50:9999",
 		},
 		{
-			name:      "Forwarded carrying no for parameter falls back to X-Forwarded-For",
+			name:      "Forwarded carrying no for parameter discloses no client",
+			headers:   config.RFC7239Headers,
 			forwarded: []string{"proto=https;host=example.com"},
 			xff:       "198.51.100.7",
-			want:      "198.51.100.7:9999",
+			want:      "",
 		},
 		{
-			name:      "Forwarded naming no address falls back to X-Forwarded-For",
+			name:      "Forwarded naming no address discloses no client",
+			headers:   config.RFC7239Headers,
 			forwarded: []string{"for=unknown, for=_hidden"},
 			xff:       "198.51.100.7",
-			want:      "198.51.100.7:9999",
+			want:      "",
 		},
 		{
 			name:      "an IPv4-mapped hop is recognised as the trusted proxy it is",
+			headers:   config.RFC7239Headers,
 			forwarded: []string{"for=203.0.113.50, for=\"[::ffff:10.0.0.2]\""},
 			want:      "203.0.113.50:9999",
 		},
 		{
 			name:      "every Forwarded node trusted leaves the peer alone",
+			headers:   config.RFC7239Headers,
 			forwarded: []string{"for=10.0.0.2, for=172.16.0.5"},
 			want:      "",
 		},
 		{
-			name: "no forwarding header leaves the peer alone",
-			want: "",
+			name:    "no forwarding header leaves the peer alone",
+			headers: config.XForwardedHeaders,
+			want:    "",
 		},
 	}
 
@@ -301,7 +343,61 @@ func TestRealIP_ClientResolution(t *testing.T) {
 				r.Header.Set("X-Forwarded-For", tt.xff)
 			}
 
-			realIP(trusted)(inner).ServeHTTP(httptest.NewRecorder(), r)
+			realIP(trusted, tt.headers)(inner).ServeHTTP(httptest.NewRecorder(), r)
+		})
+	}
+}
+
+// TestRealIP_DropsUnwrittenForwarding: the family the proxy does not write is
+// gone by the time any handler runs, whatever the peer.
+func TestRealIP_DropsUnwrittenForwarding(t *testing.T) {
+	tests := map[string]struct {
+		headers config.ForwardedHeaders
+		gone    []string
+		kept    string
+	}{
+		"x-forwarded drops Forwarded": {
+			headers: config.XForwardedHeaders,
+			gone:    []string{"Forwarded"},
+			kept:    "X-Forwarded-For",
+		},
+		"forwarded drops the X-Forwarded family": {
+			headers: config.RFC7239Headers,
+			gone:    []string{"X-Forwarded-For", "X-Forwarded-Proto", "X-Forwarded-Host"},
+			kept:    "Forwarded",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			called := false
+			inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				called = true
+
+				for _, header := range tt.gone {
+					if got := r.Header.Get(header); got != "" {
+						t.Errorf("%s = %q, want it dropped", header, got)
+					}
+				}
+				if r.Header.Get(tt.kept) == "" {
+					t.Errorf("%s was dropped too", tt.kept)
+				}
+			})
+
+			// Untrusted, because the drop does not consult the verdict.
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.RemoteAddr = "203.0.113.1:9999"
+			r.Header.Set("Forwarded", "for=203.0.113.50;proto=https;host=evil.example")
+			r.Header.Set("X-Forwarded-For", "198.51.100.7")
+			r.Header.Set("X-Forwarded-Proto", "https")
+			r.Header.Set("X-Forwarded-Host", "cetacean.example.com")
+
+			trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
+			realIP(trusted, tt.headers)(inner).ServeHTTP(httptest.NewRecorder(), r)
+
+			if !called {
+				t.Fatal("the wrapped handler never ran, so nothing was asserted")
+			}
 		})
 	}
 }

@@ -13,25 +13,41 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
-	"github.com/radiergummi/cetacean/internal/mcp/oauth"
+	"github.com/radiergummi/cetacean/internal/oauth"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
-// The base path reaches the published URLs, not the routes: the prefix is
-// already stripped by the time the mux sees a request.
-func withOAuthRoutes(basePath string) routerOption {
-	srv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:      "https://swarm.example",
-		BasePath:    basePath,
-		MCPResource: "https://swarm.example" + basePath + "/mcp",
-		MCP: config.MCPConfig{
+// oauthTestRoot is the signing root every OAuth fixture in this package shares,
+// so a token minted against one server verifies against another built the same
+// way.
+const oauthTestRoot = "cetacean-test-root-32-bytes-ok!!"
+
+// tokenTestServer is an authorization server wired the way main.go wires one:
+// the deployment root and /mcp, as two separate protected resources.
+func tokenTestServer(issuer, basePath string) *oauth.Server {
+	return oauth.NewServer(oauth.ServerConfig{
+		Issuer:   issuer,
+		BasePath: basePath,
+		Resources: []oauth.Resource{
+			{Path: "", Realm: "cetacean"},
+			{Path: "/mcp", Realm: "cetacean-mcp"},
+		},
+		OAuth: config.OAuthConfig{
 			AccessTokenTTL:  time.Hour,
 			RefreshTokenTTL: 720 * time.Hour,
 			DCREnabled:      true,
 			DCRRateLimit:    10,
 			DCRMaxClients:   100,
 		},
-		SigningKey: []byte("cetacean-test-root-32-bytes-ok!!"),
+		SigningKey: []byte(oauthTestRoot),
 	})
+}
+
+// The base path reaches the published URLs, not the routes: the prefix is
+// already stripped by the time the mux sees a request.
+func withOAuthRoutes(basePath string) routerOption {
+	srv := tokenTestServer("https://swarm.example", basePath)
 
 	return func(cfg *RouterConfig) {
 		cfg.OAuthRoutes = srv.RegisterRoutes
@@ -41,6 +57,8 @@ func withOAuthRoutes(basePath string) routerOption {
 // A route the mux never matches is answered by the SPA with 200 text/html, so
 // anything weaker than a content-type assertion passes against an HTML page.
 func TestAdvertisedJWKSURIServesAKeySet(t *testing.T) {
+	spec.Satisfies(t, "oauth/rfc9068/as-advertises-keys-and-issuer")
+
 	for _, basePath := range []string{"", "/cetacean"} {
 		t.Run("basePath="+basePath, func(t *testing.T) {
 			router := newTestRouterWithConfig(

@@ -37,17 +37,9 @@ func EnrichTasks(c *cache.Cache, tasks []swarm.Task) []EnrichedTask {
 }
 
 // EnrichTasksWithin names each task's parents from the slices given rather than
-// from the cache, leaving a name empty when the parent is not among them.
-//
-// It exists so a caller that must not disclose every parent name can pass only
-// the subset it may: internal/mcp hands it the ACL-filtered services and nodes,
-// so an enriched task never carries a name from behind the caller's grants —
-// the rule TaskDigest and RowsForTasks already follow. The task's own record
-// still carries the parent IDs, so nothing the caller could otherwise reach is
-// withheld.
-//
-// It is also the cheaper shape at cluster scale: EnrichTasks takes two cache
-// read locks per task, this one builds two maps and takes none.
+// from the cache, leaving a name empty when the parent is not among them — so a
+// caller passing its ACL-filtered services and nodes never carries a name from
+// behind its grants. It is also cheaper: EnrichTasks locks twice per task.
 func EnrichTasksWithin(
 	tasks []swarm.Task,
 	services []swarm.Service,
@@ -75,19 +67,10 @@ func EnrichTasksWithin(
 	return out
 }
 
-// TaskName is what to call a task, following Docker's own convention: a
-// replicated task is "<service>.<slot>", a global one "<service>.<node>" since
-// a global service has no slot to distinguish its replicas by.
-//
-// It is shared rather than inlined because a task's name was being derived
-// three different ways in this package — a list row named a task after its
-// service alone, so every replica of one service rendered identically, while
-// the digest and the search results named the same records "<service>.<slot>".
-// One tool reporting two names for one record is exactly the drift this
-// package exists to prevent, so the rule lives here and has one caller each.
-//
-// service is a pointer because a caller may hold a task whose parent it cannot
-// read; a nil service falls back to the task's own ID, which is always present.
+// TaskName is what to call a task, following Docker's convention: "<service>.
+// <slot>", or "<service>.<node>" for a global service. Shared so a row, a
+// digest and a search result cannot name one record differently. service is a
+// pointer because a caller may hold a task whose parent it cannot read.
 func TaskName(task swarm.Task, service *swarm.Service) string {
 	if service == nil {
 		return task.ID

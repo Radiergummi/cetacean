@@ -49,7 +49,6 @@ func TestParseFlags_AllFlags(t *testing.T) {
 		"-auth-headers-groups", "X-Groups",
 		"-auth-headers-secret-header", "X-Secret",
 		"-auth-headers-secret-value", "s3cret",
-		"-auth-headers-trusted-proxies", "10.0.0.0/8",
 		"-tls-cert", "/etc/cert.pem",
 		"-tls-key", "/etc/key.pem",
 	}
@@ -125,9 +124,6 @@ func TestParseFlags_AllFlags(t *testing.T) {
 	}
 	if flags.HeadersSecretValue == nil || *flags.HeadersSecretValue != "s3cret" {
 		t.Error("HeadersSecretValue not set correctly")
-	}
-	if flags.HeadersTrustedProxies == nil || *flags.HeadersTrustedProxies != "10.0.0.0/8" {
-		t.Error("HeadersTrustedProxies not set correctly")
 	}
 	// TLS flags
 	if flags.TLSCert == nil || *flags.TLSCert != "/etc/cert.pem" {

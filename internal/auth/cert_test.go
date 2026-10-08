@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -105,8 +106,8 @@ func TestCertProvider_NoTLS(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 
-	var authErr *AuthError
-	if !errors.As(err, &authErr) {
+	authErr, ok := errors.AsType[*AuthError](err)
+	if !ok {
 		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
 	if authErr.Status != http.StatusForbidden || authErr.Code != "AUT005" {
@@ -129,8 +130,7 @@ func TestCertProvider_EmptyPeerCertificates(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 
-	var authErr *AuthError
-	if !errors.As(err, &authErr) {
+	if _, ok := errors.AsType[*AuthError](err); !ok {
 		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
 }
@@ -178,8 +178,7 @@ func TestCertProvider_EmptySubjectIsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for cert with no identifiable subject")
 	}
-	var authErr *AuthError
-	if !errors.As(err, &authErr) {
+	if _, ok := errors.AsType[*AuthError](err); !ok {
 		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
 }
@@ -308,8 +307,7 @@ func TestCertProvider_MultipleSPIFFEURIs_Rejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for multiple SPIFFE URIs")
 	}
-	var authErr *AuthError
-	if !errors.As(err, &authErr) {
+	if _, ok := errors.AsType[*AuthError](err); !ok {
 		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
 }
@@ -412,9 +410,14 @@ func TestCertProvider_DNSSANsOnly_NoSubject(t *testing.T) {
 
 func TestCertProvider_MiddlewareRefusesWithoutChallenge(t *testing.T) {
 	p := &CertProvider{}
-	handler := Middleware(p)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("inner handler should not be called")
-	}))
+	handler := Middleware(
+		p,
+		APITokens{},
+	)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Fatal("inner handler should not be called")
+		}),
+	)
 
 	r := httptest.NewRequest("GET", "/nodes", nil)
 	w := httptest.NewRecorder()
@@ -475,6 +478,46 @@ func TestCertProvider_WhoamiRefusesAsTheMiddlewareDoes(t *testing.T) {
 	}
 }
 
+// A refusal that named its own code keeps it. The resource challenge is added
+// because it is informative, but it names a credential that cannot answer a
+// rejected certificate: promoted to 401, a conformant client would follow
+// resource_metadata to /oauth/authorize, which demands that same certificate.
+func TestCertProvider_ResourceChallengeDoesNotRewriteTheRefusal(t *testing.T) {
+	tokens := APITokens{Verifier: &stubVerifier{}, Resource: "https://cetacean.test"}
+
+	w, _ := serve(&CertProvider{}, tokens, httptest.NewRequest("GET", "/nodes", nil))
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "client certificate required") {
+		t.Errorf("detail = %q, want the certificate's own reason", body)
+	}
+
+	var named bool
+	for _, c := range w.Result().Header.Values("WWW-Authenticate") {
+		if strings.Contains(c, "resource_metadata=") {
+			named = true
+		}
+	}
+	if !named {
+		t.Error("403 with no challenge naming the resource's metadata")
+	}
+
+	// The registry code reaches a registered writer only; the fallback the
+	// assertions above read carries the status and detail instead.
+	prev := globalErrorWriter.Load()
+	t.Cleanup(func() { globalErrorWriter.Store(prev) })
+
+	var code string
+	SetErrorWriter(func(_ http.ResponseWriter, _ *http.Request, c, _ string) { code = c })
+	serve(&CertProvider{}, tokens, httptest.NewRequest("GET", "/nodes", nil))
+
+	if code != "AUT005" {
+		t.Errorf("code = %q, want AUT005", code)
+	}
+}
+
 // Verify CertProvider implements Provider interface.
 var _ Provider = (*CertProvider)(nil)
 
@@ -495,6 +538,11 @@ func TestValidateSPIFFEID(t *testing.T) {
 		{"valid root path", "spiffe://example.com/workload", false},
 		{"valid no path", "spiffe://example.com", false},
 		{"valid trust domain chars", "spiffe://my-org.example_co/svc", false},
+		{"trust domain range ends", "spiffe://az09/svc", false},
+		{"trust domain at 255", "spiffe://" + strings.Repeat("a", 255) + "/svc", false},
+		{"trust domain at 256", "spiffe://" + strings.Repeat("a", 256) + "/svc", true},
+		{"id at 2048 bytes", "spiffe://example.com/" + strings.Repeat("a", 2027), false},
+		{"id at 2049 bytes", "spiffe://example.com/" + strings.Repeat("a", 2028), true},
 		{"empty trust domain", "spiffe:///workload", true},
 		{"uppercase trust domain", "spiffe://Example.COM/workload", true},
 		{"trust domain with port", "spiffe://example.com:8080/workload", true},

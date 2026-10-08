@@ -3,9 +3,17 @@ package api
 import (
 	"errors"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestApplyJSONPatch_Add(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc6902/op-member-present",
+		"http/rfc6902/path-member-present",
+		"http/rfc6902/add-carries-a-value",
+	)
+
 	m := map[string]string{"a": "1"}
 	result, err := applyJSONPatch(m, []PatchOp{{Op: "add", Path: "b", Value: "2"}})
 	if err != nil {
@@ -43,6 +51,10 @@ func TestApplyJSONPatch_Remove(t *testing.T) {
 }
 
 func TestApplyJSONPatch_RemoveNonExistent(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc6902/remove-target-exists",
+	)
+
 	m := map[string]string{"a": "1"}
 	_, err := applyJSONPatch(m, []PatchOp{{Op: "remove", Path: "z"}})
 	if err == nil {
@@ -51,6 +63,10 @@ func TestApplyJSONPatch_RemoveNonExistent(t *testing.T) {
 }
 
 func TestApplyJSONPatch_Replace(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc6902/replace-carries-a-value",
+	)
+
 	m := map[string]string{"a": "1"}
 	result, err := applyJSONPatch(m, []PatchOp{{Op: "replace", Path: "a", Value: "2"}})
 	if err != nil {
@@ -62,6 +78,10 @@ func TestApplyJSONPatch_Replace(t *testing.T) {
 }
 
 func TestApplyJSONPatch_ReplaceNonExistent(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc6902/replace-target-exists",
+	)
+
 	m := map[string]string{"a": "1"}
 	_, err := applyJSONPatch(m, []PatchOp{{Op: "replace", Path: "z", Value: "2"}})
 	if err == nil {
@@ -70,6 +90,10 @@ func TestApplyJSONPatch_ReplaceNonExistent(t *testing.T) {
 }
 
 func TestApplyJSONPatch_Test_Pass(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc6902/test-carries-a-value",
+	)
+
 	m := map[string]string{"a": "1"}
 	_, err := applyJSONPatch(m, []PatchOp{{Op: "test", Path: "a", Value: "1"}})
 	if err != nil {
@@ -78,30 +102,40 @@ func TestApplyJSONPatch_Test_Pass(t *testing.T) {
 }
 
 func TestApplyJSONPatch_Test_Fail(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc6902/test-compares-equal",
+	)
+
 	m := map[string]string{"a": "1"}
 	_, err := applyJSONPatch(m, []PatchOp{{Op: "test", Path: "a", Value: "99"}})
 	if err == nil {
 		t.Fatal("expected error on test failure")
 	}
-	var tfe *testFailedError
-	if !errors.As(err, &tfe) {
+	if _, ok := errors.AsType[*testFailedError](err); !ok {
 		t.Errorf("expected testFailedError, got %T: %v", err, err)
 	}
 }
 
 func TestApplyJSONPatch_Test_Missing(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc5789/a-failed-patch-changes-nothing",
+	)
+
 	m := map[string]string{"a": "1"}
 	_, err := applyJSONPatch(m, []PatchOp{{Op: "test", Path: "z", Value: "1"}})
 	if err == nil {
 		t.Fatal("expected error on missing key test")
 	}
-	var tfe *testFailedError
-	if !errors.As(err, &tfe) {
+	if _, ok := errors.AsType[*testFailedError](err); !ok {
 		t.Errorf("expected testFailedError, got %T: %v", err, err)
 	}
 }
 
 func TestApplyJSONPatch_Move_Unsupported(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc6902/op-is-one-of-six",
+	)
+
 	m := map[string]string{"a": "1"}
 	_, err := applyJSONPatch(m, []PatchOp{{Op: "move", Path: "b"}})
 	if err == nil {
@@ -167,6 +201,10 @@ func TestApplyJSONPatch_EmptyPath(t *testing.T) {
 }
 
 func TestApplyJSONPatch_DoesNotMutateInput(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc6902/failure-applies-nothing",
+	)
+
 	m := map[string]string{"a": "1"}
 	_, err := applyJSONPatch(m, []PatchOp{
 		{Op: "add", Path: "b", Value: "2"},
@@ -184,6 +222,10 @@ func TestApplyJSONPatch_DoesNotMutateInput(t *testing.T) {
 }
 
 func TestApplyJSONPatch_MultipleOps(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc5789/patch-is-atomic",
+	)
+
 	m := map[string]string{"a": "1"}
 	result, err := applyJSONPatch(m, []PatchOp{
 		{Op: "add", Path: "b", Value: "2"},
@@ -206,8 +248,7 @@ func TestTestFailedError(t *testing.T) {
 		map[string]string{"k": "a"},
 		[]PatchOp{{Op: "test", Path: "k", Value: "b"}},
 	)
-	var tfe *testFailedError
-	if !errors.As(err, &tfe) {
+	if _, ok := errors.AsType[*testFailedError](err); !ok {
 		t.Fatal("expected testFailedError")
 	}
 }

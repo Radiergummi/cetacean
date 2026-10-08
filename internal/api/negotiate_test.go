@@ -9,6 +9,8 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/api/linkset"
 	"github.com/radiergummi/cetacean/internal/cache"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // parseAccept is the whole header-to-type path in one call. negotiate drives
@@ -18,6 +20,8 @@ func parseAccept(accept string) ContentType {
 }
 
 func TestNegotiate(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/a-q-parameter-is-a-weight-wherever-it-sits")
+
 	// Helper: runs a request through the negotiate middleware and returns
 	// the resolved ContentType and the path seen by the inner handler.
 	run := func(path string, accept string) (ContentType, string) {
@@ -431,12 +435,10 @@ func refuse(t *testing.T, router http.Handler, path, accept string) ProblemDetai
 	return problem
 }
 
-// TestUnservedTypeIsRefusedByTheEndpoint: an endpoint refuses every type it
-// does not serve, including one another endpoint does — a graph format
-// resolves successfully here and is no more servable for it.
-//
-// /services and /cluster differ in whether they carry a stream, and /api,
-// /events and /topology dispatch without the helpers.
+// An endpoint refuses every type it does not serve, including one another
+// endpoint does: a graph format resolves here and is no more servable for it.
+// The rows differ in how they dispatch — /services and /cluster in whether
+// they carry a stream, and /api, /events and /topology without the helpers.
 func TestUnservedTypeIsRefusedByTheEndpoint(t *testing.T) {
 	router := newTestRouterWithCache(t, cache.New(nil))
 
@@ -475,12 +477,10 @@ func TestRefusalNamesOnlyWhatTheEndpointServes(t *testing.T) {
 	}
 }
 
-// TestSingleRepresentationDocumentsNeedNoTableRow holds both halves of the
-// claim together: neither media type resolves against supportedTypes, and each
-// document still answers a client asking for it. Asserting only the second
-// half is satisfied by putting the row back, which is the thing being removed.
-//
-// The fetch helpers assert the status and the content type.
+// Holds both halves of the claim together: neither media type resolves against
+// supportedTypes, and each document still answers a client asking for it.
+// Asserting only the second half is satisfied by putting the row back, which is
+// the thing being removed.
 func TestSingleRepresentationDocumentsNeedNoTableRow(t *testing.T) {
 	router := newTestRouterWithCache(t, cache.New(nil))
 
@@ -495,4 +495,71 @@ func TestSingleRepresentationDocumentsNeedNoTableRow(t *testing.T) {
 
 	fetchOpenSearch(t, router, openSearchPath)
 	fetchCatalog(t, router, apiCatalogPath, linkset.MediaType)
+}
+
+// The YAML suffixes read only where a YAML representation exists. Everywhere
+// else they belong to the identifier: prometheus.yml is what an operator calls
+// a volume, and a name read as a suffix leaves the volume unaddressable.
+func TestNegotiate_YAMLSuffixOnlyWhereYAMLIsServed(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		want ContentType
+		left string
+	}{
+		{"/stacks/web.yaml", ContentTypeYAML, "/stacks/web"},
+		{"/services/api.yml", ContentTypeYAML, "/services/api"},
+		{"/api.yaml", ContentTypeYAML, "/api"},
+		{"/api/asyncapi.yml", ContentTypeYAML, "/api/asyncapi"},
+		// The list endpoint has no compose document, but the refusal is its
+		// own to make: the suffix still resolves.
+		{"/services.yaml", ContentTypeYAML, "/services"},
+		{"/volumes/prometheus.yml", ContentTypeJSON, "/volumes/prometheus.yml"},
+		{"/configs/app.yaml", ContentTypeJSON, "/configs/app.yaml"},
+		{"/networks/mesh.yml", ContentTypeJSON, "/networks/mesh.yml"},
+	} {
+		var captured ContentType
+		var capturedPath string
+		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			captured, capturedPath = ContentTypeFromContext(r.Context()), r.URL.Path
+		})
+
+		req := httptest.NewRequest("GET", tc.path, nil)
+		req.Header.Set("Accept", "application/json")
+		negotiate(inner).ServeHTTP(httptest.NewRecorder(), req)
+
+		if captured != tc.want {
+			t.Errorf("%s negotiated as %v, want %v", tc.path, captured, tc.want)
+		}
+		if capturedPath != tc.left {
+			t.Errorf("%s left path %q, want %q", tc.path, capturedPath, tc.left)
+		}
+	}
+}
+
+// A middleware that matches on a path matches the one the mux will route, so
+// negotiate strips the suffix before any of them run. /-/resync is the case
+// that proves it: it is the one exception to the /-/ exemption, and with the
+// suffix still on, the prefix matched and the exception did not.
+func TestAnExtensionSuffixDoesNotSkipAuthentication(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{func(cfg *RouterConfig) { cfg.AuthProvider = &refusingProvider{} }},
+		withCache(cache.New(nil)),
+	)
+
+	for _, path := range []string{
+		"/-/resync",
+		"/-/resync.json",
+		"/-/resync.html",
+		"/-/resync.csv",
+	} {
+		t.Run(path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path, nil))
+
+			if w.Code != http.StatusUnauthorized {
+				t.Errorf("status = %d, want 401: %s", w.Code, w.Body.String())
+			}
+		})
+	}
 }

@@ -4,7 +4,6 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -243,7 +242,6 @@ func TestLoadAuth_HeadersHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_GROUPS", "X-Groups")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Secret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
-	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8")
 
 	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
@@ -257,78 +255,11 @@ func TestLoadAuth_HeadersHappyPath(t *testing.T) {
 	}
 }
 
-func TestLoadAuth_HeadersNoTrustedProxies(t *testing.T) {
-	t.Setenv("CETACEAN_AUTH_MODE", "headers")
-	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
-	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Proxy-Secret")
-	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
-
-	// The check moved to main.go, where the general CETACEAN_TRUSTED_PROXIES
-	// is resolved and can supply the value.
-	cfg, err := LoadAuth(nil, nil, "", "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(cfg.Headers.TrustedProxies) != 0 {
-		t.Errorf("expected empty TrustedProxies, got %v", cfg.Headers.TrustedProxies)
-	}
-}
-
-func TestLoadAuth_HeadersTrustedProxiesOnly(t *testing.T) {
-	t.Setenv("CETACEAN_AUTH_MODE", "headers")
-	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
-	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8, 192.168.1.1")
-
-	cfg, err := LoadAuth(nil, nil, "", "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(cfg.Headers.TrustedProxies) != 2 {
-		t.Fatalf("expected 2 trusted proxies, got %d", len(cfg.Headers.TrustedProxies))
-	}
-	if cfg.Headers.TrustedProxies[0].String() != "10.0.0.0/8" {
-		t.Errorf("proxy[0] = %s, want 10.0.0.0/8", cfg.Headers.TrustedProxies[0])
-	}
-	// Bare IP should be converted to /32.
-	if cfg.Headers.TrustedProxies[1].String() != "192.168.1.1/32" {
-		t.Errorf("proxy[1] = %s, want 192.168.1.1/32", cfg.Headers.TrustedProxies[1])
-	}
-}
-
-func TestLoadAuth_HeadersTrustedProxiesIPv6(t *testing.T) {
-	t.Setenv("CETACEAN_AUTH_MODE", "headers")
-	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
-	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "fd00::/8, ::1")
-
-	cfg, err := LoadAuth(nil, nil, "", "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(cfg.Headers.TrustedProxies) != 2 {
-		t.Fatalf("expected 2 trusted proxies, got %d", len(cfg.Headers.TrustedProxies))
-	}
-}
-
-func TestLoadAuth_HeadersTrustedProxiesInvalid(t *testing.T) {
-	t.Setenv("CETACEAN_AUTH_MODE", "headers")
-	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
-	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "not-an-ip")
-
-	_, err := LoadAuth(nil, nil, "", "")
-	if err == nil {
-		t.Fatal("expected error for invalid trusted proxy")
-	}
-	if !strings.Contains(err.Error(), "not a valid CIDR or IP address") {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestLoadAuth_HeadersBothSecretAndTrustedProxies(t *testing.T) {
+func TestLoadAuth_HeadersSecret(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "headers")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Secret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
-	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8")
 
 	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
@@ -336,9 +267,6 @@ func TestLoadAuth_HeadersBothSecretAndTrustedProxies(t *testing.T) {
 	}
 	if cfg.Headers.SecretValue != "s3cret" {
 		t.Errorf("unexpected secret: %q", cfg.Headers.SecretValue)
-	}
-	if len(cfg.Headers.TrustedProxies) != 1 {
-		t.Errorf("expected 1 trusted proxy, got %d", len(cfg.Headers.TrustedProxies))
 	}
 }
 
@@ -426,10 +354,9 @@ func TestLoadAuth_HeadersFromFile(t *testing.T) {
 		Auth: &fileAuth{
 			Mode: new("headers"),
 			Headers: &fileAuthHeaders{
-				Subject:        new("X-User"),
-				SecretHeader:   new("X-Secret"),
-				SecretValue:    new("s3cret"),
-				TrustedProxies: new("10.0.0.0/8"),
+				Subject:      new("X-User"),
+				SecretHeader: new("X-Secret"),
+				SecretValue:  new("s3cret"),
 			},
 		},
 	}
@@ -443,9 +370,6 @@ func TestLoadAuth_HeadersFromFile(t *testing.T) {
 	}
 	if cfg.Headers.SecretValue != "s3cret" {
 		t.Errorf("secret_value = %q, want s3cret", cfg.Headers.SecretValue)
-	}
-	if len(cfg.Headers.TrustedProxies) != 1 {
-		t.Fatalf("expected 1 trusted proxy, got %d", len(cfg.Headers.TrustedProxies))
 	}
 }
 
@@ -525,7 +449,6 @@ func TestLoadAuth_HeadersSecretFromFile(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Secret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE_FILE", secretPath)
-	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8")
 
 	cfg, err := LoadAuth(nil, nil, "", "")
 	if err != nil {
@@ -687,83 +610,27 @@ func TestValidateCertMode(t *testing.T) {
 	}
 }
 
-func TestResolveTrustedProxies(t *testing.T) {
-	current := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
-	deprecated := []netip.Prefix{netip.MustParsePrefix("192.168.0.0/16")}
-
+func TestRequireTrustedProxies(t *testing.T) {
 	tests := []struct {
-		name         string
-		current      []netip.Prefix
-		deprecated   []netip.Prefix
-		want         []netip.Prefix
-		wantWarnings int
-		wantErr      bool
+		name    string
+		proxies []netip.Prefix
+		wantErr bool
 	}{
-		{"only the current setting", current, nil, current, 0, false},
-		{"only the deprecated setting", nil, deprecated, deprecated, 1, false},
-		{"both, so the current one wins", current, deprecated, current, 1, false},
-		{"neither, so no request could authenticate", nil, nil, nil, 0, true},
+		{"configured", []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}, false},
+		{"unset, so no request could authenticate", nil, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, warnings, err := ResolveTrustedProxies(tt.current, tt.deprecated)
-
-			if (err != nil) != tt.wantErr {
+			if err := RequireTrustedProxies(tt.proxies); (err != nil) != tt.wantErr {
 				t.Fatalf("error = %v, wantErr = %v", err, tt.wantErr)
 			}
-
-			if !slices.Equal(got, tt.want) {
-				t.Errorf("resolved = %v, want %v", got, tt.want)
-			}
-
-			if len(warnings) != tt.wantWarnings {
-				t.Errorf("warnings = %v, want %d", warnings, tt.wantWarnings)
-			}
 		})
 	}
 }
 
-// A warning an operator cannot act on is noise, so each names both spellings:
-// the one to remove and the one to keep.
-func TestResolveTrustedProxiesWarningsNameBothSettings(t *testing.T) {
-	current := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
-	deprecated := []netip.Prefix{netip.MustParsePrefix("192.168.0.0/16")}
-
-	cases := []struct {
-		name       string
-		current    []netip.Prefix
-		deprecated []netip.Prefix
-	}{
-		{"superseded", current, deprecated},
-		{"still in use", nil, deprecated},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			_, warnings, err := ResolveTrustedProxies(tt.current, tt.deprecated)
-			if err != nil {
-				t.Fatalf("ResolveTrustedProxies: %v", err)
-			}
-
-			if len(warnings) != 1 {
-				t.Fatalf("warnings = %v, want exactly one", warnings)
-			}
-
-			for _, setting := range []string{
-				"auth.headers.trusted_proxies",
-				"server.trusted_proxies",
-			} {
-				if !strings.Contains(warnings[0], setting) {
-					t.Errorf("warning %q does not name %s", warnings[0], setting)
-				}
-			}
-		})
-	}
-}
-
-func TestResolveTrustedProxiesErrorNamesTheSetting(t *testing.T) {
-	_, _, err := ResolveTrustedProxies(nil, nil)
+func TestRequireTrustedProxiesErrorNamesTheSetting(t *testing.T) {
+	err := RequireTrustedProxies(nil)
 	if err == nil {
 		t.Fatal("want an error when neither setting is configured")
 	}

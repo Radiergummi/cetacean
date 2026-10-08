@@ -21,7 +21,7 @@ command -v jq >/dev/null 2>&1 || {
 # frontend (`//go:embed frontend/dist/*`). Fail early with a clear message
 # instead of a confusing embed compile error when the frontend isn't built.
 if [ -z "$(ls -A "$repo_root/frontend/dist" 2>/dev/null)" ]; then
-  echo "error: frontend/dist is empty or missing. Run 'make build' (or 'cd frontend && npm run build') first." >&2
+  echo "error: frontend/dist is empty or missing. Run 'make build' (or 'pnpm --filter frontend build') first." >&2
   exit 1
 fi
 
@@ -41,18 +41,19 @@ toolbin="$tmp/cyclonedx-gomod"
 ( cd "$repo_root" && GOOS=linux GOARCH=amd64 "$toolbin" app -main . -json -licenses -output "$tmp/go.cdx.json" . )
 
 echo "==> npm packages (production only)"
-( cd "$repo_root/frontend" && npx --no-install cyclonedx-npm --omit dev --output-file "$tmp/npm.cdx.json" )
+# Read from the lockfile rather than the installed tree: cyclonedx-npm cannot
+# resolve a pnpm workspace, and of the generators that can, none carries the
+# tarball hashes through. See scripts/sbomnpm.
+( cd "$repo_root" && go run ./scripts/sbomnpm \
+    -bom-ref-prefix "frontend@$(jq -r .version frontend/package.json)" \
+    -out "$tmp/npm.cdx.json" )
 
-# cyclonedx-npm reads the *installed* tree, and npm stops reporting `integrity`
-# for a tree the frontend build has touched — so running this right after a
-# build yields an SBOM with no npm hashes at all. That is a silent loss of
-# supply-chain data, and it looks like ordinary dependency drift to the release
-# gate, so fail loudly and say how to fix it.
-if grep -q '"integrity"' "$repo_root/frontend/package-lock.json" \
-   && ! grep -q 'SHA-512' "$tmp/npm.cdx.json"; then
+# The hashes are the supply-chain half of the document and the lockfile is the
+# only place that records them, so a run that loses them must fail rather than
+# quietly publish less than it used to.
+if ! grep -q 'SHA-512' "$tmp/npm.cdx.json"; then
   echo "error: npm components came out with no integrity hashes." >&2
-  echo "  node_modules has been mutated since it was installed (usually by the" >&2
-  echo "  frontend build). Run 'cd frontend && npm ci' and try again." >&2
+  echo "  pnpm-lock.yaml records them; check it is present and current." >&2
   exit 1
 fi
 
@@ -75,6 +76,6 @@ echo "==> harvest license + notice texts"
 ( cd "$repo_root" && go run ./scripts/licensetexts \
     -sbom "$out" \
     -out "$repo_root/internal/api/sbom/licensetexts.json" \
-    -node-modules "$repo_root/frontend/node_modules" )
+    -node-modules "$repo_root/node_modules/.pnpm" )
 
 echo "wrote $out"

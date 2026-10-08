@@ -1,0 +1,4 @@
+{{- /* GitHub workflow commands, so each alert annotates its line on a PR. */ -}}
+{{- range .Files}}{{$path := .Path}}{{range .Alerts -}}
+::{{if eq .Severity "error"}}error{{else}}warning{{end}} file={{$path}},line={{.Line}},col={{index .Span 0}},title={{.Check}}::{{.Message | replace "%" "%25" | replace "\r" "%0D" | replace "\n" "%0A"}}
+{{end}}{{end -}}

@@ -1,0 +1,32 @@
+name: Node and pnpm
+description: Install the Node and pnpm versions this repository pins, and the workspace.
+
+inputs:
+  cache:
+    description: Restore and save the pnpm store. Off for jobs that publish signed artifacts.
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version-file: .nvmrc
+
+    # From packageManager, so the version lives in one place and pnpm is the
+    # one that wrote the lockfile. corepack reads the same field but is no
+    # longer bundled with every Node; npm always is.
+    - shell: bash
+      run: |
+        npm install -g "pnpm@$(node -p 'require("./package.json").packageManager.split("@")[1]')"
+        echo "PNPM_STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+    - if: inputs.cache == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ env.PNPM_STORE }}
+        key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: pnpm-${{ runner.os }}-
+
+    - shell: bash
+      run: pnpm install --frozen-lockfile

@@ -19,35 +19,42 @@ import (
 	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestPreconditionOnServiceEnv(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9110/if-match-is-evaluated-before-the-method",
+		"http/rfc9110/a-false-if-match-stops-the-method",
+		"http/rfc9110/a-failed-precondition-may-answer-412",
+		"http/rfc9110/preconditions-are-evaluated-before-the-action",
+	)
+
 	// stubEnvWriteClient lets a PATCH that reaches the handler actually
 	// succeed, so "admitted"/"unaffected" subtests can assert the real 200
 	// rather than merely "not 412" — a check a handler-side panic would pass
 	// just as well.
 	stubEnvWriteClient := &mockWriteClient{
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceEnvFn: func(
-				_ context.Context,
-				id string,
-				env map[string]string,
-			) (swarm.Service, error) {
-				envSlice := make([]string, 0, len(env))
-				for k, v := range env {
-					envSlice = append(envSlice, k+"="+v)
-				}
-				return swarm.Service{
-					ID:   id,
-					Meta: swarm.Meta{Version: swarm.Version{Index: 8}},
-					Spec: swarm.ServiceSpec{
-						Annotations: swarm.Annotations{Name: "web"},
-						TaskTemplate: swarm.TaskSpec{
-							ContainerSpec: &swarm.ContainerSpec{Env: envSlice},
-						},
+		updateServiceEnvFn: func(
+			_ context.Context,
+			id string,
+			env map[string]string,
+		) (swarm.Service, error) {
+			envSlice := make([]string, 0, len(env))
+			for k, v := range env {
+				envSlice = append(envSlice, k+"="+v)
+			}
+			return swarm.Service{
+				ID:      id,
+				Version: swarm.Version{Index: 8},
+				Spec: swarm.ServiceSpec{
+					Annotations: swarm.Annotations{Name: "web"},
+					TaskTemplate: swarm.TaskSpec{
+						ContainerSpec: &swarm.ContainerSpec{Env: envSlice},
 					},
-				}, nil
-			},
+				},
+			}, nil
 		},
 	}
 
@@ -55,8 +62,8 @@ func TestPreconditionOnServiceEnv(t *testing.T) {
 		t.Helper()
 		c := cache.New(nil)
 		c.SetService(swarm.Service{
-			ID:   "svc1",
-			Meta: swarm.Meta{Version: swarm.Version{Index: 7}},
+			ID:      "svc1",
+			Version: swarm.Version{Index: 7},
 			Spec: swarm.ServiceSpec{
 				Annotations: swarm.Annotations{Name: "web"},
 				TaskTemplate: swarm.TaskSpec{
@@ -119,7 +126,7 @@ func TestPreconditionOnServiceEnv(t *testing.T) {
 		}
 	})
 
-	t.Run("wildcard on a missing resource is 412 not 404", func(t *testing.T) {
+	t.Run("wildcard on a missing resource is 404 not 412", func(t *testing.T) {
 		router := newTestRouterWithCache(t, cache.New(nil))
 		req := httptest.NewRequest("PATCH", "/services/gone/env",
 			strings.NewReader(`{"B":"2"}`))
@@ -127,8 +134,8 @@ func TestPreconditionOnServiceEnv(t *testing.T) {
 		req.Header.Set("If-Match", "*")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
-		if rec.Code != http.StatusPreconditionFailed {
-			t.Errorf("status = %d, want 412 (RFC 9110 §13.2.2)", rec.Code)
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want 404 (RFC 9110 §13.2.1)", rec.Code)
 		}
 	})
 }
@@ -148,12 +155,10 @@ type preconditionEndpoint struct {
 	wantStatus int
 }
 
-// pairedEndpoints is every path in the router carrying both a GET and a write
-// method, and so every path that declares an If-Match precondition. The three
-// collection creates (POST /configs, /secrets, /plugins) are absent: their
-// paired GET is a collection whose ETag turns over on any member change, so no
-// caller could satisfy the precondition. /services/{id}/healthcheck appears
-// twice, for the PUT and the PATCH, against the one representation.
+// pairedEndpoints is every path carrying both a GET and a write method, and so
+// every path declaring an If-Match precondition. The three collection creates
+// are absent: their paired GET is a collection whose ETag turns over on any
+// member change. /services/{id}/healthcheck appears twice, for PUT and PATCH.
 var pairedEndpoints = []preconditionEndpoint{
 	{
 		"service env", "/services/svc1/env", "PATCH", "/services/svc1/env",
@@ -225,10 +230,6 @@ var pairedEndpoints = []preconditionEndpoint{
 		`{"user":"nobody"}`, "application/merge-patch+json", http.StatusOK,
 	},
 	{
-		"service mode", "/services/svc1/mode", "PUT", "/services/svc1/mode",
-		`{"mode":"replicated","replicas":3}`, "application/json", http.StatusOK,
-	},
-	{
 		"service endpoint mode", "/services/svc1/endpoint-mode",
 		"PUT", "/services/svc1/endpoint-mode",
 		`{"mode":"dnsrr"}`, "application/json", http.StatusOK,
@@ -287,15 +288,10 @@ var pairedEndpoints = []preconditionEndpoint{
 	},
 }
 
-// TestPreconditionRoundTripsForEveryPairedEndpoint reads each endpoint that
-// declares a precondition, then drives its write twice: once with the ETag the
-// read just returned, and once with a strong tag that cannot match.
-//
-// The mismatched row catches a route that never got its precond wrapper, since
-// an unconditioned write admits every If-Match; the matching row proves the
-// route is conditioned on this URI's representation. Neither can prove a
-// builder still renders what its GET rendered — a corrupted builder corrupts
-// both validators identically — so do not read a green run as covering that.
+// Reads each endpoint declaring a precondition, then drives its write twice:
+// with the ETag the read returned, and with a strong tag that cannot match. The
+// mismatched row catches a route that never got its precond wrapper; the
+// matching row proves it is conditioned on this URI's representation.
 func TestPreconditionRoundTripsForEveryPairedEndpoint(t *testing.T) {
 	write := func(t *testing.T, router http.Handler, tc preconditionEndpoint, ifMatch string) int {
 		t.Helper()
@@ -377,8 +373,8 @@ func seededService() swarm.Service {
 	stopGrace := 10 * time.Second
 
 	return swarm.Service{
-		ID:   "svc1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 7}},
+		ID:      "svc1",
+		Version: swarm.Version{Index: 7},
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{
 				Name: "web",
@@ -437,118 +433,89 @@ func seededService() swarm.Service {
 func seededWriteClient() *mockWriteClient {
 	updated := func(id string) (swarm.Service, error) {
 		return swarm.Service{
-			ID:   id,
-			Meta: swarm.Meta{Version: swarm.Version{Index: 8}},
-			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+			ID:      id,
+			Version: swarm.Version{Index: 8},
+			Spec:    swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 		}, nil
 	}
 	node := func(id string) (swarm.Node, error) {
-		return swarm.Node{ID: id, Meta: swarm.Meta{Version: swarm.Version{Index: 8}}}, nil
+		return swarm.Node{ID: id, Version: swarm.Version{Index: 8}}, nil
 	}
 
 	return &mockWriteClient{
-		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
-			removeServiceFn: func(context.Context, string) error { return nil },
-			updateServiceModeFn: func(_ context.Context, id string, _ swarm.ServiceMode) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceEndpointModeFn: func(_ context.Context, id string, _ swarm.ResolutionMode) (swarm.Service, error) {
-				return updated(id)
-			},
+		removeServiceFn: func(context.Context, string) error { return nil },
+		updateServiceEndpointModeFn: func(_ context.Context, id string, _ swarm.ResolutionMode) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockServiceSpecWriter: mockServiceSpecWriter{
-			updateServiceEnvFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceResourcesFn: func(_ context.Context, id string, _ *swarm.ResourceRequirements) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceHealthcheckFn: func(_ context.Context, id string, _ *container.HealthConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServicePlacementFn: func(_ context.Context, id string, _ *swarm.Placement) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServicePortsFn: func(_ context.Context, id string, _ []swarm.PortConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceUpdatePolicyFn: func(_ context.Context, id string, _ *swarm.UpdateConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceRollbackPolicyFn: func(_ context.Context, id string, _ *swarm.UpdateConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceLogDriverFn: func(_ context.Context, id string, _ *swarm.Driver) (swarm.Service, error) {
-				return updated(id)
-			},
+		updateServiceSpecFn: func(_ context.Context, id string, _ swarm.ServiceSpec) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockServiceAttachmentWriter: mockServiceAttachmentWriter{
-			updateServiceConfigsFn: func(_ context.Context, id string, _ []*swarm.ConfigReference) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceSecretsFn: func(_ context.Context, id string, _ []*swarm.SecretReference) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceNetworksFn: func(_ context.Context, id string, _ []swarm.NetworkAttachmentConfig) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceMountsFn: func(_ context.Context, id string, _ []mount.Mount) (swarm.Service, error) {
-				return updated(id)
-			},
-			updateServiceContainerConfigFn: func(_ context.Context, id string, _ func(*swarm.ContainerSpec)) (swarm.Service, error) {
-				return updated(id)
-			},
+		updateServiceEnvFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockNodeWriter: mockNodeWriter{
-			updateNodeLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Node, error) {
-				return node(id)
-			},
-			updateNodeRoleFn: func(_ context.Context, id string, _ swarm.NodeRole) (swarm.Node, error) {
-				return node(id)
-			},
-			removeNodeFn: func(context.Context, string, bool) error { return nil },
+		updateServiceLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockConfigWriter: mockConfigWriter{
-			removeConfigFn: func(context.Context, string) error { return nil },
-			updateConfigLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Config, error) {
-				return swarm.Config{ID: id}, nil
-			},
+		updateServiceHealthcheckFn: func(_ context.Context, id string, _ *container.HealthConfig) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockSecretWriter: mockSecretWriter{
-			removeSecretFn: func(context.Context, string) error { return nil },
-			updateSecretLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Secret, error) {
-				return swarm.Secret{ID: id}, nil
-			},
+		updateServicePlacementFn: func(_ context.Context, id string, _ *swarm.Placement) (swarm.Service, error) {
+			return updated(id)
 		},
-		mockResourceRemover: mockResourceRemover{
-			removeTaskFn:    func(context.Context, string) error { return nil },
-			removeNetworkFn: func(context.Context, string) error { return nil },
-			removeVolumeFn:  func(context.Context, string, bool) error { return nil },
+		updateServicePortsFn: func(_ context.Context, id string, _ []swarm.PortConfig) (swarm.Service, error) {
+			return updated(id)
 		},
+		updateServiceConfigsFn: func(_ context.Context, id string, _ []*swarm.ConfigReference) (swarm.Service, error) {
+			return updated(id)
+		},
+		updateServiceSecretsFn: func(_ context.Context, id string, _ []*swarm.SecretReference) (swarm.Service, error) {
+			return updated(id)
+		},
+		updateServiceNetworksFn: func(_ context.Context, id string, _ []swarm.NetworkAttachmentConfig) (swarm.Service, error) {
+			return updated(id)
+		},
+		updateServiceMountsFn: func(_ context.Context, id string, _ []mount.Mount) (swarm.Service, error) {
+			return updated(id)
+		},
+		updateNodeLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Node, error) {
+			return node(id)
+		},
+		updateNodeRoleFn: func(_ context.Context, id string, _ swarm.NodeRole) (swarm.Node, error) {
+			return node(id)
+		},
+		removeNodeFn:   func(context.Context, string, bool) error { return nil },
+		removeConfigFn: func(context.Context, string) error { return nil },
+		updateConfigLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Config, error) {
+			return swarm.Config{ID: id}, nil
+		},
+		removeSecretFn: func(context.Context, string) error { return nil },
+		updateSecretLabelsFn: func(_ context.Context, id string, _ map[string]string) (swarm.Secret, error) {
+			return swarm.Secret{ID: id}, nil
+		},
+		removeTaskFn:    func(context.Context, string) error { return nil },
+		removeNetworkFn: func(context.Context, string) error { return nil },
+		removeVolumeFn:  func(context.Context, string, bool) error { return nil },
 	}
 }
 
-// newSeededTestRouter builds a router over a cache holding one of every
-// resource type the paired endpoints address, plus write and plugin clients
-// that accept every write in pairedEndpoints. Each subtest gets its own, so a
-// row that removes a resource cannot affect the next.
-// TestPreconditionDistinguishesAnUnreachableBackend covers the one builder that
-// reads the daemon rather than the cache. A plugin that is genuinely gone has
-// no current representation and is a 412; a daemon that could not be reached
-// leaves the condition unevaluable, and answering 412 there would tell the
-// caller its validator is stale when nothing about the resource has changed.
+// Covers the one builder that reads the daemon rather than the cache. A plugin
+// genuinely gone is the resource's own 404 — RFC 9110 §13.2.1 keeps the
+// precondition out of the way of it — but a daemon that could not be reached
+// leaves the condition unevaluable, which is a different answer entirely. And
+// the 404 the pass-through counts on has to hold even if the plugin comes back.
 func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 	cases := []struct {
 		name       string
 		inspectErr error
+		removeErr  error
 		wantStatus int
 	}{
-		{"missing plugin", cerrdefs.ErrNotFound, http.StatusPreconditionFailed},
-		{"daemon unavailable", cerrdefs.ErrUnavailable, http.StatusServiceUnavailable},
-		{"unexpected failure", errors.New("boom"), http.StatusInternalServerError},
+		{"missing plugin", cerrdefs.ErrNotFound, cerrdefs.ErrNotFound, http.StatusNotFound},
+		{"daemon unavailable", cerrdefs.ErrUnavailable, nil, http.StatusServiceUnavailable},
+		{"unexpected failure", errors.New("boom"), nil, http.StatusInternalServerError},
+		// The remove would succeed: the plugin was installed between the two
+		// reads. A 204 here is a write nothing compared the validator against.
+		{"installed since the inspect", cerrdefs.ErrNotFound, nil, http.StatusNotFound},
 	}
 
 	for _, tc := range cases {
@@ -558,7 +525,7 @@ func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 				pluginInspectFn: func(context.Context, string) (*types.Plugin, error) {
 					return nil, tc.inspectErr
 				},
-				pluginRemoveFn: func(context.Context, string, bool) error { return nil },
+				pluginRemoveFn: func(context.Context, string, bool) error { return tc.removeErr },
 			}))
 
 			req := httptest.NewRequest("DELETE", "/plugins/plug1", nil)
@@ -581,13 +548,25 @@ func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 func newSeededTestRouter(t testing.TB, opts ...testHandlersOption) http.Handler {
 	t.Helper()
 
+	return newSeededTestRouterWithConfig(t, nil, opts...)
+}
+
+// newSeededTestRouterWithConfig is newSeededTestRouter over a router the caller
+// also configures — the token arm of the tier sweep needs both.
+func newSeededTestRouterWithConfig(
+	t testing.TB,
+	routerOpts []routerOption,
+	opts ...testHandlersOption,
+) http.Handler {
+	t.Helper()
+
 	stackLabels := map[string]string{"com.docker.stack.namespace": seededStack}
 
 	c := cache.New(nil)
 	c.SetService(seededService())
 	c.SetNode(swarm.Node{
-		ID:   "node1",
-		Meta: swarm.Meta{Version: swarm.Version{Index: 3}},
+		ID:      "node1",
+		Version: swarm.Version{Index: 3},
 		Spec: swarm.NodeSpec{
 			Role:         swarm.NodeRoleManager,
 			Availability: swarm.NodeAvailabilityActive,
@@ -636,10 +615,11 @@ func newSeededTestRouter(t testing.TB, opts ...testHandlersOption) http.Handler 
 		pluginRemoveFn: func(context.Context, string, bool) error { return nil },
 	}
 
-	return newTestRouterWithCache(
+	return newTestRouterWithConfig(
 		t,
-		c,
+		routerOpts,
 		append([]testHandlersOption{
+			withCache(c),
 			withWriteClient(seededWriteClient()),
 			withPluginClient(plugins),
 			// The two log routes reach their streamer as soon as the service
@@ -647,4 +627,45 @@ func newSeededTestRouter(t testing.TB, opts ...testHandlersOption) http.Handler 
 			withDockerClient(&mockLogStreamer{}),
 		}, opts...)...,
 	)
+}
+
+// RFC 9110 §13.2.1: a precondition is ignored when the answer without it
+// would be neither 2xx nor 412. A write against a resource that is gone
+// answers 404, and carrying If-Match must not turn that into a 412 — the
+// client's validator is not the problem, the missing resource is.
+func TestAPreconditionDoesNotMaskAMissingResource(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/preconditions-are-ignored-when-the-answer-is-not-2xx")
+
+	router := newTestRouterWithCache(t, cache.New(nil))
+
+	answer := func(t *testing.T, ifMatch string) int {
+		t.Helper()
+
+		req := httptest.NewRequest(
+			http.MethodPatch, "/services/gone/env", strings.NewReader(`{"A":"2"}`),
+		)
+		req.Header.Set("Content-Type", "application/json")
+		if ifMatch != "" {
+			req.Header.Set("If-Match", ifMatch)
+		}
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		return rec.Code
+	}
+
+	unconditional := answer(t, "")
+	if unconditional != http.StatusNotFound {
+		t.Fatalf("without a precondition the answer is %d, not 404; this test proves nothing",
+			unconditional)
+	}
+
+	// Both spellings: a specific validator, and the wildcard, which §13.1.1
+	// makes false precisely when there is no current representation.
+	for _, ifMatch := range []string{`"whatever"`, "*"} {
+		if got := answer(t, ifMatch); got != unconditional {
+			t.Errorf("If-Match %s: status = %d, want %d — the precondition was evaluated",
+				ifMatch, got, unconditional)
+		}
+	}
 }

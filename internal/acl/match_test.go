@@ -28,6 +28,15 @@ func TestMatchResource(t *testing.T) {
 		{"service:*", "nocolon", false},  // no colon in resource
 		{"service:*", ":noname", false},  // empty type in resource
 		{"service:*", "service:", false}, // empty resource names never match
+
+		// A backslash escapes the character after it, whether the author meant
+		// it or not, so it is pinned both ways: an escaped metacharacter stops
+		// being one, and an escape before an ordinary character disappears.
+		// Docker resource names cannot contain a backslash.
+		{`service:release-\*`, "service:release-*", true},
+		{`service:release-\*`, "service:release-1", false},
+		{`service:a\b`, "service:ab", true},
+		{`service:a\b`, `service:a\b`, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.expr+"_"+tt.resource, func(t *testing.T) {

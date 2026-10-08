@@ -1,10 +1,10 @@
-import { test, expect, navigateToFirst } from "./fixtures";
+import { test, expect, detailId, hasHistory, navigateToFirst, clickRow } from "./fixtures";
 
 test.describe("Node List (/nodes)", () => {
   test("renders table with expected columns", async ({ page }) => {
     await page.goto("/nodes");
 
-    const table = page.getByRole("table");
+    const table = page.getByRole("grid");
     await expect(table).toBeVisible({ timeout: 10_000 });
 
     const header = page.getByRole("row").first();
@@ -25,7 +25,7 @@ test.describe("Node List (/nodes)", () => {
 
     await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
 
-    await page.locator("table tbody tr").first().click();
+    await clickRow(page.locator("table tbody tr").first());
     await expect(page).toHaveURL(/\/nodes\/.+/);
   });
 
@@ -40,7 +40,9 @@ test.describe("Node List (/nodes)", () => {
     await searchInput.fill(firstHostname);
 
     // Row with that hostname should remain visible
-    await expect(page.getByRole("cell", { name: firstHostname })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("gridcell", { name: firstHostname })).toBeVisible({
+      timeout: 5_000,
+    });
 
     // Searching for something that won't match should show empty state
     await searchInput.fill("zzznomatch");
@@ -75,16 +77,17 @@ test.describe("Node Detail (/nodes/:id)", () => {
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
   });
 
-  test("activity section renders when history exists", async ({ page }) => {
-    // ActivitySection renders only when there are history entries — it returns null for an
-    // empty list. Wait for the tasks section (which always renders) to confirm the page is
-    // loaded, then check whether recent activity appears.
+  test("activity section renders when history exists", async ({ page, request, baseURL }) => {
+    // ActivitySection returns null for an empty feed, fetched after mount —
+    // so absence right now means "not loaded yet" as readily as "no history".
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
 
-    const activityButton = page.getByRole("button", { name: /Recent Activity/i });
-    const count = await activityButton.count();
-    test.skip(count === 0, "No activity history present for this node");
-    await expect(activityButton).toBeVisible();
+    const present = await hasHistory(request, baseURL, detailId(page));
+    test.skip(!present, "No activity history recorded for this node");
+
+    await expect(page.getByRole("button", { name: /Recent Activity/i })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test("labels section renders", async ({ page }) => {
@@ -105,8 +108,17 @@ test.describe("Node Detail (/nodes/:id)", () => {
   }) => {
     test.skip(!monitoring?.cadvisor, "cAdvisor not available");
 
-    await expect(page.getByRole("heading", { name: /Resource Usage by Stack/i })).toBeVisible({
-      timeout: 15_000,
-    });
+    // A section header in this app is a disclosure button, not a heading —
+    // every other section spec in this suite addresses one the same way. This
+    // case asserted a heading and never ran to find out, because without a
+    // Prometheus reporting cAdvisor targets it always skipped.
+    const section = page.getByRole("button", { name: /^Resource Usage by Stack$/i });
+
+    await expect(section).toBeVisible({ timeout: 15_000 });
+    await expect(section).toHaveAttribute("aria-expanded", "true");
+
+    // Open, and drawing: the panel renders a chart per metric rather than an
+    // empty section with a header.
+    await expect(page.locator("canvas")).not.toHaveCount(0, { timeout: 15_000 });
   });
 });

@@ -22,13 +22,10 @@ type ErrorDomain struct {
 	Label  string `json:"label"`
 }
 
-// ErrorDomains names every prefix used by errorRegistry, in the order a
-// reference presents them: protocol first, then identity, then the
-// cross-cutting subsystems, then one entry per resource type. That is not the
-// order the prefixes sort in, which is why this is a slice and not a map.
-//
-// It replaced a comment listing the same prefixes, which had already lost ACL.
-// TestErrorDomainsMatchTheRegistry now fails on that drift in both directions.
+// ErrorDomains names every prefix errorRegistry uses, in the order a reference
+// presents them: protocol, identity, the cross-cutting subsystems, then one
+// entry per resource type. That is not the order they sort in, which is why
+// this is a slice rather than a map.
 var ErrorDomains = []ErrorDomain{
 	{Prefix: "API", Label: "Protocol and content negotiation"},
 	{Prefix: "AUT", Label: "Authentication"},
@@ -121,6 +118,23 @@ var errorRegistry = map[string]ErrorDef{
 		Status:      http.StatusPreconditionFailed,
 		Description: "The If-Match header did not match the current state of the resource.",
 		Suggestion:  "Re-read the resource, take the ETag from that response, and retry with it.",
+	},
+	"API014": {
+		Code:        "API014",
+		Title:       "Not Representable as Compose",
+		Status:      http.StatusUnprocessableEntity,
+		Description: "The resource has nothing a compose file can describe. A service running a plugin or a network attachment has no container specification, which is all a compose service is.",
+		Suggestion:  "Read the resource as JSON instead; only container services have a compose projection.",
+	},
+	"API015": {
+		Code:   "API015",
+		Title:  "Ambiguous Identifier",
+		Status: http.StatusConflict,
+		Description: "The name in the path identifies more than one resource, " +
+			"so the server cannot tell which one was meant. " +
+			"Swarm does not require node hostnames to be unique.",
+		Suggestion: "Address the resource by its ID. The detail names every " +
+			"ID the request could have meant.",
 	},
 
 	// ── AUT: authentication ───────────────────────────────────────────
@@ -446,16 +460,6 @@ var errorRegistry = map[string]ErrorDef{
 		Status:      http.StatusBadRequest,
 		Description: "The service has no previous specification to rollback to.",
 		Suggestion:  "Rollback is only available after at least one update has been applied to the service.",
-	},
-	"SVC008": {Code: "SVC008", Title: "Invalid Service Mode", Status: http.StatusBadRequest,
-		Description: "The service mode must be one of: replicated, global.",
-		Suggestion:  "Use mode=replicated or mode=global."},
-	"SVC009": {
-		Code:        "SVC009",
-		Title:       "Replicas Required For Replicated Mode",
-		Status:      http.StatusBadRequest,
-		Description: "When switching to replicated mode, the replicas field is required.",
-		Suggestion:  "Provide the replicas field alongside the mode change.",
 	},
 	"SVC010": {Code: "SVC010", Title: "Invalid Endpoint Mode", Status: http.StatusBadRequest,
 		Description: "The endpoint mode must be one of: vip, dnsrr.",

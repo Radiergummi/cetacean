@@ -332,11 +332,9 @@ func (p *perServiceStreamer) Logs(
 }
 
 // A fan-out mints one cursor for many independent streams. Taken as a single
-// newest timestamp it is whichever service ran ahead, and logs.FilterSince is a
-// flat cut — so a line another service stamps earlier but Docker hands over
-// late is discarded on the resume and never returned by any later call. The
-// timestamp spread across 25 services is far wider than across one service's
-// replicas, which is why the single-service cursor logic does not carry over.
+// newest timestamp it is whichever service ran ahead, and FilterSince is a flat
+// cut — so a line another service stamped earlier is discarded on the resume.
+// The spread across 25 services is far wider than across one's replicas.
 func TestScopedReadResumesEachServiceFromItsOwnPosition(t *testing.T) {
 	c := cache.New(nil)
 	for _, name := range []string{"ahead", "behind"} {
@@ -445,10 +443,9 @@ func TestScopedCursorRoundTripsAndIgnoresPlainTimestamps(t *testing.T) {
 }
 
 // The merge is cut to `tail` as well, and that cut shortens the window on its
-// own: sixty services returning fifty lines each, kept to the newest hundred,
-// covers seconds of whatever was asked for even though no single service ran
-// out of budget. It was invisible in the payload, which is the same silence
-// the per-service ceiling note exists to break.
+// own: sixty services of fifty lines kept to the newest hundred covers seconds,
+// though no single service ran out of budget. Invisible in the payload, which
+// is the silence the per-service ceiling note exists to break.
 func TestScopedReadDisclosesTheMergedTailCut(t *testing.T) {
 	c := cache.New(nil)
 	for _, name := range []string{"api", "web", "worker"} {

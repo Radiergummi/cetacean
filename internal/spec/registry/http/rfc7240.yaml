@@ -1,0 +1,64 @@
+source: RFC 7240
+title: Prefer Header for HTTP
+reviewed: 2026-09-17
+url: https://www.rfc-editor.org/rfc/rfc7240
+
+inventory:
+  from: >-
+    RFC 7240 §2, §3, §4.2 and §5.1 in full. §1's keyword paragraph is the RFC
+    2119 boilerplate. §4.1, §4.3 and §4.4 define preference tokens this server
+    does not implement — respond-async is §4.1's and is registered there — and
+    carry no RFC 2119 keyword between them.
+  count: 12
+
+requirements:
+  - id: unknown-tokens-are-ignored
+    level: MUST
+    text: >-
+      A server that does not recognize or is unable to comply with particular
+      preference tokens in the Prefer header field of a request MUST ignore
+      those tokens and continue processing instead of signaling an error.
+    url: https://www.rfc-editor.org/rfc/rfc7240#section-2
+    mutants:
+      - file: internal/api/prefer.go
+        replace: "\t\tif name, value := preference(token); name == \"return\" && value == \"minimal\" {"
+        with: "\t\tif name, value := preference(token); name != \"\" && value == \"minimal\" {"
+
+  - id: tokens-may-be-split-or-combined
+    level: MAY
+    text: >-
+      A client MAY use multiple instances of the Prefer header field in a
+      single message, or it MAY use a single Prefer header field with multiple
+      comma-separated preference tokens.
+    url: https://www.rfc-editor.org/rfc/rfc7240#section-2
+
+dismissed:
+  prefer-is-forwarded-by-proxies: >-
+    Binds an intermediary forwarding the request, not the origin server reading
+    it.
+  tokens-may-restrict-intermediaries: >-
+    A MAY for whoever defines a preference token, about intermediaries.
+  tokens-should-not-repeat: >-
+    A SHOULD NOT addressed to the client. This server reads the first token
+    that matches and ignores the rest, which is the behaviour the next
+    statement asks of it.
+  later-occurrences-ignored: >-
+    A SHOULD about ignoring repeats. preferMinimal returns on the first match,
+    so a second occurrence changes nothing.
+  optional-preferences-discouraged: >-
+    A SHOULD NOT advising implementers against optional application of
+    preferences. This server applies return=minimal and wait= deterministically
+    or not at all.
+  vary-when-a-preference-changes-the-entity: >-
+    Conditional on a preference varying a cacheable response. Every write this
+    applies to answers no-store, so no cache can hold a variant to confuse.
+  vary-may-be-a-wildcard: >-
+    The MAY alternative to the Vary rule above.
+  preference-applied-may-be-returned: >-
+    A MAY. This server does not echo Preference-Applied; the response status
+    says what happened — 204 for minimal, 202 when a wait ran out.
+  minimal-may-use-other-status-codes: >-
+    A MAY about which success code a minimal response carries. This server
+    answers 204.
+  registry-fields-may-be-omitted: >-
+    A MAY about the IANA registration template for a preference token.

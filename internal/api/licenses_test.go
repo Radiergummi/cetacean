@@ -100,12 +100,10 @@ func TestHandleSBOMServesCycloneDXWithETag304(t *testing.T) {
 	}
 }
 
-// TestLicensesEndpointsRouteThroughNegotiate is the regression guard for the
-// routing deviation described in skipEndpoint: the negotiate middleware strips
-// the .json suffix from /-/sbom.cdx.json before mux dispatch, so the mux
-// route is registered as /-/sbom.cdx. This test exercises the full
-// negotiate-wrapped mux to confirm both public meta endpoints are reachable at
-// their canonical URLs without the full production router.
+// The regression guard for the routing deviation skipEndpoint describes: the
+// negotiate middleware strips the .json suffix from /-/sbom.cdx.json before mux
+// dispatch, so the route is registered as /-/sbom.cdx. This drives the full
+// negotiate-wrapped mux to confirm both endpoints are reachable canonically.
 func TestLicensesEndpointsRouteThroughNegotiate(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /-/licenses", HandleLicenses)

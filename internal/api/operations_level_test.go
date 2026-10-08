@@ -13,6 +13,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -31,47 +32,16 @@ var operationsLevels = []config.OperationsLevel{
 	config.OpsImpactful,
 }
 
-// unmeasurableOperations lists spec operations this test cannot drive, with
-// the reason. It is empty, and should stay that way: the streaming endpoints
-// that look unmeasurable are not. The probe asks for application/json, which
-// routes /events to the SPA and the two log tails to their JSON handlers, so
-// all three answer a status promptly rather than streaming. Excluding them
-// would be a blind spot rather than a saving — the guard below only fires when
-// an excluded operation grows a *badge*, so a gate added without one would go
-// unnoticed on exactly the operations nothing else measures.
-//
-// An entry may only cover an operation that declares no tier. One that grows
-// an operations-level badge needs a way to be measured, not a skip — the
-// assertion below fails outright rather than exempting it. An entry naming an
-// operation the spec no longer has fails too, so the list cannot rot into
-// silently skipping a path that gets added back under the same name.
+// unmeasurableOperations lists spec operations this test cannot drive. It is
+// empty and should stay that way: the streaming endpoints that look unmeasurable
+// answer a status promptly to the probe's application/json. An entry may cover
+// only an operation declaring no tier, and one naming a missing path fails.
 var unmeasurableOperations = map[string]string{}
 
-// TestEveryOperationIsGatedAtItsDeclaredTier holds the OpenAPI spec's
-// operations-level badges and the router's requireLevel gates together, in
-// both directions: every operation must be refused with OPS001 at one level
-// below its badge and admitted at the badge's own level, and an operation
-// carrying no badge must be gated at no tier at all.
-//
-// Reads are walked as well as writes, not for symmetry but because one read is
-// gated — GET /swarm/unlock-key hands out the key that decrypts a locked
-// manager's raft store, and sits at tier 3. Restricting this walk to mutations
-// would leave the one endpoint whose tier matters most as the one endpoint
-// nothing checks.
-//
-// The router side is measured, not tabulated. Driving the assembled router at
-// each of the four levels and taking the lowest one that does not answer
-// OPS001 yields the tier as the server enforces it, so a route whose gate and
-// badge disagree fails whichever of the two was changed — and so does a gate
-// with no badge, or a badge on an operation nothing gates. A hand-kept table
-// of routes here would be a sixth statement of the tier, which is the drift
-// this test exists to stop.
-//
-// It needs no request bodies. requireLevel sits ahead of the handler, so an
-// empty body answers 400, 404, 412 or 415 — never OPS001 — and the assertion
-// is only ever about whether OPS001 appears. The bogus If-Match keeps the
-// thirty precondition-carrying routes from executing their mutation on the way
-// past the gate.
+// Holds the spec's operations-level badges and the router's requireLevel gates
+// together, in both directions: an operation must be refused with OPS001 one
+// level below its badge and admitted at the badge's own, and one carrying no
+// badge must be gated at no tier. The router side is measured, not tabulated.
 func TestEveryOperationIsGatedAtItsDeclaredTier(t *testing.T) {
 	_, doc, _ := loadTestSpec(t)
 
@@ -79,6 +49,25 @@ func TestEveryOperationIsGatedAtItsDeclaredTier(t *testing.T) {
 	for _, level := range operationsLevels {
 		routers[level] = newSeededTestRouter(t, withOpsLevel(level))
 	}
+
+	// The same sweep over a token-authenticated caller, with the deployment
+	// pinned high so the token's own ceiling is the only dial. A route reached
+	// through anything but requireLevel would gate one arm and not the other.
+	tokenRouters := make(map[config.OperationsLevel]http.Handler, len(operationsLevels))
+	for _, level := range operationsLevels {
+		tokenRouters[level] = newSeededTestRouterWithConfig(
+			t,
+			tokenRouterOptions(t),
+			withOpsLevel(config.OpsImpactful),
+			withTokenOpsLevel(level),
+		)
+	}
+
+	bearer := tokenFor(t, "", &auth.Identity{
+		Subject: "a3f1c8e2-7b04-4d19-9e55-2c6f0b8a41d7",
+		Email:   "alice@example.com",
+	})
+	asToken := func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+bearer) }
 
 	var declared, gated int
 
@@ -157,6 +146,26 @@ func TestEveryOperationIsGatedAtItsDeclaredTier(t *testing.T) {
 						observed,
 					)
 				}
+
+				viaToken, admittedToken := observedOperationsLevel(
+					tokenRouters, method, requestPath, asToken,
+				)
+
+				switch {
+				case !admittedToken:
+					t.Errorf(
+						"a token caller is refused with OPS001 at every ceiling "+
+							"including %d, while a session reaches it at %d",
+						config.OpsImpactful, observed,
+					)
+				case viaToken != observed:
+					t.Errorf(
+						"gated at tier %d for a session but %d for a token — the "+
+							"ceiling reaches this route through something other than "+
+							"requireLevel",
+						observed, viaToken,
+					)
+				}
 			})
 		}
 	}
@@ -171,12 +180,10 @@ func TestEveryOperationIsGatedAtItsDeclaredTier(t *testing.T) {
 		}
 	}
 
-	// The walk above starts from the spec, so it sees only operations the spec
-	// declares. A gated route that was never written into api/openapi.yaml is
-	// invisible to it — and to every other test in the package, all of which
-	// are spec-driven. Walking what the router actually registered closes that
-	// direction: an undocumented route must be gated at no tier, because a
-	// tier nothing documents is a tier nothing can be held to.
+	// The walk above starts from the spec, so a gated route never written into
+	// api/openapi.yaml is invisible to it, and to every other test here.
+	// Walking what the router registered closes that direction: an undocumented
+	// route must be gated at no tier, since nothing can hold it to one.
 	var undocumented int
 
 	for _, pattern := range routerPatterns(t) {
@@ -295,9 +302,10 @@ func declaredOperationsLevel(op *openapi3.Operation) (config.OperationsLevel, bo
 func observedOperationsLevel(
 	routers map[config.OperationsLevel]http.Handler,
 	method, path string,
+	decorate ...func(*http.Request),
 ) (config.OperationsLevel, bool) {
 	for _, level := range operationsLevels {
-		if !refusesForOperationsLevel(routers[level], method, path) {
+		if !refusesForOperationsLevel(routers[level], method, path, decorate...) {
 			return level, true
 		}
 	}
@@ -309,10 +317,18 @@ func observedOperationsLevel(
 // with OPS001. It reads the problem document's type rather than the status,
 // because ACL002 is a 403 as well and a policy-less test router must never be
 // mistaken for a tier refusal.
-func refusesForOperationsLevel(router http.Handler, method, path string) bool {
+func refusesForOperationsLevel(
+	router http.Handler,
+	method, path string,
+	decorate ...func(*http.Request),
+) bool {
 	req := httptest.NewRequest(method, path, nil)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("If-Match", `"bogus-etag"`)
+
+	for _, d := range decorate {
+		d(req)
+	}
 
 	// No operation streams under application/json today, but one that started
 	// to would otherwise hang the walk until the whole package times out. A

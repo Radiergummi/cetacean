@@ -37,6 +37,8 @@ type mockClient struct {
 	errCh    chan error
 
 	listErrors map[string]error // resource name -> error
+
+	fullSyncs atomic.Int64
 }
 
 func newMockClient() *mockClient {
@@ -54,6 +56,8 @@ func (m *mockClient) setNodes(nodes []swarm.Node) {
 }
 
 func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
+	m.fullSyncs.Add(1)
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var data cache.FullSyncData
@@ -644,17 +648,10 @@ func TestRun_ReconnectsAfterEventStreamError(t *testing.T) {
 	}
 }
 
-// Swarm garbage-collects a task's record once it falls out of the history
-// window, and emits no removal event when it does — the only trace is that the
-// next inspect 404s. Holding the record on that failure left the cache serving
-// a task Docker had forgotten, still carrying whatever status it was last
-// inspected with: a service restarting in a loop accumulated thirty of them,
-// most reported "running", until the five-minutely full re-sync swept them.
-//
-// A not-found that survives every retry is the daemon's answer, not a race, so
-// it deletes. The retries themselves still have to run: during a stack deploy
-// a 404 means "not registered yet", which is why this is decided after they
-// are exhausted rather than on the first one.
+// Swarm garbage-collects a task's record once it leaves the history window and
+// emits no removal event, so the only trace is that the next inspect 404s. A
+// not-found surviving every retry is the daemon's answer rather than a race —
+// the retries still run, since during a deploy a 404 means "not registered yet".
 func TestHandleEventDeletesTaskThatNoLongerExists(t *testing.T) {
 	mc := newMockClient()
 	mc.inspectFn = func(context.Context, events.Type, string) (any, error) {
@@ -681,10 +678,9 @@ func TestHandleEventDeletesTaskThatNoLongerExists(t *testing.T) {
 }
 
 // A transient failure is not evidence of absence. Dropping the record on one
-// would turn a daemon hiccup into a resource vanishing from every listing,
-// which is the opposite failure and a worse one: the periodic re-sync repairs
-// a stale record, but nothing repairs a caller that already acted on an empty
-// result.
+// would make a daemon hiccup vanish a resource from every listing; the
+// periodic re-sync repairs a stale record, but nothing repairs a caller that
+// already acted on an empty result.
 func TestHandleEventKeepsTaskWhenInspectFailsTransiently(t *testing.T) {
 	mc := newMockClient()
 	mc.inspectFn = func(context.Context, events.Type, string) (any, error) {
@@ -706,16 +702,9 @@ func TestHandleEventKeepsTaskWhenInspectFailsTransiently(t *testing.T) {
 }
 
 // A container dying is the last event a failed task ever produces, and Swarm
-// reconciles the task record a moment after the container it wraps. Inspecting
-// on the event itself therefore reads the task as still running, desired
-// running — and because nothing further arrives, the cache keeps that reading
-// until the five-minutely full re-sync. Every replica figure derived from it
-// overcounts in the meantime: a service crash-looping every eight seconds
-// reported four running replicas against a desired one, and the convergence
-// wait behind every deploy could not settle.
-//
-// Re-inspecting once, shortly after, is what closes the gap: by then Swarm has
-// caught up and the terminal state is there to read.
+// reconciles the task record after the container it wraps -- so the inspect on
+// the event reads the task as still running, and nothing further arrives to
+// correct it. Re-inspecting shortly after is what closes the gap.
 func TestContainerDeathReinspectsUntilSwarmCatchesUp(t *testing.T) {
 	var calls atomic.Int32
 
@@ -766,9 +755,9 @@ func TestContainerDeathReinspectsUntilSwarmCatchesUp(t *testing.T) {
 	}
 }
 
-// An ordinary container event is not a death and must not pay for a second
-// inspect: a busy cluster produces these constantly, and doubling every one
-// would double the load the watcher puts on the daemon.
+// A container event whose task record has already caught up must not pay for a
+// second inspect: a busy cluster produces these constantly. The re-read is
+// bought only where it is needed.
 func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
 	var calls atomic.Int32
 
@@ -802,11 +791,109 @@ func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
 	}
 }
 
+// The same race at the other end of a container's life: Swarm commits a task's
+// running status after the start event that announced it, so the inspect reads
+// it as still starting and nothing further arrives. This direction settles at
+// running, the state the dying direction treats as not settled at all.
+func TestContainerStartReinspectsUntilSwarmCatchesUp(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		// The first read sees Swarm's pre-reconciliation view, as production
+		// does: the container is up, the task record has not caught up.
+		if calls.Add(1) == 1 {
+			return swarm.Task{
+				ID: id, ServiceID: "svc",
+				DesiredState: swarm.TaskStateRunning,
+				Status:       swarm.TaskStatus{State: swarm.TaskStateStarting},
+			}, nil
+		}
+
+		return swarm.Task{
+			ID: id, ServiceID: "svc",
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+		}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	w.settleDelay = 10 * time.Millisecond
+
+	w.handleEvent(context.Background(), events.Message{
+		Type:   events.ContainerEventType,
+		Action: "start",
+		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
+			"com.docker.swarm.task.id": "t1",
+		}},
+	})
+
+	w.waitForSettles()
+
+	task, ok := c.GetTask("t1")
+	if !ok {
+		t.Fatal("task missing from cache")
+	}
+
+	if task.Status.State != swarm.TaskStateRunning {
+		t.Errorf(
+			"Status.State = %q, want running — the re-inspect did not land",
+			task.Status.State,
+		)
+	}
+
+	// The count is the thing that actually hung: a service cannot converge
+	// while the cache reports fewer replicas running than the engine holds.
+	if got := c.RunningTaskCount("svc"); got != 1 {
+		t.Errorf("RunningTaskCount = %d, want 1 for a task Swarm has started", got)
+	}
+}
+
+// The re-reads stop as soon as the record reads running, rather than running
+// out the bound: this direction is scheduled by every container start on the
+// cluster, so a series that always ran to completion would be four inspects
+// per started container instead of one.
+func TestContainerStartStopsReinspectingOnceRunning(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		state := swarm.TaskStateRunning
+		if calls.Add(1) == 1 {
+			state = swarm.TaskStateStarting
+		}
+
+		return swarm.Task{
+			ID: id, ServiceID: "svc",
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: state},
+		}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	w.settleDelay = time.Millisecond
+
+	w.handleEvent(context.Background(), events.Message{
+		Type:   events.ContainerEventType,
+		Action: "start",
+		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
+			"com.docker.swarm.task.id": "t1",
+		}},
+	})
+
+	w.waitForSettles()
+
+	// The event's own inspect, plus exactly one re-read.
+	if got := calls.Load(); got != 2 {
+		t.Errorf("inspects = %d, want 2 — the series did not stop at running", got)
+	}
+}
+
 // One re-read is not enough when the daemon is slow to reconcile, and nothing
-// else re-arms it: the stale record — and the replica overcount built on it —
-// would then stand until the five-minutely full re-sync. A following container
-// event usually schedules another attempt in practice, but the fix must not
-// rest on "usually".
+// else re-arms it. A following container event usually schedules another
+// attempt in practice, but the fix must not rest on "usually".
 func TestContainerDeathKeepsReinspectingWhileSwarmLags(t *testing.T) {
 	var calls atomic.Int32
 
@@ -885,5 +972,133 @@ func TestSettleRetriesAreBounded(t *testing.T) {
 	// The event's own inspect, plus the bounded series of re-reads.
 	if want := int32(1 + settleAttempts); calls.Load() != want {
 		t.Errorf("inspects = %d, want %d", calls.Load(), want)
+	}
+}
+
+// ─── liveness ───────────────────────────────────────────────────────────
+
+// TestLivenessStartsDisconnected: a watcher that has never synced must not
+// look healthy.
+func TestLivenessStartsDisconnected(t *testing.T) {
+	w := NewWatcher(newMockClient(), cache.New(nil), "")
+
+	connected, lastSync := w.Liveness()
+	if connected {
+		t.Error("a watcher that has never synced reports connected")
+	}
+
+	if !lastSync.IsZero() {
+		t.Errorf("lastSync = %v before any sync, want zero", lastSync)
+	}
+}
+
+// TestLivenessFollowsTheEngine is the point of the signal: with the engine
+// gone, every endpoint keeps answering and readiness keeps passing.
+func TestLivenessFollowsTheEngine(t *testing.T) {
+	mc := newMockClient()
+	mc.nodes = []swarm.Node{{ID: "n1"}}
+
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	before := time.Now()
+
+	if err := w.fullSync(context.Background()); err != nil {
+		t.Fatalf("fullSync: %v", err)
+	}
+
+	connected, lastSync := w.Liveness()
+	if !connected {
+		t.Error("a watcher that just synced reports disconnected")
+	}
+
+	if lastSync.Before(before) {
+		t.Errorf("lastSync = %v, want at or after %v", lastSync, before)
+	}
+
+	// The engine goes away.
+	mc.listErrors["nodes"] = errors.New("connection refused")
+	mc.listErrors["services"] = errors.New("connection refused")
+	mc.listErrors["tasks"] = errors.New("connection refused")
+	mc.listErrors["configs"] = errors.New("connection refused")
+	mc.listErrors["secrets"] = errors.New("connection refused")
+	mc.listErrors["networks"] = errors.New("connection refused")
+	mc.listErrors["volumes"] = errors.New("connection refused")
+
+	if err := w.fullSync(context.Background()); err == nil {
+		t.Fatal("fullSync succeeded with every list failing")
+	}
+
+	connected, stale := w.Liveness()
+	if connected {
+		t.Error("a watcher whose sync just failed still reports connected")
+	}
+
+	// The timestamp is when the cache was last correct, so a failure must not
+	// advance it.
+	if !stale.Equal(lastSync) {
+		t.Errorf("a failed sync moved lastSync from %v to %v", lastSync, stale)
+	}
+}
+
+// TestLivenessDropsWhenTheStreamEnds covers the other disconnection: the sync
+// succeeded, then the stream went away.
+func TestLivenessDropsWhenTheStreamEnds(t *testing.T) {
+	mc := newMockClient()
+
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	if err := w.fullSync(context.Background()); err != nil {
+		t.Fatalf("fullSync: %v", err)
+	}
+
+	if connected, _ := w.Liveness(); !connected {
+		t.Fatal("not connected after a successful sync")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	w.watchEvents(ctx)
+
+	if connected, _ := w.Liveness(); connected {
+		t.Error("still connected after the event stream ended")
+	}
+}
+
+// POST /-/resync shares the sync path with the watcher, but runs beside a
+// healthy event stream. Letting its failure clear the connection verdict has
+// /-/health and the dashboard report "Cetacean cannot reach Docker" until the
+// next periodic sync, over a cluster nothing is wrong with.
+func TestManualResyncFailureLeavesTheStreamVerdictAlone(t *testing.T) {
+	mc := newMockClient()
+
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	if err := w.fullSync(context.Background()); err != nil {
+		t.Fatalf("fullSync: %v", err)
+	}
+
+	connected, lastSync := w.Liveness()
+	if !connected {
+		t.Fatal("not connected after a successful sync")
+	}
+
+	for _, kind := range []string{
+		"nodes", "services", "tasks", "configs", "secrets", "networks", "volumes",
+	} {
+		mc.listErrors[kind] = errors.New("connection refused")
+	}
+
+	if err := w.Resync(context.Background()); err == nil {
+		t.Fatal("Resync succeeded with a list failing")
+	}
+
+	connected, stale := w.Liveness()
+	if !connected {
+		t.Error("a failed manual resync reported the event stream as disconnected")
+	}
+
+	if !stale.Equal(lastSync) {
+		t.Errorf("a failed resync moved lastSync from %v to %v", lastSync, stale)
 	}
 }

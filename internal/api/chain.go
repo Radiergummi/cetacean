@@ -10,7 +10,6 @@ type Constructor func(http.Handler) http.Handler
 
 // Chain is an immutable, ordered list of middleware. The first Constructor is
 // the outermost wrapper, so a chain reads in the order requests traverse it.
-//
 // Derived from justinas/alice, minus its Then(nil) fallback to
 // http.DefaultServeMux: a nil handler here is a wiring bug, not a route.
 type Chain struct {

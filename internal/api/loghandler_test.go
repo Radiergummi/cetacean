@@ -508,12 +508,10 @@ func buildFrame(streamType byte, payload string) []byte {
 	return append(header, []byte(payload)...)
 }
 
-// TestHandleServiceLogs_JSON_AfterKeepsUntimestampedLines pins a deliberate
-// behaviour change: the old since/until compaction dropped lines with no
-// timestamp whenever ?after= was set (an empty timestamp compares <= any
-// non-empty cursor). logs.FilterSince keeps them instead, since a line with
-// no timestamp can't be placed relative to the cursor and dropping it would
-// silently lose output. This test pins that as intentional.
+// Pins a deliberate behaviour: a since/until compaction drops lines with no
+// timestamp whenever ?after= is set, since an empty timestamp compares below any
+// cursor. logs.FilterSince keeps them, because a line that cannot be placed
+// relative to the cursor would otherwise be silently lost.
 func TestHandleServiceLogs_JSON_AfterKeepsUntimestampedLines(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
@@ -569,12 +567,10 @@ func TestHandleServiceLogs_JSON_AfterKeepsUntimestampedLines(t *testing.T) {
 	}
 }
 
-// TestHandleServiceLogs_SSE_AfterKeepsUntimestampedLines pins the SSE path to
-// the same cursor semantic as logs.FilterSince: a line with no timestamp
-// cannot be placed relative to the cursor, so it survives a resumed stream.
-// A log frame containing embedded newlines yields exactly such continuation
-// lines — dropping them would make an automatic reconnect silently change
-// what the viewer displays.
+// Pins the SSE path to the same cursor semantic as logs.FilterSince: a line with
+// no timestamp cannot be placed relative to the cursor, so it survives a resumed
+// stream. A frame with embedded newlines yields exactly such lines, and dropping
+// them makes an automatic reconnect change what the viewer displays.
 func TestHandleServiceLogs_SSE_AfterKeepsUntimestampedLines(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})

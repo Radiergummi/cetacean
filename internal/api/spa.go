@@ -186,6 +186,15 @@ func NewSPAHandler(fsys fs.FS, basePath string) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The mux's catch-all answers every path no route matched, and has one
+		// representation. Serving it to a POST, PUT or DELETE tells a client
+		// its write succeeded when nothing was registered to receive it. A
+		// wrong method on a path that *does* exist is still ServeMux's 405.
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			writeProblem(w, r, http.StatusNotFound, "no such resource")
+			return
+		}
+
 		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path == "" {
 			path = "index.html"

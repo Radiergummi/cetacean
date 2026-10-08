@@ -152,12 +152,10 @@ func TestCompressionDisabled(t *testing.T) {
 	}
 }
 
-// TestCompressibleEncodingsCoversTheEnum keeps compressibleEncodings from
-// falling behind the Encoding enum: a coding added to the enum and not the list
-// would quietly narrow every test that iterates it to claim coverage of "all
-// codings". It walks the enum by its encodingCount sentinel rather than by what
-// String() answers, so a member added to neither String() nor the list still
-// fails here.
+// Keeps compressibleEncodings from falling behind the Encoding enum: a coding
+// added to the enum and not the list quietly narrows every test iterating it. It
+// walks the enum by its encodingCount sentinel rather than by String(), so a
+// member added to neither still fails here.
 func TestCompressibleEncodingsCoversTheEnum(t *testing.T) {
 	listed := make(map[Encoding]bool, len(compressibleEncodings))
 

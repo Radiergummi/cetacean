@@ -26,6 +26,18 @@ export function HealthDot(props: HealthDotProps) {
   );
 }
 
+/** Same count as ReplicaHealth, in the softer tone a stack's own pages use. */
+export function TaskHealth({ running, desired }: { running: number; desired: number }) {
+  return (
+    <span
+      data-healthy={running >= desired || undefined}
+      className="text-status-warning tabular-nums data-healthy:text-status-ok"
+    >
+      {running}
+    </span>
+  );
+}
+
 /**
  * Displays "running/desired" colored green when healthy, red when not.
  */

@@ -10,6 +10,7 @@ import (
 
 	"tailscale.com/client/tailscale/apitype"
 	"tailscale.com/tailcfg"
+	"tailscale.com/tailcfg/peercap"
 )
 
 type mockWhoIsClient struct {
@@ -474,7 +475,7 @@ func TestTailscaleProvider_Authenticate_NoCapabilityConfigured(t *testing.T) {
 }
 
 func TestExtractCapGroups(t *testing.T) {
-	cap := tailcfg.PeerCapability("example.com/cap/cetacean")
+	cap := peercap.Cap("example.com/cap/cetacean")
 
 	tests := []struct {
 		name   string

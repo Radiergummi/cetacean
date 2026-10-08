@@ -6,6 +6,7 @@ import (
 	"net/http/pprof"
 	"net/netip"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -23,6 +24,24 @@ import (
 // stays free of docker-package imports.
 type Resyncer interface {
 	Resync(ctx context.Context) error
+}
+
+// ResourceRefresher re-reads a single resource from the engine into the cache.
+// Backed by the watcher's Refresh method, and decoupled for the same reason
+// Resyncer is.
+//
+// The If-Match precondition needs it: the cache is filled asynchronously from
+// the event stream while every writer applies against the engine, so a
+// validator compared against the cache describes a moment the engine has
+// already moved past — which is exactly the window the header exists to close.
+type ResourceRefresher interface {
+	Refresh(ctx context.Context, kind, id string) error
+}
+
+// LivenessReporter answers whether the cache is still being kept current.
+// Backed by the watcher's Liveness method, decoupled like Resyncer.
+type LivenessReporter interface {
+	Liveness() (connected bool, lastSync time.Time)
 }
 
 // RouterConfig holds all dependencies and options for NewRouter.
@@ -47,7 +66,19 @@ type RouterConfig struct {
 	InlineScriptHashes []string
 
 	TrustedProxies []netip.Prefix
-	Resyncer       Resyncer
+
+	// ForwardedHeaders names the forwarding header family TrustedProxies write.
+	ForwardedHeaders config.ForwardedHeaders
+
+	Resyncer Resyncer
+
+	// Liveness backs the watcher block on /-/health.
+	Liveness LivenessReporter
+
+	// Refresher makes one resource current before its If-Match precondition is
+	// evaluated. Leaving it nil evaluates against the cache as it stands, which
+	// is what a test with no engine behind it wants.
+	Refresher ResourceRefresher
 
 	// MCPHandler, when non-nil, is mounted at {BasePath}/mcp. main.go builds
 	// it from internal/mcp; the api package stays decoupled from mcp-go.
@@ -55,8 +86,13 @@ type RouterConfig struct {
 
 	// OAuthRoutes, when non-nil, registers the OAuth 2.1 authorization server
 	// endpoints (/.well-known/*, /oauth/*) on the mux. Wired by main.go from
-	// internal/mcp/oauth.
+	// internal/oauth.
 	OAuthRoutes func(mux *http.ServeMux, basePath string)
+
+	// APITokens lets the auth middleware accept a bearer token this deployment's
+	// authorization server issued for the API. Its zero value accepts none, which
+	// is every deployment that runs no such server or has oauth.api_tokens off.
+	APITokens auth.APITokens
 }
 
 // listFeeds builds feedHandlers for a resource list endpoint. Every one of
@@ -131,6 +167,14 @@ func (r *routeRecorder) route(req *http.Request) string {
 	return pattern
 }
 
+// serves reports whether a route of its own answers req, rather than the
+// catch-all standing behind every path no route claims.
+func (r *routeRecorder) serves(req *http.Request) bool {
+	pattern := r.route(req)
+
+	return pattern != "" && pattern != "/"
+}
+
 func NewRouter(cfg RouterConfig) http.Handler {
 	handler, _ := newRouter(cfg)
 
@@ -144,16 +188,21 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	auth.SetErrorWriter(WriteErrorCode)
 
 	h := cfg.Handlers
+	h.refresher = cfg.Refresher
+	h.liveness = cfg.Liveness
 	b := cfg.Broadcaster
+	if b != nil {
+		b.SetBasePath(cfg.BasePath)
+	}
 	metricsProxy := cfg.MetricsProxy
 	spa := cfg.SPA
 	authProvider := cfg.AuthProvider
 
 	mux := &routeRecorder{mux: http.NewServeMux()}
 
-	tier1 := requireLevel(config.OpsOperational, h.operationsLevel)
-	tier2 := requireLevel(config.OpsConfiguration, h.operationsLevel)
-	tier3 := requireLevel(config.OpsImpactful, h.operationsLevel)
+	tier1 := h.requireLevel(config.OpsOperational)
+	tier2 := h.requireLevel(config.OpsConfiguration)
+	tier3 := h.requireLevel(config.OpsImpactful)
 
 	// ACL wrappers for write endpoints.
 	svcACL := h.requireWriteACL(
@@ -233,7 +282,15 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		mux.Handle("GET /-/metrics", metrics.Handler())
 	}
 	if cfg.Resyncer != nil {
-		mux.Handle("POST /-/resync", HandleResync(cfg.Resyncer))
+		// Authenticated and grant-gated, but deliberately not tiered: this is
+		// the one /-/ route internal/auth's isExempt does not exempt, because
+		// each call is a full sweep of the Docker API and leaving it open let
+		// anyone who could reach the port amplify one cheap request into a
+		// cluster enumeration. The operations level is not the right gate —
+		// it says what a deployment may do to the *cluster*, and a resync only
+		// re-reads it, so a read-only deployment keeps the dashboard's refresh
+		// button.
+		mux.HandleFunc("POST /-/resync", h.withAnyGrant(HandleResync(cfg.Resyncer)))
 	}
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
 	mux.HandleFunc("GET /metrics/status", h.HandleMonitoringStatus)
@@ -262,6 +319,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET "+apiCatalogPath, HandleAPICatalog(catalogMounts{
 		mcp:           cfg.MCPHandler != nil,
 		oauthMetadata: cfg.OAuthRoutes != nil,
+		apiTokens:     cfg.APITokens.Verifier != nil,
 	}))
 	mux.HandleFunc("GET /api/errors", contentNegotiated(HandleErrorIndex, feedHandlers{}, spa))
 	mux.HandleFunc(
@@ -271,8 +329,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 
 	// SSE events
 	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
-		ct := ContentTypeFromContext(r.Context())
-		switch ct {
+		switch ct := ContentTypeFromContext(r.Context()); ct {
 		case ContentTypeSSE:
 			b.ServeSSE(w, r, h.aclMatchWrap(r, nil), "")
 		case ContentTypeAtom:
@@ -379,6 +436,13 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			spa,
 		),
 	)
+	serviceFeeds := h.detailFeeds(cache.EventService, "id", func(id string) string {
+		if s, ok := h.cache.GetService(id); ok {
+			return s.Spec.Name
+		}
+		return id
+	})
+	serviceFeeds.yaml = h.HandleServiceCompose
 	mux.HandleFunc(
 		"GET /services/{id}",
 		contentNegotiatedWithSSE(
@@ -386,12 +450,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventService, r.PathValue("id"))
 			},
-			h.detailFeeds(cache.EventService, "id", func(id string) string {
-				if s, ok := h.cache.GetService(id); ok {
-					return s.Spec.Name
-				}
-				return id
-			}),
+			serviceFeeds,
 			spa,
 		),
 	)
@@ -550,9 +609,11 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		"GET /services/{id}/mode",
 		contentNegotiated(h.HandleGetServiceMode, feedHandlers{}, spa),
 	)
-	mux.Handle("PUT /services/{id}/mode",
-		svcTier3.Append(h.precond(h.serviceModeRepresentation)).
-			ThenFunc(h.HandleUpdateServiceMode))
+	// There is deliberately no PUT: Swarmkit refuses every service mode
+	// change, in either direction, with gRPC Unimplemented "service mode
+	// change is not allowed" — which is also why `docker service update` has
+	// no --mode flag. The endpoint existed, was documented as working, and
+	// could only ever answer 500.
 	mux.HandleFunc(
 		"GET /services/{id}/endpoint-mode",
 		contentNegotiated(h.HandleGetServiceEndpointMode, feedHandlers{}, spa),
@@ -619,14 +680,16 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		"GET /stacks/summary",
 		contentNegotiated(h.HandleStackSummary, feedHandlers{}, spa),
 	)
+	stackFeeds := h.detailFeeds(cache.EventStack, "name", func(name string) string {
+		return name
+	})
+	stackFeeds.yaml = h.HandleStackCompose
 	mux.HandleFunc(
 		"GET /stacks/{name}",
 		contentNegotiatedWithSSE(h.HandleGetStack, func(w http.ResponseWriter, r *http.Request) {
 			stackMatch := sse.StackMatcher(h.cache, r.PathValue("name"))
 			h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, stackMatch), "")
-		}, h.detailFeeds(cache.EventStack, "name", func(name string) string {
-			return name
-		}), spa),
+		}, stackFeeds, spa),
 	)
 	mux.Handle("DELETE /stacks/{name}",
 		stackTier3.Append(h.precond(h.stackRepresentation)).
@@ -822,9 +885,9 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		mux.Handle("/mcp", cfg.MCPHandler)
 	}
 
-	// OAuth 2.1 authorization server endpoints. Wired by main.go when MCP is
-	// enabled and an auth provider is configured; the api package itself
-	// doesn't reach into mcp/oauth.
+	// OAuth 2.1 authorization server endpoints. Wired by main.go when
+	// oauth.enabled is set; the api package itself doesn't reach into
+	// internal/oauth.
 	if cfg.OAuthRoutes != nil {
 		cfg.OAuthRoutes(mux.mux, "")
 	}
@@ -835,18 +898,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET /{$}", contentNegotiated(HandleEntrypoint, feedHandlers{}, spa))
 
 	// The same resource under the name static hosting taught clients to
-	// expect. negotiate has already stripped any suffix, so one route covers
-	// /index, /index.html and /index.json — and the suffix goes back on the
-	// target, which would otherwise re-negotiate from a disagreeing Accept.
-	mux.HandleFunc("GET /index", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		http.Redirect(
-			w, r,
-			absPath(ctx, "/")+extensionFromContext(ctx),
-			http.StatusMovedPermanently,
-		)
-	})
+	// expect; negotiate has stripped any suffix, so one route covers all three
+	// spellings. Served rather than redirected: the root has no spelling that
+	// carries a suffix, and "/.html" is a path proxies are hardened to refuse.
+	mux.HandleFunc("GET /index", contentNegotiated(HandleEntrypoint, feedHandlers{}, spa))
 
 	// SPA fallback (must be last). It answers 404 and never 406: a file it has
 	// is one representation with nothing to negotiate, and a path it does not
@@ -866,21 +921,35 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 
 	stack := NewChain(
 		requestID,
-		realIP(cfg.TrustedProxies),
+		realIP(cfg.TrustedProxies, cfg.ForwardedHeaders),
 		recovery,
 		securityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),
+		// Ahead of every middleware that decides by path: each spelling it
+		// canonicalises names the same resource, and a rule matching the path
+		// it came in on answers /-/resync.json differently from /-/resync.
+		cleanPaths,
+		negotiate,
 		cors(cfg.CORS),
 		crossOriginProtection(cfg.CORS, cfg.PublicURL),
-		auth.Middleware(authProvider),
-		negotiate,
+		auth.Middleware(authProvider, cfg.APITokens),
 		requireReady(h, mux),
 		discoveryLinks,
 		requestLogger,
+		// Innermost, so requestLogger wraps it: this middleware answers a
+		// name-addressed request itself instead of calling through, and
+		// anything it sits outside of therefore never runs for a redirect.
+		// Placed outside requestLogger, every 307 was missing from the request
+		// log and from the cetacean_http_* metrics alike — invisible exactly
+		// when a client is looping on one. It stays after requireReady for the
+		// opposite reason: a server whose cache is not filled yet resolves
+		// every name to nothing, and answering ENG001 is more honest than
+		// reporting the resource missing.
+		h.canonicalIdentifier,
 	)
 
 	return publicURLMiddleware(
 		cfg.PublicURL,
-		basePathMiddleware(cfg.BasePath, stack.Then(mux)),
+		basePathMiddleware(cfg.BasePath, mux, stack.Then(mux)),
 	), mux.patterns
 }
 

@@ -1,0 +1,318 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/oauth"
+)
+
+const testAPIIssuer = "https://cetacean.test"
+
+// tokenFor mints a real ES256 token for resourcePath, carrying identity.
+func tokenFor(t *testing.T, resourcePath string, identity *auth.Identity) string {
+	t.Helper()
+
+	issuer, err := oauth.NewTokenIssuer([]byte(oauthTestRoot), testAPIIssuer)
+	if err != nil {
+		t.Fatalf("NewTokenIssuer: %v", err)
+	}
+
+	token, err := issuer.IssueAccessToken(oauth.AccessTokenClaims{
+		Subject:     identity.Subject,
+		Email:       identity.Email,
+		DisplayName: identity.DisplayName,
+		Groups:      identity.Groups,
+		ClientID:    "test-client",
+	}, testAPIIssuer+resourcePath, time.Hour)
+	if err != nil {
+		t.Fatalf("IssueAccessToken: %v", err)
+	}
+
+	return token
+}
+
+// tokenRouter serves the real router with the API offered as a resource and a
+// provider that authenticates nobody, so only a token can get in.
+func tokenRouter(t *testing.T, opts ...testHandlersOption) http.Handler {
+	t.Helper()
+
+	return newTestRouterWithConfig(t, tokenRouterOptions(t), opts...)
+}
+
+// tokenRouterOptions configures a router that authenticates by bearer token and
+// by nothing else, so a request it answers was answered on the token.
+func tokenRouterOptions(t testing.TB) []routerOption {
+	t.Helper()
+
+	srv := tokenTestServer(testAPIIssuer, "")
+
+	return []routerOption{
+		func(cfg *RouterConfig) {
+			cfg.AuthProvider = &refusingProvider{}
+			cfg.OAuthRoutes = srv.RegisterRoutes
+			cfg.APITokens = auth.APITokens{
+				Verifier: srv,
+				Resource: srv.ResourceIdentifier(""),
+			}
+		},
+	}
+}
+
+// refusingProvider establishes nothing, so any request that reaches it is one
+// the token path declined to answer.
+type refusingProvider struct{}
+
+func (p *refusingProvider) Authenticate(
+	_ http.ResponseWriter,
+	_ *http.Request,
+) (*auth.Identity, error) {
+	return nil, &auth.AuthError{Msg: "no ambient credential", WWWAuthenticate: "Bearer"}
+}
+
+func (p *refusingProvider) RegisterRoutes(_ *http.ServeMux) {}
+
+func get(t *testing.T, router http.Handler, path string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	r := httptest.NewRequest(http.MethodGet, path, nil)
+	r.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+
+	return w
+}
+
+func getWithToken(
+	t *testing.T,
+	router http.Handler,
+	path, token string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	r := httptest.NewRequest(http.MethodGet, path, nil)
+	r.Header.Set("Accept", "application/json")
+	r.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+
+	return w
+}
+
+func TestATokenForTheAPIAuthenticatesARequest(t *testing.T) {
+	router := tokenRouter(t, withCache(cache.New(nil)))
+	token := tokenFor(t, "", &auth.Identity{Subject: "alice", Email: "alice@example.com"})
+
+	if w := getWithToken(t, router, "/nodes", token); w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+}
+
+// One path lying under another does not make one audience contain the other. A
+// token the user granted an agent for the MCP transport must not open the REST
+// write surface, and the refusal must name the API's own metadata document —
+// sent to the wrong one, a client would fetch a token that fails the same way.
+func TestATokenForAnotherResourceIsRefusedAndPointedAtTheRightDocument(t *testing.T) {
+	router := tokenRouter(t, withCache(cache.New(nil)))
+	token := tokenFor(t, "/mcp", &auth.Identity{Subject: "alice", Email: "alice@example.com"})
+
+	w := getWithToken(t, router, "/nodes", token)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401: %s", w.Code, w.Body.String())
+	}
+
+	challenge := w.Header().Get("WWW-Authenticate")
+	want := `resource_metadata="` + testAPIIssuer + `/.well-known/oauth-protected-resource"`
+	if !strings.Contains(challenge, want) {
+		t.Errorf("WWW-Authenticate = %q, want substring %q", challenge, want)
+	}
+	if strings.Contains(challenge, "oauth-protected-resource/mcp") {
+		t.Errorf("the refusal names the resource the token was for, not the API: %q", challenge)
+	}
+}
+
+// The grant docs/authorization.md documents is keyed on email, and the subject
+// here is not an address. The same person over a token must receive the same
+// Allow as over a session, or the ACL silently depends on the credential.
+func TestATokenReceivesTheSameAllowAsASession(t *testing.T) {
+	const subject = "a3f1c8e2-7b04-4d19-9e55-2c6f0b8a41d7"
+
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc-web",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:*"},
+		Audience:    []string{"user:*@example.com"},
+		Permissions: []string{"write"},
+	}}})
+
+	identity := &auth.Identity{
+		Subject: subject,
+		Email:   "alice@example.com",
+	}
+
+	opts := []testHandlersOption{
+		withCache(c),
+		withACL(evaluator),
+		withOpsLevel(config.OpsImpactful),
+	}
+
+	// The session arm runs the same router with a provider that establishes the
+	// identity directly, so the only difference between the two is the credential.
+	sessionRouter := newTestRouterWithConfig(t, []routerOption{
+		func(cfg *RouterConfig) { cfg.AuthProvider = &fixedProvider{identity: identity} },
+	}, opts...)
+
+	overSession := get(t, sessionRouter, "/services/svc-web")
+	if overSession.Code != http.StatusOK {
+		t.Fatalf("session: status = %d, want 200: %s", overSession.Code, overSession.Body.String())
+	}
+
+	overToken := getWithToken(
+		t,
+		tokenRouter(t, opts...),
+		"/services/svc-web",
+		tokenFor(t, "", identity),
+	)
+	if overToken.Code != http.StatusOK {
+		t.Fatalf("token: status = %d, want 200: %s", overToken.Code, overToken.Body.String())
+	}
+
+	session, viaToken := overSession.Header().Get("Allow"), overToken.Header().Get("Allow")
+	if session == "" {
+		t.Fatal("the session arm reported no Allow; the fixture proves nothing")
+	}
+	if !strings.Contains(session, "DELETE") {
+		t.Fatalf("session Allow = %q, want the grant to reach a write method", session)
+	}
+	if viaToken != session {
+		t.Errorf("Allow over a token = %q, over a session = %q", viaToken, session)
+	}
+}
+
+// A ceiling on tokens reaches the Allow header, not just the refusal: a client
+// that reads what it may do never attempts the write it would be refused.
+func TestATokenCeilingNarrowsTheAllowItReports(t *testing.T) {
+	const subject = "a3f1c8e2-7b04-4d19-9e55-2c6f0b8a41d7"
+
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc-web",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:*"},
+		Audience:    []string{"user:*@example.com"},
+		Permissions: []string{"write"},
+	}}})
+
+	identity := &auth.Identity{Subject: subject, Email: "alice@example.com"}
+
+	opts := []testHandlersOption{
+		withCache(c),
+		withACL(evaluator),
+		withOpsLevel(config.OpsImpactful),
+		withTokenOpsLevel(config.OpsReadOnly),
+	}
+
+	overToken := getWithToken(
+		t,
+		tokenRouter(t, opts...),
+		"/services/svc-web",
+		tokenFor(t, "", identity),
+	)
+	if overToken.Code != http.StatusOK {
+		t.Fatalf("token: status = %d, want 200: %s", overToken.Code, overToken.Body.String())
+	}
+
+	// The grant still reaches write; the ceiling is what stops it, so the two
+	// have to be told apart by the Allow rather than by the ACL.
+	viaToken := overToken.Header().Get("Allow")
+	for _, method := range []string{"DELETE", "PATCH", "PUT", "POST"} {
+		if strings.Contains(viaToken, method) {
+			t.Errorf("Allow over a read-only token = %q, want no %s", viaToken, method)
+		}
+	}
+
+	if !strings.Contains(viaToken, "GET") {
+		t.Errorf("Allow over a read-only token = %q, want GET", viaToken)
+	}
+}
+
+// What /profile says a token caller is. The value is wire-visible to exactly
+// the clients this credential exists for, and it changed while nothing but the
+// issuing package looked at it.
+func TestProfileNamesTheCredentialATokenCallerUsed(t *testing.T) {
+	identity := &auth.Identity{
+		Subject:     "a3f1c8e2-7b04-4d19-9e55-2c6f0b8a41d7",
+		Email:       "alice@example.com",
+		DisplayName: "Alice",
+	}
+
+	rec := getWithToken(
+		t,
+		tokenRouter(t),
+		"/profile.json",
+		tokenFor(t, "", identity),
+	)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	var body struct {
+		Provider    string `json:"provider"`
+		Subject     string `json:"subject"`
+		Email       string `json:"email"`
+		DisplayName string `json:"displayName"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode profile: %v", err)
+	}
+
+	// Spelled out rather than compared against the constant: the constant is
+	// what produces the value, so the two would move together and pin nothing.
+	if body.Provider != "oauth" {
+		t.Errorf("provider = %q, want %q", body.Provider, "oauth")
+	}
+
+	// The same fields a session reports: the claims carry them so a grant
+	// written against an address reaches a token too.
+	if body.Subject != identity.Subject {
+		t.Errorf("subject = %q, want %q", body.Subject, identity.Subject)
+	}
+	if body.Email != identity.Email {
+		t.Errorf("email = %q, want %q", body.Email, identity.Email)
+	}
+	if body.DisplayName != identity.DisplayName {
+		t.Errorf("displayName = %q, want %q", body.DisplayName, identity.DisplayName)
+	}
+}
+
+// fixedProvider establishes one identity, standing in for a valid session.
+type fixedProvider struct{ identity *auth.Identity }
+
+func (p *fixedProvider) Authenticate(
+	_ http.ResponseWriter,
+	_ *http.Request,
+) (*auth.Identity, error) {
+	return p.identity, nil
+}
+
+func (p *fixedProvider) RegisterRoutes(_ *http.ServeMux) {}

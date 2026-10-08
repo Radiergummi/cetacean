@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -152,7 +154,6 @@ email = "X-Email"
 groups = "X-Groups"
 secret_header = "X-Secret"
 secret_value = "s3cret"
-trusted_proxies = "10.0.0.0/8"
 `), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -178,9 +179,6 @@ trusted_proxies = "10.0.0.0/8"
 	}
 	if fc.Auth.Headers == nil || *fc.Auth.Headers.Subject != "X-User" {
 		t.Error("Headers Subject not parsed")
-	}
-	if *fc.Auth.Headers.TrustedProxies != "10.0.0.0/8" {
-		t.Error("Headers TrustedProxies not parsed")
 	}
 }
 
@@ -272,3 +270,133 @@ url = "http://prom:9090"
 		t.Error("Prometheus URL not parsed")
 	}
 }
+
+// A key the schema does not know is refused rather than ignored. Settings move
+// between releases, and the ones that move here mostly exist to switch a
+// capability off — silently ignoring one hands the operator the permissive
+// default while their file says otherwise.
+func TestLoadFileRefusesUnknownKeys(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			// Named exhaustively: the table carrying them is not listed too,
+			// having said nothing the keys inside it have not.
+			name: "a section that moved",
+			body: "[mcp.oauth]\ndcr_enabled = false\ncimd_enabled = false\n",
+			want: "read: mcp.oauth.cimd_enabled, mcp.oauth.dcr_enabled.",
+		},
+		{
+			name: "a key that moved out of its section",
+			body: "[mcp]\nsigning_key = \"x\"\n",
+			want: "mcp.signing_key",
+		},
+		{
+			// The setting is listen_addr; this is the guess someone makes when
+			// they have not looked it up.
+			name: "a plausible wrong name",
+			body: "[server]\nlisten_address = \":9000\"\n",
+			want: "server.listen_address",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "cetacean.toml")
+			if err := os.WriteFile(path, []byte(tt.body), 0600); err != nil {
+				t.Fatal(err)
+			}
+
+			_, err := LoadFile(path)
+			if err == nil {
+				t.Fatal("unknown keys were accepted")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error does not name %s: %v", tt.want, err)
+			}
+		})
+	}
+}
+
+// The refusal must not fire on a file that only uses settings the schema knows.
+func TestLoadFileAcceptsTheCurrentSchema(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cetacean.toml")
+	body := "[server]\nlisten_addr = \":9000\"\n\n" +
+		"[mcp]\nenabled = true\nauth_bypass = [\"cert\"]\n\n" +
+		"[oauth]\nenabled = true\ndcr_enabled = false\ncimd_enabled = false\n"
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	fc, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if fc.OAuth == nil || fc.OAuth.DCREnabled == nil || *fc.OAuth.DCREnabled {
+		t.Error("oauth.dcr_enabled did not reach the config")
+	}
+	if fc.MCP == nil || len(fc.MCP.AuthBypass) != 1 {
+		t.Error("mcp.auth_bypass did not reach the config")
+	}
+}
+
+// The reference file is documentation an operator copies from, so it has to
+// survive the same refusal their own file would. Now that an unknown key is an
+// error, a setting renamed in code and not in the reference fails here rather
+// than in someone's deployment.
+// Every setting in the reference is commented out, so loading the file as it
+// stands decodes nothing and LoadFile's refusal of an unknown key never fires.
+// The settings are uncommented first, which is what makes a rename in code and
+// not in the reference fail here rather than in someone's deployment.
+func TestReferenceConfigMatchesTheSchema(t *testing.T) {
+	path := filepath.Join("..", "..", "docs", "config.reference.toml")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", path, err)
+	}
+
+	live := uncommentReference(string(raw))
+	if !strings.Contains(live, "dcr_max_clients") {
+		t.Fatal("uncommenting produced no settings, so this test proves nothing")
+	}
+
+	dir := t.TempDir()
+	uncommented := filepath.Join(dir, "reference.toml")
+	if err := os.WriteFile(uncommented, []byte(live), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := LoadFile(uncommented); err != nil {
+		t.Fatalf("docs/config.reference.toml does not match the schema: %v", err)
+	}
+}
+
+// uncommentReference strips one level of comment from the reference's settings
+// and section headers, dropping its prose: a line only survives if it spells a
+// key or a section once uncommented.
+func uncommentReference(src string) string {
+	var live []string
+	for line := range strings.SplitSeq(src, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if after, ok := strings.CutPrefix(trimmed, "# "); ok {
+			if candidate := strings.TrimSpace(after); referenceKey.MatchString(candidate) ||
+				referenceSection.MatchString(candidate) {
+				live = append(live, candidate)
+			}
+
+			continue
+		}
+		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			live = append(live, trimmed)
+		}
+	}
+
+	return strings.Join(live, "\n")
+}
+
+var (
+	referenceKey     = regexp.MustCompile(`^[A-Za-z0-9_]+\s*=`)
+	referenceSection = regexp.MustCompile(`^\[[A-Za-z0-9_.]+\]$`)
+)

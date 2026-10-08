@@ -47,4 +47,15 @@ Object.defineProperty(window, "matchMedia", {
 
 afterEach(() => {
   cleanup();
+
+  // Collapsible sections and table preferences persist here, and jsdom keeps
+  // one store for every test in a file: an expanded section would otherwise
+  // decide the next test's starting state. Guarded because localStorage is
+  // undefined in some of the environments this suite runs in, which is what
+  // let the leak pass locally and fail in CI.
+  try {
+    localStorage.clear();
+  } catch {
+    // Nothing persisted, so nothing to clear.
+  }
 });

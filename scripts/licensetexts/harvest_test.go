@@ -335,10 +335,9 @@ func TestHarvestFailsWhenTheSurrogateIsAbsent(t *testing.T) {
 
 func TestHarvestSubstitutesAttributionForAPackageWithNoLicenseAnywhere(t *testing.T) {
 	// @replit/codemirror-css-color-picker declares MIT and ships no text, and
-	// neither does its repository — there is nothing to read and nothing to
-	// borrow. It still has to reach the notices with a resolvable text, which
-	// is what internal/api/sbom's own tests require of every component, so it
-	// gets a substitute saying so rather than being left out.
+	// neither does its repository, so there is nothing to read or borrow. It
+	// still has to reach the notices with a resolvable text, so it gets a
+	// substitute saying so rather than being left out.
 	doc := sbom.Document{Components: []sbom.Component{
 		{Name: "@replit/codemirror-css-color-picker", Version: "1.0.0", Ecosystem: "npm"},
 	}}

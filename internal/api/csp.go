@@ -15,18 +15,10 @@ var scriptTag = regexp.MustCompile(`(?is)<script([^>]*)>(.*?)</script>`)
 // srcAttr matches a `src` attribute on its own, so that `data-src` is not one.
 var srcAttr = regexp.MustCompile(`(?i)(^|[\s/])src\s*=`)
 
-// InlineScriptHashes returns a CSP source token per inline <script> in the
-// SPA's index.html, as `'sha256-<base64>'`.
-//
-// The theme has to be applied before the first paint or a dark-mode reader sees
-// a white flash on every load, which means an inline script in <head>; the
-// policy is `default-src 'self'` with no `script-src`, so that script needs a
-// hash to run at all. Hashing the document the server is about to serve — at
-// startup, rather than pasting a digest into the policy — is what keeps the two
-// from drifting: an edit to index.html changes the hash the header carries,
-// with nothing to remember to update.
-//
-// Scripts carrying `src` are skipped: they load from 'self' already.
+// InlineScriptHashes returns a CSP source token per inline <script> in the SPA's
+// index.html. The theme must be applied before first paint, which means an
+// inline script, and `default-src 'self'` needs a hash for it to run. Hashing
+// the document the server is about to serve keeps the two in step.
 func InlineScriptHashes(fsys fs.FS) ([]string, error) {
 	index, err := fs.ReadFile(fsys, "index.html")
 	if err != nil {

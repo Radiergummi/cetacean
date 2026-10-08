@@ -17,12 +17,10 @@ import (
 // either transport lands identically.
 const defaultAttachmentMode os.FileMode = 0o444
 
-// attachmentRef is one secret or config a container should receive.
-//
-// It names the resource rather than giving its ID, because a model holds
-// names: every listing returns them, every completion offers them, and a
-// describe prints them. Docker's reference type wants both and rejects a pair
-// that disagrees, so the ID is resolved here from the name the caller gave.
+// attachmentRef is one secret or config a container should receive. It names
+// the resource rather than giving its ID, because a model holds names: every
+// listing, completion and describe hands one back. Docker's reference type
+// wants both and rejects a disagreeing pair, so the ID is resolved here.
 type attachmentRef struct {
 	Name string `json:"name"`
 
@@ -33,11 +31,10 @@ type attachmentRef struct {
 	Target string `json:"target,omitempty"`
 }
 
-// Where a secret and a config land when the caller names no target. These are
-// the paths REST's PATCH /services/{id}/secrets and /configs already default
-// to, and the ones Docker's own CLI produces — a bare name would be read by
-// Swarm as relative to the container's working directory for a config, so the
-// same attachment made over the two transports mounted at two paths.
+// Where a secret and a config land when the caller names no target: the paths
+// REST's PATCH routes default to and Docker's CLI produces. Swarm reads a bare
+// config name as relative to the container's working directory, so without
+// these the same attachment mounts at two paths over the two transports.
 const (
 	defaultSecretDir = "/run/secrets/"
 	defaultConfigDir = "/"
@@ -82,21 +79,10 @@ func decodeAttachments(req mcplib.CallToolRequest, key string) ([]attachmentRef,
 	return refs, nil
 }
 
-// toolUpdateServiceSecrets replaces the set of secrets a service receives.
-//
-// This is the second of the three calls a rotation needs — create the
-// replacement, repoint the services, drop the old one — and the reason
-// create_secret was worth adding: Swarm secrets are immutable, so there is no
-// other way to change what a container is handed.
-//
-// It sits at the configuration level, the same one the REST route for this
-// operation requires. The spec argued for raising it, on the grounds that
-// handing a container a different credential is a bigger step for an agent
-// acting unattended; that was rejected in favour of the operations level
-// meaning one thing whichever transport an operator reaches for.
-//
-// The list replaces rather than merges, like every other wholesale section
-// here: an empty list detaches every secret.
+// toolUpdateServiceSecrets replaces the set of secrets a service receives —
+// the second of the three calls a rotation needs, since Swarm secrets are
+// immutable. Configuration level, matching the REST route. The list replaces
+// rather than merges: an empty one detaches every secret.
 func (s *Server) toolUpdateServiceSecrets(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -162,11 +148,9 @@ func (s *Server) toolUpdateServiceSecrets(
 	return marshalResult(serviceUpdate(sectionSecrets, updated))
 }
 
-// toolUpdateServiceConfigs is the config counterpart.
-//
-// It differs from the secret tool only in the reference type and the read
-// grant it checks — a config's content is readable, so attaching one discloses
-// less, but the grant is still required for the same reason.
+// toolUpdateServiceConfigs is the config counterpart, differing only in the
+// reference type and the read grant it checks. A config's content is readable
+// so attaching one discloses less, but the grant is still required.
 func (s *Server) toolUpdateServiceConfigs(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -229,12 +213,10 @@ func (s *Server) toolUpdateServiceConfigs(
 	return marshalResult(serviceUpdate(sectionConfigs, updated))
 }
 
-// mountValue is one entry of the mounts array.
-//
-// It is a wire shape of its own rather than mount.Mount because that struct
-// carries five nested option blocks — volume driver config, bind propagation,
-// tmpfs sizing — none of which a service editor needs, and all of which would
-// land in the input schema a model reads before every call.
+// mountValue is one entry of the mounts array, a wire shape of its own rather
+// than mount.Mount: that struct carries five nested option blocks a service
+// editor does not need, all of which would land in the input schema a model
+// reads before every call.
 type mountValue struct {
 	// Type is one of volume, bind or tmpfs, validated by name here so an
 	// unknown one is refused before a rolling deploy is requested.
@@ -274,15 +256,9 @@ func (v mountValue) toMount(index int) (mount.Mount, error) {
 }
 
 // toolUpdateServiceMounts replaces the set of filesystem mounts a service's
-// containers receive.
-//
-// It sits at the configuration level with the other two attachment editors,
-// matching the REST route for the same operation. That is a deliberate choice
-// against the spec, which argued the tier should be raised because a bind
-// mount of the Docker socket is a root shell on the host: the operations level
-// is the operator's single dial and must mean one thing whichever transport
-// they reach for, so the warning lives in the tool's description, where the
-// model actually reads it.
+// containers receive. Configuration level with the other two attachment
+// editors, matching the REST route. The warning that a bind mount of the
+// socket is a root shell lives in the tool's description, where a model reads it.
 func (s *Server) toolUpdateServiceMounts(
 	ctx context.Context,
 	req mcplib.CallToolRequest,

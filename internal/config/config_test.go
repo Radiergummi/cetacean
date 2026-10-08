@@ -180,6 +180,9 @@ func TestLoad_FullPrecedence(t *testing.T) {
 	}
 }
 
+// A deployment that configured nothing writes nothing: the dashboard answers
+// on an address before an operator has said who may reach it, and the default
+// is what decides whether that window is read-only.
 func TestLoad_OperationsLevel_Default(t *testing.T) {
 	t.Setenv("CETACEAN_OPERATIONS_LEVEL", "")
 
@@ -187,8 +190,8 @@ func TestLoad_OperationsLevel_Default(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.OperationsLevel != OpsOperational {
-		t.Errorf("OperationsLevel=%d, want %d", cfg.OperationsLevel, OpsOperational)
+	if cfg.OperationsLevel != OpsReadOnly {
+		t.Errorf("OperationsLevel=%d, want %d", cfg.OperationsLevel, OpsReadOnly)
 	}
 }
 

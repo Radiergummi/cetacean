@@ -20,10 +20,10 @@ type PageParams struct {
 	Dir      string
 	RangeReq bool
 
-	// Explicit records that the query named a page rather than being handed
-	// the default one, which only the CSV rendering reads. A Range request
-	// does not count: CSV answers 200 with no Content-Range, and a partial
-	// body under that status would be a lie.
+	// Explicit records that the query named a limit, which only the CSV
+	// rendering reads. An offset does not count: it says where to start, not
+	// how much to take, and the default fifty would then cut the file with
+	// nothing inside it to say so.
 	Explicit bool
 }
 
@@ -34,11 +34,12 @@ func parsePagination(r *http.Request) (PageParams, error) {
 		Dir:    "asc",
 	}
 
-	var hasQueryPagination bool
+	var hasLimit, hasQueryPagination bool
 
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			p.Limit = n
+			hasLimit = true
 			hasQueryPagination = true
 		}
 	}
@@ -61,7 +62,7 @@ func parsePagination(r *http.Request) (PageParams, error) {
 		}
 	}
 
-	p.Explicit = hasQueryPagination
+	p.Explicit = hasLimit
 
 	if p.Limit > 200 {
 		p.Limit = 200
@@ -135,19 +136,13 @@ func pageOf[T any](items []T, p PageParams) []T {
 	return items[start:end]
 }
 
-// writeCollectionResponse writes a CollectionResponse with the appropriate
-// status code and headers based on whether the request used the Range header.
+// writeCollectionResponse writes a CollectionResponse, choosing its status from
+// whether the request used Range: 206 with Content-Range for a partial answer,
+// 416 for an offset beyond the total, 200 otherwise. A query-param request gets
+// 200 with Link headers, and Accept-Ranges: items is always set.
 //
-// For Range requests:
-//   - Empty collection → 200 OK
-//   - Offset beyond total → 416 with Content-Range: items */TOTAL
-//   - Full collection covered → 200 OK
-//   - Partial → 206 with Content-Range: items START-END/TOTAL
-//
-// For query-param requests: 200 OK with Link pagination headers.
-// Always sets Accept-Ranges: items.
-// writeCollectionResponse writes a paginated collection. validator is the tag
-// the caller already offered on the conditional path, or empty to hash the body.
+// validator is the tag the caller already offered on the conditional path, or
+// empty to hash the body.
 func writeCollectionResponse[T any](
 	w http.ResponseWriter,
 	r *http.Request,

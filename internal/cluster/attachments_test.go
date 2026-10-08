@@ -7,11 +7,9 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 )
 
-// TestServiceDetailsReportsAttachmentNames: names, never content.
-//
-// A digest may say which secrets a container receives — that is what makes
-// "who uses this secret?" and "did the rotation land?" answerable — without
-// becoming a way to read them. The same rule envNames follows.
+// Names, never content. A digest may say which secrets a container receives —
+// which is what makes "who uses this secret?" and "did the rotation land?"
+// answerable — without becoming a way to read them, the rule envNames follows.
 func TestServiceDetailsReportsAttachmentNames(t *testing.T) {
 	svc := swarm.Service{
 		ID: "svc1",
@@ -116,13 +114,10 @@ func TestServiceDetailsNeverCarriesSecretContent(t *testing.T) {
 	}
 }
 
-// mountTargets is what confirms a mounts write landed.
-//
-// bindMounts already reports the security-relevant mounts in full, but it
-// deliberately skips volumes — so on its own it cannot answer "is the data
-// volume still mounted?" after a wholesale replacement, which is exactly the
-// question a caller who just replaced the set is asking. A target path is a
-// mount's identity here: two things cannot be mounted at one path.
+// mountTargets is what confirms a mounts write landed. bindMounts reports the
+// security-relevant mounts in full but skips volumes, so on its own it cannot
+// answer "is the data volume still mounted?" after a wholesale replacement. A
+// target path is a mount's identity: two things cannot share one.
 func TestServiceDetailsReportsMountTargets(t *testing.T) {
 	svc := swarm.Service{
 		ID: "svc1",

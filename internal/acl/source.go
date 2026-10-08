@@ -19,6 +19,15 @@ type ResourceResolver interface {
 
 	// ServiceOfTask returns the service name for a task, or "" if unknown.
 	ServiceOfTask(taskID string) string
+
+	// LabelsOf returns the labels for a resource, or nil if unknown.
+	LabelsOf(resourceType, name string) map[string]string
+
+	// LabelsByType returns every resource of a type, keyed by that same name.
+	// Filter needs a whole type at once: the cache is keyed by ID, so resolving
+	// one name at a time costs a scan and a read lock per item — quadratic over
+	// a list, on every list request, SSE refetch and MCP find.
+	LabelsByType(resourceType string) map[string]map[string]string
 }
 
 // extractGrantsFromRaw parses a raw slice of grant-like maps into Grant

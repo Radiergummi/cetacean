@@ -17,10 +17,20 @@ cluster — every resource browsable, with working cross-references between them
 
 ```bash
 make check        # lint + typecheck + fmt-check + test — the gate
+make lint-docs    # Vale over the published docs, README, CONTRIBUTING, and CHANGELOG
 make build        # frontend + widgets + go build
 make fmt          # gofmt + oxfmt (write)
 make test         # go test ./...
 make sbom         # regenerate the committed SBOM (rarely needed by hand)
+```
+
+The end-to-end suite is local-only, behind the `e2e` build tag, and drives the real binary
+against a Docker-in-Docker swarm. `test/e2e/README.md` covers its lanes and known gaps.
+
+```bash
+make test-stack   # build instrumented + run the suite, reporting the coverage it reached
+make e2e-up       # bring the environment up with a SUT on :19001, for the browser suite
+make e2e-down     # tear it down
 ```
 
 ```bash
@@ -29,20 +39,22 @@ go test ./internal/cache/       # one package
 go run .
 ```
 
+The frontend and the website are one pnpm workspace, driven from the repository
+root. `pnpm install` covers both; the version of pnpm is pinned by
+`packageManager` and the Node version by `.nvmrc`.
+
 ```bash
-cd frontend
-npm run dev                     # Vite on :5173, proxies to :9000
-npm run build                   # -> frontend/dist
-npm run build:widgets           # -> frontend/dist-widgets (a go build prerequisite)
-npm run check                   # tsc only, faster than a build
-npx vitest run
+pnpm --filter frontend dev              # Vite on :5173, proxies to :9000
+pnpm --filter frontend build            # -> frontend/dist
+pnpm --filter frontend build:widgets    # -> frontend/dist-widgets (a go build prerequisite)
+pnpm --filter frontend check            # tsc only, faster than a build
+pnpm --filter frontend exec vitest run
 ```
 
 ```bash
-cd website
-npm run sync-assets             # generates src/data/errors.json; needed before `check` in a clean tree
-npm run dev                     # Astro on :4321
-npm run check                   # astro check, covers .astro as well as .ts
+pnpm --filter website sync-assets       # generates src/data/errors.json; needed before `check` in a clean tree
+pnpm --filter website dev               # Astro on :4321
+pnpm --filter website check             # astro check, covers .astro as well as .ts
 ```
 
 Docker: `docker build -t cetacean:latest .`, then `docker stack deploy -c compose.yaml cetacean`.
@@ -50,7 +62,7 @@ Add `-c compose.prometheus.yaml` to join the `monitoring` network from `compose.
 
 ## Configuration
 
-66 settings, all optional, all with a TOML path, an env var and a flag.
+69 settings, all optional, all with a TOML path, an env var and a flag.
 **`docs/configuration.mdx` is canonical** — do not restate the table anywhere else, and
 name settings by their TOML path (`server.trusted_proxies`) in user-facing text.
 
@@ -81,6 +93,14 @@ These bite across the codebase; the per-component rules live in `.claude/ARCHITE
 - Protocol work follows the RFC exactly — case-insensitivity where the spec says so, header
   syntax, status codes. A shortcut that passes the tests we happened to write is still wrong.
 - Structured logging via `log/slog` throughout.
+- A requirement from an external specification belongs in `internal/spec/registry/`,
+  claimed by the test that exercises it with `spec.Satisfies` as the first statement
+  of the test or subtest holding the `t` it is given. `make spec` fails on a
+  requirement nothing claims, a cited specification nothing accounts for, and — via
+  `scripts/spec-vet`, a `go vet` tool — a claim written in a form the gate cannot
+  read. `make spec-mutants` fails when a requirement's mutants survive its
+  claimants. The `mcp/sep-*.yaml` families are generated — edit `scripts/spec-genmcp`
+  and run `make spec-genmcp`, not the files.
 
 ## Code style
 

@@ -23,6 +23,7 @@ func newResourceTestServer(t *testing.T, c *cache.Cache, opts ...func(*Options))
 	o := Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
+		AuthMode:       "none",
 	}
 	for _, fn := range opts {
 		fn(&o)
@@ -243,11 +244,10 @@ func TestReadRecommendationsWithoutEngineReturnsEmptyArray(t *testing.T) {
 	}
 }
 
-// The enriched task shape is what cetacean://tasks returns and what find's
-// raw mode hands back, and its whole point is naming the task's parents. That
-// resolution used to read the unfiltered cache, so a bare `task:*` grant was
-// told the name of every service and node the tasks touched — a bypass of the
-// rule TaskDigest and RowsForTasks both follow.
+// The enriched task shape is what cetacean://tasks returns and what find's raw
+// mode hands back, and its whole point is naming the task's parents. Resolving
+// that against the unfiltered cache tells a bare `task:*` grant the name of
+// every service and node the tasks touched.
 func TestEnrichedTaskNamesOnlyReadableParents(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{

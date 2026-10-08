@@ -7,9 +7,16 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestPreferMinimal(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc7240/unknown-tokens-are-ignored",
+		"http/rfc7240/tokens-may-be-split-or-combined",
+	)
+
 	tests := []struct {
 		name   string
 		header []string
@@ -43,6 +50,13 @@ func TestPreferMinimal(t *testing.T) {
 			name:   "whitespace around token",
 			header: []string{" return=minimal "},
 			want:   true,
+		},
+		{
+			// A token this server does not recognise is ignored, even when its
+			// value is one this server acts on for a different token.
+			name:   "another preference carrying the same value",
+			header: []string{"handling=minimal"},
+			want:   false,
 		},
 		{
 			name:   "unrelated preference",

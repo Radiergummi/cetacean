@@ -8,19 +8,9 @@ import (
 )
 
 // nodeCanHost reports whether a node passes every hard scheduling filter in a
-// service's placement spec, and names the first one it fails.
-//
-// Swarm enforces three of them exactly — constraints, supported platforms, and
-// the per-node replica cap — and a view that reads only the first reports a
-// service movable onto nodes the scheduler will refuse, which is the one wrong
-// answer the drain-impact view must not give: a service pinned to arm64, or
-// capped at one replica per node, would be called movable onto a full amd64
-// node and its replica would simply sit pending after the drain.
-//
-// placed is how many of this service's live tasks the node already carries,
-// which is what the replica cap is measured against. Resource reservations are
-// deliberately still not considered: unlike these three, spare capacity after a
-// drain is a moving target, and the cluster status read already reports it.
+// service's placement spec, naming the first it fails. Swarm enforces exactly
+// three: constraints, supported platforms and the per-node replica cap, which
+// placed is measured against. Resource reservations are deliberately not.
 func nodeCanHost(node swarm.Node, placement *swarm.Placement, placed int) (bool, string) {
 	if placement == nil {
 		return true, ""
@@ -45,27 +35,9 @@ func nodeCanHost(node swarm.Node, placement *swarm.Placement, placed int) (bool,
 }
 
 // nodeSupportsPlatform reports whether a node's platform is one the service's
-// image supports, naming both sides when it is not — a caller told only that
-// the platform is wrong cannot tell which way.
-//
-// Unlike a constraint, this list is not something an operator wrote: Swarm
-// populates it from the image's manifest, so *every* service in a real cluster
-// carries one. That inverts which mistake is affordable here. A constraint we
-// cannot evaluate is reported unsatisfied, because a mistaken "movable" is the
-// answer the drain-impact view must never give and an unparseable constraint
-// is rare. Reading an unrecognised platform the same way would instead strand
-// every service on the cluster the moment one field is spelled unexpectedly —
-// so where this cannot tell, it does not block.
-//
-// Concretely each half is compared only when both sides state it: an empty
-// field on the service's entry is a wildcard, and an empty field on the node's
-// is one the engine did not report — neither is grounds to rule a node out,
-// and treating an absent architecture as a mismatch would strand every service
-// on that node. The comparison folds architecture aliases first: Docker's own
-// node description says "aarch64" where a manifest says "arm64", and comparing
-// those two literally strands every arm service on every arm node. An
-// all-unknown entry is an attestation manifest rather than a platform, so it
-// names nothing and is skipped.
+// image supports, naming both sides when not. This list comes from the image
+// manifest, so an unrecognised value must not block — the reverse of
+// nodeSatisfies' rule. Each half is compared only when both sides state it.
 func nodeSupportsPlatform(node swarm.Node, platforms []swarm.Platform) (bool, string) {
 	if len(platforms) == 0 {
 		return true, ""
@@ -112,10 +84,8 @@ func isAttestationPlatform(p swarm.Platform) bool {
 }
 
 // normalizeArch folds the architecture aliases that mean one machine, so a node
-// whose engine reports "aarch64" matches an image manifest declaring "arm64".
-// The pairs are the ones containerd normalises, which is what actually resolves
-// an image against a host; comparing the raw strings instead would report every
-// arm service unplaceable on every arm node.
+// reporting "aarch64" matches a manifest declaring "arm64". The pairs are the
+// ones containerd normalises, which is what resolves an image against a host.
 func normalizeArch(arch string) string {
 	switch arch {
 	case "x86_64", "x86-64", "amd64":
@@ -140,9 +110,8 @@ func describePlatform(p swarm.Platform) string {
 
 // describeNodePlatform renders the same pair for the node side, where an empty
 // field means the engine did not report one rather than "anything goes".
-// Sharing describePlatform here produced the self-contradiction "runs any/any;
-// the service supports linux/arm64" — a node said to run anything, in the
-// sentence explaining why it cannot run this.
+// Sharing describePlatform gives "runs any/any" in the sentence explaining why
+// the node cannot run this service.
 func describeNodePlatform(p swarm.Platform) string {
 	return renderPlatform(p, "unknown")
 }
@@ -160,19 +129,9 @@ func renderPlatform(p swarm.Platform, absent string) string {
 }
 
 // nodeSatisfies reports whether a node meets every placement constraint in a
-// service's spec, and names the first constraint that it does not.
-//
-// This is the rule the drain-impact view turns on: a service pinned to a label
-// no remaining node carries has nowhere to go, and saying so is the whole
-// answer to "if I drain this node, what moves?". Swarm holds the constraints
-// and enforces them at schedule time, but nothing reads them back — the
-// drain_node prompt currently instructs the model to compare them by eye
-// across two listings.
-//
-// A constraint this cannot parse or does not recognise is reported as **not**
-// satisfied, with the constraint as the reason. Reading an unevaluable
-// constraint as satisfied would report a service movable that Swarm will
-// refuse to place, which is the one wrong answer this view must not give.
+// service's spec, naming the first it does not. A constraint it cannot parse
+// or does not recognise is **not** satisfied: the other reading calls a service
+// movable that Swarm will refuse to place.
 func nodeSatisfies(node swarm.Node, constraints []string) (bool, string) {
 	for _, raw := range constraints {
 		key, op, value, ok := splitConstraint(raw)
@@ -224,13 +183,10 @@ func splitConstraint(raw string) (key, op, value string, ok bool) {
 	return "", "", "", false
 }
 
-// nodeAttribute resolves a constraint key against a node, reporting whether
-// the key is one Swarm defines at all.
-//
-// The unknown-key answer is separate from the empty-value answer on purpose:
-// `node.labels.gpu` on a node with no such label is a known key with no value
-// (so `!=` holds), while `weird.key` is a key Swarm would reject outright and
-// must not be quietly treated as unset.
+// nodeAttribute resolves a constraint key against a node, reporting whether the
+// key is one Swarm defines at all. Unknown-key is separate from empty-value:
+// `node.labels.gpu` on a node without it is known and unset, so `!=` holds,
+// while `weird.key` is one Swarm rejects outright.
 func nodeAttribute(node swarm.Node, key string) (string, bool) {
 	if label, found := strings.CutPrefix(key, "node.labels."); found {
 		return node.Spec.Labels[label], label != ""

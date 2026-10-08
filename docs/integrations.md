@@ -1,15 +1,15 @@
 ---
 title: Integrations
-description: Structured panels for Traefik, Shepherd, Swarm Cronjob, and Diun on the service detail page.
+description: Structured panels for Traefik, Shepherd, swarm-cronjob, and Diun on the service detail page.
 category: guide
 tags: [ integrations, traefik, shepherd, swarm-cronjob, diun ]
 ---
 
 # Integrations
 
-Cetacean has support for certain Swarm ecosystem tools, like Traefik or Shepherd. It detects them
-from a service's own labels, and renders each as a structured panel on the service
-[detail page][detail-pages], above the labels section. Nothing is rendered when no matching labels
+Cetacean has support for certain Swarm ecosystem tools, like Traefik or Shepherd, and for its own
+access-control labels. It detects them from a service's own labels, and renders each as a structured panel on the
+service [detail page][detail-pages], above the labels section. Nothing is rendered when no matching labels
 are present.
 
 ## Supported tools
@@ -21,18 +21,24 @@ A tool is detected when the service carries at least one label with its prefix.
 |-------------------------------------------------------------|------------------|-----------------------------------------------------------------------------------|
 | [Traefik](https://traefik.io/)                              | `traefik.`       | HTTP routers, services, and middlewares parsed from `traefik.http.*`              |
 | [Shepherd](https://github.com/djmaze/shepherd)              | `shepherd.`      | Enable state and `shepherd.auth.config`                                           |
-| [Swarm Cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.` | Schedule, replicas, skip-running, and the two registry options                    |
+| [swarm-cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.` | Schedule, replicas, skip-running, and the two registry options                    |
 | [Diun](https://github.com/crazy-max/diun)                   | `diun.`          | Watch settings, tag include/exclude/sort filters, platform, and `diun.metadata.*` |
+| [Cetacean ACL](authorization#label-based-access-control)    | `cetacean.acl.`  | The read and write audiences the resource's own labels grant                      |
 
-A panel shows the tool as enabled unless a `<prefix>enable` label says otherwise.
+A panel shows the tool as enabled unless a `<prefix>enable` label says otherwise. The ACL panel has no such
+label and is shown whenever a `cetacean.acl.*` label is present. Whether those labels are *enforced* is a
+separate question, settled by `acl.labels`; the panel shows what they say either way.
 
-Traefik's TCP and UDP labels are left to the raw label view; only the HTTP routers, services and middlewares are
+Traefik's TCP and UDP labels are left to the raw label view; only the HTTP routers, services, and middlewares are
 parsed into structure.
+
+The Traefik panel adds a read-only **Graph** view, drawing each entrypoint through the routers listening on it and
+their middleware chains to the service they route to.
 
 ## Editing
 
-Each panel has a structured/raw toggle and a link to the tool's own documentation. Both views are editable when the
-service allows `PATCH`, which requires [operations level][operations-level] 2 and ACL write permission
+Each panel has a view toggle and a link to the tool's own documentation. The structured and raw views are editable
+when the service allows `PATCH`, which requires [operations level][operations-level] 2 and ACL write permission
 on the service. Saving writes the labels back through `PATCH /services/{id}/labels`; every field maps to one Docker
 service label.
 

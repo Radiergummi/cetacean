@@ -39,7 +39,7 @@ type OIDCProvider struct {
 	session               *SessionCodec
 	issuer                string // for RFC 9207 iss validation
 	issRequired           bool   // true if IdP advertises authorization_response_iss_parameter_supported
-	endSessionEndpoint    string // RFC 9722 RP-initiated logout; empty if not supported
+	endSessionEndpoint    string // OIDC RP-initiated logout; empty if not supported
 	postLogoutRedirectURL string // derived from RedirectURL origin
 	basePath              string
 }
@@ -61,7 +61,7 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCProviderConfig) (*OIDCProvider
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
 
-	// Extract additional discovery claims for RFC 9207 and RFC 9722.
+	// Extract additional discovery claims for RFC 9207 and RP-initiated logout.
 	var disco struct {
 		IssSupported       bool   `json:"authorization_response_iss_parameter_supported"`
 		EndSessionEndpoint string `json:"end_session_endpoint"`
@@ -119,8 +119,7 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 			// error, so a rejected credential never reaches the log.
 			reason := "invalid bearer token"
 
-			var expired *oidc.TokenExpiredError
-			if errors.As(err, &expired) {
+			if _, ok := errors.AsType[*oidc.TokenExpiredError](err); ok {
 				reason = "expired bearer token"
 			}
 
@@ -165,13 +164,10 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 	}
 }
 
-// RegisterRoutes registers the OIDC auth routes on the given mux.
-//
-// Logout carries no cross-origin protection of its own: the router applies
-// http.CrossOriginProtection to every route, and a second one here would hold
-// a different set of trusted origins from the one the router mirrors out of
-// server.cors.origins — so a configured cross-origin dashboard would pass the
-// router's check and be refused by this one.
+// RegisterRoutes registers the OIDC auth routes on the given mux. Logout
+// carries no cross-origin protection of its own: the router applies one to
+// every route, and a second here would hold a different set of trusted origins
+// — so a configured cross-origin dashboard would pass one check and fail this.
 func (p *OIDCProvider) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/login", p.handleLogin)
 	mux.HandleFunc("GET /auth/callback", p.handleCallback)
@@ -242,11 +238,9 @@ func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, r
 }
 
 func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
-	// Clear auth flow cookies immediately, before any early return can bypass
-	// them. Set-Cookie deletion headers are written before WriteHeader, so
-	// they're included in every response — both error and success paths.
-	// This prevents PKCE verifiers and state values from lingering in the
-	// browser after a failed callback.
+	// Cleared before any early return can bypass it: the deletion headers are
+	// written before WriteHeader, so they ride on every response. Otherwise a
+	// PKCE verifier and state linger in the browser after a failed callback.
 	p.clearAuthFlowCookies(w)
 
 	// Check for IdP-returned errors (e.g. access_denied).
@@ -369,7 +363,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Store the raw ID token for RP-initiated logout (RFC 9722 id_token_hint).
+	// Store the raw ID token for RP-initiated logout (id_token_hint).
 	p.session.Set(w, identity, ttl, rawIDToken)
 
 	http.Redirect(w, r, redirectURL, http.StatusFound)
@@ -432,7 +426,8 @@ func (p *OIDCProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleLogout clears the local session and, if the IdP supports it,
-// redirects to the IdP's end_session_endpoint per RFC 9722.
+// redirects to the IdP's end_session_endpoint per OpenID Connect
+// RP-Initiated Logout 1.0.
 func (p *OIDCProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 	// Read the ID token hint before clearing the session.
 	var idTokenHint string
@@ -510,11 +505,17 @@ func claimsToIdentity(claims map[string]any) *Identity {
 // ExtractBearerToken extracts the token from an Authorization: Bearer header.
 // The scheme comparison is case-insensitive per RFC 6750 Section 2.1.
 func ExtractBearerToken(r *http.Request) string {
+	const scheme = "bearer "
+
 	auth := r.Header.Get("Authorization")
-	if len(auth) > 7 && strings.EqualFold(auth[:7], "bearer ") {
-		return auth[7:]
+	if len(auth) <= len(scheme) || !strings.EqualFold(auth[:len(scheme)], scheme) {
+		return ""
 	}
-	return ""
+
+	// RFC 9110's credentials rule is `auth-scheme 1*SP token68`, so more than one
+	// space is legal. Returning the token with a space still attached reads as no
+	// credential at all, which would hand a valid one to a different authenticator.
+	return strings.TrimLeft(auth[len(scheme):], " ")
 }
 
 // isRelativePath returns true if s is a non-empty relative path (starts with /).

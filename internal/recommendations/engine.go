@@ -47,9 +47,26 @@ func NewEngine(checkers ...Checker) *Engine {
 // Run starts the engine tick loop. Ticks every 60 seconds,
 // running only checkers whose interval has elapsed. Blocks until ctx is cancelled.
 func (e *Engine) Run(ctx context.Context) {
+	e.RunAfter(ctx, nil)
+}
+
+// RunAfter is Run, held until `ready` closes. The startup tick is forced and a
+// checker that has just run waits out its own interval, so a tick taken before
+// the cache is filled reports an empty cluster until that interval comes
+// round.
+func (e *Engine) RunAfter(ctx context.Context, ready <-chan struct{}) {
 	if e == nil {
 		return
 	}
+
+	if ready != nil {
+		select {
+		case <-ready:
+		case <-ctx.Done():
+			return
+		}
+	}
+
 	e.tick(ctx, true) // force all on startup
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()

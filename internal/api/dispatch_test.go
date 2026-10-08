@@ -153,6 +153,26 @@ func TestFeedLinkHeaders(t *testing.T) {
 		}
 	})
 
+	// servedTypes claims application/yaml, so something has to advertise where
+	// it is; an endpoint whose only alternate is the compose document was
+	// returning before any Link was written.
+	t.Run("the compose document is advertised as an alternate", func(t *testing.T) {
+		handler := contentNegotiated(jsonH, feedHandlers{yaml: atomH}, spa)
+		req := httptest.NewRequest("GET", "/stacks/web?limit=10", nil)
+		req = withContentType(req, ContentTypeJSON)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		links := strings.Join(rec.Header().Values("Link"), ", ")
+		if !strings.Contains(links, `/stacks/web.yaml>; rel="alternate"; type="application/yaml"`) {
+			t.Errorf("Link headers do not advertise the compose document: %q", links)
+		}
+		// It is a projection of the resource, not a feed over it.
+		if strings.Contains(links, "limit=10") {
+			t.Errorf("the compose alternate carries a feed parameter: %q", links)
+		}
+	})
+
 	// The href carries only what the feed reads, so a parameter no feed
 	// declares must not come back — the rule feedQuery states for the links
 	// inside a feed body, now applied to the alternate Link headers too.
@@ -234,14 +254,10 @@ func TestFeedLinkHeaders(t *testing.T) {
 	})
 }
 
-// TestSearchFeedReachesFeedQueryOnBothPaths drives the real registered route
-// and checks that ?q= survives, and an unread parameter does not, on both
-// paths that build a feed link: the alternate Link header, built at
-// registration, and the links inside the feed itself, built at render.
-//
-// Both read searchFeedParams, so they cannot disagree about the value — this
-// is a wiring check, not a drift guard. It fails if /search stops using
-// searchFeeds(), or if either path stops going through feedQuery.
+// Drives the real registered route and checks that ?q= survives, and an unread
+// parameter does not, on both paths that build a feed link: the alternate Link
+// header at registration, and the links inside the feed at render. Both read
+// searchFeedParams, so this is a wiring check rather than a drift guard.
 func TestSearchFeedReachesFeedQueryOnBothPaths(t *testing.T) {
 	router := newSeededTestRouter(t)
 	const target = "/search?q=app&limit=5&unread=whatever"

@@ -60,44 +60,6 @@ func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.R
 	h.writeServiceRepresentation(w, r, svc.ID, h.serviceEndpointModeRepresentation)
 }
 
-func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	req, ok := decodeJSON[updateModeRequest](w, r)
-	if !ok {
-		return
-	}
-
-	var mode swarm.ServiceMode
-	switch req.Mode {
-	case "replicated":
-		if req.Replicas == nil {
-			writeErrorCode(
-				w,
-				r,
-				"SVC009",
-				"replicas is required when switching to replicated mode",
-			)
-			return
-		}
-		mode.Replicated = &swarm.ReplicatedService{Replicas: req.Replicas}
-	case "global":
-		mode.Global = &swarm.GlobalService{}
-	default:
-		writeErrorCode(w, r, "SVC008", "mode must be one of: replicated, global")
-		return
-	}
-
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
-		return
-	}
-
-	slog.Info("updating service mode", "service", id, "mode", req.Mode)
-
-	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
-		return h.serviceLifecycle.UpdateServiceMode(r.Context(), id, mode)
-	})
-}
-
 type updateEndpointModeRequest struct {
 	Mode string `json:"mode"`
 }
@@ -299,25 +261,38 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
+		return
+	}
+
+	merge, ok := structMergePatch(w, r, "SVC011", "invalid resource specification")
 	if !ok {
 		return
 	}
 
-	current := svc.Spec.TaskTemplate.Resources
-	if current == nil {
-		current = &swarm.ResourceRequirements{}
-	}
-
-	var result swarm.ResourceRequirements
-	if !applyStructMergePatch(w, r, current, &result, "SVC011", "invalid resource specification") {
-		return
-	}
-
 	slog.Info("updating service resources", "service", id)
-	updated, err := h.serviceSpec.UpdateServiceResources(r.Context(), id, &result)
+
+	updated, err := h.serviceSpec.UpdateServiceSpec(
+		r.Context(),
+		id,
+		func(spec *swarm.ServiceSpec) error {
+			current := spec.TaskTemplate.Resources
+			if current == nil {
+				current = &swarm.ResourceRequirements{}
+			}
+
+			var result swarm.ResourceRequirements
+			if err := merge(current, &result); err != nil {
+				return err
+			}
+
+			spec.TaskTemplate.Resources = &result
+
+			return nil
+		},
+	)
 	if err != nil {
-		writeResourceError(w, r, err, "service", id, "SVC001")
+		writeServiceSpecPatch(w, r, id, err)
 		return
 	}
 	writeMutationResponse(w, r, NewDetailResponse(
@@ -501,33 +476,38 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	current := svc.Spec.UpdateConfig
-	if current == nil {
-		current = &swarm.UpdateConfig{}
-	}
-
-	var result swarm.UpdateConfig
-	if !applyStructMergePatch(
-		w,
-		r,
-		current,
-		&result,
-		"SVC012",
-		"invalid update policy specification",
-	) {
+	merge, ok := structMergePatch(w, r, "SVC012", "invalid update policy specification")
+	if !ok {
 		return
 	}
 
 	slog.Info("updating service update policy", "service", id)
 
-	updated, err := h.serviceSpec.UpdateServiceUpdatePolicy(r.Context(), id, &result)
+	updated, err := h.serviceSpec.UpdateServiceSpec(
+		r.Context(),
+		id,
+		func(spec *swarm.ServiceSpec) error {
+			current := spec.UpdateConfig
+			if current == nil {
+				current = &swarm.UpdateConfig{}
+			}
+
+			var result swarm.UpdateConfig
+			if err := merge(current, &result); err != nil {
+				return err
+			}
+
+			spec.UpdateConfig = &result
+
+			return nil
+		},
+	)
 	if err != nil {
-		writeResourceError(w, r, err, "service", id, "SVC001")
+		writeServiceSpecPatch(w, r, id, err)
 		return
 	}
 
@@ -557,33 +537,38 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	current := svc.Spec.RollbackConfig
-	if current == nil {
-		current = &swarm.UpdateConfig{}
-	}
-
-	var result swarm.UpdateConfig
-	if !applyStructMergePatch(
-		w,
-		r,
-		current,
-		&result,
-		"SVC013",
-		"invalid rollback policy specification",
-	) {
+	merge, ok := structMergePatch(w, r, "SVC013", "invalid rollback policy specification")
+	if !ok {
 		return
 	}
 
 	slog.Info("updating service rollback policy", "service", id)
 
-	updated, err := h.serviceSpec.UpdateServiceRollbackPolicy(r.Context(), id, &result)
+	updated, err := h.serviceSpec.UpdateServiceSpec(
+		r.Context(),
+		id,
+		func(spec *swarm.ServiceSpec) error {
+			current := spec.RollbackConfig
+			if current == nil {
+				current = &swarm.UpdateConfig{}
+			}
+
+			var result swarm.UpdateConfig
+			if err := merge(current, &result); err != nil {
+				return err
+			}
+
+			spec.RollbackConfig = &result
+
+			return nil
+		},
+	)
 	if err != nil {
-		writeResourceError(w, r, err, "service", id, "SVC001")
+		writeServiceSpecPatch(w, r, id, err)
 		return
 	}
 
@@ -612,33 +597,38 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	current := svc.Spec.TaskTemplate.LogDriver
-	if current == nil {
-		current = &swarm.Driver{}
-	}
-
-	var result swarm.Driver
-	if !applyStructMergePatch(
-		w,
-		r,
-		current,
-		&result,
-		"SVC019",
-		"invalid log driver specification",
-	) {
+	merge, ok := structMergePatch(w, r, "SVC019", "invalid log driver specification")
+	if !ok {
 		return
 	}
 
 	slog.Info("updating service log driver", "service", id)
 
-	updated, err := h.serviceSpec.UpdateServiceLogDriver(r.Context(), id, &result)
+	updated, err := h.serviceSpec.UpdateServiceSpec(
+		r.Context(),
+		id,
+		func(spec *swarm.ServiceSpec) error {
+			current := spec.TaskTemplate.LogDriver
+			if current == nil {
+				current = &swarm.Driver{}
+			}
+
+			var result swarm.Driver
+			if err := merge(current, &result); err != nil {
+				return err
+			}
+
+			spec.TaskTemplate.LogDriver = &result
+
+			return nil
+		},
+	)
 	if err != nil {
-		writeResourceError(w, r, err, "service", id, "SVC001")
+		writeServiceSpecPatch(w, r, id, err)
 		return
 	}
 
@@ -656,34 +646,42 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	current := &container.HealthConfig{}
-	if svc.Spec.TaskTemplate.ContainerSpec != nil &&
-		svc.Spec.TaskTemplate.ContainerSpec.Healthcheck != nil {
-		current = svc.Spec.TaskTemplate.ContainerSpec.Healthcheck
-	}
-
-	var result container.HealthConfig
-	if !applyStructMergePatch(
-		w,
-		r,
-		current,
-		&result,
-		"SVC014",
-		"invalid healthcheck specification",
-	) {
+	merge, ok := structMergePatch(w, r, "SVC014", "invalid healthcheck specification")
+	if !ok {
 		return
 	}
 
 	slog.Info("updating service healthcheck", "service", id)
 
-	updated, err := h.serviceSpec.UpdateServiceHealthcheck(r.Context(), id, &result)
+	updated, err := h.serviceSpec.UpdateServiceSpec(
+		r.Context(),
+		id,
+		func(spec *swarm.ServiceSpec) error {
+			if spec.TaskTemplate.ContainerSpec == nil {
+				return errNoContainerSpec
+			}
+
+			current := spec.TaskTemplate.ContainerSpec.Healthcheck
+			if current == nil {
+				current = &container.HealthConfig{}
+			}
+
+			var result container.HealthConfig
+			if err := merge(current, &result); err != nil {
+				return err
+			}
+
+			spec.TaskTemplate.ContainerSpec.Healthcheck = &result
+
+			return nil
+		},
+	)
 	if err != nil {
-		writeResourceError(w, r, err, "service", id, "SVC001")
+		writeServiceSpecPatch(w, r, id, err)
 		return
 	}
 
@@ -772,24 +770,31 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	current := containerConfigFromSpec(svc.Spec.TaskTemplate.ContainerSpec)
-
-	var merged containerConfigResponse
-	if !applyStructMergePatch(w, r, current, &merged, "SVC018", "invalid patch result") {
+	merge, ok := structMergePatch(w, r, "SVC018", "invalid patch result")
+	if !ok {
 		return
 	}
 
 	slog.Info("updating service container config", "service", id)
 
-	updated, err := h.serviceAttachment.UpdateServiceContainerConfig(
+	updated, err := h.serviceSpec.UpdateServiceSpec(
 		r.Context(),
 		id,
-		func(cs *swarm.ContainerSpec) {
+		func(spec *swarm.ServiceSpec) error {
+			cs := spec.TaskTemplate.ContainerSpec
+			if cs == nil {
+				return errNoContainerSpec
+			}
+
+			var merged containerConfigResponse
+			if err := merge(containerConfigFromSpec(cs), &merged); err != nil {
+				return err
+			}
+
 			cs.Command = merged.Command
 			cs.Args = merged.Args
 			cs.Dir = merged.Dir
@@ -818,10 +823,12 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 			} else {
 				cs.DNSConfig = nil
 			}
+
+			return nil
 		},
 	)
 	if err != nil {
-		writeResourceError(w, r, err, "service", id, "SVC001")
+		writeServiceSpecPatch(w, r, id, err)
 		return
 	}
 

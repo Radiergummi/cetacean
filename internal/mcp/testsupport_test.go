@@ -17,13 +17,9 @@ import (
 )
 
 // callToolExpectingError is callTool's negative twin: it drives a real
-// tools/call, requires the result to be a tool error, and returns the raw
-// envelope so the caller can assert on the message.
-//
-// It exists because callTool fatals on IsError, so every refusal test was
-// open-coding the transport call, the decode and the IsError check — including
-// the load-bearing "not stubbed" assertion, which is how these tests show the
-// refusal happened before the write client was ever touched.
+// tools/call, requires a tool error, and returns the raw envelope so the caller
+// can assert on the message — including the load-bearing "not stubbed"
+// assertion, which shows the refusal happened before the write client was touched.
 func callToolExpectingError(t *testing.T, handler http.Handler, params string) string {
 	t.Helper()
 
@@ -62,13 +58,9 @@ func newTestServer(t *testing.T) *Server {
 }
 
 // stubSession is the minimal ClientSession mcp-go needs to attribute a request
-// to a session. Its notification channel is buffered so a delivery never
-// blocks; tests that assert on what reached a client read the real
-// subscriptions/listen stream instead.
-//
-// mcp-go's own NewInProcessSession would also satisfy the interface, but it
-// reports Initialized() false until Initialize() is called and drags in
-// sampling/elicitation/roots machinery these tests do not exercise.
+// to a session; its notification channel is buffered so a delivery never blocks.
+// mcp-go's NewInProcessSession would satisfy the interface too, but reports
+// Initialized() false until called and drags in machinery these tests skip.
 type stubSession struct {
 	id            string
 	notifications chan mcplib.JSONRPCNotification

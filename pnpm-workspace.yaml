@@ -1,0 +1,25 @@
+packages:
+  - frontend
+  - website
+
+# pnpm runs no dependency's install script unless it is named here. These three
+# ask for one: esbuild fetches its platform binary, msw copies its service
+# worker, and vue-demi picks a Vue build against the installed version.
+# Anything else that starts asking is a question, not a default.
+allowBuilds:
+  esbuild: true
+  msw: true
+  vue-demi: true
+
+# Version floors, carried over from the `overrides` blocks the two package.json
+# files used to hold: pnpm does not read npm's field, so leaving them there
+# would drop the constraint silently. One map covers both packages now, so the
+# entry that is a ceiling rather than a floor has to name whose ceiling it is.
+overrides:
+  brace-expansion: ">=5.0.9"
+  fast-uri: ">=4.1.2"
+  hono: ">=4.12.34"
+  ip-address: ">=10.3.1"
+  postcss: ">=8.5.23"
+  undici: ">=7.29.0"
+  "astro>vite": "^8.0.0"

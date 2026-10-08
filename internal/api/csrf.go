@@ -6,13 +6,9 @@ import (
 )
 
 // crossOriginProtection refuses non-safe cross-origin browser requests. Not
-// only defence in depth: Tailscale, mTLS and trusted-proxy headers all
-// authenticate a browser request that carries no cookie at all, so SameSite
-// covers none of them.
-//
-// The CORS allowlist is mirrored in as trusted origins — an origin CORS admits
-// must not then be refused here. A wildcard cannot be ("*" is not an origin);
-// main.go warns about that at startup.
+// merely defence in depth: Tailscale, mTLS and proxy headers all authenticate
+// a request carrying no cookie, so SameSite covers none of them. The CORS
+// allowlist mirrors in as trusted origins; a wildcard cannot, and main.go warns.
 func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 	protection := http.NewCrossOriginProtection()
 
@@ -33,11 +29,10 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 		}
 	}
 
-	// Our own origin, for the fallback path a pre-2023 browser takes: with no
-	// Sec-Fetch-Site the stdlib compares Origin against r.Host, which is the
-	// internal name behind a proxy that rewrites Host. Naming it here also
-	// spares an operator listing their own origin in server.cors.origins,
-	// which would additionally switch on CORS reflection.
+	// Our own origin, for the fallback a pre-2023 browser takes: with no
+	// Sec-Fetch-Site the stdlib compares Origin against r.Host, the internal
+	// name behind a proxy that rewrites it. Naming it here also spares
+	// listing it in server.cors.origins, which would switch on CORS reflection.
 	if publicURL != "" {
 		trust("server.public_url", publicURL)
 	}
@@ -64,9 +59,11 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 
 // carriesItsOwnProof names endpoints that authenticate from the request body
 // rather than a cookie, so there is no ambient credential to protect.
-// /oauth/authorize is absent: consent runs under the session cookie.
+// /oauth/authorize is absent: consent authenticates through the middleware, and
+// refuses a credential this deployment issued rather than an upstream one.
 func carriesItsOwnProof(path string) bool {
-	// Spelled out because internal/api does not import internal/mcp.
+	// Spelled out because internal/api imports neither internal/mcp nor
+	// internal/oauth, and these paths come from both.
 	switch path {
 	case "/mcp", "/oauth/token", "/oauth/revoke", "/oauth/register":
 		return true

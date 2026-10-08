@@ -19,14 +19,14 @@
 # ARG_MAX.
 set -euo pipefail
 
-# The artifacts `make sbom` owns. Kept in step with the same list in the
-# Makefile's sbom-check target and in .githooks/pre-commit.
-files=(
-  internal/api/sbom/sbom.cdx.json
-  internal/api/sbom/licensetexts.json
-  internal/api/sbom/notices.txt
-  THIRD_PARTY_LICENSES
-)
+# The artifacts `make sbom` owns, read from the one list the Makefile and the
+# pre-commit hook also read.
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+files=()
+while IFS= read -r line; do
+  case "$line" in ''|\#*) continue ;; esac
+  files+=("$line")
+done < "$repo_root/scripts/sbom-artifacts.txt"
 
 branch="${1:?usage: commit-sbom.sh <branch> <expected-head-oid> [--dry-run]}"
 expected_head_oid="${2:?usage: commit-sbom.sh <branch> <expected-head-oid> [--dry-run]}"

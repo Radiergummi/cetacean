@@ -171,10 +171,9 @@ func readWebManifest(t *testing.T) webManifest {
 	return manifest
 }
 
-// TestUnreadySharesTheFrontendButNotTheCluster holds the readiness gate to the
-// endpoints that read cluster state. The shell and everything it pulls — the
-// web manifest, the icons — come off the embedded filesystem, so an unreachable
-// Docker daemon must not turn them into problem documents; the browser asks for
+// Holds the readiness gate to the endpoints that read cluster state. The shell
+// and everything it pulls come off the embedded filesystem, so an unreachable
+// daemon must not turn them into problem documents — and the browser asks for
 // them with */*, which negotiates to JSON like any cluster read.
 func TestUnreadySharesTheFrontendButNotTheCluster(t *testing.T) {
 	fsys := fstest.MapFS{
@@ -373,15 +372,10 @@ func TestSPAToleratesAbsentManifest(t *testing.T) {
 	}
 }
 
-// TestEmbeddedManifestMatchesEmbeddedFiles catches a manifest naming files the
-// embed directive would not include, which is what happens if the manifest or
-// its variants are produced under a dot- or underscore-prefixed path.
-//
-// It asserts against frontend/dist on disk rather than main.go's embedded FS,
-// since the inclusion rule is a property of the path and so fails identically
-// either way. It hashes every file rather than stat-ing it, because a manifest
-// describes content — an existence check once let through variants compressed
-// from a mid-build snapshot, which threw ReferenceError in the browser.
+// Catches a manifest naming files the embed directive would not include, which
+// happens when a variant is produced under a dot- or underscore-prefixed path.
+// It asserts against frontend/dist on disk and hashes every file: an existence
+// check lets through variants compressed from a mid-build snapshot.
 func TestEmbeddedManifestMatchesEmbeddedFiles(t *testing.T) {
 	distDir := filepath.Join("..", "..", "frontend", "dist")
 	manifestPath := filepath.Join(distDir, "assets-manifest.json")

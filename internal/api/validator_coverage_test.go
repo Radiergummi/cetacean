@@ -11,18 +11,9 @@ import (
 )
 
 // Compression and conditional caching are a property of which write helper a
-// handler calls, not of the response — so a handler that writes its body with
-// a bare w.Write is silently uncompressed and unvalidatable, and nothing
-// notices. Three handlers had done exactly that (`/api`, `/api/scalar.js` and
-// `/api/context.jsonld`), each found by reading rather than by failing.
-//
-// This is the guard that finds the fourth. Vary: Accept-Encoding is written
-// in exactly two non-test places — negotiateCoding, which every write helper
-// reaches, and spa.go — so its presence on a 2xx GET is a precise witness for
-// "this handler went through the helpers", not a proxy for it.
-//
-// It walks the OpenAPI document rather than a hand-kept list, so a new
-// endpoint is covered by existing it in the spec.
+// handler calls, so one writing with a bare w.Write is silently uncompressed and
+// unvalidatable. Vary: Accept-Encoding is written in exactly two non-test
+// places, so its presence on a 2xx GET witnesses that the helpers were used.
 func TestEveryReadEndpointCarriesAValidator(t *testing.T) {
 	specBytes, doc, _ := loadTestSpec(t)
 
@@ -84,16 +75,10 @@ func TestEveryReadEndpointCarriesAValidator(t *testing.T) {
 			if reason, known := knownBypasses[pathTemplate]; known {
 				seenBypass[pathTemplate] = true
 
-				// Either half is enough to make the entry stale. A bypass is
-				// the absence of both, because the two arrive together: the
-				// write helpers are the only thing that sets a validator here,
-				// and negotiateCoding is one of only two places that write
-				// Vary: Accept-Encoding — spa.go is the other, and no listed
-				// bypass is the SPA. Requiring both, as this did, let a
-				// half-finished fix sit here indefinitely: an endpoint that
-				// gained an ETag but no coding stayed listed as bypassing the
-				// helpers it had already partly started using, which is the
-				// one state the entry cannot honestly describe.
+				// Either half is enough to make the entry stale: a bypass is
+				// the absence of both, since the two arrive together.
+				// Requiring both lets a half-finished fix sit here, listed as
+				// bypassing helpers it has already started using.
 				if validated || negotiated {
 					t.Errorf("listed as a known bypass (%s) but answered with "+
 						"validator=%t and Vary: Accept-Encoding=%t — a bypass is "+
@@ -135,14 +120,10 @@ func TestEveryReadEndpointCarriesAValidator(t *testing.T) {
 	}
 }
 
-// skipValidatorCoverage names the GET endpoints that deliberately answer
-// without going through a write helper. It is separate from skipEndpoint,
-// whose exclusions are about schema validation.
-//
-// Note the walk only reaches endpoints the OpenAPI document declares, so it
-// finds the next bypass only for those. /api/scalar.js is not among them — the
-// spec has no path for it — and is covered instead by TestAPIDocsAreCompressed
-// and TestAPIDocsRevalidate, which drive the route directly.
+// skipValidatorCoverage names the GET endpoints that deliberately answer without
+// a write helper, separate from skipEndpoint, whose exclusions are about schema
+// validation. The walk reaches only endpoints the OpenAPI document declares;
+// /api/scalar.js is covered instead by the tests driving that route directly.
 func skipValidatorCoverage(path string) bool {
 	switch {
 	// Streams: the body is open-ended, so there is nothing to hash and
