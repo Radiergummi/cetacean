@@ -82,7 +82,7 @@ export function LogSearch({
             type="button"
             onClick={() => setCaseSensitive(!caseSensitive)}
             aria-pressed={caseSensitive}
-            className="rounded px-1 py-0.5 font-mono text-[10px] font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+            className="inline-flex min-h-6 min-w-6 items-center justify-center rounded px-1 font-mono text-[10px] font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
             title="Case sensitive"
           >
             Aa
@@ -91,7 +91,7 @@ export function LogSearch({
             type="button"
             onClick={() => setUseRegex(!useRegex)}
             aria-pressed={useRegex}
-            className="rounded px-1 py-0.5 font-mono text-[10px] font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+            className="inline-flex min-h-6 min-w-6 items-center justify-center rounded px-1 font-mono text-[10px] font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
             title="Regex"
           >
             .*

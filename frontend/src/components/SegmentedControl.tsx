@@ -112,6 +112,7 @@ export default function SegmentedControl<T extends string>({
         >
           <Menu.Trigger
             aria-current={isActive || undefined}
+            aria-label={overflowLabel || activeOverflow ? undefined : "More options"}
             className={cn(
               "inline-flex cursor-pointer items-center rounded-sm text-muted-foreground transition outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm",
               scale.overflow,

@@ -173,6 +173,7 @@ export function LevelFilter({
       value={value}
       onChange={(e) => onChange(e.target.value as Level | "all")}
       title="Filter by level"
+      aria-label="Filter by level"
       className="h-8 rounded-md border bg-background px-2 text-xs"
     >
       <option value="all">All levels</option>
