@@ -4715,3 +4715,30 @@ func TestPreferWaitWithIfMatch(t *testing.T) {
 		t.Errorf("Preference-Applied = %q, want %q", got, "wait=5")
 	}
 }
+
+// One status per response: a create that wrote 201 and then let writeJSON
+// write 200 sent text/plain and logged the wrong status.
+func TestCreateSecretWritesOneJSONStatus(t *testing.T) {
+	mock := &mockWriteClient{}
+	mock.createSecretFn = func(context.Context, swarm.SecretSpec) (string, error) { return "sec1", nil }
+	h := newTestHandlers(t, withWriteClient(mock))
+
+	req := httptest.NewRequest(
+		"POST",
+		"/secrets",
+		strings.NewReader(`{"name":"db","data":"aGVsbG8="}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	w := &statusWriter{ResponseWriter: recorder}
+	h.HandleCreateSecret(w, req)
+
+	if w.status != http.StatusCreated {
+		t.Errorf("recorded status = %d, want 201", w.status)
+	}
+	if ct := recorder.Header().
+		Get("Content-Type"); !strings.HasPrefix(ct, "application/") ||
+		!strings.Contains(ct, "json") {
+		t.Errorf("Content-Type = %q, want JSON", ct)
+	}
+}

@@ -36,8 +36,7 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleReady(w http.ResponseWriter, r *http.Request) {
 	if !h.isReady() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		writeJSON(w, map[string]string{"status": "not_ready"})
+		writeJSONStatus(w, http.StatusServiceUnavailable, map[string]string{"status": "not_ready"})
 		return
 	}
 	writeJSON(w, map[string]string{"status": "ready"})

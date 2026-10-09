@@ -67,6 +67,9 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 		resp = spec.buildFallback(id, req.Name)
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, NewDetailResponse(r.Context(), spec.basePath+id, spec.typeName, resp))
+	writeJSONStatus(
+		w,
+		http.StatusCreated,
+		NewDetailResponse(r.Context(), spec.basePath+id, spec.typeName, resp),
+	)
 }
