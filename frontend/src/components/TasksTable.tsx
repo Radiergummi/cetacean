@@ -62,6 +62,13 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
     return null;
   }
 
+  const failedCount = tasks.filter(({ Status: { State } }) => State === "failed").length;
+  const emptyMessage = stateFilter
+    ? "No tasks in this state."
+    : failedCount > 0
+      ? `No active tasks; ${failedCount} failed.`
+      : "No active tasks.";
+
   return (
     <CollapsibleSection
       title="Tasks"
@@ -90,6 +97,28 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
             </tr>
           </thead>
           <tbody>
+            {filteredTasks.length === 0 && (
+              <tr>
+                <td
+                  colSpan={
+                    6 +
+                    (variant === "node" ? 1 : 0) +
+                    (variant === "service" ? 1 : 0) +
+                    (metrics ? 2 : 0)
+                  }
+                  className="p-3 text-center text-sm text-muted-foreground"
+                >
+                  {emptyMessage}{" "}
+                  <button
+                    type="button"
+                    className="font-medium text-foreground underline underline-offset-2"
+                    onClick={() => setStateFilter("__all__")}
+                  >
+                    Show all tasks
+                  </button>
+                </td>
+              </tr>
+            )}
             {filteredTasks.map(
               ({
                 DesiredState,
