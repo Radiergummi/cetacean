@@ -1,10 +1,11 @@
+import { headAllowedMethods } from "@/api/client";
 import type { Recommendation, RecommendationCategory } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
 import ResourceName from "@/components/ResourceName";
 import { Button } from "@/components/ui/button";
 import { invalidateRecommendations, useRecommendations } from "@/hooks/useRecommendations";
-import { applyRecommendation } from "@/lib/applyRecommendation";
+import { applyRecommendation, fixTarget } from "@/lib/applyRecommendation";
 import {
   hintIcon,
   recommendationKey,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
 import { Collapsible } from "@base-ui/react/collapsible";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -89,7 +91,16 @@ function RecommendationCard({ hint, applying, onApply }: CardProps) {
   // same binding in components/SizingBadge.tsx.
   // oxlint-disable-next-line react/static-components
   const CategoryIcon = hintIcon(hint.category);
-  const hasFix = hint.fixAction != null && hint.suggested != null;
+  const fix = fixTarget(hint);
+  // The target's own Allow says whether this caller may apply the fix: the
+  // operations level and the grant both have to admit its method.
+  const { data: targetMethods } = useQuery({
+    queryKey: ["allowed-methods", fix?.path],
+    queryFn: () => headAllowedMethods(fix!.path),
+    enabled: fix != null && hint.suggested != null,
+    staleTime: 60_000,
+  });
+  const hasFix = fix != null && hint.suggested != null && (targetMethods?.has(fix.method) ?? false);
   const isApplying = applying === recommendationKey(hint);
   const link = recommendationLink(hint);
   const detail = categoryDetails[hint.category];
