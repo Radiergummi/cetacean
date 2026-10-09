@@ -85,6 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A task list whose filter hides every task says so and offers to show them all
 - `cetacean --help` exits 0 and states the operations level default as 0
 - Startup warns when MCP is enabled without TLS outside auth mode `none` and `server.public_url` isn't `https`
+- `GET /swarm/unlock-key` is sent with `Cache-Control: no-store` and varies by identity, so no cache keeps the key
+- Creating a config or secret answers `201` with a JSON `Content-Type` and is logged as `201`
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
