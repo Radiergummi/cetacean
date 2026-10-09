@@ -554,12 +554,20 @@ func (c *Cache) GetTask(id string) (swarm.Task, bool) {
 
 func (c *Cache) DeleteTask(id string) {
 	c.mu.Lock()
-	if old, ok := c.tasks[id]; ok {
+	old, existed := c.tasks[id]
+	if existed {
 		c.removeTaskIndex(old)
 	}
 	delete(c.tasks, id)
 	c.mu.Unlock()
-	c.notify(Event{Type: EventTask, Action: "remove", ID: id, Name: id})
+
+	// The removed task rides along: node, service and stack streams match a
+	// task event on its parents, which the cache can no longer look up.
+	event := Event{Type: EventTask, Action: "remove", ID: id, Name: id}
+	if existed {
+		event.Resource = old
+	}
+	c.notify(event)
 }
 
 // addTaskIndex adds a task to the secondary indexes. Must be called with c.mu held for writing.

@@ -331,7 +331,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
 		switch ct := ContentTypeFromContext(r.Context()); ct {
 		case ContentTypeSSE:
-			b.ServeSSE(w, r, h.aclMatchWrap(r, nil), "")
+			b.ServeSSE(w, r, h.aclMatchWrap(r, sse.TypesFilter(r)), sse.ReplayAll)
 		case ContentTypeAtom:
 			h.handleFeedHistory(w, r, renderAtom)
 		case ContentTypeJSONFeed:

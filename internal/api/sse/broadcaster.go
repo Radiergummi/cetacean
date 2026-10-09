@@ -126,16 +126,28 @@ func (b *Broadcaster) Close() {
 	}
 }
 
-func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var match func(cache.Event) bool
-	if t := r.URL.Query().Get("types"); t != "" {
-		types := make(map[string]bool)
-		for typ := range strings.SplitSeq(t, ",") {
-			types[strings.TrimSpace(typ)] = true
-		}
-		match = func(e cache.Event) bool { return types[string(e.Type)] }
+// ReplayAll is the replay type for a stream that carries every event type,
+// as /events does: a reconnect replays history of any type its match admits.
+const ReplayAll cache.EventType = "*"
+
+// TypesFilter matches the event types a ?types= list names, or returns nil
+// when there is none. Sync events always pass: they tell the client to refetch.
+func TypesFilter(r *http.Request) func(cache.Event) bool {
+	t := r.URL.Query().Get("types")
+	if t == "" {
+		return nil
 	}
-	b.ServeSSE(w, r, match, "")
+
+	types := make(map[string]bool)
+	for typ := range strings.SplitSeq(t, ",") {
+		types[strings.TrimSpace(typ)] = true
+	}
+
+	return func(e cache.Event) bool { return e.Type == cache.EventSync || types[string(e.Type)] }
+}
+
+func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	b.ServeSSE(w, r, TypesFilter(r), ReplayAll)
 }
 
 func (b *Broadcaster) ServeSSE(
@@ -276,7 +288,7 @@ func (b *Broadcaster) replayEvents(
 	// Filter entries by type and ACL, then convert to cache.Event (no Resource payload).
 	var replay []cache.Event
 	for _, e := range entries {
-		if e.Type != replayType {
+		if replayType != ReplayAll && e.Type != replayType {
 			continue
 		}
 
