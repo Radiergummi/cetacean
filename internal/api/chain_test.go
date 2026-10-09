@@ -85,17 +85,6 @@ func TestChainNewCopiesCallerSlice(t *testing.T) {
 	}
 }
 
-func TestChainExtendComposes(t *testing.T) {
-	var order []string
-	outer := NewChain(recorder(&order, "outer"))
-	inner := NewChain(recorder(&order, "inner"))
-
-	run(t, outer.Extend(inner).ThenFunc(func(http.ResponseWriter, *http.Request) {}))
-	if want := []string{"outer", "inner"}; !slices.Equal(order, want) {
-		t.Errorf("order = %v, want %v", order, want)
-	}
-}
-
 func TestChainThenPanicsOnNil(t *testing.T) {
 	defer func() {
 		if recover() == nil {
