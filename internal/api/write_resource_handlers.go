@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 )
@@ -42,8 +41,10 @@ func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {
 
 	err := h.resourceRemover.RemoveVolume(r.Context(), name, force)
 	if err != nil {
-		if !force && (cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err)) {
-			writeErrorCode(w, r, "VOL001", err.Error())
+		// force overrides driver errors, not use: Docker refuses an in-use
+		// volume either way.
+		if isRemovalConflict(err, "volume") {
+			writeRemovalConflict(w, r, err, "VOL001", "volume", name)
 			return
 		}
 		writeDockerError(w, r, err, "volume", name)

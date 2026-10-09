@@ -163,8 +163,7 @@ const errorDictionary: Record<string, ErrorInfo> = {
   // VOL: volume operations
   VOL001: {
     title: "Volume in use",
-    suggestion: "Stop or remove the containers using this volume first, or use force removal.",
-    action: "force-remove",
+    suggestion: "Stop or remove the containers using this volume first.",
   },
 
   // NET: network operations

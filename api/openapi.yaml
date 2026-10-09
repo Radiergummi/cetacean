@@ -5700,7 +5700,8 @@ paths:
       summary: Remove a volume
       description: |
         Removes a volume. Fails with 409 if the volume is in use by a container.
-        Use `?force=true` to force removal even if the volume is in use.
+        `?force=true` removes the volume even if its driver reports an error; a volume a container is
+        using is refused either way, with `409 VOL001`.
         Requires operations level 3.
       parameters:
         - name: name
@@ -5712,7 +5713,7 @@ paths:
           example: myapp_data
         - name: force
           in: query
-          description: Force removal even if the volume is in use
+          description: Remove the volume even if its driver reports an error. Does not override use by a container.
           schema:
             type: boolean
             default: false

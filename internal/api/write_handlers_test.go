@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	json "github.com/goccy/go-json"
 
 	"github.com/docker/docker/api/types/container"
@@ -2175,7 +2176,7 @@ func TestHandleRemoveNode_DockerError(t *testing.T) {
 
 	wc := &mockWriteClient{
 		removeNodeFn: func(_ context.Context, _ string, _ bool) error {
-			return fmt.Errorf("node is not down")
+			return fmt.Errorf("connection reset by peer")
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -2187,6 +2188,32 @@ func TestHandleRemoveNode_DockerError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("status=%d, want 500", w.Code)
+	}
+}
+
+// The engine answers an undrained node with a 400, which the client reads as
+// an invalid argument; the message is what says the node's state is the cause.
+func TestHandleRemoveNode_NotDownIsAConflict(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
+
+	wc := &mockWriteClient{
+		removeNodeFn: func(_ context.Context, _ string, _ bool) error {
+			return fmt.Errorf(
+				"%w: node node1 is not down and can't be removed",
+				cerrdefs.ErrInvalidArgument,
+			)
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	req := httptest.NewRequest("DELETE", "/nodes/node1", nil)
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveNode(w, req)
+
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "NOD001") {
+		t.Errorf("status=%d body=%s, want 409 NOD001", w.Code, w.Body.String())
 	}
 }
 
