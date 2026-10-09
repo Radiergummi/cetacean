@@ -74,6 +74,9 @@ func TestHandleErrorDetail_NotFound(t *testing.T) {
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status=%d, want 404", w.Code)
 	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Errorf("Content-Type=%q, want application/problem+json", ct)
+	}
 }
 
 func TestWriteErrorCode_KnownCode(t *testing.T) {
