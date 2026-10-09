@@ -104,6 +104,14 @@ func TestClusterChecker_ManagerHasWorkloads(t *testing.T) {
 			},
 			Description: swarm.NodeDescription{Hostname: "manager-1"},
 		})
+		c.SetNode(swarm.Node{
+			ID: "node2",
+			Spec: swarm.NodeSpec{
+				Role:         swarm.NodeRoleWorker,
+				Availability: swarm.NodeAvailabilityActive,
+			},
+			Description: swarm.NodeDescription{Hostname: "worker-1"},
+		})
 
 		checker := NewClusterChecker(c)
 		recs := checker.Check(context.Background())
@@ -125,6 +133,26 @@ func TestClusterChecker_ManagerHasWorkloads(t *testing.T) {
 
 		if !found {
 			t.Error("expected CategoryManagerHasWorkloads recommendation, got none")
+		}
+	})
+
+	// Draining the only active node strands every task, so a single-node swarm
+	// has nothing to move the manager's work to.
+	t.Run("sole active node emits no recommendation", func(t *testing.T) {
+		c := cache.New(nil)
+		c.SetNode(swarm.Node{
+			ID: "node1",
+			Spec: swarm.NodeSpec{
+				Role:         swarm.NodeRoleManager,
+				Availability: swarm.NodeAvailabilityActive,
+			},
+			Description: swarm.NodeDescription{Hostname: "manager-1"},
+		})
+
+		for _, rec := range NewClusterChecker(c).Check(context.Background()) {
+			if rec.Category == CategoryManagerHasWorkloads {
+				t.Error("a single-node swarm was told to drain its only node")
+			}
 		}
 	})
 

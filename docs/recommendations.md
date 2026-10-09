@@ -23,7 +23,7 @@ Each finding names a service, a node or the cluster, and carries a severity of `
 | `no-healthcheck` | The service defines no health check, so Swarm can't tell a hung container from a working one |
 | `no-restart-policy` | Restart policy is `none`, so a failed task is never replaced |
 | `single-replica` | One replica, so any node problem is an outage |
-| `manager-has-workloads` | A manager node is `active` and running ordinary tasks alongside cluster management |
+| `manager-has-workloads` | A manager node is `active`, so Swarm may schedule ordinary tasks on it alongside cluster management. Not raised when it is the only active node |
 | `uneven-distribution` | The busiest node runs more than three times the tasks of the quietest |
 | `flaky-service` | More than 5 involuntary task failures within the lookback window |
 | `node-disk-full` | Node disk above 90% |
