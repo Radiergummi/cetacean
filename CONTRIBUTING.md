@@ -4,7 +4,7 @@ Thanks for your interest in contributing. This guide covers everything you need 
 
 ## Development setup
 
-You need Go 1.26+, Node.js 24+, and Docker with Swarm mode.
+You need Go 1.27+, Node.js 24+, and Docker with Swarm mode.
 
 ```bash
 git clone https://github.com/radiergummi/cetacean.git
@@ -27,14 +27,17 @@ Open `http://localhost:5173`. Vite proxies resource paths to the Go backend, so 
 ## Running checks
 
 ```bash
-make check       # Full suite: lint + format check + tests
+make check       # Full suite: lint + type check + format check + tests + spec registry
 make test        # Go tests only
 make lint        # golangci-lint + actionlint + zizmor + oxlint + Vale
 make fmt         # Auto-format Go + frontend code
 make build       # Frontend, MCP widgets, and the binary that embeds them
 ```
 
-All checks must pass before submitting a PR. The CI pipeline runs the same checks.
+All checks must pass before submitting a PR. The CI pipeline runs the same checks, with golangci-lint at the version
+pinned in `.github/workflows/ci.yml`; a newer local release may report findings CI doesn't.
+
+`make hooks` installs an opt-in pre-commit hook from `.githooks/`.
 
 ### End-to-end tests
 
@@ -48,9 +51,10 @@ Playwright suite (`make test-e2e`) at the environment.
 1. Fork the repository and create a branch from `main`
 2. Make your changes—keep diffs focused on one concern
 3. Add or update tests for any changed behavior
-4. Run `make check` and ensure everything passes
-5. Commit with a descriptive message (see [Commit messages](#commit-messages))
-6. Open a pull request against `main`
+4. Add a `CHANGELOG.md` entry under `[Unreleased]` for anything a user would notice
+5. Run `make check` and ensure everything passes
+6. Commit with a descriptive message (see [Commit messages](#commit-messages))
+7. Open a pull request against `main`
 
 ## Commit messages
 
@@ -94,10 +98,10 @@ capitalization everywhere. A variant spelled differently goes in `.vale/styles/C
 
 ## Architecture
 
-See the [README](README.md#architecture) for an overview. Key points:
+See [`.claude/ARCHITECTURE.md`](.claude/ARCHITECTURE.md) for the component map. Key points:
 
-- All API endpoints are read-only GET requests
-- State lives in an in-memory cache fed by Docker event stream
+- Reads are served from an in-memory cache fed by the Docker event stream
+- Writes go to Docker, gated by the operations level and the per-resource grants
 - No separate domain models—uses Docker Engine API types directly
 - Frontend uses per-resource SSE for real-time updates
 

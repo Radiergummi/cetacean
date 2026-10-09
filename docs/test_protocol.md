@@ -419,6 +419,25 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 
 ---
 
+## Search (`/search`)
+
+- [ ] `/search?q=web` shows results grouped by type, each group headed with its count
+- [ ] Typing in the input updates `?q=` after a short pause, and the results follow
+- [ ] A query with no matches shows `No results for "…"`
+- [ ] Each result links to its detail page; resources the caller can't read are absent
+
+---
+
+## Licenses (`/licenses`)
+
+- [ ] Components list sorted by name, with license and version
+- [ ] Ecosystem tabs (All, Go, npm, plus Other when present) filter the list
+- [ ] License segments filter by license, with counts that follow the ecosystem and search filters
+- [ ] Search by name narrows the list; no match shows `No matching components.`
+- [ ] "Download all notices" saves `THIRD_PARTY_LICENSES.txt`
+
+---
+
 ## Log Viewer
 
 Embedded in Service Detail and Task Detail pages.
