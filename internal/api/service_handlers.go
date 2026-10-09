@@ -38,8 +38,9 @@ type ServiceListItem struct {
 }
 
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
-	services, p, ok := prepareList(h, w, r, listSpec[swarm.Service]{
+	spec := listSpec[swarm.Service]{
 		resourceType: "service",
+		linkTemplate: "/services/{id}",
 		list:         h.cache.ListServices,
 		aclName:      func(s swarm.Service) string { return s.Spec.Name },
 		searchName:   func(s swarm.Service) string { return s.Spec.Name },
@@ -53,7 +54,16 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 				return "Replicated"
 			},
 		},
-	})
+	}
+
+	// The running counts come from the same cache, so the derived validator
+	// covers them; see handleList.
+	validator := h.derivedETag(r)
+	if listNotModified(h, w, r, spec, validator) {
+		return
+	}
+
+	services, p, ok := prepareList(h, w, r, spec)
 	if !ok {
 		return
 	}
@@ -96,7 +106,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 			paged.Offset,
 		),
 		p,
-		"",
+		validator,
 	)
 }
 
