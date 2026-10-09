@@ -181,3 +181,19 @@ func TestParseFlags_InvalidFlag(t *testing.T) {
 		t.Error("expected error for unknown flag")
 	}
 }
+
+// A subcommand after flags must reach the caller, or `cetacean -listen=:9001
+// healthcheck` starts a server instead of probing one.
+func TestParseFlagsKeepsPositionalArguments(t *testing.T) {
+	f, err := ParseFlags([]string{"-listen=:9001", "healthcheck"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(f.Args) != 1 || f.Args[0] != "healthcheck" {
+		t.Errorf("Args = %v, want [healthcheck]", f.Args)
+	}
+	if f.Listen == nil || *f.Listen != ":9001" {
+		t.Errorf("Listen = %v, want :9001", f.Listen)
+	}
+}
