@@ -563,3 +563,49 @@ func TestTheServerRefusesACSRFTokenSignedWithNoKey(t *testing.T) {
 		t.Error("a CSRF token signed with no key verified against the server's")
 	}
 }
+
+// The nonce cookie belongs to the authorization endpoint, under the
+// deployment's base path, and rides no other request.
+func TestConsentCookieIsScopedToTheOAuthPaths(t *testing.T) {
+	s := newTestServer(t)
+	s.cfg.BasePath = "/cetacean"
+
+	const redirectURI = "http://localhost:8711/cb"
+	target := authorizeURL(
+		registeredClient(t, s, []string{redirectURI}),
+		redirectURI,
+		computeS256Challenge("verifier-padded-to-the-RFC-7636-minimum-length"),
+		"state",
+		s.resources.identifiers[0],
+	)
+
+	rec := httptest.NewRecorder()
+	s.HandleAuthorize(
+		rec,
+		withIdentity(httptest.NewRequest(http.MethodGet, target, nil), "alice", ""),
+	)
+
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == csrfCookieName {
+			if cookie.Path != "/cetacean/oauth" {
+				t.Errorf("cookie Path = %q, want /cetacean/oauth", cookie.Path)
+			}
+
+			return
+		}
+	}
+
+	t.Fatalf("no %s cookie set (status %d)", csrfCookieName, rec.Code)
+}
+
+// The page adds frame-ancestors to the policy the router set, not replace it.
+func TestConsentHeadersKeepTheGlobalPolicy(t *testing.T) {
+	w := httptest.NewRecorder()
+	w.Header().Set("Content-Security-Policy", "default-src 'self'")
+	setConsentHeaders(w)
+
+	if got := w.Header().
+		Get("Content-Security-Policy"); got != "default-src 'self'; frame-ancestors 'none'" {
+		t.Errorf("Content-Security-Policy = %q", got)
+	}
+}

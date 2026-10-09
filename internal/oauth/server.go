@@ -802,6 +802,7 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 			Resource:            data.Resource,
 		},
 		strings.HasPrefix(s.cfg.Issuer, "https://"),
+		s.csrfCookiePath(),
 	)
 
 	renderConsent(w, data)
@@ -984,7 +985,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if decision == "deny" {
-		clearCSRFCookie(w, secure)
+		clearCSRFCookie(w, secure, s.csrfCookiePath())
 		s.redirectWithError(w, r, redirectURIRaw, state, "access_denied",
 			"user denied the authorization request")
 		return
@@ -993,13 +994,13 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	// Require an identity the upstream provider established.
 	identity := auth.IdentityFromContext(r.Context())
 	if status, refusal := consentRefusal(identity); status != 0 {
-		clearCSRFCookie(w, secure)
+		clearCSRFCookie(w, secure, s.csrfCookiePath())
 		s.renderConsentRefusal(w, status, refusal)
 		return
 	}
 
 	if responseType != "code" {
-		clearCSRFCookie(w, secure)
+		clearCSRFCookie(w, secure, s.csrfCookiePath())
 		s.redirectWithError(w, r, redirectURIRaw, state, "unsupported_response_type",
 			"response_type must be code")
 		return
@@ -1009,14 +1010,14 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	// token endpoint would refuse every verifier against it, but a code that
 	// can never be redeemed is a worse answer than a refusal here.
 	if codeChallenge == "" {
-		clearCSRFCookie(w, secure)
+		clearCSRFCookie(w, secure, s.csrfCookiePath())
 		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
 			"code_challenge is required")
 		return
 	}
 
 	if codeChallengeMethod != "S256" {
-		clearCSRFCookie(w, secure)
+		clearCSRFCookie(w, secure, s.csrfCookiePath())
 		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
 			"code_challenge_method must be S256")
 		return
@@ -1027,7 +1028,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		s.cfg.OAuth.RequireResourceIndicator,
 	)
 	if err != nil {
-		clearCSRFCookie(w, secure)
+		clearCSRFCookie(w, secure, s.csrfCookiePath())
 		s.redirectWithError(w, r, redirectURIRaw, state, "invalid_target", err.Error())
 		return
 	}
@@ -1062,7 +1063,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clear the CSRF cookie — the flow is complete.
-	clearCSRFCookie(w, secure)
+	clearCSRFCookie(w, secure, s.csrfCookiePath())
 
 	// Remembering is limited to verified clients. A DCR client's metadata is
 	// self-reported, so a record keyed on it would attest to nothing but what
@@ -1224,4 +1225,10 @@ func httpQuotedString(s string) string {
 	}
 	b.WriteByte('"')
 	return b.String()
+}
+
+// csrfCookiePath scopes the consent nonce cookie to the authorization server's
+// paths, under the deployment's base path, so it rides no other request.
+func (s *Server) csrfCookiePath() string {
+	return s.cfg.BasePath + "/oauth"
 }
