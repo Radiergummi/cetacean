@@ -294,7 +294,7 @@ bench-baseline: bench
 # real; sec/op needs a quiet machine before it means much.
 bench-diff:
 	@test -f bench-baseline.txt || { echo "no baseline: run 'make bench-baseline' first" >&2; exit 1; }
-	go run golang.org/x/perf/cmd/benchstat@latest bench-baseline.txt $(BENCHOUT)
+	go run golang.org/x/perf/cmd/benchstat@v0.0.0-20260929162123-406019bb8b68 bench-baseline.txt $(BENCHOUT)
 
 ## Generate the CycloneDX SBOM (Go + frontend npm) embedded into the binary
 SBOM_ARTIFACTS := $(shell grep -v '^\#' scripts/sbom-artifacts.txt)

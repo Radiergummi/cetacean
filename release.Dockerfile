@@ -5,7 +5,7 @@ RUN apk add --no-cache ca-certificates
 FROM scratch
 LABEL org.opencontainers.image.title="Cetacean" \
       org.opencontainers.image.description="A real-time observability dashboard for Docker Swarm clusters." \
-      org.opencontainers.image.license="GPL-3.0" \
+      org.opencontainers.image.licenses="GPL-3.0" \
       org.opencontainers.image.url="https://github.com/radiergummi/cetacean"
 
 ARG TARGETARCH

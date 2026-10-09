@@ -211,7 +211,7 @@ services:
     image: dexidp/dex
     command: ["dex", "serve", "/etc/dex/dex.yaml"]
     ports:
-      - "9010:5556"
+      - "127.0.0.1:9010:5556"
     configs:
       - source: dex-config
         target: /etc/dex/dex.yaml
@@ -222,7 +222,7 @@ services:
   cetacean-none:
     build: .
     ports:
-      - "9001:9000"
+      - "127.0.0.1:9001:9000"
     environment:
       CETACEAN_AUTH_MODE: none
     volumes:
@@ -251,7 +251,7 @@ services:
   caddy-oidc:
     image: caddy:2
     ports:
-      - "9002:9002"
+      - "127.0.0.1:9002:9002"
     configs:
       - source: caddyfile-oidc
         target: /etc/caddy/Caddyfile
@@ -280,7 +280,7 @@ services:
   caddy-headers:
     image: caddy:2
     ports:
-      - "9003:9003"
+      - "127.0.0.1:9003:9003"
     configs:
       - source: caddyfile-headers
         target: /etc/caddy/Caddyfile
@@ -309,7 +309,7 @@ services:
   caddy-cert:
     image: caddy:2
     ports:
-      - "9004:9004"
+      - "127.0.0.1:9004:9004"
     configs:
       - source: caddyfile-cert
         target: /etc/caddy/Caddyfile
@@ -348,10 +348,10 @@ services:
   caddy-acl:
     image: caddy:2
     ports:
-      - "9005:9005"
-      - "9006:9006"
-      - "9007:9007"
-      - "9008:9008"
+      - "127.0.0.1:9005:9005"
+      - "127.0.0.1:9006:9006"
+      - "127.0.0.1:9007:9007"
+      - "127.0.0.1:9008:9008"
     configs:
       - source: caddyfile-acl
         target: /etc/caddy/Caddyfile
@@ -381,7 +381,7 @@ services:
   caddy-acl-provider:
     image: caddy:2
     ports:
-      - "9009:9009"
+      - "127.0.0.1:9009:9009"
     configs:
       - source: caddyfile-acl-provider
         target: /etc/caddy/Caddyfile

@@ -11,3 +11,8 @@ docs
 Makefile
 compose*.yaml
 todo.md
+cetacean.toml
+data
+test/e2e/certs
+coverdata
+*.cover
