@@ -10,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func (h *Handlers) getLocalNodeID() string {
@@ -343,8 +344,10 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 
 	h.setAllow(w, r, "swarm", "cluster")
 
-	// Redact join tokens unless the caller has swarm write permission.
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "write", "swarm:cluster") {
+	// A join token admits a node to the cluster, so it is held to the tier
+	// that rotates it, not just to the swarm write grant.
+	if h.levelFor(r) < config.OpsImpactful ||
+		!h.acl.Can(auth.IdentityFromContext(r.Context()), "write", "swarm:cluster") {
 		sw.JoinTokens = swarm.JoinTokens{}
 	}
 
