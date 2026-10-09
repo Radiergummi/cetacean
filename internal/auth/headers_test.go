@@ -457,3 +457,52 @@ func TestValidateSubject(t *testing.T) {
 		})
 	}
 }
+
+// A proxy that appends instead of replacing leaves the client's own value in
+// front of its own, so a second value of any identity header is refused.
+func TestHeadersProvider_RejectsDuplicatedIdentityHeaders(t *testing.T) {
+	cfg := config.HeadersConfig{
+		Subject:      "X-User",
+		Name:         "X-Name",
+		Email:        "X-Email",
+		Groups:       "X-Groups",
+		SecretHeader: "X-Secret",
+		SecretValue:  "s3cret",
+	}
+
+	for _, header := range []string{"X-User", "X-Name", "X-Email", "X-Groups", "X-Secret", "X-Acl"} {
+		t.Run(header, func(t *testing.T) {
+			p := NewHeadersProvider(cfg, "X-ACL")
+
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.Header.Set("X-User", "alice")
+			r.Header.Set("X-Name", "Alice")
+			r.Header.Set("X-Email", "alice@example.com")
+			r.Header.Set("X-Groups", "editors")
+			r.Header.Set("X-Secret", "s3cret")
+			r.Header.Set("X-Acl", "[]")
+			r.Header.Add(header, r.Header.Get(header))
+
+			if _, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r)); err == nil {
+				t.Fatalf("a duplicated %s was accepted", header)
+			}
+		})
+	}
+}
+
+func TestHeadersProvider_CapsTheGroupCount(t *testing.T) {
+	p := NewHeadersProvider(config.HeadersConfig{Subject: "X-User", Groups: "X-Groups"})
+
+	groups := make([]string, maxGroups+1)
+	for i := range groups {
+		groups[i] = "g" + strings.Repeat("x", i%5)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("X-User", "alice")
+	r.Header.Set("X-Groups", strings.Join(groups, ","))
+
+	if _, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r)); err == nil {
+		t.Error("a groups header over the cap was accepted")
+	}
+}
