@@ -173,7 +173,8 @@ jobs:
           push-to-registry: true
 
   release:
-    needs: [build]
+    # After the images: a release must not announce a tag nobody can pull.
+    needs: [build, docker]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -223,8 +224,13 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
+          flags=()
+          # A semver pre-release (v1.2.0-rc.1) is marked as one.
+          if [[ "$TAG" == *-* ]]; then
+            flags+=(--prerelease)
+          fi
           if [ -s release-notes.md ]; then
-            gh release create "$TAG" --notes-file release-notes.md cetacean-* checksums.txt
+            gh release create "$TAG" "${flags[@]}" --notes-file release-notes.md cetacean-* checksums.txt
           else
-            gh release create "$TAG" --generate-notes cetacean-* checksums.txt
+            gh release create "$TAG" "${flags[@]}" --generate-notes cetacean-* checksums.txt
           fi
