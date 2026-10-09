@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"log/slog"
 	"net/netip"
 	"strings"
@@ -229,7 +228,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 	if trustedProxiesRaw != "" {
 		tp, err := parseTrustedProxies(trustedProxiesRaw)
 		if err != nil {
-			return nil, fmt.Errorf("server.trusted_proxies: %w", err)
+			return nil, err
 		}
 		cfg.TrustedProxies = tp
 	}
