@@ -2,6 +2,7 @@ package compose
 
 import (
 	"bytes"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -13,6 +14,12 @@ const header = `# Exported from Cetacean. Redeploys to the same state on the sam
 # them created first. This is not the file that originally created the stack.
 `
 
+// commentSafe spells out every YAML line break, so a value quoted in a warning
+// cannot end its comment line and start document content.
+var commentSafe = strings.NewReplacer(
+	"\r", `\r`, "\n", `\n`, "\u0085", `\u0085`, "\u2028", `\u2028`, "\u2029", `\u2029`,
+)
+
 // Render writes the header, then any warnings as comments, then the document.
 func Render(f File, warnings []string) ([]byte, error) {
 	var buf bytes.Buffer
@@ -21,7 +28,7 @@ func Render(f File, warnings []string) ([]byte, error) {
 	if len(warnings) > 0 {
 		buf.WriteString("#\n# Not carried across:\n")
 		for _, w := range warnings {
-			buf.WriteString("# " + w + "\n")
+			buf.WriteString("# " + commentSafe.Replace(w) + "\n")
 		}
 	}
 
