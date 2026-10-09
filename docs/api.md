@@ -318,7 +318,10 @@ Filter expressions use [expr-lang](https://expr-lang.org/) syntax and must evalu
 
 Task `state` takes the Docker task states: `new`, `allocated`, `pending`, `assigned`, `accepted`, `preparing`,
 `ready`, `starting`, `running`, `complete`, `shutdown`, `failed`, `rejected`, `remove`, `orphaned`. `exit_code` is
-empty until the task reaches a terminal state.
+a string, empty until the task reaches a terminal state, so compare it quoted: `exit_code != "0"`.
+
+A field name that isn't in the table evaluates to `nil` rather than failing, so a typo such as `staet == "failed"`
+matches nothing. An expression that takes too long to evaluate over the whole list is refused with `400 FLT004`.
 
 ```http tab
 GET /nodes?filter=role+%3D%3D+%22manager%22+%26%26+state+%3D%3D+%22ready%22 HTTP/1.1
