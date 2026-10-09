@@ -1,6 +1,7 @@
 package logs
 
 import (
+	"bufio"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -25,10 +26,18 @@ type LogLine struct {
 // calls emit per line. ServiceLogs with Follow=false may never close the
 // stream, so an idle-timeout wrapper closes it 2s after the last frame.
 func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
+	br := bufio.NewReader(r)
+
+	// A TTY service's stream is unframed text. A frame opens with its stream
+	// byte (0-2) and three zero bytes; a timestamped line opens with a digit.
+	if peek, _ := br.Peek(8); len(peek) > 0 && !looksFramed(peek) {
+		return readRawLines(br, emit)
+	}
+
 	header := make([]byte, 8)
 
 	for {
-		_, err := io.ReadFull(r, header)
+		_, err := io.ReadFull(br, header)
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			return nil
 		}
@@ -53,7 +62,7 @@ func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
 		}
 
 		payload := make([]byte, size)
-		if _, err := io.ReadFull(r, payload); err != nil {
+		if _, err := io.ReadFull(br, payload); err != nil {
 			return err
 		}
 
@@ -85,6 +94,46 @@ func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
 			emit(parsed)
 		}
 	}
+}
+
+func looksFramed(peek []byte) bool {
+	if peek[0] > 2 {
+		return false
+	}
+
+	return len(peek) < 4 || peek[1] == 0 && peek[2] == 0 && peek[3] == 0
+}
+
+// readRawLines reads an unframed stream line by line, all of it stdout. As in
+// a frame, a continuation line inherits the identity of the line it continues.
+func readRawLines(r io.Reader, emit func(LogLine)) error {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 64*1024), maxLogFrameSize)
+
+	var parent LogLine
+	for scanner.Scan() {
+		line := strings.TrimRight(scanner.Text(), "\r")
+		if line == "" {
+			continue
+		}
+
+		parsed := parseLine(line, "stdout")
+		if parsed.Timestamp == "" {
+			parsed.Timestamp = parent.Timestamp
+			parsed.Attrs = parent.Attrs
+		} else {
+			parent = parsed
+		}
+
+		emit(parsed)
+	}
+
+	err := scanner.Err()
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return nil
+	}
+
+	return err
 }
 
 // ParseDockerLogs reads Docker multiplexed log output and returns parsed lines.
@@ -123,36 +172,37 @@ func parseLine(line, stream string) LogLine {
 
 // parseDetails extracts the comma-separated key=value prefix that Docker
 // prepends when Details=true. Returns the attributes and the remaining line.
+// The prefix is known by its shape rather than its first key: a service's own
+// --log-opt labels join Docker's and may sort before them.
 func parseDetails(line string) (map[string]string, string) {
-	// Details are comma-separated key=value pairs before a space + timestamp.
-	// Quick check: details always start with "com.docker." in swarm mode.
-	if !strings.HasPrefix(line, "com.docker.") {
-		return nil, line
-	}
-
-	// Find the end of the details section: first space followed by a timestamp
-	// or message content.
 	before, after, ok := strings.Cut(line, " ")
 	if !ok {
 		return nil, line
 	}
 
 	attrs := make(map[string]string)
+	fromDocker := false
 	for pair := range strings.SplitSeq(before, ",") {
-		before, after, ok := strings.Cut(pair, "=")
-		if !ok {
-			continue
+		key, val, ok := strings.Cut(pair, "=")
+		if !ok || key == "" {
+			return nil, line
 		}
-		key, val := before, after
+		if strings.HasPrefix(key, "com.docker.") {
+			fromDocker = true
+		}
 		if short, ok := detailKeyMap[key]; ok {
 			attrs[short] = val
 		} else {
 			attrs[key] = val
 		}
 	}
-	if len(attrs) == 0 {
+
+	// In swarm mode Docker always adds its own keys; a message that merely
+	// starts with key=value pairs has none of them.
+	if !fromDocker {
 		return nil, line
 	}
+
 	return attrs, after
 }
 
