@@ -468,6 +468,9 @@ func TestCallback_RFC9207_IssuerValidation(t *testing.T) {
 func TestCallback_RFC9207_IssuerMismatch(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc9700/mismatched-issuer-aborts",
+		// A mismatch is only caught if iss was extracted, so this pins the
+		// extraction the success path above cannot.
+		"oauth/rfc9207/client-extracts-the-iss-parameter",
 		"oauth/rfc9207/client-compares-iss-to-the-issuer",
 		"oauth/rfc9207/client-rejects-a-mismatched-iss",
 	)
