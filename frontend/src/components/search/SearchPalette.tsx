@@ -28,6 +28,8 @@ function StateOrb({ state }: { state: string }) {
 
   return (
     <span
+      role="img"
+      aria-label={state}
       className={`inline-block size-2 shrink-0 rounded-full ${color}`}
       title={state}
     />

@@ -66,11 +66,24 @@ export function formatDuration(nanoseconds: number, precise = false): string {
   const min = sec / 60;
 
   if (precise) {
-    return new Intl.DurationFormat(undefined, { style: "narrow" }).format({
+    const parts = {
       hours: Math.floor(sec / 3600),
       minutes: Math.floor((sec % 3600) / 60),
       seconds: Math.round(sec % 60),
-    });
+    };
+
+    // Not every supported browser has Intl.DurationFormat yet.
+    if (typeof Intl.DurationFormat === "function") {
+      return new Intl.DurationFormat(undefined, { style: "narrow" }).format(parts);
+    }
+
+    return [
+      parts.hours && `${parts.hours}h`,
+      parts.minutes && `${parts.minutes}m`,
+      parts.seconds && `${parts.seconds}s`,
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
 
   if (min < 60) {
