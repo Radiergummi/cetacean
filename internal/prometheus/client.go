@@ -2,8 +2,10 @@ package prometheus
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -35,18 +37,13 @@ func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result
 
 	resp, err := pc.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("prometheus query failed: %w", err)
+		return nil, unreachable(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf(
-			"prometheus returned HTTP %d for %s: %s",
-			resp.StatusCode,
-			u,
-			string(preview),
-		)
+		return nil, fmt.Errorf("prometheus returned HTTP %d: %s", resp.StatusCode, string(preview))
 	}
 
 	var body struct {
@@ -159,7 +156,7 @@ func (pc *Client) RangeQueryRaw(
 	}
 	resp, err := pc.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, unreachable(err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
@@ -180,7 +177,7 @@ func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, er
 	}
 	resp, err := pc.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, unreachable(err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
@@ -191,4 +188,12 @@ func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, er
 		return nil, fmt.Errorf("prometheus returned %d: %s", resp.StatusCode, string(body))
 	}
 	return body, nil
+}
+
+// unreachable reports a failed request without its URL, which names the
+// internal Prometheus address; callers relay this error to clients.
+func unreachable(err error) error {
+	slog.Warn("prometheus request failed", "error", err)
+
+	return errors.New("prometheus unreachable")
 }

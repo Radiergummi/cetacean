@@ -147,8 +147,10 @@ Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457
 Read responses carry an `Allow` header naming the write methods available on that resource, which is how the
 dashboard knows which action buttons to show you.
 
-[Prometheus][monitoring] query endpoints (`GET /metrics`, `GET /metrics/labels`) aren't per-resource filtered.
-They require the identity to hold at least one grant.
+> [!WARNING]
+> The [Prometheus][monitoring] query endpoints (`GET /metrics`, `GET /metrics/labels`) aren't filtered per
+> resource. Any identity holding at least one grant can query usage for every service and node and list their
+> names, so a multi-tenant policy doesn't isolate tenants there. Leave `prometheus.url` unset where that matters.
 
 ## Examples
 

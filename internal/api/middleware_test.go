@@ -446,3 +446,35 @@ func TestRequestID_AcceptsSafeCharacters(t *testing.T) {
 		})
 	}
 }
+
+// The metrics proxy answers from Prometheus, not the cache, so it works while
+// Docker is unreachable, which is when its charts are needed.
+func TestMetricsProxyIsNotGatedOnClusterReadiness(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[]}}`))
+	}))
+	defer prom.Close()
+
+	notReady := make(chan struct{})
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{
+			func(cfg *RouterConfig) { cfg.MetricsProxy = promapi.NewProxy(prom.URL, noopErrorWriter) },
+		},
+		withCache(cache.New(nil)),
+		withReady(notReady),
+	)
+
+	req := httptest.NewRequest("GET", "/metrics?query=up", nil)
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf(
+			"status = %d, want 200 while the cluster is not ready; body: %s",
+			w.Code,
+			w.Body.String(),
+		)
+	}
+}

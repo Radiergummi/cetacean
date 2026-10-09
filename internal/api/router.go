@@ -992,7 +992,10 @@ func readsClusterState(mux *routeRecorder, r *http.Request) bool {
 		path == "/",
 		path == "/index",
 		path == openSearchPath,
-		path == profilePath:
+		path == profilePath,
+		// The metrics proxy asks Prometheus, which is how an outage is diagnosed.
+		path == "/metrics",
+		strings.HasPrefix(path, "/metrics/labels"):
 		return false
 	default:
 		return true
