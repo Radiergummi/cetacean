@@ -1,6 +1,9 @@
 package config
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // SizingConfig controls the resource right-sizing monitor.
 type SizingConfig struct {
@@ -78,6 +81,15 @@ func LoadSizing(fc *fileConfig) (*SizingConfig, error) {
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if overProv > approach || approach > atLimit {
+		return nil, fmt.Errorf(
+			"sizing.thresholds: over_provisioned (%g) <= approaching_limit (%g) <= at_limit (%g) must hold",
+			overProv,
+			approach,
+			atLimit,
+		)
 	}
 
 	lookback, err := resolveDuration(nil, "CETACEAN_SIZING_LOOKBACK", fLookback, 168*time.Hour)

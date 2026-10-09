@@ -1575,3 +1575,28 @@ func TestHandleGetUnlockKeyIsNeverStored(t *testing.T) {
 		t.Errorf("Vary = %v, want it to include %q", w.Header().Values("Vary"), varyIdentity)
 	}
 }
+
+// Disk usage walks every image, container and volume on the daemon, so a
+// burst of requests shares one walk.
+func TestHandleDiskUsageSharesARecentResult(t *testing.T) {
+	calls := 0
+	h := newTestHandlers(t, withSystemClient(&mockSystemClient{
+		diskUsageFn: func(context.Context) (types.DiskUsage, error) {
+			calls++
+			return types.DiskUsage{}, nil
+		},
+	}))
+
+	for range 3 {
+		w := httptest.NewRecorder()
+		h.HandleDiskUsage(w, httptest.NewRequest("GET", "/disk-usage", nil))
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", w.Code)
+		}
+	}
+
+	if calls != 1 {
+		t.Errorf("daemon called %d times, want 1", calls)
+	}
+}
