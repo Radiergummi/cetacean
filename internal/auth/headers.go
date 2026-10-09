@@ -42,39 +42,59 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 	}
 
 	if p.cfg.SecretHeader != "" {
-		got := []byte(r.Header.Get(p.cfg.SecretHeader))
-		want := []byte(p.cfg.SecretValue)
-		if !hmac.Equal(got, want) {
+		secret, err := singleHeader(r, p.cfg.SecretHeader)
+		if err != nil {
+			return nil, err
+		}
+		if !hmac.Equal([]byte(secret), []byte(p.cfg.SecretValue)) {
 			return nil, errors.New("invalid proxy secret")
 		}
 	}
 
-	subject := r.Header.Get(p.cfg.Subject)
+	subject, err := singleHeader(r, p.cfg.Subject)
+	if err != nil {
+		return nil, err
+	}
 	if err := validateSubject(subject); err != nil {
 		return nil, fmt.Errorf("invalid subject header %q: %w", p.cfg.Subject, err)
 	}
 
 	displayName := subject
 	if p.cfg.Name != "" {
-		if v := r.Header.Get(p.cfg.Name); v != "" {
+		v, err := singleHeader(r, p.cfg.Name)
+		if err != nil {
+			return nil, err
+		}
+		if v != "" {
 			displayName = v
 		}
 	}
 
 	var email string
 	if p.cfg.Email != "" {
-		email = r.Header.Get(p.cfg.Email)
+		if email, err = singleHeader(r, p.cfg.Email); err != nil {
+			return nil, err
+		}
 	}
 
 	var groups []string
 	if p.cfg.Groups != "" {
-		if v := r.Header.Get(p.cfg.Groups); v != "" {
-			for g := range strings.SplitSeq(v, ",") {
-				g = strings.TrimSpace(g)
-				if g != "" {
-					groups = append(groups, g)
-				}
+		v, err := singleHeader(r, p.cfg.Groups)
+		if err != nil {
+			return nil, err
+		}
+		for g := range strings.SplitSeq(v, ",") {
+			g = strings.TrimSpace(g)
+			if g != "" {
+				groups = append(groups, g)
 			}
+		}
+		if len(groups) > maxGroups {
+			return nil, fmt.Errorf(
+				"groups header %q names more than %d groups",
+				p.cfg.Groups,
+				maxGroups,
+			)
 		}
 	}
 
@@ -82,7 +102,11 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 		"subject_header": p.cfg.Subject,
 	}
 	for _, h := range p.extraHeaders {
-		if v := r.Header.Get(h); v != "" {
+		v, err := singleHeader(r, h)
+		if err != nil {
+			return nil, err
+		}
+		if v != "" {
 			raw[h] = v
 		}
 	}
@@ -98,6 +122,28 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 }
 
 func (p *HeadersProvider) RegisterRoutes(_ *http.ServeMux) {}
+
+// maxGroups bounds the groups one request may claim; every grant's audience
+// is matched against each of them.
+const maxGroups = 256
+
+// singleHeader reads a header the proxy must set exactly once. A proxy that
+// appends rather than replaces leaves its client's value beside its own, so a
+// second value means one of them came from the client.
+func singleHeader(r *http.Request, name string) (string, error) {
+	values := r.Header.Values(name)
+	if len(values) > 1 {
+		return "", fmt.Errorf(
+			"header %q appears more than once; the proxy must replace any its client sent",
+			name,
+		)
+	}
+	if len(values) == 0 {
+		return "", nil
+	}
+
+	return values[0], nil
+}
 
 // validateSubject rejects an empty, over-long, or control-character subject.
 // No error quotes the value: WhoamiHandler logs the error this is wrapped

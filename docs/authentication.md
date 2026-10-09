@@ -55,6 +55,8 @@ environment:
 environment:
   CETACEAN_AUTH_MODE: headers
   CETACEAN_AUTH_HEADERS_SUBJECT: X-Remote-User
+  # Without it no groups are read, and grants with a group: audience match no one.
+  CETACEAN_AUTH_HEADERS_GROUPS: X-Remote-Groups
   CETACEAN_TRUSTED_PROXIES: "10.0.0.0/8"
 ```
 
@@ -434,6 +436,10 @@ configuration][trusted-proxy-headers] for the optional name, email, and groups h
 > This mode trusts the proxy to set headers correctly. [`server.trusted_proxies`][server.trusted_proxies] is
 > required and restricts which source addresses may set identity headers, accepting individual IPs and CIDRs.
 > Without it Cetacean refuses to start.
+
+The proxy must replace these headers, not append to them. A request carrying any identity header, the secret
+header, or a header a grant source reads more than once is refused, because one of the values came from the
+client. A groups header may name at most 256 groups.
 
 For defense in depth, require a shared secret on every proxied request:
 
