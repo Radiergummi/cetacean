@@ -99,7 +99,13 @@ func HandleAsyncAPI(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 			return
 		}
 
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		// Without server.public_url the document names the Host the request
+		// carried, so a shared cache must not hand it to anyone else.
+		if PublicURLFromContext(r.Context()) != "" {
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+		} else {
+			w.Header().Set("Cache-Control", "private, max-age=3600")
+		}
 
 		if asYAML {
 			w.Header().Set("Content-Type", asyncAPIYAMLMediaType)
