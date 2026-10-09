@@ -6,6 +6,13 @@ import "../styles/global.css";
 ---
 <html lang="en">
 <head>
+    <script is:inline>
+        // Static hosting serves this page for every unknown path, so a deep
+        // link into the demo goes back through its entry, carrying the route.
+        if (location.pathname.startsWith("/demo/") && location.pathname !== "/demo/") {
+            location.replace("/demo/?route=" + encodeURIComponent(location.pathname + location.search + location.hash));
+        }
+    </script>
     <Head title="Page not found" description="The page you're looking for doesn't exist." />
 </head>
 
