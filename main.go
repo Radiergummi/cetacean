@@ -280,7 +280,7 @@ func main() {
 	}
 
 	snapshotPath := ""
-	if cfg.Snapshot {
+	if cfg.Snapshot && dataDirReady {
 		snapshotPath = filepath.Join(cfg.DataDir, "snapshot.json")
 		if err := stateCache.LoadFromDisk(snapshotPath); err != nil {
 			slog.Info("no snapshot loaded", "error", err)

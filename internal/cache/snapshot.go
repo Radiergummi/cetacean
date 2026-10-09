@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/docker/docker/api/types/network"
@@ -56,7 +57,8 @@ func (c *Cache) WriteToDisk(path string) error {
 	}
 
 	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+	if err := writeSynced(tmpPath, data); err != nil {
+		os.Remove(tmpPath) //nolint:errcheck
 		return fmt.Errorf("write snapshot tmp: %w", err)
 	}
 
@@ -65,7 +67,43 @@ func (c *Cache) WriteToDisk(path string) error {
 		return fmt.Errorf("rename snapshot: %w", err)
 	}
 
+	// The rename only survives a power loss once the directory entry is on disk.
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return fmt.Errorf("sync snapshot dir: %w", err)
+	}
+	defer dir.Close() //nolint:errcheck // read-only handle
+
+	if err := dir.Sync(); err != nil {
+		return fmt.Errorf("sync snapshot dir: %w", err)
+	}
+
 	return nil
+}
+
+// writeSynced writes data to path and flushes it to disk before returning, so
+// the rename that publishes it never exposes a file the kernel has not written.
+func writeSynced(path string, data []byte) error {
+	f, err := os.OpenFile(
+		path,
+		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
+		0o600,
+	) //nolint:gosec // operator-configured data dir
+	if err != nil {
+		return err
+	}
+
+	if _, err := f.Write(data); err != nil {
+		f.Close() //nolint:errcheck,gosec // the write error is the one to report
+		return err
+	}
+
+	if err := f.Sync(); err != nil {
+		f.Close() //nolint:errcheck,gosec // the sync error is the one to report
+		return err
+	}
+
+	return f.Close()
 }
 
 // LoadFromDisk reads a snapshot file and populates the cache via ReplaceAll.
