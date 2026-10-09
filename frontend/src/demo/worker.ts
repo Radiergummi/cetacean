@@ -1,14 +1,12 @@
 import { buildDataset } from "./dataset";
-import { createHandlers } from "./handlers";
+import { createDemoHandlers } from "./demoHandlers";
 import { startSimulator } from "./simulator";
-import { createSSEHandlers } from "./sseHandlers";
 import { setupWorker } from "msw/browser";
 
 const dataset = buildDataset();
-const { handlers: sseHandlers, clients } = createSSEHandlers(dataset);
-const httpHandlers = createHandlers(dataset, clients);
+const { handlers, clients } = createDemoHandlers(dataset);
 
-export const worker = setupWorker(...httpHandlers, ...sseHandlers);
+export const worker = setupWorker(...handlers);
 export { dataset, clients };
 
 /**
