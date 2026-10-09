@@ -454,3 +454,44 @@ func TestFilterSinceAndBacklogFilterAgree(t *testing.T) {
 		})
 	}
 }
+
+// A service's own --log-opt labels join Docker's in the details prefix, and a
+// key can sort before "com.docker.", so the prefix is recognised by its shape.
+func TestParseDetailsWithCustomLabels(t *testing.T) {
+	line := "app.team=platform,com.docker.swarm.node.id=n1,com.docker.swarm.service.id=s1," +
+		"com.docker.swarm.task.id=t1 logopt 44"
+
+	attrs, message := parseDetails(line)
+	if message != "logopt 44" {
+		t.Errorf("message = %q, want %q", message, "logopt 44")
+	}
+	if attrs["taskId"] != "t1" || attrs["app.team"] != "platform" {
+		t.Errorf("attrs = %v, want taskId t1 and app.team platform", attrs)
+	}
+}
+
+func TestParseDetailsLeavesAPlainMessageAlone(t *testing.T) {
+	for _, line := range []string{"level=info msg=started", "x=y hello"} {
+		if attrs, message := parseDetails(line); attrs != nil || message != line {
+			t.Errorf("%q: attrs = %v, message = %q; want it untouched", line, attrs, message)
+		}
+	}
+}
+
+// A TTY service's logs are not multiplexed: the stream is the text itself.
+// Read as frames, its first bytes became a frame length of hundreds of MB.
+func TestParseDockerLogsReadsAnUnframedTTYStream(t *testing.T) {
+	raw := "2026-10-09T08:12:34.000000000Z com.docker.swarm.task.id=t1 first line\r\n" +
+		"2026-10-09T08:12:35.000000000Z com.docker.swarm.task.id=t1 second line\r\n"
+
+	lines, err := ParseDockerLogs(strings.NewReader(raw))
+	if err != nil {
+		t.Fatalf("ParseDockerLogs: %v", err)
+	}
+	if len(lines) != 2 || lines[0].Message != "first line" || lines[1].Message != "second line" {
+		t.Fatalf("lines = %+v, want the two messages", lines)
+	}
+	if lines[0].Attrs["taskId"] != "t1" || lines[0].Stream != "stdout" {
+		t.Errorf("first line = %+v, want taskId t1 on stdout", lines[0])
+	}
+}
