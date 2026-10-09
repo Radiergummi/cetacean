@@ -1,15 +1,12 @@
-package mcp
+package cluster
 
-import (
-	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
-)
+import "github.com/radiergummi/cetacean/internal/cache"
 
-// nameHistoryTasks replaces the name on task history entries with the one Swarm
+// NameHistoryTasks replaces the name on task history entries with the one Swarm
 // shows. cache.ExtractName must keep recording a task's ID as its name, since
 // every read-side permission check is keyed on it — so this runs after
 // filtering, for presentation only. Naming is best-effort and falls back.
-func nameHistoryTasks(c *cache.Cache, entries []cache.HistoryEntry) []cache.HistoryEntry {
+func NameHistoryTasks(c *cache.Cache, entries []cache.HistoryEntry) []cache.HistoryEntry {
 	named := make([]cache.HistoryEntry, len(entries))
 	copy(named, entries)
 
@@ -47,5 +44,5 @@ func taskDisplayName(c *cache.Cache, taskID string) string {
 		return taskID
 	}
 
-	return cluster.TaskName(task, &svc)
+	return TaskName(task, &svc)
 }
