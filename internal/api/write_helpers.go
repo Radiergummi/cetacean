@@ -16,6 +16,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -232,11 +233,20 @@ func (h *Handlers) awaitPreferred(
 		err      error
 	)
 
-	if wanted {
+	// At the cap the write is answered as respond-async would answer it: the
+	// change was accepted, and the client polls instead of holding a slot.
+	waiting := wanted && tryAcquire(&h.activePreferWaits, maxPreferWaits)
+	if wanted && !waiting {
+		w.Header().Set("Retry-After", sse.RetryAfter())
+		wanted = false
+	}
+
+	if waiting {
 		progress, err = cluster.AwaitService(
 			r.Context(), h.cache, svc.ID, svc.Version.Index,
 			cluster.ConvergencePollInterval, wait,
 		)
+		h.activePreferWaits.Add(-1)
 	}
 
 	// RFC 7240 §2 asks for the wait actually applied, which preferWait may

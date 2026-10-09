@@ -31,6 +31,13 @@ const defaultLogLimit = 500
 const maxLogLimit = 10000
 const maxLogSSEConns = 128
 
+// maxLogReads bounds plain (non-streaming) log reads in flight. Each fans out
+// to the daemon per task and buffers, sorts and encodes up to maxLogLimit lines.
+const maxLogReads = 32
+
+// maxPreferWaits bounds writes held open by Prefer: wait, each up to minutes.
+const maxPreferWaits = 32
+
 // logResumeTail bounds how far back a resumed SSE stream reaches for the lines
 // it missed while the client was disconnected. A client away for longer than
 // this loses the overflow, which beats replaying an entire log.
@@ -231,6 +238,8 @@ type Handlers struct {
 	localNodeRetryAfter  *time.Time
 
 	activeLogSSEConns  atomic.Int64
+	activeLogReads     atomic.Int64
+	activePreferWaits  atomic.Int64
 	metricsStreamCount atomic.Int32
 	tickerInterval     time.Duration // override for tick interval in tests; zero means use step duration
 	dockerVersionCache *dockerVersionCache
@@ -367,4 +376,18 @@ func exprFilter[T any](
 		}
 	}
 	return filtered, true
+}
+
+// tryAcquire takes one of max slots on counter, or reports that none is free.
+// The caller releases a slot it took with counter.Add(-1).
+func tryAcquire(counter *atomic.Int64, max int64) bool {
+	for {
+		current := counter.Load()
+		if current >= max {
+			return false
+		}
+		if counter.CompareAndSwap(current, current+1) {
+			return true
+		}
+	}
 }
