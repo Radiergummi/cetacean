@@ -34,11 +34,6 @@ func (c Chain) Append(constructors ...Constructor) Chain {
 	return Chain{merged}
 }
 
-// Extend returns a new Chain with other's constructors appended to c's.
-func (c Chain) Extend(other Chain) Chain {
-	return c.Append(other.constructors...)
-}
-
 // Then wraps h in the chain, outermost constructor first.
 func (c Chain) Then(h http.Handler) http.Handler {
 	if h == nil {

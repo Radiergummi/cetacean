@@ -511,3 +511,31 @@ func TestCIMDCacheEntryLapsesAtItsTTL(t *testing.T) {
 		t.Error("a lapsed entry was served from the cache")
 	}
 }
+
+// Each category of the block-list, so dropping one fails here rather than in
+// a deployment that resolves a client's metadata URL to it.
+func TestCIMDCheckIPBlocksEveryCategory(t *testing.T) {
+	f := &CIMDFetcher{}
+
+	for _, tc := range []struct{ ip, category string }{
+		{"10.1.2.3", "private"},
+		{"172.16.0.1", "private"},
+		{"192.168.1.1", "private"},
+		{"fd00::1", "private"},
+		{"169.254.169.254", "link-local"},
+		{"ff02::1", "link-local"},
+		{"0.0.0.0", "unspecified"},
+		{"::", "unspecified"},
+		{"239.255.255.250", "multicast"},
+		{"ff0e::1", "multicast"},
+	} {
+		err := f.checkIP(net.ParseIP(tc.ip))
+		if !errors.Is(err, ErrCIMDSSRFBlocked) || !strings.Contains(err.Error(), tc.category) {
+			t.Errorf("%s: got %v, want a %s refusal", tc.ip, err, tc.category)
+		}
+	}
+
+	if err := f.checkIP(net.ParseIP("93.184.216.34")); err != nil {
+		t.Errorf("a public address was refused: %v", err)
+	}
+}
