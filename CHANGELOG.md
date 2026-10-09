@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - **Breaking:** adding a bind mount, named pipe, driver-configured volume or Linux capability to a service needs operations level 3, through the API, the dashboard and MCP; ones it already has stay editable at level 2
+- **Breaking:** the bundled monitoring stack no longer publishes Prometheus on port 9090 of every node; Cetacean reaches it over the overlay, and the monitoring docs show how to open its UI
 - **Breaking:** MCP's `remove_task` needs operations level 3, matching `DELETE /tasks/{id}`; it was available from level 1
 - **Breaking:** the OAuth authorization server is opt-in—set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
@@ -95,6 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Startup refuses `sizing.thresholds` out of order
 - Startup warns when `auth.mode` is `none` with writes enabled
 - With Tailscale, Cetacean exits if the listener for health checks fails to bind, rather than running without one
+- Built with Go 1.27.2 and `golang.org/x/net` 0.60.0, which fix vulnerabilities in the HTTP/2, TLS, and HTTP code the server uses
+- The image's license label uses the OCI key `org.opencontainers.image.licenses`
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of

@@ -27,6 +27,10 @@ curl -O https://cetacean.mazetti.me/dist/prometheus.yml
 docker stack deploy -c compose.monitoring.yaml monitoring
 ```
 
+Prometheus publishes no port, because it has no authentication of its own; Cetacean reaches it over the overlay.
+To open its UI, put it behind a proxy that authenticates, or publish it for a while with
+`docker service update --publish-add 127.0.0.1:9090:9090 monitoring_prometheus` on a node you can reach.
+
 `compose.prometheus.yaml` is a small overlay for `compose.yaml` that joins that network and sets
 [`prometheus.url`][prometheus.url]. Pass both files, on this deploy and every later one:
 
