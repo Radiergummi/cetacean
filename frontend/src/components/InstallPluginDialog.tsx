@@ -108,7 +108,12 @@ export default function InstallPluginDialog({
             <input
               type="text"
               value={remote}
-              onChange={(event) => setRemote(event.target.value)}
+              onChange={(event) => {
+                // The privileges on screen belong to the checked reference; a
+                // new one is checked again before it can be installed.
+                setRemote(event.target.value);
+                setPrivileges(null);
+              }}
               placeholder="docker.io/library/plugin:latest"
               className="w-full rounded-md border bg-transparent px-3 py-2 text-sm transition outline-none focus:ring-2 focus:ring-ring"
               disabled={checkPrivileges.loading || installAction.loading}

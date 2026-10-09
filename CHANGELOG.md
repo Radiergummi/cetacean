@@ -114,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - In headers mode, a request carrying an identity header twice, as a proxy that appends rather than replaces would forward it, is refused instead of authenticating as the client's value; a groups header may name at most 256 groups
 - Removing an in-use network, volume, config or secret, or a node that is up or a manager, answers `409` with its code; neither it, the MCP tools, nor a stack removal's errors repeat the daemon's text naming what is in the way
 - The volume `force` option is described as what it is: an override for driver errors on a local volume, and for use on a cluster volume; the dashboard no longer offers force removal for a volume or a manager node
+- Editing the plugin reference after checking its privileges asks for a new check before it can be installed
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
