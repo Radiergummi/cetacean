@@ -186,9 +186,8 @@ type Server struct {
 
 	// allowedOrigins is the set of Origin header values the streamable HTTP
 	// endpoint accepts. originGuard rejects any other non-empty Origin with
-	// 403 (DNS-rebinding defense). allowAnyOrigin disables the check.
+	// 403 (DNS-rebinding defense).
 	allowedOrigins []string
-	allowAnyOrigin bool
 
 	// iconBaseURL is the canonical external base (issuer + base path) that tool
 	// icon `src` values are built from, e.g. "https://cetacean.example.com".
@@ -215,7 +214,12 @@ type Server struct {
 	// watches bounds concurrent `watch` waits — see maxConcurrentWatches. A nil
 	// channel disables the bound, which is what a Server built without New gets;
 	// only New wires it, and only New serves real traffic.
-	watches   chan struct{}
+	watches chan struct{}
+
+	// listens bounds open subscriptions/listen streams — see maxListenStreams.
+	// Nil disables the bound, as for watches.
+	listens chan struct{}
+
 	closeOnce sync.Once
 }
 
@@ -239,12 +243,6 @@ type Options struct {
 	AuthProvider    auth.Provider
 	Recommendations RecommendationEngine
 	AllowedOrigins  []string
-
-	// AllowAnyOrigin disables the Origin check. It is the caller's reading of
-	// server.cors.origins — api.CORSConfig.Wildcard() — rather than a "*" this
-	// package looks for itself, so one setting cannot mean a wildcard here and
-	// a literal list to cross-origin protection.
-	AllowAnyOrigin bool
 
 	// Prometheus backs the get_metrics tool. Nil when CETACEAN_PROMETHEUS_URL
 	// is unset, and the tool then says metrics are unavailable rather than
@@ -299,10 +297,10 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		recEngine:      opts.Recommendations,
 		prom:           opts.Prometheus,
 		allowedOrigins: opts.AllowedOrigins,
-		allowAnyOrigin: opts.AllowAnyOrigin,
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
 		watches:        make(chan struct{}, maxConcurrentWatches),
+		listens:        make(chan struct{}, maxListenStreams),
 	}
 
 	serverOptions := []mcpserver.ServerOption{
@@ -453,18 +451,18 @@ func (s *Server) Handler() http.Handler {
 	case guardNone:
 	}
 
-	return s.originGuard(h)
+	return s.limitRequests(s.originGuard(h))
 }
 
 // originGuard is the DNS-rebinding defense the Streamable HTTP transport
 // requires and mcp-go does not enforce. A request with no Origin passes
-// through. Matching is exact: what counts as a wildcard stays internal/api's
-// ruling, and arrives here as AllowAnyOrigin.
+// through. Matching is exact, so "*" admits nothing: every call is a POST that
+// may write, and a wildcard is not trusted for cross-origin writes.
 func (s *Server) originGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
-		if s.allowAnyOrigin || origin == "" || slices.Contains(s.allowedOrigins, origin) {
+		if origin == "" || slices.Contains(s.allowedOrigins, origin) {
 			next.ServeHTTP(w, r)
 			return
 		}
