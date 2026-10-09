@@ -112,6 +112,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `/topology`'s 406 lists every type it serves
 - CORS responses vary on `Origin` even when they grant nothing
 - In headers mode, a request carrying an identity header twice, as a proxy that appends rather than replaces would forward it, is refused instead of authenticating as the client's value; a groups header may name at most 256 groups
+- Removing a network with active endpoints, a node that is still up, or an in-use volume (with or without `force`) answers `409` with its code instead of `500` or `400`, and the detail no longer repeats the daemon's text naming the containers in the way
+- The volume `force` option is described as what it is, an override for driver errors; the dashboard no longer offers it for a volume in use
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
