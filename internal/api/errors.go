@@ -507,6 +507,13 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "The merged log driver specification is not valid.",
 		Suggestion:  "Check the log driver name and options in the request body.",
 	},
+	"SVC020": {
+		Code:        "SVC020",
+		Title:       "Port Missing Target",
+		Status:      http.StatusBadRequest,
+		Description: "A published port must name the container port it forwards to.",
+		Suggestion:  "Set TargetPort to a non-zero container port for every port entry.",
+	},
 
 	// ── TSK: task operations ──────────────────────────────────────────
 	"TSK001": {

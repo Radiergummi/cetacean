@@ -143,7 +143,7 @@ var serviceSectionWriters = map[string]sectionWriter{
 			return swarm.Service{}, err
 		}
 
-		if err := validatePorts(ports); err != nil {
+		if err := cluster.ValidatePorts(ports); err != nil {
 			return swarm.Service{}, fmt.Errorf("section %q: %w", section, err)
 		}
 
@@ -436,21 +436,4 @@ func decodeSection[T any](req mcplib.CallToolRequest, section string) (T, error)
 	}
 
 	return out, nil
-}
-
-// validatePorts rejects a port that publishes nothing. Docker accepts a
-// PortConfig with TargetPort 0, assigns an ephemeral published port pointing
-// at container port 0, and reports success — so the service holds a port that
-// cannot serve. The target is the one field with no sensible default.
-func validatePorts(ports []swarm.PortConfig) error {
-	for i, p := range ports {
-		if p.TargetPort == 0 {
-			return fmt.Errorf(
-				"port %d: TargetPort is required and must not be 0 "+
-					"(the container port to publish)", i,
-			)
-		}
-	}
-
-	return nil
 }

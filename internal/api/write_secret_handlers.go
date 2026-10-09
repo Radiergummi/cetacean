@@ -23,6 +23,7 @@ func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 	handleCreateDataResource(w, r, createDataResourceSpec{
 		resource:     "secret",
+		acl:          h.acl,
 		nameErrCode:  "SEC004",
 		conflictCode: "SEC003",
 		basePath:     "/secrets/",

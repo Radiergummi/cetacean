@@ -239,8 +239,6 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	volACL := h.requireWriteACL(pathResource("volume", "name"))
 	pluginACL := h.requireWriteACL(pathResource("plugin", "name"))
 	pluginWildACL := h.requireWriteACL(wildcardResource("plugin"))
-	cfgWildACL := h.requireWriteACL(wildcardResource("config"))
-	secWildACL := h.requireWriteACL(wildcardResource("secret"))
 	swarmACL := h.requireWriteACL(swarmResource)
 
 	// Derived (ACL, tier) chains for the gated route registrations below.
@@ -260,8 +258,6 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	pluginTier2 := NewChain(pluginACL, tier2)
 	pluginTier3 := NewChain(pluginACL, tier3)
 	pluginWildTier3 := NewChain(pluginWildACL, tier3)
-	cfgWildTier2 := NewChain(cfgWildACL, tier2)
-	secWildTier2 := NewChain(secWildACL, tier2)
 	swarmTier2 := NewChain(swarmACL, tier2)
 	swarmTier3 := NewChain(swarmACL, tier3)
 
@@ -724,7 +720,8 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.Handle("DELETE /configs/{id}",
 		cfgTier3.Append(h.precond(h.configRepresentation)).
 			ThenFunc(h.HandleRemoveConfig))
-	mux.Handle("POST /configs", cfgWildTier2.ThenFunc(h.HandleCreateConfig))
+	// The name is in the body, so the handler checks the write grant on it.
+	mux.Handle("POST /configs", tier2(http.HandlerFunc(h.HandleCreateConfig)))
 	mux.HandleFunc(
 		"GET /configs/{id}/labels",
 		contentNegotiated(h.HandleGetConfigLabels, feedHandlers{}, spa),
@@ -762,7 +759,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	mux.Handle("DELETE /secrets/{id}",
 		secTier3.Append(h.precond(h.secretRepresentation)).
 			ThenFunc(h.HandleRemoveSecret))
-	mux.Handle("POST /secrets", secWildTier2.ThenFunc(h.HandleCreateSecret))
+	mux.Handle("POST /secrets", tier2(http.HandlerFunc(h.HandleCreateSecret)))
 	mux.HandleFunc(
 		"GET /secrets/{id}/labels",
 		contentNegotiated(h.HandleGetSecretLabels, feedHandlers{}, spa),

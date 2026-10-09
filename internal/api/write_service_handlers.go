@@ -10,6 +10,8 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
+	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -349,6 +351,11 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 	}
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 		writeErrorCode(w, r, "API008", "invalid JSON")
+		return
+	}
+
+	if err := cluster.ValidatePorts(patch.Ports); err != nil {
+		writeErrorCode(w, r, "SVC020", err.Error())
 		return
 	}
 
@@ -907,7 +914,8 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
@@ -930,13 +938,17 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 			)
 			return
 		}
+		cfg, found := h.cache.GetConfig(ref.ConfigID)
+		if !h.checkAttachable(w, r, svc, cluster.AttachConfig, ref.ConfigID, cfg.Spec.Name, found) {
+			return
+		}
 		fileName := ref.FileName
 		if fileName == "" {
-			fileName = "/" + ref.ConfigName
+			fileName = "/" + cfg.Spec.Name
 		}
 		configs[i] = &swarm.ConfigReference{
 			ConfigID:   ref.ConfigID,
-			ConfigName: ref.ConfigName,
+			ConfigName: cfg.Spec.Name,
 			File: &swarm.ConfigReferenceFileTarget{
 				Name: fileName,
 				UID:  "0",
@@ -963,6 +975,27 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 	)
 }
 
+// checkAttachable writes a 403 unless the caller may attach the resource. An
+// unknown reference gets the same answer, so a refusal never reveals what exists.
+func (h *Handlers) checkAttachable(
+	w http.ResponseWriter,
+	r *http.Request,
+	svc swarm.Service,
+	kind cluster.AttachmentKind,
+	id, name string,
+	found bool,
+) bool {
+	identity := auth.IdentityFromContext(r.Context())
+	canRead := func(resource string) bool { return h.acl.Can(identity, "read", resource) }
+
+	if !found || cluster.CheckAttachable(svc, canRead, kind, id, name) != nil {
+		writeErrorCode(w, r, "ACL001", "cannot attach "+string(kind)+" "+id)
+		return false
+	}
+
+	return true
+}
+
 func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Request) {
 	svc, ok := h.lookupServiceACL(w, r)
 	if !ok {
@@ -980,7 +1013,8 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
@@ -1003,13 +1037,17 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 			)
 			return
 		}
+		sec, found := h.cache.GetSecret(ref.SecretID)
+		if !h.checkAttachable(w, r, svc, cluster.AttachSecret, ref.SecretID, sec.Spec.Name, found) {
+			return
+		}
 		fileName := ref.FileName
 		if fileName == "" {
-			fileName = "/run/secrets/" + ref.SecretName
+			fileName = "/run/secrets/" + sec.Spec.Name
 		}
 		secrets[i] = &swarm.SecretReference{
 			SecretID:   ref.SecretID,
-			SecretName: ref.SecretName,
+			SecretName: sec.Spec.Name,
 			File: &swarm.SecretReferenceFileTarget{
 				Name: fileName,
 				UID:  "0",
@@ -1053,7 +1091,8 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
@@ -1071,8 +1110,23 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 			writeErrorCode(w, r, "SVC017", "each network must have a target")
 			return
 		}
+		target, found, resolveErr := h.cache.ResolveNetwork(ref.Target)
+		if resolveErr != nil || !found {
+			target.ID = ref.Target
+		}
+		if !h.checkAttachable(
+			w,
+			r,
+			svc,
+			cluster.AttachNetwork,
+			target.ID,
+			target.Name,
+			found && resolveErr == nil,
+		) {
+			return
+		}
 		networks[i] = swarm.NetworkAttachmentConfig{
-			Target:  ref.Target,
+			Target:  target.ID,
 			Aliases: ref.Aliases,
 		}
 	}

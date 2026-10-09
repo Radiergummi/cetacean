@@ -8,6 +8,9 @@ import (
 	"strings"
 
 	cerrdefs "github.com/containerd/errdefs"
+
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 // createDataResourceSpec describes how to create a data resource (config or
@@ -19,6 +22,8 @@ type createDataResourceSpec struct {
 	conflictCode string // create-conflict error code
 	basePath     string // URL path prefix including trailing slash
 	typeName     string // JSON-LD type name
+
+	acl *acl.Evaluator
 
 	create        func(ctx context.Context, name string, data []byte) (string, error)
 	buildFallback func(id string, name string) any
@@ -33,6 +38,11 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 
 	if strings.TrimSpace(req.Name) == "" {
 		writeErrorCode(w, r, spec.nameErrCode, "name is required")
+		return
+	}
+
+	if !spec.acl.Can(auth.IdentityFromContext(r.Context()), "write", spec.resource+":"+req.Name) {
+		writeErrorCode(w, r, "ACL002", "write access denied")
 		return
 	}
 
