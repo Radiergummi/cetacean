@@ -44,3 +44,23 @@ func TestRenderOmitsTheWarningBlockWhenThereAreNone(t *testing.T) {
 		t.Errorf("empty warning block rendered:\n%s", out)
 	}
 }
+
+// A warning quotes values a service writer chooses, such as a mount target. A
+// line break in one would end the comment and put YAML in the document.
+func TestRenderKeepsWarningsInsideTheirComment(t *testing.T) {
+	hostile := "/data\n...\n---\nservices:\n  evil:\n    image: attacker/evil\r x"
+	out, err := Render(File{Services: map[string]Service{"api": {Image: "nginx:1.27"}}},
+		[]string{"mount " + hostile + " dropped"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+
+	for line := range strings.SplitSeq(string(out), "\n") {
+		if strings.Contains(line, "attacker/evil") && !strings.HasPrefix(line, "#") {
+			t.Fatalf("warning escaped its comment:\n%s", out)
+		}
+	}
+	if strings.Count(string(out), "\n---") != 0 || strings.Contains(string(out), " ") {
+		t.Errorf("a document marker or line separator survived:\n%q", out)
+	}
+}
