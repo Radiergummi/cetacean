@@ -90,7 +90,7 @@ export function EditablePanel({
 
       {!editing && (
         <div className="flex items-center gap-2">
-          {headerActions}
+          {canEdit && headerActions}
           {canEdit && (
             <Button
               variant="outline"

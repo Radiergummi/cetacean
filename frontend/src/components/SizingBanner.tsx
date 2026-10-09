@@ -1,7 +1,7 @@
 import type { Recommendation } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { invalidateRecommendations } from "@/hooks/useRecommendations";
-import { applyRecommendation } from "@/lib/applyRecommendation";
+import { applyRecommendation, fixTarget } from "@/lib/applyRecommendation";
 import {
   bannerStyles,
   formatSuggestion,
@@ -15,7 +15,8 @@ import { useState } from "react";
 
 interface Props {
   hints: Recommendation[];
-  canFix: boolean;
+  /** The service's Allow methods; a fix is offered when they carry its method. */
+  allowedMethods: Set<string>;
   onFixed?: (() => void) | undefined;
 }
 
@@ -23,7 +24,7 @@ interface Props {
  * Full-width banner showing all sizing hints for a service, with
  * detailed messages, suggested values, and apply buttons.
  */
-export function SizingBanner({ hints, canFix, onFixed }: Props) {
+export function SizingBanner({ hints, allowedMethods, onFixed }: Props) {
   const [applying, setApplying] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +67,8 @@ export function SizingBanner({ hints, canFix, onFixed }: Props) {
         {visibleHints.map(({ hint, index: originalIndex }) => {
           const HintIcon = hintIcon(hint.category);
           const suggestion = formatSuggestion(hint);
-          const hasFix = hint.fixAction != null && hint.suggested != null;
+          const fix = fixTarget(hint);
+          const hasFix = fix != null && hint.suggested != null && allowedMethods.has(fix.method);
           const isApplying = applying === originalIndex;
 
           return (
@@ -84,7 +86,7 @@ export function SizingBanner({ hints, canFix, onFixed }: Props) {
                 </div>
               </div>
 
-              {canFix && hasFix && (
+              {hasFix && (
                 <Button
                   variant="outline"
                   size="xs"
