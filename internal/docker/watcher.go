@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/metrics"
@@ -69,9 +70,15 @@ type Store interface {
 }
 
 type Watcher struct {
-	client       DockerClient
-	store        Store
-	syncOnce     sync.Once
+	client   DockerClient
+	store    Store
+	syncOnce sync.Once
+
+	// syncMu orders full syncs, so a slower fetch cannot replace the cache
+	// after a newer one has; resyncs shares one manual resync among callers.
+	syncMu  sync.Mutex
+	resyncs singleflight.Group
+
 	ready        chan struct{}
 	snapshotPath string
 
@@ -193,6 +200,9 @@ func (w *Watcher) fullSync(ctx context.Context) error {
 // a watcher-driven one does, a manual resync does not — it runs beside a
 // healthy stream, and a transient failure there is not the engine going away.
 func (w *Watcher) sync(ctx context.Context, tracksConnection bool) error {
+	w.syncMu.Lock()
+	defer w.syncMu.Unlock()
+
 	start := time.Now()
 	slog.Info("starting full sync")
 
@@ -239,11 +249,17 @@ func (w *Watcher) sync(ctx context.Context, tracksConnection bool) error {
 // Exposed for manual recovery from drift via the admin API; the watcher's
 // regular event-stream path remains independent of this call.
 func (w *Watcher) Resync(ctx context.Context) error {
-	if err := w.sync(ctx, false); err != nil {
-		return err
-	}
-	w.writeSnapshot()
-	return nil
+	// Detached: callers who joined this flight must not fail with the first.
+	_, err, _ := w.resyncs.Do("resync", func() (any, error) {
+		if err := w.sync(context.WithoutCancel(ctx), false); err != nil {
+			return nil, err
+		}
+		w.writeSnapshot()
+
+		return nil, nil
+	})
+
+	return err
 }
 
 const (
