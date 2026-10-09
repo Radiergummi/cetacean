@@ -350,7 +350,8 @@ against measured usage. The other checkers use fixed thresholds.
 </ConfigParam>
 
 <ConfigParam name="sizing.thresholds.at_limit" env="CETACEAN_SIZING_THRESHOLD_AT_LIMIT" default="0.95">
-  Usage above this fraction of the limit raises a critical finding. Accepts `0.0` to `1.0`.
+  Usage above this fraction of the limit raises a critical finding. Accepts `0.0` to `1.0`. Startup refuses
+  thresholds out of order: `over_provisioned` ≤ `approaching_limit` ≤ `at_limit`.
 </ConfigParam>
 
 <ConfigParam name="sizing.thresholds.lookback" env="CETACEAN_SIZING_LOOKBACK" default="168h">

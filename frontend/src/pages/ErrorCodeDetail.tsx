@@ -1,17 +1,12 @@
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
-import { apiPath } from "@/lib/basePath";
+import { api, type ErrorDefinition } from "@/api/client";
+import { getErrorMessage } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
-interface ErrorDef {
-  code: string;
-  title: string;
-  status: number;
-  description: string;
-  suggestion: string;
-}
+type ErrorDef = ErrorDefinition;
 
 export default function ErrorCodeDetail() {
   const { code } = useParams<{ code: string }>();
@@ -19,15 +14,10 @@ export default function ErrorCodeDetail() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(apiPath(`/api/errors/${code}`), { headers: { Accept: "application/json" } })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`${res.status} ${res.statusText}`);
-        }
-        return res.json();
-      })
+    api
+      .errorDefinition(code ?? "")
       .then(setErrorDef)
-      .catch((err) => setError(err.message));
+      .catch((caught: unknown) => setError(getErrorMessage(caught, "Failed to load error code")));
   }, [code]);
 
   if (error) {

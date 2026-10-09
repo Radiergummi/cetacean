@@ -234,6 +234,7 @@ type Handlers struct {
 	metricsStreamCount atomic.Int32
 	tickerInterval     time.Duration // override for tick interval in tests; zero means use step duration
 	dockerVersionCache *dockerVersionCache
+	diskUsage          diskUsageCache
 
 	// topologyDocs and stackDocs memoise rendered documents that are pure
 	// functions of the cache generation and what the caller may see.

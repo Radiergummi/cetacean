@@ -71,7 +71,8 @@ func (c *dockerVersionCache) get(ctx context.Context) (*DockerLatestVersion, err
 	c.fetching = true
 	c.mu.Unlock()
 
-	v, err := c.fetch(ctx)
+	// Detached: every caller shares the result, so one leaving must not fail it.
+	v, err := c.fetch(context.WithoutCancel(ctx))
 
 	c.mu.Lock()
 	c.fetching = false

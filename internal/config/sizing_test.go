@@ -110,3 +110,14 @@ func TestLoadSizing_InvalidThreshold(t *testing.T) {
 		t.Fatal("expected error for threshold > 1.0")
 	}
 }
+
+// The evaluator reads the thresholds as bands in this order; out of order, a
+// service can be reported over-provisioned and at its limit at once.
+func TestLoadSizing_RefusesThresholdsOutOfOrder(t *testing.T) {
+	t.Setenv("CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT", "0.9")
+	t.Setenv("CETACEAN_SIZING_THRESHOLD_AT_LIMIT", "0.5")
+
+	if _, err := LoadSizing(nil); err == nil {
+		t.Error("approaching_limit above at_limit was accepted")
+	}
+}

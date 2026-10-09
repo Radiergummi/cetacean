@@ -63,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
 
 ### Fixed
+- One client disconnecting while the latest Docker version was being fetched no longer fails the check for everyone for five minutes
+- `GET /disk-usage` reuses a result for 30 seconds instead of asking the daemon on every request
+- Startup refuses `sizing.thresholds` out of order, and warns when `auth.mode` is `none` with writes enabled
+- With Tailscale, Cetacean exits if the listener for health checks fails to bind, rather than running without one
+- The error reference pages send an expired session to sign-in like every other page
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of

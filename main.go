@@ -423,6 +423,13 @@ func main() {
 	}
 
 	slog.Info("operations level", "level", cfg.OperationsLevel)
+	if authCfg.Mode == "none" && cfg.OperationsLevel > config.OpsReadOnly {
+		slog.Warn(
+			"auth.mode is none with writes enabled: anyone who can reach the server may "+
+				"change the cluster up to the operations level",
+			"operations_level", cfg.OperationsLevel,
+		)
+	}
 	handlers := api.NewHandlers(
 		stateCache,
 		broadcaster,
@@ -756,6 +763,8 @@ func serveDualListeners(
 	}()
 
 	// Start meta server in background
+	// Exits like the main listener does: without it the image's HEALTHCHECK
+	// has nothing to reach, and Swarm restarts a container it cannot see.
 	go func() {
 		slog.Info("meta server started", "addr", cfg.ListenAddr)
 		if tlsCfg.Enabled() {
@@ -764,10 +773,12 @@ func serveDualListeners(
 				tlsCfg.Key,
 			); err != http.ErrServerClosed {
 				slog.Error("meta server error", "error", err)
+				os.Exit(1)
 			}
 		} else {
 			if err := metaServer.ListenAndServe(); err != http.ErrServerClosed {
 				slog.Error("meta server error", "error", err)
+				os.Exit(1)
 			}
 		}
 	}()
