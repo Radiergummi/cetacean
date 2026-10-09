@@ -1,6 +1,7 @@
 import CreateResourceDialog from "./CreateResourceDialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { encodeBase64Text } from "@/lib/base64";
 import { type ChangeEvent, useCallback, useState } from "react";
 
 type InputMode = "text" | "file";
@@ -52,7 +53,7 @@ export default function CreateDataResourceForm({
   const lowerType = resourceType.toLowerCase();
 
   const handleSubmit = useCallback(async () => {
-    const encoded = inputMode === "file" ? fileData! : btoa(text);
+    const encoded = inputMode === "file" ? fileData! : encodeBase64Text(text);
     const result = await onCreate(name.trim(), encoded);
     return `${basePath}/${result.id}`;
   }, [name, text, fileData, inputMode, onCreate, basePath]);

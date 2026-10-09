@@ -6,6 +6,7 @@ import FetchError from "../components/FetchError";
 import { IconButton } from "../components/IconButton";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { useDetailResource } from "../hooks/useDetailResource";
+import { decodeBase64Text } from "@/lib/base64";
 import { Copy } from "lucide-react";
 import { useParams } from "react-router-dom";
 
@@ -36,7 +37,7 @@ export default function ConfigDetail() {
 
   if (config.Spec.Data) {
     try {
-      decoded = atob(config.Spec.Data);
+      decoded = decodeBase64Text(config.Spec.Data);
     } catch {
       decoded = null;
     }
