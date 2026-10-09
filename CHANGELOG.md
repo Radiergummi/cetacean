@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - A stack or a service can be exported as a Compose file, from its detail page or by adding `.yaml` to its URL. Secrets and configs are referenced, never exported
 - `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document: its channels, messages, and cursor format
+- `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document—the channels, the messages each carries, and which cursor dialect its `id:` uses
 - Both API descriptions are served as YAML as well as JSON, at `/api/openapi.yaml` and `/api/asyncapi.yaml` or by negotiating on `Accept`
 - Any list can be downloaded as CSV—add `.csv` to the URL or ask for `text/csv`. Search, filters, and sorting apply; a download that asks for no page gets every row
 - The dashboard is installable as an app, with icons and a theme color that follows its own background
@@ -83,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The cluster overview shows why its data failed to load, with a retry, instead of loading forever
 - A task list whose filter hides every task says so and offers to show them all
 - `cetacean --help` exits 0 and states the operations level default as 0
+- Startup warns when MCP is enabled without TLS outside auth mode `none` and `server.public_url` isn't `https`, as the docs said it would
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of

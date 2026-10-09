@@ -692,7 +692,7 @@ components:
         timestamp: "2026-04-13T08:12:34.123456789Z"
         message: "172.18.0.1 - - [13/Apr/2026:08:12:34 +0000] \"GET / HTTP/1.1\" 200 612"
         stream: stdout
-        attrs: { "com.docker.swarm.task.id": tsk_abc123def456 }
+        attrs: { taskId: tsk_abc123def456 }
 
     # The /metrics stream forwards Prometheus' own response bodies unchanged.
     # This is the first schema for them anywhere; OpenAPI describes the proxy
