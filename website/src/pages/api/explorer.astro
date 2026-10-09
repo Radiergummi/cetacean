@@ -24,7 +24,7 @@ const {description, title} = generatedPage("/api/explorer");
         }
     </style>
 
-    <div class="scalar-container" id="scalar-root"></div>
+    <main class="scalar-container" id="main-content"></main>
 
     <script is:inline>
         (function () {
@@ -39,7 +39,7 @@ const {description, title} = generatedPage("/api/explorer");
             }
 
             function init() {
-                Scalar.createApiReference("#scalar-root", {
+                Scalar.createApiReference("#main-content", {
                     url: "/api/openapi.yaml",
                     hideDarkModeToggle: true,
                     hideSearch: true,
