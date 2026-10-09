@@ -431,7 +431,7 @@
   "go:golang.org/x/exp@v0.0.0-20260908205506-85c1c2202aba": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
-  "go:golang.org/x/net@v0.59.0": {
+  "go:golang.org/x/net@v0.60.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
   "go:golang.org/x/oauth2@v0.37.0": {
