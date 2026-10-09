@@ -37,6 +37,28 @@ export interface ServiceResourceShape {
   Reservations?: { NanoCPUs?: number; MemoryBytes?: number } | undefined;
 }
 
+interface ResourcePair {
+  limit?: number | undefined;
+  reservation?: number | undefined;
+}
+
+/**
+ * The merge patch a save sends, CPU in cores and memory in MiB. Every field is
+ * present, a cleared one as null: merge patch keeps a key it isn't sent, so
+ * omitting a cleared limit would leave it in force.
+ */
+export function buildResourcesPatch(cpu: ResourcePair, memory: ResourcePair) {
+  const nanoCPUs = (cores: number | undefined) =>
+    cores === undefined ? null : Math.round(cores * 1e9);
+  const bytes = (megabytes: number | undefined) =>
+    megabytes === undefined ? null : Math.round(megabytes * 1024 * 1024);
+
+  return {
+    Limits: { NanoCPUs: nanoCPUs(cpu.limit), MemoryBytes: bytes(memory.limit) },
+    Reservations: { NanoCPUs: nanoCPUs(cpu.reservation), MemoryBytes: bytes(memory.reservation) },
+  };
+}
+
 export interface AllocationData {
   cpuReserved?: number | undefined;
   cpuLimit?: number | undefined;
@@ -107,38 +129,14 @@ export function ResourcesEditor({
   }
 
   async function save() {
-    const patch: ServiceResourceShape = {};
-
-    if (cpu.limit !== undefined || memory.limit !== undefined) {
-      patch.Limits = {};
-
-      if (cpu.limit !== undefined) {
-        patch.Limits.NanoCPUs = Math.round(cpu.limit * 1e9);
-      }
-
-      if (memory.limit !== undefined) {
-        patch.Limits.MemoryBytes = Math.round(memory.limit * 1024 * 1024);
-      }
-    }
-
-    if (cpu.reservation !== undefined || memory.reservation !== undefined) {
-      patch.Reservations = {};
-
-      if (cpu.reservation !== undefined) {
-        patch.Reservations.NanoCPUs = Math.round(cpu.reservation * 1e9);
-      }
-
-      if (memory.reservation !== undefined) {
-        patch.Reservations.MemoryBytes = Math.round(memory.reservation * 1024 * 1024);
-      }
-    }
+    const patch = buildResourcesPatch(cpu, memory);
 
     // No-op: nothing changed
     if (
-      patch.Limits?.NanoCPUs === Limits?.NanoCPUs &&
-      patch.Limits?.MemoryBytes === Limits?.MemoryBytes &&
-      patch.Reservations?.NanoCPUs === Reservations?.NanoCPUs &&
-      patch.Reservations?.MemoryBytes === Reservations?.MemoryBytes
+      patch.Limits.NanoCPUs === (Limits?.NanoCPUs ?? null) &&
+      patch.Limits.MemoryBytes === (Limits?.MemoryBytes ?? null) &&
+      patch.Reservations.NanoCPUs === (Reservations?.NanoCPUs ?? null) &&
+      patch.Reservations.MemoryBytes === (Reservations?.MemoryBytes ?? null)
     ) {
       setEditing(false);
 

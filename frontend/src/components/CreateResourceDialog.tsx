@@ -92,6 +92,15 @@ export default function CreateResourceDialog({
         >
           {children}
 
+          {action.error && (
+            <p
+              role="alert"
+              className="text-sm text-destructive"
+            >
+              {action.error}
+            </p>
+          )}
+
           <DialogFooter>
             <DialogClose
               render={
