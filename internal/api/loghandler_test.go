@@ -697,3 +697,24 @@ func TestHandleServiceLogs_SSE_EventIDOnlyAdvances(t *testing.T) {
 		t.Errorf("the event id moved backwards:\n%s", body)
 	}
 }
+
+func TestHandleServiceLogs_RefusesPastTheReadCap(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{}))
+	h.activeLogReads.Store(maxLogReads)
+
+	req := httptest.NewRequest("GET", "/services/svc1/logs?limit=100", nil)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	if w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") == "" {
+		t.Errorf(
+			"status = %d, Retry-After = %q; want 429 with Retry-After",
+			w.Code,
+			w.Header().Get("Retry-After"),
+		)
+	}
+}
