@@ -36,6 +36,41 @@ export function diffLabels(
 }
 
 /**
+ * Compute JSON Patch operations for an editor that models only part of an
+ * integration's labels. `before` and `after` are what the editor serializes
+ * for the original and the edited state; a key absent from `before` is not
+ * the editor's to remove, so labels it does not model survive a save.
+ */
+export function diffModelledLabels(
+  rawEntries: [string, string][],
+  before: Record<string, string>,
+  after: Record<string, string>,
+): PatchOp[] {
+  const ops: PatchOp[] = [];
+  const rawMap = Object.fromEntries(rawEntries);
+
+  for (const [key, value] of Object.entries(after)) {
+    if (before[key] === value) {
+      continue;
+    }
+
+    if (rawMap[key] === undefined) {
+      ops.push({ op: "add", path: `/${key}`, value });
+    } else if (rawMap[key] !== value) {
+      ops.push({ op: "replace", path: `/${key}`, value });
+    }
+  }
+
+  for (const key of Object.keys(before)) {
+    if (!(key in after) && rawMap[key] !== undefined) {
+      ops.push({ op: "remove", path: `/${key}` });
+    }
+  }
+
+  return ops;
+}
+
+/**
  * Save integration labels by diffing the new label state against the original
  * raw labels, then patching via the service labels API.
  */
@@ -47,6 +82,23 @@ export async function saveIntegrationLabels(
 ): Promise<void> {
   const ops = diffLabels(rawLabels, newLabels);
   const updated = await api.patchServiceLabels(serviceId, ops);
+  onSaved(updated);
+}
+
+/**
+ * Save the labels a partial editor models; see diffModelledLabels.
+ */
+export async function saveModelledLabels(
+  rawLabels: [string, string][],
+  before: Record<string, string>,
+  after: Record<string, string>,
+  serviceId: string,
+  onSaved: (updated: Record<string, string>) => void,
+): Promise<void> {
+  const updated = await api.patchServiceLabels(
+    serviceId,
+    diffModelledLabels(rawLabels, before, after),
+  );
   onSaved(updated);
 }
 
