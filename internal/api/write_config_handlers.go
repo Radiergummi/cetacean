@@ -22,6 +22,7 @@ func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 	handleCreateDataResource(w, r, createDataResourceSpec{
 		resource:     "config",
+		acl:          h.acl,
 		nameErrCode:  "CFG004",
 		conflictCode: "CFG003",
 		basePath:     "/configs/",

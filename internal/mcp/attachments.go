@@ -9,6 +9,8 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // defaultAttachmentMode is the file mode Swarm gives a mounted secret or
@@ -96,6 +98,8 @@ func (s *Server) toolUpdateServiceSecrets(
 		return "", err
 	}
 
+	svc, _ := s.cache.GetService(id)
+
 	writeClient, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -121,10 +125,9 @@ func (s *Server) toolUpdateServiceSecrets(
 			)
 		}
 
-		// The caller must be permitted to read a secret to attach it.
-		// Without this, a service write grant would be a way to mount a
-		// credential the caller cannot otherwise see.
-		if err := s.checkRead(ctx, "secret", sec.Spec.Name); err != nil {
+		if err := cluster.CheckAttachable(
+			svc, s.readPredicate(ctx), cluster.AttachSecret, sec.ID, sec.Spec.Name,
+		); err != nil {
 			return "", err
 		}
 
@@ -164,6 +167,8 @@ func (s *Server) toolUpdateServiceConfigs(
 		return "", err
 	}
 
+	svc, _ := s.cache.GetService(id)
+
 	writeClient, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -189,7 +194,9 @@ func (s *Server) toolUpdateServiceConfigs(
 			)
 		}
 
-		if err := s.checkRead(ctx, "config", cfg.Spec.Name); err != nil {
+		if err := cluster.CheckAttachable(
+			svc, s.readPredicate(ctx), cluster.AttachConfig, cfg.ID, cfg.Spec.Name,
+		); err != nil {
 			return "", err
 		}
 

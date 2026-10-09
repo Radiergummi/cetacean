@@ -71,6 +71,11 @@ again, a bare `*` matches everyone, and a grant with no `audience` field also ma
 [recommendations][recommendations] and SSE streams. `write` governs every mutation. Lists never fail on a missing
 grant: unreadable items are filtered out of the response, and `total` counts only what the identity may see.
 
+Creating a config or secret needs `write` on the name being created, so `secret:team-*` lets a team create secrets
+inside its own prefix and nowhere else. Installing a plugin needs `write` on `plugin:*`. Attaching a secret, config,
+or network to a service needs `read` on it as well as `write` on the service, unless the service already has it
+attached.
+
 ## Policy configuration
 
 Provide the policy inline through [`acl.policy`][acl.policy], which requires a restart to change,

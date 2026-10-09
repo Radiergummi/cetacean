@@ -1781,6 +1781,36 @@ func TestHandlePatchServicePorts_InvalidBody(t *testing.T) {
 	}
 }
 
+// Docker accepts a port with no container port and commits a publish that
+// cannot serve, so the write is refused before it reaches Docker.
+func TestHandlePatchServicePorts_RejectsPortWithoutTarget(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	written := false
+	mock := &mockWriteClient{
+		updateServicePortsFn: func(context.Context, string, []swarm.PortConfig) (swarm.Service, error) {
+			written = true
+			return swarm.Service{ID: "svc1"}, nil
+		},
+	}
+
+	h := newTestHandlers(t, withCache(c), withWriteClient(mock))
+	body := strings.NewReader(`{"ports":[{"Protocol":"tcp","PublishedPort":9090}]}`)
+	req := httptest.NewRequest("PATCH", "/services/svc1/ports", body)
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServicePorts(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400; body: %s", w.Code, w.Body.String())
+	}
+	if written {
+		t.Error("a port with no target reached the writer")
+	}
+}
+
 func TestHandlePatchServicePorts_WrongContentType(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
@@ -2726,6 +2756,12 @@ func TestHandleGetServiceConfigs_NotFound(t *testing.T) {
 func TestHandlePatchServiceConfigs_OK(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
+	c.SetConfig(
+		swarm.Config{
+			ID:   "cfg1",
+			Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app-config"}},
+		},
+	)
 
 	updated := swarm.Service{
 		ID: "svc1",
@@ -2866,6 +2902,12 @@ func TestHandleGetServiceSecrets_NotFound(t *testing.T) {
 func TestHandlePatchServiceSecrets_OK(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
+	c.SetSecret(
+		swarm.Secret{
+			ID:   "sec1",
+			Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "db-password"}},
+		},
+	)
 
 	updated := swarm.Service{
 		ID: "svc1",
@@ -3001,6 +3043,7 @@ func TestHandleGetServiceNetworks_NotFound(t *testing.T) {
 func TestHandlePatchServiceNetworks_OK(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
+	c.SetNetwork(network.Summary{ID: "net1", Name: "backend"})
 
 	updated := swarm.Service{
 		ID: "svc1",
