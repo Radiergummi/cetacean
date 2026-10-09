@@ -331,6 +331,10 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 
 const maxFilterLen = 512
 
+// filterBudget bounds one request's filter evaluation: expr bounds a single
+// run, but a list runs the expression once per item.
+const filterBudget = 250 * time.Millisecond
+
 func exprFilter[T any](
 	items []T,
 	expr string,
@@ -355,7 +359,17 @@ func exprFilter[T any](
 	// a second slice would copy every surviving item again.
 	filtered := items[:0]
 	var m map[string]any
+	deadline := time.Now().Add(filterBudget)
 	for _, item := range items {
+		if time.Now().After(deadline) || r.Context().Err() != nil {
+			writeErrorCode(
+				w,
+				r,
+				"FLT004",
+				"filter expression too expensive to evaluate over this list",
+			)
+			return nil, false
+		}
 		m = env(item, m)
 		ok, err := filter.Evaluate(prog, m)
 		if err != nil {

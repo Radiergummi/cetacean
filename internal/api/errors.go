@@ -209,6 +209,13 @@ var errorRegistry = map[string]ErrorDef{
 	"FLT003": {Code: "FLT003", Title: "Filter Evaluation Error", Status: http.StatusBadRequest,
 		Description: "The filter expression compiled but failed during evaluation.",
 		Suggestion:  "Check that the expression references valid fields for this resource type."},
+	"FLT004": {
+		Code:        "FLT004",
+		Title:       "Filter Too Expensive",
+		Status:      http.StatusBadRequest,
+		Description: "The filter expression took too long to evaluate over the list.",
+		Suggestion:  "Compare fields of the resource instead of building large collections in the expression.",
+	},
 
 	// ── SEA: search ───────────────────────────────────────────────────
 	"SEA001": {Code: "SEA001", Title: "Missing Search Query", Status: http.StatusBadRequest,
