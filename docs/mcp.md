@@ -118,7 +118,8 @@ Tracing stays off until the endpoint is set. A malformed endpoint stops startup 
 
 ## Before you expose it
 
-- **Run it behind TLS.** Cetacean warns at startup if MCP is enabled without TLS outside auth mode `none`.
+- **Run it behind TLS.** Cetacean warns at startup if MCP is enabled without TLS outside auth mode `none`, unless
+  [`server.public_url`][server.public_url] is an `https` URL, which means a proxy terminates TLS.
 - **Auth mode `none` leaves `/mcp` open.** Anyone who can reach it gets whatever the operations level allows.
   Use it only on a trusted network.
 - **Set [`server.cors.origins`][server.cors.origins] if the consent screen crosses origins.** It also guards

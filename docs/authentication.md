@@ -84,7 +84,7 @@ These paths skip authentication in every mode:
 | `/.well-known/*`                                                  | OAuth discovery documents, unauthenticated by spec                                                |
 | `/oauth/token`, `/oauth/revoke`, `/oauth/register`, `/oauth/jwks` | The grants carry their own proof in the body, and the key set is public                           |
 
-What guards `/mcp` depends on the configuration: with [`oauth.enabled`][oauth.enabled] the MCP server verifies
+When [`mcp.enabled`][mcp.enabled] is set, what guards `/mcp` depends on the configuration: with [`oauth.enabled`][oauth.enabled] the MCP server verifies
 a bearer token it issued; with the authorization server off, the active mode must be listed in
 [`mcp.auth_bypass`][mcp.auth_bypass]—there's no bearer check then, and the upstream provider authenticates
 every request instead. Cetacean refuses to start with neither.
@@ -648,6 +648,7 @@ response schemas.
 [mcp]: mcp
 [oauth.api_tokens]: configuration#oauth.api_tokens
 [mcp.auth_bypass]: configuration#mcp.auth_bypass
+[mcp.enabled]: configuration#mcp.enabled
 [oauth.enabled]: configuration#oauth.enabled
 [oidc]: configuration#oidc
 [rfc7239]: https://www.rfc-editor.org/rfc/rfc7239

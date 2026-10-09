@@ -84,7 +84,7 @@ repository:
 
 ## Build from source
 
-Requires Go 1.26+ and Node.js 24+. `make build` installs the frontend dependencies, builds the dashboard
+Requires Go 1.27+ and Node.js 24+. `make build` installs the frontend dependencies, builds the dashboard
 and the MCP widgets, and compiles the binary, which embeds both:
 
 ```bash

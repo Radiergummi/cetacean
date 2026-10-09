@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -509,6 +510,14 @@ func main() {
 
 		mcpTracer = traceProvider.Tracer()
 		slog.Info("distributed tracing enabled", "endpoint", cfg.OTelEndpoint)
+	}
+
+	// Bearer tokens and upstream credentials cross the wire to /mcp. An https
+	// public URL means a proxy terminates TLS in front of us.
+	if cfg.MCP.Enabled && authCfg.Mode != "none" && !tlsCfg.Enabled() &&
+		!strings.HasPrefix(cfg.PublicURL, "https://") {
+		slog.Warn("MCP is enabled without TLS: credentials reach /mcp in clear text. " +
+			"Set tls.cert and tls.key, or server.public_url to the https URL of a terminating proxy.")
 	}
 
 	deps := mcpDeps{

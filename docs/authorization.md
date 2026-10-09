@@ -118,23 +118,23 @@ which resources a given identity may write. A common pairing is `server.operatio
 ```mermaid
 flowchart LR
     accTitle: How a write request is authorized
-    accDescr: A write passes the operations level check first, then the per-resource grant check. Failing the first answers 403 OPS001, failing the second answers 403 ACL002.
+    accDescr: A write passes the per-resource grant check first, then the operations level check. Failing the first answers 403 ACL002, failing the second answers 403 OPS001.
 
-    request["Write request"] --> level{"Operations level allows<br/>this category of write?"}
-    level -->|no| ops["403 OPS001"]
-    level -->|yes| grant{"A grant gives write<br/>on this resource?"}
+    request["Write request"] --> grant{"A grant gives write<br/>on this resource?"}
     grant -->|no| acl["403 ACL002"]
-    grant -->|yes| handler["Handler runs"]
+    grant -->|yes| level{"Operations level allows<br/>this category of write?"}
+    level -->|no| ops["403 OPS001"]
+    level -->|yes| handler["Handler runs"]
 
     classDef accent fill:#2563eb,stroke:#2563eb,color:#ffffff
     class handler accent
 ```
 
-| Operations level | Grant           | Result                |
-| ---------------- | --------------- | --------------------- |
-| Allows           | Grants `write`  | Allowed               |
-| Allows           | No `write`      | Denied (`403 ACL002`) |
-| Blocks           | Grants `write`  | Denied (`403 OPS001`) |
+| Grant          | Operations level | Result                |
+| -------------- | ---------------- | --------------------- |
+| Grants `write` | Allows           | Allowed               |
+| No `write`     | Allows or blocks | Denied (`403 ACL002`) |
+| Grants `write` | Blocks           | Denied (`403 OPS001`) |
 
 Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem document:
 
