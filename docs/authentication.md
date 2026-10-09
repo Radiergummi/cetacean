@@ -105,8 +105,9 @@ the peer's place on your tailnet—so a refusal there is a `403`, and the [error
 | `cert`                 | `403 AUT005` | —         |
 | `tailscale`, `headers` | `403 AUT006` | —         |
 
-The reason is logged, not returned: which of `no subject header`, `invalid proxy secret`, or
-`not a trusted proxy` applied describes your deployment to a caller that hasn't authenticated.
+For `tailscale` and `headers` the reason is logged, not returned: which of `no subject header`,
+`invalid proxy secret`, or `not a trusted proxy` applied describes your deployment to a caller that hasn't
+authenticated. A `cert` refusal names its reason, such as `client certificate required`.
 
 ## None
 
