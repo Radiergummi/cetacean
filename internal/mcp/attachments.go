@@ -98,7 +98,7 @@ func (s *Server) toolUpdateServiceSecrets(
 		return "", err
 	}
 
-	svc, _ := s.cache.GetService(id)
+	svc, _, _ := s.cache.ResolveService(id)
 
 	writeClient, err := s.requireWriteClient()
 	if err != nil {
@@ -167,7 +167,7 @@ func (s *Server) toolUpdateServiceConfigs(
 		return "", err
 	}
 
-	svc, _ := s.cache.GetService(id)
+	svc, _, _ := s.cache.ResolveService(id)
 
 	writeClient, err := s.requireWriteClient()
 	if err != nil {
