@@ -43,7 +43,7 @@ export default function MonitoringStatus({ status, source }: Props) {
           <strong>Monitoring not configured.</strong> Deploy the monitoring stack to enable CPU,
           memory, and disk metrics across your cluster.
         </p>
-        <pre className="mt-2 max-w-fit overflow-x-auto rounded bg-status-info/15 px-2 py-1 text-xs">
+        <pre className="mt-2 max-w-full overflow-x-auto rounded bg-status-info/15 px-2 py-1 text-xs">
           docker stack deploy -c compose.monitoring.yaml cetacean-monitoring
         </pre>
         <p className="mt-3 text-xs">
@@ -139,7 +139,7 @@ function Banner({
       className="group mb-4 flex items-start gap-3 rounded-lg border border-status-info/30 bg-status-info/10 px-4 py-3 data-[variant=warn]:border-status-warning/30 data-[variant=warn]:bg-status-warning/10"
     >
       {icon}
-      <div className="flex-1 text-status-info group-data-[variant=warn]:text-status-warning">
+      <div className="min-w-0 flex-1 text-status-info group-data-[variant=warn]:text-status-warning">
         {children}
       </div>
       {onDismiss && (
