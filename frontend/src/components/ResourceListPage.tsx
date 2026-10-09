@@ -6,6 +6,7 @@ import EmptyState from "./EmptyState";
 import FetchError from "./FetchError";
 import ListToolbar from "./ListToolbar";
 import { SkeletonTable } from "./LoadingSkeleton";
+import LoadMoreSentinel from "./LoadMoreSentinel";
 import PageHeader from "./PageHeader";
 import { useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
@@ -98,11 +99,19 @@ export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
           onLoadMore={loadMore}
         />
       ) : (
-        <div className={cardGridClass}>
-          {data.map((item) => (
-            <div key={config.keyFn(item)}>{config.renderCard(item)}</div>
-          ))}
-        </div>
+        <>
+          <div className={cardGridClass}>
+            {data.map((item) => (
+              <div key={config.keyFn(item)}>{config.renderCard(item)}</div>
+            ))}
+          </div>
+          {hasMore && (
+            <LoadMoreSentinel
+              key={data.length}
+              onLoadMore={loadMore}
+            />
+          )}
+        </>
       )}
     </div>
   );
