@@ -59,7 +59,7 @@ func HandleAPIDoc(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 		case ContentTypeHTML:
 			w.Header().Set("Content-Type", "text/html")
 			w.Header().
-				Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
+				Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'")
 			playground.serve(w, r)
 		case ContentTypeJSON:
 			// The default for content negotiation, including */*.

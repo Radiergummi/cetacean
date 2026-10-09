@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -153,7 +154,15 @@ func renderErrorPage(w http.ResponseWriter, status int, message string) {
 // would replay to a different user.
 func setConsentHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-Frame-Options", "DENY")
-	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+	// Added to the global policy rather than replacing it.
+	policy := w.Header().Get("Content-Security-Policy")
+	if !strings.Contains(policy, "frame-ancestors") {
+		if policy != "" {
+			policy += "; "
+		}
+		policy += "frame-ancestors 'none'"
+	}
+	w.Header().Set("Content-Security-Policy", policy)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 }
@@ -206,6 +215,7 @@ func issueCSRFNonce(
 	signingKey []byte,
 	binding consentBinding,
 	secure bool,
+	path string,
 ) (token string, nonce string) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -222,7 +232,7 @@ func issueCSRFNonce(
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		Secure:   secure,
-		Path:     "/",
+		Path:     path,
 	})
 
 	return token, nonce
@@ -231,12 +241,12 @@ func issueCSRFNonce(
 // clearCSRFCookie tells the browser to drop the nonce cookie issued at the
 // start of the consent flow. Called whenever the flow terminates so a stale
 // cookie cannot survive past its useful life.
-func clearCSRFCookie(w http.ResponseWriter, secure bool) {
+func clearCSRFCookie(w http.ResponseWriter, secure bool, path string) {
 	//nolint:gosec // G124: cookie is HttpOnly + SameSite=Strict; Secure is true on HTTPS issuers and intentionally off only for loopback HTTP dev, which gosec can't prove from the variable.
 	http.SetCookie(w, &http.Cookie{
 		Name:     csrfCookieName,
 		Value:    "",
-		Path:     "/",
+		Path:     path,
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
