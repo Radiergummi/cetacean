@@ -1976,18 +1976,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/golang.org/x/net@v0.59.0?type=module",
+      "bom-ref": "pkg:golang/golang.org/x/net@v0.60.0?type=module",
       "type": "library",
       "name": "golang.org/x/net",
-      "version": "v0.59.0",
+      "version": "v0.60.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e737d8967fb0e570b1c2b9cc3093ee7d180da1711a1b1974c28e46a8f5f2b9eb"
+          "content": "efda79d2d7d9966d09f587e80ec4a2eb7f6a49734657013338f2c2c4cd85b185"
         }
       ],
-      "purl": "pkg:golang/golang.org/x/net@v0.59.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/golang.org/x/net@v0.60.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
