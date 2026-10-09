@@ -39,6 +39,9 @@ type mockClient struct {
 	listErrors map[string]error // resource name -> error
 
 	fullSyncs atomic.Int64
+
+	// syncGate, when set, holds every FullSync until it is closed.
+	syncGate chan struct{}
 }
 
 func newMockClient() *mockClient {
@@ -57,6 +60,9 @@ func (m *mockClient) setNodes(nodes []swarm.Node) {
 
 func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	m.fullSyncs.Add(1)
+	if m.syncGate != nil {
+		<-m.syncGate
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1100,5 +1106,34 @@ func TestManualResyncFailureLeavesTheStreamVerdictAlone(t *testing.T) {
 
 	if !stale.Equal(lastSync) {
 		t.Errorf("a failed resync moved lastSync from %v to %v", lastSync, stale)
+	}
+}
+
+// Each manual resync sweeps the whole Docker API, and two racing ones let the
+// older fetch overwrite the newer, so concurrent calls share one sync.
+func TestResyncCoalescesConcurrentCalls(t *testing.T) {
+	mc := newMockClient()
+	mc.syncGate = make(chan struct{})
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	var callers sync.WaitGroup
+	for range 5 {
+		callers.Go(func() {
+			if err := w.Resync(context.Background()); err != nil {
+				t.Errorf("Resync: %v", err)
+			}
+		})
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for mc.fullSyncs.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond) // let the other callers join the flight
+	close(mc.syncGate)
+	callers.Wait()
+
+	if got := mc.fullSyncs.Load(); got != 1 {
+		t.Errorf("FullSync ran %d times, want 1", got)
 	}
 }

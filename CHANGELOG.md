@@ -63,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
 
 ### Fixed
+- Concurrent `POST /-/resync` calls share one sync, and a manual resync can no longer overwrite the cache with an older fetch than the watcher's
+- The snapshot is flushed to disk before it replaces the previous one, and isn't written when `storage.data_dir` couldn't be created
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
@@ -354,7 +356,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - General trusted proxies setting (`CETACEAN_TRUSTED_PROXIES`) for real client IP resolution behind reverse proxies—replaces the headers-auth-specific setting, which is now deprecated
 - Client IP in structured request logs when trusted proxies are configured
 - Command-line flags for all settings that were previously env-var-only: `-operations-level`, `-sse-batch-interval`, `-cors-origins`, `-snapshot`, `-data-dir`, `-trusted-proxies`
-- Gzip compression for snapshot files (existing plain JSON snapshots are read transparently)
 - Tailscale auth mode comparison table in the authentication docs
 - Configurable CORS support for cross-origin API access (`CETACEAN_CORS_ORIGINS`)
 - Grant-based RBAC authorization with per-resource access control
