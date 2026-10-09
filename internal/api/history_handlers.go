@@ -58,6 +58,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		entries,
 		func(e cache.HistoryEntry) string { return string(e.Type) + ":" + e.Name },
 	)
+	entries = cluster.NameHistoryTasks(h.cache, entries)
 
 	if wantCSV {
 		writeCSV(w, r, "history", csvTableForHistory(entries))
