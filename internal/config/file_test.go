@@ -351,25 +351,30 @@ func TestLoadFileAcceptsTheCurrentSchema(t *testing.T) {
 // The settings are uncommented first, which is what makes a rename in code and
 // not in the reference fail here rather than in someone's deployment.
 func TestReferenceConfigMatchesTheSchema(t *testing.T) {
-	path := filepath.Join("..", "..", "docs", "config.reference.toml")
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading %s: %v", path, err)
+	cases := []struct{ path, sentinel string }{
+		{filepath.Join("..", "..", "docs", "config.reference.toml"), "dcr_max_clients"},
+		{filepath.Join("..", "..", "cetacean.example.toml"), "listen_addr"},
 	}
 
-	live := uncommentReference(string(raw))
-	if !strings.Contains(live, "dcr_max_clients") {
-		t.Fatal("uncommenting produced no settings, so this test proves nothing")
-	}
+	for _, tc := range cases {
+		raw, err := os.ReadFile(tc.path)
+		if err != nil {
+			t.Fatalf("reading %s: %v", tc.path, err)
+		}
 
-	dir := t.TempDir()
-	uncommented := filepath.Join(dir, "reference.toml")
-	if err := os.WriteFile(uncommented, []byte(live), 0o600); err != nil {
-		t.Fatal(err)
-	}
+		live := uncommentReference(string(raw))
+		if !strings.Contains(live, tc.sentinel) {
+			t.Fatalf("%s: uncommenting produced no settings, so this test proves nothing", tc.path)
+		}
 
-	if _, err := LoadFile(uncommented); err != nil {
-		t.Fatalf("docs/config.reference.toml does not match the schema: %v", err)
+		uncommented := filepath.Join(t.TempDir(), "reference.toml")
+		if err := os.WriteFile(uncommented, []byte(live), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := LoadFile(uncommented); err != nil {
+			t.Fatalf("%s does not match the schema: %v", tc.path, err)
+		}
 	}
 }
 

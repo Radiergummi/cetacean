@@ -369,6 +369,10 @@ field is optional; an omitted key uses the default.
 CETACEAN_CONFIG=/etc/cetacean/config.toml cetacean
 ```
 
+Without either, Cetacean loads the first of these that exists: `./cetacean.toml`,
+`$XDG_CONFIG_HOME/cetacean/cetacean.toml` (or `~/.config/cetacean/cetacean.toml`), `~/.cetacean.toml`, and
+`/etc/cetacean/cetacean.toml`. The startup log names the file it loaded and whether it was discovered.
+
 `docs/config.reference.toml` in the repository lists every option with its default. Copy it as a
 starting point and uncomment what you need.
 
