@@ -347,7 +347,7 @@ func parseAcceptRanges(accept string) []mediaRange {
 			params := after
 			for param := range strings.SplitSeq(params, ";") {
 				param = strings.TrimSpace(param)
-				if strings.HasPrefix(param, "q=") {
+				if len(param) > 2 && strings.EqualFold(param[:2], "q=") {
 					if v, err := strconv.ParseFloat(param[2:], 64); err == nil {
 						q = v
 					}
@@ -360,8 +360,9 @@ func parseAcceptRanges(accept string) []mediaRange {
 		if slash < 1 || slash >= len(mediaType)-1 {
 			continue
 		}
-		typ := mediaType[:slash]
-		subtype := mediaType[slash+1:]
+		// Type and subtype are case-insensitive (RFC 9110 §8.3.1).
+		typ := strings.ToLower(mediaType[:slash])
+		subtype := strings.ToLower(mediaType[slash+1:])
 
 		ranges = append(ranges, mediaRange{
 			typ:     typ,

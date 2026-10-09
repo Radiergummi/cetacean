@@ -719,3 +719,14 @@ func TestParsePagination_IfRangeIsNotEvaluated(t *testing.T) {
 		t.Errorf("limit=%d offset=%d, want 10 and 0; the deferral is stale", p.Limit, p.Offset)
 	}
 }
+
+// RFC 9110 §14.1: range unit names are case-insensitive.
+func TestParseItemsRangeUnitIsCaseInsensitive(t *testing.T) {
+	for _, header := range []string{"Items 0-49", "ITEMS 0-49"} {
+		limit, offset, matched, err := parseItemsRange(header)
+		if err != nil || !matched || limit != 50 || offset != 0 {
+			t.Errorf("%q: limit=%d offset=%d matched=%v err=%v, want 50 0 true nil",
+				header, limit, offset, matched, err)
+		}
+	}
+}

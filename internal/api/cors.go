@@ -96,6 +96,10 @@ func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Every answer from here on depends on Origin, including the ones
+			// that grant nothing, so a shared cache must key on it.
+			w.Header().Add("Vary", "Origin")
+
 			origin := r.Header.Get("Origin")
 			if origin == "" {
 				next.ServeHTTP(w, r)
@@ -113,7 +117,6 @@ func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
 			// are in use; safe for wildcard mode too).
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Expose-Headers", exposedHeaders)
-			w.Header().Add("Vary", "Origin")
 
 			// Preflight
 			if r.Method == http.MethodOptions &&

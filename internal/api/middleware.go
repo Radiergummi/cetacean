@@ -111,7 +111,7 @@ func cleanPaths(next http.Handler) http.Handler {
 
 			// #nosec G710 -- path.Clean leaves one leading slash, so this is
 			// always a path on this origin, never a scheme-relative URL.
-			http.Redirect(w, r, cleaned, http.StatusTemporaryRedirect)
+			http.Redirect(w, r, absPath(r.Context(), cleaned), http.StatusTemporaryRedirect)
 
 			return
 		}

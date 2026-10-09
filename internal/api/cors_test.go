@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -250,6 +251,32 @@ func TestTheAuthorizationEndpointReflectsNoOriginAtAnySpelling(t *testing.T) {
 					t.Errorf("ACAO = %q, want none at the authorization endpoint", got)
 				}
 			})
+		}
+	}
+}
+
+func TestCORSVariesOnOriginWhenItGrantsNothing(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withCORS("https://good.example")},
+		withCache(cache.New(nil)),
+	)
+
+	for _, origin := range []string{"", "https://evil.example"} {
+		req := httptest.NewRequest("GET", "/nodes", nil)
+		req.Header.Set("Accept", "application/json")
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if !slices.Contains(w.Header().Values("Vary"), "Origin") {
+			t.Errorf(
+				"origin %q: Vary = %v, want it to include Origin",
+				origin,
+				w.Header().Values("Vary"),
+			)
 		}
 	}
 }
