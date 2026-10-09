@@ -240,10 +240,8 @@ func TestUpdateServiceConfigsDefaultsToTheRESTPath(t *testing.T) {
 	}
 }
 
-// The tier is *not* where the danger of a host bind is communicated:
-// update_service_mounts sits at the configuration level like the REST route.
-// Binding the Docker socket in is a root shell on the host and the tool does
-// not refuse it, so the description is the only place a model reads that.
+// Below level 3 a new bind is refused, but at level 3 nothing stops a socket
+// bind, a root shell on the host, so the description is where a model reads that.
 func TestUpdateServiceMountsWarnsAboutHostBinds(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil))
 
@@ -370,4 +368,33 @@ func TestUpdateServiceMountsRequiresATarget(t *testing.T) {
 	callToolExpectingError(t, handler,
 		`{"name":"update_service_mounts","arguments":`+
 			`{"id":"web","mounts":[{"type":"volume","source":"data"}]}}`)
+}
+
+func TestUpdateServiceMountsRefusesANewBindBelowImpactful(t *testing.T) {
+	for _, level := range []config.OperationsLevel{config.OpsConfiguration, config.OpsImpactful} {
+		written := false
+		c := attachmentTestCache(t)
+		writeClient := &fakeWriteClient{
+			updateServiceMountsFn: func(context.Context, string, []mount.Mount) (swarm.Service, error) {
+				written = true
+				updated, _ := c.GetService("svc1")
+
+				return updated, nil
+			},
+		}
+
+		handler := newToolTestServer(t, c, writeClient, level).Handler()
+		params := `{"name":"update_service_mounts","arguments":{"id":"web","mounts":` +
+			`[{"type":"bind","source":"/var/run/docker.sock","target":"/var/run/docker.sock"}]}}`
+
+		if level >= config.OpsImpactful {
+			callTool(t, handler, params)
+		} else if message := callToolExpectingError(t, handler, params); !strings.Contains(message, "level 3") {
+			t.Errorf("level %d: error %q does not name the level it needs", level, message)
+		}
+
+		if want := level >= config.OpsImpactful; written != want {
+			t.Errorf("level %d: written = %v, want %v", level, written, want)
+		}
+	}
 }

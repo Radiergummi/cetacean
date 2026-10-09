@@ -9,6 +9,8 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // defaultAttachmentMode is the file mode Swarm gives a mounted secret or
@@ -257,8 +259,7 @@ func (v mountValue) toMount(index int) (mount.Mount, error) {
 
 // toolUpdateServiceMounts replaces the set of filesystem mounts a service's
 // containers receive. Configuration level with the other two attachment
-// editors, matching the REST route. The warning that a bind mount of the
-// socket is a root shell lives in the tool's description, where a model reads it.
+// editors, matching the REST route; a new bind mount needs the impactful level.
 func (s *Server) toolUpdateServiceMounts(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
@@ -293,6 +294,12 @@ func (s *Server) toolUpdateServiceMounts(
 		}
 
 		mounts = append(mounts, converted)
+	}
+
+	svc, _, _ := s.cache.ResolveService(id)
+	level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
+	if err := cluster.CheckMounts(svc, mounts, level); err != nil {
+		return "", err
 	}
 
 	updated, err := writeClient.UpdateServiceMounts(ctx, id, mounts)

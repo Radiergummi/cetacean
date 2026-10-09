@@ -405,11 +405,14 @@ expose. Each level includes everything below it. A request above the configured 
 | Browse all resources                                                          |      ✔      |       ✔       |        ✔        |      ✔      |
 | Scale, restart, roll back, update image                                       |      —      |       ✔       |        ✔        |      ✔      |
 | Edit service definitions (env, labels, resources, ports, placement, policies) |      —      |       —       |        ✔        |      ✔      |
+| Attach configs, secrets, networks, volumes, and tmpfs mounts to a service     |      —      |       —       |        ✔        |      ✔      |
+| Edit node labels                                                              |      —      |       —       |        ✔        |      ✔      |
 | Create configs and secrets, edit their labels                                 |      —      |       —       |        ✔        |      ✔      |
 | Enable, disable, or configure plugins                                         |      —      |       —       |        ✔        |      ✔      |
 | Edit swarm settings (raft, orchestration, dispatcher)                         |      —      |       —       |        ✔        |      ✔      |
 | Delete any resource                                                           |      —      |       —       |        —        |      ✔      |
-| Change node availability, role, or labels                                     |      —      |       —       |        —        |      ✔      |
+| Add a bind mount or a Linux capability to a service                           |      —      |       —       |        —        |      ✔      |
+| Change node availability or role                                              |      —      |       —       |        —        |      ✔      |
 | Change service or endpoint mode                                               |      —      |       —       |        —        |      ✔      |
 | Install, upgrade, or remove plugins                                           |      —      |       —       |        —        |      ✔      |
 | Manage CA and encryption, rotate tokens, unlock the swarm                     |      —      |       —       |        —        |      ✔      |
