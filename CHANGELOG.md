@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Each protected resource names itself in its discovery document, so a client's consent screen can show `Cetacean MCP` instead of a URL
 
 ### Changed
+- **Breaking:** adding a bind mount or a Linux capability to a service needs operations level 3, through the API, the dashboard and MCP; mounts and capabilities a service already has stay editable at level 2
 - **Breaking:** MCP's `remove_task` needs operations level 3, matching `DELETE /tasks/{id}`; it was available from level 1
 - **Breaking:** the OAuth authorization server is opt-in—set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
