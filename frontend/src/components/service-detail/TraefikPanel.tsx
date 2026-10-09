@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
-import { badgeBlue, badgePurple, badgeTeal, saveIntegrationLabels } from "@/lib/integrationLabels";
+import { badgeBlue, badgePurple, badgeTeal, saveModelledLabels } from "@/lib/integrationLabels";
 import {
   serializeTraefikLabels,
   type RouterFormState,
@@ -357,13 +357,14 @@ export function TraefikPanel({
   }
 
   async function handleSave() {
-    const newLabels = serializeTraefikLabels(
-      formEnabled,
-      routerForms,
-      serviceForms,
-      middlewareForms,
+    const before = serializeTraefikLabels(
+      integration.enabled,
+      initRouterForms(integration),
+      initServiceForms(integration),
+      initMiddlewareForms(integration),
     );
-    await saveIntegrationLabels(rawLabels, newLabels, serviceId, onSaved);
+    const after = serializeTraefikLabels(formEnabled, routerForms, serviceForms, middlewareForms);
+    await saveModelledLabels(rawLabels, before, after, serviceId, onSaved);
   }
 
   function updateRouter(index: number, updated: RouterFormState) {

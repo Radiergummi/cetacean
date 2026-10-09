@@ -56,6 +56,10 @@ type TraefikMiddleware struct {
 
 var tlsDomainIndexRegexp = regexp.MustCompile(`^tls\.domains\[(\d+)\]\.(.+)$`)
 
+// maxTLSDomains bounds the index a tls.domains label may name. The index sizes
+// a slice on every detail read, and anyone with service write sets it.
+const maxTLSDomains = 100
+
 func detectTraefik(labels map[string]string) *TraefikIntegration {
 	var (
 		found      bool
@@ -209,7 +213,7 @@ func parseTLSDomain(r *TraefikRouter, field, value string) {
 	}
 
 	index, err := strconv.Atoi(matches[1])
-	if err != nil {
+	if err != nil || index >= maxTLSDomains {
 		return
 	}
 
