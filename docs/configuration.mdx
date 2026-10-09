@@ -392,7 +392,8 @@ Two meta endpoints, exempt from authentication and content negotiation:
 | `GET /-/ready`  | 200 after the first Docker sync; 503 until then | Load balancers, `depends_on` gating |
 
 The `cetacean healthcheck` subcommand probes `/-/ready` and is what the built-in Docker
-`HEALTHCHECK` runs.
+`HEALTHCHECK` runs. It reads the same flags, environment, and config file as the server, so it
+probes the configured listen address, base path, and TLS setting. Flags go before `healthcheck`.
 
 ## Operations level
 
