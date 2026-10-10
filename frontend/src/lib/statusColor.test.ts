@@ -63,6 +63,31 @@ describe("toneSurface", () => {
   });
 });
 
+async function readSources(): Promise<[path: string, source: string][]> {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+
+  const sources: [string, string][] = [];
+  const walk = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+
+      if (entry.isDirectory()) {
+        walk(path);
+        continue;
+      }
+
+      if (/\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path)) {
+        sources.push([path, readFileSync(path, "utf8")]);
+      }
+    }
+  };
+
+  walk("src");
+
+  return sources;
+}
+
 describe("status tint call sites", () => {
   /**
    * The status sweep rewrote pairs like `bg-yellow-500/5 … text-yellow-600`
@@ -75,41 +100,33 @@ describe("status tint call sites", () => {
    * cluster overview does that, and only a browser catches it.
    */
   it("never paints status text on a solid background of the same tone", async () => {
-    const { readdirSync, readFileSync } = await import("node:fs");
-    const { join } = await import("node:path");
-
-    const sources: string[] = [];
-    const walk = (directory: string) => {
-      for (const entry of readdirSync(directory, { withFileTypes: true })) {
-        const path = join(directory, entry.name);
-
-        if (entry.isDirectory()) {
-          walk(path);
-          continue;
-        }
-
-        if (/\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path)) {
-          sources.push(path);
-        }
-      }
-    };
-
-    walk("src");
-
+    const sources = await readSources();
     const tonePatterns = ["ok", "warning", "danger", "info", "neutral"].map((tone) => ({
       solidBackground: new RegExp(`bg-status-${tone}(?![\\w/-])`),
       tonedText: new RegExp(`text-status-${tone}(?![\\w-])`),
     }));
 
     const offenders: string[] = [];
-    for (const path of sources) {
-      const source = readFileSync(path, "utf8");
-
+    for (const [path, source] of sources) {
       for (const [classList] of source.matchAll(/"([^"\n]*status-[^"\n]*)"/g)) {
         for (const { solidBackground, tonedText } of tonePatterns) {
           if (solidBackground.test(classList) && tonedText.test(classList)) {
             offenders.push(`${path}: ${classList.trim().slice(0, 60)}`);
           }
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("writes text on a solid status fill in the status foreground", async () => {
+    const offenders: string[] = [];
+
+    for (const [path, source] of await readSources()) {
+      for (const [classList] of source.matchAll(/"([^"\n]*bg-status-[^"\n]*)"/g)) {
+        if (/bg-status-\w+(?![\w/-])/.test(classList) && /\btext-white\b/.test(classList)) {
+          offenders.push(`${path}: ${classList.trim().slice(0, 60)}`);
         }
       }
     }

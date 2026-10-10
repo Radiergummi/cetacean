@@ -234,7 +234,7 @@ export default function TaskList() {
         <div className="space-y-6">
           {groupedByService.map((group) => (
             <section key={group.id}>
-              <h3 className="mb-2 flex items-center gap-2 text-base font-medium">
+              <h2 className="mb-2 flex items-center gap-2 text-base font-medium">
                 <Link
                   to={`/services/${group.id}`}
                   className="text-link hover:underline"
@@ -244,7 +244,7 @@ export default function TaskList() {
                 <span className="inline-flex size-5 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground tabular-nums">
                   {group.tasks.length}
                 </span>
-              </h3>
+              </h2>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {group.tasks.map((task) => (

@@ -168,12 +168,14 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   }, [formatLogs, logId]);
 
   const toggle = header ? (
-    <SectionToggle
-      title={header}
-      open={open}
-      onToggle={toggleCollapse}
-      className="flex w-full cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground sm:me-auto sm:w-auto"
-    />
+    <h2 className="w-full sm:me-auto sm:w-auto">
+      <SectionToggle
+        title={header}
+        open={open}
+        onToggle={toggleCollapse}
+        className="flex w-full cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground sm:w-auto"
+      />
+    </h2>
   ) : null;
 
   if (!open) {
