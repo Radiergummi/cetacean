@@ -1,7 +1,9 @@
 package prometheus
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -149,7 +151,10 @@ func TestClient_ErrorsOmitThePrometheusAddress(t *testing.T) {
 	refused := httptest.NewServer(http.NotFoundHandler())
 	refused.Close()
 
-	for _, base := range []string{gateway.URL, refused.URL} {
+	// A prometheus.url that does not parse fails before any request is sent.
+	malformed := "http://[::1]:namedport"
+
+	for _, base := range []string{gateway.URL, refused.URL, malformed} {
 		pc := NewClient(base)
 		queries := map[string]func() error{
 			"InstantQuery": func() error {
@@ -171,7 +176,8 @@ func TestClient_ErrorsOmitThePrometheusAddress(t *testing.T) {
 				t.Fatalf("%s against %s: expected an error", name, base)
 			}
 			msg := err.Error()
-			if strings.Contains(msg, "127.0.0.1") || strings.Contains(msg, "prometheus.internal") {
+			if strings.Contains(msg, base) || strings.Contains(msg, "127.0.0.1") ||
+				strings.Contains(msg, "prometheus.internal") {
 				t.Errorf("%s: the error names the Prometheus address: %s", name, msg)
 			}
 		}
@@ -188,5 +194,30 @@ func TestClient_StatusErrorKeepsThePrometheusReason(t *testing.T) {
 	_, err := NewClient(prom.URL).InstantQueryRaw(context.Background(), "up{")
 	if err == nil || !strings.Contains(err.Error(), "parse error") {
 		t.Errorf("err = %v, want Prometheus's reason", err)
+	}
+}
+
+// The client leaves logging to its callers, which log the cause the message
+// omits; a stream retrying every tick would otherwise log each failure.
+func TestClient_UnreachableLogsItsCauseOnlyThroughTheCaller(t *testing.T) {
+	refused := httptest.NewServer(http.NotFoundHandler())
+	refused.Close()
+
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+	defer slog.SetDefault(previous)
+
+	_, err := NewClient(refused.URL).InstantQueryRaw(context.Background(), "up")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if logged.Len() != 0 {
+		t.Errorf("the client logged on its own: %s", logged.String())
+	}
+
+	slog.Warn("query failed", "error", err)
+	if !strings.Contains(logged.String(), "connection refused") {
+		t.Errorf("the caller's log omits the cause: %s", logged.String())
 	}
 }
