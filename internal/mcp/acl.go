@@ -15,30 +15,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
-// searchACLPrefix maps cluster.Search's plural type keys to the ACL resource
-// prefix. Kept aligned with api/search_handlers.go so the two transports apply
-// the same ACL rules to the same hits.
-var searchACLPrefix = map[string]string{
-	"services": "service:",
-	"stacks":   "stack:",
-	"nodes":    "node:",
-	"tasks":    "task:",
-	"configs":  "config:",
-	"secrets":  "secret:",
-	"networks": "network:",
-	"volumes":  "volume:",
-}
-
-// searchResultACLResource returns the ACL resource string for a search hit.
-// Tasks key on the task ID; every other type keys on the resource name.
-func searchResultACLResource(resourceType string, sr cluster.SearchResult) string {
-	prefix := searchACLPrefix[resourceType]
-	if resourceType == "tasks" {
-		return prefix + sr.ID
-	}
-	return prefix + sr.Name
-}
-
 // filterSearchResults runs cluster.Search through ACL. The returned
 // SearchResults reflect post-filter Hits and per-type Counts (adjusted by the
 // observed denial rate, matching REST behaviour).
@@ -57,7 +33,7 @@ func (s *Server) filterSearchResults(
 	for resourceType, count := range raw.Counts {
 		hits := raw.Hits[resourceType]
 		filtered := acl.Filter(s.acl, identity, "read", hits, func(sr cluster.SearchResult) string {
-			return searchResultACLResource(resourceType, sr)
+			return cluster.SearchResultACLResource(resourceType, sr)
 		})
 		// Adjust the pre-cap count by the number of visible-page denials. We
 		// assume the visible-page ACL rate generalizes to the pre-cap set; this
@@ -92,15 +68,6 @@ func (s *Server) checkRead(ctx context.Context, resourceType, resourceName strin
 	return nil
 }
 
-// nodeACLName returns the ACL-friendly node name (hostname, falling back to ID).
-// Matches the convention used by REST's nodeHostnameOrID.
-func nodeACLName(n swarm.Node) string {
-	if h := n.Description.Hostname; h != "" {
-		return h
-	}
-	return n.ID
-}
-
 func (s *Server) filterNodes(ctx context.Context, items []swarm.Node) []swarm.Node {
 	return acl.Filter(
 		s.acl,
@@ -108,7 +75,7 @@ func (s *Server) filterNodes(ctx context.Context, items []swarm.Node) []swarm.No
 		"read",
 		items,
 		func(n swarm.Node) string {
-			return "node:" + nodeACLName(n)
+			return "node:" + cluster.NodeACLName(n)
 		},
 	)
 }

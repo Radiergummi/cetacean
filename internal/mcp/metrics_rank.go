@@ -10,6 +10,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // metricTargetCluster ranks across the cluster rather than charting one
@@ -175,7 +177,7 @@ func (s *Server) nodeNamesByHost() map[string]string {
 	for _, node := range nodes {
 		for _, host := range []string{node.Status.Addr, node.Description.Hostname} {
 			if _, taken := byHost[host]; host != "" && !taken {
-				byHost[host] = nodeACLName(node)
+				byHost[host] = cluster.NodeACLName(node)
 			}
 		}
 	}
