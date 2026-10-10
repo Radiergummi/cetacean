@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -975,8 +976,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 	)
 }
 
-// checkAttachable writes a 403 unless the caller may attach the resource. An
-// unknown reference gets the same answer, so a refusal never reveals what exists.
+// checkAttachable writes an error unless the caller may attach the resource.
 func (h *Handlers) checkAttachable(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -988,7 +988,12 @@ func (h *Handlers) checkAttachable(
 	identity := auth.IdentityFromContext(r.Context())
 	canRead := func(resource string) bool { return h.acl.Can(identity, "read", resource) }
 
-	if !found || cluster.CheckAttachable(svc, canRead, kind, id, name) != nil {
+	if !found {
+		writeErrorCode(w, r, "SVC021", fmt.Sprintf("%s %q not found", kind, id))
+		return false
+	}
+
+	if cluster.CheckAttachable(svc, canRead, kind, id, name) != nil {
 		writeErrorCode(w, r, "ACL001", "cannot attach "+string(kind)+" "+id)
 		return false
 	}
