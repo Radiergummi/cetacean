@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 func TestNewProviderRejectsUnusableEndpoints(t *testing.T) {
@@ -160,5 +162,30 @@ func TestExportReachesTheCollectorsTracesPath(t *testing.T) {
 		}
 	default:
 		t.Fatal("nothing was exported")
+	}
+}
+
+// A caller's traceparent is trusted as a parent only: sampled=0 must not stop
+// its requests from being recorded.
+func TestARemoteUnsampledParentDoesNotSuppressSpans(t *testing.T) {
+	provider, err := NewProvider(t.Context(), "http://collector:4318", "test")
+	if err != nil {
+		t.Fatalf("NewProvider: %v", err)
+	}
+
+	t.Cleanup(func() { _ = provider.Shutdown(t.Context()) })
+
+	remote := oteltrace.NewSpanContext(oteltrace.SpanContextConfig{
+		TraceID: oteltrace.TraceID{1},
+		SpanID:  oteltrace.SpanID{1},
+		Remote:  true,
+	})
+
+	_, span := provider.Tracer().
+		Start(oteltrace.ContextWithRemoteSpanContext(t.Context(), remote), "a-span")
+	defer span.End()
+
+	if !span.SpanContext().IsSampled() {
+		t.Error("a span under a remote parent with sampled=0 was not sampled")
 	}
 }
