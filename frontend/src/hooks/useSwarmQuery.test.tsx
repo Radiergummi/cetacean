@@ -131,6 +131,31 @@ describe("useSwarmQuery", () => {
     await waitFor(() => expect(result.current.data).toEqual([updated]));
   });
 
+  it("SSE updates keep the names the list resolved onto a task", async () => {
+    const enriched = { ID: "t1", Name: "running", ServiceName: "web", NodeHostname: "node-1" };
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([enriched], 1));
+
+    const { result } = renderHook(
+      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("task", {
+        type: "task",
+        action: "update",
+        id: "t1",
+        resource: { ID: "t1", Name: "shutdown" },
+      }),
+    );
+
+    await waitFor(() => expect(result.current.data).toEqual([{ ...enriched, Name: "shutdown" }]));
+  });
+
   it("SSE bumps total when an unknown item is created", async () => {
     const fetchFn = vi
       .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()

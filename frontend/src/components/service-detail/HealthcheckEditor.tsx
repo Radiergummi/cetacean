@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { NumberField } from "@/components/ui/number-field";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { formatDuration, nanosToSeconds } from "@/lib/format";
 import { joinCommand, parseCommand } from "@/lib/parseCommand";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -135,6 +136,7 @@ export function HealthcheckEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   useEscapeCancel(editing, () => cancelEdit());
+  useLeaveGuard(editing);
 
   function updateForm(partial: Partial<FormState>) {
     setForm((previous) => ({ ...previous, ...partial }));

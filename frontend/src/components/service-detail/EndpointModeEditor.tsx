@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { RadioCard, RadioCardGroup } from "@/components/ui/radio-card";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { Globe, Pencil, Shuffle } from "lucide-react";
 import { useState } from "react";
 
@@ -22,6 +23,7 @@ export function EndpointModeEditor({
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<EndpointMode>(currentMode);
   useEscapeCancel(editing, () => setEditing(false));
+  useLeaveGuard(editing);
   const action = useAsyncAction({ toast: true });
 
   function openEdit() {

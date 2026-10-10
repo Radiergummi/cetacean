@@ -191,6 +191,12 @@ Cetacean serves a web app manifest, so a browser that supports it offers to inst
 its own window and icon. It's the same dashboard—it still needs a connection to Cetacean, and nothing is cached
 for offline use.
 
+## History
+
+The history page at `/history`, linked from the recent activity on the cluster overview, lists the latest 200
+changes Cetacean has seen. Filter it by resource type, or by name with the search box. The download button saves
+the whole log Cetacean still holds as CSV.
+
 ## Atom feeds
 
 Every resource list and detail page shows a feed icon in the page header. Click it to open that page's Atom feed,

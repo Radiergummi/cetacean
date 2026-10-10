@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- A History page at `/history` lists the cluster's recent changes, filterable by type and name, with a CSV download of the full log
 - A stack or a service can be exported as a Compose file, from its detail page or by adding `.yaml` to its URL. Secrets and configs are referenced, never exported
 - `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document: its channels, messages, and cursor format
 - `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document—the channels, the messages each carries, and which cursor dialect its `id:` uses
@@ -37,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** adding a bind mount, named pipe, driver-configured volume or Linux capability to a service needs operations level 3, through the API, the dashboard and MCP; ones it already has stay editable at level 2
 - **Breaking:** the bundled monitoring stack no longer publishes Prometheus on port 9090 of every node; Cetacean reaches it over the overlay, and the monitoring docs show how to open its UI
 - **Breaking:** under an ACL policy, `GET /metrics`, its stream, and `GET /metrics/labels` need `read` on the bare resource `*`; anyone else gets `403` and the dashboard leaves out its charts. MCP `get_metrics` is unchanged
+- Demoting a manager down to the bare quorum asks for confirmation first
+- An open editor asks before the page unloads, including the sign-in redirect after a session expires
+- Attaching a secret in place of a removed one targets the removed secret's path by default
+- The service Resources panel shows the generic resources a service reserves, such as a graphics card
 - **Breaking:** MCP's `remove_task` needs operations level 3, matching `DELETE /tasks/{id}`; it was available from level 1
 - **Breaking:** the OAuth authorization server is opt-in—set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
@@ -138,6 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Only the identity that started an MCP task can read or cancel it; anyone else is told it doesn't exist
 - Recommendation count badges, the commit hash in the footer, gauge subtitles, log task IDs and muted captions are readable at WCAG AA contrast in both themes
 - Detail page sections are announced as headings in order, and the Metrics Console query box exposes a valid role to assistive technology
+- Fixed task rows briefly showing raw service and node IDs instead of names while tasks update
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
