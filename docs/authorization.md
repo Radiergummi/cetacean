@@ -195,7 +195,7 @@ grants:
     permissions: ["read"]
 ```
 
-Multi-tenant isolation, with no cross-tenant visibility:
+Multi-tenant isolation, with no cross-tenant visibility outside the metrics endpoints (see the warning above):
 
 ```yaml
 grants:

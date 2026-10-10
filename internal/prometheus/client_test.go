@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -133,5 +134,59 @@ func TestInstantQueryRaw_ConnectionRefused(t *testing.T) {
 	_, err := pc.InstantQueryRaw(context.Background(), "up")
 	if err == nil {
 		t.Fatal("expected error for connection refused")
+	}
+}
+
+// Query errors reach clients through /metrics/status and the stream, so none
+// may carry the Prometheus address or a page that stood in for its answer.
+func TestClient_ErrorsOmitThePrometheusAddress(t *testing.T) {
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		w.Write([]byte(`<html>upstream http://prometheus.internal:9090 is down</html>`))
+	}))
+	defer gateway.Close()
+
+	refused := httptest.NewServer(http.NotFoundHandler())
+	refused.Close()
+
+	for _, base := range []string{gateway.URL, refused.URL} {
+		pc := NewClient(base)
+		queries := map[string]func() error{
+			"InstantQuery": func() error {
+				_, err := pc.InstantQuery(context.Background(), "up")
+				return err
+			},
+			"InstantQueryRaw": func() error {
+				_, err := pc.InstantQueryRaw(context.Background(), "up")
+				return err
+			},
+			"RangeQueryRaw": func() error {
+				_, err := pc.RangeQueryRaw(context.Background(), "up", "0", "1", "1")
+				return err
+			},
+		}
+		for name, query := range queries {
+			err := query()
+			if err == nil {
+				t.Fatalf("%s against %s: expected an error", name, base)
+			}
+			msg := err.Error()
+			if strings.Contains(msg, "127.0.0.1") || strings.Contains(msg, "prometheus.internal") {
+				t.Errorf("%s: the error names the Prometheus address: %s", name, msg)
+			}
+		}
+	}
+}
+
+func TestClient_StatusErrorKeepsThePrometheusReason(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"status":"error","errorType":"bad_data","error":"parse error"}`))
+	}))
+	defer prom.Close()
+
+	_, err := NewClient(prom.URL).InstantQueryRaw(context.Background(), "up{")
+	if err == nil || !strings.Contains(err.Error(), "parse error") {
+		t.Errorf("err = %v, want Prometheus's reason", err)
 	}
 }
