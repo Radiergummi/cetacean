@@ -757,7 +757,7 @@ func probeReady(target string, tlsEnabled bool) error {
 	if tlsEnabled {
 		// The probe dials the listen address, which the certificate need not name.
 		client = &http.Client{Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // loopback probe
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // own listener
 		}}
 	}
 
