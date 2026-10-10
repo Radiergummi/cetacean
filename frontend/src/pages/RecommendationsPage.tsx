@@ -15,7 +15,7 @@ import {
 } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
 import { Collapsible } from "@base-ui/react/collapsible";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { ChevronRight, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -96,8 +96,7 @@ function RecommendationCard({ hint, applying, onApply }: CardProps) {
   // operations level and the grant both have to admit its method.
   const { data: targetMethods } = useQuery({
     queryKey: ["allowed-methods", fix?.path],
-    queryFn: () => headAllowedMethods(fix!.path),
-    enabled: fix != null && hint.suggested != null,
+    queryFn: fix != null && hint.suggested != null ? () => headAllowedMethods(fix.path) : skipToken,
     staleTime: 60_000,
   });
   const hasFix = fix != null && hint.suggested != null && (targetMethods?.has(fix.method) ?? false);
