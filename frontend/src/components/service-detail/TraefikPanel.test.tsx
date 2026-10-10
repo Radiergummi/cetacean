@@ -40,6 +40,7 @@ describe("TraefikPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
-    await waitFor(() => expect(api.patchServiceLabels).toHaveBeenCalledWith("s1", []));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /save/i })).toBeNull());
+    expect(api.patchServiceLabels).not.toHaveBeenCalled();
   });
 });

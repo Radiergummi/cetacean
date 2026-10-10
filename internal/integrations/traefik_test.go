@@ -264,8 +264,14 @@ func TestDetectTraefik_TLSDomainIndexIsBounded(t *testing.T) {
 
 	result := detectTraefik(labels)
 
+	if result == nil || len(result.Routers) != 1 {
+		t.Fatalf("got %+v, want one router", result)
+	}
 	r := result.Routers[0]
-	if r.TLS == nil || len(r.TLS.Domains) != 1 {
+	if r.TLS == nil {
+		t.Fatal("router has no TLS config")
+	}
+	if len(r.TLS.Domains) != 1 {
 		t.Fatalf("parsed %d domains, want only the in-range one", len(r.TLS.Domains))
 	}
 }

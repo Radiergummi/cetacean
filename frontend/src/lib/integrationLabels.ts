@@ -95,10 +95,12 @@ export async function saveModelledLabels(
   serviceId: string,
   onSaved: (updated: Record<string, string>) => void,
 ): Promise<void> {
-  const updated = await api.patchServiceLabels(
-    serviceId,
-    diffModelledLabels(rawLabels, before, after),
-  );
+  const ops = diffModelledLabels(rawLabels, before, after);
+  // An empty patch still updates the service, replacing Swarm's rollback target.
+  if (ops.length === 0) {
+    return;
+  }
+  const updated = await api.patchServiceLabels(serviceId, ops);
   onSaved(updated);
 }
 
