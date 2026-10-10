@@ -407,8 +407,8 @@ agent for MCP isn't approving it to delete your services. A client discovers whi
 the `resource_metadata` parameter of the `WWW-Authenticate` header on a 401, and asks for that one by its RFC 8707
 `resource` parameter.
 
-Set [`oauth.api_tokens`][oauth.api_tokens] to `false` to offer only `/mcp`. The API resource then has no metadata
-document and the authorize endpoint refuses to mint a token for it.
+With [`oauth.api_tokens`][oauth.api_tokens] off, the default, only `/mcp` is offered. The API resource then has no
+metadata document and the authorize endpoint refuses to mint a token for it.
 
 ### What a token is not
 
