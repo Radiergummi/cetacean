@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -331,6 +332,9 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 
 const maxFilterLen = 512
 
+// filterBudget bounds one request's filter evaluation across every item.
+const filterBudget = 250 * time.Millisecond
+
 func exprFilter[T any](
 	items []T,
 	expr string,
@@ -355,9 +359,20 @@ func exprFilter[T any](
 	// a second slice would copy every surviving item again.
 	filtered := items[:0]
 	var m map[string]any
+	ctx, cancel := context.WithTimeout(r.Context(), filterBudget)
+	defer cancel()
 	for _, item := range items {
 		m = env(item, m)
-		ok, err := filter.Evaluate(prog, m)
+		ok, err := filter.EvaluateContext(ctx, prog, m)
+		if errors.Is(err, filter.ErrBudget) {
+			writeErrorCode(
+				w,
+				r,
+				"FLT004",
+				"filter expression too expensive to evaluate over this list",
+			)
+			return nil, false
+		}
 		if err != nil {
 			writeErrorCode(w, r, "FLT003", fmt.Sprintf("filter evaluation error: %s", err))
 			return nil, false
