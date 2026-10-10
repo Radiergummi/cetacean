@@ -738,6 +738,8 @@ passes the per-resource [write grant][authorization] check.
 | `POST /plugins/{name}/upgrade` | 3 |
 | `DELETE /plugins/{name}` | 3 |
 
+One read is held to a tier as well: `GET /swarm` includes the join tokens only at level 3, and only
+to a caller with write on `swarm:cluster`. Below that, `JoinTokens` comes back empty.
 
 ### Preconditions
 
