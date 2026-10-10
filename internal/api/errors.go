@@ -681,7 +681,7 @@ func HandleErrorDetail(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	def, ok := errorRegistry[code]
 	if !ok {
-		http.NotFound(w, r)
+		writeProblem(w, r, http.StatusNotFound, "no error code "+code)
 		return
 	}
 

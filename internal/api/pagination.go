@@ -87,10 +87,12 @@ func parseItemsRange(header string) (int, int, bool, error) {
 		return 0, 0, false, nil
 	}
 
-	spec, ok := strings.CutPrefix(header, "items ")
-	if !ok {
+	// Range units are case-insensitive (RFC 9110 §14.1).
+	const unit = "items "
+	if len(header) < len(unit) || !strings.EqualFold(header[:len(unit)], unit) {
 		return 0, 0, false, nil
 	}
+	spec := header[len(unit):]
 
 	if strings.Contains(spec, ",") {
 		return 0, 0, false, errMultipartRange

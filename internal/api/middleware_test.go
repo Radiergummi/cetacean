@@ -446,3 +446,24 @@ func TestRequestID_AcceptsSafeCharacters(t *testing.T) {
 		})
 	}
 }
+
+// Past basePathMiddleware the path is relative to the mount point, so the
+// redirect has to put the base path back or it leaves the deployment.
+func TestCleanPathsRedirectKeepsTheBasePath(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withBasePath("/cetacean")},
+		withCache(cache.New(nil)),
+	)
+
+	req := httptest.NewRequest("GET", "/cetacean//nodes", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want 307", w.Code)
+	}
+	if got := w.Header().Get("Location"); got != "/cetacean/nodes" {
+		t.Errorf("Location = %q, want /cetacean/nodes", got)
+	}
+}

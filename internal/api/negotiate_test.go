@@ -477,6 +477,25 @@ func TestRefusalNamesOnlyWhatTheEndpointServes(t *testing.T) {
 	}
 }
 
+// /topology dispatches by hand, so its 406 list is written out rather than
+// derived from what the switch serves.
+func TestTopologyRefusalNamesEveryTypeItServes(t *testing.T) {
+	router := newTestRouterWithCache(t, cache.New(nil))
+	problem := refuse(t, router, "/topology", "application/atom+xml")
+
+	for _, served := range []string{
+		"text/html",
+		"application/vnd.jgf+json",
+		"application/json",
+		"application/graphml+xml",
+		"text/vnd.graphviz",
+	} {
+		if !strings.Contains(problem.Detail, served) {
+			t.Errorf("/topology serves %s, but its 406 omits it: %q", served, problem.Detail)
+		}
+	}
+}
+
 // Holds both halves of the claim together: neither media type resolves against
 // supportedTypes, and each document still answers a client asking for it.
 // Asserting only the second half is satisfied by putting the row back, which is
@@ -561,5 +580,20 @@ func TestAnExtensionSuffixDoesNotSkipAuthentication(t *testing.T) {
 				t.Errorf("status = %d, want 401: %s", w.Code, w.Body.String())
 			}
 		})
+	}
+}
+
+// RFC 9110 §8.3.1: type, subtype and parameter names are case-insensitive.
+func TestParseAcceptRangesIsCaseInsensitive(t *testing.T) {
+	ranges := parseAcceptRanges("Application/JSON;Q=0.5, TEXT/*;q=0")
+	if len(ranges) != 2 {
+		t.Fatalf("parsed %d ranges, want 2", len(ranges))
+	}
+
+	if !ranges[0].matches("application", "json") || ranges[0].q != 0.5 {
+		t.Errorf("first range = %+v, want application/json at q=0.5", ranges[0])
+	}
+	if !ranges[1].matches("text", "html") || ranges[1].q != 0 {
+		t.Errorf("second range = %+v, want text/* at q=0", ranges[1])
 	}
 }

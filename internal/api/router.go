@@ -847,8 +847,9 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			h.HandleTopologyDOT(w, r)
 		default:
 			notAcceptable(
-				w, r,
-				"application/vnd.jgf+json, application/graphml+xml, text/vnd.graphviz",
+				w,
+				r,
+				"text/html, application/vnd.jgf+json, application/json, application/graphml+xml, text/vnd.graphviz",
 			)
 		}
 	})
