@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -1995,28 +1996,73 @@ func TestCreateDataResource_RefusedWithoutAnyWriteGrant(t *testing.T) {
 // A plugin's name is not known until its image is pulled, so installing one
 // still needs a type-wide grant.
 func TestInstallPlugin_RequiresTypeWideWriteGrant(t *testing.T) {
-	e := acl.NewEvaluator()
-	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
-		{
-			Resources:   []string{"plugin:team-*"},
-			Audience:    []string{"*"},
-			Permissions: []string{"write"},
-		},
-	}})
-	router := newTestRouterWithCache(t, cache.New(nil), withACL(e))
+	for _, tc := range []struct {
+		grant      string
+		wantCreate bool
+	}{
+		{"plugin:team-*", false},
+		{"plugin:*", true},
+	} {
+		t.Run(tc.grant, func(t *testing.T) {
+			e := acl.NewEvaluator()
+			e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+				{Resources: []string{"*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+				{
+					Resources:   []string{tc.grant},
+					Audience:    []string{"*"},
+					Permissions: []string{"write"},
+				},
+			}})
+			installed := false
+			router := newTestRouterWithCache(
+				t,
+				cache.New(nil),
+				withACL(e),
+				withPluginClient(&mockPluginClient{
+					pluginListFn: func(context.Context) (types.PluginsListResponse, error) {
+						return nil, nil
+					},
+					pluginInstallFn: func(context.Context, string) (*types.Plugin, error) {
+						installed = true
+						return &types.Plugin{Name: "team-plugin:latest"}, nil
+					},
+				}),
+			)
 
-	req := httptest.NewRequest(
-		"POST",
-		"/plugins",
-		strings.NewReader(`{"remote":"team-plugin:latest"}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+			req := httptest.NewRequest(
+				"POST",
+				"/plugins",
+				strings.NewReader(`{"remote":"team-plugin:latest"}`),
+			)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusForbidden {
-		t.Errorf("POST /plugins: status=%d, want 403", w.Code)
+			wantCode := http.StatusForbidden
+			if tc.wantCreate {
+				wantCode = http.StatusCreated
+			}
+			if w.Code != wantCode || installed != tc.wantCreate {
+				t.Errorf(
+					"POST /plugins: status=%d installed=%v, want %d",
+					w.Code,
+					installed,
+					wantCode,
+				)
+			}
+
+			req = httptest.NewRequest("GET", "/plugins", nil)
+			req.Header.Set("Accept", "application/json")
+			w = httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("GET /plugins: status=%d, want 200", w.Code)
+			}
+			if allow := w.Header().Get("Allow"); strings.Contains(allow, "POST") != tc.wantCreate {
+				t.Errorf("GET /plugins: Allow = %q, want POST: %v", allow, tc.wantCreate)
+			}
+		})
 	}
 }
 
