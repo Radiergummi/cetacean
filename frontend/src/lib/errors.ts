@@ -52,6 +52,10 @@ const errorDictionary: Record<string, ErrorInfo> = {
     title: "Too many log streams",
     suggestion: "Close an existing log stream before opening a new one.",
   },
+  LOG009: {
+    title: "Too many log reads",
+    suggestion: "Wait a few seconds, then retry.",
+  },
 
   // SSE: connections
   SSE001: {

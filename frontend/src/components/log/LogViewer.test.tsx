@@ -19,7 +19,7 @@ vi.mock("../../api/client", async (importOriginal) => ({
   },
 }));
 
-import { api } from "../../api/client";
+import { api, ApiError } from "../../api/client";
 const mockServiceLogs = vi.mocked(api.serviceLogs);
 const mockServiceLogsStreamURL = vi.mocked(api.serviceLogsStreamURL);
 
@@ -180,6 +180,17 @@ describe("LogViewer", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Failed to load logs")).toBeInTheDocument();
+    });
+  });
+
+  it("explains a refused log read with the dictionary's wording", async () => {
+    mockServiceLogs.mockRejectedValue(
+      new ApiError("/api/errors/LOG009", "Too Many Log Reads", 429, "too many log reads in flight"),
+    );
+    renderWithRouter(<LogViewer serviceId="svc1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/^Too many log reads\. Wait a few seconds/)).toBeInTheDocument();
     });
   });
 
