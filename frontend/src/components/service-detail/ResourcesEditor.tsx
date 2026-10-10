@@ -1,10 +1,11 @@
 import { DockerDocsLink } from "./DockerDocsLink";
 import { ResourceRangeSlider } from "./resource-range-slider";
 import { api } from "@/api/client";
-import type { ClusterCapacity } from "@/api/types";
+import type { ClusterCapacity, GenericResource } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { formatBytes, formatCores, formatNumber, formatPercentage } from "@/lib/format";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
@@ -34,7 +35,21 @@ function sliderMax(
 
 export interface ServiceResourceShape {
   Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number } | undefined;
-  Reservations?: { NanoCPUs?: number; MemoryBytes?: number } | undefined;
+  Reservations?:
+    | { NanoCPUs?: number; MemoryBytes?: number; GenericResources?: GenericResource[] | undefined }
+    | undefined;
+}
+
+/** Renders a generic resource as Docker's CLI writes it: `kind=value`. */
+export function formatGenericResource({
+  NamedResourceSpec,
+  DiscreteResourceSpec,
+}: GenericResource): string {
+  if (NamedResourceSpec) {
+    return `${NamedResourceSpec.Kind ?? ""}=${NamedResourceSpec.Value ?? ""}`;
+  }
+
+  return `${DiscreteResourceSpec?.Kind ?? ""}=${DiscreteResourceSpec?.Value ?? 0}`;
 }
 
 export interface AllocationData {
@@ -65,6 +80,7 @@ export function ResourcesEditor({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   useEscapeCancel(editing, () => cancelEdit());
+  useLeaveGuard(editing);
 
   const [cpu, setCpu] = useState<{ reservation: number | undefined; limit: number | undefined }>({
     reservation: undefined,
@@ -160,11 +176,13 @@ export function ResourcesEditor({
     }
   }
 
+  const genericResources = Reservations?.GenericResources ?? [];
   const hasResources =
     Limits?.NanoCPUs != null ||
     Limits?.MemoryBytes != null ||
     Reservations?.NanoCPUs != null ||
-    Reservations?.MemoryBytes != null;
+    Reservations?.MemoryBytes != null ||
+    genericResources.length > 0;
 
   // Only show allocation bars when actual usage data is available (requires Prometheus).
   // Without actual data, the text grid is a better fit.
@@ -260,6 +278,14 @@ export function ResourcesEditor({
           <div className="flex items-center justify-between text-sm">
             <span className="font-medium">PID Limit</span>
             <span className="font-mono">{pids}</span>
+          </div>
+        )}
+        {genericResources.length > 0 && (
+          <div className="flex items-center justify-between gap-4 text-sm">
+            <span className="font-medium">Generic Resources Reserved</span>
+            <span className="text-right font-mono">
+              {genericResources.map(formatGenericResource).join(", ")}
+            </span>
           </div>
         )}
       </div>

@@ -79,7 +79,13 @@ export interface Service {
       } | null;
       Resources?: {
         Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number } | undefined;
-        Reservations?: { NanoCPUs?: number; MemoryBytes?: number } | undefined;
+        Reservations?:
+          | {
+              NanoCPUs?: number;
+              MemoryBytes?: number;
+              GenericResources?: GenericResource[] | undefined;
+            }
+          | undefined;
       };
       RestartPolicy?: {
         Condition?: string | undefined;
@@ -668,6 +674,12 @@ export interface ServiceConfigRef {
   configID: string;
   configName: string;
   fileName: string;
+}
+
+/** A node-advertised resource such as a GPU; Docker sets exactly one of the two specs. */
+export interface GenericResource {
+  NamedResourceSpec?: { Kind?: string; Value?: string } | undefined;
+  DiscreteResourceSpec?: { Kind?: string; Value?: number } | undefined;
 }
 
 export interface ServiceSecretRef {

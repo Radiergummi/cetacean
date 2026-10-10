@@ -6,6 +6,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState, type MouseEvent } from "react";
@@ -34,6 +35,7 @@ export function PortsEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draft, setDraft] = useState<PortConfig[]>([]);
   useEscapeCancel(editing, () => cancelEdit());
+  useLeaveGuard(editing);
 
   function openEdit() {
     setDraft(ports.map((port) => ({ ...port })));

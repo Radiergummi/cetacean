@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { getErrorMessage } from "@/lib/utils";
 import { ArrowRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState, type MouseEvent } from "react";
@@ -60,6 +61,7 @@ export function MountsEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draft, setDraft] = useState<ServiceMount[]>([]);
   useEscapeCancel(editing, () => cancelEdit());
+  useLeaveGuard(editing);
 
   function openEdit() {
     setDraft(mounts.map((mount) => structuredClone(mount)));

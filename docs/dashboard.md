@@ -150,6 +150,12 @@ The topology page has two views.
 
 Both views pan, zoom and let you drag cards, and clicking a service opens its detail page.
 
+## History
+
+The history page at `/history`, linked from the recent activity on the cluster overview, lists the latest 200
+changes Cetacean has seen. Filter it by resource type, or by name with the search box. The download button saves
+the whole log Cetacean still holds as CSV.
+
 ## Atom feeds
 
 Every resource list and detail page shows a feed icon in the page header. Click it to open that page's Atom feed,
