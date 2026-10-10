@@ -92,6 +92,13 @@ every request instead. Cetacean refuses to start with neither.
 `/oauth/authorize` isn't exempt: a user must authenticate before granting a client access. That's also why
 the authorization server can't run under the `none` mode—there would be no one to ask.
 
+Exempt means anyone who can reach the port can read these. `/-/sbom.cdx`, with or without `.json`, lists
+every component in the build with its exact version, which tells a scanner which advisories apply without a
+credential, and `/-/docker-latest-version` makes Cetacean call GitHub. If the port is reachable from a network you don't trust,
+block both at your reverse proxy—nothing in the dashboard needs the SBOM, and without the version check a node's
+page just shows no update hint. `/-/metrics` reports request and cache counters; restrict it to your Prometheus
+the same way.
+
 ## Refused requests
 
 A `401` must name a way to authenticate, in a `WWW-Authenticate` challenge
