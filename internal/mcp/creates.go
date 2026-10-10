@@ -9,6 +9,7 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // createResult is what a create answers with: enough to reference the new
@@ -167,6 +168,10 @@ func (s *Server) createHandler(
 
 		labels, err := createLabels(req)
 		if err != nil {
+			return "", err
+		}
+
+		if err := cluster.CheckStackLabel(nil, labels, s.writePredicate(ctx)); err != nil {
 			return "", err
 		}
 

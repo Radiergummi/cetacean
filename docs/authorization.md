@@ -55,6 +55,9 @@ Two inheritance rules widen a grant beyond a literal match:
 - A `stack:X` grant covers the stack and every service, task, config, secret, network, and volume in it.
 - A `service:X` grant covers that service's tasks. A task also inherits the stack of its parent service.
 
+Because membership follows the `com.docker.stack.namespace` label, setting that label to a stack, through a label edit
+or a create, needs `write` on that stack as well as on the resource.
+
 Task patterns match task IDs, which change every time a replica is replaced. Grant the parent service or the stack
 instead of naming tasks.
 
