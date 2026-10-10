@@ -297,9 +297,9 @@ func testRouterConfig(
 func routerPatterns(t testing.TB) []string {
 	t.Helper()
 
-	_, patterns := newRouter(testRouterConfig(t, nil, withCache(cache.New(nil))))
+	_, routes := newRouter(testRouterConfig(t, nil, withCache(cache.New(nil))))
 
-	return patterns
+	return routes.patterns
 }
 
 // stubResyncer stands in for the watcher, so POST /-/resync is registered and

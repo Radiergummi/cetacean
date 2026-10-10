@@ -289,3 +289,31 @@ describe("write operations", () => {
     expect(response.status).toBe(204);
   });
 });
+
+describe("Allow", () => {
+  async function allow(path: string, method = "GET") {
+    const response = await fetch(`http://localhost${path}`, {
+      method,
+      headers: { Accept: "application/json" },
+    });
+
+    return response.headers.get("Allow");
+  }
+
+  it("offers only the writes the server routes for a resource", async () => {
+    expect(await allow(`/volumes/${dataset.volumes[0]!.Name}`)).toBe("GET, HEAD, DELETE");
+    expect(await allow(`/secrets/${dataset.secrets[0]!.ID}`)).toBe("GET, HEAD, PATCH, DELETE");
+    expect(await allow(`/services/${dataset.services[0]!.ID}`)).toBe(
+      "GET, HEAD, PUT, POST, PATCH, DELETE",
+    );
+  });
+
+  it("offers create on the collections that have one", async () => {
+    expect(await allow("/configs")).toBe("GET, HEAD, POST");
+    expect(await allow("/nodes")).toBe("GET, HEAD");
+  });
+
+  it("answers HEAD the way it answers GET", async () => {
+    expect(await allow(`/volumes/${dataset.volumes[0]!.Name}`, "HEAD")).toBe("GET, HEAD, DELETE");
+  });
+});

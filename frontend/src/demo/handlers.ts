@@ -44,14 +44,48 @@ import type {
   JGFEdge,
   JGFHyperedge,
 } from "@/api/types";
-import { http, HttpResponse, type JsonBodyType } from "msw";
+import { http, HttpResponse, type JsonBodyType, type PathParams } from "msw";
 
 const stackLabel = "com.docker.stack.namespace";
 
 function jsonResponse<T extends JsonBodyType>(data: T, status = 200) {
-  return HttpResponse.json(data, {
-    status,
-    headers: { Allow: "GET, HEAD, PUT, POST, PATCH, DELETE" },
+  return HttpResponse.json(data, { status });
+}
+
+/**
+ * The demo visitor is an operator at operations level 3 holding every grant, so
+ * each path offers the writes the server routes at or below it.
+ */
+const writesByPath: [RegExp, string][] = [
+  [/\/services\/[^/]+$/, "PUT, POST, PATCH, DELETE"],
+  [/\/services\/[^/]+\/endpoint-mode$/, "PUT"],
+  [/\/nodes\/[^/]+$/, "PUT, PATCH, DELETE"],
+  [/\/(configs|secrets)\/[^/]+$/, "PATCH, DELETE"],
+  [/\/(configs|secrets|plugins)$/, "POST"],
+  [/\/plugins\/[^/]+$/, "POST, PATCH, DELETE"],
+  [/\/(tasks|stacks|networks|volumes)\/[^/]+$/, "DELETE"],
+  [/\/swarm$/, "POST, PATCH"],
+];
+
+function allowFor(url: string) {
+  const { pathname } = new URL(url);
+  const writes = writesByPath.find(([pattern]) => pattern.test(pathname))?.[1];
+
+  return writes ? `GET, HEAD, ${writes}` : "GET, HEAD";
+}
+
+/**
+ * Registers a GET handler whose response carries the path's Allow.
+ */
+function get(
+  path: string,
+  resolver: (info: { params: PathParams; request: Request }) => Response | Promise<Response>,
+) {
+  return http.get(path, async (info) => {
+    const response = await resolver(info);
+    response.headers.set("Allow", allowFor(info.request.url));
+
+    return response;
   });
 }
 
@@ -479,7 +513,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
   return [
     // ---- Health & meta ----
-    http.get("*/-/health", () => {
+    get("*/-/health", () => {
       const data: HealthInfo = {
         status: "ok",
         version: "demo",
@@ -490,12 +524,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<HealthInfo>(data);
     }),
 
-    http.get("*/-/ready", () => {
+    get("*/-/ready", () => {
       return jsonResponse<{ status: string }>({ status: "ready" });
     }),
 
     // The frontend calls /profile for whoami
-    http.get("*/profile", () => {
+    get("*/profile", () => {
       return jsonResponse(
         detailEnvelope("/profile", "Profile", {
           subject: "demo",
@@ -505,7 +539,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       );
     }),
 
-    http.get("*/auth/whoami", () => {
+    get("*/auth/whoami", () => {
       return jsonResponse(
         detailEnvelope("/auth/whoami", "Identity", {
           subject: "demo",
@@ -516,7 +550,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Cluster ----
-    http.get("*/cluster/metrics", () => {
+    get("*/cluster/metrics", () => {
       return jsonResponse(
         detailEnvelope("/cluster/metrics", "ClusterMetrics", {
           cpu: { used: 4.2, total: 16, percent: 26.25 },
@@ -526,7 +560,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       );
     }),
 
-    http.get("*/cluster/capacity", () => {
+    get("*/cluster/capacity", () => {
       return jsonResponse<ClusterCapacity>({
         maxNodeCPU: 8_000_000_000,
         maxNodeMemory: 16 * 1024 * 1024 * 1024,
@@ -536,12 +570,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/cluster", () => {
+    get("*/cluster", () => {
       return jsonResponse<ClusterSnapshot>(buildClusterSnapshot(dataset));
     }),
 
     // ---- Swarm ----
-    http.get("*/swarm", () => {
+    get("*/swarm", () => {
       return jsonResponse<SwarmInfo>({
         swarm: dataset.swarm,
         managerAddr: "10.0.0.1:2377",
@@ -549,7 +583,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Topology (must be before */networks and */nodes to avoid glob conflicts) ----
-    http.get("*/topology", () => {
+    get("*/topology", () => {
       const context = "/api/context.jsonld";
       const urn = (type: string, id: string) => `urn:cetacean:${type}:${id}`;
 
@@ -752,13 +786,13 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Nodes ----
-    http.get("*/nodes/:id/tasks", ({ params, request }) => {
+    get("*/nodes/:id/tasks", ({ params, request }) => {
       const nodeID = params.id as string;
       const nodeTasks = dataset.tasks.filter((task) => task.NodeID === nodeID);
       return jsonResponse(paginateWrapped(nodeTasks, request, "Task", (t) => `/tasks/${t.ID}`));
     }),
 
-    http.get("*/nodes/:id/labels", ({ params }) => {
+    get("*/nodes/:id/labels", ({ params }) => {
       const node = dataset.nodesByID.get(params.id as string);
 
       if (!node) {
@@ -768,7 +802,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<{ labels: Record<string, string> }>({ labels: node.Spec.Labels ?? {} });
     }),
 
-    http.get("*/nodes/:id/role", ({ params }) => {
+    get("*/nodes/:id/role", ({ params }) => {
       const node = dataset.nodesByID.get(params.id as string);
 
       if (!node) {
@@ -785,7 +819,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       );
     }),
 
-    http.get("*/nodes/:id", ({ params }) => {
+    get("*/nodes/:id", ({ params }) => {
       const node = dataset.nodesByID.get(params.id as string);
 
       if (!node) {
@@ -795,18 +829,18 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse(detailEnvelope(`/nodes/${node.ID}`, "Node", { node }));
     }),
 
-    http.get("*/nodes", ({ request }) => {
+    get("*/nodes", ({ request }) => {
       return jsonResponse(paginateWrapped(dataset.nodes, request, "Node", (n) => `/nodes/${n.ID}`));
     }),
 
     // ---- Services ----
-    http.get("*/services/:id/tasks", ({ params, request }) => {
+    get("*/services/:id/tasks", ({ params, request }) => {
       const serviceID = params.id as string;
       const serviceTasks = dataset.tasks.filter((task) => task.ServiceID === serviceID);
       return jsonResponse(paginateWrapped(serviceTasks, request, "Task", (t) => `/tasks/${t.ID}`));
     }),
 
-    http.get("*/services/:id/env", ({ params }) => {
+    get("*/services/:id/env", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -827,7 +861,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<{ env: Record<string, string> }>({ env });
     }),
 
-    http.get("*/services/:id/labels", ({ params }) => {
+    get("*/services/:id/labels", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -839,7 +873,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/services/:id/resources", ({ params }) => {
+    get("*/services/:id/resources", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -851,7 +885,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/services/:id/healthcheck", ({ params }) => {
+    get("*/services/:id/healthcheck", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -863,7 +897,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/services/:id/configs", ({ params }) => {
+    get("*/services/:id/configs", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -880,7 +914,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<{ configs: ServiceConfigRef[] }>({ configs });
     }),
 
-    http.get("*/services/:id/secrets", ({ params }) => {
+    get("*/services/:id/secrets", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -897,7 +931,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<{ secrets: ServiceSecretRef[] }>({ secrets });
     }),
 
-    http.get("*/services/:id/networks", ({ params }) => {
+    get("*/services/:id/networks", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -910,7 +944,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<{ networks: ServiceNetworkRef[] }>({ networks });
     }),
 
-    http.get("*/services/:id/mounts", ({ params }) => {
+    get("*/services/:id/mounts", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -922,7 +956,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/services/:id/ports", ({ params }) => {
+    get("*/services/:id/ports", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -934,7 +968,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/services/:id/placement", ({ params }) => {
+    get("*/services/:id/placement", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -946,7 +980,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/services/:id/update-policy", ({ params }) => {
+    get("*/services/:id/update-policy", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -958,7 +992,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/services/:id/rollback-policy", ({ params }) => {
+    get("*/services/:id/rollback-policy", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -970,7 +1004,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/services/:id/log-driver", ({ params }) => {
+    get("*/services/:id/log-driver", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -982,7 +1016,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/services/:id/container-config", ({ params }) => {
+    get("*/services/:id/container-config", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -1017,11 +1051,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/services/:id/logs", () => {
+    get("*/services/:id/logs", () => {
       return jsonResponse<LogResponse>({ lines: [], oldest: "", newest: "", hasMore: false });
     }),
 
-    http.get("*/services/:id", ({ params }) => {
+    get("*/services/:id", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);
 
       if (!service) {
@@ -1037,7 +1071,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       );
     }),
 
-    http.get("*/services", ({ request }) => {
+    get("*/services", ({ request }) => {
       const items = dataset.services.map((service) => ({
         ...service,
         RunningTasks: countRunningTasks(dataset, service.ID),
@@ -1046,11 +1080,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Tasks ----
-    http.get("*/tasks/:id/logs", () => {
+    get("*/tasks/:id/logs", () => {
       return jsonResponse<LogResponse>({ lines: [], oldest: "", newest: "", hasMore: false });
     }),
 
-    http.get("*/tasks/:id", ({ params }) => {
+    get("*/tasks/:id", ({ params }) => {
       const task = dataset.tasksByID.get(params.id as string);
 
       if (!task) {
@@ -1060,12 +1094,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse(detailEnvelope(`/tasks/${task.ID}`, "Task", { task }));
     }),
 
-    http.get("*/tasks", ({ request }) => {
+    get("*/tasks", ({ request }) => {
       return jsonResponse(paginateWrapped(dataset.tasks, request, "Task", (t) => `/tasks/${t.ID}`));
     }),
 
     // ---- Stacks ----
-    http.get("*/stacks/summary", () => {
+    get("*/stacks/summary", () => {
       const items = buildStackSummaries(dataset);
       return jsonResponse<CollectionResponse<StackSummary & { "@id": string; "@type": string }>>({
         items: items.map((summary) => wrapItem(summary, "StackSummary", `/stacks/${summary.name}`)),
@@ -1075,7 +1109,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/stacks/:name", ({ params }) => {
+    get("*/stacks/:name", ({ params }) => {
       const stackName = params.name as string;
       const stacks = deriveStacks(dataset);
       const stack = stacks.get(stackName);
@@ -1108,7 +1142,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       );
     }),
 
-    http.get("*/stacks", ({ request }) => {
+    get("*/stacks", ({ request }) => {
       const stacks = deriveStacks(dataset);
       const items = Array.from(stacks.entries()).map(([name, stack]) => ({
         name,
@@ -1122,7 +1156,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Configs ----
-    http.get("*/configs/:id", ({ params }) => {
+    get("*/configs/:id", ({ params }) => {
       const config = dataset.configsByID.get(params.id as string);
 
       if (!config) {
@@ -1143,14 +1177,14 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       );
     }),
 
-    http.get("*/configs", ({ request }) => {
+    get("*/configs", ({ request }) => {
       return jsonResponse(
         paginateWrapped(dataset.configs, request, "Config", (c) => `/configs/${c.ID}`),
       );
     }),
 
     // ---- Secrets ----
-    http.get("*/secrets/:id", ({ params }) => {
+    get("*/secrets/:id", ({ params }) => {
       const secret = dataset.secretsByID.get(params.id as string);
 
       if (!secret) {
@@ -1171,14 +1205,14 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       );
     }),
 
-    http.get("*/secrets", ({ request }) => {
+    get("*/secrets", ({ request }) => {
       return jsonResponse(
         paginateWrapped(dataset.secrets, request, "Secret", (s) => `/secrets/${s.ID}`),
       );
     }),
 
     // ---- Networks ----
-    http.get("*/networks/:id", ({ params }) => {
+    get("*/networks/:id", ({ params }) => {
       const network = dataset.networksByID.get(params.id as string);
 
       if (!network) {
@@ -1198,14 +1232,14 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       );
     }),
 
-    http.get("*/networks", ({ request }) => {
+    get("*/networks", ({ request }) => {
       return jsonResponse(
         paginateWrapped(dataset.networks, request, "Network", (n) => `/networks/${n.Id}`),
       );
     }),
 
     // ---- Volumes ----
-    http.get("*/volumes/:name", ({ params }) => {
+    get("*/volumes/:name", ({ params }) => {
       const volume = dataset.volumesByName.get(params.name as string);
 
       if (!volume) {
@@ -1226,14 +1260,14 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       );
     }),
 
-    http.get("*/volumes", ({ request }) => {
+    get("*/volumes", ({ request }) => {
       return jsonResponse(
         paginateWrapped(dataset.volumes, request, "Volume", (v) => `/volumes/${v.Name}`),
       );
     }),
 
     // ---- Search ----
-    http.get("*/search", ({ request }) => {
+    get("*/search", ({ request }) => {
       const url = new URL(request.url);
       const query = url.searchParams.get("q") ?? "";
       const limitParam = url.searchParams.get("limit");
@@ -1244,7 +1278,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- History ----
-    http.get("*/history", () => {
+    get("*/history", () => {
       return jsonResponse<CollectionResponse<HistoryEntry & { "@id": string; "@type": string }>>({
         items: [],
         total: 0,
@@ -1254,7 +1288,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Recommendations ----
-    http.get("*/recommendations", () => {
+    get("*/recommendations", () => {
       return jsonResponse<RecommendationsResponse>({
         items: [],
         total: 0,
@@ -1264,7 +1298,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Disk usage ----
-    http.get("*/disk-usage", () => {
+    get("*/disk-usage", () => {
       const summaries: DiskUsageSummary[] = [
         { type: "images", count: 11, active: 11, totalSize: 3_221_225_472, reclaimable: 0 },
         {
@@ -1302,7 +1336,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Plugins ----
-    http.get("*/plugins", () => {
+    get("*/plugins", () => {
       return jsonResponse<CollectionResponse<Plugin & { "@id": string; "@type": string }>>({
         items: [],
         total: 0,
@@ -1312,7 +1346,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Monitoring status ----
-    http.get("*/metrics/status", () => {
+    get("*/metrics/status", () => {
       return jsonResponse<MonitoringStatus>({
         prometheusConfigured: true,
         prometheusReachable: true,
@@ -1322,7 +1356,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Metrics (Prometheus proxy) ----
-    http.get("*/metrics/labels/:name", ({ params }) => {
+    get("*/metrics/labels/:name", ({ params }) => {
       const name = params.name as string;
       const valueMap: Record<string, string[]> = {
         __name__: [
@@ -1340,7 +1374,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<{ data: string[] }>({ data: valueMap[name] ?? [] });
     }),
 
-    http.get("*/metrics/labels", () => {
+    get("*/metrics/labels", () => {
       return jsonResponse<{ data: string[] }>({
         data: [
           "__name__",
@@ -1355,7 +1389,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       });
     }),
 
-    http.get("*/metrics", ({ request }) => {
+    get("*/metrics", ({ request }) => {
       const url = new URL(request.url);
       const query = url.searchParams.get("query") ?? "";
       const start = url.searchParams.get("start");
@@ -1378,7 +1412,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Docker latest version ----
-    http.get("*/-/docker-latest-version", () => {
+    get("*/-/docker-latest-version", () => {
       return jsonResponse<{ version: string; url: string }>({
         version: "27.5.1",
         url: "https://docs.docker.com/engine/release-notes/",
@@ -1773,10 +1807,10 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- Catch-all for HEAD requests (for Allow header checks) ----
-    http.head("*", () => {
+    http.head("*", ({ request }) => {
       return new HttpResponse(null, {
         status: 200,
-        headers: { Allow: "GET, HEAD, PUT, POST, PATCH, DELETE" },
+        headers: { Allow: allowFor(request.url) },
       });
     }),
   ];

@@ -63,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
 
 ### Fixed
+- `Allow` no longer offers `POST` on a single config or secret, `PUT` on a service's mode, or plugin install below operations level 3; the Plugins page hides Install accordingly
+- Applying a drain from the Recommendations page asks for confirmation first, and the demo no longer offers writes a resource doesn't support
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of

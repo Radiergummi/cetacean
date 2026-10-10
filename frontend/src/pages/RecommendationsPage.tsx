@@ -2,6 +2,16 @@ import type { Recommendation, RecommendationCategory } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
 import ResourceName from "@/components/ResourceName";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { invalidateRecommendations, useRecommendations } from "@/hooks/useRecommendations";
 import { applyRecommendation } from "@/lib/applyRecommendation";
@@ -159,6 +169,7 @@ export default function RecommendationsPage() {
   const [applying, setApplying] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [pendingDrain, setPendingDrain] = useState<Recommendation | null>(null);
 
   const rawFilter = searchParams.get("filter") ?? "all";
   const activeFilter: FilterTab = filterTabs.includes(rawFilter as FilterTab)
@@ -193,6 +204,16 @@ export default function RecommendationsPage() {
 
     return filterGroups[activeFilter]?.has(hint.category) ?? false;
   });
+
+  function requestApply(hint: Recommendation) {
+    if (hint.fixAction?.includes("/availability")) {
+      setPendingDrain(hint);
+
+      return;
+    }
+
+    void handleApply(hint);
+  }
 
   async function handleApply(hint: Recommendation) {
     const key = recommendationKey(hint);
@@ -246,11 +267,43 @@ export default function RecommendationsPage() {
               key={recommendationKey(hint)}
               hint={hint}
               applying={applying}
-              onApply={handleApply}
+              onApply={requestApply}
             />
           ))}
         </div>
       )}
+
+      <AlertDialog
+        open={pendingDrain !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDrain(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Drain this node?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Draining {pendingDrain?.targetName} will reschedule all running tasks to other nodes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingDrain) {
+                  void handleApply(pendingDrain);
+                }
+
+                setPendingDrain(null);
+              }}
+            >
+              Drain
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

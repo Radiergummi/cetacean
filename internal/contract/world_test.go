@@ -118,7 +118,7 @@ func TestWorldSeparatesPersonas(t *testing.T) {
 }
 
 // w1Allow reads the Allow header a persona gets on a service detail endpoint.
-// Detail endpoints use setAllow/resourceWriteMethods; list endpoints use
+// Detail endpoints use setAllow, which reads the routes; list endpoints use
 // setAllowList, which is constant for most types and cannot distinguish
 // personas at all.
 func w1Allow(t *testing.T, persona string) string {

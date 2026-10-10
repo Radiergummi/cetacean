@@ -139,10 +139,15 @@ func (h *Handlers) detailFeeds(
 type routeRecorder struct {
 	mux      *http.ServeMux
 	patterns []string
+	tiered   []tieredRoute
 }
 
 func (r *routeRecorder) Handle(pattern string, handler http.Handler) {
 	r.patterns = append(r.patterns, pattern)
+	if gated, ok := handler.(tieredHandler); ok {
+		method, path, _ := strings.Cut(pattern, " ")
+		r.tiered = append(r.tiered, tieredRoute{method, path, gated.level})
+	}
 	r.mux.Handle(pattern, handler)
 }
 
@@ -181,10 +186,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	return handler
 }
 
-// newRouter assembles the router and returns the patterns it registered beside
+// newRouter assembles the router and returns the routes it registered beside
 // it. Production calls NewRouter and drops the second value; the spec-parity
-// test reads it.
-func newRouter(cfg RouterConfig) (http.Handler, []string) {
+// test and the Allow header read it.
+func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	auth.SetErrorWriter(WriteErrorCode)
 
 	h := cfg.Handlers
@@ -199,10 +204,6 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	authProvider := cfg.AuthProvider
 
 	mux := &routeRecorder{mux: http.NewServeMux()}
-
-	tier1 := h.requireLevel(config.OpsOperational)
-	tier2 := h.requireLevel(config.OpsConfiguration)
-	tier3 := h.requireLevel(config.OpsImpactful)
 
 	// ACL wrappers for write endpoints.
 	svcACL := h.requireWriteACL(
@@ -244,26 +245,26 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	swarmACL := h.requireWriteACL(swarmResource)
 
 	// Derived (ACL, tier) chains for the gated route registrations below.
-	svcTier1 := NewChain(svcACL, tier1)
-	svcTier2 := NewChain(svcACL, tier2)
-	svcTier3 := NewChain(svcACL, tier3)
-	nodeTier2 := NewChain(nodeACL, tier2)
-	nodeTier3 := NewChain(nodeACL, tier3)
-	taskTier3 := NewChain(taskACL, tier3)
-	stackTier3 := NewChain(stackACL, tier3)
-	cfgTier2 := NewChain(cfgACL, tier2)
-	cfgTier3 := NewChain(cfgACL, tier3)
-	secTier2 := NewChain(secACL, tier2)
-	secTier3 := NewChain(secACL, tier3)
-	netTier3 := NewChain(netACL, tier3)
-	volTier3 := NewChain(volACL, tier3)
-	pluginTier2 := NewChain(pluginACL, tier2)
-	pluginTier3 := NewChain(pluginACL, tier3)
-	pluginWildTier3 := NewChain(pluginWildACL, tier3)
-	cfgWildTier2 := NewChain(cfgWildACL, tier2)
-	secWildTier2 := NewChain(secWildACL, tier2)
-	swarmTier2 := NewChain(swarmACL, tier2)
-	swarmTier3 := NewChain(swarmACL, tier3)
+	svcTier1 := h.tiered(svcACL, config.OpsOperational)
+	svcTier2 := h.tiered(svcACL, config.OpsConfiguration)
+	svcTier3 := h.tiered(svcACL, config.OpsImpactful)
+	nodeTier2 := h.tiered(nodeACL, config.OpsConfiguration)
+	nodeTier3 := h.tiered(nodeACL, config.OpsImpactful)
+	taskTier3 := h.tiered(taskACL, config.OpsImpactful)
+	stackTier3 := h.tiered(stackACL, config.OpsImpactful)
+	cfgTier2 := h.tiered(cfgACL, config.OpsConfiguration)
+	cfgTier3 := h.tiered(cfgACL, config.OpsImpactful)
+	secTier2 := h.tiered(secACL, config.OpsConfiguration)
+	secTier3 := h.tiered(secACL, config.OpsImpactful)
+	netTier3 := h.tiered(netACL, config.OpsImpactful)
+	volTier3 := h.tiered(volACL, config.OpsImpactful)
+	pluginTier2 := h.tiered(pluginACL, config.OpsConfiguration)
+	pluginTier3 := h.tiered(pluginACL, config.OpsImpactful)
+	pluginWildTier3 := h.tiered(pluginWildACL, config.OpsImpactful)
+	cfgWildTier2 := h.tiered(cfgWildACL, config.OpsConfiguration)
+	secWildTier2 := h.tiered(secWildACL, config.OpsConfiguration)
+	swarmTier2 := h.tiered(swarmACL, config.OpsConfiguration)
+	swarmTier3 := h.tiered(swarmACL, config.OpsImpactful)
 
 	authProvider.RegisterRoutes(mux.mux)
 	mux.HandleFunc("GET /auth/whoami", auth.WhoamiHandler(authProvider, writeIdentityJSONLD))
@@ -950,7 +951,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	return publicURLMiddleware(
 		cfg.PublicURL,
 		basePathMiddleware(cfg.BasePath, mux, stack.Then(mux)),
-	), mux.patterns
+	), mux
 }
 
 func requireReady(h *Handlers, mux *routeRecorder) func(http.Handler) http.Handler {
