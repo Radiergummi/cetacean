@@ -130,7 +130,7 @@ The cluster overview and the metrics console show a banner when something is mis
 | -------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Healthy              | Prometheus answers and both exporters cover every node           | Nothing                                                                         |
 | Not configured       | `prometheus.url` is unset                                        | Deploy instructions. Dismissible                                                |
-| Unreachable          | `prometheus.url` is set but queries fail                         | Warning with the connection error. Not dismissible                              |
+| Unreachable          | `prometheus.url` is set but queries fail                         | Warning. The cause is in Cetacean's log. Not dismissible                        |
 | Partially configured | Prometheus answers, but an exporter covers no nodes or only some | One line per exporter naming what's missing and on how many nodes. Dismissible |
 
 The [MCP][mcp-tools] `get_metrics` tool reports the same gap rather than charting zeros. When every series comes

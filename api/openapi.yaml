@@ -312,7 +312,7 @@ paths:
                   value:
                     prometheusConfigured: true
                     prometheusReachable: false
-                    error: "dial tcp: lookup prometheus on 127.0.0.11:53: no such host"
+                    error: prometheus unreachable
                     nodeExporter: { targets: 0, nodes: 3 }
                     cadvisor: { targets: 0, nodes: 3 }
                 unconfigured:

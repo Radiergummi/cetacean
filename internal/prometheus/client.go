@@ -32,7 +32,7 @@ func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result
 	u := pc.baseURL + "/api/v1/query?query=" + url.QueryEscape(query)
 	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
-		return nil, err
+		return nil, invalidRequest(err)
 	}
 
 	resp, err := pc.client.Do(req)
@@ -152,7 +152,7 @@ func (pc *Client) RangeQueryRaw(
 		"&step=" + url.QueryEscape(step)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, err
+		return nil, invalidRequest(err)
 	}
 	resp, err := pc.client.Do(req)
 	if err != nil {
@@ -173,7 +173,7 @@ func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, er
 	u := pc.baseURL + "/api/v1/query?query=" + url.QueryEscape(query)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, err
+		return nil, invalidRequest(err)
 	}
 	resp, err := pc.client.Do(req)
 	if err != nil {
@@ -190,12 +190,25 @@ func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, er
 	return body, nil
 }
 
-// unreachable reports a failed request without its URL, which names the
-// internal Prometheus address; callers relay this error to clients.
-func unreachable(err error) error {
-	if !errors.Is(err, context.Canceled) {
-		slog.Warn("prometheus request failed", "error", err)
-	}
+// redactedError is what callers relay to clients: a fixed message, since the
+// cause names the internal Prometheus address. Logging it records the cause.
+type redactedError struct {
+	message string
+	cause   error
+}
 
-	return errors.New("prometheus unreachable")
+func (e *redactedError) Error() string { return e.message }
+
+func (e *redactedError) Unwrap() error { return e.cause }
+
+func (e *redactedError) LogValue() slog.Value {
+	return slog.StringValue(e.message + ": " + e.cause.Error())
+}
+
+func unreachable(err error) error {
+	return &redactedError{message: "prometheus unreachable", cause: err}
+}
+
+func invalidRequest(err error) error {
+	return &redactedError{message: "failed to create prometheus request", cause: err}
 }
