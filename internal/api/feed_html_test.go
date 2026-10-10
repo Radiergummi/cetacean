@@ -34,3 +34,26 @@ func TestRecommendationFeedEntryEscapesTheMessage(t *testing.T) {
 		t.Errorf("unescaped markup in feed HTML: %s", entry.ContentHTML)
 	}
 }
+
+// A trusted proxy's X-Forwarded-Host passes isAuthority with quotes and angle
+// brackets in it, so the origin is as untrusted as any other value here.
+func TestFeedEntryHTMLEscapesTheLink(t *testing.T) {
+	req := httptest.NewRequest("GET", "/recommendations.atom", nil)
+	req.Host = `a"><b`
+
+	history := historyEntryHTML(
+		cache.HistoryEntry{Type: "node", Name: "n"},
+		absURL(req, "/nodes/x"),
+	)
+	rec := recommendationToFeedEntry(
+		req,
+		recommendations.Recommendation{Scope: recommendations.ScopeNode, TargetID: "x"},
+		time.Now(),
+	)
+
+	for _, got := range []string{history, rec.ContentHTML} {
+		if strings.Contains(got, "<b") {
+			t.Errorf("unescaped markup in feed link: %s", got)
+		}
+	}
+}
