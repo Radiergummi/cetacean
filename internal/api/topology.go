@@ -58,7 +58,7 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		h.cache.ListServices(),
 		func(s swarm.Service) string { return "service:" + s.Spec.Name },
 	)
-	networks := h.cache.ListNetworks()
+	networks := h.readableNetworks(r)
 	clusterNodes := acl.Filter(
 		h.acl, identity, "read",
 		h.cache.ListNodes(),
@@ -117,7 +117,7 @@ func (h *Handlers) buildACLFilteredNetworkGraph(r *http.Request) jgf.Graph {
 		h.cache.ListServices(),
 		func(s swarm.Service) string { return "service:" + s.Spec.Name },
 	)
-	networks := h.cache.ListNetworks()
+	networks := h.readableNetworks(r)
 	contextURL := absPath(r.Context(), jsonLDContext)
 	return buildNetworkJGF(services, networks, h.cache.RunningTaskCounts(), contextURL)
 }

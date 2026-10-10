@@ -26,7 +26,7 @@ func TestSearchByName(t *testing.T) {
 	c.SetNode(node)
 
 	// Search by service name.
-	svcResults := cluster.Search(context.Background(), c, "web-frontend", 10)
+	svcResults := cluster.Search(context.Background(), c, "web-frontend", 10, nil)
 	services, ok := svcResults.Hits["services"]
 	if !ok {
 		t.Fatal("expected services in results")
@@ -45,7 +45,7 @@ func TestSearchByName(t *testing.T) {
 	}
 
 	// Search by node hostname.
-	nodeResultsMap := cluster.Search(context.Background(), c, "worker-node-1", 10)
+	nodeResultsMap := cluster.Search(context.Background(), c, "worker-node-1", 10, nil)
 	nodeResults, ok := nodeResultsMap.Hits["nodes"]
 	if !ok {
 		t.Fatal("expected nodes in results")
@@ -67,7 +67,7 @@ func TestSearchByLabel(t *testing.T) {
 	svc.Spec.Labels = map[string]string{"team": "platform-eng"}
 	c.SetService(svc)
 
-	results := cluster.Search(context.Background(), c, "platform-eng", 10)
+	results := cluster.Search(context.Background(), c, "platform-eng", 10, nil)
 
 	services, ok := results.Hits["services"]
 	if !ok {
@@ -92,7 +92,7 @@ func TestSearchIncludesServiceState(t *testing.T) {
 	c.SetService(svc)
 
 	// No tasks running → expect "failed"
-	results := cluster.Search(context.Background(), c, "stateful-service", 10)
+	results := cluster.Search(context.Background(), c, "stateful-service", 10, nil)
 
 	services, ok := results.Hits["services"]
 	if !ok {
@@ -118,7 +118,7 @@ func TestSearchRedactsSecrets(t *testing.T) {
 	sec.Spec.Data = []byte("do-not-expose")
 	c.SetSecret(sec)
 
-	results := cluster.Search(context.Background(), c, "my-secret-token", 10)
+	results := cluster.Search(context.Background(), c, "my-secret-token", 10, nil)
 
 	secrets, ok := results.Hits["secrets"]
 	if !ok {
@@ -149,7 +149,7 @@ func TestSearchLimit(t *testing.T) {
 		c.SetService(svc)
 	}
 
-	results := cluster.Search(context.Background(), c, "limit-service", 2)
+	results := cluster.Search(context.Background(), c, "limit-service", 2, nil)
 
 	services, ok := results.Hits["services"]
 	if !ok {
@@ -163,6 +163,52 @@ func TestSearchLimit(t *testing.T) {
 	}
 	if len(services) > 2 {
 		t.Errorf("len(services) = %d, want at most 2 (limit enforced)", len(services))
+	}
+}
+
+// The count reaches past the page, so it is taken after the read filter: a
+// count of matches the caller cannot read is an existence oracle.
+func TestSearchCountsOnlyWhatCanReadAdmits(t *testing.T) {
+	c := newTestCache()
+
+	for _, name := range []string{"acme-a", "acme-b", "acme-c"} {
+		svc := swarm.Service{}
+		svc.ID = "id-" + name
+		svc.Spec.Name = name
+		c.SetService(svc)
+	}
+
+	c.SetTask(swarm.Task{ID: "task-1", ServiceID: "id-acme-a"})
+	c.SetTask(swarm.Task{ID: "task-2", ServiceID: "id-acme-b"})
+
+	node := swarm.Node{ID: "acme-node"}
+	node.Spec.Labels = map[string]string{"team": "acme"}
+	c.SetNode(node)
+
+	readable := map[string]bool{
+		"service:acme-a": true,
+		"task:task-2":    true,
+		"node:acme-node": true,
+	}
+	results := cluster.Search(context.Background(), c, "acme", 1, func(resource string) bool {
+		return readable[resource]
+	})
+
+	want := map[string]int{"services": 1, "tasks": 1, "nodes": 1}
+	if !maps.Equal(results.Counts, want) {
+		t.Errorf("counts = %v, want %v", results.Counts, want)
+	}
+
+	if results.Total != 3 {
+		t.Errorf("total = %d, want 3", results.Total)
+	}
+
+	if hits := results.Hits["tasks"]; len(hits) != 1 || hits[0].ID != "task-2" {
+		t.Errorf("tasks = %+v, want task-2 alone, keyed on its ID", hits)
+	}
+
+	if hits := results.Hits["nodes"]; len(hits) != 1 || hits[0].ID != "acme-node" {
+		t.Errorf("nodes = %+v, want the node keyed on its ID when it has no hostname", hits)
 	}
 }
 

@@ -981,6 +981,48 @@ func TestHandleSearch_ACLFiltering(t *testing.T) {
 	}
 }
 
+// The count covers every match, not just the capped page, so it has to be
+// taken after the filter or it reports resources the caller cannot read.
+func TestHandleSearch_CountsOnlyReadableBeyondThePage(t *testing.T) {
+	c := cache.New(nil)
+	for _, name := range []string{"filler-a", "filler-b", "filler-c", "filler-d"} {
+		c.SetConfig(swarm.Config{
+			ID:   "id-" + name,
+			Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}},
+		})
+	}
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"config:filler-a"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+
+	for _, limit := range []string{"0", "1", "3"} {
+		req := httptest.NewRequest("GET", "/search?q=filler&limit="+limit, nil)
+		req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "u"}))
+		w := httptest.NewRecorder()
+		h.HandleSearch(w, req)
+
+		var resp struct {
+			Counts map[string]int `json:"counts"`
+			Total  int            `json:"total"`
+		}
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if resp.Counts["configs"] != 1 || resp.Total != 1 {
+			t.Errorf("limit=%s: counts=%v total=%d, want configs=1 total=1",
+				limit, resp.Counts, resp.Total)
+		}
+	}
+}
+
 func TestHandleGetStack_ACLDenied(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{

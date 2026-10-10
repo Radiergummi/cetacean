@@ -11,8 +11,10 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/jgf"
 	"github.com/radiergummi/cetacean/internal/api/sse"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -322,6 +324,49 @@ func TestHandleTopology_JGF(t *testing.T) {
 
 	if doc.Graphs[1].ID != "placement" {
 		t.Errorf("graph[1].id=%q, want placement", doc.Graphs[1].ID)
+	}
+}
+
+// Two readable services sharing a network the caller cannot read must not
+// name that network in any rendering, as MCP's get_topology already doesn't.
+func TestHandleTopology_OmitsUnreadableNetworks(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "hidden-net", Driver: "overlay"})
+	for _, id := range []string{"svc1", "svc2"} {
+		c.SetService(swarm.Service{
+			ID:       id,
+			Spec:     swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web-" + id}},
+			Endpoint: swarm.Endpoint{VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}}},
+		})
+	}
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:web-*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+	h := newTestHandlers(t, withCache(c), withACL(e))
+
+	for name, handle := range map[string]http.HandlerFunc{
+		"jgf":     h.HandleTopology,
+		"graphml": h.HandleTopologyGraphML,
+		"dot":     h.HandleTopologyDOT,
+	} {
+		req := httptest.NewRequest("GET", "/topology", nil)
+		req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "u"}))
+		w := httptest.NewRecorder()
+		handle(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: status=%d, want 200", name, w.Code)
+		}
+		if body := w.Body.String(); strings.Contains(body, "hidden-net") ||
+			strings.Contains(body, "net1") {
+			t.Errorf("%s names the unreadable network: %s", name, body)
+		}
 	}
 }
 

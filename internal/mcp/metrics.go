@@ -366,12 +366,8 @@ func (s *Server) serviceMetricSelector(ctx context.Context, id string) (string, 
 		return "", "", err
 	}
 
-	if !ok {
+	if !ok || s.checkRead(ctx, "service", service.Spec.Name) != nil {
 		return "", "", fmt.Errorf("service %q not found", id)
-	}
-
-	if err := s.checkRead(ctx, "service", service.Spec.Name); err != nil {
-		return "", "", err
 	}
 
 	return service.Spec.Name,
@@ -387,12 +383,8 @@ func (s *Server) nodeMetricSelector(ctx context.Context, id string) (string, str
 		return "", "", err
 	}
 
-	if !ok {
+	if !ok || s.checkRead(ctx, "node", nodeACLName(node)) != nil {
 		return "", "", fmt.Errorf("node %q not found", id)
-	}
-
-	if err := s.checkRead(ctx, "node", nodeACLName(node)); err != nil {
-		return "", "", err
 	}
 
 	selector := instanceSelector(node)

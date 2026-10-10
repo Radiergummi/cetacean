@@ -11,7 +11,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // readOnlyPolicy grants read on the supplied resource patterns to all
@@ -161,6 +160,28 @@ func TestReadResource_NoPolicyAllowsAll(t *testing.T) {
 	}
 }
 
+// The resource returns the newest readable entries, so a burst of unreadable
+// ones must not push what the caller may see off the page.
+func TestReadHistoryResource_FiltersBeforeThePageIsCut(t *testing.T) {
+	c := cache.New(nil)
+	c.History().Append(cache.HistoryEntry{Type: cache.EventService, Name: "public-api"})
+	for range 150 {
+		c.History().Append(cache.HistoryEntry{Type: cache.EventService, Name: "secret-svc"})
+	}
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(readOnlyPolicy("service:public-*"))
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	body, err := srv.readResource(ctxWithIdentity(), "cetacean://history")
+	if err != nil {
+		t.Fatalf("readResource: %v", err)
+	}
+	if !strings.Contains(body, "public-api") {
+		t.Errorf("the readable entry fell off the page: %s", body)
+	}
+}
+
 func TestReadHistoryResource_ACLFilters(t *testing.T) {
 	c := cache.New(nil)
 	c.History().Append(cache.HistoryEntry{
@@ -188,102 +209,6 @@ func TestReadHistoryResource_ACLFilters(t *testing.T) {
 	}
 	if strings.Contains(body, "secret-svc") {
 		t.Errorf("denied entry leaked into history: %s", body)
-	}
-}
-
-func TestFilterSearchResults_HidesDeniedServices(t *testing.T) {
-	raw := cluster.SearchResults{
-		Hits: map[string][]cluster.SearchResult{
-			"services": {
-				{Type: "services", ID: "svc1", Name: "public-api"},
-				{Type: "services", ID: "svc2", Name: "public-web"},
-				{Type: "services", ID: "svc3", Name: "secret-svc"},
-			},
-		},
-		Counts: map[string]int{"services": 3},
-		Total:  3,
-	}
-
-	e := acl.NewEvaluator()
-	e.SetPolicy(readOnlyPolicy("service:public-*"))
-
-	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
-
-	out := srv.filterSearchResults(ctxWithIdentity(), raw)
-
-	hits := out.Hits["services"]
-	if len(hits) != 2 {
-		t.Fatalf("expected 2 visible service hits, got %d (%+v)", len(hits), hits)
-	}
-	for _, h := range hits {
-		if !strings.HasPrefix(h.Name, "public-") {
-			t.Errorf("denied service leaked into search: %s", h.Name)
-		}
-	}
-	if out.Counts["services"] != 2 {
-		t.Errorf("services count = %d, want 2", out.Counts["services"])
-	}
-	if out.Total != 2 {
-		t.Errorf("total = %d, want 2", out.Total)
-	}
-}
-
-func TestFilterSearchResults_NilEvaluatorPassesThrough(t *testing.T) {
-	raw := cluster.SearchResults{
-		Hits:   map[string][]cluster.SearchResult{"services": {{Name: "anything"}}},
-		Counts: map[string]int{"services": 1},
-		Total:  1,
-	}
-
-	srv := newResourceTestServer(t, cache.New(nil)) // no ACL evaluator
-
-	out := srv.filterSearchResults(ctxWithIdentity(), raw)
-	if out.Total != 1 {
-		t.Errorf("expected pass-through total 1, got %d", out.Total)
-	}
-}
-
-func TestFilterSearchResults_TasksKeyOnID(t *testing.T) {
-	raw := cluster.SearchResults{
-		Hits: map[string][]cluster.SearchResult{
-			"tasks": {{Type: "tasks", ID: "anything-task", Name: "web.1"}},
-		},
-		Counts: map[string]int{"tasks": 1},
-		Total:  1,
-	}
-
-	e := acl.NewEvaluator()
-	// Allow task with a different ID; the fixture's ID does not match.
-	e.SetPolicy(readOnlyPolicy("task:other-*"))
-
-	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
-
-	out := srv.filterSearchResults(ctxWithIdentity(), raw)
-	if hits := out.Hits["tasks"]; len(hits) != 0 {
-		t.Errorf("expected task hidden by task: ACL, got %+v", hits)
-	}
-}
-
-func TestFilterSearchResults_DropsTypeWhenAllDenied(t *testing.T) {
-	raw := cluster.SearchResults{
-		Hits: map[string][]cluster.SearchResult{
-			"services": {{Type: "services", ID: "svc1", Name: "secret-svc"}},
-		},
-		Counts: map[string]int{"services": 1},
-		Total:  1,
-	}
-
-	e := acl.NewEvaluator()
-	e.SetPolicy(readOnlyPolicy("service:public-*"))
-
-	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = e })
-
-	out := srv.filterSearchResults(ctxWithIdentity(), raw)
-	if _, ok := out.Hits["services"]; ok {
-		t.Errorf("type entry should be dropped when all denied, got %+v", out.Hits)
-	}
-	if out.Total != 0 {
-		t.Errorf("total = %d, want 0", out.Total)
 	}
 }
 
@@ -461,4 +386,120 @@ func TestCanReadAnyOfTypeSharesTheProjection(t *testing.T) {
 			t.Error("a zero-grant caller must not be told a service changed")
 		}
 	})
+}
+
+// find counts every match, not just the returned page, so the count has to be
+// taken after the read filter.
+func TestFindCountsOnlyReadableBeyondThePage(t *testing.T) {
+	c := cache.New(nil)
+	for _, name := range []string{"acme-a", "acme-b", "acme-c", "acme-d"} {
+		c.SetService(swarm.Service{
+			ID:   "id-" + name,
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name}},
+		})
+	}
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(readOnlyPolicy("service:acme-a"))
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	td, ok := srv.findTool("find")
+	if !ok {
+		t.Fatal("find not registered")
+	}
+
+	for _, limit := range []int{1, 3} {
+		out, err := td.handler(ctxWithIdentity(), newCallToolRequest("find", map[string]any{
+			"query": "acme",
+			"limit": limit,
+		}))
+		if err != nil {
+			t.Fatalf("handler: %v", err)
+		}
+
+		var got findResult
+		if err := json.Unmarshal([]byte(out), &got); err != nil {
+			t.Fatalf("unmarshal: %v: %s", err, out)
+		}
+		if got.Total != 1 || got.Counts["services"] != 1 {
+			t.Errorf("limit=%d: total=%d counts=%v, want 1", limit, got.Total, got.Counts)
+		}
+	}
+}
+
+// REST refuses /cluster to an identity holding no grant; the MCP twins of that
+// aggregate must refuse it too.
+func TestClusterAggregatesRequireAGrant(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"*"},
+		Audience:    []string{"user:somebody-else"},
+		Permissions: []string{"read"},
+	}}})
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	if _, err := srv.readResource(ctxWithIdentity(), "cetacean://cluster"); err == nil {
+		t.Error("cetacean://cluster answered a caller holding no grant")
+	}
+
+	td, ok := srv.findTool("get_cluster_status")
+	if !ok {
+		t.Fatal("get_cluster_status not registered")
+	}
+	if _, err := td.handler(
+		ctxWithIdentity(), newCallToolRequest("get_cluster_status", nil),
+	); err == nil {
+		t.Error("get_cluster_status answered a caller holding no grant")
+	}
+
+	e.SetPolicy(readOnlyPolicy("service:web"))
+	if _, err := srv.readResource(ctxWithIdentity(), "cetacean://cluster"); err != nil {
+		t.Errorf("cetacean://cluster refused a caller holding a grant: %v", err)
+	}
+}
+
+// docs/mcp.md promises an unreadable resource reads exactly like a missing one,
+// so the error must not differ by class, wording or the name it discloses.
+func TestReadDenialLooksLikeNotFound(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "secret-svc"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(readOnlyPolicy("service:public-*"))
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	_, denied := srv.readResource(ctxWithIdentity(), "cetacean://services/svc1")
+	_, missing := srv.readResource(ctxWithIdentity(), "cetacean://services/svc2")
+	if denied == nil || missing == nil {
+		t.Fatalf("denied=%v missing=%v, want both to fail", denied, missing)
+	}
+	if want := strings.ReplaceAll(missing.Error(), "svc2", "svc1"); denied.Error() != want {
+		t.Errorf("denied read = %q, want %q", denied, want)
+	}
+
+	td, ok := srv.findTool("watch")
+	if !ok {
+		t.Fatal("watch not registered")
+	}
+	_, denied = td.handler(ctxWithIdentity(), newCallToolRequest("watch", map[string]any{
+		"service": "svc1",
+	}))
+	_, missing = td.handler(ctxWithIdentity(), newCallToolRequest("watch", map[string]any{
+		"service": "svc2",
+	}))
+	if denied == nil || missing == nil {
+		t.Fatalf("denied=%v missing=%v, want both to fail", denied, missing)
+	}
+	if want := strings.ReplaceAll(missing.Error(), "svc2", "svc1"); denied.Error() != want {
+		t.Errorf("denied watch = %q, want %q", denied, want)
+	}
 }

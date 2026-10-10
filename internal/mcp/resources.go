@@ -270,6 +270,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 
 	switch resourceType {
 	case "cluster":
+		if err := s.requireAnyGrant(ctx); err != nil {
+			return nil, err
+		}
 		return newClusterOverview(s.cache.Snapshot()), nil
 
 	case "recommendations":
@@ -284,12 +287,12 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		), nil
 
 	case "history":
-		// Named after filtering, never before: filterHistory keys a task's ACL
+		// Named after filtering, never before: the read filter keys a task's ACL
 		// check on its ID, which is what the resolver resolves parentage from.
-		return nameHistoryTasks(
-			s.cache,
-			s.filterHistory(ctx, s.cache.History().List(cache.HistoryQuery{Limit: 100})),
-		), nil
+		return nameHistoryTasks(s.cache, s.cache.History().List(cache.HistoryQuery{
+			Limit:   100,
+			Visible: cluster.HistoryReadable(s.readPredicate(ctx)),
+		})), nil
 
 	case "nodes":
 		if resourceID == "" {
@@ -299,7 +302,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := s.checkRead(ctx, "node", nodeACLName(node)); err != nil {
+		if err := s.checkReadable(ctx, uri, "node", nodeACLName(node)); err != nil {
 			return nil, err
 		}
 		return node, nil
@@ -312,7 +315,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := s.checkRead(ctx, "service", svc.Spec.Name); err != nil {
+		if err := s.checkReadable(ctx, uri, "service", svc.Spec.Name); err != nil {
 			return nil, err
 		}
 		if subResource == "logs" {
@@ -333,7 +336,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := s.checkRead(ctx, "task", task.ID); err != nil {
+		if err := s.checkReadable(ctx, uri, "task", task.ID); err != nil {
 			return nil, err
 		}
 		return s.readableEnrichedTask(ctx, task), nil
@@ -349,7 +352,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if !ok {
 			return nil, notFound(uri)
 		}
-		if err := s.checkRead(ctx, "stack", resourceID); err != nil {
+		if err := s.checkReadable(ctx, uri, "stack", resourceID); err != nil {
 			return nil, err
 		}
 		if subResource == "compose" {
@@ -367,7 +370,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := s.checkRead(ctx, "config", cfg.Spec.Name); err != nil {
+		if err := s.checkReadable(ctx, uri, "config", cfg.Spec.Name); err != nil {
 			return nil, err
 		}
 		return cfg, nil
@@ -380,7 +383,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := s.checkRead(ctx, "secret", sec.Spec.Name); err != nil {
+		if err := s.checkReadable(ctx, uri, "secret", sec.Spec.Name); err != nil {
 			return nil, err
 		}
 		return cluster.RedactSecret(sec), nil
@@ -393,7 +396,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := s.checkRead(ctx, "network", net.Name); err != nil {
+		if err := s.checkReadable(ctx, uri, "network", net.Name); err != nil {
 			return nil, err
 		}
 		return net, nil
@@ -407,7 +410,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if !ok {
 			return nil, notFound(uri)
 		}
-		if err := s.checkRead(ctx, "volume", resourceID); err != nil {
+		if err := s.checkReadable(ctx, uri, "volume", resourceID); err != nil {
 			return nil, err
 		}
 		return vol, nil
@@ -431,4 +434,13 @@ func (s *Server) readServiceLogs(ctx context.Context, serviceID string) (any, er
 
 func notFound(uri string) error {
 	return fmt.Errorf("resource not found: %s", uri)
+}
+
+// checkReadable is checkRead for the resource at uri, answering a denial with
+// the error a missing resource gets, so a probe cannot tell the two apart.
+func (s *Server) checkReadable(ctx context.Context, uri, resourceType, name string) error {
+	if s.checkRead(ctx, resourceType, name) != nil {
+		return notFound(uri)
+	}
+	return nil
 }

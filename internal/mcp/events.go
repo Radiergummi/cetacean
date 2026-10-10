@@ -77,22 +77,20 @@ func (s *Server) toolGetEvents(
 		return "", err
 	}
 
-	// Every filter but the ACL one is pushed into the walk, so the ring copies
-	// what matched rather than everything it holds. The limit stays the whole
-	// ring on purpose: the ACL filter runs after the read and `total` has to
-	// count what the caller may read, so bounding the copy would skew it.
-	entries := history.List(cache.HistoryQuery{
+	// Every filter is pushed into the walk, so the ring copies what matched
+	// rather than everything it holds. The limit stays the whole ring on
+	// purpose: `total` counts everything the caller may read.
+	matched := history.List(cache.HistoryQuery{
 		ResourceID: resource,
 		Types:      types,
 		Limit:      history.Size(),
 		After:      since,
 		Before:     until,
+		Visible:    cluster.HistoryReadable(s.readPredicate(ctx)),
 	})
 
 	// Task naming runs after the cut, because a name only matters for an entry
 	// that is returned and every lookup takes the cache's read lock.
-	matched := s.filterHistory(ctx, entries)
-
 	total := len(matched)
 	truncated := total > limit
 	if truncated {

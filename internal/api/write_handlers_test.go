@@ -19,6 +19,8 @@ import (
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/errdefs"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 
@@ -3459,6 +3461,61 @@ func TestHandleCreateConfig_OK(t *testing.T) {
 	}
 	if loc := w.Header().Get("Location"); loc != "/configs/new-cfg-id" {
 		t.Errorf("Location=%q, want /configs/new-cfg-id", loc)
+	}
+}
+
+// A create answers with the same representation GET does, cross-references
+// filtered to the services the caller may read.
+func TestHandleCreateDataResource_FiltersServiceRefs(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID:   "new-id",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "my-data"}},
+	})
+	c.SetSecret(swarm.Secret{
+		ID:   "new-id",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "my-data"}},
+	})
+	c.SetService(swarm.Service{
+		ID: "svc-hidden",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "hidden-svc"},
+			TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{
+				Configs: []*swarm.ConfigReference{{ConfigID: "new-id"}},
+				Secrets: []*swarm.SecretReference{{SecretID: "new-id"}},
+			}},
+		},
+	})
+
+	wc := &mockWriteClient{
+		createConfigFn: func(context.Context, swarm.ConfigSpec) (string, error) { return "new-id", nil },
+		createSecretFn: func(context.Context, swarm.SecretSpec) (string, error) { return "new-id", nil },
+	}
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"config:*", "secret:*"},
+		Audience:    []string{"*"},
+		Permissions: []string{"read", "write"},
+	}}})
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc), withACL(e),
+		withOpsLevel(config.OpsConfiguration))
+
+	for name, handle := range map[string]http.HandlerFunc{
+		"config": h.HandleCreateConfig,
+		"secret": h.HandleCreateSecret,
+	} {
+		body := `{"name":"my-data","data":"aGVsbG8="}`
+		req := httptest.NewRequest("POST", "/"+name+"s", strings.NewReader(body))
+		req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "u"}))
+		w := httptest.NewRecorder()
+		handle(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Fatalf("%s: status=%d, want 201; body: %s", name, w.Code, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), "hidden-svc") {
+			t.Errorf("%s create names a service the caller cannot read: %s", name, w.Body.String())
+		}
 	}
 }
 

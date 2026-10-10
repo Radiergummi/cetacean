@@ -39,13 +39,17 @@ type SearchResults struct {
 	Total  int                       `json:"total"`
 }
 
-// Search returns matches across all swarm resource types.
-//
-// Each per-type slice in Hits is capped at limit (0 means up to 1000), while
-// Counts always reports the pre-cap total so callers can show "X matches" even
-// when displaying a small subset. Secret data is never returned; RedactSecret
-// is applied where applicable.
-func Search(ctx context.Context, c *cache.Cache, query string, limit int) SearchResults {
+// Search returns the matches canRead admits across every resource type; a nil
+// canRead admits all. Hits are capped per type at limit (0 means 1000), while
+// Counts is the readable pre-cap total, for "X matches" affordances. Secret
+// data is never returned.
+func Search(
+	ctx context.Context,
+	c *cache.Cache,
+	query string,
+	limit int,
+	canRead func(resource string) bool,
+) SearchResults {
 	if limit == 0 || limit > 1000 {
 		limit = 1000
 	}
@@ -77,7 +81,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	go func() {
 		defer wg.Done()
 		var hits []swarm.Service
-		count := 0
 		c.EachService(func(s swarm.Service) bool {
 			if ctx.Err() != nil {
 				return false
@@ -89,11 +92,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 			if !hit {
 				hit = labelsMatch(s.Spec.Labels, ql)
 			}
-			if !hit {
-				return true
-			}
-			count++
-			if len(hits) < limit {
+			if hit {
 				hits = append(hits, s)
 			}
 
@@ -104,6 +103,9 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 			// would report a truncated total as the whole one.
 			return
 		}
+		hits, count := readable(hits, canRead, limit, func(s swarm.Service) string {
+			return "service:" + s.Spec.Name
+		})
 
 		// RunningTaskCount takes the read lock, so it runs out here rather than
 		// inside the scan that already holds it.
@@ -129,16 +131,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		defer wg.Done()
 		stacks := c.ListStacks()
 		var matches []SearchResult
-		count := 0
 		for _, s := range stacks {
 			if ctx.Err() != nil {
 				return
 			}
 			if !ContainsFold(s.Name, ql) {
-				continue
-			}
-			count++
-			if len(matches) >= limit {
 				continue
 			}
 			matches = append(matches, SearchResult{
@@ -148,6 +145,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				Detail: fmt.Sprintf("%d services", len(s.Services)),
 			})
 		}
+		matches, count := readable(matches, canRead, limit, resourceOf("stack:"))
 		allResults[stStacks] = typeResults{"stacks", matches, count}
 	}()
 
@@ -155,7 +153,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	go func() {
 		defer wg.Done()
 		var matches []SearchResult
-		count := 0
 		c.EachNode(func(n swarm.Node) bool {
 			if ctx.Err() != nil {
 				return false
@@ -168,10 +165,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(n.Spec.Labels, ql)
 			}
 			if !hit {
-				return true
-			}
-			count++
-			if len(matches) >= limit {
 				return true
 			}
 			matches = append(matches, SearchResult{
@@ -187,6 +180,13 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		if ctx.Err() != nil {
 			return
 		}
+		// A node's ACL name falls back to its ID, as everywhere else.
+		matches, count := readable(matches, canRead, limit, func(sr SearchResult) string {
+			if sr.Name == "" {
+				return "node:" + sr.ID
+			}
+			return "node:" + sr.Name
+		})
 		allResults[stNodes] = typeResults{"nodes", matches, count}
 	}()
 
@@ -203,8 +203,9 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 			return true
 		})
 
-		var hits []swarm.Task
-		count := 0
+		// IDs rather than tasks: every match is held until the read filter has
+		// run, and a broad query matches most of the task table.
+		var ids []string
 		c.EachTask(func(t swarm.Task) bool {
 			if ctx.Err() != nil {
 				return false
@@ -216,12 +217,8 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 			if !hit && t.Spec.ContainerSpec != nil {
 				hit = labelsMatch(t.Spec.ContainerSpec.Labels, ql)
 			}
-			if !hit {
-				return true
-			}
-			count++
-			if len(hits) < limit {
-				hits = append(hits, t)
+			if hit {
+				ids = append(ids, t.ID)
 			}
 
 			return true
@@ -229,12 +226,17 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		if ctx.Err() != nil {
 			return
 		}
+		ids, count := readable(ids, canRead, limit, func(id string) string { return "task:" + id })
 
 		// TaskName needs the whole service, and GetService takes the read lock
 		// the scan above was holding — so naming happens out here, and only for
 		// the tasks that survived.
-		matches := make([]SearchResult, 0, len(hits))
-		for _, t := range hits {
+		matches := make([]SearchResult, 0, len(ids))
+		for _, id := range ids {
+			t, ok := c.GetTask(id)
+			if !ok {
+				continue
+			}
 			var svc *swarm.Service
 			if s, ok := c.GetService(t.ServiceID); ok {
 				svc = &s
@@ -258,7 +260,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	go func() {
 		defer wg.Done()
 		var matches []SearchResult
-		count := 0
 		c.EachConfig(func(cfg swarm.Config) bool {
 			if ctx.Err() != nil {
 				return false
@@ -268,10 +269,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(cfg.Spec.Labels, ql)
 			}
 			if !hit {
-				return true
-			}
-			count++
-			if len(matches) >= limit {
 				return true
 			}
 			matches = append(matches, SearchResult{
@@ -286,6 +283,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		if ctx.Err() != nil {
 			return
 		}
+		matches, count := readable(matches, canRead, limit, resourceOf("config:"))
 		allResults[stConfigs] = typeResults{"configs", matches, count}
 	}()
 
@@ -293,7 +291,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	go func() {
 		defer wg.Done()
 		var matches []SearchResult
-		count := 0
 		c.EachSecret(func(s swarm.Secret) bool {
 			if ctx.Err() != nil {
 				return false
@@ -304,10 +301,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(s.Spec.Labels, ql)
 			}
 			if !hit {
-				return true
-			}
-			count++
-			if len(matches) >= limit {
 				return true
 			}
 			matches = append(matches, SearchResult{
@@ -322,6 +315,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		if ctx.Err() != nil {
 			return
 		}
+		matches, count := readable(matches, canRead, limit, resourceOf("secret:"))
 		allResults[stSecrets] = typeResults{"secrets", matches, count}
 	}()
 
@@ -329,7 +323,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	go func() {
 		defer wg.Done()
 		var matches []SearchResult
-		count := 0
 		c.EachNetwork(func(n network.Summary) bool {
 			if ctx.Err() != nil {
 				return false
@@ -339,10 +332,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(n.Labels, ql)
 			}
 			if !hit {
-				return true
-			}
-			count++
-			if len(matches) >= limit {
 				return true
 			}
 			matches = append(matches, SearchResult{
@@ -357,6 +346,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		if ctx.Err() != nil {
 			return
 		}
+		matches, count := readable(matches, canRead, limit, resourceOf("network:"))
 		allResults[stNetworks] = typeResults{"networks", matches, count}
 	}()
 
@@ -364,7 +354,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	go func() {
 		defer wg.Done()
 		var matches []SearchResult
-		count := 0
 		c.EachVolume(func(v volume.Volume) bool {
 			if ctx.Err() != nil {
 				return false
@@ -374,10 +363,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				hit = labelsMatch(v.Labels, ql)
 			}
 			if !hit {
-				return true
-			}
-			count++
-			if len(matches) >= limit {
 				return true
 			}
 			matches = append(matches, SearchResult{
@@ -392,6 +377,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		if ctx.Err() != nil {
 			return
 		}
+		matches, count := readable(matches, canRead, limit, resourceOf("volume:"))
 		allResults[stVolumes] = typeResults{"volumes", matches, count}
 	}()
 
@@ -410,6 +396,33 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		out.Total += tr.count
 	}
 	return out
+}
+
+// readable keeps the hits canRead admits, returning at most limit of them and
+// how many there were. It runs after a scan, never inside one: the ACL resolver
+// reads the cache, whose read lock the scan holds.
+func readable[T any](
+	hits []T,
+	canRead func(resource string) bool,
+	limit int,
+	resource func(T) string,
+) ([]T, int) {
+	if canRead != nil {
+		kept := hits[:0]
+		for _, hit := range hits {
+			if canRead(resource(hit)) {
+				kept = append(kept, hit)
+			}
+		}
+		hits = kept
+	}
+
+	return hits[:min(len(hits), limit)], len(hits)
+}
+
+// resourceOf names a search hit for ACL by its resource name.
+func resourceOf(prefix string) func(SearchResult) string {
+	return func(sr SearchResult) string { return prefix + sr.Name }
 }
 
 // ContainsFold reports whether s contains substr using case-insensitive

@@ -52,7 +52,7 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 
 			return SecretResponse{
 				Secret:   sec,
-				Services: h.cache.ServicesUsingSecret(id),
+				Services: h.filterServiceRefs(r, h.cache.ServicesUsingSecret(id)),
 			}, true
 		},
 	})

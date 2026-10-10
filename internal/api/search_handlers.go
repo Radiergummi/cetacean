@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -22,35 +21,9 @@ type searchResult struct {
 	State  string `json:"state,omitempty"`
 }
 
-// searchACLPrefix maps cluster.Search's plural type keys to the ACL resource
-// prefix used elsewhere in the codebase (service_handlers.go etc.). Kept as
-// an explicit map so a future irregular plural ("policies") doesn't silently
-// produce a wrong ACL key.
-var searchACLPrefix = map[string]string{
-	"services": "service:",
-	"stacks":   "stack:",
-	"nodes":    "node:",
-	"tasks":    "task:",
-	"configs":  "config:",
-	"secrets":  "secret:",
-	"networks": "network:",
-	"volumes":  "volume:",
-}
-
-// aclResourceFor returns the ACL resource string for a search result.
-// Tasks key on the task ID, every other type keys on the resource name.
-func aclResourceFor(resourceType, name, id string) string {
-	prefix := searchACLPrefix[resourceType]
-	if resourceType == "tasks" {
-		return prefix + id
-	}
-	return prefix + name
-}
-
 // HandleSearch performs a cross-resource global search via the shared cluster
-// layer, then applies ACL filtering. Per-type counts and the grand total
-// reflect pre-cap matches (after ACL filtering) so the UI can show "X matches"
-// even when only the first N are displayed.
+// layer. Per-type counts and the grand total reflect the readable pre-cap
+// matches so the UI can show "X matches" even when only the first N are displayed.
 func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	if !h.requireAnyGrant(w, r) {
 		return
@@ -73,34 +46,15 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	raw := cluster.Search(r.Context(), h.cache, q, limit)
+	raw := cluster.Search(
+		r.Context(), h.cache, q, limit,
+		h.acl.Checker(auth.IdentityFromContext(r.Context()), "read"),
+	)
 
-	identity := auth.IdentityFromContext(r.Context())
 	results := make(map[string][]searchResult, len(raw.Hits))
-	counts := make(map[string]int, len(raw.Counts))
-	total := 0
-	for resourceType, count := range raw.Counts {
-		hits := raw.Hits[resourceType]
-		filtered := acl.Filter(
-			h.acl,
-			identity,
-			"read",
-			hits,
-			func(sr cluster.SearchResult) string {
-				return aclResourceFor(resourceType, sr.Name, sr.ID)
-			},
-		)
-		// Adjust the pre-cap count by the number of visible-page denials. We
-		// assume the visible-page ACL rate generalizes to the pre-cap set; this
-		// is the same approximation the old handler used.
-		removed := len(hits) - len(filtered)
-		visibleCount := count - removed
-		if visibleCount <= 0 {
-			continue
-		}
-
-		converted := make([]searchResult, len(filtered))
-		for i, sr := range filtered {
+	for resourceType, hits := range raw.Hits {
+		converted := make([]searchResult, len(hits))
+		for i, sr := range hits {
 			converted[i] = searchResult{
 				ID:     sr.ID,
 				Name:   sr.Name,
@@ -110,8 +64,6 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 
 		results[resourceType] = converted
-		counts[resourceType] = visibleCount
-		total += visibleCount
 	}
 
 	// This body echoes ?q= verbatim beside authenticated content, which is
@@ -123,8 +75,8 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		NewDetailResponse(r.Context(), "/search", "SearchResult", SearchResponse{
 			Query:   q,
 			Results: results,
-			Counts:  counts,
-			Total:   total,
+			Counts:  raw.Counts,
+			Total:   raw.Total,
 		}),
 	)
 }

@@ -358,22 +358,33 @@ func serviceRefs(s swarm.Service) refSet {
 }
 
 func (c *Cache) notifyRefChanges(old, new refSet) {
-	diffNotify := func(typ EventType, oldSet, newSet map[string]bool) {
+	// Named after the referenced resource, which is what every scoped stream
+	// authorizes on; volumes are keyed by name already.
+	diffNotify := func(typ EventType, oldSet, newSet map[string]bool, name func(string) string) {
 		for id := range oldSet {
 			if !newSet[id] {
-				c.notify(Event{Type: typ, Action: "ref_changed", ID: id})
+				c.notify(Event{Type: typ, Action: "ref_changed", ID: id, Name: name(id)})
 			}
 		}
 		for id := range newSet {
 			if !oldSet[id] {
-				c.notify(Event{Type: typ, Action: "ref_changed", ID: id})
+				c.notify(Event{Type: typ, Action: "ref_changed", ID: id, Name: name(id)})
 			}
 		}
 	}
-	diffNotify(EventConfig, old.configs, new.configs)
-	diffNotify(EventSecret, old.secrets, new.secrets)
-	diffNotify(EventNetwork, old.networks, new.networks)
-	diffNotify(EventVolume, old.volumes, new.volumes)
+	diffNotify(EventConfig, old.configs, new.configs, func(id string) string {
+		cfg, _ := c.GetConfig(id)
+		return cfg.Spec.Name
+	})
+	diffNotify(EventSecret, old.secrets, new.secrets, func(id string) string {
+		sec, _ := c.GetSecret(id)
+		return sec.Spec.Name
+	})
+	diffNotify(EventNetwork, old.networks, new.networks, func(id string) string {
+		net, _ := c.GetNetwork(id)
+		return net.Name
+	})
+	diffNotify(EventVolume, old.volumes, new.volumes, func(id string) string { return id })
 }
 
 // --- Nodes ---

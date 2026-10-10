@@ -49,7 +49,7 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 
 			return ConfigResponse{
 				Config:   cfg,
-				Services: h.cache.ServicesUsingConfig(id),
+				Services: h.filterServiceRefs(r, h.cache.ServicesUsingConfig(id)),
 			}, true
 		},
 	})
