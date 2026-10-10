@@ -71,7 +71,7 @@ func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Request) {
-	handlePatchLabels(w, r, patchLabelsSpec[swarm.Config]{
+	handlePatchLabels(w, r, h.acl, patchLabelsSpec[swarm.Config]{
 		resource:     "config",
 		pathKey:      "id",
 		typeName:     "ConfigLabels",
@@ -79,5 +79,6 @@ func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Reques
 		getLabels:    func(c swarm.Config) map[string]string { return c.Spec.Labels },
 		update:       h.configWriter.UpdateConfigLabels,
 		conflictCode: "CFG005",
+		stackMember:  true,
 	})
 }

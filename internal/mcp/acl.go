@@ -317,6 +317,16 @@ func (s *Server) checkWrite(ctx context.Context, resourceType, resourceName stri
 	return nil
 }
 
+// writePredicate is checkWrite in the predicate form the shared rules in
+// internal/cluster take.
+func (s *Server) writePredicate(ctx context.Context) func(resource string) bool {
+	identity := auth.IdentityFromContext(ctx)
+
+	return func(resource string) bool {
+		return identity == nil || s.acl.Can(identity, "write", resource)
+	}
+}
+
 // checkServiceWrite resolves the service name from the cache so the ACL key
 // is `service:<name>` rather than `service:<id>`, matching REST behaviour.
 func (s *Server) checkServiceWrite(ctx context.Context, id string) error {

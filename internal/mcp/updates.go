@@ -351,12 +351,34 @@ func (s *Server) toolUpdateService(
 		return "", err
 	}
 
+	writeClient = stackLabelGuard{writeClient, s.writePredicate(ctx)}
+
 	updated, err := write(writeClient, ctx, id, req, section)
 	if err != nil {
 		return "", err
 	}
 
 	return marshalResult(serviceUpdate(section, updated))
+}
+
+// stackLabelGuard refuses a relabel into a stack the caller may not write,
+// inside the writer's read-modify-write so it compares against Docker's labels.
+type stackLabelGuard struct {
+	DockerWriteClient
+
+	canWrite func(resource string) bool
+}
+
+func (g stackLabelGuard) UpdateServiceLabels(
+	ctx context.Context,
+	id string,
+	mutate func(current map[string]string) (map[string]string, error),
+) (swarm.Service, error) {
+	return g.DockerWriteClient.UpdateServiceLabels(
+		ctx,
+		id,
+		cluster.GuardStackLabel(mutate, g.canWrite),
+	)
 }
 
 // toolUpdateNode is the node counterpart, over the two sections that need the

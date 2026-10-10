@@ -238,7 +238,7 @@ func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request
 }
 
 func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Request) {
-	handlePatchLabels(w, r, patchLabelsSpec[swarm.Service]{
+	handlePatchLabels(w, r, h.acl, patchLabelsSpec[swarm.Service]{
 		resource:     "service",
 		pathKey:      "id",
 		typeName:     "ServiceLabels",
@@ -246,6 +246,7 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 		getLabels:    func(s swarm.Service) map[string]string { return s.Spec.Labels },
 		update:       h.serviceSpec.UpdateServiceLabels,
 		conflictCode: "SVC001",
+		stackMember:  true,
 	})
 }
 
