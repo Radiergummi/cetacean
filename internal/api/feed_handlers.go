@@ -12,6 +12,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
@@ -61,7 +62,7 @@ func (h *Handlers) feedListHandler(
 			BeforeID: beforeID,
 			Limit:    limit,
 		})
-		entries = h.filterHistoryACL(r, entries)
+		entries = cluster.NameHistoryTasks(h.cache, h.filterHistoryACL(r, entries))
 
 		render(w, r, historyFeedData(r, title, entries, beforeID, limit))
 	}
@@ -89,7 +90,7 @@ func (h *Handlers) feedDetailHandler(
 			BeforeID:   beforeID,
 			Limit:      limit,
 		})
-		entries = h.filterHistoryACL(r, entries)
+		entries = cluster.NameHistoryTasks(h.cache, h.filterHistoryACL(r, entries))
 
 		render(w, r, historyFeedData(r, nameFunc(resourceID), entries, beforeID, limit))
 	}
@@ -110,7 +111,7 @@ func (h *Handlers) handleFeedHistory(
 		BeforeID: beforeID,
 		Limit:    limit,
 	})
-	entries = h.filterHistoryACL(r, entries)
+	entries = cluster.NameHistoryTasks(h.cache, h.filterHistoryACL(r, entries))
 
 	render(w, r, historyFeedData(r, "History", entries, beforeID, limit))
 }
@@ -143,7 +144,7 @@ func (h *Handlers) handleFeedSearch(
 		NameContains: q,
 		Limit:        limit,
 	})
-	entries = h.filterHistoryACL(r, entries)
+	entries = cluster.NameHistoryTasks(h.cache, h.filterHistoryACL(r, entries))
 
 	// This feed titles itself with ?q= verbatim beside ACL-filtered entries,
 	// the same BREACH shape HandleSearch opts out of, so it opts out too.

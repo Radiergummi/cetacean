@@ -7213,6 +7213,10 @@ components:
           type: string
         name:
           type: string
+          description: >-
+            The resource's name. A task carries the name Swarm gives it
+            (`webapp.1`, or `webapp.<node ID>` in a global service), or its ID
+            once the task or its service is gone.
         summary:
           type: string
       example:
