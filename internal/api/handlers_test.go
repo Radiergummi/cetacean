@@ -155,10 +155,14 @@ func TestHandleReady_NotReady(t *testing.T) {
 	ch := make(chan struct{}) // not closed = not ready
 	h := newTestHandlers(t, withReady(ch))
 	req := httptest.NewRequest("GET", "/-/ready", nil)
-	w := httptest.NewRecorder()
+	rec := httptest.NewRecorder()
+	w := &statusWriter{ResponseWriter: rec}
 	h.HandleReady(w, req)
-	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("status=%d, want 503", w.Code)
+	if w.status != http.StatusServiceUnavailable {
+		t.Errorf("recorded status=%d, want 503", w.status)
+	}
+	if ct := rec.Result().Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("sent Content-Type = %q, want application/json", ct)
 	}
 }
 
