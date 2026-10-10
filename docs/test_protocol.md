@@ -374,7 +374,7 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 ### Metadata
 - [ ] Shows Cluster ID, Created, Updated, Default Address Pool, Subnet Size, Data Path Port
 
-### Join Commands
+### Join Commands (impactful level)
 - [ ] "Join as Manager" button opens dialog with `docker swarm join` command; Copy button works
 - [ ] "Join as Worker" button opens similar dialog
 
