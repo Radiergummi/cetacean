@@ -415,13 +415,19 @@ func ToSSEEvent(e cache.Event, basePath string) Event {
 		path = basePath + path
 	}
 
+	// A removed task rides on its event for matching only.
+	resource := e.Resource
+	if e.Action == "remove" {
+		resource = nil
+	}
+
 	return Event{
 		AtID:     path,
 		AtType:   ResourceType(e.Type),
 		Type:     string(e.Type),
 		Action:   e.Action,
 		ID:       e.ID,
-		Resource: e.Resource,
+		Resource: resource,
 	}
 }
 
