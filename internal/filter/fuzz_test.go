@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -17,6 +18,7 @@ func FuzzFilterCompile(f *testing.F) {
 		`name ==`, // syntax error: never reaches Evaluate
 		`((((((((((true))))))))))`,
 		`repeat("a", 100000000) != ""`, // deliberately expensive
+		`len(reduce(1..999999, #acc + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "")) > 0`,
 	}
 	for _, s := range seeds {
 		f.Add(s)
@@ -47,7 +49,9 @@ func FuzzFilterCompile(f *testing.F) {
 			return
 		}
 
-		_, _ = Evaluate(prog, env)
+		ctx, cancel := context.WithTimeout(t.Context(), budget/2)
+		defer cancel()
+		_, _ = EvaluateContext(ctx, prog, env)
 
 		if elapsed := time.Since(start); elapsed > budget {
 			t.Fatalf("expression took %s (budget %s): %q", elapsed, budget, expression)

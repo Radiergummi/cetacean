@@ -1,6 +1,8 @@
 package filter
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -9,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/ast"
 	"github.com/expr-lang/expr/vm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -23,7 +26,12 @@ func Compile(expression string) (Program, error) {
 	if prog, ok := compileCache.get(expression); ok {
 		return prog, nil
 	}
-	prog, err := expr.Compile(expression, expr.AsBool())
+	prog, err := expr.Compile(
+		expression,
+		expr.AsBool(),
+		expr.Function(budgetCall, checkBudget),
+		expr.Patch(budgetPatcher{}),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +73,51 @@ func (c *programCache) put(key string, prog Program) {
 	c.mu.Unlock()
 }
 
+// ErrBudget reports that an evaluation outlived its context.
+var ErrBudget = errors.New("filter evaluation budget exhausted")
+
+// Neither name is a token the expression grammar can produce, so an expression
+// can neither call the check itself nor shadow the context it reads.
+const (
+	budgetCall    = "budget check"
+	budgetContext = "budget context"
+)
+
+// budgetPatcher routes every predicate body through checkBudget: expr bounds
+// a run's memory but not its steps, and every loop in the language iterates
+// through a predicate.
+type budgetPatcher struct{}
+
+func (budgetPatcher) Visit(node *ast.Node) {
+	if p, ok := (*node).(*ast.PredicateNode); ok {
+		check := &ast.CallNode{
+			Callee:    &ast.IdentifierNode{Value: budgetCall},
+			Arguments: []ast.Node{&ast.IdentifierNode{Value: budgetContext}},
+		}
+		p.Node = &ast.SequenceNode{Nodes: []ast.Node{check, p.Node}}
+	}
+}
+
+func checkBudget(params ...any) (any, error) {
+	ctx, ok := params[0].(context.Context)
+	if !ok || ctx.Err() != nil {
+		return nil, ErrBudget
+	}
+	return nil, nil
+}
+
 // Evaluate runs a compiled program against an environment map.
 func Evaluate(prog Program, env map[string]any) (bool, error) {
+	return EvaluateContext(context.Background(), prog, env)
+}
+
+// EvaluateContext is Evaluate that stops with ErrBudget once ctx is done,
+// including between iterations of the expression's own loops.
+func EvaluateContext(ctx context.Context, prog Program, env map[string]any) (bool, error) {
+	if ctx.Err() != nil {
+		return false, ErrBudget
+	}
+	env[budgetContext] = ctx
 	out, err := expr.Run(prog, env)
 	if err != nil {
 		return false, err
