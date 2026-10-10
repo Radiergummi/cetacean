@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 						"no excuse:\n  %s\n\nAdd a sweep that reaches them, or add them to "+
 						"excusedUncovered in excused.go with a reason a reader can "+
 						"evaluate. \"Not yet\" is not a reason — that is a coverage gap, "+
-						"and it belongs on the defect list.\n",
+						"and it is excused only as sweepGap, which says so.\n",
 					strings.Join(failures, "\n  "),
 				)
 
