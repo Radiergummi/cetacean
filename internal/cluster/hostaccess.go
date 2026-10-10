@@ -60,11 +60,15 @@ func hostAccess(m mount.Mount) string {
 	case mount.TypeNamedPipe:
 		return "a named pipe mount of " + m.Source
 	case mount.TypeVolume:
-		if m.VolumeOptions != nil && m.VolumeOptions.DriverConfig != nil {
-			return "a volume mount of " + m.Source + " with driver options"
+		if m.VolumeOptions == nil || m.VolumeOptions.DriverConfig == nil {
+			return ""
 		}
 
-		return ""
+		if m.Source == "" {
+			return "an anonymous volume mount with driver options"
+		}
+
+		return "a volume mount of " + m.Source + " with driver options"
 	default:
 		return ""
 	}
