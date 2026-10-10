@@ -30,6 +30,56 @@ func TestHandlerRefusesAnOversizedBody(t *testing.T) {
 	}
 }
 
+// The body cap must not answer for the origin or bearer check, which owe
+// 403 and 401 before anything reads the body.
+func TestGuardsAnswerBeforeTheBodyCap(t *testing.T) {
+	oversized := func() *http.Request {
+		body := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"pad":"` +
+			strings.Repeat("a", maxRequestBytes) + `"}}`
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+
+		return req
+	}
+
+	t.Run("forged origin", func(t *testing.T) {
+		srv := newToolTestServer(
+			t,
+			cache.New(nil),
+			&fakeWriteClient{},
+			config.OpsReadOnly,
+			func(o *Options) { o.AllowedOrigins = []string{"https://good.example"} },
+		)
+		req := oversized()
+		req.Header.Set("Origin", "https://evil.example")
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403", rec.Code)
+		}
+	})
+
+	t.Run("no bearer", func(t *testing.T) {
+		cfg := config.DefaultMCPConfig()
+		cfg.Enabled = true
+		srv, err := New(cache.New(nil), Options{
+			Config:   cfg,
+			OAuth:    oauthServerFor([]byte("test-secret-32-bytes-long-padding")),
+			Resource: testResource,
+		})
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, oversized())
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("status = %d, want 401", rec.Code)
+		}
+	})
+}
+
 func TestHandlerCapsListenStreams(t *testing.T) {
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsReadOnly)
 	for range maxListenStreams {
