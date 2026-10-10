@@ -2,6 +2,7 @@ import CollapsibleSection from "@/components/CollapsibleSection";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -80,6 +81,7 @@ export function EditableTable<T>({
   const [adding, setAdding] = useState(false);
 
   useEscapeCancel(editing, () => cancelEdit());
+  useLeaveGuard(editing);
 
   function openEdit() {
     setDraft([...items]);

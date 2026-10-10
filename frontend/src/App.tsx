@@ -26,6 +26,7 @@ import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "re
 
 const ClusterOverview = lazy(() => import("./pages/ClusterOverview"));
 const ErrorIndex = lazy(() => import("./pages/ErrorIndex"));
+const History = lazy(() => import("./pages/History"));
 const ErrorCodeDetail = lazy(() => import("./pages/ErrorCodeDetail"));
 const ConfigDetail = lazy(() => import("./pages/ConfigDetail"));
 const ConfigList = lazy(() => import("./pages/ConfigList"));
@@ -373,6 +374,10 @@ export default function App() {
                   <Route
                     path="/topology"
                     element={<Topology />}
+                  />
+                  <Route
+                    path="/history"
+                    element={<History />}
                   />
                   <Route
                     path="/recommendations"

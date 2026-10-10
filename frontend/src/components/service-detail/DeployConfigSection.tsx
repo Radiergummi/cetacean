@@ -49,6 +49,7 @@ export function DeployConfigSection({
       serviceResources.Limits?.MemoryBytes != null ||
       serviceResources.Reservations?.NanoCPUs != null ||
       serviceResources.Reservations?.MemoryBytes != null ||
+      (serviceResources.Reservations?.GenericResources?.length ?? 0) > 0 ||
       taskTemplate?.Resources?.Limits?.Pids != null);
 
   const allocation = useMemo(() => {

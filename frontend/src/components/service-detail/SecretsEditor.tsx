@@ -15,6 +15,20 @@ interface SecretsEditorProps {
   onSaved: (secrets: ServiceSecretRef[]) => void;
 }
 
+/**
+ * The target a newly attached secret defaults to: the path a removed secret
+ * vacated in this edit, so a rotation keeps the file the app reads.
+ */
+export function defaultSecretTarget(
+  secretName: string,
+  saved: ServiceSecretRef[],
+  draft: ServiceSecretRef[],
+): string {
+  const vacated = saved.find(({ fileName }) => !draft.some((item) => item.fileName === fileName));
+
+  return vacated?.fileName ?? `/run/secrets/${splitStackPrefix(secretName).name}`;
+}
+
 export function SecretsEditor({
   serviceId,
   secrets,
@@ -40,13 +54,13 @@ export function SecretsEditor({
       .catch(console.warn);
   }, []);
 
-  function handleSecretSelected(secretId: string) {
+  function handleSecretSelected(secretId: string, draft: ServiceSecretRef[]) {
     setNewSecretId(secretId);
 
     const match = availableSecrets.find((option) => option.value === secretId);
 
     if (match) {
-      setNewTargetPath(`/run/secrets/${splitStackPrefix(match.label).name}`);
+      setNewTargetPath(defaultSecretTarget(match.label, secrets, draft));
     }
   }
 
@@ -93,10 +107,10 @@ export function SecretsEditor({
           className="font-mono text-xs"
         />
       )}
-      renderAddKeyCell={() => (
+      renderAddKeyCell={(draft) => (
         <Combobox
           value={newSecretId}
-          onChange={handleSecretSelected}
+          onChange={(secretId) => handleSecretSelected(secretId, draft)}
           options={availableSecrets}
           placeholder="Select secret..."
           allowCustom={false}

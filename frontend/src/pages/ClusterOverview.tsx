@@ -129,7 +129,17 @@ export default function ClusterOverview() {
             <RecommendationSummary />
           </div>
         </CollapsibleSection>
-        <CollapsibleSection title="Recent Activity">
+        <CollapsibleSection
+          title="Recent Activity"
+          controls={
+            <Link
+              to="/history"
+              className="text-sm text-link hover:underline"
+            >
+              View all
+            </Link>
+          }
+        >
           <div className="max-h-80 overflow-y-auto rounded-lg border bg-card p-4">
             <ActivityFeed
               entries={history}

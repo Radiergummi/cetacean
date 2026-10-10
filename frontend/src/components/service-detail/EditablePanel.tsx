@@ -1,6 +1,7 @@
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { showErrorToast } from "@/lib/showErrorToast";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
@@ -55,6 +56,7 @@ export function EditablePanel({
   }
 
   useEscapeCancel(editing, cancelEdit);
+  useLeaveGuard(editing);
 
   function openEdit(event: MouseEvent) {
     event.stopPropagation();

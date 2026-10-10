@@ -18,6 +18,26 @@ const ssePathMap: Record<string, string> = {
   stack: "/stacks",
 };
 
+/**
+ * Fields the list endpoints resolve onto a row but the stream's raw resource
+ * lacks; an update keeps them from the row it replaces.
+ */
+const enrichedFields = ["ServiceName", "NodeHostname"] as const;
+
+function keepEnrichment<T>(cached: T, incoming: T): T {
+  const kept: Record<string, unknown> = {};
+
+  for (const field of enrichedFields) {
+    const value = (cached as Record<string, unknown>)[field];
+
+    if (value !== undefined && (incoming as Record<string, unknown>)[field] === undefined) {
+      kept[field] = value;
+    }
+  }
+
+  return Object.keys(kept).length === 0 ? incoming : { ...incoming, ...kept };
+}
+
 type PageData<T> = FetchResult<CollectionResponse<T>>;
 type InfinitePages<T> = InfiniteData<PageData<T>, number>;
 
@@ -149,7 +169,7 @@ export function useSwarmQuery<T>(
                   data: {
                     ...page.data,
                     items: page.data.items.map((item) =>
-                      getIdRef.current(item) === event.id ? resource : item,
+                      getIdRef.current(item) === event.id ? keepEnrichment(item, resource) : item,
                     ),
                   },
                 })),
