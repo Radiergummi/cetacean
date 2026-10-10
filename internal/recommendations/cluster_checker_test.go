@@ -187,6 +187,39 @@ func TestClusterChecker_ManagerHasWorkloads(t *testing.T) {
 		}
 	})
 
+	// A ready worker that is drained or paused accepts no new tasks either.
+	for _, availability := range []swarm.NodeAvailability{swarm.NodeAvailabilityDrain, swarm.NodeAvailabilityPause} {
+		t.Run("ready "+string(availability)+" worker emits no recommendation", func(t *testing.T) {
+			c := cache.New(nil)
+			c.SetNode(swarm.Node{
+				ID: "m1",
+				Spec: swarm.NodeSpec{
+					Role:         swarm.NodeRoleManager,
+					Availability: swarm.NodeAvailabilityActive,
+				},
+				Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+			})
+			c.SetNode(swarm.Node{
+				ID: "w1",
+				Spec: swarm.NodeSpec{
+					Role:         swarm.NodeRoleWorker,
+					Availability: availability,
+				},
+				Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+			})
+
+			for _, rec := range NewClusterChecker(c).Check(context.Background()) {
+				if rec.Category == CategoryManagerHasWorkloads {
+					t.Errorf(
+						"manager %s told to drain towards a %s worker",
+						rec.TargetID,
+						availability,
+					)
+				}
+			}
+		})
+	}
+
 	t.Run("manager node with drain availability emits no recommendation", func(t *testing.T) {
 		c := cache.New(nil)
 		c.SetNode(swarm.Node{
