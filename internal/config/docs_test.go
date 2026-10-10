@@ -124,6 +124,12 @@ func forEachSourceFile(t *testing.T, fn func(*ast.File)) {
 			continue
 		}
 
+		// env.go names variables the tooling sets, and the generated list is
+		// this scan's own output.
+		if path == "env.go" || path == knownEnvVarsFile {
+			continue
+		}
+
 		found = true
 
 		file, err := parser.ParseFile(fset, path, nil, 0)

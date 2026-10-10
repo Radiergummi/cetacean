@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -133,7 +134,7 @@ func TestResolveBool(t *testing.T) {
 		t.Setenv("TEST_BOOL", "false")
 		flag := true
 		file := false
-		got := resolveBool(&flag, "TEST_BOOL", &file, false)
+		got, _ := resolveBool(&flag, "TEST_BOOL", &file, false)
 		if got != true {
 			t.Errorf("got %v, want true", got)
 		}
@@ -141,7 +142,7 @@ func TestResolveBool(t *testing.T) {
 
 	t.Run("env true", func(t *testing.T) {
 		t.Setenv("TEST_BOOL", "true")
-		got := resolveBool(nil, "TEST_BOOL", nil, false)
+		got, _ := resolveBool(nil, "TEST_BOOL", nil, false)
 		if got != true {
 			t.Errorf("got %v, want true", got)
 		}
@@ -149,25 +150,25 @@ func TestResolveBool(t *testing.T) {
 
 	t.Run("env false", func(t *testing.T) {
 		t.Setenv("TEST_BOOL", "0")
-		got := resolveBool(nil, "TEST_BOOL", nil, true)
+		got, _ := resolveBool(nil, "TEST_BOOL", nil, true)
 		if got != false {
 			t.Errorf("got %v, want false", got)
 		}
 	})
 
-	t.Run("env invalid falls through to file", func(t *testing.T) {
-		t.Setenv("TEST_BOOL", "maybe")
+	t.Run("env invalid is an error, not a fall-through", func(t *testing.T) {
+		t.Setenv("TEST_BOOL", "yes")
 		file := true
-		got := resolveBool(nil, "TEST_BOOL", &file, false)
-		if got != true {
-			t.Errorf("got %v, want true (from file)", got)
+		_, err := resolveBool(nil, "TEST_BOOL", &file, false)
+		if err == nil || !strings.Contains(err.Error(), `TEST_BOOL "yes"`) {
+			t.Errorf("err = %v, want one naming TEST_BOOL and the value", err)
 		}
 	})
 
 	t.Run("file wins when no flag or env", func(t *testing.T) {
 		t.Setenv("TEST_BOOL", "")
 		file := true
-		got := resolveBool(nil, "TEST_BOOL", &file, false)
+		got, _ := resolveBool(nil, "TEST_BOOL", &file, false)
 		if got != true {
 			t.Errorf("got %v, want true", got)
 		}
@@ -175,7 +176,7 @@ func TestResolveBool(t *testing.T) {
 
 	t.Run("default when nothing set", func(t *testing.T) {
 		t.Setenv("TEST_BOOL", "")
-		got := resolveBool(nil, "TEST_BOOL", nil, true)
+		got, _ := resolveBool(nil, "TEST_BOOL", nil, true)
 		if got != true {
 			t.Errorf("got %v, want true", got)
 		}
