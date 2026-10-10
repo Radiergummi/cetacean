@@ -11,6 +11,7 @@ import {
 } from "../../lib/searchConstants";
 import { showErrorToast } from "../../lib/showErrorToast";
 import { getErrorMessage } from "../../lib/utils";
+import { DrainImpactSummary } from "../node-detail/DrainImpactSummary";
 import ResourceName from "../ResourceName";
 import { Spinner } from "../Spinner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -592,6 +593,15 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
                 Confirm
               </button>
             </div>
+          </div>
+        )}
+
+        {pendingConfirm?.action.id === "drain" && (
+          <div className="border-b px-3 py-2.5">
+            <DrainImpactSummary
+              nodeId={(pendingConfirm.args[0] as SearchResult).id}
+              enabled
+            />
           </div>
         )}
 

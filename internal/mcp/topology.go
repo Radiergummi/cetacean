@@ -86,17 +86,7 @@ func (s *Server) drainImpact(
 		s.filterServices(ctx, s.cache.ListServices()),
 	)
 
-	// The candidates are the nodes the caller may read, so a service called
-	// stranded may in fact be placeable on one it cannot see. The view exists
-	// to keep a drain from stranding work, so where the node list was
-	// narrowed, the answer says so.
-	if hidden := len(all) - len(visible); hidden > 0 {
-		graph.Note = fmt.Sprintf(
-			"assessed against the %d node(s) you can read; %d more are hidden by "+
-				"your grants, so a service reported stranded may be placeable on one of them",
-			len(visible), hidden,
-		)
-	}
+	cluster.NoteHiddenNodes(&graph, len(visible), len(all)-len(visible))
 
 	return marshalResult(graph)
 }

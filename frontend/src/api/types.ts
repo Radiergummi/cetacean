@@ -262,6 +262,25 @@ export interface CollectionResponse<T> {
   offset: number;
 }
 
+/**
+ * What draining a node would do: each service with a task on it is `movable`
+ * (with an edge to every node that could take it), `stranded` (`detail` says
+ * why), or `global`. Candidate nodes appear as `node` vertices.
+ */
+export interface DrainImpact {
+  view: "drain-impact";
+  subject?: string | undefined;
+  note?: string | undefined;
+  nodes: {
+    id: string;
+    label: string;
+    type: string;
+    detail?: string | undefined;
+    state?: string | undefined;
+  }[];
+  edges: { source: string; target: string }[];
+}
+
 export interface HistoryEntry {
   "@id"?: string;
   "@type"?: string;
