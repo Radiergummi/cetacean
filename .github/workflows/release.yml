@@ -14,11 +14,45 @@ permissions: {}
 # cache is one input to an attested artifact that the tag itself never built.
 
 jobs:
+  # No ruleset covers tags, so this is what keeps an unsigned one from shipping.
+  # GitHub verifies the signature against the tagger's registered keys; a
+  # lightweight tag has none, and a tag moved since the push names another commit.
+  verify-tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          ref=$(gh api "repos/$REPO/git/ref/tags/$TAG" --jq '"\(.object.type) \(.object.sha)"')
+          read -r type object <<<"$ref"
+          if [ "$type" != tag ]; then
+            echo "::error::$TAG is a lightweight tag. Release tags are signed: git tag -s."
+            exit 1
+          fi
+          tag=$(gh api "repos/$REPO/git/tags/$object" \
+            --jq '"\(.verification.verified) \(.object.sha) \(.verification.reason)"')
+          read -r verified commit reason <<<"$tag"
+          if [ "$verified" != true ]; then
+            echo "::error::$TAG has no verified signature ($reason). Re-tag with git tag -s."
+            exit 1
+          fi
+          if [ "$commit" != "$SHA" ]; then
+            echo "::error::$TAG now points at $commit, not $SHA, which this run was started for."
+            exit 1
+          fi
+
   # The committed SBOM is embedded in the binary, and main is allowed to carry
   # it stale for a run or two: a Dependabot PR merges without one and
   # chore/sbom-sync repairs it afterwards. A release must not go out in that
   # window, so check before anything is built.
   sbom-gate:
+    needs: [verify-tag]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -169,6 +203,14 @@ jobs:
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      # The mirror holds the same index, so the same digest; Docker Hub
+      # subjects are named under docker.io.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: docker.io/${{ vars.DOCKER_HUB_USERNAME }}/cetacean
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
