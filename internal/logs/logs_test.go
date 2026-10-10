@@ -496,6 +496,24 @@ func TestParseDockerLogsReadsAnUnframedTTYStream(t *testing.T) {
 	}
 }
 
+// Docker stamps every line of a TTY stream; its own error arrives unstamped and
+// belongs to no task.
+func TestParseDockerLogsKeepsAnUnstampedTTYErrorUnattributed(t *testing.T) {
+	raw := "2026-10-09T08:12:34.000000000Z com.docker.swarm.task.id=t1 first line\r\n" +
+		"Error grabbing logs: node down\r\n"
+
+	lines, err := ParseDockerLogs(strings.NewReader(raw))
+	if err != nil {
+		t.Fatalf("ParseDockerLogs: %v", err)
+	}
+	if len(lines) != 2 || lines[1].Message != "Error grabbing logs: node down" {
+		t.Fatalf("lines = %+v, want the line and then the error", lines)
+	}
+	if lines[1].Timestamp != "" || lines[1].Attrs != nil {
+		t.Errorf("error line = %+v, want no timestamp and no attrs", lines[1])
+	}
+}
+
 // Docker frames its own errors as a fourth stream, and one can come first.
 func TestParseDockerLogsReadsAStreamOpeningWithASystemError(t *testing.T) {
 	var buf bytes.Buffer
