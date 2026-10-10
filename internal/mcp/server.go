@@ -395,10 +395,11 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 	srv.cancelNotifications = srv.startNotifications()
 
 	httpSrv := mcpserver.NewStreamableHTTPServer(mcpSrv,
-		// Protocol 2026-07-28 has no sessions, and requireModernProtocol
-		// turns away everything older, so there is no session state to keep:
-		// each request is served by its own ephemeral session.
-		mcpserver.WithStateful(false),
+		// Protocol 2026-07-28 has no sessions, and requireSupportedProtocol
+		// holds 2025-11-25 to its sessionless subset, so there is no session
+		// state to keep: each request is served by its own ephemeral session.
+		// WithStateful(false) would not do: it leaves mcp-go minting IDs.
+		mcpserver.WithStateLess(true),
 		mcpserver.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
 			// The bearer-validating middleware (see Handler) stamps an
 			// auth.Identity on r.Context() before mcp-go sees the request.
@@ -410,12 +411,9 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 
 			// server/discover reports this as supportedVersions. mcp-go would
 			// otherwise list every revision it implements, advertising eras
-			// requireModernProtocol turns away and sending a well-behaved
+			// requireSupportedProtocol turns away and sending a well-behaved
 			// client straight into a rejection.
-			return mcpserver.WithSupportedProtocolVersions(
-				ctx,
-				[]string{mcplib.LATEST_PROTOCOL_VERSION},
-			)
+			return mcpserver.WithSupportedProtocolVersions(ctx, SupportedProtocolVersions)
 		}),
 	)
 	srv.httpServer = httpSrv
@@ -443,7 +441,7 @@ func (s *Server) Close() {
 func (s *Server) Handler() http.Handler {
 	// The protocol gate sits innermost so that origin and bearer checks answer
 	// first: an unauthenticated caller learns nothing about what we speak.
-	h := s.requireModernProtocol(s.httpServer)
+	h := s.requireSupportedProtocol(s.httpServer)
 
 	switch s.guard {
 	case guardBearer:

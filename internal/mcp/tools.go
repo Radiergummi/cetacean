@@ -213,6 +213,17 @@ func (s *Server) iconsForTool(name string) []mcplib.Icon {
 	return s.icon("tools", category)
 }
 
+// objectSubschemas spells the always-true schema an `any` field generates as
+// {}. The two mean the same, but 2025-11-25 types a property schema as an
+// object, and the stock SDK refuses a whole tools/list over one boolean.
+func objectSubschemas(properties map[string]any) {
+	for name, schema := range properties {
+		if schema == true {
+			properties[name] = map[string]any{}
+		}
+	}
+}
+
 func (s *Server) registerTools() {
 	tools := s.toolCatalog()
 
@@ -225,6 +236,7 @@ func (s *Server) registerTools() {
 		}
 
 		td.tool.Icons = s.iconsForTool(td.tool.Name)
+		objectSubschemas(td.tool.OutputSchema.Properties)
 
 		// Point the host at this tool's widget, but only if the widget build
 		// actually produced it. A binary built without `npm run build:widgets`
