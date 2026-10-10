@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -248,6 +249,18 @@ func TestLoad_OperationsLevel_Invalid(t *testing.T) {
 	_, err := Load(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for non-integer value")
+	}
+}
+
+func TestLoad_TrustedProxiesErrorNamesTheSettingOnce(t *testing.T) {
+	t.Setenv("CETACEAN_TRUSTED_PROXIES", "banana")
+
+	_, err := Load(nil, nil)
+	if err == nil {
+		t.Fatal("expected error for an invalid proxy entry")
+	}
+	if n := strings.Count(err.Error(), "server.trusted_proxies"); n != 1 {
+		t.Errorf("error names the setting %d times: %v", n, err)
 	}
 }
 
