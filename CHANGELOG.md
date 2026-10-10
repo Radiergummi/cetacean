@@ -69,9 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Attaching a secret, config, or network to a service through the API needs read access to it, as it already did through MCP. An ID Cetacean doesn't know answers `400 SVC021`, and a network name several networks share answers `409 API015`
 - Creating a config or secret through the API checks the write grant on its name, so a grant like `secret:team-*` can create `team-db`
 - A service port with no `TargetPort` is refused with `400 SVC020` instead of being published to nowhere
-- `cetacean healthcheck` reads the config file, TLS settings and a listen address with a host, so the image's `HEALTHCHECK` no longer marks a working server unhealthy
-- In tsnet mode, `/-/health` and `/-/ready` on `server.listen_addr` also answer under `server.base_path`, where `cetacean healthcheck` probes
-- A flag before `healthcheck` no longer starts a second server, and an unknown subcommand is refused
+- `cetacean healthcheck` probes the server its config file, flags and TLS settings describe, including a listen host and tsnet mode with `server.base_path`; flags may precede it, and unknown subcommands are refused
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
