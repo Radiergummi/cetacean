@@ -72,7 +72,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 
 	paged := applyPagination(r.Context(), tasks, p)
 	enriched := cluster.EnrichTasks(h.cache, paged.Items)
-	writeLinkTemplate(w, r, "/tasks/{id}")
+	writeLinkTemplate(w, r, spec.linkTemplate)
 	writeCollectionResponse(
 		w,
 		r,
