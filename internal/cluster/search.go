@@ -118,7 +118,11 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				ID:     s.ID,
 				Name:   s.Spec.Name,
 				Detail: detail,
-				State:  DeriveServiceState(s, c.RunningTaskCount(s.ID)),
+				State: DeriveServiceState(
+					s,
+					c.RunningTaskCount(s.ID),
+					c.CompletedJobTaskCount(s.ID),
+				),
 			})
 		}
 		allResults[stServices] = typeResults{"services", matches, count}

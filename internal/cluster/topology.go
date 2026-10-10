@@ -181,6 +181,7 @@ func PlacementGraph(
 
 	placed := make(map[pair][2]int)
 	runningPerService := make(map[string]int)
+	completedPerService := make(map[string]int)
 
 	for _, task := range tasks {
 		if !TaskIsLive(task) {
@@ -193,6 +194,10 @@ func PlacementGraph(
 
 		if _, ok := visibleServices[task.ServiceID]; !ok {
 			continue
+		}
+
+		if cache.CountsAsJobCompletion(visibleServices[task.ServiceID], task) {
+			completedPerService[task.ServiceID]++
 		}
 
 		key := pair{task.NodeID, task.ServiceID}
@@ -223,7 +228,8 @@ func PlacementGraph(
 	// a service that cannot be scheduled is exactly what an operator opens this
 	// view to find, and dropping it with its tasks would hide it.
 	for _, svc := range services {
-		nodes = append(nodes, serviceNode(svc, DeriveServiceState(svc, runningPerService[svc.ID])))
+		state := DeriveServiceState(svc, runningPerService[svc.ID], completedPerService[svc.ID])
+		nodes = append(nodes, serviceNode(svc, state))
 	}
 
 	edges := make([]TopologyEdge, 0, len(placed))

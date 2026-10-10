@@ -15,7 +15,7 @@ func (c *Cache) addToStack(resource EventType, id string, labels map[string]stri
 		if resource != EventService {
 			return // never create a stack entry without at least one service
 		}
-		s = Stack{Name: ns}
+		s = c.seedStack(ns)
 	}
 	switch resource {
 	case EventService:
@@ -32,6 +32,44 @@ func (c *Cache) addToStack(resource EventType, id string, labels map[string]stri
 		// Nodes, tasks, stacks, and sync events do not belong to a stack.
 	}
 	c.stacks[ns] = s
+}
+
+// seedStack builds a new stack entry from the non-service members already
+// cached: they arrive before the first service in any order the watcher's
+// workers apply them, and are not re-added later. Must be called with c.mu held.
+func (c *Cache) seedStack(ns string) Stack {
+	s := Stack{Name: ns}
+
+	for id, cfg := range c.configs.items {
+		if cfg.Spec.Labels[stackLabel] == ns {
+			s.Configs = append(s.Configs, id)
+		}
+	}
+
+	for id, sec := range c.secrets.items {
+		if sec.Spec.Labels[stackLabel] == ns {
+			s.Secrets = append(s.Secrets, id)
+		}
+	}
+
+	for id, net := range c.networks.items {
+		if net.Labels[stackLabel] == ns {
+			s.Networks = append(s.Networks, id)
+		}
+	}
+
+	for name, vol := range c.volumes.items {
+		if vol.Labels[stackLabel] == ns {
+			s.Volumes = append(s.Volumes, name)
+		}
+	}
+
+	slices.Sort(s.Configs)
+	slices.Sort(s.Secrets)
+	slices.Sort(s.Networks)
+	slices.Sort(s.Volumes)
+
+	return s
 }
 
 // removeFromStack incrementally removes a resource from its stack. Must be called with c.mu held for writing.

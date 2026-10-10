@@ -206,7 +206,11 @@ func (s *Server) rowsFor(
 
 	switch items := listed.(type) {
 	case []swarm.Service:
-		return cluster.RowsForServices(items, c.RunningTaskCounts()), nil
+		return cluster.RowsForServices(
+			items,
+			c.RunningTaskCounts(),
+			c.CompletedJobTaskCounts(),
+		), nil
 
 	case []swarm.Node:
 		return cluster.RowsForNodes(items), nil

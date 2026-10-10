@@ -956,12 +956,12 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 func requireReady(h *Handlers, mux *routeRecorder) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Named as what it is not, so the next representation cannot be
-			// left out: the dashboard renders its own error, a stream says so
-			// by closing, and a type nothing serves is the endpoint's 406 to
-			// give whether or not Docker is up.
+			// A loaded snapshot is served to every representation alike. Without
+			// one, the dashboard renders its own error, a stream says so by
+			// closing, and a type nothing serves is the endpoint's 406 to give
+			// whether or not Docker is up.
 			ct := ContentTypeFromContext(r.Context())
-			if !h.isReady() && readsClusterState(mux, r) &&
+			if !h.isReady() && !h.cache.Populated() && readsClusterState(mux, r) &&
 				ct != ContentTypeHTML && ct != ContentTypeSSE &&
 				ct != ContentTypeUnsupported {
 				writeErrorCode(w, r, "ENG001", "Docker daemon is not reachable")

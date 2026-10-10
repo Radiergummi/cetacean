@@ -52,9 +52,9 @@ type History struct {
 	full    bool
 
 	// byResource maps resource IDs to a ring of entry indices, enabling
-	// fast filtered lookups without scanning the entire buffer.
-	// Stale index entries (where the main ring has overwritten the slot)
-	// are detected and skipped during iteration in listByResource.
+	// fast filtered lookups without scanning the entire buffer. Stale
+	// indices are skipped in listByResource; a resource leaves the map once
+	// the main ring overwrites its newest entry.
 	byResource map[string]*indexRing
 }
 
@@ -80,6 +80,14 @@ func (r *indexRing) push(idx int) {
 		r.cursor = 0
 		r.full = true
 	}
+}
+
+func (r *indexRing) newest() int {
+	if r.cursor == 0 {
+		return r.indices[len(r.indices)-1]
+	}
+
+	return r.indices[r.cursor-1]
 }
 
 // iterNewest calls fn with each stored index, newest first.
@@ -209,6 +217,15 @@ func (h *History) Append(e HistoryEntry) uint64 {
 		e.Timestamp = time.Now()
 	}
 
+	// The ring overwrites oldest-first, so a resource whose newest entry sits
+	// in the slot being reused has no entry left.
+	if h.full {
+		evicted := h.entries[h.cursor].ResourceID
+		if ring := h.byResource[evicted]; ring != nil && ring.newest() == h.cursor {
+			delete(h.byResource, evicted)
+		}
+	}
+
 	h.entries[h.cursor] = e
 
 	// Update the per-resource index.
@@ -329,8 +346,8 @@ func (h *History) listByResource(
 ) (entries []HistoryEntry, complete bool) {
 	ring := h.byResource[q.ResourceID]
 	if ring == nil {
-		// Nothing was ever recorded under this ID: an empty answer is the
-		// complete one. The index is never pruned, so its absence is proof.
+		// Nothing under this ID survives in the ring: an index is pruned only
+		// once its newest entry is overwritten, so its absence is proof.
 		return nil, true
 	}
 

@@ -612,7 +612,7 @@ func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
 		ID:      svc.ID,
 		Name:    svc.Spec.Name,
 		Running: running,
-		State:   cluster.DeriveServiceState(svc, running),
+		State:   cluster.DeriveServiceState(svc, running, s.cache.CompletedJobTaskCount(svc.ID)),
 		Version: svc.Version.Index,
 	}
 

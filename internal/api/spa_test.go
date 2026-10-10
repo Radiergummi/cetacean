@@ -12,6 +12,10 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func TestSPAServesPrecompressedVariants(t *testing.T) {
@@ -251,6 +255,45 @@ func TestUnreadySharesTheFrontendButNotTheCluster(t *testing.T) {
 			}
 			if !strings.Contains(rec.Body.String(), "ENG001") {
 				t.Errorf("GET %s body = %s, want the ENG001 problem", resource, rec.Body.String())
+			}
+		})
+	}
+}
+
+// A snapshot loaded off disk is what every representation serves until the
+// first sync lands — not only the dashboard and its streams, while a JSON
+// client of the same resource is told the daemon is unreachable.
+func TestUnreadyServesTheLoadedSnapshotToEveryRepresentation(t *testing.T) {
+	saved := cache.New(nil)
+	saved.SetNode(swarm.Node{ID: "node-1"})
+
+	path := filepath.Join(t.TempDir(), "snapshot.json")
+	if err := saved.WriteToDisk(path); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded := cache.New(nil)
+	if err := loaded.LoadFromDisk(path); err != nil {
+		t.Fatal(err)
+	}
+
+	router := newTestRouterWithConfig(
+		t,
+		nil,
+		withCache(loaded),
+		withReady(make(chan struct{})),
+	)
+
+	for _, accept := range []string{"application/json", "text/csv"} {
+		t.Run(accept, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/nodes", nil)
+			req.Header.Set("Accept", accept)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("GET /nodes (%s) = %d, want %d off the snapshot: %s",
+					accept, rec.Code, http.StatusOK, rec.Body.String())
 			}
 		})
 	}

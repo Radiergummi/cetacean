@@ -1,4 +1,4 @@
-import { serviceUpdateStatus } from "./deriveServiceState";
+import { serviceModeLabel, serviceUpdateStatus } from "./deriveServiceState";
 import { describe, expect, it } from "vitest";
 
 describe("serviceUpdateStatus", () => {
@@ -46,5 +46,14 @@ describe("serviceUpdateStatus", () => {
       label: "some_new_state",
       state: "some_new_state",
     });
+  });
+});
+
+describe("serviceModeLabel", () => {
+  it("names each of Swarm's four modes", () => {
+    expect(serviceModeLabel({ Replicated: { Replicas: 2 } })).toBe("replicated");
+    expect(serviceModeLabel({ Global: {} })).toBe("global");
+    expect(serviceModeLabel({ ReplicatedJob: { TotalCompletions: 2 } })).toBe("replicated-job");
+    expect(serviceModeLabel({ GlobalJob: {} })).toBe("global-job");
   });
 });
