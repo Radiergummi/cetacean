@@ -174,7 +174,7 @@ func ParseFlags(args []string) (*Flags, error) {
 	opsLevel := fs.Int(
 		"operations-level",
 		0,
-		"Write operation tier 0-3 (env: CETACEAN_OPERATIONS_LEVEL, default 1)",
+		"Write operation tier 0-3 (env: CETACEAN_OPERATIONS_LEVEL, default 0)",
 	)
 	sseBatch := fs.String(
 		"sse-batch-interval",

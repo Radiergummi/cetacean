@@ -17,8 +17,8 @@ Sensitive settings accept a `_FILE` suffix on their environment variable to read
 file at startup, which is how a Docker secret reaches the process. The `_FILE` variant ranks below
 the direct environment variable.
 
-The `acl.*`, `mcp.*`, `oauth.*`, and `sizing.*` settings have no command-line flags. Set them through the environment or
-the config file.
+The `acl.*`, `mcp.*`, `oauth.*`, `sizing.*`, and `tracing.*` settings have no command-line flags. Set them through the
+environment or the config file.
 
 A setting this page doesn't list isn't ignored: a config file carrying a key the schema doesn't
 know refuses startup and names it.
@@ -365,6 +365,10 @@ the default.
 ```bash
 cetacean -config /etc/cetacean/config.toml
 ```
+
+Without either, Cetacean loads the first of these that exists: `./cetacean.toml`,
+`$XDG_CONFIG_HOME/cetacean/cetacean.toml` (or `~/.config/cetacean/cetacean.toml`), `~/.cetacean.toml`, and
+`/etc/cetacean/cetacean.toml`. The startup log names the file it loaded and whether it was discovered.
 
 `docs/config.reference.toml` in the repository lists every option with its default. Copy it as a
 starting point and uncomment what you need.

@@ -432,7 +432,7 @@ investigation or a runbook. A prompt only seeds the conversation; every read and
 through the normal tools, ACL checks included.
 
 A prompt's level is the highest level of the tools it walks, so it's never offered where one of its steps
-would be refused. At the default level 1 you get the three diagnostic prompts plus `roll_back_service`.
+would be refused. At the default level 0 you get the three diagnostic prompts; level 1 adds `roll_back_service`.
 
 Prompts are filtered by ACL too, all or nothing: you are offered a prompt only if you can use every tool it
 walks and can read every resource type in its Reads column. A caller whose grants match nothing is offered
