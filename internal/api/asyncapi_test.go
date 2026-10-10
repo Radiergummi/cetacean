@@ -166,7 +166,8 @@ func TestAsyncAPIIsServed(t *testing.T) {
 				t.Errorf("Content-Type = %q, want %q", got, asyncAPIMediaType)
 			}
 
-			if got := rec.Header().Get("Cache-Control"); got != "public, max-age=3600" {
+			// Named from the request's Host, so not for a shared cache.
+			if got := rec.Header().Get("Cache-Control"); got != "private, max-age=3600" {
 				t.Errorf("Cache-Control = %q", got)
 			}
 
@@ -618,4 +619,29 @@ func truncate(b []byte) string {
 	}
 
 	return string(b)
+}
+
+// With server.public_url the document names the configured origin, the same
+// for every caller, so it may be cached publicly.
+func TestAsyncAPIIsPublicWithAPublicURL(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{
+			withAsyncAPISpec(t),
+			func(cfg *RouterConfig) { cfg.PublicURL = "https://cetacean.example.com" },
+		},
+		withCache(cache.New(nil)),
+	)
+
+	req := httptest.NewRequest(http.MethodGet, asyncAPIPath, nil)
+	req.Host = "evil.attacker.example"
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=3600" {
+		t.Errorf("Cache-Control = %q, want public", got)
+	}
+	if strings.Contains(rec.Body.String(), "evil.attacker.example") {
+		t.Error("the document names the request's Host instead of the public URL")
+	}
 }

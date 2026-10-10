@@ -41,8 +41,9 @@ func taskStateSortKey(state swarm.TaskState) string {
 }
 
 func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
-	tasks, p, ok := prepareList(h, w, r, listSpec[swarm.Task]{
+	spec := listSpec[swarm.Task]{
 		resourceType: "task",
+		linkTemplate: "/tasks/{id}",
 		list:         h.cache.ListTasks,
 		aclName:      func(t swarm.Task) string { return t.ID },
 		filterEnv:    filter.TaskEnv,
@@ -51,7 +52,15 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 			"service": func(t swarm.Task) string { return t.ServiceID },
 			"node":    func(t swarm.Task) string { return t.NodeID },
 		},
-	})
+	}
+
+	// Enrichment reads the same cache, so the derived validator covers it.
+	validator := h.derivedETag(r)
+	if listNotModified(h, w, r, spec, validator) {
+		return
+	}
+
+	tasks, p, ok := prepareList(h, w, r, spec)
 	if !ok {
 		return
 	}
@@ -63,7 +72,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 
 	paged := applyPagination(r.Context(), tasks, p)
 	enriched := cluster.EnrichTasks(h.cache, paged.Items)
-	writeLinkTemplate(w, r, "/tasks/{id}")
+	writeLinkTemplate(w, r, spec.linkTemplate)
 	writeCollectionResponse(
 		w,
 		r,
@@ -75,7 +84,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 			paged.Offset,
 		),
 		p,
-		"",
+		validator,
 	)
 }
 
