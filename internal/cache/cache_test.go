@@ -1,7 +1,9 @@
 package cache
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
@@ -1364,6 +1366,66 @@ func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
 	}
 	if snap.ReservedMemory != 512*1024*1024 {
 		t.Errorf("ReservedMemory=%d, want %d", snap.ReservedMemory, 512*1024*1024)
+	}
+}
+
+// What happened to a crash-looping service happened to its tasks; asking the
+// service's timeline must find them.
+func TestTaskHistoryIsFiledUnderItsService(t *testing.T) {
+	c := New(nil)
+	c.SetTask(swarm.Task{
+		ID:        "t1",
+		ServiceID: "svc",
+		Status:    swarm.TaskStatus{State: swarm.TaskStateFailed},
+	})
+
+	got := c.History().List(HistoryQuery{ResourceID: "svc"})
+	if len(got) != 1 || got[0].ResourceID != "t1" {
+		t.Errorf("service timeline = %+v, want the task's entry", got)
+	}
+}
+
+// A crash-looping service has its replica up a good part of the time; caught
+// then, it must still count as degraded, or the overview reads "all healthy".
+func TestSnapshotCountsFlappingServiceDegraded(t *testing.T) {
+	c := New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "flaky"},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: new(uint64(1))},
+			},
+		},
+	})
+
+	now := time.Now()
+	for i := range flappingRestarts {
+		c.SetTask(swarm.Task{
+			ID:        fmt.Sprintf("dead-%d", i),
+			ServiceID: "svc",
+			Status: swarm.TaskStatus{
+				State:     swarm.TaskStateFailed,
+				Timestamp: now.Add(-time.Duration(i) * 5 * time.Second),
+			},
+		})
+	}
+	c.SetTask(swarm.Task{
+		ID:        "live",
+		ServiceID: "svc",
+		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+
+	snap := c.Snapshot()
+	if snap.ServicesDegraded != 1 || snap.ServicesConverged != 0 {
+		t.Errorf(
+			"converged=%d degraded=%d, want 0 and 1",
+			snap.ServicesConverged,
+			snap.ServicesDegraded,
+		)
+	}
+	if !snap.Flapping["svc"] {
+		t.Error("Snapshot.Flapping does not name the crash-looping service")
 	}
 }
 

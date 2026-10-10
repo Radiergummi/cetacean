@@ -119,6 +119,7 @@ func (s *Server) digestOf(
 			s.filterRawTasks(ctx, s.cache.ListTasksByService(resource.ID)),
 			s.readableAttachedNetworks(ctx, resource),
 			s.serviceRestarts(resource.ID),
+			s.cache.FlappingServices()[resource.ID],
 		), nil
 
 	case swarm.Node:
@@ -143,7 +144,11 @@ func (s *Server) digestOf(
 			tasks = append(tasks, s.cache.ListTasksByService(svc.ID)...)
 		}
 
-		return cluster.StackDigest(resource, s.filterRawTasks(ctx, tasks)), nil
+		return cluster.StackDigest(
+			resource,
+			s.filterRawTasks(ctx, tasks),
+			s.cache.FlappingServices(),
+		), nil
 
 	case swarm.Config:
 		return cluster.ConfigDigest(

@@ -22,7 +22,7 @@ func TestRowsForServicesCarryDerivedState(t *testing.T) {
 	svc := replicated("api", 3)
 	svc.Spec.Labels = map[string]string{"com.docker.stack.namespace": "demo"}
 
-	rows := RowsForServices([]swarm.Service{svc}, map[string]int{"svc-api": 2})
+	rows := RowsForServices([]swarm.Service{svc}, map[string]int{"svc-api": 2}, nil)
 
 	if len(rows) != 1 {
 		t.Fatalf("rows = %d, want 1", len(rows))
@@ -163,7 +163,7 @@ func TestServiceDigestExplainsWhyAServiceIsNotRunning(t *testing.T) {
 		},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	if got.Reason != "no suitable node (scheduling constraints not satisfied on 1 node)" {
 		t.Errorf("reason = %q, want Status.Err verbatim", got.Reason)
@@ -185,7 +185,7 @@ func TestServiceDigestOmitsReasonWhenHealthy(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	if got.Reason != "" {
 		t.Errorf("reason = %q, want empty for a converged service", got.Reason)
@@ -202,7 +202,7 @@ func TestServiceDigestMarshalsEmptySlicesNotNull(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	data, err := json.Marshal(got)
 	if err != nil {
@@ -231,7 +231,7 @@ func TestServiceDigestIgnoresNormalStartup(t *testing.T) {
 			Status: swarm.TaskStatus{State: swarm.TaskStatePreparing, Message: "preparing"}},
 	}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	if len(got.RecentFailures) != 0 {
 		t.Errorf(
@@ -264,7 +264,7 @@ func TestServiceDigestSinceIsTheOldestFailure(t *testing.T) {
 			}},
 	}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	want := older.UTC().Format(time.RFC3339)
 	if got.Since != want {
@@ -288,7 +288,7 @@ func TestServiceDigestReasonFallsBackToUpdateStatus(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	if got.State != "updating" {
 		t.Fatalf("state = %q, want updating", got.State)
@@ -312,7 +312,7 @@ func TestServiceDigestFailuresTieBreakOnTaskID(t *testing.T) {
 			Status: swarm.TaskStatus{State: swarm.TaskStateRejected, Timestamp: same, Err: "a"}},
 	}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	if len(got.RecentFailures) != 2 || got.RecentFailures[0].TaskID != "t1" {
 		t.Errorf("order = %+v, want t1 before t2 on a timestamp tie", got.RecentFailures)
@@ -376,7 +376,7 @@ func TestServiceDigestRelatedResolvesNetworkName(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, []network.Summary{overlay("net1", "demo_overlay")}, nil)
+	got := ServiceDigest(svc, tasks, []network.Summary{overlay("net1", "demo_overlay")}, nil, false)
 
 	if len(got.Related) != 1 {
 		t.Fatalf("related = %d, want 1", len(got.Related))
@@ -406,7 +406,7 @@ func TestServiceDigestRelatedFallsBackToIDWhenNetworkUnknown(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	if len(got.Related) != 1 {
 		t.Fatalf("related = %d, want 1", len(got.Related))
@@ -430,7 +430,7 @@ func TestServiceDigestRelatedOnlyIncludesVolumeMounts(t *testing.T) {
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	if len(got.Related) != 1 {
 		t.Fatalf("related = %d, want 1 (the volume, not the bind mount)", len(got.Related))
@@ -556,7 +556,7 @@ func TestServiceDigestReportsFailuresSwarmHasAlreadyReplaced(t *testing.T) {
 			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
 	}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	if len(got.RecentFailures) != 1 {
 		t.Fatalf(
@@ -583,7 +583,7 @@ func TestServiceDigestIgnoresCleanlyReplacedTasks(t *testing.T) {
 			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
 	}
 
-	if got := ServiceDigest(svc, tasks, nil, nil); len(got.RecentFailures) != 0 {
+	if got := ServiceDigest(svc, tasks, nil, nil, false); len(got.RecentFailures) != 0 {
 		t.Errorf(
 			"recentFailures = %d, want none for a cleanly replaced task",
 			len(got.RecentFailures),
@@ -605,11 +605,11 @@ func TestServiceDigestCountsReplicasTheWayFindDoes(t *testing.T) {
 			Status: swarm.TaskStatus{State: swarm.TaskStatePreparing}},
 	}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	// One desired, none running: the same numbers DeriveServiceState sees on
 	// the list side, and so the same state.
-	if want := DeriveServiceState(svc, 0); got.State != want {
+	if want := DeriveServiceState(svc, 0, false); got.State != want {
 		t.Errorf(
 			"state = %q, want %q — the draining task was counted as a replica",
 			got.State, want,
@@ -633,7 +633,7 @@ func TestServiceDigestDoesNotDateARunningServiceFromAnOldFailure(t *testing.T) {
 			Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
 	}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	if got.State != "running" {
 		t.Fatalf("state = %q, want running", got.State)
@@ -672,7 +672,7 @@ func TestServiceDigestDatesAFailingServiceFromItsOldestFailure(t *testing.T) {
 			}},
 	}
 
-	got := ServiceDigest(svc, tasks, nil, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, false)
 
 	if got.State == "running" {
 		t.Fatalf("state = %q, want a failing state", got.State)

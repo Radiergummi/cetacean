@@ -108,6 +108,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		// RunningTaskCount takes the read lock, so it runs out here rather than
 		// inside the scan that already holds it.
 		matches := make([]SearchResult, 0, len(hits))
+		flapping := c.FlappingServices()
 		for _, s := range hits {
 			detail := ""
 			if s.Spec.TaskTemplate.ContainerSpec != nil {
@@ -118,7 +119,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				ID:     s.ID,
 				Name:   s.Spec.Name,
 				Detail: detail,
-				State:  DeriveServiceState(s, c.RunningTaskCount(s.ID)),
+				State:  DeriveServiceState(s, c.RunningTaskCount(s.ID), flapping[s.ID]),
 			})
 		}
 		allResults[stServices] = typeResults{"services", matches, count}

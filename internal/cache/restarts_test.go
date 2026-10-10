@@ -330,3 +330,54 @@ func TestRestartTrackerHorizonIsCappedByRetention(t *testing.T) {
 		t.Errorf("TrackingSince = %v, beyond the 2h retention horizon", since)
 	}
 }
+
+// A crash loop reads "running" whenever a replacement is caught up, so the
+// failure rate is the only steady signal; a fault that is over must clear.
+func TestRestartTrackerFlapping(t *testing.T) {
+	rt := NewRestartTracker(7*24*time.Hour, time.Hour)
+	now := time.Now()
+
+	for i := range flappingRestarts {
+		rt.Record("loop", now.Add(-time.Duration(i)*5*time.Second))
+	}
+
+	// Newest first, as a full sync may report them, and all outside the window.
+	for i := range flappingRestarts + 2 {
+		rt.Record("over", now.Add(-flappingWindow-time.Duration(i+1)*time.Minute))
+	}
+
+	rt.Record("once", now)
+
+	got := rt.Flapping()
+	if !got["loop"] {
+		t.Error("a service failing every five seconds is not flapping")
+	}
+	if got["over"] {
+		t.Error("failures older than the window still count as flapping")
+	}
+	if got["once"] {
+		t.Error("a single failure counts as flapping")
+	}
+
+	rt.Forget("loop")
+	if rt.Flapping()["loop"] {
+		t.Error("a forgotten service is still flapping")
+	}
+}
+
+// An old failure arriving late must not displace a newer one: a loop that is
+// still going stays flapping however its history is replayed.
+func TestRestartTrackerFlappingKeepsNewest(t *testing.T) {
+	rt := NewRestartTracker(7*24*time.Hour, time.Hour)
+	now := time.Now()
+
+	for i := range flappingRestarts {
+		rt.Record("loop", now.Add(-time.Duration(i)*time.Second))
+	}
+
+	rt.Record("loop", now.Add(-time.Hour))
+
+	if !rt.Flapping()["loop"] {
+		t.Error("a late, older failure pushed the recent ones out")
+	}
+}
