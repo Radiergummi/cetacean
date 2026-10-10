@@ -43,8 +43,8 @@ func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {
 
 	err := h.resourceRemover.RemoveVolume(r.Context(), name, force)
 	if err != nil {
-		// force overrides driver errors, not use: Docker refuses an in-use
-		// volume either way.
+		// On a local volume force overrides driver errors, not use; Docker
+		// refuses an in-use local volume either way.
 		if cluster.IsRemovalConflict(err, "volume") {
 			writeRemovalConflict(w, r, err, "VOL001", "volume", name)
 			return

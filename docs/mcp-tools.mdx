@@ -311,8 +311,8 @@ content can be read back, so use a secret for anything sensitive.
 <McpTool name="remove_volume" level={3}>
     <Fragment slot="arguments">`name`, `force`</Fragment>
 
-    Deletes a volume by name. Fails if a container is using it, even with `force`, which only overrides an error
-    from the volume driver.
+    Deletes a volume by name. Fails if a container is using a local volume, even with `force`, which there only
+    overrides an error from the volume driver. On a cluster volume, `force` deletes it even while it is in use.
 </McpTool>
 
 ### Nodes

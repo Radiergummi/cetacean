@@ -160,7 +160,7 @@ func (s *Server) impactfulTools() []toolDef {
 				mcplib.WithToolTitle("Remove volume"),
 				mcplib.WithOutputSchema[removalResult](),
 				mcplib.WithDescription(
-					"Delete a Docker volume by name. Fails if any container is currently using it, `force` included; `force` only overrides an error from the volume driver. Volume contents are irrecoverable.",
+					"Delete a Docker volume by name. Fails if any container is currently using a local volume, `force` included; there `force` only overrides an error from the volume driver. On a cluster volume `force` deletes it even while it is in use. Volume contents are irrecoverable.",
 				),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
@@ -173,7 +173,7 @@ func (s *Server) impactfulTools() []toolDef {
 				mcplib.WithBoolean(
 					"force",
 					mcplib.Description(
-						"Remove even if the volume driver reports an error. Does not override use by a container. Default false.",
+						"Remove a local volume even if its driver reports an error, or a cluster volume even while it is in use. Does not override use of a local volume by a container. Default false.",
 					),
 				),
 			),

@@ -12,10 +12,10 @@ import (
 // are the messages that mark them, matched where the class alone cannot.
 var removalConflictMessages = map[string][]string{
 	"config":  {"is in use by the following"},
-	"network": {"has active endpoints", "is in use by", "depends on it"},
+	"network": {"has active endpoints", "is in use", "depends on it"},
 	"node":    {"is not down", "must be demoted"},
 	"secret":  {"is in use by the following"},
-	"volume":  {"volume is in use"},
+	"volume":  {"volume is in use", "volume is still in use"},
 }
 
 // IsRemovalConflict reports whether err refused a removal because of the

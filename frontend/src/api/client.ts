@@ -854,8 +854,7 @@ export const api = {
       "application/json-patch+json",
     ).then(({ labels }) => labels),
   removeNetwork: (id: string) => del(`/networks/${id}`),
-  removeVolume: (name: string, force?: boolean) =>
-    del(force ? `/volumes/${name}?force=true` : `/volumes/${name}`),
+  removeVolume: (name: string) => del(`/volumes/${name}`),
 
   // Tier 2: sub-resource GETs
   serviceEnv: (id: string, signal?: AbortSignal) =>

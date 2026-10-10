@@ -23,7 +23,6 @@ interface RemoveResourceActionProps {
   resourceName: string;
   listPath: string;
   onRemove: () => Promise<void>;
-  onForceRemove?: (() => Promise<void>) | undefined;
   canDelete?: boolean | undefined;
   disabled?: boolean | undefined;
   disabledTitle?: string | undefined;
@@ -34,7 +33,6 @@ export function RemoveResourceAction({
   resourceName,
   listPath,
   onRemove,
-  onForceRemove,
   canDelete = false,
   disabled,
   disabledTitle,
@@ -48,7 +46,6 @@ export function RemoveResourceAction({
 
   const errorCode = remove.cause instanceof ApiError ? remove.cause.code : null;
   const errorInfo = getErrorInfo(errorCode);
-  const showForceRemove = onForceRemove && errorInfo?.action === "force-remove";
 
   const trigger = (
     <AlertDialogTrigger
@@ -102,24 +99,7 @@ export function RemoveResourceAction({
         </AlertDialogContent>
       </AlertDialog>
       {remove.error && (
-        <div className="flex items-center gap-2">
-          <p className="text-xs text-status-danger">{errorInfo?.suggestion ?? remove.error}</p>
-          {showForceRemove && (
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={remove.loading}
-              onClick={() => {
-                void remove.execute(async () => {
-                  await onForceRemove();
-                  navigate(listPath, { replace: true });
-                }, `Failed to force remove ${resourceType.toLowerCase()}`);
-              }}
-            >
-              Force remove
-            </Button>
-          )}
-        </div>
+        <p className="text-xs text-status-danger">{errorInfo?.suggestion ?? remove.error}</p>
       )}
     </div>
   );

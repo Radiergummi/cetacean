@@ -49,6 +49,14 @@ func TestIsRemovalConflict(t *testing.T) {
 			true,
 		},
 		{
+			"network",
+			fmt.Errorf(
+				"%w: error while removing network: configuration network \"cfg\" is in use",
+				cerrdefs.ErrPermissionDenied,
+			),
+			true,
+		},
+		{
 			"node",
 			fmt.Errorf(
 				"%w: rpc error: code = FailedPrecondition desc = node abc is not down and can't be removed",
@@ -67,6 +75,14 @@ func TestIsRemovalConflict(t *testing.T) {
 		{
 			"volume",
 			fmt.Errorf("%w: remove data: volume is in use - [19625d2c]", cerrdefs.ErrConflict),
+			true,
+		},
+		{
+			"volume",
+			fmt.Errorf(
+				"%w: rpc error: code = FailedPrecondition desc = volume is still in use",
+				cerrdefs.ErrInvalidArgument,
+			),
 			true,
 		},
 		{
