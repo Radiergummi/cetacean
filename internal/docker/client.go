@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -384,20 +385,16 @@ func (c *Client) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 		return nil
 	})
 
-	var failed int
+	failed := make(map[string]bool)
 	for range 7 {
 		r := <-ch
 		if r.err != nil {
 			slog.Warn("full sync resource failed", "resource", r.name, "error", r.err)
-			failed++
+			failed[r.name] = true
 		}
 	}
 
-	if failed == 7 {
-		return data, fmt.Errorf("all resource syncs failed")
-	}
-
-	return data, nil
+	return data, fullSyncError(failed)
 }
 
 // Inspect fetches a single resource by its event type and ID. Returns the
@@ -1161,4 +1158,26 @@ func (c *Client) UpdateServiceContainerConfig(
 		return swarm.Service{}, err
 	}
 	return c.InspectService(ctx, id)
+}
+
+// swarmResources are the lists only a manager answers. A worker still lists
+// its own networks and volumes, so a sync that reached one is not a success.
+var swarmResources = []string{"nodes", "services", "tasks", "configs", "secrets"}
+
+// fullSyncError decides whether a sync with these resources failed counts as
+// a failure: every one of them, or every swarm resource.
+func fullSyncError(failed map[string]bool) error {
+	if len(failed) == 7 {
+		return errors.New("all resource syncs failed")
+	}
+
+	for _, name := range swarmResources {
+		if !failed[name] {
+			return nil
+		}
+	}
+
+	return errors.New(
+		"no swarm resource could be listed; docker.host must point at a swarm manager",
+	)
 }

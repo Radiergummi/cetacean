@@ -139,7 +139,7 @@ function Banner({
       className="group mb-4 flex items-start gap-3 rounded-lg border border-status-info/30 bg-status-info/10 px-4 py-3 data-[variant=warn]:border-status-warning/30 data-[variant=warn]:bg-status-warning/10"
     >
       {icon}
-      <div className="flex-1 text-status-info group-data-[variant=warn]:text-status-warning">
+      <div className="min-w-0 flex-1 text-status-info group-data-[variant=warn]:text-status-warning">
         {children}
       </div>
       {onDismiss && (

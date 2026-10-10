@@ -133,7 +133,8 @@ func (w *Watcher) waitForSettles() {
 	w.settles.Wait()
 }
 
-// Ready returns a channel that is closed after the first full sync completes.
+// Ready returns a channel that is closed after the first full sync succeeds,
+// whichever path ran it.
 func (w *Watcher) Ready() <-chan struct{} {
 	return w.ready
 }
@@ -142,7 +143,6 @@ func (w *Watcher) Ready() <-chan struct{} {
 func (w *Watcher) Run(ctx context.Context) {
 	if err := w.fullSync(ctx); err == nil {
 		w.writeSnapshot()
-		w.syncOnce.Do(func() { close(w.ready) })
 	}
 
 	// Event stream with reconnect and exponential backoff.
@@ -163,7 +163,6 @@ func (w *Watcher) Run(ctx context.Context) {
 		slog.Info("re-syncing after reconnect")
 		if err := w.fullSync(ctx); err == nil {
 			w.writeSnapshot()
-			w.syncOnce.Do(func() { close(w.ready) })
 			backoff = 1 * time.Second // Reset on success.
 		} else {
 			backoff = min(backoff*2, maxBackoff)
@@ -214,6 +213,7 @@ func (w *Watcher) sync(ctx context.Context, tracksConnection bool) error {
 	metrics.ObserveSyncDuration(done.Sub(start).Seconds())
 	metrics.RecordSyncSuccess(done)
 	w.lastSync.Store(done.UnixNano())
+	w.syncOnce.Do(func() { close(w.ready) })
 
 	if tracksConnection {
 		w.setConnected(true)
