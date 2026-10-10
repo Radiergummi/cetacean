@@ -117,7 +117,7 @@ export function profileFor(name: string): ServiceProfile {
  * Simple seeded pseudo-random number generator (linear congruential).
  * Returns values in [0, 1).
  */
-function seededRandom(seed: number): () => number {
+export function seededRandom(seed: number): () => number {
   let state = seed | 0 || 1;
   return () => {
     state = (state * 1664525 + 1013904223) | 0;
