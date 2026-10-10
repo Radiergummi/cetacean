@@ -140,6 +140,44 @@ func TestUpdateServiceSecretsRejectsAnUnknownSecret(t *testing.T) {
 	}
 }
 
+// A service write grant attaches only what the caller may read, except what the
+// service already carries. The service is named, as a model names it.
+func TestUpdateServiceSecretsNeedsReadUnlessAlreadyAttached(t *testing.T) {
+	c := attachmentTestCache(t)
+	svc, _ := c.GetService("svc1")
+	svc.Spec.TaskTemplate.ContainerSpec.Secrets = []*swarm.SecretReference{{SecretID: "s2"}}
+	c.SetService(svc)
+	c.SetSecret(swarm.Secret{
+		ID:   "s3",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "other_team"}},
+	})
+
+	writeClient := &fakeWriteClient{
+		updateServiceSecretsFn: func(
+			context.Context, string, []*swarm.SecretReference,
+		) (swarm.Service, error) {
+			return svc, nil
+		},
+	}
+	srv := newToolTestServer(t, c, writeClient, config.OpsConfiguration,
+		func(o *Options) { o.ACL = aclEvaluatorWithGrants("write", "service:web") })
+	td, _ := srv.findTool("update_service_secrets")
+
+	attach := func(name string) error {
+		_, err := td.handler(ctxWithIdentity(), newCallToolRequest("update_service_secrets",
+			map[string]any{"id": "web", "secrets": []any{map[string]any{"name": name}}}))
+
+		return err
+	}
+
+	if err := attach("other_team"); err == nil {
+		t.Error("attached a secret the caller cannot read")
+	}
+	if err := attach("db_password_v2"); err != nil {
+		t.Errorf("re-sending an attached secret: %v", err)
+	}
+}
+
 // Replacement, not merge: the caller passes the complete list, and an empty
 // one detaches everything. Stating it in the description is not enough — the
 // behaviour is pinned here, because getting it wrong silently strips a

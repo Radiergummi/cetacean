@@ -22,15 +22,25 @@ func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 	handleCreateDataResource(w, r, createDataResourceSpec{
 		resource:     "config",
+		acl:          h.acl,
 		nameErrCode:  "CFG004",
 		conflictCode: "CFG003",
 		basePath:     "/configs/",
 		typeName:     "Config",
 		create: func(ctx context.Context, name string, data []byte) (string, error) {
-			return h.configWriter.CreateConfig(ctx, swarm.ConfigSpec{
+			id, err := h.configWriter.CreateConfig(ctx, swarm.ConfigSpec{
 				Name: name,
 				Data: data,
 			})
+			if err == nil {
+				// Attaching resolves through the cache, which the watcher fills later.
+				h.cache.SetConfig(swarm.Config{
+					ID:   id,
+					Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}},
+				})
+			}
+
+			return id, err
 		},
 		buildFallback: func(id string, name string) any {
 			return ConfigResponse{

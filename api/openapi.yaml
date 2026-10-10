@@ -3817,7 +3817,10 @@ paths:
           color: orange
       tags: [Services]
       summary: Patch service config references
-      description: Replaces the config references for the service. Requires operations level 2.
+      description: >-
+        Replaces the config references for the service. Requires operations level 2, and read access to
+        each config the service does not already carry. A config ID that is not known answers
+        `400 SVC021`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -3838,6 +3841,9 @@ paths:
                         type: string
                       configName:
                         type: string
+                        description: >-
+                          Required, but not trusted: the name recorded on the service, and the default
+                          `fileName`, come from the config `configID` names.
                       fileName:
                         type: string
             example:
@@ -3916,7 +3922,10 @@ paths:
           color: orange
       tags: [Services]
       summary: Patch service secret references
-      description: Replaces the secret references for the service. Requires operations level 2.
+      description: >-
+        Replaces the secret references for the service. Requires operations level 2, and read access to
+        each secret the service does not already carry. A secret ID that is not known answers
+        `400 SVC021`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -3937,6 +3946,9 @@ paths:
                         type: string
                       secretName:
                         type: string
+                        description: >-
+                          Required, but not trusted: the name recorded on the service, and the default
+                          `fileName` under `/run/secrets/`, come from the secret `secretID` names.
                       fileName:
                         type: string
             example:
@@ -4015,7 +4027,10 @@ paths:
           color: orange
       tags: [Services]
       summary: Patch service network attachments
-      description: Replaces the network attachments for the service. Requires operations level 2.
+      description: >-
+        Replaces the network attachments for the service. Requires operations level 2, and read access to
+        each network the service does not already join. A network that is not known answers
+        `400 SVC021`; a name several networks share answers `409 API015`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4034,6 +4049,7 @@ paths:
                     properties:
                       target:
                         type: string
+                        description: Network ID or name; stored as the ID.
                       aliases:
                         type: array
                         items:

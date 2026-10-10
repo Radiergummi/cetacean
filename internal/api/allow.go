@@ -163,21 +163,26 @@ func (h *Handlers) setAllowSubResource(
 	varyByIdentity(w)
 }
 
-// listCreateMethods maps resource types that support creation via POST to
-// the minimum operations tier required.
-var listCreateMethods = map[string]config.OperationsLevel{
-	"config": config.OpsConfiguration,
-	"secret": config.OpsConfiguration,
-	"plugin": config.OpsConfiguration,
+// listCreateMethods maps resource types that support creation via POST to the
+// minimum operations tier required, and whether the write grant is checked on
+// the created name (any grant on the type may suffice) or type-wide.
+var listCreateMethods = map[string]struct {
+	tier  config.OperationsLevel
+	named bool
+}{
+	"config": {config.OpsConfiguration, true},
+	"secret": {config.OpsConfiguration, true},
+	"plugin": {config.OpsConfiguration, false},
 }
 
 // setAllowList sets the Allow header for list endpoints.
 func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resourceType string) {
 	methods := []string{"GET", "HEAD"}
 
-	if tier, ok := listCreateMethods[resourceType]; ok && h.levelFor(r) >= tier {
+	if create, ok := listCreateMethods[resourceType]; ok && h.levelFor(r) >= create.tier {
 		id := auth.IdentityFromContext(r.Context())
-		if h.acl.Can(id, "write", resourceType+":*") {
+		if create.named && h.acl.TypeGrants(id).Can("write", resourceType) ||
+			h.acl.Can(id, "write", resourceType+":*") {
 			methods = append(methods, "POST")
 		}
 	}

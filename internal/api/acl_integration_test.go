@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -1734,5 +1736,457 @@ func TestHandleTopology_ACLFiltering(t *testing.T) {
 	}
 	if _, ok := networkGraph.Nodes[jgf.URN("service", "svc1")]; !ok {
 		t.Error("expected webapp (svc1) in network graph")
+	}
+}
+
+// A service write grant must not attach what the caller cannot read: a mounted
+// secret is readable from inside the container, so this is where it leaks.
+func TestPatchServiceAttachments_RequireReadOnTheAttachment(t *testing.T) {
+	cases := []struct {
+		name    string
+		path    string
+		handler func(*Handlers) http.HandlerFunc
+		body    func(id, name string) string
+	}{
+		{
+			name:    "secrets",
+			path:    "/services/svc1/secrets",
+			handler: func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceSecrets },
+			body: func(id, name string) string {
+				return fmt.Sprintf(`{"secrets":[{"secretID":%q,"secretName":%q}]}`, id, name)
+			},
+		},
+		{
+			name:    "configs",
+			path:    "/services/svc1/configs",
+			handler: func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceConfigs },
+			body: func(id, name string) string {
+				return fmt.Sprintf(`{"configs":[{"configID":%q,"configName":%q}]}`, id, name)
+			},
+		},
+		{
+			name:    "networks",
+			path:    "/services/svc1/networks",
+			handler: func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceNetworks },
+			body: func(id, _ string) string {
+				return fmt.Sprintf(`{"networks":[{"target":%q}]}`, id)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := cache.New(nil)
+			c.SetService(
+				swarm.Service{
+					ID: "svc1",
+					Spec: swarm.ServiceSpec{
+						Annotations: swarm.Annotations{Name: "web"},
+						TaskTemplate: swarm.TaskSpec{
+							ContainerSpec: &swarm.ContainerSpec{
+								Secrets: []*swarm.SecretReference{{SecretID: "x-held"}},
+								Configs: []*swarm.ConfigReference{{ConfigID: "x-held"}},
+							},
+							Networks: []swarm.NetworkAttachmentConfig{{Target: "x-held"}},
+						},
+					},
+				},
+			)
+			for id, name := range map[string]string{
+				"x-mine":   "mine",
+				"x-theirs": "theirs",
+				"x-held":   "held",
+			} {
+				c.SetSecret(
+					swarm.Secret{
+						ID:   id,
+						Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
+					},
+				)
+				c.SetConfig(
+					swarm.Config{
+						ID:   id,
+						Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}},
+					},
+				)
+				c.SetNetwork(network.Summary{ID: id, Name: name})
+			}
+
+			e := acl.NewEvaluator()
+			e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+				{
+					Resources:   []string{"service:web"},
+					Audience:    []string{"*"},
+					Permissions: []string{"write"},
+				},
+				{
+					Resources:   []string{"*:mine"},
+					Audience:    []string{"*"},
+					Permissions: []string{"read"},
+				},
+			}})
+
+			written := false
+			mock := &mockWriteClient{
+				updateServiceSecretsFn: func(context.Context, string, []*swarm.SecretReference) (swarm.Service, error) {
+					written = true
+					return swarm.Service{ID: "svc1"}, nil
+				},
+				updateServiceConfigsFn: func(context.Context, string, []*swarm.ConfigReference) (swarm.Service, error) {
+					written = true
+					return swarm.Service{ID: "svc1"}, nil
+				},
+				updateServiceNetworksFn: func(context.Context, string, []swarm.NetworkAttachmentConfig) (swarm.Service, error) {
+					written = true
+					return swarm.Service{ID: "svc1"}, nil
+				},
+			}
+			h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(mock))
+
+			send := func(id, name string) *httptest.ResponseRecorder {
+				req := httptest.NewRequest("PATCH", tc.path, strings.NewReader(tc.body(id, name)))
+				req.Header.Set("Content-Type", "application/merge-patch+json")
+				req.SetPathValue("id", "svc1")
+				req = req.WithContext(
+					auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "dev"}),
+				)
+				w := httptest.NewRecorder()
+				tc.handler(h)(w, req)
+
+				return w
+			}
+
+			// The client-supplied name must not stand in for the real one.
+			if w := send("x-theirs", "mine"); w.Code != http.StatusForbidden {
+				t.Fatalf(
+					"unreadable attachment: status=%d, want 403; body: %s",
+					w.Code,
+					w.Body.String(),
+				)
+			}
+			if w := send("unknown", "mine"); w.Code != http.StatusBadRequest {
+				t.Fatalf(
+					"unknown attachment: status=%d, want 400; body: %s",
+					w.Code,
+					w.Body.String(),
+				)
+			} else {
+				assertACLErrorCode(t, w, "SVC021")
+			}
+			if written {
+				t.Fatal("a refused attachment reached the writer")
+			}
+
+			if w := send("x-mine", "mine"); w.Code != http.StatusOK {
+				t.Fatalf(
+					"readable attachment: status=%d, want 200; body: %s",
+					w.Code,
+					w.Body.String(),
+				)
+			}
+
+			// Re-sending what the service already carries must not need read on it.
+			if w := send("x-held", "held"); w.Code != http.StatusOK {
+				t.Fatalf(
+					"already-attached reference: status=%d, want 200; body: %s",
+					w.Code,
+					w.Body.String(),
+				)
+			}
+		})
+	}
+}
+
+// Without a policy nothing is denied, so a reference the cache has not seen yet
+// is reported as unknown, never as an access refusal.
+func TestPatchServiceAttachments_UnknownReferenceWithoutPolicy(t *testing.T) {
+	cases := map[string]struct {
+		path    string
+		handler func(*Handlers) http.HandlerFunc
+		body    string
+	}{
+		"secrets": {
+			"/services/svc1/secrets",
+			func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceSecrets },
+			`{"secrets":[{"secretID":"unknown","secretName":"db"}]}`,
+		},
+		"configs": {
+			"/services/svc1/configs",
+			func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceConfigs },
+			`{"configs":[{"configID":"unknown","configName":"app"}]}`,
+		},
+		"networks": {
+			"/services/svc1/networks",
+			func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceNetworks },
+			`{"networks":[{"target":"unknown"}]}`,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := cache.New(nil)
+			c.SetService(swarm.Service{ID: "svc1"})
+			h := newTestHandlers(t, withCache(c), withWriteClient(&mockWriteClient{}))
+
+			req := httptest.NewRequest("PATCH", tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/merge-patch+json")
+			req.SetPathValue("id", "svc1")
+			w := httptest.NewRecorder()
+			tc.handler(h)(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d, want 400; body: %s", w.Code, w.Body.String())
+			}
+			assertACLErrorCode(t, w, "SVC021")
+		})
+	}
+}
+
+// A network name two networks share is ambiguous, not unknown.
+func TestPatchServiceNetworks_AmbiguousName(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	c.SetNetwork(network.Summary{ID: "net1", Name: "shared"})
+	c.SetNetwork(network.Summary{ID: "net2", Name: "shared"})
+	h := newTestHandlers(t, withCache(c), withWriteClient(&mockWriteClient{}))
+
+	req := httptest.NewRequest(
+		"PATCH",
+		"/services/svc1/networks",
+		strings.NewReader(`{"networks":[{"target":"shared"}]}`),
+	)
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceNetworks(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want 409; body: %s", w.Code, w.Body.String())
+	}
+	assertACLErrorCode(t, w, "API015")
+}
+
+// Creation is authorized on the name being created, the key MCP checks, so a
+// grant scoped to a team's prefix can create inside it and nowhere else.
+func TestCreateDataResource_AuthorizesTheNameBeingCreated(t *testing.T) {
+	for _, kind := range []string{"secret", "config"} {
+		t.Run(kind, func(t *testing.T) {
+			e := acl.NewEvaluator()
+			e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+				{Resources: []string{"*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+				{
+					Resources:   []string{kind + ":team-*"},
+					Audience:    []string{"*"},
+					Permissions: []string{"write"},
+				},
+			}})
+
+			var created []string
+			mock := &mockWriteClient{
+				createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+					created = append(created, spec.Name)
+					return "new-id", nil
+				},
+				createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+					created = append(created, spec.Name)
+					return "new-id", nil
+				},
+			}
+			router := newTestRouterWithCache(t, cache.New(nil), withACL(e), withWriteClient(mock))
+
+			create := func(name string) int {
+				body := fmt.Sprintf(`{"name":%q,"data":"aGVsbG8="}`, name)
+				req := httptest.NewRequest("POST", "/"+kind+"s", strings.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Accept", "application/json")
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, req)
+
+				return w.Code
+			}
+
+			if code := create("other-db"); code != http.StatusForbidden {
+				t.Errorf("outside the grant: status=%d, want 403", code)
+			}
+			if code := create("team-db"); code != http.StatusCreated {
+				t.Errorf("inside the grant: status=%d, want 201", code)
+			}
+			if len(created) != 1 || created[0] != "team-db" {
+				t.Errorf("created %v, want only team-db", created)
+			}
+
+			req := httptest.NewRequest("GET", "/"+kind+"s", nil)
+			req.Header.Set("Accept", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if allow := w.Header().Get("Allow"); !strings.Contains(allow, "POST") {
+				t.Errorf("Allow = %q, want POST for a caller who can create some %s", allow, kind)
+			}
+		})
+	}
+}
+
+func TestCreateDataResource_RefusedWithoutAnyWriteGrant(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+	router := newTestRouterWithCache(
+		t,
+		cache.New(nil),
+		withACL(e),
+		withWriteClient(&mockWriteClient{}),
+	)
+
+	for _, kind := range []string{"secret", "config"} {
+		req := httptest.NewRequest(
+			"POST",
+			"/"+kind+"s",
+			strings.NewReader(`{"name":"db","data":"aGVsbG8="}`),
+		)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("POST /%ss: status=%d, want 403", kind, w.Code)
+		}
+
+		req = httptest.NewRequest("GET", "/"+kind+"s", nil)
+		req.Header.Set("Accept", "application/json")
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if allow := w.Header().Get("Allow"); strings.Contains(allow, "POST") {
+			t.Errorf("GET /%ss: Allow = %q, want no POST", kind, allow)
+		}
+	}
+}
+
+// A plugin's name is not known until its image is pulled, so installing one
+// still needs a type-wide grant.
+func TestInstallPlugin_RequiresTypeWideWriteGrant(t *testing.T) {
+	for _, tc := range []struct {
+		grant      string
+		wantCreate bool
+	}{
+		{"plugin:team-*", false},
+		{"plugin:*", true},
+	} {
+		t.Run(tc.grant, func(t *testing.T) {
+			e := acl.NewEvaluator()
+			e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+				{Resources: []string{"*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+				{
+					Resources:   []string{tc.grant},
+					Audience:    []string{"*"},
+					Permissions: []string{"write"},
+				},
+			}})
+			installed := false
+			router := newTestRouterWithCache(
+				t,
+				cache.New(nil),
+				withACL(e),
+				withPluginClient(&mockPluginClient{
+					pluginListFn: func(context.Context) (types.PluginsListResponse, error) {
+						return nil, nil
+					},
+					pluginInstallFn: func(context.Context, string) (*types.Plugin, error) {
+						installed = true
+						return &types.Plugin{Name: "team-plugin:latest"}, nil
+					},
+				}),
+			)
+
+			req := httptest.NewRequest(
+				"POST",
+				"/plugins",
+				strings.NewReader(`{"remote":"team-plugin:latest"}`),
+			)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			wantCode := http.StatusForbidden
+			if tc.wantCreate {
+				wantCode = http.StatusCreated
+			}
+			if w.Code != wantCode || installed != tc.wantCreate {
+				t.Errorf(
+					"POST /plugins: status=%d installed=%v, want %d",
+					w.Code,
+					installed,
+					wantCode,
+				)
+			}
+
+			req = httptest.NewRequest("GET", "/plugins", nil)
+			req.Header.Set("Accept", "application/json")
+			w = httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("GET /plugins: status=%d, want 200", w.Code)
+			}
+			if allow := w.Header().Get("Allow"); strings.Contains(allow, "POST") != tc.wantCreate {
+				t.Errorf("GET /plugins: Allow = %q, want POST: %v", allow, tc.wantCreate)
+			}
+		})
+	}
+}
+
+// Rotation is create-then-repoint, and the attach check resolves through the
+// cache the watcher fills only later, so the create must seed it.
+func TestCreatedDataResourceIsImmediatelyAttachable(t *testing.T) {
+	for _, kind := range []string{"secret", "config"} {
+		t.Run(kind, func(t *testing.T) {
+			c := cache.New(nil)
+			c.SetService(
+				swarm.Service{
+					ID:   "svc1",
+					Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+				},
+			)
+			mock := &mockWriteClient{
+				createConfigFn: func(context.Context, swarm.ConfigSpec) (string, error) {
+					return "fresh", nil
+				},
+				createSecretFn: func(context.Context, swarm.SecretSpec) (string, error) {
+					return "fresh", nil
+				},
+				updateServiceSecretsFn: func(context.Context, string, []*swarm.SecretReference) (swarm.Service, error) {
+					return swarm.Service{ID: "svc1"}, nil
+				},
+				updateServiceConfigsFn: func(context.Context, string, []*swarm.ConfigReference) (swarm.Service, error) {
+					return swarm.Service{ID: "svc1"}, nil
+				},
+			}
+			router := newTestRouterWithCache(t, c, withWriteClient(mock))
+
+			send := func(method, path, contentType, body string) int {
+				req := httptest.NewRequest(method, path, strings.NewReader(body))
+				req.Header.Set("Content-Type", contentType)
+				req.Header.Set("Accept", "application/json")
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, req)
+
+				return w.Code
+			}
+
+			if code := send(
+				"POST", "/"+kind+"s", "application/json", `{"name":"rot_v1","data":"aGVsbG8="}`,
+			); code != http.StatusCreated {
+				t.Fatalf("create: status=%d, want 201", code)
+			}
+
+			body := fmt.Sprintf(`{%q:[{%q:"fresh",%q:"rot_v1"}]}`, kind+"s", kind+"ID", kind+"Name")
+			if code := send(
+				"PATCH", "/services/svc1/"+kind+"s", "application/merge-patch+json", body,
+			); code != http.StatusOK {
+				t.Errorf("attach the new %s: status=%d, want 200", kind, code)
+			}
+		})
 	}
 }

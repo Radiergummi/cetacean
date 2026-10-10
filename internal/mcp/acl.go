@@ -92,6 +92,16 @@ func (s *Server) checkRead(ctx context.Context, resourceType, resourceName strin
 	return nil
 }
 
+// readPredicate is checkRead in the predicate form the shared rules in
+// internal/cluster take.
+func (s *Server) readPredicate(ctx context.Context) func(resource string) bool {
+	identity := auth.IdentityFromContext(ctx)
+
+	return func(resource string) bool {
+		return identity == nil || s.canRead(identity, resource)
+	}
+}
+
 // nodeACLName returns the ACL-friendly node name (hostname, falling back to ID).
 // Matches the convention used by REST's nodeHostnameOrID.
 func nodeACLName(n swarm.Node) string {
