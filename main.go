@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -754,7 +755,7 @@ func probeReady(target string, tlsEnabled bool) error {
 
 	client := http.DefaultClient
 	if tlsEnabled {
-		// The probe dials loopback, which the certificate does not name.
+		// The probe dials the listen address, which the certificate need not name.
 		client = &http.Client{Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // loopback probe
 		}}
@@ -773,6 +774,18 @@ func probeReady(target string, tlsEnabled bool) error {
 	return nil
 }
 
+// newMetaMux serves the meta endpoints at the root and, as the full router
+// does, under the base path, where `cetacean healthcheck` probes.
+func newMetaMux(basePath string, health, ready http.HandlerFunc) *http.ServeMux {
+	mux := http.NewServeMux()
+	for _, prefix := range slices.Compact([]string{"", basePath}) {
+		mux.HandleFunc("GET "+prefix+"/-/health", health)
+		mux.HandleFunc("GET "+prefix+"/-/ready", ready)
+	}
+
+	return mux
+}
+
 // serveDualListeners runs two HTTP servers for tsnet mode:
 // - the full router on the tsnet listener (tailnet traffic)
 // - meta endpoints only on the regular listener (health checks from Docker)
@@ -784,13 +797,9 @@ func serveDualListeners(
 	h *api.Handlers,
 	tsnetLn net.Listener,
 ) {
-	metaMux := http.NewServeMux()
-	metaMux.HandleFunc("GET /-/health", h.HandleHealth)
-	metaMux.HandleFunc("GET /-/ready", h.HandleReady)
-
 	metaServer := &http.Server{
 		Addr:        cfg.ListenAddr,
-		Handler:     metaMux,
+		Handler:     newMetaMux(cfg.BasePath, h.HandleHealth, h.HandleReady),
 		ReadTimeout: 5 * time.Second,
 		IdleTimeout: 120 * time.Second,
 	}

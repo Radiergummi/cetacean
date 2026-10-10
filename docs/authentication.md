@@ -280,7 +280,7 @@ volumes:
 ### tsnet mode
 
 Embeds a Tailscale node in the Cetacean process. No local Tailscale installation is needed. The full app is served on
-port 443 of the tailnet node; `/-/health` and `/-/ready` stay on `server.listen_addr` for Docker health checks.
+port 443 of the tailnet node; `/-/health` and `/-/ready` stay on `server.listen_addr` for Docker health checks, at the root and under `server.base_path`.
 
 ```yaml
 environment:

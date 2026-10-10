@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - `cetacean healthcheck` reads the config file, TLS settings and a listen address with a host, so the image's `HEALTHCHECK` no longer marks a working server unhealthy
+- In tsnet mode, `/-/health` and `/-/ready` on `server.listen_addr` also answer under `server.base_path`, where `cetacean healthcheck` probes
 - A flag before `healthcheck` no longer starts a second server, and an unknown subcommand is refused
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
