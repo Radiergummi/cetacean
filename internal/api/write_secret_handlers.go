@@ -29,10 +29,19 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 		basePath:     "/secrets/",
 		typeName:     "Secret",
 		create: func(ctx context.Context, name string, data []byte) (string, error) {
-			return h.secretWriter.CreateSecret(ctx, swarm.SecretSpec{
+			id, err := h.secretWriter.CreateSecret(ctx, swarm.SecretSpec{
 				Name: name,
 				Data: data,
 			})
+			if err == nil {
+				// Attaching resolves through the cache, which the watcher fills later.
+				h.cache.SetSecret(swarm.Secret{
+					ID:   id,
+					Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
+				})
+			}
+
+			return id, err
 		},
 		buildFallback: func(id string, name string) any {
 			return SecretResponse{
