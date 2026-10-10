@@ -145,6 +145,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Recommendation count badges, the commit hash in the footer, gauge subtitles, log task IDs and muted captions are readable at WCAG AA contrast in both themes
 - Detail page sections are announced as headings in order, and the Metrics Console query box exposes a valid role to assistive technology
 - Fixed task rows briefly showing raw service and node IDs instead of names while tasks update
+- The API explorer at `/api` loads under `server.base_path`, and the OpenAPI document's `servers` names the base path
+- The OpenAPI document describes `Range` pagination with its 206 and 416 answers, JSON Feed on every feed endpoint, and the versioned media type
+- The OpenAPI schema for `DELETE /stacks/{name}` matches its response: removed counts per type and an `errors` list
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - One user, or one address under `auth.mode = "none"`, can hold at most a quarter of the event-stream connections, so a single client can no longer lock everyone else out
 - An event stream reconnecting after Cetacean restarts is told to refetch, instead of being replayed unrelated events. Event `id:` values are now opaque strings
