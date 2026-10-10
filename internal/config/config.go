@@ -37,6 +37,7 @@ const (
 
 type Config struct {
 	DockerHost       string
+	DockerTLS        DockerTLSConfig // [docker.tls] / CETACEAN_DOCKER_TLS_*
 	PrometheusURL    string
 	ListenAddr       string
 	BasePath         string           // CETACEAN_BASE_PATH, default ""
@@ -77,6 +78,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		fRecommendations  *bool
 		fSSEBatch         *string
 		fDockerHost       *string
+		fDocker           *fileDocker
 		fPromURL          *string
 		fLogLevel         *string
 		fLogFormat        *string
@@ -109,6 +111,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			}
 		}
 		if fc.Docker != nil {
+			fDocker = fc.Docker
 			fDockerHost = fc.Docker.Host
 		}
 		if fc.Prom != nil {
@@ -190,6 +193,11 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			"CETACEAN_CORS_ORIGINS",
 			fCORSOrigins,
 		),
+	}
+
+	cfg.DockerTLS = loadDockerTLS(flags, fDocker)
+	if err := validateDocker(cfg.DockerHost, cfg.DockerTLS); err != nil {
+		return nil, err
 	}
 
 	if err := ValidateBasePath(cfg.BasePath); err != nil {

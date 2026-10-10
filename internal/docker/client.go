@@ -78,12 +78,21 @@ func (c *Client) CheckAPIVersion(ctx context.Context) error {
 	return nil
 }
 
-func NewClient(host string) (*Client, error) {
+// TLS names the PEM files for reaching an engine over tcp:// with TLS. An empty
+// CA trusts the system roots; an empty Cert and Key present no certificate.
+type TLS struct {
+	CA, Cert, Key string
+}
+
+func NewClient(host string, tls TLS) (*Client, error) {
 	opts := []client.Opt{
 		client.WithVersion(RequiredAPIVersion),
 	}
 	if host != "" {
 		opts = append(opts, client.WithHost(host))
+	}
+	if tls != (TLS{}) {
+		opts = append(opts, client.WithTLSClientConfig(tls.CA, tls.Cert, tls.Key))
 	}
 	c, err := client.NewClientWithOpts(opts...)
 	if err != nil {

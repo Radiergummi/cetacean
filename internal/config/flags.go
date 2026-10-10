@@ -11,6 +11,9 @@ type Flags struct {
 	Config          string // path to TOML config file
 	Listen          *string
 	DockerHost      *string
+	DockerTLSCA     *string
+	DockerTLSCert   *string
+	DockerTLSKey    *string
 	PrometheusURL   *string
 	LogLevel        *string
 	LogFormat       *string
@@ -92,6 +95,21 @@ func ParseFlags(args []string) (*Flags, error) {
 		"Listen address (env: CETACEAN_LISTEN_ADDR, default \":9000\")",
 	)
 	dockerHost := fs.String("docker-host", "", "Docker socket (env: CETACEAN_DOCKER_HOST)")
+	dockerTLSCA := fs.String(
+		"docker-tls-ca",
+		"",
+		"CA bundle for the Docker Engine's certificate (env: CETACEAN_DOCKER_TLS_CA)",
+	)
+	dockerTLSCert := fs.String(
+		"docker-tls-cert",
+		"",
+		"Client certificate for the Docker Engine (env: CETACEAN_DOCKER_TLS_CERT)",
+	)
+	dockerTLSKey := fs.String(
+		"docker-tls-key",
+		"",
+		"Client key for the Docker Engine (env: CETACEAN_DOCKER_TLS_KEY)",
+	)
 	prometheusURL := fs.String(
 		"prometheus-url",
 		"",
@@ -210,6 +228,12 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.Listen = listen
 		case "docker-host":
 			f.DockerHost = dockerHost
+		case "docker-tls-ca":
+			f.DockerTLSCA = dockerTLSCA
+		case "docker-tls-cert":
+			f.DockerTLSCert = dockerTLSCert
+		case "docker-tls-key":
+			f.DockerTLSKey = dockerTLSKey
 		case "prometheus-url":
 			f.PrometheusURL = prometheusURL
 		case "log-level":
