@@ -89,7 +89,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeLinkTemplate(w, r, "/services/{id}")
+	writeLinkTemplate(w, r, spec.linkTemplate)
 	writeCollectionResponse(
 		w,
 		r,
