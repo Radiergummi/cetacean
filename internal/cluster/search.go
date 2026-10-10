@@ -3,6 +3,8 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"iter"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -52,354 +54,176 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 
 	ql := strings.ToLower(query)
 
-	const (
-		stServices = iota
-		stStacks
-		stNodes
-		stTasks
-		stConfigs
-		stSecrets
-		stNetworks
-		stVolumes
-		stCount
-	)
-	type typeResults struct {
-		key     string
-		results []SearchResult
-		count   int
+	searches := [...]func() (typeResults, bool){
+		func() (typeResults, bool) {
+			return searchType(ctx, "services", limit, c.EachService,
+				func(s swarm.Service) bool {
+					hit := ContainsFold(s.Spec.Name, ql)
+					if !hit && s.Spec.TaskTemplate.ContainerSpec != nil {
+						hit = ContainsFold(s.Spec.TaskTemplate.ContainerSpec.Image, ql)
+					}
+
+					return hit || labelsMatch(s.Spec.Labels, ql)
+				},
+				func(s swarm.Service) SearchResult {
+					detail := ""
+					if s.Spec.TaskTemplate.ContainerSpec != nil {
+						detail = StripImageDigest(s.Spec.TaskTemplate.ContainerSpec.Image)
+					}
+
+					return SearchResult{
+						Type:   "services",
+						ID:     s.ID,
+						Name:   s.Spec.Name,
+						Detail: detail,
+						State:  DeriveServiceState(s, c.RunningTaskCount(s.ID)),
+					}
+				},
+			)
+		},
+		func() (typeResults, bool) {
+			return searchType(ctx, "stacks", limit, slices.Values(c.ListStacks()),
+				func(s cache.Stack) bool { return ContainsFold(s.Name, ql) },
+				func(s cache.Stack) SearchResult {
+					return SearchResult{
+						Type:   "stacks",
+						ID:     s.Name,
+						Name:   s.Name,
+						Detail: fmt.Sprintf("%d services", len(s.Services)),
+					}
+				},
+			)
+		},
+		func() (typeResults, bool) {
+			return searchType(ctx, "nodes", limit, c.EachNode,
+				func(n swarm.Node) bool {
+					return ContainsFold(n.Description.Hostname, ql) ||
+						ContainsFold(n.Status.Addr, ql) ||
+						labelsMatch(n.Spec.Labels, ql)
+				},
+				func(n swarm.Node) SearchResult {
+					return SearchResult{
+						Type:   "nodes",
+						ID:     n.ID,
+						Name:   n.Description.Hostname,
+						State:  deriveNodeState(n),
+						Detail: string(n.Spec.Role),
+					}
+				},
+			)
+		},
+		func() (typeResults, bool) {
+			// A task matches on its service's name, so every task needs one — but
+			// only the name. Keeping the services themselves would put a copy of
+			// every service on the heap to read one field off each.
+			svcNames := make(map[string]string)
+			c.EachService(func(s swarm.Service) bool {
+				svcNames[s.ID] = s.Spec.Name
+
+				return true
+			})
+
+			return searchType(ctx, "tasks", limit, c.EachTask,
+				func(t swarm.Task) bool {
+					hit := ContainsFold(svcNames[t.ServiceID], ql)
+					if !hit && t.Spec.ContainerSpec != nil {
+						hit = ContainsFold(t.Spec.ContainerSpec.Image, ql) ||
+							labelsMatch(t.Spec.ContainerSpec.Labels, ql)
+					}
+
+					return hit
+				},
+				func(t swarm.Task) SearchResult {
+					var svc *swarm.Service
+					if s, ok := c.GetService(t.ServiceID); ok {
+						svc = &s
+					}
+					detail := ""
+					if t.Spec.ContainerSpec != nil {
+						detail = StripImageDigest(t.Spec.ContainerSpec.Image)
+					}
+
+					return SearchResult{
+						Type:   "tasks",
+						ID:     t.ID,
+						Name:   TaskName(t, svc),
+						Detail: detail,
+						State:  string(t.Status.State),
+					}
+				},
+			)
+		},
+		func() (typeResults, bool) {
+			return searchType(ctx, "configs", limit, c.EachConfig,
+				func(cfg swarm.Config) bool {
+					return ContainsFold(cfg.Spec.Name, ql) || labelsMatch(cfg.Spec.Labels, ql)
+				},
+				func(cfg swarm.Config) SearchResult {
+					return SearchResult{
+						Type:   "configs",
+						ID:     cfg.ID,
+						Name:   cfg.Spec.Name,
+						Detail: cfg.CreatedAt.Format(time.RFC3339),
+					}
+				},
+			)
+		},
+		func() (typeResults, bool) {
+			redacted := func(yield func(swarm.Secret) bool) {
+				c.EachSecret(func(s swarm.Secret) bool { return yield(RedactSecret(s)) })
+			}
+
+			return searchType(ctx, "secrets", limit, redacted,
+				func(s swarm.Secret) bool {
+					return ContainsFold(s.Spec.Name, ql) || labelsMatch(s.Spec.Labels, ql)
+				},
+				func(s swarm.Secret) SearchResult {
+					return SearchResult{
+						Type:   "secrets",
+						ID:     s.ID,
+						Name:   s.Spec.Name,
+						Detail: s.CreatedAt.Format(time.RFC3339),
+					}
+				},
+			)
+		},
+		func() (typeResults, bool) {
+			return searchType(ctx, "networks", limit, c.EachNetwork,
+				func(n network.Summary) bool {
+					return ContainsFold(n.Name, ql) || labelsMatch(n.Labels, ql)
+				},
+				func(n network.Summary) SearchResult {
+					return SearchResult{Type: "networks", ID: n.ID, Name: n.Name, Detail: n.Driver}
+				},
+			)
+		},
+		func() (typeResults, bool) {
+			return searchType(ctx, "volumes", limit, c.EachVolume,
+				func(v volume.Volume) bool {
+					return ContainsFold(v.Name, ql) || labelsMatch(v.Labels, ql)
+				},
+				func(v volume.Volume) SearchResult {
+					return SearchResult{Type: "volumes", ID: v.Name, Name: v.Name, Detail: v.Driver}
+				},
+			)
+		},
 	}
-	var allResults [stCount]typeResults
+
+	var allResults [len(searches)]typeResults
 
 	var wg sync.WaitGroup
-	wg.Add(stCount)
-
-	// Services
-	go func() {
-		defer wg.Done()
-		var hits []swarm.Service
-		count := 0
-		c.EachService(func(s swarm.Service) bool {
-			if ctx.Err() != nil {
-				return false
+	for i, search := range searches {
+		wg.Go(func() {
+			if tr, ok := search(); ok {
+				allResults[i] = tr
 			}
-			hit := ContainsFold(s.Spec.Name, ql)
-			if !hit && s.Spec.TaskTemplate.ContainerSpec != nil {
-				hit = ContainsFold(s.Spec.TaskTemplate.ContainerSpec.Image, ql)
-			}
-			if !hit {
-				hit = labelsMatch(s.Spec.Labels, ql)
-			}
-			if !hit {
-				return true
-			}
-			count++
-			if len(hits) < limit {
-				hits = append(hits, s)
-			}
-
-			return true
 		})
-		if ctx.Err() != nil {
-			// An abandoned scan counted part of the cluster; publishing that
-			// would report a truncated total as the whole one.
-			return
-		}
-
-		// RunningTaskCount takes the read lock, so it runs out here rather than
-		// inside the scan that already holds it.
-		matches := make([]SearchResult, 0, len(hits))
-		for _, s := range hits {
-			detail := ""
-			if s.Spec.TaskTemplate.ContainerSpec != nil {
-				detail = StripImageDigest(s.Spec.TaskTemplate.ContainerSpec.Image)
-			}
-			matches = append(matches, SearchResult{
-				Type:   "services",
-				ID:     s.ID,
-				Name:   s.Spec.Name,
-				Detail: detail,
-				State:  DeriveServiceState(s, c.RunningTaskCount(s.ID)),
-			})
-		}
-		allResults[stServices] = typeResults{"services", matches, count}
-	}()
-
-	// Stacks
-	go func() {
-		defer wg.Done()
-		stacks := c.ListStacks()
-		var matches []SearchResult
-		count := 0
-		for _, s := range stacks {
-			if ctx.Err() != nil {
-				return
-			}
-			if !ContainsFold(s.Name, ql) {
-				continue
-			}
-			count++
-			if len(matches) >= limit {
-				continue
-			}
-			matches = append(matches, SearchResult{
-				Type:   "stacks",
-				ID:     s.Name,
-				Name:   s.Name,
-				Detail: fmt.Sprintf("%d services", len(s.Services)),
-			})
-		}
-		allResults[stStacks] = typeResults{"stacks", matches, count}
-	}()
-
-	// Nodes
-	go func() {
-		defer wg.Done()
-		var matches []SearchResult
-		count := 0
-		c.EachNode(func(n swarm.Node) bool {
-			if ctx.Err() != nil {
-				return false
-			}
-			hit := ContainsFold(n.Description.Hostname, ql)
-			if !hit {
-				hit = ContainsFold(n.Status.Addr, ql)
-			}
-			if !hit {
-				hit = labelsMatch(n.Spec.Labels, ql)
-			}
-			if !hit {
-				return true
-			}
-			count++
-			if len(matches) >= limit {
-				return true
-			}
-			matches = append(matches, SearchResult{
-				Type:   "nodes",
-				ID:     n.ID,
-				Name:   n.Description.Hostname,
-				State:  deriveNodeState(n),
-				Detail: string(n.Spec.Role),
-			})
-
-			return true
-		})
-		if ctx.Err() != nil {
-			return
-		}
-		allResults[stNodes] = typeResults{"nodes", matches, count}
-	}()
-
-	// Tasks
-	go func() {
-		defer wg.Done()
-		// A task matches on its service's name, so every task needs one — but
-		// only the name. Keeping the services themselves would put a copy of
-		// every service on the heap to read one field off each.
-		svcNames := make(map[string]string)
-		c.EachService(func(s swarm.Service) bool {
-			svcNames[s.ID] = s.Spec.Name
-
-			return true
-		})
-
-		var hits []swarm.Task
-		count := 0
-		c.EachTask(func(t swarm.Task) bool {
-			if ctx.Err() != nil {
-				return false
-			}
-			hit := ContainsFold(svcNames[t.ServiceID], ql)
-			if !hit && t.Spec.ContainerSpec != nil {
-				hit = ContainsFold(t.Spec.ContainerSpec.Image, ql)
-			}
-			if !hit && t.Spec.ContainerSpec != nil {
-				hit = labelsMatch(t.Spec.ContainerSpec.Labels, ql)
-			}
-			if !hit {
-				return true
-			}
-			count++
-			if len(hits) < limit {
-				hits = append(hits, t)
-			}
-
-			return true
-		})
-		if ctx.Err() != nil {
-			return
-		}
-
-		// TaskName needs the whole service, and GetService takes the read lock
-		// the scan above was holding — so naming happens out here, and only for
-		// the tasks that survived.
-		matches := make([]SearchResult, 0, len(hits))
-		for _, t := range hits {
-			var svc *swarm.Service
-			if s, ok := c.GetService(t.ServiceID); ok {
-				svc = &s
-			}
-			detail := ""
-			if t.Spec.ContainerSpec != nil {
-				detail = StripImageDigest(t.Spec.ContainerSpec.Image)
-			}
-			matches = append(matches, SearchResult{
-				Type:   "tasks",
-				ID:     t.ID,
-				Name:   TaskName(t, svc),
-				Detail: detail,
-				State:  string(t.Status.State),
-			})
-		}
-		allResults[stTasks] = typeResults{"tasks", matches, count}
-	}()
-
-	// Configs
-	go func() {
-		defer wg.Done()
-		var matches []SearchResult
-		count := 0
-		c.EachConfig(func(cfg swarm.Config) bool {
-			if ctx.Err() != nil {
-				return false
-			}
-			hit := ContainsFold(cfg.Spec.Name, ql)
-			if !hit {
-				hit = labelsMatch(cfg.Spec.Labels, ql)
-			}
-			if !hit {
-				return true
-			}
-			count++
-			if len(matches) >= limit {
-				return true
-			}
-			matches = append(matches, SearchResult{
-				Type:   "configs",
-				ID:     cfg.ID,
-				Name:   cfg.Spec.Name,
-				Detail: cfg.CreatedAt.Format(time.RFC3339),
-			})
-
-			return true
-		})
-		if ctx.Err() != nil {
-			return
-		}
-		allResults[stConfigs] = typeResults{"configs", matches, count}
-	}()
-
-	// Secrets
-	go func() {
-		defer wg.Done()
-		var matches []SearchResult
-		count := 0
-		c.EachSecret(func(s swarm.Secret) bool {
-			if ctx.Err() != nil {
-				return false
-			}
-			s = RedactSecret(s)
-			hit := ContainsFold(s.Spec.Name, ql)
-			if !hit {
-				hit = labelsMatch(s.Spec.Labels, ql)
-			}
-			if !hit {
-				return true
-			}
-			count++
-			if len(matches) >= limit {
-				return true
-			}
-			matches = append(matches, SearchResult{
-				Type:   "secrets",
-				ID:     s.ID,
-				Name:   s.Spec.Name,
-				Detail: s.CreatedAt.Format(time.RFC3339),
-			})
-
-			return true
-		})
-		if ctx.Err() != nil {
-			return
-		}
-		allResults[stSecrets] = typeResults{"secrets", matches, count}
-	}()
-
-	// Networks
-	go func() {
-		defer wg.Done()
-		var matches []SearchResult
-		count := 0
-		c.EachNetwork(func(n network.Summary) bool {
-			if ctx.Err() != nil {
-				return false
-			}
-			hit := ContainsFold(n.Name, ql)
-			if !hit {
-				hit = labelsMatch(n.Labels, ql)
-			}
-			if !hit {
-				return true
-			}
-			count++
-			if len(matches) >= limit {
-				return true
-			}
-			matches = append(matches, SearchResult{
-				Type:   "networks",
-				ID:     n.ID,
-				Name:   n.Name,
-				Detail: n.Driver,
-			})
-
-			return true
-		})
-		if ctx.Err() != nil {
-			return
-		}
-		allResults[stNetworks] = typeResults{"networks", matches, count}
-	}()
-
-	// Volumes
-	go func() {
-		defer wg.Done()
-		var matches []SearchResult
-		count := 0
-		c.EachVolume(func(v volume.Volume) bool {
-			if ctx.Err() != nil {
-				return false
-			}
-			hit := ContainsFold(v.Name, ql)
-			if !hit {
-				hit = labelsMatch(v.Labels, ql)
-			}
-			if !hit {
-				return true
-			}
-			count++
-			if len(matches) >= limit {
-				return true
-			}
-			matches = append(matches, SearchResult{
-				Type:   "volumes",
-				ID:     v.Name,
-				Name:   v.Name,
-				Detail: v.Driver,
-			})
-
-			return true
-		})
-		if ctx.Err() != nil {
-			return
-		}
-		allResults[stVolumes] = typeResults{"volumes", matches, count}
-	}()
-
+	}
 	wg.Wait()
 
 	out := SearchResults{
-		Hits:   make(map[string][]SearchResult, stCount),
-		Counts: make(map[string]int, stCount),
+		Hits:   make(map[string][]SearchResult, len(searches)),
+		Counts: make(map[string]int, len(searches)),
 	}
 	for _, tr := range allResults {
 		if tr.count == 0 {
@@ -410,6 +234,54 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		out.Total += tr.count
 	}
 	return out
+}
+
+// typeResults is one resource type's share of a search: its capped hits and
+// its pre-cap match count.
+type typeResults struct {
+	key     string
+	results []SearchResult
+	count   int
+}
+
+// searchType counts every item of each that matches and builds a result for
+// the first limit of them. It reports false when ctx ended mid-scan, since a
+// partial count published as the whole one would understate the total. build
+// runs after the scan, which holds the cache's read lock that builders take.
+func searchType[T any](
+	ctx context.Context,
+	key string,
+	limit int,
+	each iter.Seq[T],
+	match func(T) bool,
+	build func(T) SearchResult,
+) (typeResults, bool) {
+	var hits []T
+	count := 0
+	each(func(item T) bool {
+		if ctx.Err() != nil {
+			return false
+		}
+		if !match(item) {
+			return true
+		}
+		count++
+		if len(hits) < limit {
+			hits = append(hits, item)
+		}
+
+		return true
+	})
+	if ctx.Err() != nil {
+		return typeResults{}, false
+	}
+
+	results := make([]SearchResult, 0, len(hits))
+	for _, item := range hits {
+		results = append(results, build(item))
+	}
+
+	return typeResults{key, results, count}, true
 }
 
 // ContainsFold reports whether s contains substr using case-insensitive
