@@ -295,10 +295,15 @@ async function mutationFetch<T>(
   method: string,
   body?: unknown | undefined,
   contentType?: string | undefined,
+  ifMatch?: string | undefined,
 ): Promise<T> {
   const h: Record<string, string> = { Accept: "application/json" };
   if (contentType) {
     h["Content-Type"] = contentType;
+  }
+
+  if (ifMatch) {
+    h["If-Match"] = ifMatch;
   }
   const init: RequestInit = {
     method,
@@ -315,6 +320,12 @@ async function mutationFetch<T>(
   if (!response.ok) {
     if (response.status === 401 && response.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
       redirectToLoginAndStop();
+    }
+
+    if (response.status === 412) {
+      const { type, title } = await problemFromResponse(response);
+
+      throw new ApiError(type, title, 412, staleWriteMessage);
     }
 
     await throwResponseError(response);
@@ -335,16 +346,43 @@ export function get<T>(path: string, signal?: AbortSignal): Promise<FetchResult<
   return fetchJSON(path, signal, z.unknown());
 }
 
-export function put<T>(path: string, body: unknown): Promise<T> {
-  return mutationFetch(path, "PUT", body, "application/json");
+/** What a write refused with 412 tells the user. */
+export const staleWriteMessage =
+  "This changed since you loaded it. Reload to see the current version, then make your change again.";
+
+/**
+ * The ETag a GET of the path would carry now, to send back as `If-Match` on a
+ * write. Undefined when it cannot be read; the write then goes unconditioned.
+ */
+export async function currentETag(path: string): Promise<string | undefined> {
+  try {
+    const response = await fetch(apiPath(path), {
+      method: "HEAD",
+      headers,
+      signal: AbortSignal.timeout(defaultTimeoutMilliseconds),
+    });
+
+    return (response.ok && response.headers.get("ETag")) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function put<T>(path: string, body: unknown, ifMatch?: string | undefined): Promise<T> {
+  return mutationFetch(path, "PUT", body, "application/json", ifMatch);
 }
 
 export function post<T>(path: string): Promise<T> {
   return mutationFetch(path, "POST");
 }
 
-export function patch<T>(path: string, body: unknown, contentType: string): Promise<T> {
-  return mutationFetch(path, "PATCH", body, contentType);
+export function patch<T>(
+  path: string,
+  body: unknown,
+  contentType: string,
+  ifMatch?: string | undefined,
+): Promise<T> {
+  return mutationFetch(path, "PATCH", body, contentType, ifMatch);
 }
 
 export function del(path: string): Promise<void> {
@@ -816,8 +854,8 @@ export const api = {
     ).then(({ data }) => data),
   scaleService: (id: string, replicas: number) =>
     put<ServiceDetail>(`/services/${id}/scale`, { replicas }),
-  updateServiceEndpointMode: (id: string, mode: "vip" | "dnsrr") =>
-    put<ServiceDetail>(`/services/${id}/endpoint-mode`, { mode }),
+  updateServiceEndpointMode: (id: string, mode: "vip" | "dnsrr", ifMatch?: string | undefined) =>
+    put<ServiceDetail>(`/services/${id}/endpoint-mode`, { mode }, ifMatch),
   updateServiceImage: (id: string, image: string) =>
     put<ServiceDetail>(`/services/${id}/image`, { image }),
   rollbackService: (id: string) => post<ServiceDetail>(`/services/${id}/rollback`),
@@ -826,8 +864,8 @@ export const api = {
     put<{ node: Node }>(`/nodes/${id}/availability`, { availability }),
   removeTask: (id: string) => del(`/tasks/${id}`),
   removeService: (id: string) => del(`/services/${id}`),
-  updateNodeRole: (id: string, role: "worker" | "manager") =>
-    put<{ node: Node }>(`/nodes/${id}/role`, { role }),
+  updateNodeRole: (id: string, role: "worker" | "manager", ifMatch?: string | undefined) =>
+    put<{ node: Node }>(`/nodes/${id}/role`, { role }, ifMatch),
   removeNode: (id: string, force?: boolean) =>
     del(force ? `/nodes/${id}?force=true` : `/nodes/${id}`),
   removeStack: (name: string) =>
@@ -841,17 +879,19 @@ export const api = {
     mutationFetch<ConfigDetail>("/configs", "POST", { name, data }, "application/json"),
   createSecret: (name: string, data: string) =>
     mutationFetch<SecretDetail>("/secrets", "POST", { name, data }, "application/json"),
-  patchConfigLabels: (id: string, ops: PatchOp[]) =>
+  patchConfigLabels: (id: string, ops: PatchOp[], ifMatch?: string | undefined) =>
     patch<{ labels: Record<string, string> }>(
       `/configs/${id}/labels`,
       ops,
       "application/json-patch+json",
+      ifMatch,
     ).then(({ labels }) => labels),
-  patchSecretLabels: (id: string, ops: PatchOp[]) =>
+  patchSecretLabels: (id: string, ops: PatchOp[], ifMatch?: string | undefined) =>
     patch<{ labels: Record<string, string> }>(
       `/secrets/${id}/labels`,
       ops,
       "application/json-patch+json",
+      ifMatch,
     ).then(({ labels }) => labels),
   removeNetwork: (id: string) => del(`/networks/${id}`),
   removeVolume: (name: string, force?: boolean) =>
@@ -920,32 +960,36 @@ export const api = {
     ).then(({ data }) => data.mounts ?? []),
 
   // Tier 2: sub-resource PATCHes
-  patchServiceEnv: (id: string, ops: PatchOp[]) =>
+  patchServiceEnv: (id: string, ops: PatchOp[], ifMatch?: string | undefined) =>
     patch<{ env: Record<string, string> }>(
       `/services/${id}/env`,
       ops,
       "application/json-patch+json",
+      ifMatch,
     ).then(({ env }) => env),
-  patchNodeLabels: (id: string, ops: PatchOp[]) =>
+  patchNodeLabels: (id: string, ops: PatchOp[], ifMatch?: string | undefined) =>
     patch<{ labels: Record<string, string> }>(
       `/nodes/${id}/labels`,
       ops,
       "application/json-patch+json",
+      ifMatch,
     ).then(({ labels }) => labels),
-  patchServiceLabels: (id: string, ops: PatchOp[]) =>
+  patchServiceLabels: (id: string, ops: PatchOp[], ifMatch?: string | undefined) =>
     patch<{ labels: Record<string, string> }>(
       `/services/${id}/labels`,
       ops,
       "application/json-patch+json",
+      ifMatch,
     ).then(({ labels }) => labels),
-  patchServiceResources: (id: string, partial: unknown) =>
+  patchServiceResources: (id: string, partial: unknown, ifMatch?: string | undefined) =>
     patch<{ resources: Record<string, unknown> }>(
       `/services/${id}/resources`,
       partial,
       "application/merge-patch+json",
+      ifMatch,
     ).then(({ resources }) => resources),
-  putServiceHealthcheck: (id: string, healthcheck: Healthcheck) =>
-    put<{ healthcheck: Healthcheck }>(`/services/${id}/healthcheck`, healthcheck),
+  putServiceHealthcheck: (id: string, healthcheck: Healthcheck, ifMatch?: string | undefined) =>
+    put<{ healthcheck: Healthcheck }>(`/services/${id}/healthcheck`, healthcheck, ifMatch),
 
   servicePorts: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ ports: PortConfig[] }>(`/services/${id}/ports`, signal, schema.portsSchema).then(
@@ -959,59 +1003,79 @@ export const api = {
       schema.placementSchema,
     ).then(({ data }) => data.placement),
 
-  putServicePlacement: (id: string, placement: Placement) =>
-    put<{ placement: Placement }>(`/services/${id}/placement`, placement),
+  putServicePlacement: (id: string, placement: Placement, ifMatch?: string | undefined) =>
+    put<{ placement: Placement }>(`/services/${id}/placement`, placement, ifMatch),
 
-  patchServicePorts: (id: string, ports: PortConfig[]) =>
+  patchServicePorts: (id: string, ports: PortConfig[], ifMatch?: string | undefined) =>
     patch<{ ports: PortConfig[] }>(
       `/services/${id}/ports`,
       { ports },
       "application/merge-patch+json",
+      ifMatch,
     ),
-  patchServiceConfigs: (id: string, configs: ServiceConfigRef[]) =>
+  patchServiceConfigs: (id: string, configs: ServiceConfigRef[], ifMatch?: string | undefined) =>
     patch<{ configs: ServiceConfigRef[] }>(
       `/services/${id}/configs`,
       { configs },
       "application/merge-patch+json",
+      ifMatch,
     ),
-  patchServiceSecrets: (id: string, secrets: ServiceSecretRef[]) =>
+  patchServiceSecrets: (id: string, secrets: ServiceSecretRef[], ifMatch?: string | undefined) =>
     patch<{ secrets: ServiceSecretRef[] }>(
       `/services/${id}/secrets`,
       { secrets },
       "application/merge-patch+json",
+      ifMatch,
     ),
-  patchServiceNetworks: (id: string, networks: ServiceNetworkRef[]) =>
+  patchServiceNetworks: (id: string, networks: ServiceNetworkRef[], ifMatch?: string | undefined) =>
     patch<{ networks: ServiceNetworkRef[] }>(
       `/services/${id}/networks`,
       { networks },
       "application/merge-patch+json",
+      ifMatch,
     ),
-  patchServiceMounts: (id: string, mounts: ServiceMount[]) =>
+  patchServiceMounts: (id: string, mounts: ServiceMount[], ifMatch?: string | undefined) =>
     patch<{ mounts: ServiceMount[] }>(
       `/services/${id}/mounts`,
       { mounts },
       "application/merge-patch+json",
+      ifMatch,
     ),
 
-  patchServiceUpdatePolicy: (id: string, partial: Record<string, unknown>) =>
+  patchServiceUpdatePolicy: (
+    id: string,
+    partial: Record<string, unknown>,
+    ifMatch?: string | undefined,
+  ) =>
     patch<{ updatePolicy: UpdateConfig }>(
       `/services/${id}/update-policy`,
       partial,
       "application/merge-patch+json",
+      ifMatch,
     ),
 
-  patchServiceRollbackPolicy: (id: string, partial: Record<string, unknown>) =>
+  patchServiceRollbackPolicy: (
+    id: string,
+    partial: Record<string, unknown>,
+    ifMatch?: string | undefined,
+  ) =>
     patch<{ rollbackPolicy: UpdateConfig }>(
       `/services/${id}/rollback-policy`,
       partial,
       "application/merge-patch+json",
+      ifMatch,
     ),
 
-  patchServiceLogDriver: (id: string, partial: Record<string, unknown>) =>
+  patchServiceLogDriver: (
+    id: string,
+    partial: Record<string, unknown>,
+    ifMatch?: string | undefined,
+  ) =>
     patch<{ logDriver: LogDriver }>(
       `/services/${id}/log-driver`,
       partial,
       "application/merge-patch+json",
+      ifMatch,
     ),
 
   serviceContainerConfig: (id: string, signal?: AbortSignal) =>
@@ -1021,11 +1085,16 @@ export const api = {
       schema.containerConfigSchema,
     ),
 
-  patchServiceContainerConfig: (id: string, partial: Record<string, unknown>) =>
+  patchServiceContainerConfig: (
+    id: string,
+    partial: Record<string, unknown>,
+    ifMatch?: string | undefined,
+  ) =>
     patch<{ containerConfig: ContainerConfig }>(
       `/services/${id}/container-config`,
       partial,
       "application/merge-patch+json",
+      ifMatch,
     ).then(({ containerConfig }) => containerConfig),
 
   health: (signal?: AbortSignal) =>

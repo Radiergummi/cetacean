@@ -44,9 +44,10 @@ export async function saveIntegrationLabels(
   newLabels: Record<string, string>,
   serviceId: string,
   onSaved: (updated: Record<string, string>) => void,
+  ifMatch?: string | undefined,
 ): Promise<void> {
   const ops = diffLabels(rawLabels, newLabels);
-  const updated = await api.patchServiceLabels(serviceId, ops);
+  const updated = await api.patchServiceLabels(serviceId, ops, ifMatch);
   onSaved(updated);
 }
 

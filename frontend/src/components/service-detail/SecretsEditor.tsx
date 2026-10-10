@@ -5,6 +5,7 @@ import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { splitStackPrefix } from "@/lib/searchConstants";
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
@@ -21,6 +22,7 @@ export function SecretsEditor({
   onSaved,
   canEdit = false,
 }: SecretsEditorProps & { canEdit?: boolean }) {
+  const version = useEditVersion(`/services/${serviceId}/secrets`);
   const [availableSecrets, setAvailableSecrets] = useState<ComboboxOption[]>([]);
   const [newSecretId, setNewSecretId] = useState("");
   const [newTargetPath, setNewTargetPath] = useState("");
@@ -57,7 +59,10 @@ export function SecretsEditor({
       columns={["Secret", "Target"]}
       defaultOpen={secrets.length > 0}
       editDisabled={!canEdit}
-      onEditStart={fetchSecrets}
+      onEditStart={() => {
+        version.capture();
+        fetchSecrets();
+      }}
       emptyLabel="No secrets attached"
       emptyHint="Click Edit to attach Docker secrets to this service."
       keyFn={({ secretID }) => secretID}
@@ -128,7 +133,7 @@ export function SecretsEditor({
         setNewTargetPath("");
       }}
       onSave={async (items) => {
-        const result = await api.patchServiceSecrets(serviceId, items);
+        const result = await api.patchServiceSecrets(serviceId, items, await version.ifMatch());
         onSaved(result.secrets);
       }}
     />

@@ -5,6 +5,7 @@ import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Plus, Trash2 } from "lucide-react";
@@ -29,6 +30,7 @@ export function PortsEditor({
   onSaved,
   canEdit = false,
 }: PortsEditorProps & { canEdit?: boolean }) {
+  const version = useEditVersion(`/services/${serviceId}/ports`);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -36,6 +38,7 @@ export function PortsEditor({
   useEscapeCancel(editing, () => cancelEdit());
 
   function openEdit() {
+    version.capture();
     setDraft(ports.map((port) => ({ ...port })));
     setSaveError(null);
     setEditing(true);
@@ -65,7 +68,7 @@ export function PortsEditor({
     setSaveError(null);
 
     try {
-      const result = await api.patchServicePorts(serviceId, draft);
+      const result = await api.patchServicePorts(serviceId, draft, await version.ifMatch());
       setEditing(false);
       onSaved(result.ports);
     } catch (error) {

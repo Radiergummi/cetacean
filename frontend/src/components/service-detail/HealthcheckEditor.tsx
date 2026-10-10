@@ -7,6 +7,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { NumberField } from "@/components/ui/number-field";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { formatDuration, nanosToSeconds } from "@/lib/format";
 import { joinCommand, parseCommand } from "@/lib/parseCommand";
@@ -130,6 +131,7 @@ export function HealthcheckEditor({
   onSaved: (updated: Healthcheck | null) => void;
   canEdit?: boolean | undefined;
 }) {
+  const version = useEditVersion(`/services/${serviceId}/healthcheck`);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -141,6 +143,7 @@ export function HealthcheckEditor({
   }
 
   function openEdit() {
+    version.capture();
     setForm(formFromHealthcheck(healthcheck));
     setSaveError(null);
     setEditing(true);
@@ -156,7 +159,11 @@ export function HealthcheckEditor({
     setSaveError(null);
 
     try {
-      const result = await api.putServiceHealthcheck(serviceId, formToHealthcheck(form));
+      const result = await api.putServiceHealthcheck(
+        serviceId,
+        formToHealthcheck(form),
+        await version.ifMatch(),
+      );
       onSaved(result.healthcheck);
       setEditing(false);
     } catch (error) {

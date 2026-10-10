@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import type { ClusterCapacity } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { formatBytes, formatCores, formatNumber, formatPercentage } from "@/lib/format";
 import { getErrorMessage } from "@/lib/utils";
@@ -61,6 +62,7 @@ export function ResourcesEditor({
   onSaved: (updated: ServiceResourceShape) => void;
   canEdit?: boolean | undefined;
 }) {
+  const version = useEditVersion(`/services/${serviceId}/resources`);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -81,6 +83,7 @@ export function ResourcesEditor({
   const [capacityError, setCapacityError] = useState(false);
 
   function openEdit() {
+    version.capture();
     setCpu({
       reservation: Reservations?.NanoCPUs != null ? Reservations.NanoCPUs / 1e9 : undefined,
       limit: Limits?.NanoCPUs != null ? Limits.NanoCPUs / 1e9 : undefined,
@@ -149,7 +152,7 @@ export function ResourcesEditor({
     setSaveError(null);
 
     try {
-      const updated = await api.patchServiceResources(serviceId, patch);
+      const updated = await api.patchServiceResources(serviceId, patch, await version.ifMatch());
 
       onSaved(updated);
       setEditing(false);

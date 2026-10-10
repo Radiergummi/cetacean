@@ -21,6 +21,7 @@ import {
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
 import { useDetailResource } from "../hooks/useDetailResource";
+import { useEditVersion } from "../hooks/useEditVersion";
 import { useGaugeValue } from "../hooks/useGaugeValue";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import {
@@ -40,6 +41,7 @@ import { useParams } from "react-router-dom";
 
 export default function NodeDetail() {
   const { id } = useParams<{ id: string }>();
+  const labelsVersion = useEditVersion(`/nodes/${id}/labels`);
 
   const extraQueryKeys = useMemo(
     () =>
@@ -238,8 +240,9 @@ export default function NodeDetail() {
           editDisabled={!allowedMethods.has("PATCH")}
           isKeyReadOnly={isReservedLabelKey}
           validateKey={validateLabelKey}
+          onEditStart={labelsVersion.capture}
           onSave={async (ops) => {
-            const updated = await api.patchNodeLabels(node.ID, ops);
+            const updated = await api.patchNodeLabels(node.ID, ops, await labelsVersion.ifMatch());
             setPatchedLabels({ from: node.Version.Index, entries: updated });
 
             return updated;
