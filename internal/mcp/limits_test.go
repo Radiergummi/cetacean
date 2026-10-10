@@ -40,11 +40,21 @@ func TestHandlerCapsListenStreams(t *testing.T) {
 	srv.Handler().
 		ServeHTTP(rec, modernRequest(t, 1, "subscriptions/listen", `{"notifications":{}}`))
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("listen past the cap: status = %d, want 503", rec.Code)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("listen past the cap: status = %d, want 429", rec.Code)
 	}
 	if rec.Header().Get("Retry-After") == "" {
 		t.Error("listen past the cap: no Retry-After")
+	}
+
+	// A full cap must not answer for the origin guard, which owes a 403.
+	forged := modernRequest(t, 3, "subscriptions/listen", `{"notifications":{}}`)
+	forged.Header.Set("Origin", "https://evil.example")
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, forged)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("forged origin while listens are full: status = %d, want 403", rec.Code)
 	}
 
 	// Only listen streams count against the cap.

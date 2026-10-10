@@ -439,9 +439,10 @@ func (s *Server) Close() {
 // upstream provider the deployment already runs, or nobody — the last only
 // where startup validation has established that auth mode is "none".
 func (s *Server) Handler() http.Handler {
-	// The protocol gate sits innermost so that origin and bearer checks answer
-	// first: an unauthenticated caller learns nothing about what we speak.
-	h := s.requireModernProtocol(s.httpServer)
+	// The protocol gate and listen cap sit innermost so that origin and bearer
+	// checks answer first: an unauthenticated caller learns nothing about what
+	// we speak.
+	h := s.requireModernProtocol(s.limitListens(s.httpServer))
 
 	switch s.guard {
 	case guardBearer:
@@ -451,7 +452,7 @@ func (s *Server) Handler() http.Handler {
 	case guardNone:
 	}
 
-	return s.limitRequests(s.originGuard(h))
+	return limitBody(s.originGuard(h))
 }
 
 // originGuard is the DNS-rebinding defense the Streamable HTTP transport
