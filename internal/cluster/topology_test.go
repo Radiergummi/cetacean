@@ -182,8 +182,7 @@ func TestPlacementGraphJoinsNodesToServices(t *testing.T) {
 	graph := PlacementGraph(
 		[]swarm.Node{clusterNode},
 		tasks,
-		[]swarm.Service{replicated("api", 2)},
-	)
+		[]swarm.Service{replicated("api", 2)}, nil)
 
 	if graph.View != TopologyViewPlacement {
 		t.Errorf("view = %q, want %q", graph.View, TopologyViewPlacement)
@@ -229,8 +228,7 @@ func TestPlacementGraphDropsTasksOnUnreadableResources(t *testing.T) {
 			{ID: "t1", NodeID: "node-hidden", ServiceID: "svc-api"},
 			{ID: "t2", NodeID: "node-1", ServiceID: "svc-hidden"},
 		},
-		[]swarm.Service{replicated("api", 1)},
-	)
+		[]swarm.Service{replicated("api", 1)}, nil)
 
 	if len(graph.Edges) != 0 {
 		t.Errorf("edges = %+v, want none: neither task joins two visible resources", graph.Edges)
@@ -247,7 +245,7 @@ func TestPlacementGraphDropsTasksOnUnreadableResources(t *testing.T) {
 // is the one an operator most needs to see, so it stays as an isolated vertex
 // rather than disappearing with its tasks.
 func TestPlacementGraphKeepsUnscheduledServices(t *testing.T) {
-	graph := PlacementGraph(nil, nil, []swarm.Service{replicated("api", 3)})
+	graph := PlacementGraph(nil, nil, []swarm.Service{replicated("api", 3)}, nil)
 
 	svc := findNode(t, graph, "svc-api")
 	if svc.State != "failed" {
@@ -280,7 +278,7 @@ func TestGraphsAreDeterministic(t *testing.T) {
 func TestGraphsNeverMarshalNullSlices(t *testing.T) {
 	for name, graph := range map[string]TopologyGraph{
 		"network":   NetworkGraph(nil, nil),
-		"placement": PlacementGraph(nil, nil, nil),
+		"placement": PlacementGraph(nil, nil, nil, nil),
 	} {
 		if graph.Nodes == nil {
 			t.Errorf("%s: Nodes is nil and would marshal to null", name)
@@ -375,8 +373,7 @@ func TestPlacementGraphIgnoresReplacedTasks(t *testing.T) {
 	graph := PlacementGraph(
 		[]swarm.Node{clusterNode},
 		tasks,
-		[]swarm.Service{replicated("api", 1)},
-	)
+		[]swarm.Service{replicated("api", 1)}, nil)
 
 	if len(graph.Edges) != 1 {
 		t.Fatalf("edges = %+v, want one", graph.Edges)

@@ -150,6 +150,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The OpenAPI schema for `DELETE /stacks/{name}` matches its response: removed counts per type and an `errors` list
 - `Allow` no longer offers `POST` on a single config or secret, `PUT` on a service's mode, or plugin install below operations level 3; the Plugins page hides Install accordingly
 - Applying a drain from the Recommendations page asks for confirmation first, and the demo no longer offers writes a resource doesn't support
+- A service restarting in a loop reads `flapping` and counts as unhealthy in MCP's `get_cluster_status`, the overview page and search, instead of `running` whenever a replica is briefly up
+- A service's activity, `GET /history` and MCP's `get_events` include its tasks' changes, so a crash-looping service no longer shows an empty timeline
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - One user, or one address under `auth.mode = "none"`, can hold at most a quarter of the event-stream connections, so a single client can no longer lock everyone else out
 - An event stream reconnecting after Cetacean restarts is told to refetch, instead of being replayed unrelated events. Event `id:` values are now opaque strings

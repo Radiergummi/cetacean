@@ -56,6 +56,8 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 
 	searches := [...]func() (typeResults, bool){
 		func() (typeResults, bool) {
+			flapping := c.FlappingServices()
+
 			return searchType(ctx, "services", limit, c.EachService,
 				func(s swarm.Service) bool {
 					hit := ContainsFold(s.Spec.Name, ql)
@@ -76,7 +78,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 						ID:     s.ID,
 						Name:   s.Spec.Name,
 						Detail: detail,
-						State:  DeriveServiceState(s, c.RunningTaskCount(s.ID)),
+						State:  DeriveServiceState(s, c.RunningTaskCount(s.ID), flapping[s.ID]),
 					}
 				},
 			)

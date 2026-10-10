@@ -14,6 +14,7 @@ const stateTones: Record<string, StatusTone> = {
   ready: "ok",
   complete: "ok",
   failed: "danger",
+  flapping: "danger",
   rejected: "danger",
   down: "danger",
   orphaned: "danger",

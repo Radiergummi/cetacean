@@ -46,6 +46,33 @@ func TestBuildClusterStatusNamesUnhealthyServices(t *testing.T) {
 	}
 }
 
+// A crash loop has its replica up a good part of the time. Caught then, the
+// count matches the desired one, and only the restart rate says otherwise.
+func TestBuildClusterStatusNamesAFlappingService(t *testing.T) {
+	one := uint64(1)
+	svc := swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "shop_flaky"},
+			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &one}},
+		},
+	}
+
+	got := BuildClusterStatus(
+		cache.ClusterSnapshot{Flapping: map[string]bool{"svc1": true}},
+		[]swarm.Service{svc},
+		nil,
+		map[string]int{"svc1": 1},
+	)
+
+	if got.Healthy {
+		t.Error("Healthy is true with a crash-looping service")
+	}
+	if len(got.UnhealthyServices) != 1 || got.UnhealthyServices[0].State != "flapping" {
+		t.Errorf("unhealthy = %+v, want shop_flaky as flapping", got.UnhealthyServices)
+	}
+}
+
 func TestBuildClusterStatusReportsHealthyWhenNothingIsWrong(t *testing.T) {
 	one := uint64(1)
 	svc := swarm.Service{

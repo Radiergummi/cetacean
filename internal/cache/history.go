@@ -19,6 +19,10 @@ type HistoryEntry struct {
 	// Service and Stack are the remove Event's, for authorizing its replay.
 	Service string `json:"-"`
 	Stack   string `json:"-"`
+
+	// ServiceID is the owning service of a task entry. A query for the service
+	// returns it too, since a crash loop changes nothing on the service itself.
+	ServiceID string `json:"-"`
 }
 
 type HistoryQuery struct {
@@ -215,13 +219,11 @@ func (h *History) Append(e HistoryEntry) uint64 {
 
 	h.entries[h.cursor] = e
 
-	// Update the per-resource index.
-	ring := h.byResource[e.ResourceID]
-	if ring == nil {
-		ring = &indexRing{indices: make([]int, indexRingSize)}
-		h.byResource[e.ResourceID] = ring
+	// Update the per-resource index, under the owning service as well.
+	h.index(e.ResourceID)
+	if e.ServiceID != "" {
+		h.index(e.ServiceID)
 	}
-	ring.push(h.cursor)
 
 	h.cursor++
 	if h.cursor >= h.size {
@@ -230,6 +232,20 @@ func (h *History) Append(e HistoryEntry) uint64 {
 	}
 
 	return h.count
+}
+
+func (h *History) index(id string) {
+	ring := h.byResource[id]
+	if ring == nil {
+		ring = &indexRing{indices: make([]int, indexRingSize)}
+		h.byResource[id] = ring
+	}
+	ring.push(h.cursor)
+}
+
+// about reports whether an entry belongs on id's timeline.
+func (e HistoryEntry) about(id string) bool {
+	return e.ResourceID == id || e.ServiceID == id
 }
 
 func (h *History) List(q HistoryQuery) []HistoryEntry {
@@ -298,7 +314,7 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 // two list paths share it so a filter added here is honoured on both, which is
 // the same reason listByResource takes the whole query.
 func (q HistoryQuery) matches(e HistoryEntry) bool {
-	if q.ResourceID != "" && e.ResourceID != q.ResourceID {
+	if q.ResourceID != "" && !e.about(q.ResourceID) {
 		return false
 	}
 
@@ -346,7 +362,7 @@ func (h *History) listByResource(
 
 		// Skip stale entries: the ring buffer slot may have been overwritten
 		// by a different resource's entry since the index was recorded.
-		if e.ResourceID != q.ResourceID {
+		if !e.about(q.ResourceID) {
 			return true
 		}
 

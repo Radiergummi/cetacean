@@ -55,10 +55,11 @@ func ServiceConverged(svc swarm.Service, runningCount int) (bool, string) {
 }
 
 // DeriveServiceState returns a human-readable state for a service given its
-// running-task count — "running", "pending", "failed" or "updating" — and is
-// read by both transports so they cannot report differently. "updating" also
-// covers a rollback, paused or freshly started: the desired spec is in flux.
-func DeriveServiceState(svc swarm.Service, runningCount int) string {
+// running-task count — "running", "flapping", "pending", "failed" or
+// "updating" — and is read by both transports so they cannot report
+// differently. flapping, from cache.FlappingServices, stops a crash loop caught
+// with its replicas up from reading as "running".
+func DeriveServiceState(svc swarm.Service, runningCount int, flapping bool) string {
 	if serviceUpdateInFlight(svc) {
 		return "updating"
 	}
@@ -66,6 +67,9 @@ func DeriveServiceState(svc swarm.Service, runningCount int) string {
 	if svc.Spec.Mode.Global != nil {
 		if runningCount == 0 {
 			return "pending"
+		}
+		if flapping {
+			return "flapping"
 		}
 		return "running"
 	}
@@ -81,6 +85,9 @@ func DeriveServiceState(svc swarm.Service, runningCount int) string {
 	}
 	if runningCount < desired {
 		return "pending"
+	}
+	if flapping {
+		return "flapping"
 	}
 	return "running"
 }
