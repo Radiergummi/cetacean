@@ -1,4 +1,4 @@
-package api
+package cluster
 
 import (
 	"errors"
@@ -25,6 +25,30 @@ func TestIsRemovalConflict(t *testing.T) {
 			true,
 		},
 		{
+			"network",
+			fmt.Errorf(
+				"%w: rpc error: code = FailedPrecondition desc = network abc is in use by service def",
+				cerrdefs.ErrInvalidArgument,
+			),
+			true,
+		},
+		{
+			"network",
+			fmt.Errorf(
+				"%w: rpc error: code = FailedPrecondition desc = network abc is in use by task def",
+				cerrdefs.ErrInvalidArgument,
+			),
+			true,
+		},
+		{
+			"network",
+			fmt.Errorf(
+				"%w: rpc error: code = FailedPrecondition desc = ingress network cannot be removed because service def depends on it",
+				cerrdefs.ErrInvalidArgument,
+			),
+			true,
+		},
+		{
 			"node",
 			fmt.Errorf(
 				"%w: rpc error: code = FailedPrecondition desc = node abc is not down and can't be removed",
@@ -45,11 +69,27 @@ func TestIsRemovalConflict(t *testing.T) {
 			fmt.Errorf("%w: remove data: volume is in use - [19625d2c]", cerrdefs.ErrConflict),
 			true,
 		},
+		{
+			"config",
+			fmt.Errorf(
+				"%w: rpc error: code = InvalidArgument desc = config 'app' is in use by the following service: web",
+				cerrdefs.ErrInvalidArgument,
+			),
+			true,
+		},
+		{
+			"secret",
+			fmt.Errorf(
+				"%w: rpc error: code = InvalidArgument desc = secret 'key' is in use by the following services: web, api",
+				cerrdefs.ErrInvalidArgument,
+			),
+			true,
+		},
 		{"network", errors.New("connection reset"), false},
 		{"volume", fmt.Errorf("%w: invalid volume name", cerrdefs.ErrInvalidArgument), false},
 	}
 	for _, tc := range cases {
-		if got := isRemovalConflict(tc.err, tc.resource); got != tc.want {
+		if got := IsRemovalConflict(tc.err, tc.resource); got != tc.want {
 			t.Errorf("%s %q: got %v, want %v", tc.resource, tc.err, got, tc.want)
 		}
 	}

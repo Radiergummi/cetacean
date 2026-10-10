@@ -6,6 +6,8 @@ import (
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +45,7 @@ func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// force overrides driver errors, not use: Docker refuses an in-use
 		// volume either way.
-		if isRemovalConflict(err, "volume") {
+		if cluster.IsRemovalConflict(err, "volume") {
 			writeRemovalConflict(w, r, err, "VOL001", "volume", name)
 			return
 		}

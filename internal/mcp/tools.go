@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -490,7 +492,7 @@ func (s *Server) toolRestartService(
 // remove_* tools share. idKey is the schema property name (`name` for volumes),
 // aclCheck enforces write permission, remove invokes the writer.
 func (s *Server) removeHandler(
-	idKey string,
+	idKey, resource string,
 	aclCheck func(ctx context.Context, id string) error,
 	remove func(wc DockerWriteClient, ctx context.Context, id string) error,
 ) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
@@ -507,10 +509,22 @@ func (s *Server) removeHandler(
 			return "", err
 		}
 		if err := remove(wc, ctx, id); err != nil {
-			return "", err
+			return "", removalError(err, resource, id)
 		}
 		return marshalResult(removalResult{Removed: true})
 	}
+}
+
+// removalError keeps the engine's text out of a refused removal, as the
+// caller may not be allowed to see what is in the way. The log keeps it.
+func removalError(err error, resource, key string) error {
+	if !cluster.IsRemovalConflict(err, resource) {
+		return err
+	}
+
+	slog.Info("removal refused", "resource", resource, "id", key, "error", err)
+
+	return errors.New(cluster.RemovalConflictDetail(resource, key))
 }
 
 func (s *Server) toolUpdateNodeLabels(
@@ -554,7 +568,7 @@ func (s *Server) toolRemoveVolume(ctx context.Context, req mcplib.CallToolReques
 		return "", err
 	}
 	if err := wc.RemoveVolume(ctx, name, force); err != nil {
-		return "", err
+		return "", removalError(err, "volume", name)
 	}
 	return marshalResult(removalResult{Removed: true})
 }

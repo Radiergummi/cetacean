@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	cerrdefs "github.com/containerd/errdefs"
+
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // removeAll removes each resource by ID, skipping not-found errors and
@@ -23,7 +25,12 @@ func removeAll(
 			if cerrdefs.IsNotFound(err) {
 				continue
 			}
-			errs = append(errs, removeError{Type: resourceType, ID: id, Error: err.Error()})
+			message := err.Error()
+			if cluster.IsRemovalConflict(err, resourceType) {
+				slog.Info("removal refused", "resource", resourceType, "id", id, "error", err)
+				message = cluster.RemovalConflictDetail(resourceType, id)
+			}
+			errs = append(errs, removeError{Type: resourceType, ID: id, Error: message})
 			continue
 		}
 		count++
