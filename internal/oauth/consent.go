@@ -49,6 +49,7 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!DOCTYPE htm
     {{if .Verified}}<span class="badge badge-verified">Verified</span>{{else}}<span class="badge badge-self">Self-registered</span>{{end}}
   </div>
   <div class="redirect">Redirect: {{.RedirectURI}}</div>
+  {{if gt (len .RegisteredRedirectURIs) 1}}<div class="redirect">Registered redirects:<ul>{{range .RegisteredRedirectURIs}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
 </div>
 <div class="identity">
   Authorizing as: <strong>{{.Subject}}</strong>{{if .Email}} ({{.Email}}){{end}}
@@ -107,7 +108,12 @@ type consentData struct {
 	// the template gates the disclosure on.
 	RememberedFor string
 
-	RedirectURI         string
+	RedirectURI string
+
+	// RegisteredRedirectURIs is every URI the fingerprint covers, so a
+	// remembered approval never reaches one the page did not show.
+	RegisteredRedirectURIs []string
+
 	Subject             string
 	Email               string
 	ActionURL           string
