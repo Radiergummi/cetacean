@@ -237,6 +237,44 @@ func TestDispatchCacheEvent_ACLOffPassesThrough(t *testing.T) {
 	}
 }
 
+// A removed task is gone from the cache the evaluator resolves it through, so
+// a service-scoped subscriber must still be told of its remove.
+func TestDispatchCacheEvent_RemovedTaskInheritsServiceGrant(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc2",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "other"}},
+	})
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1"})
+	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc2"})
+
+	e := acl.NewEvaluator()
+	e.SetResolver(c)
+	e.SetPolicy(readOnlyPolicy("service:webapp"))
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	id := &auth.Identity{Subject: "alice"}
+	readable := session("removed-task-readable")
+	unreadable := session("removed-task-unreadable")
+	srv.notifications.Subscribe(readable, "cetacean://tasks/t1", id)
+	srv.notifications.Subscribe(unreadable, "cetacean://tasks/t2", id)
+
+	c.DeleteTask("t1")
+	c.DeleteTask("t2")
+
+	if got := len(readable.(stubSession).notifications); got != 1 {
+		t.Errorf("readable subscriber got %d notifications, want 1", got)
+	}
+
+	if got := len(unreadable.(stubSession).notifications); got != 0 {
+		t.Errorf("unreadable subscriber got %d notifications, want 0", got)
+	}
+}
+
 // TestStartNotificationsCancelDetachesListener verifies that calling the
 // returned cancel function actually removes the listener from the cache —
 // otherwise the cache would keep firing into a stale Server after shutdown.

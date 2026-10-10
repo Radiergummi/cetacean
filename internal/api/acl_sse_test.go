@@ -4,6 +4,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/docker/docker/api/types/swarm"
+
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -123,5 +125,52 @@ func TestAclMatchWrap_NilInnerMatcher(t *testing.T) {
 	matcher := h.aclMatchWrap(r, nil)
 	if !matcher(cache.Event{Type: cache.EventService, Name: "anything"}) {
 		t.Fatal("nil inner + nil ACL should pass all events")
+	}
+}
+
+// A removed task is gone from the cache the evaluator resolves it through, so
+// a service-scoped grant must still reach its remove on that service's stream.
+func TestAclMatchWrap_RemovedTaskInheritsServiceGrant(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc2",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "other"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetResolver(c)
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	r := httptest.NewRequest("GET", "/services/svc1", nil)
+	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
+	matcher := h.aclMatchWrap(r, nil)
+
+	removed := map[string]cache.Event{}
+	c.AddOnChangeListener(func(ev cache.Event) {
+		if ev.Action == "remove" {
+			removed[ev.ID] = ev
+		}
+	})
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1"})
+	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc2"})
+	c.DeleteTask("t1")
+	c.DeleteTask("t2")
+
+	if !matcher(removed["t1"]) {
+		t.Error("a task removed from a readable service should pass")
+	}
+	if matcher(removed["t2"]) {
+		t.Error("a task removed from an unreadable service should not pass")
 	}
 }

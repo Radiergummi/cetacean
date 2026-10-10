@@ -8,6 +8,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // feedHandlers groups the optional feed format handlers for an endpoint.
@@ -164,7 +165,9 @@ func (h *Handlers) aclMatchWrap(
 		if ev.Type == cache.EventSync {
 			return true
 		}
-		return h.acl.Can(id, "read", string(ev.Type)+":"+ev.Name)
+		return cluster.CanReadEvent(h.cache, ev, func(resource string) bool {
+			return h.acl.Can(id, "read", resource)
+		})
 	}
 }
 
