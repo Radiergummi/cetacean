@@ -3,6 +3,8 @@ package compose
 import (
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestRenderLeadsWithTheFixedHeader(t *testing.T) {
@@ -46,21 +48,24 @@ func TestRenderOmitsTheWarningBlockWhenThereAreNone(t *testing.T) {
 }
 
 // A warning quotes values a service writer chooses, such as a mount target. A
-// line break in one would end the comment and put YAML in the document.
+// line break in one would end the comment and put YAML in the document; a
+// control character would leave a document no loader accepts.
 func TestRenderKeepsWarningsInsideTheirComment(t *testing.T) {
-	hostile := "/data\n...\n---\nservices:\n  evil:\n    image: attacker/evil\r x"
+	hostile := "/data\n...\n---\nservices:\n  evil:\n    image: attacker/evil\r\u2028\u0085\x1b\xff"
 	out, err := Render(File{Services: map[string]Service{"api": {Image: "nginx:1.27"}}},
 		[]string{"mount " + hostile + " dropped"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
 
-	for line := range strings.SplitSeq(string(out), "\n") {
-		if strings.Contains(line, "attacker/evil") && !strings.HasPrefix(line, "#") {
-			t.Fatalf("warning escaped its comment:\n%s", out)
-		}
+	var got File
+	if err := yaml.Unmarshal(out, &got); err != nil {
+		t.Fatalf("export does not load: %v\n%q", err, out)
 	}
-	if strings.Count(string(out), "\n---") != 0 || strings.Contains(string(out), " ") {
-		t.Errorf("a document marker or line separator survived:\n%q", out)
+	if len(got.Services) != 1 || got.Services["api"].Image != "nginx:1.27" {
+		t.Errorf("warning changed the document: %+v\n%s", got.Services, out)
+	}
+	if strings.ContainsAny(string(out), "\r\u2028\u0085") {
+		t.Errorf("a line break survived in a comment:\n%q", out)
 	}
 }

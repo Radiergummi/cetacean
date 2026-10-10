@@ -176,6 +176,9 @@ Responses carry `Content-Type: text/csv; charset=utf-8; header=present` and an
 `services-2026-09-11.csv` rather than rendering it. A task list hanging off a parent names it—`/nodes/{id}/tasks.csv`
 saves `tasks-worker-1-2026-09-11.csv`.
 
+A cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'`, so a spreadsheet shows a
+label someone set to a formula instead of running it. A number such as `-1` is left as it is.
+
 ### Supported endpoints
 
 - `/nodes`, `/services`, `/tasks`, `/stacks`, `/configs`, `/secrets`, `/networks`, `/volumes`
